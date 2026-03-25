@@ -18,11 +18,23 @@ public struct SCADomain {
     /// Converts a covering array row into a ``ChoiceTree`` suitable for replay.
     ///
     /// Dispatches to the appropriate ``SequenceCoveringArray`` overload based on whether an argument mapping is present, eliminating the `if let mapping` dispatch at call sites.
-    public func buildTree(row: CoveringArrayRow, sequenceLengthRange: ClosedRange<UInt64>) -> ChoiceTree? {
+    public func buildTree(
+        row: CoveringArrayRow,
+        sequenceLengthRange: ClosedRange<UInt64>
+    ) -> ChoiceTree? {
         if let mapping {
-            SequenceCoveringArray.buildTree(row: row, profile: profile, mapping: mapping, sequenceLengthRange: sequenceLengthRange)
+            SequenceCoveringArray.buildTree(
+                row: row,
+                profile: profile,
+                mapping: mapping,
+                sequenceLengthRange: sequenceLengthRange
+            )
         } else {
-            SequenceCoveringArray.buildTree(row: row, profile: profile, sequenceLengthRange: sequenceLengthRange)
+            SequenceCoveringArray.buildTree(
+                row: row,
+                profile: profile,
+                sequenceLengthRange: sequenceLengthRange
+            )
         }
     }
 }
@@ -87,7 +99,10 @@ public struct ArgumentAwareSCABuilder: SCADomainBuilder {
             sequenceLength: sequenceLength,
             branchCount: pickChoices.count
         )
-        let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices, threshold: threshold)
+        let branchProfiles = SequenceCoveringArray.analyzeBranches(
+            pickChoices,
+            threshold: threshold
+        )
         let (profile, mapping) = SequenceCoveringArray.buildProfile(
             sequenceLength: sequenceLength,
             pickChoices: pickChoices,

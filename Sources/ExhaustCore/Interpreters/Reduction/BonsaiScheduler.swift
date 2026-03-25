@@ -207,9 +207,16 @@ enum BonsaiScheduler {
             }
 
             // Mark phases that were not in either stage as gated.
-            for phase in [PlannedPhase.Phase.baseDescent, .fibreDescent, .exploration, .relaxRound] {
+            let allPhases: [PlannedPhase.Phase] = [
+                .baseDescent, .fibreDescent, .exploration, .relaxRound,
+            ]
+            for phase in allPhases {
                 if phaseDispositions[phase] == nil {
-                    phaseDispositions[phase] = .gated(reason: phase == .fibreDescent ? .allCoordinatesConverged : .noProgress)
+                    let reason: GateReason =
+                        phase == .fibreDescent
+                            ? .allCoordinatesConverged
+                            : .noProgress
+                    phaseDispositions[phase] = .gated(reason: reason)
                 }
             }
 
@@ -325,7 +332,9 @@ enum BonsaiScheduler {
                             var reentryCycleImproved = false
                             var reentryFirstResult: PhaseOutcome?
                             for planned in reentryFirstStage {
-                                let (outcome, producedDag) = try Self.dispatchPhase(planned, state: state, dag: reentryDag)
+                                let (outcome, producedDag) = try Self.dispatchPhase(
+                                    planned, state: state, dag: reentryDag
+                                )
                                 reentryDag = producedDag ?? reentryDag
                                 if outcome.acceptances > 0 { reentryCycleImproved = true }
                                 strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
@@ -338,7 +347,9 @@ enum BonsaiScheduler {
                             )
                             for planned in reentrySecondStage {
                                 if planned.requiresStall, reentryCycleImproved { continue }
-                                let (outcome, _) = try Self.dispatchPhase(planned, state: state, dag: reentryDag)
+                                let (outcome, _) = try Self.dispatchPhase(
+                                    planned, state: state, dag: reentryDag
+                                )
                                 if outcome.acceptances > 0 { reentryCycleImproved = true }
                                 strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
                             }
@@ -416,7 +427,11 @@ enum BonsaiScheduler {
         }
 
         if isInstrumented {
-            ExhaustLog.notice(category: .reducer, event: "bonsai_complete", metadata: ["cycles": "\(cycles)"])
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "bonsai_complete",
+                metadata: ["cycles": "\(cycles)"]
+            )
         }
 
         var bestSequence = state.bestSequence
@@ -453,13 +468,21 @@ enum BonsaiScheduler {
         switch planned.phase {
         case .baseDescent:
             var budget = planned.budget
-            let (producedDag, _) = try state.runBaseDescent(budget: &budget, cycle: state.currentCycle)
-            return (state.phaseTracker.outcome(for: .baseDescent, budgetAllocated: planned.budget), producedDag)
+            let (producedDag, _) = try state.runBaseDescent(
+                budget: &budget, cycle: state.currentCycle
+            )
+            let baseOutcome = state.phaseTracker.outcome(
+                for: .baseDescent, budgetAllocated: planned.budget
+            )
+            return (baseOutcome, producedDag)
 
         case .fibreDescent:
             var budget = planned.budget
             _ = try state.runFibreDescent(budget: &budget, dag: dag)
-            return (state.phaseTracker.outcome(for: .fibreDescent, budgetAllocated: planned.budget), nil)
+            let fibreOutcome = state.phaseTracker.outcome(
+                for: .fibreDescent, budgetAllocated: planned.budget
+            )
+            return (fibreOutcome, nil)
 
         case .exploration:
             var budget = planned.budget
@@ -468,12 +491,18 @@ enum BonsaiScheduler {
                 dag: dag,
                 edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy
             )
-            return (state.phaseTracker.outcome(for: .exploration, budgetAllocated: planned.budget), nil)
+            let exploreOutcome = state.phaseTracker.outcome(
+                for: .exploration, budgetAllocated: planned.budget
+            )
+            return (exploreOutcome, nil)
 
         case .relaxRound:
             var budget = planned.budget
             _ = try state.runRelaxRound(remaining: &budget)
-            return (state.phaseTracker.outcome(for: .relaxRound, budgetAllocated: planned.budget), nil)
+            let relaxOutcome = state.phaseTracker.outcome(
+                for: .relaxRound, budgetAllocated: planned.budget
+            )
+            return (relaxOutcome, nil)
         }
     }
 

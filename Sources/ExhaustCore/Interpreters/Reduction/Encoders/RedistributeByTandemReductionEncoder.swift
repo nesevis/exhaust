@@ -394,7 +394,10 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
                 }
                 let signedDelta = plan.searchUpward ? Double(delta) : -Double(delta)
                 let candidateFloatingValue = currentFloatingValue + signedDelta
-                guard let floatingChoice = makeFloatingChoice(from: candidateFloatingValue, tag: plan.tag) else {
+                guard let floatingChoice = makeFloatingChoice(
+                    from: candidateFloatingValue,
+                    tag: plan.tag
+                ) else {
                     return nil
                 }
                 newChoice = floatingChoice
@@ -526,7 +529,10 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
         for indices in perSiblingValueIndices {
             for idx in indices {
                 guard let value = sequence[idx].value else { continue }
-                byTagAndValue[value.choice.tag, default: [:]][value.choice.bitPattern64, default: []].append(idx)
+                let tag = value.choice.tag
+                let bitPattern = value.choice.bitPattern64
+                byTagAndValue[tag, default: [:]][bitPattern, default: []]
+                    .append(idx)
             }
         }
         for (_, byBitPattern) in byTagAndValue {
@@ -558,7 +564,9 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
     /// Returns whether tandem reduction supports the given type tag.
     private func supportsTandemTag(_ tag: TypeTag) -> Bool {
         switch tag {
-        case .int, .int64, .int32, .int16, .int8, .uint, .uint64, .uint32, .uint16, .uint8, .double, .float, .date, .bits:
+        case .int, .int64, .int32, .int16, .int8,
+             .uint, .uint64, .uint32, .uint16, .uint8,
+             .double, .float, .date, .bits:
             true
         }
     }

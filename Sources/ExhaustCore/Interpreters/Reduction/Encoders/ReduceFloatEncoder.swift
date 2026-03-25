@@ -194,7 +194,11 @@ struct ReduceFloatEncoder: ComposableEncoder {
         }
 
         for special in FloatShrink.specialValues(for: target.tag) {
-            guard let candidateChoice = floatingChoice(from: special, tag: target.tag, allowNonFinite: true) else {
+            guard let candidateChoice = floatingChoice(
+                from: special,
+                tag: target.tag,
+                allowNonFinite: true
+            ) else {
                 continue
             }
             let bp = candidateChoice.bitPattern64
@@ -424,7 +428,10 @@ struct ReduceFloatEncoder: ComposableEncoder {
             ? binarySearchCurrentInt + signedDelta
             : binarySearchCurrentInt - signedDelta
         let candidateDouble = Double(candidateInt)
-        guard let candidateChoice = floatingChoice(from: candidateDouble, tag: target.tag) else { return }
+        guard let candidateChoice = floatingChoice(
+            from: candidateDouble,
+            tag: target.tag
+        ) else { return }
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRange: target.validRange,
@@ -471,11 +478,13 @@ struct ReduceFloatEncoder: ComposableEncoder {
             ? ratioIntegerPart + signedDelta
             : ratioIntegerPart - signedDelta
 
-        let (scaledNumerator, multiplyOverflow) = candidateInteger.multipliedReportingOverflow(by: ratioDenominator)
+        let (scaledNumerator, multiplyOverflow) =
+            candidateInteger.multipliedReportingOverflow(by: ratioDenominator)
         guard multiplyOverflow == false else {
             return nextRatioBinarySearchCandidate(lastAccepted: false)
         }
-        let (candidateNumerator, addOverflow) = scaledNumerator.addingReportingOverflow(ratioRemainder)
+        let (candidateNumerator, addOverflow) =
+            scaledNumerator.addingReportingOverflow(ratioRemainder)
         guard addOverflow == false else {
             return nextRatioBinarySearchCandidate(lastAccepted: false)
         }
@@ -518,7 +527,10 @@ struct ReduceFloatEncoder: ComposableEncoder {
         let scaledNumerator = candidateInteger * ratioDenominator
         let candidateNumerator = scaledNumerator + ratioRemainder
         let candidateValue = Double(candidateNumerator) / Double(ratioDenominator)
-        guard let candidateChoice = floatingChoice(from: candidateValue, tag: target.tag) else { return }
+        guard let candidateChoice = floatingChoice(
+            from: candidateValue,
+            tag: target.tag
+        ) else { return }
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRange: target.validRange,
@@ -598,7 +610,11 @@ struct ReduceFloatEncoder: ComposableEncoder {
 
     // MARK: - Helpers
 
-    private func floatingChoice(from value: Double, tag: TypeTag, allowNonFinite: Bool = false) -> ChoiceValue? {
+    private func floatingChoice(
+        from value: Double,
+        tag: TypeTag,
+        allowNonFinite: Bool = false
+    ) -> ChoiceValue? {
         switch tag {
         case .double:
             guard allowNonFinite || value.isFinite else { return nil }
@@ -616,7 +632,10 @@ struct ReduceFloatEncoder: ComposableEncoder {
         ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)
     }
 
-    private func floorDivMod(_ numerator: Int64, _ denominator: Int64) -> (quotient: Int64, remainder: Int64) {
+    private func floorDivMod(
+        _ numerator: Int64,
+        _ denominator: Int64
+    ) -> (quotient: Int64, remainder: Int64) {
         precondition(denominator > 0)
         var quotient = numerator / denominator
         var remainder = numerator % denominator

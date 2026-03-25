@@ -28,7 +28,13 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
     /// A node that represents a branching choice made via ``pick``. ``siteID`` identifies the pick site, ``id`` is the stable branch identifier, and ``branchIDs`` contains all identifiers in this pick site.
-    indirect case branch(siteID: UInt64, weight: UInt64, id: UInt64, branchIDs: [UInt64], choice: ChoiceTree)
+    indirect case branch(
+        siteID: UInt64,
+        weight: UInt64,
+        id: UInt64,
+        branchIDs: [UInt64],
+        choice: ChoiceTree
+    )
 
     /// Represents a nested group of choices that usually represent objects or tuples.
     ///
@@ -73,14 +79,18 @@ public extension ChoiceTree {
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
                case let .selected(.branch(_, _, _, _, choice)) = array.first(where: \.isSelected)
             {
-                2 + 1 + choice.flattenedEntryCount // group open + branch entry + choice + group close
+                // group open + branch entry + choice + group close
+                2 + 1 + choice.flattenedEntryCount
             } else {
-                2 + array.reduce(0) { $0 + $1.flattenedEntryCount } // group open + children + group close
+                // group open + children + group close
+                2 + array.reduce(0) { $0 + $1.flattenedEntryCount }
             }
         case let .bind(inner, bound):
-            2 + inner.flattenedEntryCount + bound.flattenedEntryCount // bind open + inner + bound + bind close
+            // bind open + inner + bound + bind close
+            2 + inner.flattenedEntryCount + bound.flattenedEntryCount
         case let .resize(_, choices):
-            2 + choices.reduce(0) { $0 + $1.flattenedEntryCount } // group open + choices + group close
+            // group open + choices + group close
+            2 + choices.reduce(0) { $0 + $1.flattenedEntryCount }
         case let .selected(tree):
             tree.flattenedEntryCount
         }
@@ -192,7 +202,9 @@ public extension ChoiceTree {
         case let .group(array, _):
             return array.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
         case let .bind(inner, bound):
-            return max(inner.pickComplexityHelper(pickDepth: pickDepth), bound.pickComplexityHelper(pickDepth: pickDepth))
+            let innerComplexity = inner.pickComplexityHelper(pickDepth: pickDepth)
+            let boundComplexity = bound.pickComplexityHelper(pickDepth: pickDepth)
+            return max(innerComplexity, boundComplexity)
         case let .resize(_, choices):
             return choices.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
         }
@@ -213,10 +225,21 @@ public extension ChoiceTree {
             return transformedNode
         case let .sequence(length, elements, metadata):
             // For a sequence, recursively map over its elements.
-            return try .sequence(length: length, elements: elements.map { try $0.map(transform) }, metadata)
+            let mapped = try elements.map { try $0.map(transform) }
+            return try .sequence(
+                length: length,
+                elements: mapped,
+                metadata
+            )
         case let .branch(siteID, weight, id, branchIDs, choice):
             // For a branch, recursively map over its children.
-            return try .branch(siteID: siteID, weight: weight, id: id, branchIDs: branchIDs, choice: choice.map(transform))
+            return try .branch(
+                siteID: siteID,
+                weight: weight,
+                id: id,
+                branchIDs: branchIDs,
+                choice: choice.map(transform)
+            )
         case let .group(children, isOpaque: isOpaque):
             // For a group, recursively map over its children.
             return try .group(children.map { try $0.map(transform) }, isOpaque: isOpaque)

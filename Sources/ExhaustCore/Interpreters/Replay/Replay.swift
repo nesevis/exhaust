@@ -96,7 +96,11 @@ extension Interpreters {
                 choices: &choices
             )
         case let .just(value):
-            return try replayWithChoicesJust(value: value, continuation: continuation, choices: &choices)
+            return try replayWithChoicesJust(
+                value: value,
+                continuation: continuation,
+                choices: &choices
+            )
         case .getSize:
             return try replayWithChoicesGetSize(continuation: continuation, choices: &choices)
         case let .resize(_, subGenerator):
@@ -106,7 +110,9 @@ extension Interpreters {
                 choices: &choices
             )
         case let .filter(gen, _, _, predicate):
-            guard let inner = try replayWithChoicesHelper(gen, choices: &choices), predicate(inner) else {
+            guard let inner = try replayWithChoicesHelper(gen, choices: &choices),
+                  predicate(inner)
+            else {
                 return nil
             }
             return inner as? Output
@@ -116,7 +122,12 @@ extension Interpreters {
             let result: Any
             switch kind {
             case let .map(forward, _, _):
-                guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
+                guard let innerValue = try replayWithChoicesHelper(
+                    inner,
+                    choices: &choices
+                ) else {
+                    return nil
+                }
                 result = try forward(innerValue)
             case let .bind(forward, _, _, _):
                 // VACTI produces .bind(inner:bound:) for bind.
@@ -124,10 +135,20 @@ extension Interpreters {
                 if case let .bind(innerTree, boundTree) = choices.first {
                     choices.removeFirst()
                     var scopedChoices = [innerTree]
-                    guard let innerValue = try replayWithChoicesHelper(inner, choices: &scopedChoices) else { return nil }
+                    guard let innerValue = try replayWithChoicesHelper(
+                        inner,
+                        choices: &scopedChoices
+                    ) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
                     var boundChoices = [boundTree]
-                    guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &boundChoices) else { return nil }
+                    guard let boundValue = try replayWithChoicesHelper(
+                        boundGen,
+                        choices: &boundChoices
+                    ) else {
+                        return nil
+                    }
                     result = boundValue
                 } else if case let .group(innerChoices, _) = choices.first,
                           innerChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
@@ -135,14 +156,34 @@ extension Interpreters {
                     // Legacy: support .group([innerTree, boundTree]) for backwards compatibility
                     choices.removeFirst()
                     var scopedChoices = innerChoices
-                    guard let innerValue = try replayWithChoicesHelper(inner, choices: &scopedChoices) else { return nil }
+                    guard let innerValue = try replayWithChoicesHelper(
+                        inner,
+                        choices: &scopedChoices
+                    ) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &choices) else { return nil }
+                    guard let boundValue = try replayWithChoicesHelper(
+                        boundGen,
+                        choices: &choices
+                    ) else {
+                        return nil
+                    }
                     result = boundValue
                 } else {
-                    guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
+                    guard let innerValue = try replayWithChoicesHelper(
+                        inner,
+                        choices: &choices
+                    ) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &choices) else { return nil }
+                    guard let boundValue = try replayWithChoicesHelper(
+                        boundGen,
+                        choices: &choices
+                    ) else {
+                        return nil
+                    }
                     result = boundValue
                 }
             }
@@ -218,7 +259,10 @@ extension Interpreters {
         var accumulatedValues: [Any] = []
         accumulatedValues.reserveCapacity(elements.count)
         let didSucceed = try SequenceExecutionKernel.run(over: elements) { elementScript in
-            guard let elementValue = try replayRecursive(elementGenerator, with: elementScript) else {
+            guard let elementValue = try replayRecursive(
+                elementGenerator,
+                with: elementScript
+            ) else {
                 return false
             }
             accumulatedValues.append(elementValue)
@@ -338,7 +382,10 @@ extension Interpreters {
         }
 
         var subChoicesCopy = subChoices
-        guard let subResult = try replayWithChoicesHelper(subGenerator, choices: &subChoicesCopy) else {
+        guard let subResult = try replayWithChoicesHelper(
+            subGenerator,
+            choices: &subChoicesCopy
+        ) else {
             return nil
         }
         let nextGen = try continuation(subResult)
@@ -395,11 +442,19 @@ extension Interpreters {
     ) throws -> Output? {
         switch operation {
         case let .zip(generators, _):
-            return try replayRecursiveZip(generators: generators, script: script, runContinuation: runContinuation)
+            return try replayRecursiveZip(
+                generators: generators,
+                script: script,
+                runContinuation: runContinuation
+            )
         case .chooseBits:
             return try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
         case let .just(value):
-            return try replayRecursiveJust(value: value, script: script, runContinuation: runContinuation)
+            return try replayRecursiveJust(
+                value: value,
+                script: script,
+                runContinuation: runContinuation
+            )
         case .getSize:
             return try replayRecursiveGetSize(script: script, runContinuation: runContinuation)
         case let .resize(_, nextGen):
@@ -436,26 +491,63 @@ extension Interpreters {
             let result: Any
             switch kind {
             case let .map(forward, _, _):
-                guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
+                guard let innerValue = try replayRecursive(
+                    inner,
+                    with: script
+                ) else {
+                    return nil
+                }
                 result = try forward(innerValue)
             case let .bind(forward, _, _, _):
                 // VACTI produces .bind(inner:bound:) for bind.
                 // Split the script so inner and bound each get their own tree.
                 if case let .bind(innerTree, boundTree) = script {
-                    guard let innerValue = try replayRecursive(inner, with: innerTree) else { return nil }
+                    guard let innerValue = try replayRecursive(
+                        inner,
+                        with: innerTree
+                    ) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayRecursive(boundGen, with: boundTree) else { return nil }
+                    guard let boundValue = try replayRecursive(
+                        boundGen,
+                        with: boundTree
+                    ) else {
+                        return nil
+                    }
                     result = boundValue
-                } else if case let .group(children, _) = script, children.count >= 2 {
+                } else if case let .group(children, _) = script,
+                          children.count >= 2
+                {
                     // Legacy: support .group([innerTree, boundTree]) for backwards compatibility
-                    guard let innerValue = try replayRecursive(inner, with: children[0]) else { return nil }
+                    guard let innerValue = try replayRecursive(
+                        inner,
+                        with: children[0]
+                    ) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayRecursive(boundGen, with: children[1]) else { return nil }
+                    guard let boundValue = try replayRecursive(
+                        boundGen,
+                        with: children[1]
+                    ) else {
+                        return nil
+                    }
                     result = boundValue
                 } else {
-                    guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
+                    guard let innerValue = try replayRecursive(
+                        inner,
+                        with: script
+                    ) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayRecursive(boundGen, with: script) else { return nil }
+                    guard let boundValue = try replayRecursive(
+                        boundGen,
+                        with: script
+                    ) else {
+                        return nil
+                    }
                     result = boundValue
                 }
             }
@@ -544,14 +636,21 @@ extension Interpreters {
             validRange: lengthGen.associatedRange ?? length ... length,
             isRangeExplicit: lengthGen.associatedRange != nil
         )
-        guard try replayRecursive(lengthGen, with: .choice(.unsigned(length, .uint64), lengthMetadata)) != nil else {
+        let lengthChoice = ChoiceTree.choice(
+            .unsigned(length, .uint64),
+            lengthMetadata
+        )
+        guard try replayRecursive(lengthGen, with: lengthChoice) != nil else {
             return nil
         }
 
         var accumulatedValues: [Any] = []
         accumulatedValues.reserveCapacity(elements.count)
         let didSucceed = try SequenceExecutionKernel.run(over: elements) { elementScript in
-            guard let elementValue = try replayRecursive(elementGenerator, with: elementScript) else {
+            guard let elementValue = try replayRecursive(
+                elementGenerator,
+                with: elementScript
+            ) else {
                 return false
             }
             accumulatedValues.append(elementValue)

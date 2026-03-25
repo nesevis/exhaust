@@ -186,7 +186,8 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 return try runContinuation(value, &context)
 
             case .getSize:
-                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
+                let size = context.sizeOverride
+                    ?? GenerationContext.scaledSize(forRun: context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(size, &context)
 
@@ -210,7 +211,11 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
-                    guard let result = try generateRecursive(tunedGen, with: inputValue, context: &context) else { return nil }
+                    guard let result = try generateRecursive(
+                        tunedGen, with: inputValue, context: &context
+                    ) else {
+                        return nil
+                    }
 
                     if predicate(result) {
                         return try runContinuation(result, &context)
@@ -241,9 +246,15 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 while attempts < GenerationContext.maxFilterRuns {
                     if let keyExtractor {
                         // Key-based: generate value directly and dedup by extracted key
-                        guard let result = try generateRecursive(gen, with: inputValue, context: &context) else { return nil }
+                        guard let result = try generateRecursive(
+                            gen, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
                         let key = keyExtractor(result)
-                        let isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                        let isDuplicate = !context.uniqueSeenKeys[
+                            fingerprint, default: []
+                        ].insert(key).inserted
                         if !isDuplicate {
                             return try runContinuation(result, &context)
                         }
@@ -258,16 +269,22 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                             runs: context.runs
                         )
                         swap(&context.prng, &vactiContext.prng)
-                        guard let (result, tree) = try ValueAndChoiceTreeInterpreter<Any>.generateRecursive(
-                            gen, with: inputValue, context: &vactiContext
-                        ) else {
+                        let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
+                            .generateRecursive(
+                              gen,
+                              with: inputValue,
+                              context: &vactiContext
+                            )
+                        guard let (result, tree) = vactiResult else {
                             swap(&context.prng, &vactiContext.prng)
                             return nil
                         }
                         swap(&context.prng, &vactiContext.prng)
 
                         let sequence = ChoiceSequence.flatten(tree)
-                        let isDuplicate = !context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted
+                        let isDuplicate = !context.uniqueSeenSequences[
+                            fingerprint, default: []
+                        ].insert(sequence).inserted
                         if !isDuplicate {
                             return try runContinuation(result, &context)
                         }
@@ -286,7 +303,11 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context: inout GenerationContext,
         runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
-        guard let result = try generateRecursive(nextGen, with: inputValue, context: &context) else { return nil }
+        guard let result = try generateRecursive(
+            nextGen, with: inputValue, context: &context
+        ) else {
+            return nil
+        }
         return try runContinuation(result, &context)
     }
 
@@ -300,7 +321,11 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
         }
-        guard let result = try generateRecursive(nextGen, with: wrappedValue, context: &context) else { return nil }
+        guard let result = try generateRecursive(
+            nextGen, with: wrappedValue, context: &context
+        ) else {
+            return nil
+        }
         return try runContinuation(result, &context)
     }
 
@@ -311,12 +336,18 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context: inout GenerationContext,
         runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
-        guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
+        guard let selectedChoice = WeightedPickSelection.draw(
+            from: choices, using: &context.prng
+        ) else {
             return nil
         }
         // Keep parity with ValueAndChoiceTreeInterpreter's materializePicks path.
         _ = context.prng.next()
-        guard let result = try generateRecursive(selectedChoice.generator, with: inputValue, context: &context) else {
+        guard let result = try generateRecursive(
+            selectedChoice.generator,
+            with: inputValue,
+            context: &context
+        ) else {
             return nil
         }
         return try runContinuation(result, &context)
@@ -346,7 +377,9 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         var results: [Any] = []
         results.reserveCapacity(Int(length))
         let didSucceed = try SequenceExecutionKernel.run(count: length) {
-            guard let element = try generateRecursive(elementGen, with: (), context: &context) else {
+            guard let element = try generateRecursive(
+                elementGen, with: (), context: &context
+            ) else {
                 return false
             }
             results.append(element)
@@ -368,7 +401,9 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         var results = [Any]()
         results.reserveCapacity(generators.count)
         for generator in generators {
-            guard let result = try generateRecursive(generator, with: inputValue, context: &context) else {
+            guard let result = try generateRecursive(
+                generator, with: inputValue, context: &context
+            ) else {
                 throw GeneratorError.couldNotGenerateConcomitantChoiceTree
             }
             results.append(result)
@@ -385,7 +420,9 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         context.sizeOverride = newSize
-        guard let result = try generateRecursive(nextGen, with: inputValue, context: &context) else {
+        guard let result = try generateRecursive(
+            nextGen, with: inputValue, context: &context
+        ) else {
             return nil
         }
         return try runContinuation(result, &context)
@@ -399,14 +436,22 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context: inout GenerationContext,
         runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
-        guard let innerValue = try generateRecursive(inner, with: inputValue, context: &context) else { return nil }
+        guard let innerValue = try generateRecursive(
+            inner, with: inputValue, context: &context
+        ) else {
+            return nil
+        }
         let result: Any
         switch kind {
         case let .map(forward, _, _):
             result = try forward(innerValue)
         case let .bind(forward, _, _, _):
             let boundGen = try forward(innerValue)
-            guard let boundValue = try generateRecursive(boundGen, with: inputValue, context: &context) else { return nil }
+            guard let boundValue = try generateRecursive(
+                boundGen, with: inputValue, context: &context
+            ) else {
+                return nil
+            }
             result = boundValue
         }
         return try runContinuation(result, &context)
@@ -419,7 +464,11 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context: inout GenerationContext,
         runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
-        guard let result = try generateRecursive(gen, with: inputValue, context: &context) else { return nil }
+        guard let result = try generateRecursive(
+            gen, with: inputValue, context: &context
+        ) else {
+            return nil
+        }
         return try runContinuation(result, &context)
     }
 

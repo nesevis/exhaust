@@ -35,15 +35,30 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         case .int64:
             self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, .int64)
         case .int32:
-            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64, .int32)
+            let int32 = Int32(bitPattern64: value.bitPattern64)
+            self = .signed(
+                Int64(int32),
+                value.bitPattern64,
+                .int32
+            )
         case .int16:
-            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, .int16)
+            let int16 = Int16(bitPattern64: value.bitPattern64)
+            self = .signed(
+                Int64(int16),
+                value.bitPattern64,
+                .int16
+            )
         case .int8:
             self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, .int8)
         case .double:
             self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, .double)
         case .float:
-            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, .float)
+            let float = Float(bitPattern64: value.bitPattern64)
+            self = .floating(
+                Double(float),
+                value.bitPattern64,
+                .float
+            )
         case .date:
             self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, tag)
         }

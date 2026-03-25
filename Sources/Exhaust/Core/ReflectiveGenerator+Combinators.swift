@@ -127,7 +127,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 // Backward pass. The calling function is expecting a non-optional, so we throw the `reflectedNil` error to indicate to the consumer — which should only be a `pick` exploring the nil and non-nil options — that they are trying to parse the `.some` branch using the `.none` value during reflection
                 // TODO: Can we verify that this closure is executed from a `pick`?
                 if let optional = result as? Value?, optional == nil {
-                    throw Interpreters.ReflectionError.reflectedNil(type: description, resultType: String(describing: type(of: result)))
+                    throw Interpreters.ReflectionError.reflectedNil(
+                        type: description,
+                        resultType: String(describing: type(of: result))
+                    )
                 }
                 return result as! Value
             },
@@ -204,7 +207,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
-            operation: .filter(gen: erase(), fingerprint: fingerprint, filterType: type, predicate: { value in predicate(value as! Value) }),
+            operation: .filter(
+                gen: erase(),
+                fingerprint: fingerprint,
+                filterType: type,
+                predicate: { value in predicate(value as! Value) }
+            ),
             continuation: { .pure($0 as! Value) }
         )
     }
@@ -281,7 +289,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
-            operation: .unique(gen: erase(), fingerprint: fingerprint, keyExtractor: { value in AnyHashable(transform(value as! Value)) }),
+            operation: .unique(
+                gen: erase(),
+                fingerprint: fingerprint,
+                keyExtractor: { value in
+                    AnyHashable(transform(value as! Value))
+                }
+            ),
             continuation: { .pure($0 as! Value) }
         )
     }
@@ -308,7 +322,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: Value,
         maxDepth: UInt64,
-        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+        extend: @Sendable @escaping (
+            @escaping () -> ReflectiveGenerator<Value>,
+            UInt64
+        ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }
@@ -337,7 +354,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: ReflectiveGenerator<Value>,
         maxDepth: UInt64,
-        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+        extend: @Sendable @escaping (
+            @escaping () -> ReflectiveGenerator<Value>,
+            UInt64
+        ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }
@@ -373,7 +393,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter transform: A function to apply to each generated value
     /// - Returns: A generator producing the transformed values
     @inlinable
-    func map<NewValue>(_ transform: @Sendable @escaping (Value) throws -> NewValue) rethrows -> ReflectiveGenerator<NewValue> {
+    func map<NewValue>(
+        _ transform: @Sendable @escaping (Value) throws -> NewValue
+    ) rethrows -> ReflectiveGenerator<NewValue> {
         Gen.liftF(.transform(
             kind: .map(
                 forward: { try transform($0 as! Value) },
@@ -400,7 +422,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter transform: A function that takes the generated value and returns a new generator
     /// - Returns: A generator that sequences the two computations
     @inlinable
-    func bind<NewValue>(_ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>) rethrows -> ReflectiveGenerator<NewValue> {
+    func bind<NewValue>(
+        _ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>
+    ) rethrows -> ReflectiveGenerator<NewValue> {
         Gen.liftF(.transform(
             kind: .bind(
                 forward: { try transform($0 as! Value).erase() },

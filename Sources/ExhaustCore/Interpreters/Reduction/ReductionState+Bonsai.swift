@@ -233,7 +233,9 @@ extension ReductionState {
                     }
                 } else {
                     guard targets.isEmpty == false else { continue }
-                    let decoder = slot == .randomRepairDelete ? makeSpeculativeDecoder() : scopeDecoder
+                    let decoder = slot == .randomRepairDelete
+                        ? makeSpeculativeDecoder()
+                        : scopeDecoder
                     let category = slot.spanCategory
                     slotAccepted = try runComposable(
                         DeletionEncoder(spanCategory: category, spans: targets),
@@ -434,7 +436,11 @@ extension ReductionState {
             }
 
             if bestSpans.isEmpty == false {
-                candidates.append((nodeIndex: nodeIndex, spans: bestSpans, deletedLength: bestLength))
+                candidates.append((
+                    nodeIndex: nodeIndex,
+                    spans: bestSpans,
+                    deletedLength: bestLength
+                ))
             }
         }
 
@@ -796,7 +802,8 @@ extension ReductionState {
         let leafRanges = computeLeafRanges(dag: dag)
 
         // Capture skeleton fingerprint before fibre descent starts.
-        let prePhaseFingerprint: StructuralFingerprint? = if hasBind, let bindSpanIndex = bindIndex {
+        let prePhaseFingerprint: StructuralFingerprint? =
+            if hasBind, let bindSpanIndex = bindIndex {
             StructuralFingerprint.from(sequence, bindIndex: bindSpanIndex)
         } else {
             nil
@@ -815,7 +822,8 @@ extension ReductionState {
                 let isConstant = dag?.nodes.contains { node in
                     guard case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind,
                           regionIndex < currentBindIndex.regions.count else { return false }
-                    return currentBindIndex.regions[regionIndex].boundRange.contains(leafRange.lowerBound)
+                    let region = currentBindIndex.regions[regionIndex]
+                    return region.boundRange.contains(leafRange.lowerBound)
                         && node.isStructurallyConstant
                 } ?? false
                 needsFingerprintGuard = isConstant == false
@@ -844,12 +852,14 @@ extension ReductionState {
                     dag: dag
                 )
                 let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
-                let hasFloats = floatSpans.isEmpty == false
-
                 // Check for zeroingDependency suppression.
                 let suppressZeroValue: Bool = {
-                    guard let origins = cachedOrigins, origins.isEmpty == false else { return false }
-                    return origins.values.allSatisfy { $0.signal == .zeroingDependency }
+                    guard let origins = cachedOrigins,
+                          origins.isEmpty == false
+                    else { return false }
+                    return origins.values.allSatisfy {
+                        $0.signal == .zeroingDependency
+                    }
                 }()
 
                 var firstAcceptedSlot: ReductionScheduler.ValueEncoderSlot?
@@ -935,13 +945,21 @@ extension ReductionState {
                     dag: dag,
                     depthFilter: depth
                 )
-                let hasValueSpansAtDepth = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex).isEmpty == false
-                let hasFloatsAtDepth = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex).isEmpty == false
+                let hasValueSpansAtDepth = spanCache.valueSpans(
+                    at: depth, from: sequence, bindIndex: bindIndex
+                ).isEmpty == false
+                let hasFloatsAtDepth = spanCache.floatSpans(
+                    at: depth, from: sequence, bindIndex: bindIndex
+                ).isEmpty == false
 
                 // Check for zeroingDependency suppression.
                 let depthSuppressZeroValue: Bool = {
-                    guard let origins = cachedOrigins, origins.isEmpty == false else { return false }
-                    return origins.values.allSatisfy { $0.signal == .zeroingDependency }
+                    guard let origins = cachedOrigins,
+                          origins.isEmpty == false
+                    else { return false }
+                    return origins.values.allSatisfy {
+                        $0.signal == .zeroingDependency
+                    }
                 }()
 
                 var firstAcceptedDepthSlot: ReductionScheduler.ValueEncoderSlot?
@@ -1118,7 +1136,9 @@ extension ReductionState {
             if edge.isStructurallyConstant,
                let observation = edgeObservations[edge.regionIndex],
                observation.signal == .exhaustedClean,
-               let currentUpstreamValue = sequence[edge.upstreamRange.lowerBound].value?.choice.bitPattern64,
+               let currentUpstreamValue = sequence[
+                   edge.upstreamRange.lowerBound
+               ].value?.choice.bitPattern64,
                observation.upstreamValue == currentUpstreamValue
             {
                 continue
@@ -1228,7 +1248,11 @@ extension ReductionState {
                     compositionEdge.composition.setValidatedOrigins(nil)
                 }
 
-                guard let probe = compositionEdge.composition.nextProbe(lastAccepted: lastAccepted) else { break }
+                guard let probe = compositionEdge.composition.nextProbe(
+                    lastAccepted: lastAccepted
+                ) else {
+                    break
+                }
                 guard legBudget.isExhausted == false else { break }
                 if collectStats { kleisliProbes += 1 }
                 legBudget.recordMaterialization()
@@ -1273,25 +1297,28 @@ extension ReductionState {
 
             // Harvest fibre telemetry from the composition's downstream encoder.
             if collectStats {
-                fibreExceededExhaustiveThreshold += compositionEdge.composition.fibrePairwiseStarts
-                pairwiseOnExhaustibleFibre += compositionEdge.composition.fibreExhaustiveStarts
-                fibreZeroValueStarts += compositionEdge.composition.fibreZeroValueStarts
+                let comp = compositionEdge.composition
+                fibreExceededExhaustiveThreshold += comp.fibrePairwiseStarts
+                pairwiseOnExhaustibleFibre += comp.fibreExhaustiveStarts
+                fibreZeroValueStarts += comp.fibreZeroValueStarts
 
                 // Compare prediction against ground truth.
                 // The prediction uses the current sequence; the ground truth uses the lifted sequences.
                 // "Correct" means the predicted mode matches the MAJORITY of actual downstream starts.
                 let actualMajorityMode: FibrePrediction.Mode
-                if compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibrePairwiseStarts,
-                   compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibreZeroValueStarts
+                if comp.fibreExhaustiveStarts >= comp.fibrePairwiseStarts,
+                   comp.fibreExhaustiveStarts >= comp.fibreZeroValueStarts
                 {
                     actualMajorityMode = .exhaustive
-                } else if compositionEdge.composition.fibrePairwiseStarts >= compositionEdge.composition.fibreZeroValueStarts {
+                } else if comp.fibrePairwiseStarts >= comp.fibreZeroValueStarts {
                     actualMajorityMode = .pairwise
                 } else {
                     actualMajorityMode = .tooLarge
                 }
 
-                let totalStarts = compositionEdge.composition.fibreExhaustiveStarts + compositionEdge.composition.fibrePairwiseStarts + compositionEdge.composition.fibreZeroValueStarts
+                let totalStarts = comp.fibreExhaustiveStarts
+                    + comp.fibrePairwiseStarts
+                    + comp.fibreZeroValueStarts
                 if totalStarts > 0 {
                     if prediction.predictedMode == actualMajorityMode {
                         fibrePredictionCorrect += 1
@@ -1382,7 +1409,11 @@ extension ReductionState {
         }
 
         // Rollback: net result was not an improvement. Revert acceptances but keep invocations.
-        phaseTracker.restoreAcceptances(for: .exploration, acceptances: acceptancesAtCheckpoint, structuralAcceptances: structuralAtCheckpoint)
+        phaseTracker.restoreAcceptances(
+            for: .exploration,
+            acceptances: acceptancesAtCheckpoint,
+            structuralAcceptances: structuralAtCheckpoint
+        )
         restoreSnapshot(checkpoint)
         return false
     }
@@ -1462,7 +1493,10 @@ extension ReductionState {
             )
 
             for dependentNodeIndex in entry.dependsOn {
-                guard case let .structural(.bindInner(regionIndex: downstreamRegion)) = dag.nodes[dependentNodeIndex].kind else {
+                let nodeKind = dag.nodes[dependentNodeIndex].kind
+                guard case let .structural(
+                    .bindInner(regionIndex: downstreamRegion)
+                ) = nodeKind else {
                     continue
                 }
 
@@ -1480,7 +1514,9 @@ extension ReductionState {
                     if value == upstreamAxis.currentBitPattern { continue }
 
                     // Ladder values are shortlex keys — convert to bit patterns for materialization.
-                    let probeChoice = ChoiceValue.fromShortlexKey(value, tag: upstreamAxis.choiceTag)
+                    let probeChoice = ChoiceValue.fromShortlexKey(
+                        value, tag: upstreamAxis.choiceTag
+                    )
 
                     // Create modified sequence with upstream set to candidate value.
                     var modified = sequence
@@ -1661,7 +1697,9 @@ extension ReductionState {
                     // Exhaustive: small fibres (<= 64 combinations).
                     .init(
                         encoder: FibreCoveringEncoder(),
-                        predicate: { totalSpace, _ in totalSpace <= FibreCoveringEncoder.exhaustiveThreshold }
+                        predicate: { totalSpace, _ in
+                            totalSpace <= FibreCoveringEncoder.exhaustiveThreshold
+                        }
                     ),
                     // Pairwise: medium fibres (2–20 parameters).
                     .init(
@@ -1696,8 +1734,9 @@ extension ReductionState {
         // impact per probe. Leverage is the downstream range size; required budget is the
         // predicted fibre size (capped at the covering budget for pairwise).
         result.sort { lhs, rhs in
-            let lhsBudget = max(1, min(lhs.prediction.predictedSize, UInt64(FibreCoveringEncoder.coveringBudget)))
-            let rhsBudget = max(1, min(rhs.prediction.predictedSize, UInt64(FibreCoveringEncoder.coveringBudget)))
+            let coveringCap = UInt64(FibreCoveringEncoder.coveringBudget)
+            let lhsBudget = max(1, min(lhs.prediction.predictedSize, coveringCap))
+            let rhsBudget = max(1, min(rhs.prediction.predictedSize, coveringCap))
             let lhsLeverage = UInt64(lhs.edge.downstreamRange.count)
             let rhsLeverage = UInt64(rhs.edge.downstreamRange.count)
             // leverage / budget — higher is better. Cross-multiply to avoid division.
@@ -1771,7 +1810,9 @@ extension ReductionState {
             return predictFibreSize(sequence: sequence, downstreamRange: edge.downstreamRange)
         }
 
-        let isWithinRecordedRange = upstreamValue.isRangeExplicit && upstreamValue.choice.fits(in: upstreamValue.validRange)
+        let isWithinRecordedRange =
+            upstreamValue.isRangeExplicit
+            && upstreamValue.choice.fits(in: upstreamValue.validRange)
         let targetBitPattern = isWithinRecordedRange
             ? upstreamValue.choice.reductionTarget(in: upstreamValue.validRange)
             : upstreamValue.choice.semanticSimplest.bitPattern64
@@ -1806,7 +1847,11 @@ extension ReductionState {
             // Read the fibre size from the lifted sequence.
             // The downstream range may shift in the lifted sequence (structural changes).
             // Use the edge's downstream range clamped to the fresh sequence length.
-            let clampedRange = edge.downstreamRange.lowerBound ... min(edge.downstreamRange.upperBound, max(0, freshSequence.count - 1))
+            let clampedUpperBound = min(
+                edge.downstreamRange.upperBound,
+                max(0, freshSequence.count - 1)
+            )
+            let clampedRange = edge.downstreamRange.lowerBound ... clampedUpperBound
             return predictFibreSize(sequence: freshSequence, downstreamRange: clampedRange)
         case .rejected, .failed:
             // Discovery lift failed (target value out of range or materialisation error).

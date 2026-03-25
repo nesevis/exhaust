@@ -91,7 +91,10 @@ struct ProductSpaceBatchEncoder {
         var ladders = [BinarySearchLadder]()
         ladders.reserveCapacity(axes.count)
         for ai in 0 ..< axes.count {
-            ladders.append(BinarySearchLadder.compute(current: axes[ai].currentBitPattern, target: axes[ai].targetBitPattern))
+            ladders.append(BinarySearchLadder.compute(
+                current: axes[ai].currentBitPattern,
+                target: axes[ai].targetBitPattern
+            ))
         }
 
         // Determine enumeration order and dependency mapping from DAG topology.
@@ -117,7 +120,8 @@ struct ProductSpaceBatchEncoder {
                     continue
                 }
                 for dependentNodeIndex in entry.dependsOn {
-                    if case let .structural(.bindInner(regionIndex: downstreamRegion)) = dag.nodes[dependentNodeIndex].kind {
+                    let nodeKind = dag.nodes[dependentNodeIndex].kind
+                    if case let .structural(.bindInner(regionIndex: downstreamRegion)) = nodeKind {
                         downstreamToUpstreamTuplePosition[downstreamRegion] = upstreamTuplePosition
                     }
                 }
@@ -146,14 +150,24 @@ struct ProductSpaceBatchEncoder {
                         // Domain bounds are in bit-pattern space; axis keys are in shortlex space.
                         // Convert axis shortlex keys to bit patterns for domain clamping, then
                         // convert the clamped bounds back to shortlex keys for the ladder.
-                        let currentBitPattern = ChoiceValue.fromShortlexKey(axis.currentBitPattern, tag: axis.choiceTag).bitPattern64
-                        let targetBitPattern = ChoiceValue.fromShortlexKey(axis.targetBitPattern, tag: axis.choiceTag).bitPattern64
+                        let currentBitPattern = ChoiceValue.fromShortlexKey(
+                            axis.currentBitPattern, tag: axis.choiceTag
+                        ).bitPattern64
+                        let targetBitPattern = ChoiceValue.fromShortlexKey(
+                            axis.targetBitPattern, tag: axis.choiceTag
+                        ).bitPattern64
                         let effectiveCurrentBP = min(domain.upperBound, currentBitPattern)
                         let effectiveTargetBP = max(domain.lowerBound, targetBitPattern)
                         if effectiveCurrentBP >= effectiveTargetBP {
                             // Convert clamped bit patterns back to shortlex keys for the ladder.
-                            let effectiveCurrentKey = ChoiceValue(axis.choiceTag.makeConvertible(bitPattern64: effectiveCurrentBP), tag: axis.choiceTag).shortlexKey
-                            let effectiveTargetKey = ChoiceValue(axis.choiceTag.makeConvertible(bitPattern64: effectiveTargetBP), tag: axis.choiceTag).shortlexKey
+                            let effectiveCurrentKey = ChoiceValue(
+                                axis.choiceTag.makeConvertible(bitPattern64: effectiveCurrentBP),
+                                tag: axis.choiceTag
+                            ).shortlexKey
+                            let effectiveTargetKey = ChoiceValue(
+                                axis.choiceTag.makeConvertible(bitPattern64: effectiveTargetBP),
+                                tag: axis.choiceTag
+                            ).shortlexKey
                             if effectiveCurrentKey >= effectiveTargetKey {
                                 ladder = BinarySearchLadder.compute(
                                     current: effectiveCurrentKey, target: effectiveTargetKey
@@ -163,7 +177,10 @@ struct ProductSpaceBatchEncoder {
                             }
                         } else {
                             // Domain collapsed (target above current in new range). Use target only.
-                            let targetKey = ChoiceValue(axis.choiceTag.makeConvertible(bitPattern64: effectiveTargetBP), tag: axis.choiceTag).shortlexKey
+                            let targetKey = ChoiceValue(
+                                axis.choiceTag.makeConvertible(bitPattern64: effectiveTargetBP),
+                                tag: axis.choiceTag
+                            ).shortlexKey
                             ladder = BinarySearchLadder(values: [targetKey])
                         }
                     } else {
@@ -486,7 +503,9 @@ func extractAxes(
     for (regionIndex, region) in bindIndex.regions.enumerated() {
         for index in region.innerRange where index < sequence.count {
             guard let value = sequence[index].value else { continue }
-            let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
+            let isWithinRecordedRange =
+                value.isRangeExplicit
+                && value.choice.fits(in: value.validRange)
             let targetBitPattern: UInt64 = if isWithinRecordedRange {
                 value.choice.reductionTarget(in: value.validRange)
             } else {
@@ -497,7 +516,10 @@ func extractAxes(
             // (for example, -1 with shortlex key 1) are correctly ordered relative to
             // the target (for example, 0 with shortlex key 0).
             let currentKey = value.choice.shortlexKey
-            let targetChoice = ChoiceValue(value.choice.tag.makeConvertible(bitPattern64: targetBitPattern), tag: value.choice.tag)
+            let targetChoice = ChoiceValue(
+                value.choice.tag.makeConvertible(bitPattern64: targetBitPattern),
+                tag: value.choice.tag
+            )
             let targetKey = targetChoice.shortlexKey
             guard currentKey != targetKey, currentKey > targetKey else {
                 continue

@@ -270,7 +270,12 @@ public enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this filter condition (for optimization caching)
     ///   - filterType: Strategy to use for satisfying the predicate
     ///   - predicate: Validity condition that generated values must satisfy
-    case filter(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, filterType: FilterType, predicate: (Any) -> Bool)
+    case filter(
+        gen: ReflectiveGenerator<Any>,
+        fingerprint: UInt64,
+        filterType: FilterType,
+        predicate: (Any) -> Bool
+    )
 
     /// Categorizes generated values for statistical analysis and test coverage reporting.
     ///
@@ -291,7 +296,11 @@ public enum ReflectiveOperation {
     ///   - gen: The base generator to classify
     ///   - fingerprint: Unique identifier for this classification operation
     ///   - classifiers: Array of (label, predicate) pairs for categorizing values
-    case classify(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, classifiers: [(label: String, predicate: (Any) -> Bool)])
+    case classify(
+        gen: ReflectiveGenerator<Any>,
+        fingerprint: UInt64,
+        classifiers: [(label: String, predicate: (Any) -> Bool)]
+    )
 
     /// Deduplicates generated values, ensuring each output is unique.
     ///
@@ -310,7 +319,11 @@ public enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this unique site (for per-site tracking)
     ///   - keyExtractor: Optional function to extract a hashable key from generated values.
     ///     When `nil`, deduplication uses the choice sequence instead.
-    case unique(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, keyExtractor: ((Any) -> AnyHashable)?)
+    case unique(
+        gen: ReflectiveGenerator<Any>,
+        fingerprint: UInt64,
+        keyExtractor: ((Any) -> AnyHashable)?
+    )
 
     /// Forward-only transformation of the inner generator's output.
     ///
@@ -348,5 +361,10 @@ public enum TransformKind {
     ///     the reflector to decompose the output back through the bind. `nil` = forward-only.
     ///   - inputType: The metatype of the input, captured at the call site.
     ///   - outputType: The metatype of the output, captured at the call site.
-    case bind(forward: (Any) throws -> ReflectiveGenerator<Any>, backward: ((Any) throws -> Any)?, inputType: Any.Type, outputType: Any.Type)
+    case bind(
+        forward: (Any) throws -> ReflectiveGenerator<Any>,
+        backward: ((Any) throws -> Any)?,
+        inputType: Any.Type,
+        outputType: Any.Type
+    )
 }

@@ -17,7 +17,10 @@ public extension Gen {
             if let typedResult = result as? Output {
                 return .pure(typedResult)
             }
-            throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self), resultType: String(describing: result.self))
+            throw Interpreters.ReflectionError.reflectedNil(
+                type: String(describing: Output.self),
+                resultType: String(describing: result.self)
+            )
         }
     }
 
@@ -27,7 +30,9 @@ public extension Gen {
     ///
     /// - Parameter generator: The generator to apply pruning to
     /// - Returns: A generator with pruning applied
-    static func prune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
+    static func prune<Output>(
+        _ generator: ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
         liftF(.prune(next: generator.erase()))
     }
 
@@ -59,7 +64,10 @@ public extension Gen {
                 return .pure(typed)
             }
             if let optional = result as? Output?, optional == nil {
-                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self), resultType: String(describing: type(of: result)))
+                throw Interpreters.ReflectionError.reflectedNil(
+                    type: String(describing: Output.self),
+                    resultType: String(describing: type(of: result))
+                )
             }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),

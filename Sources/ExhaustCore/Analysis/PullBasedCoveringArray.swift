@@ -169,8 +169,16 @@ private struct PullCoverageSlice {
     }
 
     @inline(__always)
-    func flatIndex4(_ value0: UInt16, _ value1: UInt16, _ value2: UInt16, _ value3: UInt16) -> UInt32 {
-        UInt32(value0) &* strides.0 &+ UInt32(value1) &* strides.1 &+ UInt32(value2) &* strides.2 &+ UInt32(value3)
+    func flatIndex4(
+        _ value0: UInt16,
+        _ value1: UInt16,
+        _ value2: UInt16,
+        _ value3: UInt16
+    ) -> UInt32 {
+        UInt32(value0) &* strides.0
+            &+ UInt32(value1) &* strides.1
+            &+ UInt32(value2) &* strides.2
+            &+ UInt32(value3)
     }
 
     @inline(__always)
@@ -338,7 +346,8 @@ public struct PullBasedCoveringArrayGenerator {
 
         case 4:
             allSlices.reserveCapacity(
-                domainSizes.count * (domainSizes.count - 1) * (domainSizes.count - 2) * (domainSizes.count - 3) / 24
+                domainSizes.count * (domainSizes.count - 1)
+                    * (domainSizes.count - 2) * (domainSizes.count - 3) / 24
             )
             var first = 0
             while first < domainSizes.count {
@@ -358,7 +367,10 @@ public struct PullBasedCoveringArrayGenerator {
                             allSlices.append(PullCoverageSlice(
                                 bits: PullBitVector(bitCount: tupleCount),
                                 strides: (s0, s1, d3, 1),
-                                paramIndices: (UInt16(first), UInt16(second), UInt16(third), UInt16(fourth)),
+                                paramIndices: (
+                                    UInt16(first), UInt16(second),
+                                    UInt16(third), UInt16(fourth)
+                                ),
                                 remaining: tupleCount
                             ))
                             byColumn[fourth].append(allSlices.count &- 1)

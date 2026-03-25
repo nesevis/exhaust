@@ -164,7 +164,11 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 case .fitnessSharing:
                     computeFitnessSharingWeights(choices: choices, accumulator: accumulator)
                 case let .ucb(explorationConstant):
-                    computeUCBWeights(choices: choices, accumulator: accumulator, explorationConstant: explorationConstant)
+                    computeUCBWeights(
+                        choices: choices,
+                        accumulator: accumulator,
+                        explorationConstant: explorationConstant
+                    )
                 default:
                     nil
                 }
@@ -174,7 +178,10 @@ public enum ChoiceGradientTuner<FinalOutput> {
                     if let precomputed = precomputedWeights {
                         weight = precomputed[index]
                     } else {
-                        let key = FitnessAccumulator.SiteChoiceKey(siteID: choice.siteID, choiceID: choice.id)
+                        let key = FitnessAccumulator.SiteChoiceKey(
+                            siteID: choice.siteID,
+                            choiceID: choice.id
+                        )
                         if let record = accumulator.records[key] {
                             switch strategy {
                             case .totalFitness:
@@ -197,13 +204,19 @@ public enum ChoiceGradientTuner<FinalOutput> {
                         siteID: choice.siteID,
                         id: choice.id,
                         weight: Swift.max(1, weight),
-                        generator: bakeWeights(choice.generator, from: accumulator, strategy: strategy)
+                        generator: bakeWeights(
+                            choice.generator,
+                            from: accumulator,
+                            strategy: strategy
+                        )
                     ))
                 }
                 return .impure(operation: .pick(choices: baked), continuation: continuation)
 
             case let .zip(generators, _):
-                let bakedGens = ContiguousArray(generators.map { bakeWeights($0, from: accumulator, strategy: strategy) })
+                let bakedGens = ContiguousArray(generators.map {
+                    bakeWeights($0, from: accumulator, strategy: strategy)
+                })
                 return .impure(operation: .zip(bakedGens), continuation: continuation)
 
             case let .sequence(lengthGen, elementGen):
@@ -217,19 +230,27 @@ public enum ChoiceGradientTuner<FinalOutput> {
 
             case let .contramap(transform, next):
                 return .impure(
-                    operation: .contramap(transform: transform, next: bakeWeights(next, from: accumulator, strategy: strategy)),
+                    operation: .contramap(
+                        transform: transform,
+                        next: bakeWeights(next, from: accumulator, strategy: strategy)
+                    ),
                     continuation: continuation
                 )
 
             case let .prune(next):
                 return .impure(
-                    operation: .prune(next: bakeWeights(next, from: accumulator, strategy: strategy)),
+                    operation: .prune(
+                        next: bakeWeights(next, from: accumulator, strategy: strategy)
+                    ),
                     continuation: continuation
                 )
 
             case let .resize(newSize, next):
                 return .impure(
-                    operation: .resize(newSize: newSize, next: bakeWeights(next, from: accumulator, strategy: strategy)),
+                    operation: .resize(
+                        newSize: newSize,
+                        next: bakeWeights(next, from: accumulator, strategy: strategy)
+                    ),
                     continuation: continuation
                 )
 
@@ -266,7 +287,10 @@ public enum ChoiceGradientTuner<FinalOutput> {
 
             case let .transform(kind, inner):
                 return .impure(
-                    operation: .transform(kind: kind, inner: bakeWeights(inner, from: accumulator, strategy: strategy)),
+                    operation: .transform(
+                        kind: kind,
+                        inner: bakeWeights(inner, from: accumulator, strategy: strategy)
+                    ),
                     continuation: continuation
                 )
 
@@ -344,7 +368,8 @@ public enum ChoiceGradientTuner<FinalOutput> {
             let ucbScore: Double
             if let record, record.observationCount > 0 {
                 let meanFitness = Double(record.totalFitness) / Double(record.observationCount)
-                let explorationBonus = explorationConstant * sqrt(logTotal / Double(record.observationCount))
+                let explorationBonus =
+                    explorationConstant * sqrt(logTotal / Double(record.observationCount))
                 ucbScore = meanFitness + explorationBonus
             } else {
                 // Unobserved choices get maximum exploration bonus
@@ -388,7 +413,10 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 let subdividedElement = try subdivideSequenceLengths(elementGen, context: context)
 
                 // 2a. Check if length generator is a direct .chooseBits with range > 4
-                if case let .impure(.chooseBits(lower, upper, tag, isRangeExplicit), lengthContinuation) = lengthGen {
+                if case let .impure(
+                    .chooseBits(lower, upper, tag, isRangeExplicit),
+                    lengthContinuation
+                ) = lengthGen {
                     let rangeSize = upper - lower + 1
                     if rangeSize > 4 {
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
@@ -431,7 +459,9 @@ public enum ChoiceGradientTuner<FinalOutput> {
 
                 // 2b. Check if length generator is .getSize → continuation
                 if case let .impure(.getSize, getSizeContinuation) = lengthGen {
-                    let subranges = (0 ... context.maxSize).split(into: Swift.min(4, Int(context.maxSize + 1)))
+                    let subranges = (0 ... context.maxSize).split(
+                        into: Swift.min(4, Int(context.maxSize + 1))
+                    )
 
                     var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                     subrangeChoices.reserveCapacity(subranges.count)
@@ -552,7 +582,10 @@ public enum ChoiceGradientTuner<FinalOutput> {
 
             case let .transform(kind, inner):
                 return try .impure(
-                    operation: .transform(kind: kind, inner: subdivideSequenceLengths(inner, context: context)),
+                    operation: .transform(
+                        kind: kind,
+                        inner: subdivideSequenceLengths(inner, context: context)
+                    ),
                     continuation: continuation
                 )
 

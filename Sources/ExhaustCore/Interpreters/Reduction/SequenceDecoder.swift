@@ -45,7 +45,11 @@ public enum SequenceDecoder {
                 materializePicks: materializePicks
             )
 
-        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks, usePRNGFallback, skipShortlexCheck, prngSalt):
+        case let .guided(
+            fallbackTree, maximizeBoundRegionIndices,
+            materializePicks, usePRNGFallback,
+            skipShortlexCheck, prngSalt
+        ):
             decodeGuided(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: usePRNGFallback ? nil : (fallbackTree ?? tree),

@@ -83,14 +83,19 @@ public struct ChoiceDependencyGraph: Sendable {
         var bindTreeNodes: [(bound: ChoiceTree, offset: Int)] = []
         _ = collectBindTreeNodes(from: tree, offset: 0, into: &bindTreeNodes)
         // Index by offset for O(1) lookup per region instead of a linear scan.
-        let bindTreeByOffset = Dictionary(uniqueKeysWithValues: bindTreeNodes.map { ($0.offset, $0) })
+        let bindTreeByOffset = Dictionary(
+            uniqueKeysWithValues: bindTreeNodes.map { ($0.offset, $0) }
+        )
 
         var nodes: [DependencyNode] = []
 
         // Bind-inner nodes.
         for (regionIndex, region) in bindIndex.regions.enumerated() {
             let treeNode = bindTreeByOffset[region.bindSpanRange.lowerBound]
-            let isConstant = treeNode.map { $0.bound.containsBind == false && $0.bound.containsPicks == false } ?? false
+            let isConstant = treeNode.map {
+                $0.bound.containsBind == false
+                    && $0.bound.containsPicks == false
+            } ?? false
 
             nodes.append(DependencyNode(
                 positionRange: region.innerRange,
@@ -286,7 +291,11 @@ extension ChoiceDependencyGraph {
                 continue
             }
             let bindInnerDependsOn = node.dependents.filter { bindInnerNodeIndices.contains($0) }
-            result.append((nodeIndex: nodeIndex, regionIndex: regionIndex, dependsOn: bindInnerDependsOn))
+            result.append((
+                nodeIndex: nodeIndex,
+                regionIndex: regionIndex,
+                dependsOn: bindInnerDependsOn
+            ))
         }
         return result
     }
@@ -460,7 +469,9 @@ private extension ChoiceDependencyGraph {
         case let .sequence(_, elements, _):
             var consumed = 1 // open marker
             for element in elements {
-                consumed += collectBindTreeNodes(from: element, offset: offset + consumed, into: &result)
+                consumed += collectBindTreeNodes(
+                    from: element, offset: offset + consumed, into: &result
+                )
             }
             return consumed + 1 // close marker
 
@@ -473,12 +484,16 @@ private extension ChoiceDependencyGraph {
             {
                 // Pick-site group: group open + branch entry + selected choice + group close.
                 var consumed = 2
-                consumed += collectBindTreeNodes(from: choice, offset: offset + consumed, into: &result)
+                consumed += collectBindTreeNodes(
+                    from: choice, offset: offset + consumed, into: &result
+                )
                 return consumed + 1
             } else {
                 var consumed = 1 // group open
                 for child in array {
-                    consumed += collectBindTreeNodes(from: child, offset: offset + consumed, into: &result)
+                    consumed += collectBindTreeNodes(
+                        from: child, offset: offset + consumed, into: &result
+                    )
                 }
                 return consumed + 1 // group close
             }
@@ -487,21 +502,31 @@ private extension ChoiceDependencyGraph {
             if inner.isGetSize {
                 // getSize-bind flattens as group markers, not bind markers.
                 var consumed = 1 // group open
-                consumed += collectBindTreeNodes(from: inner, offset: offset + consumed, into: &result)
-                consumed += collectBindTreeNodes(from: bound, offset: offset + consumed, into: &result)
+                consumed += collectBindTreeNodes(
+                    from: inner, offset: offset + consumed, into: &result
+                )
+                consumed += collectBindTreeNodes(
+                    from: bound, offset: offset + consumed, into: &result
+                )
                 return consumed + 1 // group close
             } else {
                 result.append((bound: bound, offset: offset))
                 var consumed = 1 // bind open
-                consumed += collectBindTreeNodes(from: inner, offset: offset + consumed, into: &result)
-                consumed += collectBindTreeNodes(from: bound, offset: offset + consumed, into: &result)
+                consumed += collectBindTreeNodes(
+                    from: inner, offset: offset + consumed, into: &result
+                )
+                consumed += collectBindTreeNodes(
+                    from: bound, offset: offset + consumed, into: &result
+                )
                 return consumed + 1 // bind close
             }
 
         case let .resize(_, choices):
             var consumed = 1 // group open
             for choice in choices {
-                consumed += collectBindTreeNodes(from: choice, offset: offset + consumed, into: &result)
+                consumed += collectBindTreeNodes(
+                    from: choice, offset: offset + consumed, into: &result
+                )
             }
             return consumed + 1 // group close
 

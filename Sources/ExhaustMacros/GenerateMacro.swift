@@ -30,7 +30,10 @@ public struct GenerateMacro: ExpressionMacro {
         }
 
         let generatorCount = generatorArgs.count
-        let outcome = analyzeClosureForBidirectional(trailingClosure, generatorCount: generatorCount)
+        let outcome = analyzeClosureForBidirectional(
+            trailingClosure,
+            generatorCount: generatorCount
+        )
 
         switch outcome {
         case let .bidirectional(result):

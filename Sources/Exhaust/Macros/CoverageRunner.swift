@@ -7,11 +7,18 @@
 enum CoverageRunner {
     enum Result<Output> {
         /// Coverage found a counterexample.
-        case failure(value: Output, tree: ChoiceTree, iteration: Int, strength: Int, rows: Int, parameters: Int, totalSpace: UInt64, kind: String)
+        case failure(
+            value: Output, tree: ChoiceTree,
+            iteration: Int, strength: Int, rows: Int,
+            parameters: Int, totalSpace: UInt64, kind: String
+        )
         /// Exhaustive coverage passed — entire space tested, skip random phase.
         case exhaustive(iterations: Int)
         /// Partial coverage completed — proceed to random phase.
-        case partial(iterations: Int, strength: Int, rows: Int, parameters: Int, totalSpace: UInt64, kind: String)
+        case partial(
+            iterations: Int, strength: Int, rows: Int,
+            parameters: Int, totalSpace: UInt64, kind: String
+        )
         /// Analysis found nothing to cover — skip to random.
         case notApplicable
     }
@@ -54,13 +61,20 @@ enum CoverageRunner {
         if paramCount >= 2 {
             // Use the highest strength the space can support for exhaustive candidates.
             let strength = isExhaustiveCandidate ? min(paramCount, 4) : 2
-            var generator = PullBasedCoveringArrayGenerator(domainSizes: domainSizes, strength: strength)
+            var generator = PullBasedCoveringArrayGenerator(
+                domainSizes: domainSizes,
+                strength: strength
+            )
             defer { generator.deallocate() }
 
             var iterations = 0
             var rowIndex = 0
             while rowIndex < budget, let row = generator.next() {
-                if let result = testRow(gen, row: row, rowIndex: rowIndex, profile: profile, property: property) {
+                let result = testRow(
+                    gen, row: row, rowIndex: rowIndex,
+                    profile: profile, property: property
+                )
+                if let result {
                     return .failure(
                         value: result.value, tree: result.tree, iteration: iterations + 1,
                         strength: strength, rows: rowIndex + 1,
@@ -87,7 +101,11 @@ enum CoverageRunner {
         var rowIndex = 0
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
             let row = CoveringArrayRow(values: [UInt64(rowIndex)])
-            if let result = testRow(gen, row: row, rowIndex: rowIndex, profile: profile, property: property) {
+            let result = testRow(
+                gen, row: row, rowIndex: rowIndex,
+                profile: profile, property: property
+            )
+            if let result {
                 return .failure(
                     value: result.value, tree: result.tree, iteration: iterations + 1,
                     strength: 1, rows: rowIndex + 1,
@@ -126,7 +144,13 @@ enum CoverageRunner {
         guard let tree = profile.buildTree(from: row) else { return nil }
 
         let prefix = ChoiceSequence(tree)
-        switch ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil)) {
+        let mode = ReductionMaterializer.Mode.guided(
+            seed: UInt64(rowIndex),
+            fallbackTree: nil
+        )
+        switch ReductionMaterializer.materialize(
+            gen, prefix: prefix, mode: mode
+        ) {
         case let .success(value, freshTree, _):
             if property(value) == false {
                 return RowFailure(value: value, tree: freshTree)

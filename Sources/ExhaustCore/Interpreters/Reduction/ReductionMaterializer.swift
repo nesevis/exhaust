@@ -302,7 +302,8 @@ private extension ReductionMaterializer {
                         continuationFallback: nil
                     )
                 case .bind:
-                    let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                    let (calleeFallback, continuationFallback) =
+                        decomposeNonGroupFallback(fallbackTree)
                     return try handleTransform(
                         kind: kind, inner: inner,
                         continuation: continuation, inputValue: inputValue,
@@ -663,7 +664,10 @@ private extension ReductionMaterializer {
                 // (the common case, e.g. `array(length: 0...10)`), avoiding a full
                 // generateRecursive + runContinuation round-trip.
                 if case let .impure(.chooseBits(min, max, _, isRangeExplicit), _) = lengthGen {
-                    lengthMeta = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+                    lengthMeta = ChoiceMetadata(
+                        validRange: min ... max,
+                        isRangeExplicit: isRangeExplicit
+                    )
                 } else {
                     let savedMode = context.mode
                     context.mode = .generate
@@ -694,7 +698,8 @@ private extension ReductionMaterializer {
                 }
                 context.mode = savedMode
                 if let freshRange = lengthTree.metadata.validRange {
-                    length = Swift.min(Swift.max(prefixCount, freshRange.lowerBound), freshRange.upperBound)
+                    let clamped = Swift.max(prefixCount, freshRange.lowerBound)
+                    length = Swift.min(clamped, freshRange.upperBound)
                 } else {
                     length = prefixCount
                 }
@@ -725,7 +730,8 @@ private extension ReductionMaterializer {
             }
             context.mode = savedMode
             if let freshRange = lengthTree.metadata.validRange {
-                length = Swift.min(Swift.max(resolvedLen, freshRange.lowerBound), freshRange.upperBound)
+                let clamped = Swift.max(resolvedLen, freshRange.lowerBound)
+                length = Swift.min(clamped, freshRange.upperBound)
             } else {
                 length = resolvedLen
             }
@@ -855,18 +861,22 @@ private extension ReductionMaterializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
-        let innerFallback: ChoiceTree? = if let calleeFallback, case let .resize(_, choices) = calleeFallback,
-                                            let inner = choices.first
+        let innerFallback: ChoiceTree?
+        if let calleeFallback,
+           case let .resize(_, choices) = calleeFallback,
+           let inner = choices.first
         {
-            inner
+            innerFallback = inner
         } else {
-            nil
+            innerFallback = nil
         }
         context.sizeOverride = newSize
         guard let result = try generateRecursive(
             gen, with: inputValue, context: &context, fallbackTree: innerFallback
         ) else { return nil }
-        context.sizeOverride = nil // Defensive clear — consumed by getSize, but guard against missing getSize.
+        // Defensive clear — consumed by getSize, but guard
+        // against missing getSize.
+        context.sizeOverride = nil
         return try runContinuation(
             result: result.0,
             calleeChoiceTree: .resize(newSize: newSize, choices: [result.1]),

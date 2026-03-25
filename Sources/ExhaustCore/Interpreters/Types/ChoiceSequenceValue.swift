@@ -43,21 +43,32 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
-        case (.group(true), .group(true)), (.sequence(true, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)),
+        case (.group(true), .group(true)),
+             (.sequence(true, isLengthExplicit: _),
+              .sequence(true, isLengthExplicit: _)),
              (.bind(true), .bind(true)):
             return .eq
-        case (.group(false), .group(false)), (.sequence(false, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)),
+        case (.group(false), .group(false)),
+             (.sequence(false, isLengthExplicit: _),
+              .sequence(false, isLengthExplicit: _)),
              (.bind(false), .bind(false)):
             return .eq
-        case (.group(false), .group(true)), (.sequence(false, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)),
+        case (.group(false), .group(true)),
+             (.sequence(false, isLengthExplicit: _),
+              .sequence(true, isLengthExplicit: _)),
              (.bind(false), .bind(true)):
             return .lt
-        case (.group(true), .group(false)), (.sequence(true, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)),
+        case (.group(true), .group(false)),
+             (.sequence(true, isLengthExplicit: _),
+              .sequence(false, isLengthExplicit: _)),
              (.bind(true), .bind(false)):
             return .gt
         case let (.branch(a), .branch(b)):
             return a.shortLexCompare(b)
-        case let (.value(a), .value(b)), let (.reduced(a), .reduced(b)), let (.value(a), .reduced(b)), let (.reduced(a), .value(b)):
+        case let (.value(a), .value(b)),
+             let (.reduced(a), .reduced(b)),
+             let (.value(a), .reduced(b)),
+             let (.reduced(a), .value(b)):
             return a.shortLexCompare(b)
         default:
             if kindOrder < other.kindOrder { return .lt }
@@ -138,7 +149,11 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         public let validRange: ClosedRange<UInt64>?
         public let isRangeExplicit: Bool
 
-        public init(choice: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool = false) {
+        public init(
+            choice: ChoiceValue,
+            validRange: ClosedRange<UInt64>?,
+            isRangeExplicit: Bool = false
+        ) {
             self.choice = choice
             self.validRange = validRange
             self.isRangeExplicit = isRangeExplicit

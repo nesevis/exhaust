@@ -24,7 +24,9 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let members = declaration.memberBlock.members
         let commands = extractCommands(from: members)
         let invariants = extractInvariants(from: members)
-        let hasAnyAsync = commands.contains(where: \.isAsync) || invariants.contains(where: \.isAsync)
+        let hasAnyAsync =
+            commands.contains(where: \.isAsync)
+            || invariants.contains(where: \.isAsync)
 
         let proto = hasAnyAsync ? "AsyncContractSpec" : "ContractSpec"
         let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
@@ -60,7 +62,9 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
-        let hasAnyAsync = commands.contains(where: \.isAsync) || invariants.contains(where: \.isAsync)
+        let hasAnyAsync =
+            commands.contains(where: \.isAsync)
+            || invariants.contains(where: \.isAsync)
 
         var decls: [DeclSyntax] = []
 
@@ -249,7 +253,9 @@ private func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
             cases.append("        case \(cmd.methodName)")
             descriptionCases.append("            case .\(cmd.methodName): \"\(cmd.methodName)\"")
         } else {
-            let assocValues = cmd.parameters.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+            let assocValues = cmd.parameters.map {
+                "\($0.label): \($0.type)"
+            }.joined(separator: ", ")
             cases.append("        case \(cmd.methodName)(\(assocValues))")
 
             let bindings = cmd.parameters.map(\.label).joined(separator: ", ")
@@ -287,10 +293,14 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
             choices.append("            (\(cmd.weight), #gen(\(genExpr)) { \(param.label) in Command.\(cmd.methodName)(\(param.label): \(param.label)) })")
         } else if cmd.generatorExprs.count > 1 {
             // Multiple parameters — #gen with zip
-            let qualifiedGens = zip(cmd.generatorExprs, cmd.parameters).map { qualifyGenExpression($0.0, paramType: $0.1.type) }
+            let qualifiedGens = zip(cmd.generatorExprs, cmd.parameters).map {
+                qualifyGenExpression($0.0, paramType: $0.1.type)
+            }
             let genArgs = qualifiedGens.joined(separator: ", ")
             let closureParams = cmd.parameters.map(\.label).joined(separator: ", ")
-            let constructorArgs = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
+            let constructorArgs = cmd.parameters.map {
+                "\($0.label): \($0.label)"
+            }.joined(separator: ", ")
             choices.append("            (\(cmd.weight), #gen(\(genArgs)) { \(closureParams) in Command.\(cmd.methodName)(\(constructorArgs)) })")
         } else {
             // No generators specified — use .just for parameterless, error otherwise
@@ -337,7 +347,10 @@ private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> 
     """
 }
 
-private func synthesizeCheckInvariants(invariants: [InvariantInfo], hasAnyAsync: Bool) -> DeclSyntax {
+private func synthesizeCheckInvariants(
+    invariants: [InvariantInfo],
+    hasAnyAsync: Bool
+) -> DeclSyntax {
     let signature = hasAnyAsync
         ? "func checkInvariants() async throws"
         : "func checkInvariants() throws"

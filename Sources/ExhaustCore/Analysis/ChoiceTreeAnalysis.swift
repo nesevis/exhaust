@@ -111,25 +111,43 @@ public enum ChoiceTreeAnalysis {
             let finiteParams = parameters.enumerated().map { i, param -> FiniteParameter in
                 switch param.kind {
                 case let .finiteChooseBits(range, tag):
-                    return FiniteParameter(index: i, domainSize: param.domainSize, kind: .chooseBits(range: range, tag: tag))
+                    return FiniteParameter(
+                        index: i,
+                        domainSize: param.domainSize,
+                        kind: .chooseBits(range: range, tag: tag)
+                    )
                 case let .pick(choices):
-                    return FiniteParameter(index: i, domainSize: param.domainSize, kind: .pick(choices: choices))
+                    return FiniteParameter(
+                        index: i,
+                        domainSize: param.domainSize,
+                        kind: .pick(choices: choices)
+                    )
                 default:
                     fatalError("unreachable: allFinite check passed")
                 }
             }
             var totalSpace: UInt64 = 1
             for param in finiteParams {
-                let (product, overflow) = totalSpace.multipliedReportingOverflow(by: param.domainSize)
+                let (product, overflow) =
+                    totalSpace.multipliedReportingOverflow(by: param.domainSize)
                 if overflow {
                     totalSpace = .max
                     break
                 }
                 totalSpace = product
             }
-            return .finite(FiniteDomainProfile(parameters: finiteParams, totalSpace: totalSpace, originalTree: bestTree))
+            let profile = FiniteDomainProfile(
+                parameters: finiteParams,
+                totalSpace: totalSpace,
+                originalTree: bestTree
+            )
+            return .finite(profile)
         } else {
-            return .boundary(BoundaryDomainProfile(parameters: parameters, originalTree: bestTree))
+            let profile = BoundaryDomainProfile(
+                parameters: parameters,
+                originalTree: bestTree
+            )
+            return .boundary(profile)
         }
     }
 
@@ -170,7 +188,12 @@ public enum ChoiceTreeAnalysis {
             return walkTree(inner, parameters: &parameters)
 
         case let .sequence(length, elements, metadata):
-            return walkSequence(length: length, elements: elements, metadata: metadata, parameters: &parameters)
+            return walkSequence(
+                length: length,
+                elements: elements,
+                metadata: metadata,
+                parameters: &parameters
+            )
 
         case .getSize:
             // getSize reads the current size parameter — a fixed value during
@@ -249,7 +272,9 @@ public enum ChoiceTreeAnalysis {
             )
             parameters.append(param)
         } else {
-            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(min: range.lowerBound, max: range.upperBound, tag: tag)
+            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                min: range.lowerBound, max: range.upperBound, tag: tag
+            )
             let param = BoundaryParameter(
                 index: parameters.count,
                 values: boundaryValues,
@@ -376,7 +401,11 @@ public enum ChoiceTreeAnalysis {
 
         let maxElementSlots = min(2, Int(lengthRange.upperBound), elements.count)
         for elementIndex in 0 ..< maxElementSlots {
-            guard walkElementTree(elements[elementIndex], elementIndex: elementIndex, parameters: &parameters) else {
+            guard walkElementTree(
+                elements[elementIndex],
+                elementIndex: elementIndex,
+                parameters: &parameters
+            ) else {
                 return false
             }
         }
@@ -404,7 +433,12 @@ public enum ChoiceTreeAnalysis {
     ) -> Bool {
         switch tree {
         case let .choice(value, metadata):
-            return walkElementChoice(value: value, metadata: metadata, elementIndex: elementIndex, parameters: &parameters)
+            return walkElementChoice(
+                value: value,
+                metadata: metadata,
+                elementIndex: elementIndex,
+                parameters: &parameters
+            )
 
         case .just:
             return true
@@ -417,7 +451,11 @@ public enum ChoiceTreeAnalysis {
                 return walkPick(children, parameters: &parameters)
             }
             for child in children {
-                guard walkElementTree(child, elementIndex: elementIndex, parameters: &parameters) else { return false }
+                guard walkElementTree(
+                    child,
+                    elementIndex: elementIndex,
+                    parameters: &parameters
+                ) else { return false }
             }
             return true
 
@@ -460,7 +498,9 @@ public enum ChoiceTreeAnalysis {
             )
             parameters.append(param)
         } else {
-            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(min: range.lowerBound, max: range.upperBound, tag: tag)
+            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                min: range.lowerBound, max: range.upperBound, tag: tag
+            )
             let param = BoundaryParameter(
                 index: parameters.count,
                 values: boundaryValues,

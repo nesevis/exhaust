@@ -100,7 +100,12 @@ public struct ExhaustReport: Sendable {
         var phaseAcceptances: [ReducerPhaseIdentifier: Int] = [:]
         var phaseStructural: [ReducerPhaseIdentifier: Int] = [:]
         for outcome in cycleOutcomes {
-            for (phase, disposition) in [(ReducerPhaseIdentifier.baseDescent, outcome.baseDescent), (.fibreDescent, outcome.fibreDescent), (.exploration, outcome.exploration), (.relaxRound, outcome.relaxRound)] {
+            for (phase, disposition) in [
+                (ReducerPhaseIdentifier.baseDescent, outcome.baseDescent),
+                (.fibreDescent, outcome.fibreDescent),
+                (.exploration, outcome.exploration),
+                (.relaxRound, outcome.relaxRound),
+            ] {
                 if case let .ran(phaseOutcome) = disposition {
                     phaseInvocations[phase, default: 0] += phaseOutcome.propertyInvocations
                     phaseAcceptances[phase, default: 0] += phaseOutcome.acceptances
@@ -115,7 +120,12 @@ public struct ExhaustReport: Sendable {
             guard invocations > 0 else { return "" }
             return " \(tag):\(invocations)/\(structural)s+\(value)v"
         }
-        let parts = [label(.baseDescent, "B"), label(.fibreDescent, "F"), label(.exploration, "E"), label(.relaxRound, "R")]
+        let parts = [
+            label(.baseDescent, "B"),
+            label(.fibreDescent, "F"),
+            label(.exploration, "E"),
+            label(.relaxRound, "R"),
+        ]
         let joined = parts.joined()
         return joined.isEmpty ? "" : "phases=\(joined.dropFirst())"
     }
@@ -129,7 +139,11 @@ public struct ExhaustReport: Sendable {
         let predictionLabel = predictionTotal > 0
             ? "\(fibrePredictionCorrect)/\(predictionTotal)"
             : "n/a"
-        let signalLabel = (zeroingDependencyCount > 0 || fibreExhaustedCleanCount > 0 || fibreBailCount > 0)
+        let hasSignals =
+            zeroingDependencyCount > 0
+            || fibreExhaustedCleanCount > 0
+            || fibreBailCount > 0
+        let signalLabel = hasSignals
             ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
             : ""
         let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"

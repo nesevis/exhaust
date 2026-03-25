@@ -88,7 +88,9 @@ public struct BinarySearchEncoder: ComposableEncoder {
                 continue
             }
             let currentBP = value.choice.bitPattern64
-            let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
+            let isWithinRecordedRange =
+                value.isRangeExplicit
+                && value.choice.fits(in: value.validRange)
             let targetBP = isWithinRecordedRange
                 ? value.choice.reductionTarget(in: value.validRange)
                 : value.choice.semanticSimplest.bitPattern64
@@ -109,12 +111,16 @@ public struct BinarySearchEncoder: ComposableEncoder {
             let stepper: DirectionalStepper
 
             if currentBP > targetBP {
-                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
+                let validConvergedOrigin =
+                    (convergedOrigin?.configuration == encoderConfiguration)
+                    ? convergedOrigin : nil
                 effectiveBound = validConvergedOrigin?.bound ?? targetBP
                 isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBP))
             } else {
-                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
+                let validConvergedOrigin =
+                    (convergedOrigin?.configuration == encoderConfiguration)
+                    ? convergedOrigin : nil
                 effectiveBound = validConvergedOrigin?.bound ?? targetBP
                 isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .upward(MaxBinarySearchStepper(lo: currentBP, hi: effectiveBound))
@@ -244,7 +250,8 @@ public struct BinarySearchEncoder: ComposableEncoder {
                    case .downward = state.stepper,
                    state.convergedOriginBound > state.targetBP,
                    state.convergedOriginBound > 0,
-                   state.convergedOriginBound < sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
+                   state.convergedOriginBound
+                    < sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
                 {
                     searchPhase = .validatingFloor(
                         floor: state.convergedOriginBound,
@@ -253,7 +260,10 @@ public struct BinarySearchEncoder: ComposableEncoder {
                     savedEntry = sequence[state.seqIdx]
                     let probeBP = state.convergedOriginBound - 1
                     sequence[state.seqIdx] = .value(.init(
-                        choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: probeBP), tag: state.choiceTag),
+                        choice: ChoiceValue(
+                            state.choiceTag.makeConvertible(bitPattern64: probeBP),
+                            tag: state.choiceTag
+                        ),
                         validRange: state.validRange,
                         isRangeExplicit: state.isRangeExplicit
                     ))
@@ -300,7 +310,10 @@ public struct BinarySearchEncoder: ComposableEncoder {
                 if let saved = savedEntry {
                     if lastAccepted {
                         let state = targets[currentIndex]
-                        let acceptedChoice = ChoiceValue.fromShortlexKey(currentKey, tag: state.choiceTag)
+                        let acceptedChoice = ChoiceValue.fromShortlexKey(
+                            currentKey,
+                            tag: state.choiceTag
+                        )
                         sequence[state.seqIdx] = .reduced(.init(
                             choice: acceptedChoice,
                             validRange: state.validRange,
@@ -350,7 +363,10 @@ public struct BinarySearchEncoder: ComposableEncoder {
             let state = targets[currentIndex]
             if lastAccepted {
                 sequence[state.seqIdx] = .value(.init(
-                    choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted), tag: state.choiceTag),
+                    choice: ChoiceValue(
+                        state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted),
+                        tag: state.choiceTag
+                    ),
                     validRange: state.validRange,
                     isRangeExplicit: state.isRangeExplicit
                 ))
@@ -368,7 +384,10 @@ public struct BinarySearchEncoder: ComposableEncoder {
         }
         savedEntry = sequence[state.seqIdx]
         sequence[state.seqIdx] = .value(.init(
-            choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: bitPattern), tag: state.choiceTag),
+            choice: ChoiceValue(
+                state.choiceTag.makeConvertible(bitPattern64: bitPattern),
+                tag: state.choiceTag
+            ),
             validRange: state.validRange,
             isRangeExplicit: state.isRangeExplicit
         ))

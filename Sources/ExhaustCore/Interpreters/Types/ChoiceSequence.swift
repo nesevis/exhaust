@@ -85,7 +85,8 @@ public extension ChoiceSequence {
             flatten(gen, includingAllBranches: includingAllBranches, into: &output)
         case let .group(array, _):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
-               case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected)
+               case let .selected(.branch(_, _, id, branchIDs, choice)) =
+                    array.first(where: \.isSelected)
             {
                 output.append(.group(true))
                 output.append(.branch(.init(id: id, validIDs: branchIDs)))
@@ -93,7 +94,11 @@ public extension ChoiceSequence {
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var cIdx = 0
                 while cIdx < children.count {
-                    flatten(children[cIdx], includingAllBranches: includingAllBranches, into: &output)
+                    flatten(
+                        children[cIdx],
+                        includingAllBranches: includingAllBranches,
+                        into: &output
+                    )
                     cIdx += 1
                 }
                 output.append(.group(false))
@@ -256,7 +261,9 @@ public extension ChoiceSequence {
                     continue
                 }
                 // Check if the parent frame (if any) is a sequence
-                if let parent = stack.last, case .sequence(true, isLengthExplicit: _) = parent.kind {
+                if let parent = stack.last,
+                   case .sequence(true, isLengthExplicit: _) = parent.kind
+                {
                     spans.append(ChoiceSpan(
                         kind: frame.kind,
                         range: frame.start ... i,
@@ -271,7 +278,9 @@ public extension ChoiceSequence {
                 }
 
             case .value, .reduced, .just:
-                if let parent = stack.last, case .sequence(true, isLengthExplicit: _) = parent.kind {
+                if let parent = stack.last,
+                   case .sequence(true, isLengthExplicit: _) = parent.kind
+                {
                     spans.append(ChoiceSpan(
                         kind: entry,
                         range: i ... i,
@@ -417,7 +426,8 @@ public extension ChoiceSequence {
             case (.value, .value), (.reduced, .value), (.value, .reduced), (.reduced, .reduced),
                  (.just, .value), (.just, .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
-            case (.sequence(true, isLengthExplicit: _), .value), (.sequence(true, isLengthExplicit: _), .reduced):
+            case (.sequence(true, isLengthExplicit: _), .value),
+                 (.sequence(true, isLengthExplicit: _), .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
             case (_, .group(true)), (_, .bind(true)), (_, .sequence(true, isLengthExplicit: _)):
                 depth += 1
@@ -474,7 +484,10 @@ public extension ChoiceSequence {
                     } else {
                         // Mixed-kind children: extract same-kind subsets so values of the
                         // same type can still be reduced in tandem across unrelated draws.
-                        var byKind = [SiblingChildKind: [(range: ClosedRange<Int>, kind: SiblingChildKind)]]()
+                        typealias SiblingChild = (
+                            range: ClosedRange<Int>, kind: SiblingChildKind
+                        )
+                        var byKind = [SiblingChildKind: [SiblingChild]]()
                         for child in frame.children {
                             byKind[child.kind, default: []].append(child)
                         }
@@ -521,12 +534,19 @@ public extension ChoiceSequence {
         in containerRange: ClosedRange<Int>
     ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
         guard !sequence.isEmpty else { return [] }
-        guard containerRange.lowerBound >= 0, containerRange.upperBound < sequence.count else { return [] }
+        guard containerRange.lowerBound >= 0,
+              containerRange.upperBound < sequence.count
+        else { return [] }
 
         let open = sequence[containerRange.lowerBound]
         let close = sequence[containerRange.upperBound]
-        let isGroupContainer = (open == .group(true) && close == .group(false)) || (open == .bind(true) && close == .bind(false))
-        let isSequenceContainer = if case .sequence(true, isLengthExplicit: _) = open, case .sequence(false, isLengthExplicit: _) = close {
+        let isGroupContainer =
+            (open == .group(true) && close == .group(false))
+            || (open == .bind(true) && close == .bind(false))
+        let isSequenceContainer =
+            if case .sequence(true, isLengthExplicit: _) = open,
+               case .sequence(false, isLengthExplicit: _) = close
+            {
             true
         } else {
             false
@@ -543,10 +563,14 @@ public extension ChoiceSequence {
                 index += 1
 
             case .group(true), .bind(true), .sequence(true, isLengthExplicit: _):
-                let isGroupChild = sequence[index] == .group(true) || sequence[index] == .bind(true)
                 let openEntry = sequence[index]
-                let isGroupOpen = openEntry == .group(true) || openEntry == .bind(true)
-                let isSequenceEntry = if case .sequence(true, isLengthExplicit: _) = openEntry { true } else { false }
+                let isGroupChild = openEntry == .group(true) || openEntry == .bind(true)
+                let isSequenceEntry =
+                    if case .sequence(true, isLengthExplicit: _) = openEntry {
+                        true
+                    } else {
+                        false
+                    }
                 let start = index
                 var depth = 1
                 index += 1

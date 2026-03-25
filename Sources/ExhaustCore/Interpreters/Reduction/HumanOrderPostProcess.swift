@@ -32,7 +32,9 @@ extension ReductionScheduler {
                 }
             }
 
-            let keys = group.ranges.map { ChoiceSequence.siblingComparisonKey(from: sequence, range: $0) }
+            let keys = group.ranges.map {
+                ChoiceSequence.siblingComparisonKey(from: sequence, range: $0)
+            }
             let firstLength = keys[0].count
             guard firstLength > 0 else { return false }
             for key in keys {
@@ -65,7 +67,9 @@ extension ReductionScheduler {
         for group in sortedGroups {
             let ranges = group.ranges
             // Re-extract keys from the current (possibly already reordered) best sequence.
-            let keys = ranges.map { ChoiceSequence.siblingComparisonKey(from: bestSequence, range: $0) }
+            let keys = ranges.map {
+                ChoiceSequence.siblingComparisonKey(from: bestSequence, range: $0)
+            }
 
             let sortedIndices = keys.indices.sorted { lhs, rhs in
                 naturalOrderPrecedes(keys[lhs], keys[rhs])

@@ -111,9 +111,15 @@ public enum HillClimber {
                         var probe = currentSequence
                         probe[i] = newEntry
 
-                        guard case let .success(value, freshTree, _) = ReductionMaterializer.materialize(
-                            gen, prefix: probe, mode: .guided(seed: probePRNG.next(), fallbackTree: nil)
-                        ) else {
+                        let probeResult = ReductionMaterializer.materialize(
+                            gen,
+                            prefix: probe,
+                            mode: .guided(
+                                seed: probePRNG.next(),
+                                fallbackTree: nil
+                            )
+                        )
+                        guard case let .success(value, freshTree, _) = probeResult else {
                             probesUsed += 1
                             return false
                         }
@@ -121,7 +127,11 @@ public enum HillClimber {
                         let sequence = ChoiceSequence(freshTree)
 
                         if property(value) == false {
-                            let ceTree = reflectOrFallback(gen: gen, value: value, fallback: freshTree)
+                            let ceTree = reflectOrFallback(
+                                gen: gen,
+                                value: value,
+                                fallback: freshTree
+                            )
                             foundCounterexample = (value, ceTree)
                             return false
                         }
@@ -144,7 +154,11 @@ public enum HillClimber {
                     }
 
                     if let ce = foundCounterexample {
-                        return .counterexample(value: ce.value, tree: ce.tree, probesUsed: probesUsed)
+                        return .counterexample(
+                            value: ce.value,
+                            tree: ce.tree,
+                            probesUsed: probesUsed
+                        )
                     }
 
                     if didAccept {
@@ -176,9 +190,15 @@ public enum HillClimber {
                     var probe = currentSequence
                     probe[i] = .branch(.init(id: altID, validIDs: b.validIDs))
 
-                    guard case let .success(value, freshTree, _) = ReductionMaterializer.materialize(
-                        gen, prefix: probe, mode: .guided(seed: probePRNG.next(), fallbackTree: nil)
-                    ) else {
+                    let branchResult = ReductionMaterializer.materialize(
+                        gen,
+                        prefix: probe,
+                        mode: .guided(
+                            seed: probePRNG.next(),
+                            fallbackTree: nil
+                        )
+                    )
+                    guard case let .success(value, freshTree, _) = branchResult else {
                         probesUsed += 1
                         continue
                     }

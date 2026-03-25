@@ -54,10 +54,15 @@ public enum Interpreters {
 
         case let .impure(operation, continuation):
             // 1. Interpret the operation against the final output value.
-            let intermediateResults = try interpretOperationBackward(operation, onFinalOutput: finalOutput, outputType: Output.self)
+            let intermediateResults = try interpretOperationBackward(
+                operation,
+                onFinalOutput: finalOutput,
+                outputType: Output.self
+            )
 
             // 2. For each successful intermediate result...
-            return try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
+            return try intermediateResults.flatMap {
+                (intermediateValue: Any, partialPath: [ChoiceTree]) in
                 let nextGen = try continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -151,7 +156,8 @@ public enum Interpreters {
                         if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
                            roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
                         {
-                            return try reflectRecursive(inner, onFinalOutput: inverted).map { result in
+                            let reflected = try reflectRecursive(inner, onFinalOutput: inverted)
+                            return reflected.map { result in
                                 (value: roundTripped, path: result.path)
                             }
                         }
@@ -159,10 +165,16 @@ public enum Interpreters {
                         // Forward application failed — fall through to error
                     }
                 }
-                throw ReflectionError.forwardOnlyMap(inputType: "\(inputType)", outputType: "\(outputType)")
+                throw ReflectionError.forwardOnlyMap(
+                    inputType: "\(inputType)",
+                    outputType: "\(outputType)"
+                )
             case let .bind(forward, backward, inputType, outputType):
                 guard let backward else {
-                    throw ReflectionError.forwardOnlyBind(inputType: "\(inputType)", outputType: "\(outputType)")
+                    throw ReflectionError.forwardOnlyBind(
+                        inputType: "\(inputType)",
+                        outputType: "\(outputType)"
+                    )
                 }
                 // Xia et al.'s comap at bind sites: extract the inner value from the final output.
                 let innerValue = try backward(finalOutput)
@@ -174,9 +186,16 @@ public enum Interpreters {
                 // Combine paths: inner choices followed by bound choices.
                 return innerResults.flatMap { innerResult in
                     boundResults.map { boundResult in
-                        let innerTree = innerResult.path.count == 1 ? innerResult.path[0] : .group(innerResult.path)
-                        let boundTree = boundResult.path.count == 1 ? boundResult.path[0] : .group(boundResult.path)
-                        return (value: boundResult.value, path: [.bind(inner: innerTree, bound: boundTree)])
+                        let innerTree = innerResult.path.count == 1
+                            ? innerResult.path[0]
+                            : .group(innerResult.path)
+                        let boundTree = boundResult.path.count == 1
+                            ? boundResult.path[0]
+                            : .group(boundResult.path)
+                        return (
+                            value: boundResult.value,
+                            path: [.bind(inner: innerTree, bound: boundTree)]
+                        )
                     }
                 }
             }
@@ -201,7 +220,8 @@ public enum Interpreters {
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         do {
-            return try reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+            return try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+                .map { ($0.value, $0.path) }
         } catch ReflectionError.reflectedNil {
             return []
         }
@@ -212,7 +232,11 @@ public enum Interpreters {
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchIDs = choices.map(\.id)
-        let results = try choices.flatMap { choice -> [(value: Any, siteID: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
+        let results = try choices.flatMap {
+            choice -> [(
+                value: Any, siteID: UInt64, weight: UInt64,
+                id: UInt64, isPicked: Bool, path: ChoiceTree
+            )] in
             do {
                 let subPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
                 let value = subPaths.firstNonNil(\.value)
@@ -223,7 +247,8 @@ public enum Interpreters {
                 {
                     isPicked = equatableOutput.isEqual(equatableValue)
                 } else if let convertible = value as? any BitPatternConvertible {
-                    isPicked = choice.generator.associatedRange?.contains(convertible.bitPattern64) ?? false
+                    isPicked = choice.generator.associatedRange?
+                        .contains(convertible.bitPattern64) ?? false
                 }
 
                 return subPaths
@@ -287,7 +312,10 @@ public enum Interpreters {
 
         let bitPattern = convertibleValue.bitPattern64
         if isRangeExplicit, (min ... max).contains(bitPattern) == false {
-            throw ReflectionError.inputWasOutOfGeneratorRange(String(describing: convertibleValue), min ... max)
+            throw ReflectionError.inputWasOutOfGeneratorRange(
+                String(describing: convertibleValue),
+                min ... max
+            )
         }
 
         let reflectedRange: ClosedRange<UInt64> = if isRangeExplicit {
@@ -297,8 +325,15 @@ public enum Interpreters {
                 .first(where: { $0.contains(bitPattern) }) ?? (UInt64.min ... UInt64.max)
         }
 
-        let metadata = ChoiceMetadata(validRange: reflectedRange, isRangeExplicit: isRangeExplicit)
-        return [(value: convertibleValue, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
+        let metadata = ChoiceMetadata(
+            validRange: reflectedRange,
+            isRangeExplicit: isRangeExplicit
+        )
+        let choiceTree = ChoiceTree.choice(
+            .init(convertibleValue, tag: tag),
+            metadata
+        )
+        return [(value: convertibleValue, path: [choiceTree])]
     }
 
     @inline(__always)
@@ -330,13 +365,22 @@ public enum Interpreters {
         if let lengthRange = lengthGen.associatedRange {
             validRange = lengthRange
         } else {
-            let lengthReflection = try reflectRecursive(lengthGen, onFinalOutput: UInt64(targetArray.underestimatedCount))
-            validRange = lengthReflection.firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
+            let targetLength = UInt64(targetArray.underestimatedCount)
+            let lengthReflection = try reflectRecursive(
+                lengthGen,
+                onFinalOutput: targetLength
+            )
+            validRange = lengthReflection
+                .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
                 ?? UInt64.bitPatternRanges[0]
         }
 
         for elementTarget in targetArray {
-            guard let (value, path) = try reflectRecursive(elementGen, onFinalOutput: elementTarget).first else {
+            let elementResults = try reflectRecursive(
+                elementGen,
+                onFinalOutput: elementTarget
+            )
+            guard let (value, path) = elementResults.first else {
                 throw ReflectionError.couldNotReflectOnSequenceElement("\(elementTarget)")
             }
             combinedResults.append(value)

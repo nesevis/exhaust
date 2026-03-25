@@ -65,7 +65,10 @@ public extension ReflectiveGenerator {
         let intervalSeconds = Int64(abs(interval.fixedSeconds))
 
         precondition(intervalSeconds > 0, "Interval must be non-zero")
-        precondition(intervalSeconds <= upperSeconds - lowerSeconds, "Interval must not exceed the date range")
+        precondition(
+            intervalSeconds <= upperSeconds - lowerSeconds,
+            "Interval must not exceed the date range"
+        )
 
         let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
 
@@ -73,7 +76,11 @@ public extension ReflectiveGenerator {
             operation: .chooseBits(
                 min: Int64(0).bitPattern64,
                 max: numSteps.bitPattern64,
-                tag: .date(lowerSeconds: lowerSeconds, intervalSeconds: intervalSeconds, timeZoneID: timeZone.identifier),
+                tag: .date(
+                    lowerSeconds: lowerSeconds,
+                    intervalSeconds: intervalSeconds,
+                    timeZoneID: timeZone.identifier
+                ),
                 isRangeExplicit: true
             )
         ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
@@ -83,7 +90,8 @@ public extension ReflectiveGenerator {
                 Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
             },
             backward: { date in
-                Int64(floor((date.timeIntervalSinceReferenceDate - Double(lowerSeconds)) / Double(intervalSeconds)))
+                let offset = date.timeIntervalSinceReferenceDate - Double(lowerSeconds)
+                return Int64(floor(offset / Double(intervalSeconds)))
             }
         )
     }
@@ -100,7 +108,9 @@ public extension ReflectiveGenerator {
         timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
         let offsetSeconds = TimeInterval(span.fixedSeconds)
-        let range = anchor.addingTimeInterval(-offsetSeconds) ... anchor.addingTimeInterval(offsetSeconds)
+        let lower = anchor.addingTimeInterval(-offsetSeconds)
+        let upper = anchor.addingTimeInterval(offsetSeconds)
+        let range = lower ... upper
         return date(between: range, interval: interval, timeZone: timeZone)
     }
 

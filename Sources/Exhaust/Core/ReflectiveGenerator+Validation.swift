@@ -113,7 +113,15 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         line: UInt = #line,
         column: UInt = #column
     ) -> ValidationReport {
-        _validate(samples: samples, seed: seed, differ: nil, fileID: fileID, filePath: filePath, line: line, column: column)
+        _validate(
+            samples: samples,
+            seed: seed,
+            differ: nil,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
     }
 }
 
@@ -221,7 +229,10 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                                 ))
                             }
                         } else {
-                            failures.append(.reflectionFailed(sampleIndex: sampleIndex, errorDescription: "replay of reflected tree returned nil"))
+                            failures.append(.reflectionFailed(
+                                sampleIndex: sampleIndex,
+                                errorDescription: "replay of reflected tree returned nil"
+                            ))
                         }
                     } else {
                         // Non-Equatable path: compare via choice sequences
@@ -229,25 +240,40 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                         if generatedSequence == reflectedSequence {
                             roundTripSuccesses += 1
                         } else {
+                            let detail = "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)"
                             failures.append(.reflectionRoundTripMismatch(
                                 sampleIndex: sampleIndex,
-                                detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)"
+                                detail: detail
                             ))
                         }
                     }
                 } catch let error as Interpreters.ReflectionError {
                     switch error {
                     case let .forwardOnlyMap(inputType, outputType):
-                        failures.append(.forwardOnlyTransform(inputType: "\(inputType)", outputType: "\(outputType)", kind: "map"))
+                        failures.append(.forwardOnlyTransform(
+                            inputType: "\(inputType)",
+                            outputType: "\(outputType)",
+                            kind: "map"
+                        ))
                         forwardOnlyDetected = true
                     case let .forwardOnlyBind(inputType, outputType):
-                        failures.append(.forwardOnlyTransform(inputType: "\(inputType)", outputType: "\(outputType)", kind: "bind"))
+                        failures.append(.forwardOnlyTransform(
+                            inputType: "\(inputType)",
+                            outputType: "\(outputType)",
+                            kind: "bind"
+                        ))
                         forwardOnlyDetected = true
                     default:
-                        failures.append(.reflectionFailed(sampleIndex: sampleIndex, errorDescription: "\(error)"))
+                        failures.append(.reflectionFailed(
+                            sampleIndex: sampleIndex,
+                            errorDescription: "\(error)"
+                        ))
                     }
                 } catch {
-                    failures.append(.reflectionFailed(sampleIndex: sampleIndex, errorDescription: "\(error)"))
+                    failures.append(.reflectionFailed(
+                        sampleIndex: sampleIndex,
+                        errorDescription: "\(error)"
+                    ))
                 }
             }
 
@@ -263,7 +289,10 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                             case .equal:
                                 determinismSuccesses += 1
                             case let .notEqual(detail):
-                                failures.append(.replayNonDeterministic(sampleIndex: sampleIndex, detail: detail))
+                                failures.append(.replayNonDeterministic(
+                                    sampleIndex: sampleIndex,
+                                    detail: detail
+                                ))
                             }
                         } else {
                             // Non-Equatable: both non-nil is sufficient since replay is deterministic by construction
@@ -279,7 +308,9 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         }
 
         let elapsed = ContinuousClock.now - startTime
-        let elapsedSeconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) * 1e-18
+        let elapsedSeconds =
+            Double(elapsed.components.seconds)
+            + Double(elapsed.components.attoseconds) * 1e-18
 
         if valuesGenerated == 0 {
             failures.append(.noValuesGenerated)

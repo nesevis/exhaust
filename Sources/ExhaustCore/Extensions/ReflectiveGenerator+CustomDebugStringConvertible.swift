@@ -40,12 +40,20 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             return prefix + connector + "pure(\(value))"
 
         case let .impure(operation, _):
-            let operationDesc = operationDescription(operation, childPrefix: childPrefix, depth: depth + 1)
+            let operationDesc = operationDescription(
+                operation,
+                childPrefix: childPrefix,
+                depth: depth + 1
+            )
             return prefix + connector + operationDesc
         }
     }
 
-    private func operationDescription(_ operation: ReflectiveOperation, childPrefix: String, depth: Int) -> String {
+    private func operationDescription(
+        _ operation: ReflectiveOperation,
+        childPrefix: String,
+        depth: Int
+    ) -> String {
         switch operation {
         case let .chooseBits(min, max, tag, isRangeExplicit):
             let range = formatBitRange(min: min, max: max, tag: tag)
@@ -70,7 +78,9 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
                     depth: depth + 1
                 )
 
-                return childPrefix + (isLast ? "└── " : "├── ") + choiceHeader + "\n" + nestedDesc
+                let connector = isLast ? "└── " : "├── "
+                return childPrefix + connector + choiceHeader
+                    + "\n" + nestedDesc
             }
 
             return header + "\n" + childDescriptions.joined(separator: "\n")
@@ -83,13 +93,21 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
 
             let childDescriptions = generators.enumerated().map { index, generator in
                 let isLast = index == generators.count - 1
-                return generator.treeDescription(prefix: childPrefix, isLast: isLast, depth: depth + 1)
+                return generator.treeDescription(
+                    prefix: childPrefix,
+                    isLast: isLast,
+                    depth: depth + 1
+                )
             }
 
             return header + "\n" + childDescriptions.joined(separator: "\n")
 
         case let .sequence(length, gen):
-            let lengthDesc = length.treeDescription(prefix: childPrefix, isLast: false, depth: depth + 1)
+            let lengthDesc = length.treeDescription(
+                prefix: childPrefix,
+                isLast: false,
+                depth: depth + 1
+            )
             let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "sequence\n" + lengthDesc + "\n" + genDesc
 
@@ -119,8 +137,13 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
         case let .classify(gen, fingerprint, classifiers):
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
             let classifierLabels = classifiers.map(\.label).joined(separator: ", ")
-            let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "classify(fingerprint: \(fingerprintShort), labels: [\(classifierLabels)])\n" + genDesc
+            let genDesc = gen.treeDescription(
+                prefix: childPrefix,
+                isLast: true,
+                depth: depth + 1
+            )
+            let header = "classify(fingerprint: \(fingerprintShort), labels: [\(classifierLabels)])"
+            return header + "\n" + genDesc
 
         case let .unique(gen, fingerprint, keyExtractor):
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
@@ -137,7 +160,11 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
                 let direction = backward != nil ? "bind↔" : "bind→"
                 kindDesc = "\(direction): \(inputType) → \(outputType)"
             }
-            let innerDesc = inner.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+            let innerDesc = inner.treeDescription(
+                prefix: childPrefix,
+                isLast: true,
+                depth: depth + 1
+            )
             return "transform(\(kindDesc))\n" + innerDesc
         }
     }

@@ -69,7 +69,10 @@ public struct ScalarRangeSet: Sendable {
                 return cumulativeCounts[mid] + Int(value - range.lowerBound)
             }
         }
-        preconditionFailure("Scalar U+\(String(value, radix: 16, uppercase: true)) not found in ScalarRangeSet")
+        let hex = String(value, radix: 16, uppercase: true)
+        preconditionFailure(
+            "Scalar U+\(hex) not found in ScalarRangeSet"
+        )
     }
 
     /// Binary search for the range index containing the given flat index.
@@ -110,7 +113,12 @@ extension CharacterSet {
         while offset + 1 + planeSize <= bitmap.count {
             let planeIndex = UInt32(bitmap[offset])
             offset += 1
-            extractRanges(from: bitmap, byteStart: offset, planeBase: planeIndex &* 0x10000, into: &rangeSet)
+            extractRanges(
+                from: bitmap,
+                byteStart: offset,
+                planeBase: planeIndex &* 0x10000,
+                into: &rangeSet
+            )
             offset += planeSize
         }
 

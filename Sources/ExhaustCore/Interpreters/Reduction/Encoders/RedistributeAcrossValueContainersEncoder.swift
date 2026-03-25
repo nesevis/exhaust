@@ -28,7 +28,11 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        let spanCount = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context).count
+        let spanCount = Self.extractFilteredSpans(
+            from: sequence,
+            in: positionRange,
+            context: context
+        ).count
         guard spanCount >= 2 else { return nil }
         return min(spanCount * (spanCount - 1), 240) * 20
     }
@@ -468,14 +472,18 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
             let lhsNumerator: Int64
             let rhsNumerator: Int64
             if lhsMovesUpward {
-                let (lhsCandidate, lhsOverflow) = floatContext.lhsNumerator.addingReportingOverflow(signedDelta)
-                let (rhsCandidate, rhsOverflow) = floatContext.rhsNumerator.subtractingReportingOverflow(signedDelta)
+                let (lhsCandidate, lhsOverflow) =
+                    floatContext.lhsNumerator.addingReportingOverflow(signedDelta)
+                let (rhsCandidate, rhsOverflow) =
+                    floatContext.rhsNumerator.subtractingReportingOverflow(signedDelta)
                 guard lhsOverflow == false, rhsOverflow == false else { return nil }
                 lhsNumerator = lhsCandidate
                 rhsNumerator = rhsCandidate
             } else {
-                let (lhsCandidate, lhsOverflow) = floatContext.lhsNumerator.subtractingReportingOverflow(signedDelta)
-                let (rhsCandidate, rhsOverflow) = floatContext.rhsNumerator.addingReportingOverflow(signedDelta)
+                let (lhsCandidate, lhsOverflow) =
+                    floatContext.lhsNumerator.subtractingReportingOverflow(signedDelta)
+                let (rhsCandidate, rhsOverflow) =
+                    floatContext.rhsNumerator.addingReportingOverflow(signedDelta)
                 guard lhsOverflow == false, rhsOverflow == false else { return nil }
                 lhsNumerator = lhsCandidate
                 rhsNumerator = rhsCandidate
@@ -546,21 +554,33 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         let newLhsNum: Int64
         let newRhsNum: Int64
         if context.lhsMovesUpward {
-            let (lhsCandidate, lhsOverflow) = context.lhsNumerator.addingReportingOverflow(signedDelta)
-            let (rhsCandidate, rhsOverflow) = context.rhsNumerator.subtractingReportingOverflow(signedDelta)
+            let (lhsCandidate, lhsOverflow) =
+                context.lhsNumerator.addingReportingOverflow(signedDelta)
+            let (rhsCandidate, rhsOverflow) =
+                context.rhsNumerator.subtractingReportingOverflow(signedDelta)
             guard lhsOverflow == false, rhsOverflow == false else { return nil }
             newLhsNum = lhsCandidate
             newRhsNum = rhsCandidate
         } else {
-            let (lhsCandidate, lhsOverflow) = context.lhsNumerator.subtractingReportingOverflow(signedDelta)
-            let (rhsCandidate, rhsOverflow) = context.rhsNumerator.addingReportingOverflow(signedDelta)
+            let (lhsCandidate, lhsOverflow) =
+                context.lhsNumerator.subtractingReportingOverflow(signedDelta)
+            let (rhsCandidate, rhsOverflow) =
+                context.rhsNumerator.addingReportingOverflow(signedDelta)
             guard lhsOverflow == false, rhsOverflow == false else { return nil }
             newLhsNum = lhsCandidate
             newRhsNum = rhsCandidate
         }
 
-        guard let newChoice1 = choiceFromNumerator(newLhsNum, denominator: context.denominator, original: lhs),
-              let newChoice2 = choiceFromNumerator(newRhsNum, denominator: context.denominator, original: rhs)
+        guard let newChoice1 = choiceFromNumerator(
+            newLhsNum,
+            denominator: context.denominator,
+            original: lhs
+        ),
+              let newChoice2 = choiceFromNumerator(
+                newRhsNum,
+                denominator: context.denominator,
+                original: rhs
+              )
         else { return nil }
 
         return (newChoice1, newChoice2)
@@ -596,8 +616,14 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         guard let lhsRatio = FloatShrink.integerRatio(for: lhsValue, tag: tag),
               let rhsRatio = FloatShrink.integerRatio(for: rhsValue, tag: tag),
               let targetRatio = FloatShrink.integerRatio(for: targetValue, tag: tag),
-              let lhsAndRhsDenominator = leastCommonMultiple(lhsRatio.denominator, rhsRatio.denominator),
-              let denominator = leastCommonMultiple(lhsAndRhsDenominator, targetRatio.denominator),
+              let lhsAndRhsDenominator = leastCommonMultiple(
+                lhsRatio.denominator,
+                rhsRatio.denominator
+              ),
+              let denominator = leastCommonMultiple(
+                lhsAndRhsDenominator,
+                targetRatio.denominator
+              ),
               denominator > 0
         else { return nil }
 
@@ -639,8 +665,14 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         guard let lhsRatio = rationalForChoice(lhs),
               let rhsRatio = rationalForChoice(rhs),
               let targetRatio = rationalForTarget(lhs, targetBitPattern: lhsTargetBitPattern),
-              let lhsAndRhsDenominator = leastCommonMultiple(lhsRatio.denominator, rhsRatio.denominator),
-              let denominator = leastCommonMultiple(lhsAndRhsDenominator, targetRatio.denominator),
+              let lhsAndRhsDenominator = leastCommonMultiple(
+                lhsRatio.denominator,
+                rhsRatio.denominator
+              ),
+              let denominator = leastCommonMultiple(
+                lhsAndRhsDenominator,
+                targetRatio.denominator
+              ),
               denominator > 0
         else { return nil }
 

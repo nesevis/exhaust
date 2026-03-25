@@ -73,7 +73,13 @@ public enum BoundaryDomainAnalysis {
         case .double, .float:
             computeFloatBoundaryValues(min: min, max: max, tag: tag)
         case let .date(lowerSeconds, intervalSeconds, timeZoneID):
-            computeDateBoundaryValues(min: min, max: max, lowerSeconds: lowerSeconds, intervalSeconds: intervalSeconds, timeZoneID: timeZoneID)
+            computeDateBoundaryValues(
+                min: min,
+                max: max,
+                lowerSeconds: lowerSeconds,
+                intervalSeconds: intervalSeconds,
+                timeZoneID: timeZoneID
+            )
         case .bits:
             [min, max]
         default:
@@ -81,7 +87,11 @@ public enum BoundaryDomainAnalysis {
         }
     }
 
-    private static func computeIntegerBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
+    private static func computeIntegerBoundaryValues(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag
+    ) -> [UInt64] {
         var values: Set<UInt64> = [min, max]
         if min < max { values.insert(min + 1) }
         if max > min { values.insert(max - 1) }
@@ -94,7 +104,11 @@ public enum BoundaryDomainAnalysis {
         return values.sorted()
     }
 
-    private static func computeFloatBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
+    private static func computeFloatBoundaryValues(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag
+    ) -> [UInt64] {
         // For float types, check if range is the full type range
         let isFullRange: Bool = switch tag {
         case .double:
@@ -178,7 +192,13 @@ public enum BoundaryDomainAnalysis {
     /// Computes boundary values for date step indices.
     ///
     /// `min`/`max` are step indices in `[0, numSteps]`. Each step maps to real seconds as `lowerSeconds + step * intervalSeconds`. Boundary computation identifies interesting real-seconds values (epochs, calendar boundaries, DST transitions), then converts them to step indices. For each interesting point the ±1 step neighbors are also included.
-    private static func computeDateBoundaryValues(min: UInt64, max: UInt64, lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String) -> [UInt64] {
+    private static func computeDateBoundaryValues(
+        min: UInt64,
+        max: UInt64,
+        lowerSeconds: Int64,
+        intervalSeconds: Int64,
+        timeZoneID: String
+    ) -> [UInt64] {
         let minStep = Int64(bitPattern64: min)
         let maxStep = Int64(bitPattern64: max)
         guard maxStep > minStep, intervalSeconds > 0 else {
@@ -270,7 +290,12 @@ public enum BoundaryDomainAnalysis {
         }
 
         // 6. DST transition times for the specified timezone (converted to steps, with neighbors)
-        for transition in DSTTransitions.inRange(lower: lowerSeconds, upper: upperSeconds, timeZoneID: timeZoneID) {
+        let transitions = DSTTransitions.inRange(
+            lower: lowerSeconds,
+            upper: upperSeconds,
+            timeZoneID: timeZoneID
+        )
+        for transition in transitions {
             insertWithNeighbors(transition)
         }
 

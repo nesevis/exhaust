@@ -28,7 +28,9 @@ public extension ReflectiveGenerator {
     }
 
     /// Creates a generator that randomly selects from weighted generators.
-    static func oneOf(weighted choices: (Int, ReflectiveGenerator<Value>)...) -> ReflectiveGenerator<Value> {
+    static func oneOf(
+        weighted choices: (Int, ReflectiveGenerator<Value>)...
+    ) -> ReflectiveGenerator<Value> {
         Gen.pick(choices: choices.map { ($0.0, $0.1) })
     }
 }

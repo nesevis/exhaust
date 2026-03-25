@@ -28,7 +28,10 @@ public extension Gen {
     static func recursive<Output>(
         base: Output,
         maxDepth: UInt64,
-        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+        extend: @escaping (
+            @escaping () -> ReflectiveGenerator<Output>,
+            UInt64
+        ) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
         recursive(base: Gen.just(base), maxDepth: maxDepth, extend: extend)
     }
@@ -47,7 +50,10 @@ public extension Gen {
     static func recursive<Output>(
         base: ReflectiveGenerator<Output>,
         maxDepth: UInt64,
-        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+        extend: @escaping (
+            @escaping () -> ReflectiveGenerator<Output>,
+            UInt64
+        ) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
         // Generate a base siteID at construction time. Each unfolded layer gets
         // a deterministic siteID (baseSiteID &+ remaining) so CGS can tune

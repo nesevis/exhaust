@@ -102,7 +102,13 @@ public enum GeneratorTuning {
             samples = min(samples, max(convergenceMinSamples, maxRuns / 5))
         }
 
-        let tuned = try tune(generator, samples: samples, maxSize: maxSize, seed: seed, predicate: predicate)
+        let tuned = try tune(
+            generator,
+            samples: samples,
+            maxSize: maxSize,
+            seed: seed,
+            predicate: predicate
+        )
         return smoothAdaptively(tuned)
     }
 
@@ -241,7 +247,11 @@ public enum GeneratorTuning {
                     predicate: { _ in true }
                 )
                 return .impure(
-                    operation: .unique(gen: tunedInner, fingerprint: fingerprint, keyExtractor: keyExtractor),
+                    operation: .unique(
+                        gen: tunedInner,
+                        fingerprint: fingerprint,
+                        keyExtractor: keyExtractor
+                    ),
                     continuation: continuation
                 )
 
@@ -282,7 +292,8 @@ public enum GeneratorTuning {
 
         // Per-choice state: independent RNG stream (stored as seed+state tuples
         // since ~Copyable Xoshiro256 can't be stored in Array), accumulators, cache
-        var choiceRngStates: [(seed: UInt64, state: Xoshiro256.StateType)] = (0 ..< choiceCount).map {
+        var choiceRngStates: [(seed: UInt64, state: Xoshiro256.StateType)] =
+            (0 ..< choiceCount).map {
             let rng = context.rng.spawned(streamID: UInt64($0))
             return (rng.seed, rng.currentState)
         }
@@ -306,7 +317,10 @@ public enum GeneratorTuning {
 
             // Sample one batch for every choice
             for choiceIdx in 0 ..< choiceCount {
-                var rng = Xoshiro256(seed: choiceRngStates[choiceIdx].seed, state: choiceRngStates[choiceIdx].state)
+                var rng = Xoshiro256(
+                    seed: choiceRngStates[choiceIdx].seed,
+                    state: choiceRngStates[choiceIdx].state
+                )
                 for _ in totalSampled ..< batchEnd {
                     // Advance RNG to ensure each sample sees a unique state.
                     // Without this, choices with trivial generators (e.g. .just)
@@ -415,7 +429,10 @@ public enum GeneratorTuning {
 
             // The composed predicate checks the cache from Phase 1 first,
             // falling back to full continuation evaluation on cache miss.
-            var composedRng = Xoshiro256(seed: choiceRngStates[choiceIdx].seed, state: choiceRngStates[choiceIdx].state)
+            var composedRng = Xoshiro256(
+                seed: choiceRngStates[choiceIdx].seed,
+                state: choiceRngStates[choiceIdx].state
+            )
             let cache = continuationCaches[choiceIdx]
             let composedPredicate: (Any) -> Bool = { innerValue in
                 if let hashable = innerValue as? AnyHashable,
@@ -493,7 +510,12 @@ public enum GeneratorTuning {
         // All-zero safety: restore with weight 1 to prevent draw returning nil
         if tunedChoices.allSatisfy({ $0.weight == 0 }) {
             tunedChoices = ContiguousArray(tunedChoices.map {
-                ReflectiveOperation.PickTuple(siteID: $0.siteID, id: $0.id, weight: 1, generator: $0.generator)
+                ReflectiveOperation.PickTuple(
+                    siteID: $0.siteID,
+                    id: $0.id,
+                    weight: 1,
+                    generator: $0.generator
+                )
             })
         }
 
@@ -569,7 +591,10 @@ public enum GeneratorTuning {
         // Try to subdivide the length generator if it's a chooseBits
         // (only if we haven't already subdivided)
         if !insideSubdividedChooseBits,
-           case let .impure(.chooseBits(lower, upper, tag, isRangeExplicit), lengthContinuation) = lengthGen
+           case let .impure(
+            .chooseBits(lower, upper, tag, isRangeExplicit),
+            lengthContinuation
+           ) = lengthGen
         {
             context.depth += 1
             defer { context.depth -= 1 }
@@ -769,7 +794,10 @@ public enum GeneratorTuning {
                         if otherIndex == index {
                             values.append(componentValue)
                         } else {
-                            var rngCopy = Xoshiro256(seed: context.rng.seed, state: context.rng.currentState)
+                            var rngCopy = Xoshiro256(
+                                seed: context.rng.seed,
+                                state: context.rng.currentState
+                            )
                             guard let otherValue = try ValueInterpreter<Any>.generate(
                                 otherGen,
                                 maxRuns: 1,
@@ -820,7 +848,12 @@ public enum GeneratorTuning {
     ) throws -> ReflectiveGenerator<Output> {
         guard filterType != .rejectionSampling else {
             return .impure(
-                operation: .filter(gen: subGen, fingerprint: fingerprint, filterType: filterType, predicate: filterPredicate),
+                operation: .filter(
+                    gen: subGen,
+                    fingerprint: fingerprint,
+                    filterType: filterType,
+                    predicate: filterPredicate
+                ),
                 continuation: continuation
             )
         }
@@ -834,7 +867,12 @@ public enum GeneratorTuning {
         )
 
         return .impure(
-            operation: .filter(gen: tunedInner, fingerprint: fingerprint, filterType: filterType, predicate: filterPredicate),
+            operation: .filter(
+                gen: tunedInner,
+                fingerprint: fingerprint,
+                filterType: filterType,
+                predicate: filterPredicate
+            ),
             continuation: continuation
         )
     }

@@ -101,9 +101,14 @@ enum AlignedDeletionCohortBuilder {
     private static func rootSequenceContainerCohorts(
         in sequence: ChoiceSequence
     ) -> [[AlignedDeletionSlot]] {
-        let sequenceContainerSpans = ChoiceSequence.extractContainerSpans(from: sequence).filter { span in
+        let allSpans = ChoiceSequence.extractContainerSpans(from: sequence)
+        let sequenceContainerSpans = allSpans.filter { span in
             guard case .sequence(true, isLengthExplicit: _) = span.kind else { return false }
-            guard span.range.lowerBound >= 0, span.range.upperBound < sequence.count else { return false }
+            guard span.range.lowerBound >= 0,
+                  span.range.upperBound < sequence.count
+            else {
+                return false
+            }
             guard case .sequence(true, isLengthExplicit: _) = sequence[span.range.lowerBound],
                   case .sequence(false, isLengthExplicit: _) = sequence[span.range.upperBound]
             else { return false }
@@ -189,7 +194,11 @@ enum AlignedDeletionCohortBuilder {
                 else {
                     return nil
                 }
-                typedChildren.append(.init(range: child.range, kind: child.kind, valueTag: value.choice.tag))
+                typedChildren.append(.init(
+                    range: child.range,
+                    kind: child.kind,
+                    valueTag: value.choice.tag
+                ))
             } else {
                 typedChildren.append(.init(range: child.range, kind: child.kind, valueTag: nil))
             }
@@ -210,7 +219,11 @@ enum AlignedDeletionCohortBuilder {
             let children = ChoiceSequence.extractImmediateChildren(from: sequence, in: currentRange)
             guard children.isEmpty == false else { return [] }
 
-            if children.count == 1, let only = children.first, only.kind != .bareValue, only.range != currentRange {
+            if children.count == 1,
+               let only = children.first,
+               only.kind != .bareValue,
+               only.range != currentRange
+            {
                 currentRange = only.range
                 remainingUnwraps -= 1
                 continue

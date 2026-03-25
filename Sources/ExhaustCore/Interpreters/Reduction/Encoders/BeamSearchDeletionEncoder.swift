@@ -79,7 +79,10 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
         cohortIndex = 0
 
         let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
-        cohorts = AlignedDeletionCohortBuilder.buildCohorts(from: sequence, siblingGroups: siblingGroups)
+        cohorts = AlignedDeletionCohortBuilder.buildCohorts(
+            from: sequence,
+            siblingGroups: siblingGroups
+        )
             .filter { $0.isEmpty == false }
 
         if cohorts.isEmpty == false {
@@ -113,7 +116,10 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
     }
 
     private mutating func prepareBeamSearch() {
-        guard let ranges = cohortRanges, ranges.slotCount >= 2, ranges.slotCount < Int.bitWidth else {
+        guard let ranges = cohortRanges,
+              ranges.slotCount >= 2,
+              ranges.slotCount < Int.bitWidth
+        else {
             beamFrontier = []
             return
         }
@@ -161,7 +167,10 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
                     lastAddedSlot: slotIndex,
                     deletionCount: beamLayer,
                     slotIndexSum: slotIndexSum,
-                    heuristicScore: beamHeuristicScore(deletionCount: beamLayer, slotIndexSum: slotIndexSum),
+                    heuristicScore: beamHeuristicScore(
+                        deletionCount: beamLayer,
+                        slotIndexSum: slotIndexSum
+                    ),
                     rangeSet: rangeSet
                 ))
             }
@@ -230,7 +239,11 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
     // MARK: - Repair
 
     private func buildRepairCandidate(_ shortened: ChoiceSequence) -> ChoiceSequence? {
-        typealias ValueInfo = (index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)
+        typealias ValueInfo = (
+            index: Int, bp: UInt64, target: UInt64,
+            distance: UInt64, upward: Bool,
+            value: ChoiceSequenceValue.Value
+        )
         var values = [ValueInfo]()
         for (index, entry) in shortened.enumerated() {
             guard let value = entry.value else { continue }
@@ -252,7 +265,11 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
 
     private static func applyUniformRepair(
         _ sequence: ChoiceSequence,
-        values: [(index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)],
+        values: [(
+            index: Int, bp: UInt64, target: UInt64,
+            distance: UInt64, upward: Bool,
+            value: ChoiceSequenceValue.Value
+        )],
         k: UInt64
     ) -> ChoiceSequence {
         var result = sequence
@@ -264,7 +281,12 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
                 value.value.choice.tag.makeConvertible(bitPattern64: newBP),
                 tag: value.value.choice.tag
             )
-            result[value.index] = .reduced(.init(choice: newChoice, validRange: value.value.validRange, isRangeExplicit: value.value.isRangeExplicit))
+            let reduced = ChoiceSequenceValue.Value(
+                choice: newChoice,
+                validRange: value.value.validRange,
+                isRangeExplicit: value.value.isRangeExplicit
+            )
+            result[value.index] = .reduced(reduced)
         }
         return result
     }

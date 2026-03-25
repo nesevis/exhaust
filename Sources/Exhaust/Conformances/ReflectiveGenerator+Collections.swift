@@ -43,7 +43,8 @@ public extension ReflectiveGenerator {
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<[Element]> where Value == [Element] {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
-        return Gen.arrayOf(gen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound), scaling: scaling)
+        let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
+        return Gen.arrayOf(gen, within: range, scaling: scaling)
     }
 
     /// Creates a generator that produces arrays of an exact fixed length.
@@ -92,7 +93,8 @@ public extension ReflectiveGenerator {
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
-        return Gen.setOf(gen, within: UInt64(count.lowerBound) ... UInt64(count.upperBound), scaling: scaling)
+        let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
+        return Gen.setOf(gen, within: range, scaling: scaling)
     }
 
     /// Creates a generator that produces sets of an exact fixed count.
@@ -176,9 +178,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - length: The allowed range of array lengths
     ///   - scaling: How array length scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing arrays with length in the given range
-    func array(length: ClosedRange<Int>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<[Value]> {
+    func array(
+        length: ClosedRange<Int>,
+        scaling: SizeScaling<UInt64> = .linear
+    ) -> ReflectiveGenerator<[Value]> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
-        return Gen.arrayOf(self, within: UInt64(length.lowerBound) ... UInt64(length.upperBound), scaling: scaling)
+        let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
+        return Gen.arrayOf(self, within: range, scaling: scaling)
     }
 
     /// Wraps this element generator to produce arrays of an exact fixed length.
@@ -206,9 +212,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - count: The allowed range of set sizes
     ///   - scaling: How set size scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing sets with count in the given range
-    func set(count: ClosedRange<Int>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<Set<Value>> where Value: Hashable {
+    func set(
+        count: ClosedRange<Int>,
+        scaling: SizeScaling<UInt64> = .linear
+    ) -> ReflectiveGenerator<Set<Value>> where Value: Hashable {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
-        return Gen.setOf(self, within: UInt64(count.lowerBound) ... UInt64(count.upperBound), scaling: scaling)
+        let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
+        return Gen.setOf(self, within: range, scaling: scaling)
     }
 
     /// Wraps this element generator to produce sets of an exact fixed count.

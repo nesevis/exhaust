@@ -13,7 +13,12 @@ public struct ZeroValueEncoder: ComposableEncoder {
     }
 
     private var sequence = ChoiceSequence()
-    private var filteredSpans: [(seqIdx: Int, target: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool)] = []
+    private var filteredSpans: [(
+        seqIdx: Int,
+        target: ChoiceValue,
+        validRange: ClosedRange<UInt64>?,
+        isRangeExplicit: Bool
+    )] = []
     private var zeroPhase = ZeroValuePhase.allAtOnce
     private var spanIndex = 0
     private var batchRejected = false
@@ -70,7 +75,12 @@ public struct ZeroValueEncoder: ComposableEncoder {
             guard let v = sequence[seqIdx].value else { continue }
             let target = Self.simplestTarget(for: v)
             guard target != v.choice else { continue }
-            filteredSpans.append((seqIdx: seqIdx, target: target, validRange: v.validRange, isRangeExplicit: v.isRangeExplicit))
+            filteredSpans.append((
+                seqIdx: seqIdx,
+                target: target,
+                validRange: v.validRange,
+                isRangeExplicit: v.isRangeExplicit
+            ))
         }
     }
 
@@ -151,7 +161,9 @@ public struct ZeroValueEncoder: ComposableEncoder {
         let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)
         if isWithinRecordedRange, simplified.fits(in: v.validRange) == false {
             guard let range = v.validRange else { return simplified }
-            return ChoiceValue(v.choice.tag.makeConvertible(bitPattern64: range.lowerBound), tag: v.choice.tag)
+            let convertible = v.choice.tag
+                .makeConvertible(bitPattern64: range.lowerBound)
+            return ChoiceValue(convertible, tag: v.choice.tag)
         }
         return simplified
     }

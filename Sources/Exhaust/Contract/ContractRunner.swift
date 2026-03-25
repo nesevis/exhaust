@@ -109,11 +109,16 @@ public func __runContract<Spec: ContractSpec>(
     let failureInfo: ContractFailureInfo<Spec.Command>
     if let scaResult {
         failingSequence = scaResult.commands
-        failureInfo = ContractFailureInfo(originalCommands: scaResult.original, discoveryMethod: .coverage)
+        failureInfo = ContractFailureInfo(
+            originalCommands: scaResult.original,
+            discoveryMethod: .coverage
+        )
     } else {
         // Skip generic coverage — SCA already covered command orderings.
         // If SCA wasn't applicable, __exhaust's generic coverage runs.
-        let skipGenericCoverage = !useRandomOnly && seed == nil && extractPickChoices(from: commandGen) != nil
+        let skipGenericCoverage =
+            !useRandomOnly && seed == nil
+            && extractPickChoices(from: commandGen) != nil
         failingSequence = __ExhaustRuntime.__exhaust(
             seqGen,
             settings: buildExhaustSettings(
@@ -153,7 +158,11 @@ public func __runContract<Spec: ContractSpec>(
     )
 
     if !suppressIssueReporting {
-        let rendered = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
+        let rendered = renderFailure(
+            result,
+            failureInfo: failureInfo,
+            modelDescription: spec.modelDescription
+        )
         ExhaustLog.error(
             category: .propertyTest,
             event: "contract_failed",
@@ -194,10 +203,18 @@ private func buildTrace<Spec: ContractSpec>(
             trace.append(TraceStep(index: step, command: description, outcome: .skipped))
             continue
         } catch let failure as ContractCheckFailure {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: failure.message)))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: failure.message)
+            ))
             return (trace, spec)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: "\(error)")
+            ))
             return (trace, spec)
         }
 
@@ -205,10 +222,18 @@ private func buildTrace<Spec: ContractSpec>(
             try spec.checkInvariants()
         } catch let failure as ContractCheckFailure {
             let name = failure.message ?? "unknown"
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: name)))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: name)
+            ))
             return (trace, spec)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: "\(error)")
+            ))
             return (trace, spec)
         }
 
@@ -231,7 +256,9 @@ func renderFailure<Spec: ContractSpecBase>(
 
     // Show sequence header with reduction info when available.
     if let original = failureInfo.originalCommands, original.count > result.commands.count {
-        lines.append("Command sequence (\(result.commands.count) steps, reduced from \(original.count)):")
+        let header =
+            "Command sequence (\(result.commands.count) steps, reduced from \(original.count)):"
+        lines.append(header)
     } else {
         lines.append("Command sequence (\(result.commands.count) steps):")
     }
@@ -433,7 +460,11 @@ func buildExhaustSettings<Output>(
     useRandomOnly: Bool
 ) -> [ExhaustSettings<Output>] {
     var settings: [ExhaustSettings<Output>] = [
-        .budget(.custom(coverage: coverageBudget, sampling: samplingBudget, reduction: reductionConfig)),
+        .budget(.custom(
+            coverage: coverageBudget,
+            sampling: samplingBudget,
+            reduction: reductionConfig
+        )),
     ]
     if let seed {
         settings.append(.replay(seed))

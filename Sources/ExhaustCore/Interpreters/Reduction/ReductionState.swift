@@ -179,7 +179,11 @@ struct PhaseTracker {
     }
 
     /// Restores acceptance counts for a phase to a prior checkpoint.
-    mutating func restoreAcceptances(for phase: Phase, acceptances: Int, structuralAcceptances: Int) {
+    mutating func restoreAcceptances(
+        for phase: Phase,
+        acceptances: Int,
+        structuralAcceptances: Int
+    ) {
         counts[phase, default: PhaseCounts()].acceptances = acceptances
         counts[phase, default: PhaseCounts()].structuralAcceptances = structuralAcceptances
     }
@@ -409,7 +413,9 @@ final class ReductionState<Output> {
                 return false
             }
             // No cache entry — check if the value is already at its reduction target.
-            let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
+            let isWithinRecordedRange =
+                value.isRangeExplicit
+                && value.choice.fits(in: value.validRange)
             let targetBitPattern = isWithinRecordedRange
                 ? value.choice.reductionTarget(in: value.validRange)
                 : value.choice.semanticSimplest.bitPattern64
@@ -459,15 +465,18 @@ final class ReductionState<Output> {
     /// Value encoder ordering for leaf-range passes in fibre descent.
     ///
     /// Diverges from ``trainOrder`` via move-to-front within the leaf-range loop.
-    var snipOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
+    var snipOrder: [ReductionScheduler.ValueEncoderSlot] =
+        ReductionScheduler.ValueEncoderSlot.allCases
 
     /// Deletion encoder ordering for structural deletion in base descent.
-    var pruneOrder: [ReductionScheduler.DeletionEncoderSlot] = ReductionScheduler.DeletionEncoderSlot.allCases
+    var pruneOrder: [ReductionScheduler.DeletionEncoderSlot] =
+        ReductionScheduler.DeletionEncoderSlot.allCases
 
     /// Value encoder ordering for the covariant depth sweep in fibre descent.
     ///
     /// Starts identical to ``snipOrder`` each cycle; diverges via independent move-to-front.
-    var trainOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
+    var trainOrder: [ReductionScheduler.ValueEncoderSlot] =
+        ReductionScheduler.ValueEncoderSlot.allCases
 
     init(
         gen: ReflectiveGenerator<Output>,
@@ -601,7 +610,9 @@ extension ReductionState {
                     let snap = makeSnapshot()
                     accept(result, structureChanged: structureChanged)
                     if let currentBindIndex = bindIndex,
-                       StructuralFingerprint.from(sequence, bindIndex: currentBindIndex) != guardPrint
+                       StructuralFingerprint.from(
+                         sequence, bindIndex: currentBindIndex
+                       ) != guardPrint
                     {
                         phaseTracker.revertAcceptance(structural: structureChanged)
                         restoreSnapshot(snap)
@@ -648,7 +659,11 @@ extension ReductionState {
            let startSeq = startSequenceForCacheInvalidation,
            let index = bindIndex
         {
-            invalidateConvergenceCacheSiblings(oldSequence: startSeq, newSequence: sequence, bindIndex: index)
+            invalidateConvergenceCacheSiblings(
+                oldSequence: startSeq,
+                newSequence: sequence,
+                bindIndex: index
+            )
         }
 
         if anyAccepted {
@@ -656,11 +671,20 @@ extension ReductionState {
         }
         if isInstrumented {
             if probes > 0 {
-                ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
-                    "encoder": encoder.name.rawValue, "probes": "\(probes)", "accepted": "\(accepted)",
-                    "seq_len": "\(startSeqLen)→\(sequence.count)",
-                    "output": anyAccepted ? "\(output)" : "",
-                ])
+                let event = anyAccepted
+                    ? "encoder_accepted"
+                    : "encoder_exhausted"
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: event,
+                    metadata: [
+                        "encoder": encoder.name.rawValue,
+                        "probes": "\(probes)",
+                        "accepted": "\(accepted)",
+                        "seq_len": "\(startSeqLen)→\(sequence.count)",
+                        "output": anyAccepted ? "\(output)" : "",
+                    ]
+                )
             } else {
                 ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
                     "encoder": encoder.name.rawValue,
@@ -671,7 +695,12 @@ extension ReductionState {
     }
 
     func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
-        let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed)
+        let context = DecoderContext(
+            depth: .specific(depth),
+            bindIndex: bindIndex,
+            fallbackTree: fallbackTree,
+            strictness: .relaxed
+        )
         return SequenceDecoder.for(context)
     }
 
@@ -682,7 +711,12 @@ extension ReductionState {
     }
 
     func makeDepthZeroDecoder() -> SequenceDecoder {
-        let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
+        let context = DecoderContext(
+            depth: .specific(0),
+            bindIndex: bindIndex,
+            fallbackTree: fallbackTree,
+            strictness: .normal
+        )
         return SequenceDecoder.for(context)
     }
 
@@ -733,10 +767,30 @@ extension ReductionState {
         var valueCosts = [ReductionScheduler.ValueEncoderSlot: Int]()
         for slot in ReductionScheduler.ValueEncoderSlot.allCases {
             let cost: Int? = switch slot {
-            case .zeroValue: zeroValueEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
-            case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
-            case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
-            case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
+            case .zeroValue:
+                zeroValueEncoder.estimatedCost(
+                    sequence: sequence, tree: tree,
+                    positionRange: fullRange,
+                    context: orderingContext
+                )
+            case .binarySearchToZero:
+                binarySearchToZeroEncoder.estimatedCost(
+                    sequence: sequence, tree: tree,
+                    positionRange: fullRange,
+                    context: orderingContext
+                )
+            case .binarySearchToTarget:
+                binarySearchToTargetEncoder.estimatedCost(
+                    sequence: sequence, tree: tree,
+                    positionRange: fullRange,
+                    context: orderingContext
+                )
+            case .reduceFloat:
+                reduceFloatEncoder.estimatedCost(
+                    sequence: sequence, tree: tree,
+                    positionRange: fullRange,
+                    context: orderingContext
+                )
             }
             if let cost { valueCosts[slot] = cost }
         }
@@ -849,7 +903,11 @@ extension ReductionState {
         guard redistributionAccepted else {
             // No speculative move found — restore all state atomically.
             // Revert acceptances but keep invocations (they consumed real budget).
-            phaseTracker.restoreAcceptances(for: .relaxRound, acceptances: acceptancesAtCheckpoint, structuralAcceptances: structuralAtCheckpoint)
+            phaseTracker.restoreAcceptances(
+                for: .relaxRound,
+                acceptances: acceptancesAtCheckpoint,
+                structuralAcceptances: structuralAtCheckpoint
+            )
             restoreSnapshot(checkpoint)
             remaining -= explorationBudget.used
             return false
@@ -877,7 +935,11 @@ extension ReductionState {
         }
 
         // Rollback all state atomically. Revert acceptances but keep invocations.
-        phaseTracker.restoreAcceptances(for: .relaxRound, acceptances: acceptancesAtCheckpoint, structuralAcceptances: structuralAtCheckpoint)
+        phaseTracker.restoreAcceptances(
+            for: .relaxRound,
+            acceptances: acceptancesAtCheckpoint,
+            structuralAcceptances: structuralAtCheckpoint
+        )
         restoreSnapshot(checkpoint)
         remaining -= explorationBudget.used
         return false

@@ -116,7 +116,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             )
         }
         if !useRandomOnly, seed == nil {
-            let coverageResult = CoverageRunner.run(gen, coverageBudget: coverageBudget, property: property)
+            let coverageResult = CoverageRunner.run(
+                gen,
+                coverageBudget: coverageBudget,
+                property: property
+            )
             coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             switch coverageResult {
             case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
@@ -162,8 +166,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             blueprint: shrunkSequence.shortString,
                             propertyInvocations: propertyInvocationCount
                         )
-                        failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
-                        let rendered = failure.render(format: ExhaustLog.configuration.format)
+                        failure.replayHint =
+                            "No replay seed — found via systematic combinatorial coverage."
+                        let rendered = failure.render(
+                            format: ExhaustLog.configuration.format
+                        )
                         ExhaustLog.error(
                             category: .propertyTest,
                             event: "property_failed",
@@ -176,10 +183,14 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             generationEnd: coveragePhaseEndTime,
                             reductionEnd: reductionEndTime
                         )
-                        report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
-                        report.reductionMilliseconds = Double(reductionEndTime - coveragePhaseEndTime) / 1_000_000
-                        report.totalMilliseconds = Double(reductionEndTime - phaseTimingStart) / 1_000_000
-                        report.propertyInvocations = coverageIterations + propertyInvocationCount
+                        let coverageElapsed = coveragePhaseEndTime - phaseTimingStart
+                        report.coverageMilliseconds = Double(coverageElapsed) / 1_000_000
+                        let reductionElapsed = reductionEndTime - coveragePhaseEndTime
+                        report.reductionMilliseconds = Double(reductionElapsed) / 1_000_000
+                        let totalElapsed = reductionEndTime - phaseTimingStart
+                        report.totalMilliseconds = Double(totalElapsed) / 1_000_000
+                        report.propertyInvocations =
+                            coverageIterations + propertyInvocationCount
                         if !suppressIssueReporting {
                             reportIssue(
                                 rendered,
@@ -255,7 +266,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     metadata: passMetadata
                 )
                 let exhaustiveEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-                report.coverageMilliseconds = Double(exhaustiveEndTime - phaseTimingStart) / 1_000_000
+                let elapsed = exhaustiveEndTime - phaseTimingStart
+                report.coverageMilliseconds = Double(elapsed) / 1_000_000
                 report.totalMilliseconds = report.coverageMilliseconds
                 report.propertyInvocations = iterations
                 return nil
@@ -345,11 +357,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             generationEnd: generationPhaseEndTime,
                             reductionEnd: reductionEndTime
                         )
-                        report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
-                        report.generationMilliseconds = Double(generationPhaseEndTime - coveragePhaseEndTime) / 1_000_000
-                        report.reductionMilliseconds = Double(reductionEndTime - generationPhaseEndTime) / 1_000_000
-                        report.totalMilliseconds = Double(reductionEndTime - phaseTimingStart) / 1_000_000
-                        report.propertyInvocations = coverageIterations + iterations + propertyInvocationCount
+                        let coverageElapsed = coveragePhaseEndTime - phaseTimingStart
+                        report.coverageMilliseconds = Double(coverageElapsed) / 1_000_000
+                        let generationElapsed = generationPhaseEndTime - coveragePhaseEndTime
+                        report.generationMilliseconds = Double(generationElapsed) / 1_000_000
+                        let reductionElapsed = reductionEndTime - generationPhaseEndTime
+                        report.reductionMilliseconds = Double(reductionElapsed) / 1_000_000
+                        let totalElapsed = reductionEndTime - phaseTimingStart
+                        report.totalMilliseconds = Double(totalElapsed) / 1_000_000
+                        report.propertyInvocations =
+                            coverageIterations + iterations + propertyInvocationCount
                         if !suppressIssueReporting {
                             reportIssue(
                                 rendered,
@@ -369,7 +386,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         line: line,
                         column: column
                     )
-                    report.propertyInvocations = coverageIterations + iterations + propertyInvocationCount
+                    report.propertyInvocations =
+                        coverageIterations + iterations + propertyInvocationCount
                     return next
                 }
 
@@ -397,7 +415,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     line: line,
                     column: column
                 )
-                report.propertyInvocations = coverageIterations + iterations + propertyInvocationCount
+                report.propertyInvocations =
+                    coverageIterations + iterations + propertyInvocationCount
                 return nil
             }
         }

@@ -41,7 +41,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         /// Compose all frames onto `gen` to produce a full `FinalOutput` generator.
         ///
         /// Frames are stored in push order (oldest first). `apply` iterates in reverse (newest/innermost first) to match the closure chain's nesting: `gen.bind(innerCont).bind(outerCont).map(cast)`.
-        public func apply(_ gen: ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<FinalOutput> {
+        public func apply(
+            _ gen: ReflectiveGenerator<Any>
+        ) throws -> ReflectiveGenerator<FinalOutput> {
             var current = gen
             for frame in frames.reversed() {
                 switch frame {
@@ -217,7 +219,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - Prune
 
             case let .prune(nextGen):
-                guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
+                guard let wrappedValue =
+                    InterpreterWrapperHandlers.unwrapPruneInput(inputValue)
+                else {
                     return nil
                 }
                 guard let result = try generateRecursive(
@@ -396,7 +400,8 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - GetSize
 
             case .getSize:
-                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
+                let size = context.sizeOverride
+                    ?? GenerationContext.scaledSize(forRun: context.runs)
                 context.sizeOverride = nil
                 return try runContinuation(
                     result: size,
@@ -485,7 +490,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     derivativeContext: derivativeContext
                 ) else { return nil }
                 for (label, classifier) in classifiers where classifier(result) {
-                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+                    var byLabel = context.classifications[fingerprint, default: [:]]
+                    byLabel[label, default: []].insert(context.runs)
+                    context.classifications[fingerprint] = byLabel
                 }
                 return try runContinuation(
                     result: result,
@@ -556,11 +563,16 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     let isDuplicate: Bool
                     if let keyExtractor {
                         let key = keyExtractor(result)
-                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                        isDuplicate = !context.uniqueSeenKeys[
+                            fingerprint, default: []
+                        ].insert(key).inserted
                     } else {
                         // Without a key extractor, try AnyHashable-based dedup
-                        let key = result as? AnyHashable ?? AnyHashable(ObjectIdentifier(type(of: result)))
-                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                        let key = result as? AnyHashable
+                            ?? AnyHashable(ObjectIdentifier(type(of: result)))
+                        isDuplicate = !context.uniqueSeenKeys[
+                            fingerprint, default: []
+                        ].insert(key).inserted
                     }
 
                     if !isDuplicate {
@@ -625,7 +637,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // sequence boundaries, so deep picks must fall back to weighted selection.
         let effectiveSampleCount = Swift.max(2, sampleCount >> derivativeContext.depth)
         if choices.count == 1 || derivativeContext.depth >= 4 {
-            guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
+            guard let selectedChoice = WeightedPickSelection.draw(
+                from: choices, using: &context.prng
+            ) else {
                 return nil
             }
             _ = context.prng.next()
@@ -674,7 +688,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         liveChoiceMap.reserveCapacity(choiceCount)
         if let accumulator = cgsState.fitnessAccumulator {
             for (i, choice) in choices.enumerated() {
-                let key = FitnessAccumulator.SiteChoiceKey(siteID: choice.siteID, choiceID: choice.id)
+                let key = FitnessAccumulator.SiteChoiceKey(
+                    siteID: choice.siteID, choiceID: choice.id
+                )
                 if let record = accumulator.records[key],
                    record.observationCount >= minDeadObservations,
                    record.totalFitness == 0
@@ -812,7 +828,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         }
 
         // 3. Select branch weighted by fitness
-        guard let selectedChoice = WeightedPickSelection.draw(from: weightedChoices, using: &context.prng) else {
+        guard let selectedChoice = WeightedPickSelection.draw(
+            from: weightedChoices, using: &context.prng
+        ) else {
             return nil
         }
 

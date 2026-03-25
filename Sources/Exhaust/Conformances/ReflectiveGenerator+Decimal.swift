@@ -36,7 +36,10 @@ public extension ReflectiveGenerator {
         let lowerStep = Int64(truncating: (range.lowerBound * multiplier) as NSDecimalNumber)
         let upperStep = Int64(truncating: (range.upperBound * multiplier) as NSDecimalNumber)
 
-        precondition(lowerStep <= upperStep, "Lower bound must not exceed upper bound after scaling")
+        precondition(
+            lowerStep <= upperStep,
+            "Lower bound must not exceed upper bound after scaling"
+        )
 
         let inner: ReflectiveGenerator<Int64> = Gen.choose(in: lowerStep ... upperStep)
 

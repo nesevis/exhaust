@@ -86,7 +86,13 @@ struct BranchSimplificationEncoder: ComposableEncoder {
         guard branches.count >= 2 else { return [] }
 
         let sorted = branches
-            .map { branch in (branch: branch, sequence: ChoiceSequence.flatten(branch.node, includingAllBranches: true)) }
+            .map { branch in
+                let seq = ChoiceSequence.flatten(
+                    branch.node,
+                    includingAllBranches: true
+                )
+                return (branch: branch, sequence: seq)
+            }
             .sorted { lhs, rhs in lhs.sequence.shortLexPrecedes(rhs.sequence) }
 
         var candidates: [ChoiceSequence] = []
@@ -96,7 +102,9 @@ struct BranchSimplificationEncoder: ComposableEncoder {
             var sourceIdx = 0
             while sourceIdx < targetIdx {
                 let source = sorted[sourceIdx]
-                if selectedBranchID(of: source.branch.node) != selectedBranchID(of: target.branch.node) {
+                let sourceID = selectedBranchID(of: source.branch.node)
+                let targetID = selectedBranchID(of: target.branch.node)
+                if sourceID != targetID {
                     var candidateTree = tree
                     let sourceNode = source.branch.node.unwrapped
                     candidateTree[target.branch.fingerprint] = sourceNode
@@ -129,14 +137,19 @@ struct BranchSimplificationEncoder: ComposableEncoder {
             var alternatives = [(index: Int, complexity: ChoiceSequence)]()
             alternatives.reserveCapacity(elements.count)
             for index in 0 ..< elements.count where index != selectedIndex {
-                alternatives.append((index: index, complexity: ChoiceSequence.flatten(elements[index], includingAllBranches: true)))
+                let complexity = ChoiceSequence.flatten(
+                    elements[index],
+                    includingAllBranches: true
+                )
+                alternatives.append((index: index, complexity: complexity))
             }
             alternatives.sort { lhs, rhs in lhs.complexity.shortLexPrecedes(rhs.complexity) }
 
             for alternative in alternatives {
                 var candidateElements = elements
                 candidateElements[selectedIndex] = elements[selectedIndex].unwrapped
-                candidateElements[alternative.index] = .selected(elements[alternative.index].unwrapped)
+                let altNode = elements[alternative.index].unwrapped
+                candidateElements[alternative.index] = .selected(altNode)
 
                 var candidateTree = tree
                 candidateTree[site] = .group(candidateElements)

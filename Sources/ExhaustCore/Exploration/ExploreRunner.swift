@@ -6,7 +6,12 @@
 /// Result of an exploration run.
 public enum ExploreResult<Output> {
     /// A counterexample was found and shrunk.
-    case failure(counterexample: Output, shrunkSequence: ChoiceSequence, original: Output, iteration: UInt64)
+    case failure(
+        counterexample: Output,
+        shrunkSequence: ChoiceSequence,
+        original: Output,
+        iteration: UInt64
+    )
     /// A counterexample was found but shrinking failed.
     case unshrunkFailure(counterexample: Output, iteration: UInt64)
     /// All iterations passed without finding a failure.
@@ -132,7 +137,12 @@ public struct ExploreRunner<Output>: ~Copyable {
                 switch result {
                 case let .counterexample(value, tree, probesUsed):
                     iteration += UInt64(probesUsed)
-                    return shrinkAndReturn(value: value, tree: tree, iteration: iteration, fromMutation: true)
+                    return shrinkAndReturn(
+                        value: value,
+                        tree: tree,
+                        iteration: iteration,
+                        fromMutation: true
+                    )
 
                 case let .improved(improvedSeed, _, probesUsed):
                     iteration += UInt64(probesUsed)
@@ -192,7 +202,8 @@ public struct ExploreRunner<Output>: ~Copyable {
         fromMutation _: Bool = false
     ) -> ExploreResult<Output> {
         do {
-            let shrinkTree: ChoiceTree = if let reflected = try Interpreters.reflect(gen, with: value) {
+            let reflected = try Interpreters.reflect(gen, with: value)
+            let shrinkTree: ChoiceTree = if let reflected {
                 reflected
             } else {
                 tree

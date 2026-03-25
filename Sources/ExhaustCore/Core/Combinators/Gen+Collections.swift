@@ -242,7 +242,9 @@ public extension Gen {
                 filtered._map { (length: Int, startIndexPos: Int) -> AnyCollection.SubSequence in
                     let startIndex = indices[startIndexPos]
                     let endIndexPos = min(startIndexPos + length, indices.count)
-                    let endIndex = endIndexPos < indices.count ? indices[endIndexPos] : collection.endIndex
+                    let endIndex = endIndexPos < indices.count
+                        ? indices[endIndexPos]
+                        : collection.endIndex
                     return collection[startIndex ..< endIndex]
                 }
             )
@@ -272,7 +274,10 @@ public extension Gen {
     static func element<AnyCollection: Collection>(
         from collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.Element> {
-        precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
+        precondition(
+            collection.isEmpty == false,
+            "Cannot return random element from empty collection"
+        )
         let count = collection.count
         let dict = Dictionary(grouping: collection.enumerated(), by: \.offset)
             .mapValues { $0[0].element }
@@ -301,7 +306,10 @@ public extension Gen {
     static func element<AnyCollection: Collection>(
         from collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.Element> where AnyCollection.Element: Hashable {
-        precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
+        precondition(
+            collection.isEmpty == false,
+            "Cannot return random element from empty collection"
+        )
         var elementToOffset: [AnyCollection.Element: Int] = [:]
         var offsetToElement: [Int: AnyCollection.Element] = [:]
         offsetToElement.reserveCapacity(collection.count)

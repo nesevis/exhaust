@@ -99,7 +99,8 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     let argAwareCoverage = useArgumentAwareCoverage
 
     // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
-    let searchResult: ([Spec.Command], ContractFailureInfo<Spec.Command>)? = await withCheckedContinuation { continuation in
+    typealias SearchResult = ([Spec.Command], ContractFailureInfo<Spec.Command>)
+    let searchResult: SearchResult? = await withCheckedContinuation { continuation in
         DispatchQueue.global().async {
             // SCA coverage
             var scaResult: SCAResult<Spec.Command>?
@@ -116,10 +117,15 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             }
 
             if let scaResult {
-                let info = ContractFailureInfo(originalCommands: scaResult.original, discoveryMethod: .coverage)
+                let info = ContractFailureInfo(
+                    originalCommands: scaResult.original,
+                    discoveryMethod: .coverage
+                )
                 continuation.resume(returning: (scaResult.commands, info))
             } else {
-                let skipGenericCoverage = !randomOnly && replaySeed == nil && extractPickChoices(from: commandGen) != nil
+                let skipGenericCoverage =
+                    !randomOnly && replaySeed == nil
+                    && extractPickChoices(from: commandGen) != nil
                 let exhaustResult = __ExhaustRuntime.__exhaust(
                     seqGen,
                     settings: buildExhaustSettings(
@@ -166,7 +172,11 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     )
 
     if !suppressIssueReporting {
-        let rendered = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
+        let rendered = renderFailure(
+            result,
+            failureInfo: failureInfo,
+            modelDescription: spec.modelDescription
+        )
         ExhaustLog.error(
             category: .propertyTest,
             event: "contract_failed",
@@ -205,10 +215,18 @@ private func buildTraceAsync<Spec: AsyncContractSpec>(
             trace.append(TraceStep(index: step, command: description, outcome: .skipped))
             continue
         } catch let failure as ContractCheckFailure {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: failure.message)))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: failure.message)
+            ))
             return (trace, spec)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: "\(error)")
+            ))
             return (trace, spec)
         }
 
@@ -216,10 +234,18 @@ private func buildTraceAsync<Spec: AsyncContractSpec>(
             try await spec.checkInvariants()
         } catch let failure as ContractCheckFailure {
             let name = failure.message ?? "unknown"
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: name)))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: name)
+            ))
             return (trace, spec)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: "\(error)")
+            ))
             return (trace, spec)
         }
 

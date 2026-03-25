@@ -55,8 +55,11 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
         anyAccepted = false
 
         let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
-        cohorts = AlignedDeletionCohortBuilder.buildCohorts(from: sequence, siblingGroups: siblingGroups)
-            .filter { $0.isEmpty == false }
+        cohorts = AlignedDeletionCohortBuilder.buildCohorts(
+            from: sequence,
+            siblingGroups: siblingGroups
+        )
+        .filter { $0.isEmpty == false }
 
         if cohorts.isEmpty == false {
             prepareCohort()
@@ -104,13 +107,20 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
                 nonMonotonicSizes = []
                 nonMonotonicIndex = 0
                 let firstProbe = stepper.start()
-                if let candidate = buildContiguousCandidate(slotStart: slotPosition, size: firstProbe, ranges: ranges) {
+                if let candidate = buildContiguousCandidate(
+                    slotStart: slotPosition,
+                    size: firstProbe,
+                    ranges: ranges
+                ) {
                     return candidate
                 }
             }
 
             if nonMonotonicSizes.isEmpty == false {
-                if let candidate = nextNonMonotonicProbe(lastAccepted: lastAccepted, ranges: ranges) {
+                if let candidate = nextNonMonotonicProbe(
+                    lastAccepted: lastAccepted,
+                    ranges: ranges
+                ) {
                     return candidate
                 }
                 slotPosition += 1
@@ -119,7 +129,11 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
             }
 
             if let nextSize = stepper.advance(lastAccepted: lastAccepted) {
-                if let candidate = buildContiguousCandidate(slotStart: slotPosition, size: nextSize, ranges: ranges) {
+                if let candidate = buildContiguousCandidate(
+                    slotStart: slotPosition,
+                    size: nextSize,
+                    ranges: ranges
+                ) {
                     return candidate
                 }
                 continue
@@ -146,18 +160,29 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
         return nil
     }
 
-    private mutating func nextNonMonotonicProbe(lastAccepted _: Bool, ranges: AlignedDeletionCohortRanges) -> ChoiceSequence? {
+    private mutating func nextNonMonotonicProbe(
+        lastAccepted _: Bool,
+        ranges: AlignedDeletionCohortRanges
+    ) -> ChoiceSequence? {
         while nonMonotonicIndex < nonMonotonicSizes.count {
             let size = nonMonotonicSizes[nonMonotonicIndex]
             nonMonotonicIndex += 1
-            if let candidate = buildContiguousCandidate(slotStart: slotPosition, size: size, ranges: ranges) {
+            if let candidate = buildContiguousCandidate(
+                slotStart: slotPosition,
+                size: size,
+                ranges: ranges
+            ) {
                 return candidate
             }
         }
         return nil
     }
 
-    private func buildContiguousCandidate(slotStart: Int, size: Int, ranges: AlignedDeletionCohortRanges) -> ChoiceSequence? {
+    private func buildContiguousCandidate(
+        slotStart: Int,
+        size: Int,
+        ranges: AlignedDeletionCohortRanges
+    ) -> ChoiceSequence? {
         guard size > 0, size <= ranges.slotCount - slotStart else { return nil }
         let rangeSet = ranges.contiguousRangeSet(slotStart: slotStart, size: size)
         var candidate = sequence

@@ -52,7 +52,10 @@ public enum FloatShrink {
     }
 
     /// Exact integer ratio (`numerator / denominator`) for finite values, reduced by powers of two when representable as 64-bit integers.
-    public static func integerRatio(for value: Double, tag: TypeTag) -> (numerator: Int64, denominator: UInt64)? {
+    public static func integerRatio(
+        for value: Double,
+        tag: TypeTag
+    ) -> (numerator: Int64, denominator: UInt64)? {
         switch tag {
         case .double:
             return integerRatio(value)
@@ -65,7 +68,9 @@ public enum FloatShrink {
         }
     }
 
-    public static func integerRatio(_ value: Double) -> (numerator: Int64, denominator: UInt64)? {
+    public static func integerRatio(
+        _ value: Double
+    ) -> (numerator: Int64, denominator: UInt64)? {
         guard value.isFinite else { return nil }
         guard value != 0 else { return (0, 1) }
 
@@ -89,7 +94,9 @@ public enum FloatShrink {
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
     }
 
-    public static func integerRatio(_ value: Float) -> (numerator: Int64, denominator: UInt64)? {
+    public static func integerRatio(
+        _ value: Float
+    ) -> (numerator: Int64, denominator: UInt64)? {
         guard value.isFinite else { return nil }
         guard value != 0 else { return (0, 1) }
 
@@ -113,14 +120,19 @@ public enum FloatShrink {
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
     }
 
-    public static func buildRatio(sign: Int64, significand: UInt64, exponent: Int) -> (numerator: Int64, denominator: UInt64)? {
+    public static func buildRatio(
+        sign: Int64,
+        significand: UInt64,
+        exponent: Int
+    ) -> (numerator: Int64, denominator: UInt64)? {
         guard significand > 0 else { return (0, 1) }
         var numerator = significand
         var denominator: UInt64 = 1
 
         if exponent >= 0 {
             guard exponent < 64 else { return nil }
-            let (shifted, overflow) = numerator.multipliedReportingOverflow(by: UInt64(1) << exponent)
+            let (shifted, overflow) = numerator
+                .multipliedReportingOverflow(by: UInt64(1) << exponent)
             guard overflow == false else { return nil }
             numerator = shifted
         } else {
@@ -129,7 +141,10 @@ public enum FloatShrink {
             denominator = UInt64(1) << shift
         }
 
-        let commonZeros = min(numerator.trailingZeroBitCount, denominator.trailingZeroBitCount)
+        let commonZeros = min(
+            numerator.trailingZeroBitCount,
+            denominator.trailingZeroBitCount
+        )
         numerator >>= commonZeros
         denominator >>= commonZeros
 

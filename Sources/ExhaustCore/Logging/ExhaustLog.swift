@@ -284,17 +284,45 @@ public enum ExhaustLog {
     private nonisolated(unsafe) static var _configuration = Configuration()
 
     private static let coreLogger = Logger(subsystem: subsystem, category: Category.core.rawValue)
-    private static let extensionsLogger = Logger(subsystem: subsystem, category: Category.extensions.rawValue)
-    private static let generationLogger = Logger(subsystem: subsystem, category: Category.generation.rawValue)
-    private static let replayLogger = Logger(subsystem: subsystem, category: Category.replay.rawValue)
-    private static let reflectionLogger = Logger(subsystem: subsystem, category: Category.reflection.rawValue)
-    private static let materializeLogger = Logger(subsystem: subsystem, category: Category.materialize.rawValue)
-    private static let reducerLogger = Logger(subsystem: subsystem, category: Category.reducer.rawValue)
-    private static let adaptationLogger = Logger(subsystem: subsystem, category: Category.adaptation.rawValue)
-    private static let propertyTestLogger = Logger(subsystem: subsystem, category: Category.propertyTest.rawValue)
+    private static let extensionsLogger = Logger(
+        subsystem: subsystem,
+        category: Category.extensions.rawValue
+    )
+    private static let generationLogger = Logger(
+        subsystem: subsystem,
+        category: Category.generation.rawValue
+    )
+    private static let replayLogger = Logger(
+        subsystem: subsystem,
+        category: Category.replay.rawValue
+    )
+    private static let reflectionLogger = Logger(
+        subsystem: subsystem,
+        category: Category.reflection.rawValue
+    )
+    private static let materializeLogger = Logger(
+        subsystem: subsystem,
+        category: Category.materialize.rawValue
+    )
+    private static let reducerLogger = Logger(
+        subsystem: subsystem,
+        category: Category.reducer.rawValue
+    )
+    private static let adaptationLogger = Logger(
+        subsystem: subsystem,
+        category: Category.adaptation.rawValue
+    )
+    private static let propertyTestLogger = Logger(
+        subsystem: subsystem,
+        category: Category.propertyTest.rawValue
+    )
 
     @inline(__always)
-    private static func shouldLog(_ level: Level, category: Category, configuration: Configuration) -> Bool {
+    private static func shouldLog(
+        _ level: Level,
+        category: Category,
+        configuration: Configuration
+    ) -> Bool {
         guard configuration.isEnabled else {
             return false
         }

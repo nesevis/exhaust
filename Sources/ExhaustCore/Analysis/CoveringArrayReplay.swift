@@ -15,12 +15,20 @@ public enum CoveringArrayReplay {
     ///   - row: The covering array row with value indices for each parameter.
     ///   - profile: The finite domain profile describing parameter structure.
     /// - Returns: A `ChoiceTree` suitable for `Interpreters.replay`, or `nil` if construction fails.
-    public static func buildTree(row: CoveringArrayRow, profile: FiniteDomainProfile) -> ChoiceTree? {
+    public static func buildTree(
+        row: CoveringArrayRow,
+        profile: FiniteDomainProfile
+    ) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 
         if let originalTree = profile.originalTree {
             var paramIndex = 0
-            return substituteParameters(in: originalTree, row: row, profile: profile, paramIndex: &paramIndex)
+            return substituteParameters(
+                in: originalTree,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            )
         }
 
         // Fallback: flat construction (no original tree available)
@@ -72,7 +80,12 @@ public enum CoveringArrayReplay {
             }
             var newChildren: [ChoiceTree] = []
             for child in children {
-                guard let newChild = substituteParameters(in: child, row: row, profile: profile, paramIndex: &paramIndex) else {
+                guard let newChild = substituteParameters(
+                    in: child,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
                     return nil
                 }
                 newChildren.append(newChild)
@@ -81,13 +94,23 @@ public enum CoveringArrayReplay {
 
         case let .bind(inner, bound):
             // Substitute parameters in inner only; pass bound through unchanged.
-            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+            guard let newInner = substituteParameters(
+                in: inner,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            ) else {
                 return nil
             }
             return .bind(inner: newInner, bound: bound)
 
         case let .selected(inner):
-            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+            guard let newInner = substituteParameters(
+                in: inner,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            ) else {
                 return nil
             }
             return .selected(newInner)
@@ -99,16 +122,30 @@ public enum CoveringArrayReplay {
             return tree
 
         case let .branch(siteID, weight, id, branchIDs, choice):
-            guard let newChoice = substituteParameters(in: choice, row: row, profile: profile, paramIndex: &paramIndex) else {
+            guard let newChoice = substituteParameters(
+                in: choice,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            ) else {
                 return nil
             }
-            return .branch(siteID: siteID, weight: weight, id: id, branchIDs: branchIDs, choice: newChoice)
+            return .branch(
+                siteID: siteID,
+                weight: weight,
+                id: id,
+                branchIDs: branchIDs,
+                choice: newChoice
+            )
         }
     }
 
     // MARK: - Per-Parameter Tree Construction
 
-    private static func buildParameterTree(param: FiniteParameter, valueIndex: UInt64) -> ChoiceTree? {
+    private static func buildParameterTree(
+        param: FiniteParameter,
+        valueIndex: UInt64
+    ) -> ChoiceTree? {
         switch param.kind {
         case let .chooseBits(range, tag):
             let bitPattern = range.lowerBound + valueIndex

@@ -98,7 +98,11 @@ struct LinearScanEncoder: ComposableEncoder {
             }
         case .fromSimplest:
             // Semantic simplest for the tag, then expand outward.
-            let simplest = ChoiceValue(choiceTag.makeConvertible(bitPattern64: 0), tag: choiceTag).semanticSimplest.bitPattern64
+            let zeroChoice = ChoiceValue(
+                choiceTag.makeConvertible(bitPattern64: 0),
+                tag: choiceTag
+            )
+            let simplest = zeroChoice.semanticSimplest.bitPattern64
             if lower <= simplest, simplest <= upper {
                 scanValues.append(simplest)
             }
@@ -145,7 +149,10 @@ struct LinearScanEncoder: ComposableEncoder {
 
         var candidate = sequence
         candidate[targetPosition] = .value(.init(
-            choice: ChoiceValue(choiceTag.makeConvertible(bitPattern64: probeValue), tag: choiceTag),
+            choice: ChoiceValue(
+                choiceTag.makeConvertible(bitPattern64: probeValue),
+                tag: choiceTag
+            ),
             validRange: validRange,
             isRangeExplicit: isRangeExplicit
         ))

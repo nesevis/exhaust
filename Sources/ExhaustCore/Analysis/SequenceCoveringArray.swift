@@ -21,7 +21,11 @@ public enum SequenceCoveringArray {
     /// At strength t=2, IPOG produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to boundary-value representatives.
     ///
     /// The floor of 2 ensures every parameter retains at least its extremes. Param-free and unanalyzable branches use only 1 slot each, so analyzed branches effectively inherit leftover capacity — `bestFitting` provides the final rejection if the heuristic overshoots.
-    public static func computeThreshold(budget: UInt64, sequenceLength: Int, branchCount: Int) -> UInt64 {
+    public static func computeThreshold(
+        budget: UInt64,
+        sequenceLength: Int,
+        branchCount: Int
+    ) -> UInt64 {
         let logLen = max(1.0, log2(Double(sequenceLength)))
         let maxDomain = sqrt(Double(budget) / logLen)
         let perBranch = maxDomain / Double(branchCount)

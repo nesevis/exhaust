@@ -63,7 +63,8 @@ func analyzeClosureForBidirectional(
     if let signature = closure.signature {
         if let paramList = signature.parameterClause?.as(ClosureShorthandParameterListSyntax.self) {
             parameterNames = paramList.map(\.name.text)
-        } else if let paramClause = signature.parameterClause?.as(ClosureParameterClauseSyntax.self) {
+        } else if let paramClause = signature.parameterClause?
+            .as(ClosureParameterClauseSyntax.self) {
             parameterNames = paramClause.parameters.map(\.firstName.text)
         } else {
             return .forwardOnly(.forwardOnlyShorthandParams)
@@ -79,7 +80,11 @@ func analyzeClosureForBidirectional(
         return .forwardOnly(.forwardOnlyMultiStatement)
     }
 
-    return analyzeFunctionCall(singleExpr, parameterNames: parameterNames, generatorCount: generatorCount)
+    return analyzeFunctionCall(
+        singleExpr,
+        parameterNames: parameterNames,
+        generatorCount: generatorCount
+    )
 }
 
 /// Analyzes a closure that uses shorthand parameters ($0, $1, ...) for bidirectional capability.

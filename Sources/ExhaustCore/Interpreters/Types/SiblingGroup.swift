@@ -37,7 +37,12 @@ public struct SiblingFrame {
     public let startIndex: Int
     public let isSequence: Bool
 
-    public init(children: [(range: ClosedRange<Int>, kind: SiblingChildKind)] = [], depth: Int, startIndex: Int, isSequence: Bool) {
+    public init(
+      children: [(range: ClosedRange<Int>, kind: SiblingChildKind)] = [],
+      depth: Int,
+      startIndex: Int,
+      isSequence: Bool
+    ) {
         self.children = children
         self.depth = depth
         self.startIndex = startIndex

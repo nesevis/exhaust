@@ -49,7 +49,10 @@ public extension Gen {
     static func pick<Output>(
         choices: [(weight: Int, generator: ReflectiveGenerator<Output>)]
     ) -> ReflectiveGenerator<Output> {
-        precondition(choices.map(\.weight).allSatisfy { $0 > 0 }, "Weights must be higher than zero")
+        precondition(
+            choices.map(\.weight).allSatisfy { $0 > 0 },
+            "Weights must be higher than zero"
+        )
 
         return pick(choices: choices.map { (UInt64($0.weight), $0.generator) })
     }
@@ -88,7 +91,10 @@ public extension Gen {
         return Gen.contramap(
             { (element: C.Element) throws -> Int in
                 guard let index = collection.firstIndex(of: element) else {
-                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement("Collection does not contain \(element)")
+                    throw Interpreters.ReflectionError
+                        .couldNotReflectOnSequenceElement(
+                            "Collection does not contain \(element)"
+                        )
                 }
                 return index
             },
@@ -175,8 +181,18 @@ public extension Gen {
             isExponential = true
         }
 
-        let effectiveLower = originBits - scaledDistance(originBits - lowerBits, fraction: fraction, isExponential: isExponential)
-        let effectiveUpper = originBits + scaledDistance(upperBits - originBits, fraction: fraction, isExponential: isExponential)
+        let lowerDistance = scaledDistance(
+            originBits - lowerBits,
+            fraction: fraction,
+            isExponential: isExponential
+        )
+        let upperDistance = scaledDistance(
+            upperBits - originBits,
+            fraction: fraction,
+            isExponential: isExponential
+        )
+        let effectiveLower = originBits - lowerDistance
+        let effectiveUpper = originBits + upperDistance
 
         return Output(bitPattern64: effectiveLower) ... Output(bitPattern64: effectiveUpper)
     }
@@ -184,7 +200,11 @@ public extension Gen {
     /// Scales a distance from origin to bound by the given fraction (0–1).
     ///
     /// Follows Hedgehog's scaling approach: linear uses integer arithmetic with a `+1` adjustment to ensure non-trivial ranges at small sizes, and exponential uses `rounded()` instead of truncation.
-    static func scaledDistance(_ distance: UInt64, fraction: Double, isExponential: Bool) -> UInt64 {
+    static func scaledDistance(
+        _ distance: UInt64,
+        fraction: Double,
+        isExponential: Bool
+    ) -> UInt64 {
         guard distance > 0, fraction > 0 else { return 0 }
 
         if isExponential {
@@ -208,7 +228,13 @@ public extension Gen {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
 
-        return .impure(operation: .chooseBits(min: minBits, max: maxBits, tag: Output.tag, isRangeExplicit: isRangeExplicit)) { result in
+        let operation = ReflectiveOperation.chooseBits(
+            min: minBits,
+            max: maxBits,
+            tag: Output.tag,
+            isRangeExplicit: isRangeExplicit
+        )
+        return .impure(operation: operation) { result in
             guard let convertible = result as? any BitPatternConvertible else {
                 throw GeneratorError.typeMismatch(
                     expected: "any BitPatternConvertible",
@@ -227,7 +253,13 @@ public extension Gen {
         in range: ClosedRange<UInt64>? = nil
     ) -> ReflectiveGenerator<UInt64> {
         let resolvedRange = range ?? UInt64.min ... .max
-        return .impure(operation: .chooseBits(min: resolvedRange.lowerBound, max: resolvedRange.upperBound, tag: .bits, isRangeExplicit: range != nil)) { result in
+        let operation = ReflectiveOperation.chooseBits(
+            min: resolvedRange.lowerBound,
+            max: resolvedRange.upperBound,
+            tag: .bits,
+            isRangeExplicit: range != nil
+        )
+        return .impure(operation: operation) { result in
             guard let convertible = result as? any BitPatternConvertible else {
                 throw GeneratorError.typeMismatch(
                     expected: "any BitPatternConvertible",

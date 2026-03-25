@@ -10,12 +10,20 @@ public enum BoundaryCoveringArrayReplay {
     /// When the profile contains an original tree (from VACTI), walks the tree as a template and substitutes
     /// parameter values at matching positions. This preserves structural nodes like `.bind` that the flat
     /// parameter list doesn't capture. Falls back to flat construction when no original tree is available.
-    public static func buildTree(row: CoveringArrayRow, profile: BoundaryDomainProfile) -> ChoiceTree? {
+    public static func buildTree(
+        row: CoveringArrayRow,
+        profile: BoundaryDomainProfile
+    ) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 
         if let originalTree = profile.originalTree {
             var paramIndex = 0
-            return substituteParameters(in: originalTree, row: row, profile: profile, paramIndex: &paramIndex)
+            return substituteParameters(
+                in: originalTree,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            )
         }
 
         return buildTreeFlat(row: row, profile: profile)
@@ -59,7 +67,12 @@ public enum BoundaryCoveringArrayReplay {
             }
             var newChildren: [ChoiceTree] = []
             for child in children {
-                guard let newChild = substituteParameters(in: child, row: row, profile: profile, paramIndex: &paramIndex) else {
+                guard let newChild = substituteParameters(
+                    in: child,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
                     return nil
                 }
                 newChildren.append(newChild)
@@ -67,13 +80,23 @@ public enum BoundaryCoveringArrayReplay {
             return .group(newChildren)
 
         case let .bind(inner, bound):
-            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+            guard let newInner = substituteParameters(
+                in: inner,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            ) else {
                 return nil
             }
             return .bind(inner: newInner, bound: bound)
 
         case let .selected(inner):
-            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+            guard let newInner = substituteParameters(
+                in: inner,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            ) else {
                 return nil
             }
             return .selected(newInner)
@@ -95,7 +118,12 @@ public enum BoundaryCoveringArrayReplay {
             var newElements: [ChoiceTree] = []
             for (elementIndex, element) in elements.enumerated() {
                 guard UInt64(elementIndex) < newLength else { break }
-                guard let newElement = substituteParameters(in: element, row: row, profile: profile, paramIndex: &paramIndex) else {
+                guard let newElement = substituteParameters(
+                    in: element,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
                     return nil
                 }
                 newElements.append(newElement)
@@ -104,16 +132,30 @@ public enum BoundaryCoveringArrayReplay {
             return .sequence(length: newLength, elements: newElements, metadata)
 
         case let .branch(siteID, weight, id, branchIDs, choice):
-            guard let newChoice = substituteParameters(in: choice, row: row, profile: profile, paramIndex: &paramIndex) else {
+            guard let newChoice = substituteParameters(
+                in: choice,
+                row: row,
+                profile: profile,
+                paramIndex: &paramIndex
+            ) else {
                 return nil
             }
-            return .branch(siteID: siteID, weight: weight, id: id, branchIDs: branchIDs, choice: newChoice)
+            return .branch(
+                siteID: siteID,
+                weight: weight,
+                id: id,
+                branchIDs: branchIDs,
+                choice: newChoice
+            )
         }
     }
 
     // MARK: - Flat Construction (Fallback)
 
-    private static func buildTreeFlat(row: CoveringArrayRow, profile: BoundaryDomainProfile) -> ChoiceTree? {
+    private static func buildTreeFlat(
+        row: CoveringArrayRow,
+        profile: BoundaryDomainProfile
+    ) -> ChoiceTree? {
         var trees: [ChoiceTree] = []
 
         var i = 0

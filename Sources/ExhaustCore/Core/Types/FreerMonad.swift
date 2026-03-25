@@ -35,7 +35,10 @@ public enum FreerMonad<Operation, Value> {
     /// - `continuation`: A function that processes the effect's result and produces the next step
     ///
     /// The continuation receives `Any` to maintain type erasure across the interpretation boundary, allowing interpreters to work with heterogeneous effect types.
-    indirect case impure(operation: Operation, continuation: (Any) throws -> FreerMonad<Operation, Value>)
+    indirect case impure(
+        operation: Operation,
+        continuation: (Any) throws -> FreerMonad<Operation, Value>
+    )
 }
 
 // MARK: - Functor and Monad
@@ -53,7 +56,9 @@ public extension FreerMonad {
     /// - Parameter transform: A function that takes the current value and produces a new computation
     /// - Returns: A new computation representing the sequenced effects
     /// - Throws: Rethrows any errors from the transform function
-    func _bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
+    func _bind<NewValue>(
+        _ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>
+    ) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value):
             try transform(value)
@@ -75,7 +80,9 @@ public extension FreerMonad {
     /// - Parameter transform: A pure function to apply to the final value
     /// - Returns: A computation that produces the transformed value
     /// - Throws: Rethrows any errors from the transform function
-    func _map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> FreerMonad<Operation, NewValue> {
+    func _map<NewValue>(
+        _ transform: @escaping (Value) throws -> NewValue
+    ) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value): try .pure(transform(value))
         case let .impure(operation, continuation):

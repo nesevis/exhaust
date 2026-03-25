@@ -19,7 +19,11 @@ public struct CoveringArray: @unchecked Sendable {
     ///   - budget: Maximum number of rows the covering array may contain.
     ///   - profile: The finite domain profile describing all parameters.
     ///   - maxStrength: Upper bound on the interaction strength to try. Capped internally at 4 (the maximum the FIPOG builder supports). Defaults to 6 for API compatibility.
-    public static func bestFitting(budget: UInt64, profile: FiniteDomainProfile, maxStrength: Int = 6) -> CoveringArray? {
+    public static func bestFitting(
+        budget: UInt64,
+        profile: FiniteDomainProfile,
+        maxStrength: Int = 6
+    ) -> CoveringArray? {
         let paramCount = profile.parameters.count
         guard paramCount >= 2 else { return nil }
 
@@ -34,7 +38,8 @@ public struct CoveringArray: @unchecked Sendable {
             var seedSize: UInt64 = 1
             var tooBig = false
             for index in 0 ..< strength {
-                let (product, overflow) = seedSize.multipliedReportingOverflow(by: profile.parameters[index].domainSize)
+                let domainSize = profile.parameters[index].domainSize
+                let (product, overflow) = seedSize.multipliedReportingOverflow(by: domainSize)
                 if overflow || product > budget {
                     tooBig = true
                     break
@@ -43,7 +48,12 @@ public struct CoveringArray: @unchecked Sendable {
             }
             if tooBig { break }
 
-            guard let covering = generate(profile: profile, strength: strength, rowBudget: rowBudget) else {
+            let covering = generate(
+                profile: profile,
+                strength: strength,
+                rowBudget: rowBudget
+            )
+            guard let covering else {
                 break
             }
             best = covering
@@ -62,7 +72,11 @@ public struct CoveringArray: @unchecked Sendable {
     ///   - strength: The interaction strength `t`. Supported values: 1 through 4, or equal to the parameter count (exhaustive). Values above 4 return `nil`.
     ///   - rowBudget: Maximum number of rows. Defaults to 2000.
     /// - Returns: A covering array, or `nil` if generation fails or exceeds the budget.
-    public static func generate(profile: FiniteDomainProfile, strength: Int, rowBudget: Int? = nil) -> CoveringArray? {
+    public static func generate(
+        profile: FiniteDomainProfile,
+        strength: Int,
+        rowBudget: Int? = nil
+    ) -> CoveringArray? {
         let params = profile.parameters
         let paramCount = params.count
         guard strength >= 1, strength <= paramCount else { return nil }
@@ -97,7 +111,10 @@ public struct CoveringArray: @unchecked Sendable {
     }
 
     /// Returns the strongest covering array that fits within `budget` rows for a boundary domain profile, or `nil` if even t=2 doesn't fit.
-    public static func bestFitting(budget: UInt64, boundaryProfile: BoundaryDomainProfile) -> CoveringArray? {
+    public static func bestFitting(
+        budget: UInt64,
+        boundaryProfile: BoundaryDomainProfile
+    ) -> CoveringArray? {
         let syntheticParams = boundaryProfile.parameters.map { param in
             FiniteParameter(
                 index: param.index,
@@ -139,8 +156,16 @@ public struct CoveringArray: @unchecked Sendable {
 
         var totalCombinations: UInt64 = 1
         for p in params {
-            let (product, overflow) = totalCombinations.multipliedReportingOverflow(by: p.domainSize)
-            guard !overflow else { return CoveringArray(strength: params.count, rows: [], profile: profile) }
+            let (product, overflow) = totalCombinations.multipliedReportingOverflow(
+                by: p.domainSize
+            )
+            guard overflow == false else {
+                return CoveringArray(
+                    strength: params.count,
+                    rows: [],
+                    profile: profile
+                )
+            }
             totalCombinations = product
         }
 
@@ -267,8 +292,16 @@ private struct CoverageSlice {
     }
 
     @inline(__always)
-    func flatIndex4(_ value0: UInt16, _ value1: UInt16, _ value2: UInt16, _ value3: UInt16) -> UInt32 {
-        UInt32(value0) &* strides.0 &+ UInt32(value1) &* strides.1 &+ UInt32(value2) &* strides.2 &+ UInt32(value3)
+    func flatIndex4(
+        _ value0: UInt16,
+        _ value1: UInt16,
+        _ value2: UInt16,
+        _ value3: UInt16
+    ) -> UInt32 {
+        UInt32(value0) &* strides.0
+            &+ UInt32(value1) &* strides.1
+            &+ UInt32(value2) &* strides.2
+            &+ UInt32(value3)
     }
 
     /// Marks the tuple at `index` as covered. Returns `true` if newly covered.
@@ -323,7 +356,11 @@ private struct FIPOGBuilder {
             default: break
             }
 
-            let succeeded = verticalGrowth(paramIndex: paramIndex, slices: &slices, rowBudget: rowBudget)
+            let succeeded = verticalGrowth(
+                paramIndex: paramIndex,
+                slices: &slices,
+                rowBudget: rowBudget
+            )
 
             for index in slices.indices {
                 slices[index].deallocate()
@@ -360,7 +397,8 @@ private struct FIPOGBuilder {
     private mutating func seedInitialRows(rowBudget: Int) -> Bool {
         var seedSize = 1
         for index in 0 ..< strength {
-            let (product, overflow) = seedSize.multipliedReportingOverflow(by: Int(domainSizes[index]))
+            let domain = Int(domainSizes[index])
+            let (product, overflow) = seedSize.multipliedReportingOverflow(by: domain)
             if overflow || product > rowBudget { return false }
             seedSize = product
         }
@@ -460,7 +498,10 @@ private struct FIPOGBuilder {
 
     // MARK: - Horizontal Growth (strength-specialized)
 
-    private mutating func horizontalGrowth2(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
+    private mutating func horizontalGrowth2(
+        paramIndex: Int,
+        slices: inout ContiguousArray<CoverageSlice>
+    ) {
         let domain = UInt16(domainSizes[paramIndex])
         let sliceCount = slices.count
 
@@ -503,7 +544,10 @@ private struct FIPOGBuilder {
         }
     }
 
-    private mutating func horizontalGrowth3(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
+    private mutating func horizontalGrowth3(
+        paramIndex: Int,
+        slices: inout ContiguousArray<CoverageSlice>
+    ) {
         let domain = UInt16(domainSizes[paramIndex])
         let sliceCount = slices.count
 
@@ -548,7 +592,10 @@ private struct FIPOGBuilder {
         }
     }
 
-    private mutating func horizontalGrowth4(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
+    private mutating func horizontalGrowth4(
+        paramIndex: Int,
+        slices: inout ContiguousArray<CoverageSlice>
+    ) {
         let domain = UInt16(domainSizes[paramIndex])
         let sliceCount = slices.count
 
@@ -717,8 +764,9 @@ private struct FIPOGBuilder {
     ) -> (sliceIndex: Int, flatIndex: UInt32)? {
         var sliceIndex = 0
         while sliceIndex < slices.count {
-            if slices[sliceIndex].remaining > 0,
-               let bit = slices[sliceIndex].bits.firstUnsetBit(below: slices[sliceIndex].totalTuples)
+            let slice = slices[sliceIndex]
+            if slice.remaining > 0,
+               let bit = slice.bits.firstUnsetBit(below: slice.totalTuples)
             {
                 return (sliceIndex, bit)
             }
@@ -728,7 +776,10 @@ private struct FIPOGBuilder {
     }
 
     /// Decomposes a flat index back into per-parameter values using the slice's strides.
-    private func decompose(flatIndex: UInt32, slice: CoverageSlice) -> (UInt16, UInt16, UInt16, UInt16) {
+    private func decompose(
+        flatIndex: UInt32,
+        slice: CoverageSlice
+    ) -> (UInt16, UInt16, UInt16, UInt16) {
         var remainder = flatIndex
         let value0 = UInt16(remainder / slice.strides.0)
         remainder = remainder % slice.strides.0
