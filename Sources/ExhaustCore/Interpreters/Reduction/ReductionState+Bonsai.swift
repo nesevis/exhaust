@@ -1018,31 +1018,43 @@ extension ReductionState {
             }
         }
 
+        // Shared decoder context for reorder and redistribution passes.
+        let tailDecoderContext = DecoderContext(
+            depth: .global,
+            bindIndex: bindIndex,
+            fallbackTree: fallbackTree,
+            strictness: .normal
+        )
+        let tailDecoder = SequenceDecoder.for(tailDecoderContext)
+        let tailContext = ReductionContext(
+            bindIndex: bindIndex,
+            convergedOrigins: cachedOrigins,
+            dag: dag
+        )
+
+        // Shortlex reorder: sort siblings by shortlex key after values settle.
+        if legBudget.isExhausted == false {
+            if try runComposable(
+                shortlexReorderEncoder, decoder: tailDecoder,
+                positionRange: fullRange, context: tailContext,
+                structureChanged: hasBind, budget: &legBudget
+            ) {
+                anyAccepted = true
+            }
+        }
+
         // Redistribution (once at end of fibre descent).
         if legBudget.isExhausted == false {
-            let redistDecoderContext = DecoderContext(
-                depth: .global,
-                bindIndex: bindIndex,
-                fallbackTree: fallbackTree,
-                strictness: .normal
-            )
-            let redistDecoder = SequenceDecoder.for(redistDecoderContext)
-            let redistContext = ReductionContext(
-                bindIndex: bindIndex,
-                convergedOrigins: cachedOrigins,
-                dag: dag
-            )
-
             if try runComposable(
-                tandemEncoder, decoder: redistDecoder,
-                positionRange: fullRange, context: redistContext,
+                tandemEncoder, decoder: tailDecoder,
+                positionRange: fullRange, context: tailContext,
                 structureChanged: hasBind, budget: &legBudget
             ) {
                 anyAccepted = true
             }
             if try runComposable(
-                redistributeEncoder, decoder: redistDecoder,
-                positionRange: fullRange, context: redistContext,
+                redistributeEncoder, decoder: tailDecoder,
+                positionRange: fullRange, context: tailContext,
                 structureChanged: hasBind, budget: &legBudget
             ) {
                 anyAccepted = true

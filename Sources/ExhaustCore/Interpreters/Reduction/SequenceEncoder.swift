@@ -16,6 +16,7 @@ public enum EncoderName: String, Hashable, Sendable {
     case reduceFloat
     case productSpaceBatch
     case productSpaceAdaptive
+    case shortlexReorder
     // Redistribution
     case redistributeSiblingValuesInLockstep
     case redistributeArbitraryValuePairsAcrossContainers

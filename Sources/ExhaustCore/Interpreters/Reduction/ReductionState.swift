@@ -459,6 +459,7 @@ final class ReductionState<Output> {
     var reduceFloatEncoder = ReduceFloatEncoder()
     var contiguousWindowEncoder = ContiguousWindowDeletionEncoder()
     var beamSearchEncoder: BeamSearchDeletionEncoder
+    var shortlexReorderEncoder = ShortlexReorderEncoder()
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
