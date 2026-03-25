@@ -70,10 +70,6 @@ extension ReductionScheduler {
     }
 
     /// Returns the subset of slots that survive the span availability filter, in order.
-    ///
-    /// Maps descriptor indices back to encoder slots for move-to-front promotion after
-    /// ``ReductionState/runDescriptorChainDetailed(_:positionRange:context:budget:)`` reports
-    /// which descriptor accepted.
     static func survivingSlots(
         from ordering: [ValueEncoderSlot],
         hasValueSpans: Bool,

@@ -227,7 +227,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
                         return .monotoneConvergence
                     }
                     let remaining = bestAccepted - convergedTarget.targetBP
-                    if remaining <= UInt64(EncoderFactory.linearScanThreshold) {
+                    if remaining <= UInt64(linearScanThreshold) {
                         return .nonMonotoneGap(remainingRange: Int(remaining))
                     }
                     return .monotoneConvergence

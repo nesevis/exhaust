@@ -7,7 +7,7 @@
 /// no value assignment can improve on it, and PRNG retries are waste. If it passes,
 /// specific values are required to reproduce the failure.
 ///
-/// Sits between the guided and PRNG tiers in a ``MorphismDescriptor`` dominance chain.
+/// Sits between the guided and PRNG tiers in the product-space batch dominance chain.
 /// When the probe succeeds (property fails on the all-zeroed sequence), it dominates
 /// the PRNG tier and prevents unnecessary retries.
 struct RegimeProbeEncoder: ComposableEncoder {
