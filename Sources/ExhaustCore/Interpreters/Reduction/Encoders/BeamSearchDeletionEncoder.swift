@@ -40,6 +40,9 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
     private var cohorts: [[AlignedDeletionSlot]] = []
     private var cohortIndex = 0
     private var cohortRanges: AlignedDeletionCohortRanges?
+    /// Pre-computed cohorts injected by the orchestrator to avoid duplicate extraction.
+    /// Consumed once by ``start(sequence:tree:positionRange:context:)`` and reset to `nil`.
+    var precomputedCohorts: [[AlignedDeletionSlot]]?
 
     private var beamFrontier: [BeamState] = []
     private var beamLayer = 0
@@ -78,12 +81,17 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
         self.sequence = sequence
         cohortIndex = 0
 
-        let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
-        cohorts = AlignedDeletionCohortBuilder.buildCohorts(
-            from: sequence,
-            siblingGroups: siblingGroups
-        )
-        .filter { $0.isEmpty == false }
+        if let precomputed = precomputedCohorts {
+            cohorts = precomputed
+            precomputedCohorts = nil
+        } else {
+            let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
+            cohorts = AlignedDeletionCohortBuilder.buildCohorts(
+                from: sequence,
+                siblingGroups: siblingGroups
+            )
+            .filter { $0.isEmpty == false }
+        }
 
         if cohorts.isEmpty == false {
             prepareCohort()

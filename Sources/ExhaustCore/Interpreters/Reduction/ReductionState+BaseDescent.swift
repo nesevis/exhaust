@@ -212,6 +212,12 @@ extension ReductionState {
                 if slot == .alignedWindows {
                     // Contiguous window search dominates beam search.
                     // Both self-extract sibling groups — don't skip on empty container spans.
+                    // Pre-compute cohorts once via SpanCache so both encoders share
+                    // the O(n) sibling group extraction and cohort construction.
+                    let sharedCohorts = spanCache.alignedDeletionCohorts(from: sequence)
+                    guard sharedCohorts.isEmpty == false else { continue }
+                    contiguousWindowEncoder.precomputedCohorts = sharedCohorts
+                    beamSearchEncoder.precomputedCohorts = sharedCohorts
                     let contiguousAccepted = try runComposable(
                         contiguousWindowEncoder,
                         decoder: scopeDecoder,

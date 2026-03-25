@@ -78,9 +78,10 @@ enum AlignedDeletionCohortBuilder {
         from sequence: ChoiceSequence,
         siblingGroups: [SiblingGroup]
     ) -> [[AlignedDeletionSlot]] {
-        alignedContainerCohorts(in: sequence)
-            + alignedSiblingGroupCohorts(from: siblingGroups)
-            + rootSequenceContainerCohorts(in: sequence)
+        var result = alignedContainerCohorts(in: sequence)
+        result.append(contentsOf: alignedSiblingGroupCohorts(from: siblingGroups))
+        result.append(contentsOf: rootSequenceContainerCohorts(in: sequence))
+        return result
     }
 
     // MARK: - Sibling Group Cohorts
