@@ -148,7 +148,13 @@ public struct ExhaustReport: Sendable {
             ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
             : ""
         let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
-        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(phaseLabel)"
+        let projectionProbes = encoderProbes[.freeCoordinateProjection] ?? 0
+        let humanOrderProbes = encoderProbes[.humanOrderReorder] ?? 0
+        let hasPassData = projectionProbes > 0 || humanOrderProbes > 0
+        let passLabel = hasPassData
+            ? " passes=\(projectionProbes)proj/\(humanOrderProbes)human"
+            : ""
+        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(passLabel)\(phaseLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
