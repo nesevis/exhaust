@@ -14,7 +14,7 @@
 /// ``ContiguousWindowDeletionEncoder`` in the descriptor chain. Only runs when contiguous
 /// window search exhausts without finding improvements.
 struct BeamSearchDeletionEncoder: ComposableEncoder {
-    let name: EncoderName = .deleteAlignedSiblingWindows
+    let name: EncoderName = .deleteAlignedSiblingSubsets
     let phase = ReductionPhase.structuralDeletion
 
     private let beamTuning: Interpreters.ReductionBudget.AlignedDeletionBeamSearchTuning

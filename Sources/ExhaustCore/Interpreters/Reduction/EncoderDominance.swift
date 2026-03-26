@@ -46,6 +46,10 @@ struct EncoderDominance {
         case (.structuralDeletion, .deleteContainerSpansWithRandomRepair):
             succeeded.contains(.deleteContainerSpans)
                 || succeeded.contains(.deleteAlignedSiblingWindows)
+        // Contiguous window deletion dominates beam search subset deletion:
+        // every contiguous window is a degenerate non-contiguous subset.
+        case (.structuralDeletion, .deleteAlignedSiblingSubsets):
+            succeeded.contains(.deleteAlignedSiblingWindows)
         // Zero is the best binary-search-to-semantic-simplest can achieve.
         case (.valueMinimization, .binarySearchToSemanticSimplest):
             succeeded.contains(.zeroValue)

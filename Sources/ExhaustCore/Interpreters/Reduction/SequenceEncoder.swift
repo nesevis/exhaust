@@ -9,6 +9,7 @@ public enum EncoderName: String, Hashable, Sendable {
     case deleteFreeStandingValues
     case deleteContainerSpansWithRandomRepair
     case deleteAlignedSiblingWindows
+    case deleteAlignedSiblingSubsets
     // Value minimization
     case zeroValue
     case binarySearchToSemanticSimplest

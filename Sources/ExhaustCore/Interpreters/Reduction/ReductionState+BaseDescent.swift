@@ -206,7 +206,7 @@ extension ReductionState {
                     from: sequence,
                     bindIndex: bindIndex
                 )
-                let slotAccepted: Bool
+                var slotAccepted = false
                 if slot == .alignedWindows {
                     // Contiguous window search dominates beam search.
                     // Both self-extract sibling groups — don't skip on empty container spans.
@@ -216,26 +216,26 @@ extension ReductionState {
                     guard sharedCohorts.isEmpty == false else { continue }
                     contiguousWindowEncoder.precomputedCohorts = sharedCohorts
                     beamSearchEncoder.precomputedCohorts = sharedCohorts
-                    let contiguousAccepted = try runComposable(
+                    if try runComposable(
                         contiguousWindowEncoder,
                         decoder: scopeDecoder,
                         positionRange: fullRange,
                         context: deletionContext,
                         structureChanged: true,
                         budget: &legBudget
-                    )
-                    if contiguousAccepted {
+                    ) {
                         slotAccepted = true
-                    } else {
-                        // Contiguous exhausted — try beam search fallback.
-                        slotAccepted = try runComposable(
-                            beamSearchEncoder,
-                            decoder: scopeDecoder,
-                            positionRange: fullRange,
-                            context: deletionContext,
-                            structureChanged: true,
-                            budget: &legBudget
-                        )
+                    }
+                    // Beam search: dominance check skips if contiguous accepted.
+                    if try runComposable(
+                        beamSearchEncoder,
+                        decoder: scopeDecoder,
+                        positionRange: fullRange,
+                        context: deletionContext,
+                        structureChanged: true,
+                        budget: &legBudget
+                    ) {
+                        slotAccepted = true
                     }
                 } else {
                     guard targets.isEmpty == false else { continue }
@@ -243,14 +243,16 @@ extension ReductionState {
                         ? makeSpeculativeDecoder()
                         : scopeDecoder
                     let category = slot.spanCategory
-                    slotAccepted = try runComposable(
+                    if try runComposable(
                         DeletionEncoder(spanCategory: category, spans: targets),
                         decoder: decoder,
                         positionRange: fullRange,
                         context: deletionContext,
                         structureChanged: true,
                         budget: &legBudget
-                    )
+                    ) {
+                        slotAccepted = true
+                    }
                 }
                 if slotAccepted {
                     ReductionScheduler.moveToFront(slot, in: &pruneOrder)
