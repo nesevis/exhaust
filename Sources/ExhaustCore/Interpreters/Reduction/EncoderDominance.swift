@@ -9,6 +9,7 @@
 /// - **Deletion**: `deleteAlignedSiblingWindows` ⇒ `deleteAlignedSiblingSubsets`
 /// - **Deletion**: `productSpaceBatch` ⇒ `productSpaceAdaptive`
 /// - **Value minimization**: `zeroValue` ⇒ `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
+/// - **Value minimization**: `zeroValue` or `binarySearchToSemanticSimplest` ⇒ `linearScan`
 ///
 /// The dominance relation is scoped per hom-set: success in one hom-set (for example, deletion)
 /// does not affect dominance in another (for example, value minimization). The scheduler resets
@@ -61,7 +62,12 @@ struct EncoderDominance {
             succeeded.contains(.zeroValue)
         // Binary-search-to-semantic-simplest finds values ≤ any nonzero target.
         case (.valueMinimization, .binarySearchToRangeMinimum):
-            succeeded.contains(.zeroValue) || succeeded.contains(.binarySearchToSemanticSimplest)
+            succeeded.contains(.zeroValue)
+                || succeeded.contains(.binarySearchToSemanticSimplest)
+        // Linear scan covers a bounded subrange that binary search already searched.
+        case (.valueMinimization, .linearScan):
+            succeeded.contains(.zeroValue)
+                || succeeded.contains(.binarySearchToSemanticSimplest)
         default:
             false
         }
