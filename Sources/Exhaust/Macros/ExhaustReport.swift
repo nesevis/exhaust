@@ -22,6 +22,27 @@ public struct ExhaustReport: Sendable {
     /// Total property invocations across all phases (coverage, random sampling, and reduction).
     public var propertyInvocations: Int = 0
 
+    /// Property invocations during the structured coverage phase.
+    public var coverageInvocations: Int = 0
+
+    /// Property invocations during the random sampling phase.
+    public var randomSamplingInvocations: Int = 0
+
+    /// Property invocations during the reduction phase (counted by the wrapping closure).
+    public var reductionInvocations: Int = 0
+
+    /// Sets the per-phase property invocation counts and derives the total.
+    public mutating func setInvocations(
+        coverage: Int,
+        randomSampling: Int,
+        reduction: Int
+    ) {
+        coverageInvocations = coverage
+        randomSamplingInvocations = randomSampling
+        reductionInvocations = reduction
+        propertyInvocations = coverage + randomSampling + reduction
+    }
+
     /// Total materialization attempts (decoder invocations) during the reduction phase.
     public var totalMaterializations: Int = 0
 
@@ -154,7 +175,7 @@ public struct ExhaustReport: Sendable {
         let passLabel = hasPassData
             ? " passes=\(projectionProbes)proj/\(humanOrderProbes)human"
             : ""
-        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(passLabel)\(phaseLabel)"
+        return "cycles=\(cycles) probes=\(coverageInvocations)cov/\(randomSamplingInvocations)rand/\(reductionInvocations)red mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(passLabel)\(phaseLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.

@@ -174,6 +174,7 @@ enum BonsaiScheduler {
             let staleness = try Self.detectStaleness(state: state, gen: gen, property: property)
             state.verificationSweepProbes = staleness.probesUsed
             state.verificationSweepFoundStaleness = staleness.hasStaleFloors
+            state.totalMaterializations += staleness.probesUsed
             if staleness.hasStaleFloors {
                 if isInstrumented {
                     ExhaustLog.debug(

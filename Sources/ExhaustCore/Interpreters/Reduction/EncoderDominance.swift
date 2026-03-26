@@ -64,7 +64,7 @@ struct EncoderDominance {
         case (.valueMinimization, .binarySearchToRangeMinimum):
             succeeded.contains(.zeroValue)
                 || succeeded.contains(.binarySearchToSemanticSimplest)
-        // Linear scan covers a bounded subrange that binary search already searched.
+        // Linear scan covers a bounded subrange that binary search already searched. NOTE: this edge is per-encoder (global), not per-coordinate. LinearScan fires on .nonMonotoneGap signals at specific coordinates where binary search detected non-monotonicity. If binary search succeeded at a DIFFERENT coordinate, this skip suppresses LinearScan at coordinates where it is genuinely needed. Revisit whether this should be per-coordinate or removed entirely.
         case (.valueMinimization, .linearScan):
             succeeded.contains(.zeroValue)
                 || succeeded.contains(.binarySearchToSemanticSimplest)

@@ -87,8 +87,8 @@ public struct KleisliComposition<Output>: ComposableEncoder {
 
     /// Maximum upstream candidates to try.
     private var upstreamBudget = 15
-    /// Probes used by the upstream so far.
-    private var upstreamProbesUsed = 0
+    /// Probes used by the upstream so far. Each upstream probe triggers one ``GeneratorLift`` materialization.
+    private(set) var upstreamProbesUsed = 0
 
     // MARK: - Initializer
 

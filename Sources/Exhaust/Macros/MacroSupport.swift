@@ -189,8 +189,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         report.reductionMilliseconds = Double(reductionElapsed) / 1_000_000
                         let totalElapsed = reductionEndTime - phaseTimingStart
                         report.totalMilliseconds = Double(totalElapsed) / 1_000_000
-                        report.propertyInvocations =
-                            coverageIterations + propertyInvocationCount
+                        report.setInvocations(
+                            coverage: coverageIterations,
+                            randomSampling: 0,
+                            reduction: propertyInvocationCount
+                        )
                         if !suppressIssueReporting {
                             reportIssue(
                                 rendered,
@@ -210,7 +213,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         line: line,
                         column: column
                     )
-                    report.propertyInvocations = coverageIterations + propertyInvocationCount
+                    report.setInvocations(
+                        coverage: coverageIterations,
+                        randomSampling: 0,
+                        reduction: propertyInvocationCount
+                    )
                     return value
                 }
 
@@ -241,7 +248,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         column: column
                     )
                 }
-                report.propertyInvocations = coverageIterations + propertyInvocationCount
+                report.setInvocations(
+                    coverage: coverageIterations,
+                    randomSampling: 0,
+                    reduction: propertyInvocationCount
+                )
                 return nil
 
             case let .exhaustive(iterations):
@@ -269,7 +280,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 let elapsed = exhaustiveEndTime - phaseTimingStart
                 report.coverageMilliseconds = Double(elapsed) / 1_000_000
                 report.totalMilliseconds = report.coverageMilliseconds
-                report.propertyInvocations = iterations
+                report.setInvocations(
+                    coverage: iterations,
+                    randomSampling: 0,
+                    reduction: 0
+                )
                 return nil
 
             case let .partial(iterations, strength, rows, parameters, totalSpace, kind):
@@ -365,8 +380,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         report.reductionMilliseconds = Double(reductionElapsed) / 1_000_000
                         let totalElapsed = reductionEndTime - phaseTimingStart
                         report.totalMilliseconds = Double(totalElapsed) / 1_000_000
-                        report.propertyInvocations =
-                            coverageIterations + iterations + propertyInvocationCount
+                        report.setInvocations(
+                            coverage: coverageIterations,
+                            randomSampling: iterations,
+                            reduction: propertyInvocationCount
+                        )
                         if !suppressIssueReporting {
                             reportIssue(
                                 rendered,
@@ -386,8 +404,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         line: line,
                         column: column
                     )
-                    report.propertyInvocations =
-                        coverageIterations + iterations + propertyInvocationCount
+                    report.setInvocations(
+                        coverage: coverageIterations,
+                        randomSampling: iterations,
+                        reduction: propertyInvocationCount
+                    )
                     return next
                 }
 
@@ -415,8 +436,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     line: line,
                     column: column
                 )
-                report.propertyInvocations =
-                    coverageIterations + iterations + propertyInvocationCount
+                report.setInvocations(
+                    coverage: coverageIterations,
+                    randomSampling: iterations,
+                    reduction: propertyInvocationCount
+                )
                 return nil
             }
         }
@@ -458,7 +482,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
         report.generationMilliseconds = Double(passEndTime - coveragePhaseEndTime) / 1_000_000
         report.totalMilliseconds = Double(passEndTime - phaseTimingStart) / 1_000_000
-        report.propertyInvocations = totalPropertyCalls
+        report.setInvocations(
+            coverage: coverageIterations,
+            randomSampling: iterations,
+            reduction: 0
+        )
         return nil
     }
 
@@ -725,7 +753,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     column: column
                 )
             }
-            report.propertyInvocations = 1
+            report.setInvocations(coverage: 0, randomSampling: 0, reduction: 1)
             return nil
         }
 
@@ -745,7 +773,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     column: column
                 )
             }
-            report.propertyInvocations = 1
+            report.setInvocations(coverage: 0, randomSampling: 0, reduction: 1)
             return nil
         }
 
@@ -800,7 +828,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             report.reflectionMilliseconds = reflectionMs
             report.reductionMilliseconds = reductionMs
             report.totalMilliseconds = totalMs
-            report.propertyInvocations = 1 + propertyInvocationCount
+            report.setInvocations(
+            coverage: 0,
+            randomSampling: 0,
+            reduction: 1 + propertyInvocationCount
+        )
             if !suppressIssueReporting {
                 reportIssue(
                     rendered,
@@ -846,7 +878,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         report.reflectionMilliseconds = reflectionMs
         report.reductionMilliseconds = reductionMs
         report.totalMilliseconds = totalMs
-        report.propertyInvocations = 1 + propertyInvocationCount
+        report.setInvocations(
+            coverage: 0,
+            randomSampling: 0,
+            reduction: 1 + propertyInvocationCount
+        )
         if !suppressIssueReporting {
             reportIssue(
                 rendered,

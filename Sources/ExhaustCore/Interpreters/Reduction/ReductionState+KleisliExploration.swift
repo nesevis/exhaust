@@ -62,6 +62,12 @@ extension ReductionState {
             fallbackTree: fallbackTree
         )
 
+        // Discovery lifts: predictFibreSizeAtTarget materializes once per structurally constant edge.
+        if collectStats {
+            let discoveryLifts = compositionEdges.count { $0.edge.isStructurallyConstant }
+            kleisliMaterializations += discoveryLifts
+        }
+
         for var compositionEdge in compositionEdges {
             guard budget > 0 else { break }
             compositionEdgesAttempted += 1
@@ -318,7 +324,11 @@ extension ReductionState {
             }
 
             budget -= legBudget.used
-            if collectStats { kleisliMaterializations += legBudget.used }
+            if collectStats {
+                // legBudget.used counts property-checked materializations (downstream probes). upstreamProbesUsed counts GeneratorLift materializations that do NOT check the property — one per upstream probe.
+                kleisliMaterializations += legBudget.used
+                    + compositionEdge.composition.upstreamProbesUsed
+            }
         }
 
         if collectStats {
