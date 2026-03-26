@@ -81,8 +81,6 @@ final class ReductionState<Output> {
         var stats = ReductionStats()
         stats.encoderProbes = encoderProbes.filter { $0.value > 0 }
         stats.totalMaterializations = totalMaterializations
-            + phaseTracker.reductionPassInvocations
-        stats.reductionPassInvocations = phaseTracker.reductionPassInvocations
         stats.cycles = statsCycles
         stats.convergedCoordinatesAtPhaseTwoStart = convergedCoordinatesAtPhaseTwoStart
         stats.totalValueCoordinatesAtPhaseTwoStart = totalValueCoordinatesAtPhaseTwoStart
@@ -191,7 +189,6 @@ final class ReductionState<Output> {
     var contiguousWindowEncoder = ContiguousWindowDeletionEncoder()
     var beamSearchEncoder: BeamSearchDeletionEncoder
     var shortlexReorderEncoder = ShortlexReorderEncoder()
-    var oscillationDampingPass = OscillationDampingPass()
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()

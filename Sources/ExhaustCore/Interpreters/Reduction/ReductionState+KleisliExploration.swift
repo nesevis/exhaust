@@ -449,10 +449,20 @@ extension ReductionState {
                     // Pairwise: medium fibres (2–20 parameters).
                     .init(
                         encoder: FibreCoveringEncoder(),
-                        predicate: { _, paramCount in paramCount >= 2 && paramCount <= 20 }
+                        predicate: { _, paramCount in
+                            paramCount >= 2 && paramCount <= 20
+                        }
                     ),
-                    // Zero-value: large fibres (> 20 params or overflow). Cheap structural
-                    // probe — the all-at-once zero discovers elimination-regime failures.
+                    // Binary search: single-parameter fibres too large for
+                    // exhaustive. Searches each coordinate toward its
+                    // semantic simplest. In a Kleisli downstream context the
+                    // upstream improvement dominates shortlex, so even
+                    // partial convergence helps.
+                    .init(
+                        encoder: BinarySearchToSemanticSimplestEncoder(),
+                        predicate: { _, paramCount in paramCount == 1 }
+                    ),
+                    // Zero-value: large fibres (> 20 params or overflow).
                     .init(
                         encoder: ZeroValueEncoder(),
                         predicate: { _, _ in true }

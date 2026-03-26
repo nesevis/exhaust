@@ -191,7 +191,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
                 phase: .exploration,
                 budget: Self.phaseBudgetCeiling,
                 configuration: PhaseConfiguration(edgeBudgetPolicy: .adaptive),
-                requiresStall: true
+                requiresStall: false
             ))
         }
 

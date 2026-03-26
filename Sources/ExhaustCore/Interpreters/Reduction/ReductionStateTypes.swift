@@ -157,9 +157,6 @@ struct PhaseTracker {
     private var stack: [Phase] = []
     private(set) var counts: [Phase: PhaseCounts] = [:]
 
-    /// Property invocations from ``ReductionPass`` passes that run outside the phase stack (structural isolation, oscillation damping, human-order post-processing).
-    private(set) var reductionPassInvocations: Int = 0
-
     mutating func push(_ phase: Phase) {
         stack.append(phase)
     }
@@ -172,16 +169,6 @@ struct PhaseTracker {
     mutating func recordInvocation() {
         guard let phase = stack.first else { return }
         counts[phase, default: PhaseCounts()].propertyInvocations += 1
-    }
-
-    mutating func recordInvocations(_ count: Int) {
-        guard let phase = stack.first else { return }
-        counts[phase, default: PhaseCounts()].propertyInvocations += count
-    }
-
-    /// Records property invocations from a ``ReductionPass`` pass. Tracked separately from phase-attributed invocations but included in the reported total.
-    mutating func recordReductionPassInvocations(_ count: Int) {
-        reductionPassInvocations += count
     }
 
     mutating func recordAcceptance(structural: Bool) {

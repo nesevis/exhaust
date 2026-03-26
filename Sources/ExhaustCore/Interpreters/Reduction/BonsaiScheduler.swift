@@ -107,8 +107,8 @@ enum BonsaiScheduler {
             isInstrumented: state.isInstrumented
         ) {
             if state.collectStats {
-                state.phaseTracker.recordReductionPassInvocations(1)
-                state.encoderProbes[.structuralIsolation, default: 0] += 1
+                state.encoderProbes[.freeCoordinateProjection, default: 0] += 1
+                state.totalMaterializations += 1
             }
             state.accept(
                 ReductionResult(
@@ -309,11 +309,9 @@ enum BonsaiScheduler {
                 property: property
             ) {
                 if state.collectStats {
-                    state.phaseTracker.recordReductionPassInvocations(
-                        humanResult.materializations
-                    )
                     state.encoderProbes[.humanOrderReorder, default: 0] +=
                         humanResult.materializations
+                    state.totalMaterializations += humanResult.materializations
                 }
                 bestSequence = humanResult.result.sequence
                 bestOutput = humanResult.result.output
@@ -350,6 +348,7 @@ enum BonsaiScheduler {
         case .fibreDescent:
             var budget = planned.budget
             _ = try state.runFibreDescent(budget: &budget, dag: dag)
+
             let fibreOutcome = state.phaseTracker.outcome(
                 for: .fibreDescent, budgetAllocated: planned.budget
             )

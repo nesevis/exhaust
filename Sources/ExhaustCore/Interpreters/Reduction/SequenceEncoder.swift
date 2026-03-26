@@ -24,8 +24,7 @@ public enum EncoderName: String, Hashable, Sendable {
     /// Exploration
     case relaxRound
     case kleisliComposition
-    // Closed reductions
-    case structuralIsolation
-    case oscillationDamping
+    // Reduction passes
+    case freeCoordinateProjection
     case humanOrderReorder
 }

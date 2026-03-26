@@ -34,7 +34,7 @@
 ///
 /// Categorically, this is a retraction within the fibre — it projects the value assignment onto the shortlex-minimal point that agrees with the original on all structurally coupled coordinates. No base change occurs. Finds every value that cannot affect any structural decision, sets each one to its simplest possible value, and checks whether the bug still reproduces.
 public struct FreeCoordinateProjectionPass: ReductionPass {
-    public let name: EncoderName = .structuralIsolation
+    public let name: EncoderName = .freeCoordinateProjection
 
     /// Projects structurally independent value positions to their domain minimum and verifies the property still fails.
     ///
