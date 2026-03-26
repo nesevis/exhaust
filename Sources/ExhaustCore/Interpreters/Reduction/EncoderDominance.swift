@@ -6,6 +6,8 @@
 /// more-aggressive one has already succeeded. The 2-cell relationships are:
 ///
 /// - **Deletion**: `deleteContainerSpans` or `deleteAlignedSiblingWindows` ⇒ `deleteContainerSpansWithRandomRepair`
+/// - **Deletion**: `deleteAlignedSiblingWindows` ⇒ `deleteAlignedSiblingSubsets`
+/// - **Deletion**: `productSpaceBatch` ⇒ `productSpaceAdaptive`
 /// - **Value minimization**: `zeroValue` ⇒ `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
 ///
 /// The dominance relation is scoped per hom-set: success in one hom-set (for example, deletion)
@@ -50,6 +52,10 @@ struct EncoderDominance {
         // every contiguous window is a degenerate non-contiguous subset.
         case (.structuralDeletion, .deleteAlignedSiblingSubsets):
             succeeded.contains(.deleteAlignedSiblingWindows)
+        // Antichain delta-debugging dominates mutation pool pair enumeration:
+        // the antichain's jointly-deletable subset subsumes individual and pair mutations.
+        case (.structuralDeletion, .productSpaceAdaptive):
+            succeeded.contains(.productSpaceBatch)
         // Zero is the best binary-search-to-semantic-simplest can achieve.
         case (.valueMinimization, .binarySearchToSemanticSimplest):
             succeeded.contains(.zeroValue)

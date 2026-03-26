@@ -191,6 +191,7 @@ final class ReductionState<Output> {
     var shortlexReorderEncoder = ShortlexReorderEncoder()
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
+    var antichainDeletionEncoder = AntichainDeletionEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
     var productSpaceAdaptiveEncoder = ProductSpaceAdaptiveEncoder()
 

@@ -268,29 +268,46 @@ extension ReductionState {
 
         // MARK: - Antichain composition (k-way pushout law)
 
-        // The sequential adaptive loop above finds the largest individually-accepted batch per
-        // Track materializations from antichain composition and mutation pool.
-        // These bypass runComposable and need manual accumulation into totalMaterializations.
-        let budgetBeforeDirectDecodes = legBudget.used
-
-        // scope and slot. k independent batches that are each rejected individually may be jointly
+        // k independent batches that are each rejected individually may be jointly
         // accepted (property still fails when all k are deleted). The antichain of the CDG
         // identifies the maximum set of structurally independent nodes; delta-debugging over this
         // set finds the largest jointly-deletable subset.
         //
         // Unlike the MutationPool fallback, this operates on CDG nodes directly and is not gated
         // on sequence length — the cost depends on the number of CDG nodes (typically < 20).
+        //
+        // Track materializations from mutation pool below — it bypasses runComposable
+        // and needs manual accumulation into totalMaterializations.
+        let budgetBeforeDirectDecodes = legBudget.used
+
         if let dag {
-            let antichainAccepted = try runAntichainComposition(
-                dag: dag,
-                budget: &legBudget
-            )
-            if antichainAccepted {
-                if collectStats {
-                    totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
+            let antichainNodes = dag.maximalAntichain()
+            if antichainNodes.count > 2 {
+                let rawCandidates = collectAntichainCandidates(
+                    antichainNodes: antichainNodes,
+                    dag: dag
+                )
+                if rawCandidates.count > 2 {
+                    antichainDeletionEncoder.setCandidates(
+                        rawCandidates.map { AntichainDeletionEncoder.Candidate(
+                            nodeIndex: $0.nodeIndex,
+                            spans: $0.spans,
+                            deletedLength: $0.deletedLength
+                        ) }
+                    )
+                    let speculativeDecoder = makeSpeculativeDecoder()
+                    if try runComposable(
+                        antichainDeletionEncoder,
+                        decoder: speculativeDecoder,
+                        positionRange: 0 ... max(0, sequence.count - 1),
+                        context: ReductionContext(),
+                        structureChanged: true,
+                        budget: &legBudget
+                    ) {
+                        budget -= legBudget.used
+                        return true
+                    }
                 }
-                budget -= legBudget.used
-                return true
             }
         }
 
@@ -308,57 +325,29 @@ extension ReductionState {
                 bindIndex: bindIndex
             )
             if individuals.isEmpty == false {
-                let pairs = MutationPool.composePairs(from: individuals, sequence: sequence)
+                let pairs = MutationPool.composePairs(
+                    from: individuals,
+                    sequence: sequence
+                )
                 var combined = individuals + pairs
                 combined.sort { $0.deletedLength > $1.deletedLength }
-                let speculativeDecoder = makeSpeculativeDecoder()
-                let cacheSalt = speculativeDecoder.rejectCacheSalt
-                for entry in combined {
-                    guard legBudget.isExhausted == false else { break }
-                    let candidate = entry.candidate
-                    let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
-                    if rejectCache.contains(cacheKey) {
-                        continue
-                    }
-                    if let result = try speculativeDecoder.decode(
-                        candidate: candidate,
-                        gen: gen,
-                        tree: tree,
-                        originalSequence: sequence,
-                        property: property
-                    ) {
-                        legBudget.recordMaterialization()
-                        phaseTracker.recordInvocation()
-                        accept(result, structureChanged: true)
-                        if isInstrumented {
-                            ExhaustLog.debug(
-                                category: .reducer,
-                                event: "bonsai_phase1_accepted",
-                                metadata: [
-                                    "subphase": "deletion_pool",
-                                    "deleted_length": "\(entry.deletedLength)",
-                                ]
-                            )
-                        }
-                        if collectStats {
-                            totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
-                        }
-                        budget -= legBudget.used
-                        return true
-                    }
-                    legBudget.recordMaterialization()
-                    phaseTracker.recordInvocation()
-                    rejectCache.insert(cacheKey)
+                let poolEncoder = PrecomputedComposableEncoder(
+                    name: .productSpaceAdaptive,
+                    phase: .structuralDeletion,
+                    candidates: combined.map(\.candidate)
+                )
+                if try runComposable(
+                    poolEncoder,
+                    decoder: makeSpeculativeDecoder(),
+                    positionRange: 0 ... max(0, sequence.count - 1),
+                    context: ReductionContext(),
+                    structureChanged: true,
+                    budget: &legBudget
+                ) {
+                    budget -= legBudget.used
+                    return true
                 }
             }
-        }
-
-        // Accumulate materializations from antichain composition and mutation pool.
-        // runComposable calls within this method already accumulate their share
-        // via their deferred blocks. Direct decode calls in the antichain and
-        // mutation pool bypass runComposable and need manual accumulation.
-        if collectStats {
-            totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
         }
 
         budget -= legBudget.used
