@@ -27,11 +27,13 @@ struct CalculatorShrinkingChallenge {
     @Test("Calculator, Full")
     func calculatorFull() throws {
         let gen = #gen(Self.expression(depth: 4))
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
+            .randomOnly,
+            .budget(.exorbitant),
             .replay(1_117_838_118_804_311_299),
             .onReport { report = $0 }
         ) { expr in
@@ -118,41 +120,40 @@ struct CalculatorShrinkingChallenge {
     static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
         let leaf = #gen(.int(in: -10 ... 10))
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
-
-        guard depth > 0 else {
-            return leaf
-        }
-
-        let child = expression(depth: depth - 1)
-
-        let add = #gen(child, leaf)
-            .mapped(
-                forward: { lhs, rhs in Expr.add(lhs, rhs) },
-                backward: { value in
-                    switch value {
-                    case let .add(lhs, rhs): (lhs, rhs)
-                    case let .div(lhs, rhs): (lhs, rhs)
-                    case .value:
-                        (value, value)
+        
+        let calculator = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+            let add = #gen(recurse(), leaf)
+                .mapped(
+                    forward: { lhs, rhs in Expr.add(lhs, rhs) },
+                    backward: { value in
+                        switch value {
+                        case let .add(lhs, rhs): (lhs, rhs)
+                        case let .div(lhs, rhs): (lhs, rhs)
+                        case .value:
+                            (value, value)
+                        }
                     }
-                }
-            )
-        let div = #gen(leaf, child)
-            .mapped(
-                forward: { lhs, rhs in Expr.div(lhs, rhs) },
-                backward: { value in
-                    switch value {
-                    case let .add(lhs, rhs): (lhs, rhs)
-                    case let .div(lhs, rhs): (lhs, rhs)
-                    case .value:
-                        (value, value)
+                )
+            let div = #gen(leaf, recurse())
+                .mapped(
+                    forward: { lhs, rhs in Expr.div(lhs, rhs) },
+                    backward: { value in
+                        switch value {
+                        case let .add(lhs, rhs): (lhs, rhs)
+                        case let .div(lhs, rhs): (lhs, rhs)
+                        case .value:
+                            (value, value)
+                        }
                     }
-                }
-            )
+                )
 
-        return #gen(.oneOf(weighted:
-            (3, leaf),
-            (3, add),
-            (3, div)))
+            return .oneOf(weighted:
+                (3, leaf),
+                (3, add),
+                (3, div))
+            
+        })
+        
+        return calculator
     }
 }

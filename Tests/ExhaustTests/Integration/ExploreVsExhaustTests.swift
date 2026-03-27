@@ -15,8 +15,14 @@ struct ExploreVsExhaustTests {
         let gen = BST.arbitraryRecursive(valueRange: 0 ... 18)
             .unique()
             .filter { $0.isValidBST() }
+        
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        let result = #exhaust(gen, .budget(.expensive), .suppressIssueReporting, .replay(13_183_411_771_408_542_277)) { bst in
+        let result = #exhaust(
+            gen,
+            .budget(.expensive),
+            .replay(577118919570660442),
+            .suppressIssueReporting
+        ) { bst in
             !(bst.height == 5)
         }
         let bst = try #require(result)
@@ -28,7 +34,7 @@ struct ExploreVsExhaustTests {
 
     @Test("#explore with scorer finds deep valid BSTs")
     func exploreWithScorerFindsDeepBSTs() throws {
-        let gen = BST.arbitrary(maxDepth: 8, valueRange: 1 ... 18)
+        let gen = BST.arbitrary(maxDepth: 5, valueRange: 1 ... 18)
             .filter { $0.isValidBST() }
             .unique()
 

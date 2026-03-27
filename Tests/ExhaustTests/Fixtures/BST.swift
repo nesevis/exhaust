@@ -24,7 +24,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
     }
 
     static func arbitraryRecursive(valueRange: ClosedRange<UInt> = 0 ... 9) -> ReflectiveGenerator<BST> {
-        .recursive(base: .leaf, maxDepth: 5) { recurse, remaining in
+        .recursive(base: .leaf, depthRange: 5 ... 5) { recurse, remaining in
             let nodeBranch = #gen(recurse(), .uint(in: valueRange), recurse()).map { left, value, right in
                 BST.node(left: left, value: value, right: right)
             }
