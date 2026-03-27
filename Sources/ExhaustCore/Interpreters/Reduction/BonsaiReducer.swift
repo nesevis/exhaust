@@ -38,7 +38,7 @@ public extension Interpreters {
             switch config {
             case .fast:
                 self = Self(
-                    maxStalls: 1,
+                    maxStalls: 2,
                     alignedDeletionBeamSearchTuning: .fast
                 )
             case .slow:
@@ -50,7 +50,7 @@ public extension Interpreters {
         }
 
         public static let fast = Self(
-            maxStalls: 1,
+            maxStalls: 2,
             alignedDeletionBeamSearchTuning: .fast
         )
 
