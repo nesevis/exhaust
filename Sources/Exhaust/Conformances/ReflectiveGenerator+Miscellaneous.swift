@@ -23,15 +23,23 @@ public extension ReflectiveGenerator {
     }
 
     /// Creates a generator that randomly selects from one of the provided generators with equal weight.
-    static func oneOf(_ generators: ReflectiveGenerator<Value>...) -> ReflectiveGenerator<Value> {
-        Gen.pick(choices: generators.map { (1, $0) })
+    static func oneOf(
+        _ generators: ReflectiveGenerator<Value>...,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) -> ReflectiveGenerator<Value> {
+        Gen.pick(choices: generators.map { (1, $0) }, fileID: fileID, line: line, column: column)
     }
 
     /// Creates a generator that randomly selects from weighted generators.
     static func oneOf(
-        weighted choices: (Int, ReflectiveGenerator<Value>)...
+        weighted choices: (Int, ReflectiveGenerator<Value>)...,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Value> {
-        Gen.pick(choices: choices.map { ($0.0, $0.1) })
+        Gen.pick(choices: choices.map { ($0.0, $0.1) }, fileID: fileID, line: line, column: column)
     }
 }
 
