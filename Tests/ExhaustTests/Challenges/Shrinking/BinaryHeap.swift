@@ -32,7 +32,7 @@ struct BinaryHeapShrinkingChallenge {
             let sorted = Self.toList(heap).sorted()
             return sorted == xs.sorted() && xs == xs.sorted()
         }
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(
@@ -45,8 +45,8 @@ struct BinaryHeapShrinkingChallenge {
             )
         )
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 697)
-        #expect(rep.totalMaterializations == 892)
+        #expect(rep.propertyInvocations == 315)
+        #expect(rep.totalMaterializations == 406)
 
         if let report { print("[PROFILE] BinaryHeap: \(report.profilingSummary)") }
         let outputValues = Self.toList(output)

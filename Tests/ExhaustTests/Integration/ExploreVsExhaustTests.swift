@@ -34,8 +34,12 @@ struct ExploreVsExhaustTests {
 
         // Composite scorer: reward height
         // Height alone doesn't guide toward valid BSTs — most tall trees violate ordering.
-        let result = #explore(gen, .samplingBudget(200_000), .replay(15_190_352_305_301_843_617), .suppressIssueReporting,
-                              scorer: { Double($0.height) })
+        let result = #explore(
+            gen,
+            .samplingBudget(200_000),
+            .replay(15_190_352_305_301_843_617),
+            .suppressIssueReporting,
+            scorer: { Double($0.height) })
         { bst in
             !(bst.height >= 5)
         }

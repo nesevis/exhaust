@@ -12,9 +12,14 @@ import Testing
 @Suite("Experimental Challenge: Replacement")
 struct ReplacementChallenge {
     /*
-     Origins unknown. Given a starting integer n in [0, 10^6] and a list of multipliers
-     in [2, 5], compute the running product sequence. The (wrong) property asserts that
-     no product reaches 10^6.
+     From the MacIver & Donaldson ECOOP 2020 artifact (hypothesis-ecoop-2020-artifact,
+     smartcheck-benchmarks/evaluations/replacement). Originally a Haskell QuickCheck
+     benchmark with multipliers in [2, 5]; the Hypothesis reimplementation widened
+     multipliers to [2, 10].
+
+     Given a starting integer n in [0, 10^6] and a list of multipliers in [2, 5],
+     compute the running product sequence. The (wrong) property asserts that no
+     product reaches 10^6.
 
      The property fails whenever the cumulative product reaches 1_000_000. The smallest
      counterexample is (1_000_000, []) — n itself is already >= 10^6.
