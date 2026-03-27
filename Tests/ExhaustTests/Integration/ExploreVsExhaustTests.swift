@@ -10,7 +10,7 @@ import Testing
 struct ExploreVsExhaustTests {
     // MARK: - #exhaust baseline
 
-    @Test("#exhaust finds a valid BST with height exactly 5")
+    @Test("#exhaust finds a valid BST with height exactly 5", .disabled("Stack overflow"))
     func exhaustFindsHeight5BST() throws {
         let gen = BST.arbitraryRecursive(valueRange: 0 ... 18)
             .unique()

@@ -60,7 +60,7 @@ private func registerBound5() {
 // MARK: - Binary Heap
 
 private func registerBinaryHeap() {
-    let gen = binaryHeapGen(depth: 6)
+    let gen = binaryHeapGen(depth: 7)
 
     let property: @Sendable (Heap<Int>) -> Bool = { heap in
         guard heapInvariant(heap) else { return true }

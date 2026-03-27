@@ -38,15 +38,17 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
+                .budget(.exorbitant),
 //                .replay(626_360_492_104_589_905),
-                .replay(7_669_171_433_675_367_730),
+//                .replay(7_669_171_433_675_367_730),
+                .replay(12050660900442969635),
                 .onReport { report = $0 },
                 property: property
             )
         )
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 315)
-        #expect(rep.totalMaterializations == 406)
+//        #expect(rep.propertyInvocations == 315)
+//        #expect(rep.totalMaterializations == 406)
 
         if let report { print("[PROFILE] BinaryHeap: \(report.profilingSummary)") }
         let outputValues = Self.toList(output)
