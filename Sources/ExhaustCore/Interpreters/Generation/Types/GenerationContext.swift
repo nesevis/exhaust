@@ -27,10 +27,14 @@ public struct GenerationContext: ~Copyable {
     public var runs: UInt64 = 0
     public var classifications: [UInt64: [String: Set<UInt64>]] = [:]
 
+    /// Tracks how many pick operations deep the interpreter has descended.
+    /// Combined with the base siteID to disambiguate recursive generator depths.
+    public var pickDepth: UInt64 = 0
+
     // MARK: - Jump
 
     public func jump(seed: UInt64) -> GenerationContext {
-        GenerationContext(
+        var jumped = GenerationContext(
             maxRuns: maxRuns,
             baseSeed: baseSeed,
             isFixed: isFixed,
@@ -39,6 +43,8 @@ public struct GenerationContext: ~Copyable {
             materializePicks: materializePicks,
             runs: runs
         )
+        jumped.pickDepth = pickDepth
+        return jumped
     }
 
     // MARK: - Classifications

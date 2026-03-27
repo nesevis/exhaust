@@ -208,6 +208,9 @@ extension ReductionMaterializer {
         var branches = [ChoiceTree]()
         branches.reserveCapacity(context.materializePicks ? choices.count : 1)
         var finalValue: Output?
+        let augmentedSiteID = choices[0].siteID &+ context.pickDepth
+        let savedPickDepth = context.pickDepth
+        context.pickDepth += 1
 
         if context.materializePicks {
             // Pre-compute selected index to avoid per-iteration ID comparison.
@@ -236,7 +239,7 @@ extension ReductionMaterializer {
 
                     finalValue = contValue
                     branches.append(.selected(.branch(
-                        siteID: choice.siteID, weight: choice.weight,
+                        siteID: augmentedSiteID, weight: choice.weight,
                         id: choice.id, branchIDs: branchIDs, choice: contTree
                     )))
                 } else {
@@ -249,7 +252,8 @@ extension ReductionMaterializer {
                         cursor: Cursor.empty,
                         prng: Xoshiro256(seed: jumpSeed),
                         mode: .minimize,
-                        size: context.size
+                        size: context.size,
+                        pickDepth: context.pickDepth
                     )
                     if let (result, branchTree) = try generateRecursive(
                         choice.generator, with: inputValue, context: &branchContext,
@@ -262,7 +266,7 @@ extension ReductionMaterializer {
                         )
                     {
                         branches.append(.branch(
-                            siteID: choice.siteID, weight: choice.weight,
+                            siteID: augmentedSiteID, weight: choice.weight,
                             id: choice.id, branchIDs: branchIDs, choice: contTree
                         ))
                     }
@@ -285,10 +289,12 @@ extension ReductionMaterializer {
 
             finalValue = contValue
             branches.append(.selected(.branch(
-                siteID: selectedChoice.siteID, weight: selectedChoice.weight,
+                siteID: augmentedSiteID, weight: selectedChoice.weight,
                 id: selectedChoice.id, branchIDs: branchIDs, choice: contTree
             )))
         }
+
+        context.pickDepth = savedPickDepth
 
         guard let value = finalValue else { return nil }
         return (value, .group(branches))
