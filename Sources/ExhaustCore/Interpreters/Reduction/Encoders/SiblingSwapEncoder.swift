@@ -74,38 +74,59 @@ struct SiblingSwapEncoder: ComposableEncoder {
     return candidates
   }
 
-  /// Finds pairs of children with the same structural shape.
+  /// Finds pairs of children that are candidates for swapping.
   ///
-  /// Empty sequences (children with no elements) are wildcards — they pair with
-  /// any populated sequence group that shares the same top-level kind.
+  /// Groups children by depth-augmented siteID when branches are present, falling back to
+  /// structural shape matching for branchless children (plain sequences, values). Empty
+  /// sequences are wildcards that merge into the first populated sequence group.
   private static func findSwappablePairs(
     in children: [ChoiceTree]
   ) -> [(Int, Int)] {
-    var byShape: [StructuralShape: [Int]] = [:]
+    // Collect all groups (keyed by an opaque Int tag to unify siteID and shape groups).
+    var groups: [[Int]] = []
+    var siteIDToGroup: [UInt64: Int] = [:]
+    var shapeToGroup: [StructuralShape: Int] = [:]
     var emptySequenceIndices: [Int] = []
 
     for (index, child) in children.enumerated() {
+      // Try siteID first (works for children with branch structure).
+      if let siteID = rootBranchSiteID(child) {
+        if let groupIndex = siteIDToGroup[siteID] {
+          groups[groupIndex].append(index)
+        } else {
+          siteIDToGroup[siteID] = groups.count
+          groups.append([index])
+        }
+        continue
+      }
+
+      // Fallback: structural shape.
       let shape = structuralShape(of: child)
       if shape.kind == .sequence, shape.children.isEmpty {
         emptySequenceIndices.append(index)
+        continue
+      }
+
+      if let groupIndex = shapeToGroup[shape] {
+        groups[groupIndex].append(index)
       } else {
-        byShape[shape, default: []].append(index)
+        shapeToGroup[shape] = groups.count
+        groups.append([index])
       }
     }
 
-    // Merge empty sequences into the first populated sequence group.
+    // Merge empty sequences into the first populated sequence group (siteID or shape).
     if emptySequenceIndices.isEmpty == false {
-      let sequenceGroupKey = byShape.keys.first { $0.kind == .sequence }
-      if let key = sequenceGroupKey {
-        byShape[key, default: []].append(contentsOf: emptySequenceIndices)
+      let sequenceGroup = shapeToGroup.first(where: { $0.key.kind == .sequence })?.value
+      if let groupIndex = sequenceGroup {
+        groups[groupIndex].append(contentsOf: emptySequenceIndices)
       } else if emptySequenceIndices.count >= 2 {
-        // All sequences are empty — group them together.
-        byShape[StructuralShape(kind: .sequence, children: [])] = emptySequenceIndices
+        groups.append(emptySequenceIndices)
       }
     }
 
     var pairs: [(Int, Int)] = []
-    for (_, indices) in byShape where indices.count >= 2 {
+    for indices in groups where indices.count >= 2 {
       for i in 0 ..< indices.count {
         for j in (i + 1) ..< indices.count {
           pairs.append((indices[i], indices[j]))
@@ -113,6 +134,35 @@ struct SiblingSwapEncoder: ComposableEncoder {
       }
     }
     return pairs
+  }
+
+  // MARK: - siteID Extraction
+
+  /// Extracts the root branch siteID from a subtree.
+  ///
+  /// Recursively descends through `.selected`, `.group`, and `.bind` wrappers to find the first branch siteID. Returns `nil` for subtrees that don't start with a branch.
+  private static func rootBranchSiteID(_ tree: ChoiceTree) -> UInt64? {
+    switch tree.unwrapped {
+    case let .branch(siteID, _, _, _, _):
+      return siteID
+    case let .group(children, _):
+      if let first = children.first?.unwrapped,
+         case let .branch(siteID, _, _, _, _) = first {
+        return siteID
+      }
+      if let first = children.first {
+        return rootBranchSiteID(first)
+      }
+      return nil
+    case let .bind(inner: _, bound):
+      return rootBranchSiteID(bound)
+    case let .sequence(_, elements, _):
+      return elements.first.flatMap { rootBranchSiteID($0) }
+    case let .resize(_, choices):
+      return choices.first.flatMap { rootBranchSiteID($0) }
+    default:
+      return nil
+    }
   }
 
   // MARK: - Structural Shape
