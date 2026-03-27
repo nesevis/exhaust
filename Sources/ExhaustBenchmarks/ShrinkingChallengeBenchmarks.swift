@@ -102,7 +102,8 @@ private func registerCalculator() {
         let results = runReflectableBenchmark(
             gen: gen,
             property: property,
-            failingValues: failingValues
+            failingValues: failingValues,
+            config: .slow
         )
         if enableReport { printChallengeReport(name: "Calculator", results: results) }
     }
@@ -477,35 +478,41 @@ private func containsLiteralDivisionByZero(_ expr: Expr) -> Bool {
 private func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
     let leaf = #gen(.int(in: -10 ... 10))
         .mapped(forward: { Expr.value($0) }, backward: { $0.intValue ?? 0 })
-
-    guard depth > 0 else { return leaf }
-
-    let child = calculatorExpressionGen(depth: depth - 1)
-
-    let add = #gen(child, leaf)
-        .mapped(
-            forward: { lhs, rhs in Expr.add(lhs, rhs) },
-            backward: { value in
-                switch value {
-                case let .add(lhs, rhs): (lhs, rhs)
-                case let .div(lhs, rhs): (lhs, rhs)
-                case .value: (value, value)
+    
+    let calculator = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+        let add = #gen(recurse(), leaf)
+            .mapped(
+                forward: { lhs, rhs in Expr.add(lhs, rhs) },
+                backward: { value in
+                    switch value {
+                    case let .add(lhs, rhs): (lhs, rhs)
+                    case let .div(lhs, rhs): (lhs, rhs)
+                    case .value:
+                        (value, value)
+                    }
                 }
-            }
-        )
-    let div = #gen(leaf, child)
-        .mapped(
-            forward: { lhs, rhs in Expr.div(lhs, rhs) },
-            backward: { value in
-                switch value {
-                case let .add(lhs, rhs): (lhs, rhs)
-                case let .div(lhs, rhs): (lhs, rhs)
-                case .value: (value, value)
+            )
+        let div = #gen(leaf, recurse())
+            .mapped(
+                forward: { lhs, rhs in Expr.div(lhs, rhs) },
+                backward: { value in
+                    switch value {
+                    case let .add(lhs, rhs): (lhs, rhs)
+                    case let .div(lhs, rhs): (lhs, rhs)
+                    case .value:
+                        (value, value)
+                    }
                 }
-            }
-        )
+            )
 
-    return #gen(.oneOf(weighted: (3, leaf), (3, add), (3, div)))
+        return .oneOf(weighted:
+            (3, leaf),
+            (3, add),
+            (3, div))
+        
+    })
+    
+    return calculator
 }
 
 // MARK: - Binary Heap Types
