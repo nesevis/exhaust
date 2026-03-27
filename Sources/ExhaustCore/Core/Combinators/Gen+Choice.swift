@@ -13,14 +13,16 @@ public extension Gen {
     /// - Returns: A generator that produces values from one of the provided generators
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
-        choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)]
+        choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)],
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         precondition(choices.isEmpty == false, "At least one choice must be provided")
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
         // ensures the final monad has the correct `Output` type.
-        var prng = Xoshiro256()
-        let siteID = prng.next()
+        let siteID = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
 
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
@@ -47,14 +49,22 @@ public extension Gen {
     /// - Returns: A generator that produces values from one of the provided generators
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
-        choices: [(weight: Int, generator: ReflectiveGenerator<Output>)]
+        choices: [(weight: Int, generator: ReflectiveGenerator<Output>)],
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         precondition(
             choices.map(\.weight).allSatisfy { $0 > 0 },
             "Weights must be higher than zero"
         )
 
-        return pick(choices: choices.map { (UInt64($0.weight), $0.generator) })
+        return pick(
+            choices: choices.map { (UInt64($0.weight), $0.generator) },
+            fileID: fileID,
+            line: line,
+            column: column
+        )
     }
 
     /// Generates a random value within a specified range for types conforming to BitPatternConvertible.

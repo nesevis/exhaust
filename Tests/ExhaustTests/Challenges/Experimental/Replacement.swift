@@ -9,16 +9,26 @@ import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Shrinking Challenge: Replacement")
-struct ReplacementShrinkingChallenge {
+@Suite("Experimental Challenge: Replacement")
+struct ReplacementChallenge {
     /*
-     https://github.com/jlink/shrinking-challenge/blob/main/challenges/replacement.md
-     Based on the SmartCheck paper. Given a starting integer n in [0, 10^6] and a list
-     of multipliers in [2, 5], compute the running product sequence. The (wrong) property
-     asserts that no product reaches 10^6.
+     From the MacIver & Donaldson ECOOP 2020 artifact (hypothesis-ecoop-2020-artifact,
+     smartcheck-benchmarks/evaluations/replacement). Originally a Haskell QuickCheck
+     benchmark with multipliers in [2, 5]; the Hypothesis reimplementation widened
+     multipliers to [2, 10].
+
+     Given a starting integer n in [0, 10^6] and a list of multipliers in [2, 5],
+     compute the running product sequence. The (wrong) property asserts that no
+     product reaches 10^6.
 
      The property fails whenever the cumulative product reaches 1_000_000. The smallest
      counterexample is (1_000_000, []) — n itself is already >= 10^6.
+
+     This challenge exhibits multiplicative local minima: the reducer converges to
+     different factorizations of 1_000_000 (for example (200000, [5]) or (8000, [5,5,5]))
+     depending on the starting counterexample's array length. Reaching the global
+     minimum requires increasing the initial value while deleting multipliers — a
+     direction the reducer cannot take.
      */
 
     @Test("Replacement, Full")

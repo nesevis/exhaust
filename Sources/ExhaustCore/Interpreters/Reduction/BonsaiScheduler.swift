@@ -586,7 +586,8 @@ enum BonsaiScheduler {
             guard let value = state.sequence[index].value,
                   let range = value.validRange
             else { continue }
-            let rangeSize = range.upperBound - range.lowerBound + 1
+            let rangeSpan = range.upperBound - range.lowerBound
+            let rangeSize = rangeSpan == UInt64.max ? UInt64.max : rangeSpan + 1
             // ceil(log2(rangeSize)) via bit width — no floating-point
             let bitsNeeded = UInt64.bitWidth - max(2, rangeSize - 1).leadingZeroBitCount
             budget += bitsNeeded

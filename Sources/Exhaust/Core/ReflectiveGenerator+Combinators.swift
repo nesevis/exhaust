@@ -303,9 +303,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a recursive generator with a constant base case value.
     ///
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
-    ///
+    /// TODO: Code example needs updating
     /// ```swift
-    /// .recursive(base: .leaf, maxDepth: 5) { recurse, remaining in
+    /// .recursive(base: .leaf, depthRange: 1...5) { recurse, remaining in
     ///     guard remaining > 1 else { return .just(.leaf) }
     ///     .oneOf(weighted:
     ///         (1, .just(.leaf)),
@@ -321,45 +321,60 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that produces recursive values with depth-controlled structure
     static func recursive(
         base: Value,
-        maxDepth: UInt64,
+        depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (
             @escaping () -> ReflectiveGenerator<Value>,
             UInt64
         ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
-        Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
+        Gen.recursive(base: base, depthRange: depthRange, extend: extend)
     }
 
-    /// Creates a recursive generator with a generator base case.
+    static func recursive(
+        base: Value,
+        depthRange: ClosedRange<UInt64>,
+        extend: @Sendable @escaping (
+            @escaping () -> ReflectiveGenerator<Value>,
+            UInt64
+        ) -> ReflectiveGenerator<Value>
+    ) -> ReflectiveGenerator<Value> {
+        Gen.recursive(base: Gen.just(base), depthRange: depthRange, extend: extend)
+    }
+
+    /// Creates a recursive generator with a generator base case and a shrinkable depth range.
     ///
-    /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
-    ///
-    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
-    ///
-    /// ```swift
-    /// let baseGen = Gen.choose(in: 0...9).map { Expression.literal($0) }
-    /// .recursive(base: baseGen, maxDepth: 4) { recurse, remaining in
-    ///     .oneOf(weighted:
-    ///         (1, baseGen),
-    ///         (Int(remaining), #gen(recurse(), recurse()).map { .add($0, $1) })
-    ///     )
-    /// }
-    /// ```
+    /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it shrinkable. The reducer can collapse subtrees by shrinking the depth toward the range's lower bound.
     ///
     /// - Parameters:
     ///   - base: Generator for the base case
-    ///   - maxDepth: Maximum number of recursive layers to unfold
+    ///   - depthRange: Range of depths to draw from (lower bound can be 0 for fully collapsible trees)
     ///   - extend: Closure that builds one recursive layer from the previous layer
     /// - Returns: A generator that produces recursive values with depth-controlled structure
     static func recursive(
         base: ReflectiveGenerator<Value>,
-        maxDepth: UInt64,
+        depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (
             @escaping () -> ReflectiveGenerator<Value>,
             UInt64
         ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
-        Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
+        precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
+        return Gen.recursive(
+            base: base,
+            depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound),
+            extend: extend
+        )
+    }
+
+    static func recursive(
+        base: ReflectiveGenerator<Value>,
+        depthRange: ClosedRange<UInt64>,
+        extend: @Sendable @escaping (
+            @escaping () -> ReflectiveGenerator<Value>,
+            UInt64
+        ) -> ReflectiveGenerator<Value>
+    ) -> ReflectiveGenerator<Value> {
+        Gen.recursive(base: base, depthRange: depthRange, extend: extend)
     }
 
     /// Retrieves the current size parameter and feeds it into a generator-producing closure.

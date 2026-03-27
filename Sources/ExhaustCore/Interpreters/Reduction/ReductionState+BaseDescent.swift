@@ -158,6 +158,21 @@ extension ReductionState {
             }
         }
 
+        if try runComposable(
+            swapSiblingsEncoder,
+            decoder: branchDecoder,
+            positionRange: fullBranchRange,
+            context: branchReductionContext,
+            structureChanged: true,
+            budget: &legBudget
+        ) {
+            improved = true
+            if isInstrumented {
+                ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
+                                 metadata: ["subphase": "sibling_swap"])
+            }
+        }
+
         budget -= legBudget.used
         return improved
     }

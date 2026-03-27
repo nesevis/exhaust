@@ -27,15 +27,16 @@ public extension Gen {
     /// - Returns: A generator that produces recursive values with depth-controlled structure
     static func recursive<Output>(
         base: Output,
-        maxDepth: UInt64,
+        depthRange: ClosedRange<Int>,
         extend: @escaping (
             @escaping () -> ReflectiveGenerator<Output>,
             UInt64
         ) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        recursive(base: Gen.just(base), maxDepth: maxDepth, extend: extend)
+        precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
+        return recursive(base: Gen.just(base), depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound), extend: extend)
     }
-
+    
     /// Creates a recursive generator with a generator base case.
     ///
     /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
@@ -49,49 +50,27 @@ public extension Gen {
     /// - Returns: A generator that produces recursive values with depth-controlled structure
     static func recursive<Output>(
         base: ReflectiveGenerator<Output>,
-        maxDepth: UInt64,
-        extend: @escaping (
-            @escaping () -> ReflectiveGenerator<Output>,
-            UInt64
-        ) -> ReflectiveGenerator<Output>
+        depthRange: ClosedRange<UInt64>,
+        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        // Generate a base siteID at construction time. Each unfolded layer gets
-        // a deterministic siteID (baseSiteID &+ remaining) so CGS can tune
-        // each layer independently while remaining stable across unfolds.
-        var prng = Xoshiro256()
-        let baseSiteID = prng.next()
-
-        // Build layers inside-out: the first extend call uses remaining=1
-        // (innermost layer), and the last uses remaining=maxDepth (outermost).
-        guard maxDepth > 0 else { return base }
-
-        var current: ReflectiveGenerator<Output> = base
-        for layer in 1 ... maxDepth {
-            let prev = current
-            let built = extend({ prev }, layer)
-            current = replaceTopLevelPickSiteID(built, with: baseSiteID &+ layer)
+        // Build all layers eagerly. Layer 0 = base, layer N = extend applied N times.
+        var layers: [ReflectiveGenerator<Output>] = [base]
+        for layer in 0 ... depthRange.upperBound {
+            let availableLayers = layers  // capture current set
+            // recurse() draws its OWN depth independently
+            let recurseGen = Gen.choose(in: 0 ... UInt64(layer), scaling: .constant)
+                ._bound(
+                    forward: { depth in availableLayers[Int(depth)] },
+                    backward: { _ in UInt64(layer) }
+                )
+            layers.append(extend({ recurseGen }, UInt64(layer + 1)))
         }
-        return current
+        
+        // Outer depth draw selects the root layer
+        return Gen.choose(in: depthRange, scaling: .constant)
+            ._bound(
+                forward: { depth in layers[Int(depth)] },
+                backward: { _ in depthRange.upperBound }
+            )
     }
-}
-
-/// Replaces the siteID of the top-level pick operation in a generator, if present.
-/// Used by `Gen.recursive` to give each layer a deterministic siteID for CGS tuning.
-private func replaceTopLevelPickSiteID<Output>(
-    _ gen: ReflectiveGenerator<Output>,
-    with siteID: UInt64
-) -> ReflectiveGenerator<Output> {
-    guard case let .impure(operation, continuation) = gen,
-          case let .pick(choices) = operation
-    else { return gen }
-
-    let replaced = ContiguousArray(choices.map { choice in
-        ReflectiveOperation.PickTuple(
-            siteID: siteID,
-            id: choice.id,
-            weight: choice.weight,
-            generator: choice.generator
-        )
-    })
-    return .impure(operation: .pick(choices: replaced), continuation: continuation)
 }

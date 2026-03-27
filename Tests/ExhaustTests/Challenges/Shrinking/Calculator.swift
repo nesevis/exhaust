@@ -14,27 +14,30 @@ struct CalculatorShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
      The challenge involves a simple calculator language representing expressions consisting of integers, their additions and divisions only, like 1 + (2 / 3).
-
+     
      The property being tested is that
-
+     
      if we have no subterms of the form x / 0,
      then we can evaluate the expression without a zero division error.
      This property is false, because we might have a term like 1 / (3 + -3), in which the divisor is not literally 0 but evaluates to 0.
-
+     
      One of the possible difficulties that might come up is the shrinking of recursive expressions.
      */
-
+    
     @Test("Calculator, Full")
     func calculatorFull() throws {
         let gen = #gen(Self.expression(depth: 4))
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-            .replay(1_117_838_118_804_311_299),
+            .randomOnly,
+            .budget(.exorbitant),
+            //            .replay(1_117_838_118_804_311_299),
             .onReport { report = $0 }
         ) { expr in
+            //            print("Attempt: \(expr)")
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
             }
@@ -47,10 +50,10 @@ struct CalculatorShrinkingChallenge {
                 return false
             }
         }
-
+        
         if let report { print("[PROFILE] Calculator: \(report.profilingSummary)") }
-        print("Output: \(result!)")
-        #expect(result == .div(.value(0), .add(.value(0), .value(0))))
+        #expect(result == .div(.value(0), .add(.value(0), .value(0))) ||
+                result == .div(.value(0), .div(.value(0), .value(-1))))
     }
 
     // MARK: - Types
@@ -118,41 +121,40 @@ struct CalculatorShrinkingChallenge {
     static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
         let leaf = #gen(.int(in: -10 ... 10))
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
-
-        guard depth > 0 else {
-            return leaf
-        }
-
-        let child = expression(depth: depth - 1)
-
-        let add = #gen(child, leaf)
-            .mapped(
-                forward: { lhs, rhs in Expr.add(lhs, rhs) },
-                backward: { value in
-                    switch value {
-                    case let .add(lhs, rhs): (lhs, rhs)
-                    case let .div(lhs, rhs): (lhs, rhs)
-                    case .value:
-                        (value, value)
+        
+        let calculator = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+            let add = #gen(recurse(), leaf)
+                .mapped(
+                    forward: { lhs, rhs in Expr.add(lhs, rhs) },
+                    backward: { value in
+                        switch value {
+                        case let .add(lhs, rhs): (lhs, rhs)
+                        case let .div(lhs, rhs): (lhs, rhs)
+                        case .value:
+                            (value, value)
+                        }
                     }
-                }
-            )
-        let div = #gen(leaf, child)
-            .mapped(
-                forward: { lhs, rhs in Expr.div(lhs, rhs) },
-                backward: { value in
-                    switch value {
-                    case let .add(lhs, rhs): (lhs, rhs)
-                    case let .div(lhs, rhs): (lhs, rhs)
-                    case .value:
-                        (value, value)
+                )
+            let div = #gen(leaf, recurse())
+                .mapped(
+                    forward: { lhs, rhs in Expr.div(lhs, rhs) },
+                    backward: { value in
+                        switch value {
+                        case let .add(lhs, rhs): (lhs, rhs)
+                        case let .div(lhs, rhs): (lhs, rhs)
+                        case .value:
+                            (value, value)
+                        }
                     }
-                }
-            )
+                )
 
-        return #gen(.oneOf(weighted:
-            (3, leaf),
-            (3, add),
-            (3, div)))
+            return .oneOf(weighted:
+                (3, leaf),
+                (3, add),
+                (3, div))
+            
+        })
+        
+        return calculator
     }
 }

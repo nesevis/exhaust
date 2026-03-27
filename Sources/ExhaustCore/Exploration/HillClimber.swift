@@ -15,12 +15,28 @@ public enum HillClimbResult<Output> {
 
 /// Hill climber inspired by Hypothesis's `Optimiser`.
 ///
-/// Single backward loop over all sequence entries (values + branches), using `GuidedMaterializer` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
+/// Single backward loop over all sequence entries (values + branches), using `ReductionMaterializer` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
 ///
 /// **Acceptance criterion** (from Hypothesis):
 /// - Score improvement → accept
 /// - Same score, sequence no longer → accept (lateral move to escape local optima)
 /// - Score decrease → reject
+///
+/// ## siteID Stability and Branch Ping-Pong
+///
+/// The branch handler (line ~173) swaps the selected alternative at a pick site and materializes the result. The lateral-move acceptance criterion ("same score, no growth") can cause infinite ping-pong between two branch alternatives when siteIDs are stable across materializations:
+///
+/// 1. Position `i` has branch id=A. Swap to B → same score, same length → lateral accept → restart from end.
+/// 2. Walk back to position `i`. Now has id=B. Swap to A → same score → lateral accept → restart.
+/// 3. Repeat forever. Each cycle costs probes but never exhausts budget on deep generators.
+///
+/// With PRNG siteIDs (current default), each materialization produces different random siteIDs in the choice tree, making the round-trip non-deterministic. The sequences are never exactly identical, breaking the cycle by luck. With fingerprint-based siteIDs (stable, deterministic), the round-trip IS deterministic and the ping-pong is exact.
+///
+/// **Attempted fix**: restricting branch acceptance to strict score improvement (`score > currentScore`, no lateral moves). This prevents ping-pong but disables lateral exploration — branch alternatives that restructure the tree without improving score can no longer be accepted. The impact on exploration quality is unknown.
+///
+/// **Deeper issue**: even with strict branch acceptance, fingerprint-based siteIDs cause a 36x slowdown (50ms → 1800ms on `exploreWithScorerFindsDeepBSTs`). The cause is likely in the ``NoveltyTracker``'s branch-path fingerprinting: stable siteIDs collapse the tier-1 novelty signal for structurally similar seeds, reducing seed pool diversity and forcing the explorer to exhaust its budget. This is a fundamental tension — stable siteIDs help the reducer (branch promotion, sibling swap) but hurt the explorer (novelty detection).
+///
+/// **Possible resolution**: split siteID strategies — PRNG at generation time (VACTI) for exploration diversity, fingerprint + depth augmentation at materialization time (``ReductionMaterializer``) for reducer stability. The reducer re-materializes before branch encoders run, so generation-time siteIDs don't affect reduction. This split has not been implemented.
 public enum HillClimber {
     public static func climb<Output>(
         seed: Seed,
@@ -80,7 +96,7 @@ public enum HillClimber {
                     var foundCounterexample: (value: Output, tree: ChoiceTree)?
                     var didAccept = false
 
-                    let _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
+                    _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
                         guard k > 0 else { return true }
                         guard probesUsed < budget else { return false }
                         guard k <= 1 << 20 else { return false }

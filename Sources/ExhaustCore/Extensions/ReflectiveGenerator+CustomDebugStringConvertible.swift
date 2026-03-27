@@ -61,7 +61,9 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             return "chooseBits(\(tag.description): \(range))\(suffix)"
 
         case let .pick(choices):
-            let header = "pick(choices: \(choices.count))"
+            let siteId = choices.first?.siteID ?? 0
+            let siteIdShort = String(format: "%08X", siteId & 0xFFFF_FFFF)
+            let header = "pick(id: \(siteIdShort), choices: \(choices.count))"
             if choices.isEmpty {
                 return header
             }

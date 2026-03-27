@@ -368,6 +368,9 @@ extension ReductionMaterializer {
         /// Accumulates per-coordinate resolution tier data for guided mode.
         /// `nil` for exact mode and pure-generate mode.
         var decodingReport: DecodingReport?
+        /// Tracks how many pick operations deep the interpreter has descended.
+        /// Combined with the base siteID to disambiguate recursive generator depths.
+        var pickDepth: UInt64 = 0
     }
 }
 

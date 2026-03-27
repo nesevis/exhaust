@@ -408,6 +408,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         branches.reserveCapacity(choices.count)
         var finalValue: Output?
         let branchIDs = choices.map(\.id)
+        let augmentedSiteID = choices[0].siteID &+ context.pickDepth
+        let savedPickDepth = context.pickDepth
+        context.pickDepth += 1
 
         for choice in choices {
             let isSelected = choice.id == selectedChoice.id
@@ -431,7 +434,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 {
                     value = final.0
                     branch = ChoiceTree.branch(
-                        siteID: choice.siteID,
+                        siteID: augmentedSiteID,
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
@@ -456,7 +459,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 {
                     value = final.0
                     branch = ChoiceTree.branch(
-                        siteID: choice.siteID,
+                        siteID: augmentedSiteID,
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
@@ -475,6 +478,8 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 branches.append(branch)
             }
         }
+
+        context.pickDepth = savedPickDepth
 
         guard let value = finalValue else {
             throw GeneratorError.couldNotGenerateConcomitantChoiceTree
