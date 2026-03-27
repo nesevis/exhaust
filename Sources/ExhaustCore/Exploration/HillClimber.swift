@@ -15,7 +15,7 @@ public enum HillClimbResult<Output> {
 
 /// Hill climber inspired by Hypothesis's `Optimiser`.
 ///
-/// Single backward loop over all sequence entries (values + branches), using `GuidedMaterializer` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
+/// Single backward loop over all sequence entries (values + branches), using `ReductionMaterializer` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
 ///
 /// **Acceptance criterion** (from Hypothesis):
 /// - Score improvement → accept
@@ -80,7 +80,7 @@ public enum HillClimber {
                     var foundCounterexample: (value: Output, tree: ChoiceTree)?
                     var didAccept = false
 
-                    let _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
+                    _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
                         guard k > 0 else { return true }
                         guard probesUsed < budget else { return false }
                         guard k <= 1 << 20 else { return false }
