@@ -18,13 +18,18 @@ extension ReductionState {
     func runKleisliExploration(
         budget: inout Int,
         dag: ChoiceDependencyGraph?,
-        edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)
+        edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100),
+        scopeRange: ClosedRange<Int>? = nil
     ) throws -> Bool {
         phaseTracker.push(.exploration)
         defer { phaseTracker.pop() }
         guard hasBind, let dag, let bindSpanIndex = bindIndex else { return false }
 
-        let edges = dag.reductionEdges()
+        var edges = dag.reductionEdges()
+        // When scoped, only explore edges whose upstream falls within the scope.
+        if let scope = scopeRange {
+            edges = edges.filter { scope.overlaps($0.upstreamRange) }
+        }
         guard edges.isEmpty == false else {
             if isInstrumented {
                 ExhaustLog.debug(

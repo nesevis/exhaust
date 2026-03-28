@@ -39,6 +39,7 @@ struct BinaryHeapShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .budget(.exorbitant),
+                .reductionStrategy(.topological),
 //                .replay(626_360_492_104_589_905),
 //                .replay(7_669_171_433_675_367_730),
                 .replay(12050660900442969635),

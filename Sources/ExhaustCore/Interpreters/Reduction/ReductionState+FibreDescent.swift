@@ -18,7 +18,8 @@ extension ReductionState {
     /// Processes DAG leaf positions first, then sweeps bound-content values at intermediate bind depths from minimum upward (covariant). Returns `true` if any value reduction was committed.
     func runFibreDescent(
         budget: inout Int,
-        dag: ChoiceDependencyGraph?
+        dag: ChoiceDependencyGraph?,
+        scopeRange: ClosedRange<Int>? = nil
     ) throws -> Bool {
         phaseTracker.push(.fibreDescent)
         defer { phaseTracker.pop() }
@@ -61,8 +62,11 @@ extension ReductionState {
             }
         }()
 
-        // Compute target leaf ranges.
-        let leafRanges = computeLeafRanges(dag: dag)
+        // Compute target leaf ranges, optionally filtered to the scope.
+        var leafRanges = computeLeafRanges(dag: dag)
+        if let scope = scopeRange {
+            leafRanges = leafRanges.filter { scope.overlaps($0) }
+        }
 
         // Capture skeleton fingerprint before fibre descent starts.
         let prePhaseFingerprint = bindIndex.map {

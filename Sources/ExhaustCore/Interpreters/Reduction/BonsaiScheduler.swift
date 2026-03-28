@@ -124,15 +124,28 @@ enum BonsaiScheduler {
 
         let isInstrumented = state.isInstrumented
 
-        var strategy = AdaptiveStrategy()
-        return try runWithStrategy(
-            &strategy,
-            state: state,
-            config: config,
-            gen: gen,
-            property: property,
-            isInstrumented: isInstrumented
-        )
+        switch config.schedulingStrategy {
+        case .adaptive:
+            var strategy = AdaptiveStrategy()
+            return try runWithStrategy(
+                &strategy,
+                state: state,
+                config: config,
+                gen: gen,
+                property: property,
+                isInstrumented: isInstrumented
+            )
+        case .topological:
+            var strategy = TopologicalStrategy()
+            return try runWithStrategy(
+                &strategy,
+                state: state,
+                config: config,
+                gen: gen,
+                property: property,
+                isInstrumented: isInstrumented
+            )
+        }
     }
 
     /// Runs the reduction cycle loop with the given strategy.
@@ -348,7 +361,14 @@ enum BonsaiScheduler {
 
         case .fibreDescent:
             var budget = planned.budget
-            _ = try state.runFibreDescent(budget: &budget, dag: dag)
+            if planned.configuration.clearConvergence {
+                state.convergenceCache.invalidateAll()
+            }
+            _ = try state.runFibreDescent(
+                budget: &budget,
+                dag: dag,
+                scopeRange: planned.configuration.scopeRange
+            )
 
             let fibreOutcome = state.phaseTracker.outcome(
                 for: .fibreDescent, budgetAllocated: planned.budget
@@ -360,7 +380,8 @@ enum BonsaiScheduler {
             _ = try state.runKleisliExploration(
                 budget: &budget,
                 dag: dag,
-                edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy
+                edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy,
+                scopeRange: planned.configuration.scopeRange
             )
             let exploreOutcome = state.phaseTracker.outcome(
                 for: .exploration, budgetAllocated: planned.budget

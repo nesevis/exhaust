@@ -1,3 +1,13 @@
+// MARK: - Strategy Kind
+
+/// Selects which scheduling strategy the reducer uses.
+public enum SchedulingStrategyKind: Sendable {
+    /// Phase-based scheduling: base descent → fibre descent → exploration → relax round.
+    case adaptive
+    /// Dependency-ordered scheduling: walks the CDG topologically.
+    case topological
+}
+
 // MARK: - Scheduling Strategy
 
 /// Provides scheduling decisions for the reduction cycle loop.
@@ -59,9 +69,25 @@ struct PhaseConfiguration {
     /// How to allocate budget to composition edges in the exploration phase.
     var edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)
 
+    /// Optional scope restriction for the phase. When set, encoders only operate
+    /// within this position range. Used by ``TopologicalStrategy`` to focus each
+    /// cycle on a specific CDG node's region.
+    var scopeRange: ClosedRange<Int>?
+
+    /// When `true`, fibre descent clears the convergence cache before running.
+    /// Used by ``TopologicalStrategy`` after a stall cycle to retry batch zeroing
+    /// with fresh convergence state.
+    var clearConvergence = false
+
     /// Creates a default configuration.
-    init(edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)) {
+    init(
+        edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100),
+        scopeRange: ClosedRange<Int>? = nil,
+        clearConvergence: Bool = false
+    ) {
         self.edgeBudgetPolicy = edgeBudgetPolicy
+        self.scopeRange = scopeRange
+        self.clearConvergence = clearConvergence
     }
 }
 
@@ -90,6 +116,12 @@ struct ReductionStateView {
 
     /// Whether the choice tree has branch nodes (picks) that branch simplification could operate on.
     let hasBranchTargets: Bool
+
+    /// Whether the generator has bind operations.
+    let hasBind: Bool
+
+    /// The choice dependency graph built from the current sequence, or `nil` if no binds/picks.
+    let dag: ChoiceDependencyGraph?
 }
 
 // MARK: - Adaptive Strategy

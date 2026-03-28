@@ -112,7 +112,9 @@ final class ReductionState<Output> {
             allValueCoordinatesConverged: allValueCoordinatesConverged(),
             cycleNumber: currentCycle,
             hasDeletionTargets: pruneOrder.isEmpty == false,
-            hasBranchTargets: tree.containsPicks
+            hasBranchTargets: tree.containsPicks,
+            hasBind: hasBind,
+            dag: buildDAG()
         )
     }
 

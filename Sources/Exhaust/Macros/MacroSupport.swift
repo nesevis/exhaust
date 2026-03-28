@@ -38,6 +38,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var useRandomOnly = false
         var humanOrderPostProcess = true
         var visualize = false
+        var reductionStrategy: SchedulingStrategyKind = .adaptive
         var onReportClosure: ((ExhaustReport) -> Void)?
 
         for setting in settings {
@@ -56,6 +57,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 humanOrderPostProcess = true
             case .visualize:
                 visualize = true
+            case let .reductionStrategy(strategy):
+                reductionStrategy = strategy
             case let .onReport(closure):
                 onReportClosure = closure
             }
@@ -63,7 +66,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
-        let reductionConfig = budget.reducerBudget
+        let reductionConfig: Interpreters.BonsaiReducerConfiguration = {
+            var config = Interpreters.BonsaiReducerConfiguration(from: budget.reducerBudget)
+            config.schedulingStrategy = reductionStrategy
+            return config
+        }()
 
         var report = ExhaustReport()
         defer { onReportClosure?(report) }
@@ -149,7 +156,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: shrinkTree,
                         output: value,
-                        config: .init(from: reductionConfig),
+                        config: reductionConfig,
                         humanOrderPostProcess: humanOrderPostProcess,
                         visualize: visualize,
                         property: countingProperty
@@ -337,7 +344,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: tree,
                         output: next,
-                        config: .init(from: reductionConfig),
+                        config: reductionConfig,
                         humanOrderPostProcess: humanOrderPostProcess,
                         visualize: visualize,
                         property: countingProperty
@@ -723,7 +730,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     private static func __reduceReflected<Output>(
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
-        reductionConfig: ReducerBudget,
+        reductionConfig: Interpreters.BonsaiReducerConfiguration,
         humanOrderPostProcess: Bool,
         visualize: Bool,
         suppressIssueReporting: Bool,
@@ -788,7 +795,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             gen: gen,
             tree: tree,
             output: value,
-            config: .init(from: reductionConfig),
+            config: reductionConfig,
             humanOrderPostProcess: humanOrderPostProcess,
             visualize: visualize,
             property: countingProperty

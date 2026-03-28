@@ -11,6 +11,20 @@ let enableReport = true
 let enableCounterExamples = true
 private let reductionCount = 100
 
+/// Returns both strategy variants of a base config.
+private func withStrategies(
+    _ base: Interpreters.BonsaiReducerConfiguration = .fast
+) -> [(name: String, config: Interpreters.BonsaiReducerConfiguration)] {
+    var adaptive = base
+    adaptive.schedulingStrategy = .adaptive
+    var topological = base
+    topological.schedulingStrategy = .topological
+    return [
+        ("adaptive", adaptive),
+        ("topological", topological),
+    ]
+}
+
 // MARK: - Registration
 
 func registerShrinkingChallengeBenchmarks() {
@@ -47,13 +61,16 @@ private func registerBound5() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Bound5")
 
-    benchmark("Bound5") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Bound5", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Bound5 (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Bound5 (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -71,13 +88,16 @@ private func registerBinaryHeap() {
 
     let failingPairs = generateFailingPairs(gen: gen, property: property, name: "BinaryHeap")
 
-    benchmark("BinaryHeap") {
-        let results = runNonReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingPairs: failingPairs
-        )
-        if enableReport { printChallengeReport(name: "BinaryHeap", results: results) }
+    for strategy in withStrategies() {
+        benchmark("BinaryHeap (\(strategy.name))") {
+            let results = runNonReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingPairs: failingPairs,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "BinaryHeap (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -98,14 +118,16 @@ private func registerCalculator() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Calculator")
 
-    benchmark("Calculator") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues,
-            config: .slow
-        )
-        if enableReport { printChallengeReport(name: "Calculator", results: results) }
+    for strategy in withStrategies(.slow) {
+        benchmark("Calculator (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Calculator (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -130,13 +152,16 @@ private func registerCoupling() {
 
     let failingPairs = generateFailingPairs(gen: gen, property: property, name: "Coupling")
 
-    benchmark("Coupling") {
-        let results = runNonReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingPairs: failingPairs
-        )
-        if enableReport { printChallengeReport(name: "Coupling", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Coupling (\(strategy.name))") {
+            let results = runNonReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingPairs: failingPairs,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Coupling (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -157,13 +182,16 @@ private func registerDeletion() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Deletion")
 
-    benchmark("Deletion") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Deletion", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Deletion (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Deletion (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -183,13 +211,16 @@ private func registerDifferenceMustNotBeZero() {
         maxRuns: 500_000
     )
 
-    benchmark("Difference: Must Not Be Zero") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Difference: Must Not Be Zero", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Difference: Must Not Be Zero (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Difference: Must Not Be Zero (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -210,13 +241,16 @@ private func registerDifferenceMustNotBeSmall() {
         maxRuns: 500_000
     )
 
-    benchmark("Difference: Must Not Be Small") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Difference: Must Not Be Small", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Difference: Must Not Be Small (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Difference: Must Not Be Small (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -237,13 +271,16 @@ private func registerDifferenceMustNotBeOne() {
         maxRuns: 500_000
     )
 
-    benchmark("Difference: Must Not Be One") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Difference: Must Not Be One", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Difference: Must Not Be One (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Difference: Must Not Be One (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -258,13 +295,16 @@ private func registerDistinct() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Distinct")
 
-    benchmark("Distinct") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Distinct", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Distinct (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Distinct (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -279,13 +319,16 @@ private func registerLargeUnionList() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "LargeUnionList")
 
-    benchmark("LargeUnionList") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "LargeUnionList", results: results) }
+    for strategy in withStrategies() {
+        benchmark("LargeUnionList (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "LargeUnionList (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -300,13 +343,16 @@ private func registerLengthList() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "LengthList")
 
-    benchmark("LengthList") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "LengthList", results: results) }
+    for strategy in withStrategies() {
+        benchmark("LengthList (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "LengthList (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -321,13 +367,16 @@ private func registerNestedLists() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "NestedLists")
 
-    benchmark("NestedLists") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "NestedLists", results: results) }
+    for strategy in withStrategies() {
+        benchmark("NestedLists (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "NestedLists (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -342,13 +391,16 @@ private func registerParser() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Parser")
 
-    benchmark("Parser") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Parser", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Parser (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Parser (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -364,13 +416,16 @@ private func registerReplacement() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Replacement")
 
-    benchmark("Replacement") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Replacement", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Replacement (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Replacement (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -385,13 +440,16 @@ private func registerReverse() {
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Reverse")
 
-    benchmark("Reverse") {
-        let results = runReflectableBenchmark(
-            gen: gen,
-            property: property,
-            failingValues: failingValues
-        )
-        if enableReport { printChallengeReport(name: "Reverse", results: results) }
+    for strategy in withStrategies() {
+        benchmark("Reverse (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Reverse (\(strategy.name))", results: results) }
+        }
     }
 }
 
@@ -1171,7 +1229,7 @@ private func generateFailingValues<Output>(
     maxRuns: UInt64 = 1_000_000
 ) -> [Output] {
     var values: [Output] = []
-    var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: maxRuns)
+    var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 80085, maxRuns: maxRuns)
     do {
         while let (value, _) = try iterator.next(), values.count < reductionCount {
             if property(value) == false {

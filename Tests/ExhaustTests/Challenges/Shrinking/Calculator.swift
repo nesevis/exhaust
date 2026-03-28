@@ -34,6 +34,9 @@ struct CalculatorShrinkingChallenge {
             .suppressIssueReporting,
             .randomOnly,
             .budget(.exorbitant),
+//            .replay(1337),
+            .reductionStrategy(.topological),
+//            .replay(8788901370880310582),
             //            .replay(1_117_838_118_804_311_299),
             .onReport { report = $0 }
         ) { expr in
@@ -50,7 +53,7 @@ struct CalculatorShrinkingChallenge {
                 return false
             }
         }
-        
+        print("Output: \(result)")
         if let report { print("[PROFILE] Calculator: \(report.profilingSummary)") }
         #expect(result == .div(.value(0), .add(.value(0), .value(0))) ||
                 result == .div(.value(0), .div(.value(0), .value(-1))))
