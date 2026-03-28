@@ -695,4 +695,198 @@ struct ChoiceDependencyGraphTests {
         #expect(dag.nodes[bindInnerIdx].dependents.contains(outerBranchIdx))
         #expect(dag.nodes[outerBranchIdx].dependents.contains(innerBranchIdx))
     }
+
+    // MARK: - Exclusion Ranges
+
+    @Test("Exclusion ranges for bind-inner include bound content")
+    func exclusionRangesForBindInnerIncludesBoundContent() {
+        // Nested binds: outer at level 0, inner at level 1.
+        let val = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let innerBind = ChoiceTree.bind(inner: val, bound: val)
+        let outerBind = ChoiceTree.bind(inner: val, bound: innerBind)
+
+        let sequence = ChoiceSequence(outerBind)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let levels = dag.topologicalLevels()
+
+        // At level 0, exclude level-1 nodes. The inner bind-inner should be excluded
+        // with a range covering its positionRange through its scopeRange end.
+        let outerScope = dag.scopeRange(forNodesAtLevel: levels[0])!
+        let excluded = dag.exclusionRanges(forLevel: 0, levels: levels, scopeRange: outerScope)
+
+        #expect(excluded.count == 1)
+        let innerIdx = dag.nodes.firstIndex { $0.positionRange == 3 ... 3 }!
+        let innerNode = dag.nodes[innerIdx]
+        #expect(excluded[0].lowerBound == innerNode.positionRange.lowerBound)
+        #expect(excluded[0].upperBound == innerNode.scopeRange!.upperBound)
+    }
+
+    @Test("Exclusion ranges for branch-selector is pick entry only")
+    func exclusionRangesForBranchSelectorIsPickOnly() {
+        // Bind with branch inside: bind-inner at level 0, branch at level 1.
+        let branchA = ChoiceTree.branch(
+            siteID: 0, weight: 1, id: 0, branchIDs: [0, 1],
+            choice: .choice(.unsigned(100, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        )
+        let branchB = ChoiceTree.branch(
+            siteID: 0, weight: 1, id: 1, branchIDs: [0, 1],
+            choice: .choice(.unsigned(200, .uint64), .init(validRange: 0 ... 200, isRangeExplicit: true))
+        )
+        let pickSite = ChoiceTree.group([branchA, .selected(branchB)])
+        let inner = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let tree = ChoiceTree.bind(inner: inner, bound: pickSite)
+
+        let sequence = ChoiceSequence(tree)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let levels = dag.topologicalLevels()
+
+        let bindScope = dag.scopeRange(forNodesAtLevel: levels[0])!
+        let excluded = dag.exclusionRanges(forLevel: 0, levels: levels, scopeRange: bindScope)
+
+        #expect(excluded.count == 1)
+        let branchIdx = dag.nodes.firstIndex { $0.kind == .structural(.branchSelector) }!
+        // Branch-selector exclusion is just the pick position, not the subtree.
+        #expect(excluded[0] == dag.nodes[branchIdx].positionRange)
+    }
+
+    @Test("Exclusion ranges empty when no deeper nodes in scope")
+    func exclusionRangesEmptyWhenNoDeepNodes() {
+        // Single bind — only one level, no deeper nodes.
+        let tree = ChoiceTree.bind(
+            inner: .choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            bound: .choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        )
+        let sequence = ChoiceSequence(tree)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let levels = dag.topologicalLevels()
+
+        let scope = dag.scopeRange(forNodesAtLevel: levels[0])!
+        let excluded = dag.exclusionRanges(forLevel: 0, levels: levels, scopeRange: scope)
+        #expect(excluded.isEmpty)
+    }
+
+    @Test("applyExclusion removes matching spans and keeps others")
+    func applyExclusionRemovesMatchingSpans() {
+        let val = ChoiceSequenceValue.value(
+            ChoiceSequenceValue.Value(
+                choice: .unsigned(1, .uint64),
+                validRange: 0 ... 10,
+                isRangeExplicit: true
+            )
+        )
+        let spans = [
+            ChoiceSpan(kind: val, range: 1 ... 1, depth: 0),
+            ChoiceSpan(kind: val, range: 3 ... 3, depth: 1),
+            ChoiceSpan(kind: val, range: 5 ... 5, depth: 0),
+        ]
+        let excluded: [ClosedRange<Int>] = [3 ... 4]
+
+        let filtered = ChoiceDependencyGraph.applyExclusion(spans: spans, excluding: excluded)
+        #expect(filtered.count == 2)
+        #expect(filtered[0].range == 1 ... 1)
+        #expect(filtered[1].range == 5 ... 5)
+    }
+
+    @Test("applyExclusion with empty exclusion keeps all spans")
+    func applyExclusionWithEmptyExclusion() {
+        let val = ChoiceSequenceValue.value(
+            ChoiceSequenceValue.Value(
+                choice: .unsigned(1, .uint64),
+                validRange: 0 ... 10,
+                isRangeExplicit: true
+            )
+        )
+        let spans = [
+            ChoiceSpan(kind: val, range: 1 ... 1, depth: 0),
+            ChoiceSpan(kind: val, range: 3 ... 3, depth: 1),
+        ]
+
+        let filtered = ChoiceDependencyGraph.applyExclusion(spans: spans, excluding: [])
+        #expect(filtered.count == 2)
+    }
+
+    // MARK: - Scope Range Computation
+
+    @Test("Bind-inner scopeRange includes control value position")
+    func scopeRangeForBindInnerIncludesControlValue() {
+        let tree = ChoiceTree.bind(
+            inner: .choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            bound: .group([
+                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            ])
+        )
+        let sequence = ChoiceSequence(tree)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let levels = dag.topologicalLevels()
+
+        let scope = dag.scopeRange(forNodesAtLevel: levels[0])
+        #expect(scope != nil)
+        // The bind-inner value is at position 1, bound content starts after.
+        // scopeRange should include the control value position.
+        #expect(scope!.lowerBound == dag.nodes[0].positionRange.lowerBound)
+        #expect(scope!.upperBound == dag.nodes[0].scopeRange!.upperBound)
+    }
+
+    @Test("Branch-selector scopeRange is the selected subtree range")
+    func scopeRangeForBranchSelector() {
+        let branchA = ChoiceTree.branch(
+            siteID: 0, weight: 1, id: 0, branchIDs: [0, 1],
+            choice: .choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        )
+        let branchB = ChoiceTree.branch(
+            siteID: 0, weight: 1, id: 1, branchIDs: [0, 1],
+            choice: .choice(.unsigned(20, .uint64), .init(validRange: 0 ... 200, isRangeExplicit: true))
+        )
+        let tree = ChoiceTree.group([branchA, .selected(branchB)])
+        let sequence = ChoiceSequence(tree)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let levels = dag.topologicalLevels()
+
+        let scope = dag.scopeRange(forNodesAtLevel: levels[0])
+        #expect(scope == dag.nodes[0].scopeRange)
+    }
+
+    @Test("scopeRange for multiple nodes is the convex hull")
+    func scopeRangeUnionOfMultipleNodes() {
+        let bind1 = ChoiceTree.bind(
+            inner: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            bound: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        )
+        let bind2 = ChoiceTree.bind(
+            inner: .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            bound: .choice(.unsigned(4, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        )
+        let tree = ChoiceTree.group([bind1, bind2])
+
+        let sequence = ChoiceSequence(tree)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let levels = dag.topologicalLevels()
+
+        // Both binds at level 0 — scope should span from first bind's inner to second bind's bound end.
+        let scope = dag.scopeRange(forNodesAtLevel: levels[0])
+        #expect(scope != nil)
+        #expect(scope!.lowerBound == dag.nodes[0].positionRange.lowerBound)
+        #expect(scope!.upperBound == dag.nodes[1].scopeRange!.upperBound)
+    }
+
+    @Test("scopeRange for empty node list is nil")
+    func scopeRangeNilForEmptyLevel() {
+        let tree = ChoiceTree.bind(
+            inner: .choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            bound: .choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        )
+        let sequence = ChoiceSequence(tree)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+
+        let scope = dag.scopeRange(forNodesAtLevel: [])
+        #expect(scope == nil)
+    }
 }

@@ -496,10 +496,12 @@ extension ReductionState {
 // MARK: - Encoder Ordering
 
 extension ReductionState {
-    /// Computes cost-based encoder ordering for the current sequence. Called once per cycle.
-    func computeEncoderOrdering() {
+    /// Computes cost-based encoder ordering for the current sequence.
+    ///
+    /// Called once per cycle in the adaptive strategy, or once per level sub-cycle in the topological strategy. When `depthFilter` is non-nil, cost estimation extracts spans at that bind depth only, ensuring encoder ordering reflects the scoped level's targets.
+    func computeEncoderOrdering(depthFilter: Int? = nil) {
         let fullRange = 0 ... max(0, sequence.count - 1)
-        let orderingContext = ReductionContext(bindIndex: bindIndex)
+        let orderingContext = ReductionContext(bindIndex: bindIndex, depthFilter: depthFilter)
         var valueCosts = [ReductionScheduler.ValueEncoderSlot: Int]()
         for slot in ReductionScheduler.ValueEncoderSlot.allCases {
             let cost: Int? = switch slot {

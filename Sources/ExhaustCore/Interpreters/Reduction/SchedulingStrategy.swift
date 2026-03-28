@@ -79,15 +79,36 @@ struct PhaseConfiguration {
     /// with fresh convergence state.
     var clearConvergence = false
 
+    /// When non-nil, restricts fibre descent's span extraction to values at this bind depth.
+    ///
+    /// Used by the topological level walk to implement exclusive scope: each level's sub-cycle processes only values at its own bind depth, not nested content.
+    var depthFilter: Int?
+
+    /// When `true`, fibre descent skips the covariant depth sweep (depths 1 through `maxBindDepth`).
+    ///
+    /// Used by the topological level walk because the outer level iteration subsumes the sweep's purpose — values at deeper bind depths are processed at their own level's sub-cycle.
+    var suppressCovariantSweep = false
+
+    /// Position ranges to exclude from fibre descent's span extraction and redistribution.
+    ///
+    /// Used by branch-selector level sub-cycles to prevent premature convergence of bind-inner values that belong to deeper CDG levels. Computed by ``ChoiceDependencyGraph/exclusionRanges(forLevel:levels:scopeRange:)``.
+    var exclusionRanges: [ClosedRange<Int>]?
+
     /// Creates a default configuration.
     init(
         edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100),
         scopeRange: ClosedRange<Int>? = nil,
-        clearConvergence: Bool = false
+        clearConvergence: Bool = false,
+        depthFilter: Int? = nil,
+        suppressCovariantSweep: Bool = false,
+        exclusionRanges: [ClosedRange<Int>]? = nil
     ) {
         self.edgeBudgetPolicy = edgeBudgetPolicy
         self.scopeRange = scopeRange
         self.clearConvergence = clearConvergence
+        self.depthFilter = depthFilter
+        self.suppressCovariantSweep = suppressCovariantSweep
+        self.exclusionRanges = exclusionRanges
     }
 }
 

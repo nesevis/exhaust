@@ -352,7 +352,8 @@ enum BonsaiScheduler {
         case .baseDescent:
             var budget = planned.budget
             let (producedDag, _) = try state.runBaseDescent(
-                budget: &budget, cycle: state.currentCycle
+                budget: &budget, cycle: state.currentCycle,
+                scopeRange: planned.configuration.scopeRange
             )
             let baseOutcome = state.phaseTracker.outcome(
                 for: .baseDescent, budgetAllocated: planned.budget
@@ -367,7 +368,9 @@ enum BonsaiScheduler {
             _ = try state.runFibreDescent(
                 budget: &budget,
                 dag: dag,
-                scopeRange: planned.configuration.scopeRange
+                scopeRange: planned.configuration.scopeRange,
+                depthFilter: planned.configuration.depthFilter,
+                suppressCovariantSweep: planned.configuration.suppressCovariantSweep
             )
 
             let fibreOutcome = state.phaseTracker.outcome(

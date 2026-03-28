@@ -20,7 +20,8 @@ extension ReductionState {
     /// Branch simplification and bind-inner reduction restart from the top on success. Structural deletion loops internally until exhausted. Returns the final dependency graph and whether any progress was made.
     func runBaseDescent(
         budget: inout Int,
-        cycle: Int = 0
+        cycle: Int = 0,
+        scopeRange: ClosedRange<Int>? = nil
     ) throws -> (dag: ChoiceDependencyGraph?, progress: Bool) {
         phaseTracker.push(.baseDescent)
         defer { phaseTracker.pop() }
@@ -28,7 +29,7 @@ extension ReductionState {
 
         while budget > 0 {
             // Branch simplification.
-            if try runBranchSimplification(budget: &budget) {
+            if try runBranchSimplification(budget: &budget, scopeRange: scopeRange) {
                 anyProgress = true
                 continue // Restart from 1a.
             }
@@ -37,7 +38,7 @@ extension ReductionState {
             var deletionMadeProgress = false
             while budget > 0 {
                 let dag = rebuildDAGIfNeeded()
-                if try runStructuralDeletion(budget: &budget, dag: dag) {
+                if try runStructuralDeletion(budget: &budget, dag: dag, scopeRange: scopeRange) {
                     deletionMadeProgress = true
                     anyProgress = true
                 } else {
@@ -46,7 +47,7 @@ extension ReductionState {
             }
 
             // Joint bind-inner reduction.
-            if try runJointBindInnerReduction(budget: &budget, cycle: cycle) {
+            if try runJointBindInnerReduction(budget: &budget, cycle: cycle, scopeRange: scopeRange) {
                 anyProgress = true
                 continue // Restart from 1a.
             }
@@ -99,7 +100,7 @@ extension ReductionState {
     // MARK: - Branch Simplification
 
     /// Runs branch promotion and pivoting encoders.
-    private func runBranchSimplification(budget: inout Int) throws -> Bool {
+    private func runBranchSimplification(budget: inout Int, scopeRange: ClosedRange<Int>? = nil) throws -> Bool {
         let subBudget = min(budget, config.branchSimplificationBudget)
         guard subBudget > 0 else { return false }
 
@@ -127,7 +128,7 @@ extension ReductionState {
         }
 
         let branchReductionContext = ReductionContext(bindIndex: bindIndex)
-        let fullBranchRange = 0 ... max(0, sequence.count - 1)
+        let fullBranchRange = scopeRange ?? (0 ... max(0, sequence.count - 1))
         if try runComposable(
             promoteBranchesEncoder,
             decoder: branchDecoder,
@@ -184,7 +185,8 @@ extension ReductionState {
     /// Returns `true` on first acceptance (caller loops internally to chain further deletions). For bind generators, iterates structural nodes in topological order (roots first), then depth-0 content outside any bind. For bind-free generators, falls back to depth-0 only.
     private func runStructuralDeletion(
         budget: inout Int,
-        dag: ChoiceDependencyGraph?
+        dag: ChoiceDependencyGraph?,
+        scopeRange: ClosedRange<Int>? = nil
     ) throws -> Bool {
         let subBudget = min(budget, config.structuralDeletionBudget)
         guard subBudget > 0 else { return false }
@@ -193,7 +195,13 @@ extension ReductionState {
         spanCache.invalidate()
         dominance.invalidate()
 
-        let scopes = buildDeletionScopes(dag: dag)
+        let allScopes = buildDeletionScopes(dag: dag)
+        // When scoped to a level, filter to deletion scopes that overlap the scope range.
+        let scopes = scopeRange.map { range in
+            allScopes.filter { scope in
+                scope.positionRange.map { $0.overlaps(range) } ?? true
+            }
+        } ?? allScopes
 
         for scope in scopes {
             guard legBudget.isExhausted == false else { break }
@@ -205,7 +213,7 @@ extension ReductionState {
             // encoders. A descriptor chain would process stale spans — per-encoder restart
             // ensures each encoder gets fresh spans.
             let deletionContext = ReductionContext(bindIndex: bindIndex)
-            let fullRange = 0 ... max(0, sequence.count - 1)
+            let fullRange = scopeRange ?? (0 ... max(0, sequence.count - 1))
 
             for slot in pruneOrder {
                 guard legBudget.isExhausted == false else { break }
@@ -372,7 +380,7 @@ extension ReductionState {
     // MARK: - Joint Bind-Inner Reduction
 
     /// Runs product-space encoders and value encoders on bind-inner values.
-    private func runJointBindInnerReduction(budget: inout Int, cycle: Int = 0) throws -> Bool {
+    private func runJointBindInnerReduction(budget: inout Int, cycle: Int = 0, scopeRange: ClosedRange<Int>? = nil) throws -> Bool {
         guard hasBind, let bindSpanIndex = bindIndex else { return false }
         let subBudget = min(budget, config.bindInnerReductionBudget)
         guard subBudget > 0 else { return false }
@@ -405,7 +413,7 @@ extension ReductionState {
             )
 
             let chainContext = ReductionContext(bindIndex: bindSpanIndex, dag: bindDag)
-            let fullRange = 0 ... max(0, sequence.count - 1)
+            let fullRange = scopeRange ?? (0 ... max(0, sequence.count - 1))
             let guidedDecoder: SequenceDecoder = .guided(fallbackTree: fallbackTree ?? tree)
 
             // Tier 1: guided — all candidates.
@@ -461,7 +469,7 @@ extension ReductionState {
             while legBudget.isExhausted == false {
                 if try runComposable(
                     productSpaceAdaptiveEncoder, decoder: adaptivePRNGDecoder,
-                    positionRange: 0 ... max(0, sequence.count - 1),
+                    positionRange: scopeRange ?? (0 ... max(0, sequence.count - 1)),
                     context: adaptiveContext,
                     structureChanged: true,
                     budget: &legBudget

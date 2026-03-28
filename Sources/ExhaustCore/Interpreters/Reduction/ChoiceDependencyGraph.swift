@@ -108,6 +108,77 @@ public struct ChoiceDependencyGraph: Sendable {
         return levels
     }
 
+    /// Computes position ranges owned by CDG nodes at levels deeper than the given level, within the given scope.
+    ///
+    /// For bind-inner nodes, the excluded range is `positionRange.lowerBound ... scopeRange.upperBound` (control value + bound content). For branch-selector nodes, the excluded range is just `positionRange` (the pick entry). Used by branch-selector level sub-cycles to prevent premature convergence of deeper-level positions during fibre descent and redistribution.
+    ///
+    /// - Parameters:
+    ///   - level: The current level index. Nodes at levels > `level` are candidates for exclusion.
+    ///   - levels: Precomputed topological levels from ``topologicalLevels()``.
+    ///   - scopeRange: The current sub-cycle's scope range. Only nodes whose ranges fall within this scope are included.
+    public func exclusionRanges(
+        forLevel level: Int,
+        levels: [[Int]],
+        scopeRange: ClosedRange<Int>
+    ) -> [ClosedRange<Int>] {
+        var excluded: [ClosedRange<Int>] = []
+        for deeperLevel in (level + 1) ..< levels.count {
+            for nodeIndex in levels[deeperLevel] {
+                let node = nodes[nodeIndex]
+                let nodeRange: ClosedRange<Int>
+                if case .structural(.bindInner) = node.kind, let scope = node.scopeRange {
+                    // Bind-inner: exclude control value + bound content.
+                    nodeRange = node.positionRange.lowerBound ... scope.upperBound
+                } else {
+                    // Branch-selector: exclude pick entry only.
+                    nodeRange = node.positionRange
+                }
+                // Only include if the node's range falls within the current scope.
+                if scopeRange.overlaps(nodeRange) {
+                    excluded.append(nodeRange)
+                }
+            }
+        }
+        return excluded
+    }
+
+    /// Removes spans whose `range.lowerBound` falls within any excluded range.
+    ///
+    /// Used as a post-filter on `extractFilteredSpans` output to enforce the branch-selector depth exclusion.
+    public static func applyExclusion(
+        spans: [ChoiceSpan],
+        excluding ranges: [ClosedRange<Int>]
+    ) -> [ChoiceSpan] {
+        guard ranges.isEmpty == false else { return spans }
+        return spans.filter { span in
+            ranges.contains { $0.contains(span.range.lowerBound) } == false
+        }
+    }
+
+    /// Computes the scope range for a topological level's sub-cycle.
+    ///
+    /// For bind-inner nodes: `positionRange.lowerBound ... scopeRange.upperBound` (includes control value). For branch-selector nodes: the node's `scopeRange`. For multiple nodes at the same level: the convex hull of all individual ranges.
+    ///
+    /// - Returns: The scope range, or `nil` if the level has no nodes with scope ranges.
+    public func scopeRange(forNodesAtLevel nodeIndices: [Int]) -> ClosedRange<Int>? {
+        var lower = Int.max
+        var upper = Int.min
+        for nodeIndex in nodeIndices {
+            let node = nodes[nodeIndex]
+            if case .structural(.bindInner) = node.kind, let scope = node.scopeRange {
+                // Bind-inner: include the control value position and the bound content.
+                lower = min(lower, node.positionRange.lowerBound)
+                upper = max(upper, scope.upperBound)
+            } else if let scope = node.scopeRange {
+                // Branch-selector: use the selected subtree range.
+                lower = min(lower, scope.lowerBound)
+                upper = max(upper, scope.upperBound)
+            }
+        }
+        guard lower <= upper else { return nil }
+        return lower ... upper
+    }
+
     /// Builds a dependency DAG from a choice sequence, its tree, and the bind span index.
     ///
     /// Identifies bind-inner and branch-selector structural nodes, builds dependency edges between them, computes a topological ordering via Kahn's algorithm, and collects leaf positions.
