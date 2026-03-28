@@ -1,40 +1,50 @@
-/// Dependency-ordered scheduling strategy that walks the CDG topologically.
+/// Level-ordered scheduling strategy that walks CDG topological levels.
 ///
-/// Each cycle focuses on the next unconverged CDG node in dependency order (roots first).
-/// Base descent runs on the full sequence (structural encoders need full context), then
-/// fibre descent and exploration are scoped to the current node's region. When a node
-/// accepts changes, its dependents are marked dirty so they'll be revisited.
+/// Each cycle processes one topological level of the CDG as a scoped sub-cycle
+/// (base descent → fibre descent → exploration → redistribution). After all levels
+/// complete, a full-sequence cleanup pass runs. The scheduler's stall budget handles
+/// termination.
 ///
-/// For flat generators (no CDG nodes), falls back to full-sequence phases identical
-/// to ``AdaptiveStrategy``.
+/// For bind-inner levels, the sub-cycle uses exclusive scope via `depthFilter` — only
+/// values at the bind-inner's depth are processed. For branch-selector levels,
+/// `depthFilter` is nil and an exclusion set prevents premature convergence of
+/// deeper-level positions.
+///
+/// For flat generators (no CDG nodes), the level walk is empty and only the cleanup
+/// pass runs — functionally identical to ``AdaptiveStrategy``.
 struct TopologicalStrategy: SchedulingStrategy {
   private static let phaseBudgetCeiling = 2000
 
-  // MARK: - Topological Walk State
+  // MARK: - Level Walk State
 
-  /// Node indices from the CDG's topological order. Rebuilt when the DAG changes.
-  private var nodeQueue: [Int] = []
+  /// Topological levels from the CDG. Each element is an array of node indices at that level.
+  private var levels: [[Int]] = []
 
-  /// Current position in the node queue. Advances each cycle.
-  private var queuePosition = 0
+  /// Index into `levels` for the next level to process. Advances after each level's sub-cycle.
+  private var currentLevelIndex = 0
 
-  /// Nodes that stalled (no progress on last visit). Skipped until a dependency makes progress.
-  private var convergedNodes: Set<Int> = []
+  /// When `true`, the level walk is complete and the next cycle is the cleanup pass.
+  private var isCleanupCycle = false
 
-  /// The DAG from the last cycle, used to detect when the DAG changes (structural acceptance).
-  private var lastNodeCount = 0
+  /// When `true`, the cleanup pass has run and no more work remains.
+  private var isDone = false
 
-  /// Scope range for the current node's fibre descent and exploration.
-  private var currentNodeScope: ClosedRange<Int>?
+  /// Set by `phaseCompleted` when a structural acceptance occurs. The next `planFirstStage`
+  /// rebuilds levels from the fresh DAG and resets to level 0.
+  private var needsRebuild = false
 
-  /// Dependent node indices for the current node (to dirty on progress).
-  private var currentNodeDependents: [Int] = []
-
-  // MARK: - Phase Tracking
+  // MARK: - Per-Cycle Tracking
 
   private var currentCycleImproved = false
   private var previousFibreProgress = true
-  private var previousCycleStalled = false
+
+  // MARK: - Current Level Scope
+
+  /// Scope parameters computed in `planFirstStage`, consumed by `planSecondStage`.
+  private var currentScopeRange: ClosedRange<Int>?
+  private var currentDepthFilter: Int?
+  private var currentExclusionRanges: [ClosedRange<Int>]?
+  private var currentSuppressCovariantSweep = false
 
   // MARK: - SchedulingStrategy
 
@@ -42,40 +52,59 @@ struct TopologicalStrategy: SchedulingStrategy {
     priorOutcome: CycleOutcome?,
     state: ReductionStateView
   ) -> [PlannedPhase] {
-    previousCycleStalled = currentCycleImproved == false && state.cycleNumber > 1
     currentCycleImproved = false
 
-    // Rebuild the topological walk when the DAG changes or on first cycle.
-    if let dag = state.dag {
-      let nodeCount = dag.nodes.count
-      if nodeCount != lastNodeCount || state.cycleNumber <= 1 {
-        nodeQueue = dag.topologicalOrder
-        queuePosition = 0
-        convergedNodes.removeAll()
-        lastNodeCount = nodeCount
+    // Rebuild levels on first cycle or after structural acceptance.
+    if needsRebuild || state.cycleNumber <= 1 {
+      if let dag = state.dag {
+        levels = dag.topologicalLevels()
+      } else {
+        levels = []
       }
+      currentLevelIndex = 0
+      isCleanupCycle = false
+      isDone = false
+      needsRebuild = false
     }
 
-    // Advance to the next unconverged node.
-    advanceToNextUnconvergedNode(dag: state.dag)
+    guard isDone == false else { return [] }
 
-    // Base descent always runs on the full sequence — structural encoders
-    // (promotion, pivot, deletion) need the full tree context.
-    guard state.hasDeletionTargets || state.hasBranchTargets else {
-      return []
+    if isCleanupCycle {
+      // Cleanup cycle: full-sequence base descent (no scoping).
+      return planCleanupBaseDescent(state: state)
     }
 
-    if let prior = priorOutcome,
-       case let .ran(outcome) = prior.baseDescent,
-       outcome.structuralAcceptances == 0
-    {
-      return []
+    if currentLevelIndex >= levels.count {
+      // Level walk complete → transition to cleanup.
+      isCleanupCycle = true
+      clearCurrentLevelScope()
+      return planCleanupBaseDescent(state: state)
     }
 
+    guard let dag = state.dag else {
+      // No DAG → skip directly to cleanup.
+      isCleanupCycle = true
+      clearCurrentLevelScope()
+      return planCleanupBaseDescent(state: state)
+    }
+
+    // Compute scope for the current level.
+    let nodeIndices = levels[currentLevelIndex]
+    currentScopeRange = dag.scopeRange(forNodesAtLevel: nodeIndices)
+
+    guard let scope = currentScopeRange else {
+      // Level has no scope (all nodes have nil scopeRange) — skip to next level.
+      currentLevelIndex += 1
+      return planFirstStage(priorOutcome: priorOutcome, state: state)
+    }
+
+    computeLevelScope(dag: dag, nodeIndices: nodeIndices, scopeRange: scope)
+
+    // Base descent scoped to this level.
     return [PlannedPhase(
       phase: .baseDescent,
       budget: Self.phaseBudgetCeiling,
-      configuration: PhaseConfiguration()
+      configuration: PhaseConfiguration(scopeRange: currentScopeRange)
     )]
   }
 
@@ -84,57 +113,57 @@ struct TopologicalStrategy: SchedulingStrategy {
     state: ReductionStateView
   ) -> [PlannedPhase] {
     let baseProgress = (firstStageResult?.acceptances ?? 0) > 0
-    if baseProgress {
-      currentCycleImproved = true
-      // Structural change invalidates the walk — all nodes need revisiting.
-      convergedNodes.removeAll()
+    if baseProgress { currentCycleImproved = true }
+
+    if isCleanupCycle {
+      return planCleanupSecondStage(baseProgress: baseProgress, state: state)
     }
 
+    guard isDone == false else { return [] }
+
+    // Level sub-cycle: fibre descent, exploration, redistribution — all scoped.
     var phases: [PlannedPhase] = []
 
-    // If we have a current node scope, focus fibre descent and exploration on it.
-    // Otherwise fall back to full-sequence (flat generator or exhausted queue).
-    let scopeConfig = currentNodeScope.map {
-      PhaseConfiguration(scopeRange: $0)
-    } ?? PhaseConfiguration()
+    let levelConfig = PhaseConfiguration(
+      scopeRange: currentScopeRange,
+      depthFilter: currentDepthFilter,
+      suppressCovariantSweep: currentSuppressCovariantSweep,
+      exclusionRanges: currentExclusionRanges
+    )
 
-    // Fibre descent: always full-sequence. Batch zeroing needs the full picture
-    // to coordinate coupled values (e.g. add(X, Y) where X + Y = 0 requires
-    // both zeroed simultaneously). Scoping would break batch coordination.
-    // After a stall, clear convergence so batch zeroing retries with fresh state —
-    // Kleisli may have set values externally that the cache doesn't reflect.
+    // Fibre descent: scoped to level.
     let fibreGated = baseProgress == false
       && previousFibreProgress == false
       && state.cycleNumber > 1
       && state.allValueCoordinatesConverged
-      && previousCycleStalled == false
     if fibreGated == false {
       phases.append(PlannedPhase(
         phase: .fibreDescent,
         budget: Self.phaseBudgetCeiling,
-        configuration: PhaseConfiguration(clearConvergence: previousCycleStalled)
+        configuration: levelConfig
       ))
     }
 
-    // Exploration: scoped to current node's edges when available.
-    let explorationConfig = PhaseConfiguration(
-      edgeBudgetPolicy: .adaptive,
-      scopeRange: currentNodeScope
-    )
+    // Exploration: scoped to level's edges.
     phases.append(PlannedPhase(
       phase: .exploration,
       budget: Self.phaseBudgetCeiling,
-      configuration: explorationConfig,
-      requiresStall: currentNodeScope == nil
+      configuration: PhaseConfiguration(
+        edgeBudgetPolicy: .adaptive,
+        scopeRange: currentScopeRange
+      )
     ))
 
-    // Relax round.
+    // Redistribution: scoped to level.
     phases.append(PlannedPhase(
       phase: .relaxRound,
       budget: Self.phaseBudgetCeiling,
-      configuration: PhaseConfiguration(),
+      configuration: PhaseConfiguration(scopeRange: currentScopeRange),
       requiresStall: true
     ))
+
+    // Advance to next level for the next cycle.
+    currentLevelIndex += 1
 
     return phases
   }
@@ -145,49 +174,102 @@ struct TopologicalStrategy: SchedulingStrategy {
   ) {
     if outcome.acceptances > 0 {
       currentCycleImproved = true
-      // Progress on this node: dirty its dependents so they'll be revisited.
-      for dependent in currentNodeDependents {
-        convergedNodes.remove(dependent)
-      }
     }
     if phase == .fibreDescent {
       previousFibreProgress = outcome.acceptances > 0
     }
-    // If fibre descent and exploration both stalled, mark this node converged.
-    if phase == .exploration, outcome.acceptances == 0, currentCycleImproved == false {
-      if queuePosition < nodeQueue.count {
-        convergedNodes.insert(nodeQueue[queuePosition])
-      }
+    // Structural acceptance triggers rebuild on next planFirstStage.
+    if outcome.structuralAcceptances > 0 {
+      needsRebuild = true
     }
   }
 
   // MARK: - Private
 
-  /// Advances `queuePosition` past converged nodes to the next one that needs work.
-  private mutating func advanceToNextUnconvergedNode(dag: ChoiceDependencyGraph?) {
-    currentNodeScope = nil
-    currentNodeDependents = []
-
-    guard let dag, nodeQueue.isEmpty == false else { return }
-
-    // Wrap around when we reach the end of the queue.
-    var attempts = 0
-    while attempts < nodeQueue.count {
-      let wrappedPosition = (queuePosition + attempts) % nodeQueue.count
-      let nodeIndex = nodeQueue[wrappedPosition]
-
-      if convergedNodes.contains(nodeIndex) == false {
-        queuePosition = wrappedPosition
-        let node = dag.nodes[nodeIndex]
-        currentNodeScope = node.scopeRange
-        currentNodeDependents = dag.nodes[nodeIndex].dependents
-        return
-      }
-      attempts += 1
+  /// Computes `depthFilter`, `suppressCovariantSweep`, and `exclusionRanges` for the current level.
+  private mutating func computeLevelScope(
+    dag: ChoiceDependencyGraph,
+    nodeIndices: [Int],
+    scopeRange: ClosedRange<Int>
+  ) {
+    let hasBindInner = nodeIndices.contains { index in
+      if case .structural(.bindInner) = dag.nodes[index].kind { return true }
+      return false
+    }
+    let hasBranchSelector = nodeIndices.contains {
+      dag.nodes[$0].kind == .structural(.branchSelector)
     }
 
-    // All nodes converged — fall back to full-sequence phases.
-    currentNodeScope = nil
-    currentNodeDependents = []
+    if hasBindInner, hasBranchSelector == false {
+      // Pure bind-inner level: exclusive scope via depthFilter.
+      let firstBindInner = nodeIndices.first { index in
+        if case .structural(.bindInner) = dag.nodes[index].kind { return true }
+        return false
+      }!
+      currentDepthFilter = dag.nodes[firstBindInner].bindDepth
+      currentSuppressCovariantSweep = true
+      currentExclusionRanges = nil
+    } else {
+      // Branch-selector or mixed-type level: no depthFilter, use exclusion set.
+      currentDepthFilter = nil
+      currentSuppressCovariantSweep = true
+      currentExclusionRanges = dag.exclusionRanges(
+        forLevel: currentLevelIndex,
+        levels: levels,
+        scopeRange: scopeRange
+      )
+    }
+  }
+
+  /// Resets the current level scope fields to their unscoped defaults.
+  private mutating func clearCurrentLevelScope() {
+    currentScopeRange = nil
+    currentDepthFilter = nil
+    currentExclusionRanges = nil
+    currentSuppressCovariantSweep = false
+  }
+
+  /// Plans base descent for the cleanup cycle, with structural gates.
+  private func planCleanupBaseDescent(
+    state: ReductionStateView
+  ) -> [PlannedPhase] {
+    guard state.hasDeletionTargets || state.hasBranchTargets else {
+      return []
+    }
+    return [PlannedPhase(
+      phase: .baseDescent,
+      budget: Self.phaseBudgetCeiling,
+      configuration: PhaseConfiguration()
+    )]
+  }
+
+  /// Plans second-stage phases for the cleanup cycle (full-sequence, no suppression).
+  private mutating func planCleanupSecondStage(
+    baseProgress: Bool,
+    state: ReductionStateView
+  ) -> [PlannedPhase] {
+    var phases: [PlannedPhase] = []
+
+    let fibreGated = baseProgress == false
+      && previousFibreProgress == false
+      && state.cycleNumber > 1
+      && state.allValueCoordinatesConverged
+    if fibreGated == false {
+      phases.append(PlannedPhase(
+        phase: .fibreDescent,
+        budget: Self.phaseBudgetCeiling,
+        configuration: PhaseConfiguration()
+      ))
+    }
+
+    phases.append(PlannedPhase(
+      phase: .relaxRound,
+      budget: Self.phaseBudgetCeiling,
+      configuration: PhaseConfiguration(),
+      requiresStall: true
+    ))
+
+    isDone = true
+    return phases
   }
 }

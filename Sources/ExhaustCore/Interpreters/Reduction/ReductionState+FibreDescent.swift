@@ -21,7 +21,8 @@ extension ReductionState {
         dag: ChoiceDependencyGraph?,
         scopeRange: ClosedRange<Int>? = nil,
         depthFilter: Int? = nil,
-        suppressCovariantSweep: Bool = false
+        suppressCovariantSweep: Bool = false,
+        exclusionRanges: [ClosedRange<Int>]? = nil
     ) throws -> Bool {
         phaseTracker.push(.fibreDescent)
         defer { phaseTracker.pop() }
@@ -101,7 +102,12 @@ extension ReductionState {
             repeat {
                 restartLeafRange = false
 
-                let leafSpans = extractValueSpans(in: leafRange)
+                var leafSpans = extractValueSpans(in: leafRange)
+                if let excluded = exclusionRanges {
+                    leafSpans = ChoiceDependencyGraph.applyExclusion(
+                        spans: leafSpans, excluding: excluded
+                    )
+                }
                 guard leafSpans.isEmpty == false else { break }
 
                 let floatSpans = leafSpans.filter { span in

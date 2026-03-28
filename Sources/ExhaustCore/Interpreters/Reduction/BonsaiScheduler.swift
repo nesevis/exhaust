@@ -370,7 +370,8 @@ enum BonsaiScheduler {
                 dag: dag,
                 scopeRange: planned.configuration.scopeRange,
                 depthFilter: planned.configuration.depthFilter,
-                suppressCovariantSweep: planned.configuration.suppressCovariantSweep
+                suppressCovariantSweep: planned.configuration.suppressCovariantSweep,
+                exclusionRanges: planned.configuration.exclusionRanges
             )
 
             let fibreOutcome = state.phaseTracker.outcome(
