@@ -45,6 +45,11 @@ public struct DependencyNode: Equatable, Sendable {
     /// For bind-inner nodes, this is the bound range. For branch-selector nodes, this is the selected subtree range. `nil` for branch selectors with an empty selected subtree.
     public let scopeRange: ClosedRange<Int>?
 
+    /// The bind nesting depth of this node's control position, or `nil` for branch-selector nodes.
+    ///
+    /// For bind-inner nodes, this is `BindSpanIndex.bindDepth(at: positionRange.lowerBound)` — the number of enclosing bind regions around the control value. Branch-selector nodes store `nil` because they use `depthFilter = nil` in the level-scoped architecture.
+    public let bindDepth: Int?
+
     /// Indices into ``ChoiceDependencyGraph/nodes`` of nodes that depend on this node's value.
     public var dependents: [Int]
 }
@@ -70,6 +75,38 @@ public struct ChoiceDependencyGraph: Sendable {
     ///
     /// - Complexity: O(*V*²) space, O(*V* · *E*) construction time.
     let reachability: [Set<Int>]
+
+    /// Groups nodes by topological level — the longest path from any root to the node.
+    ///
+    /// Level 0 contains root nodes (no parents). Level k contains nodes whose deepest parent is at level k-1. All parents of a level-k node are guaranteed to be at levels < k. This is topological (max-parent-depth) assignment, not BFS distance.
+    ///
+    /// - Complexity: O(*V* + *E*) where *V* is the node count and *E* is the edge count.
+    public func topologicalLevels() -> [[Int]] {
+        guard nodes.isEmpty == false else { return [] }
+
+        // Build inverse adjacency: for each node, collect its parent indices.
+        var parents = [[Int]](repeating: [], count: nodes.count)
+        for (nodeIndex, node) in nodes.enumerated() {
+            for dependent in node.dependents {
+                parents[dependent].append(nodeIndex)
+            }
+        }
+
+        // Assign levels via max-parent-depth + 1, iterating in topological order.
+        var nodeLevel = [Int](repeating: 0, count: nodes.count)
+        for nodeIndex in topologicalOrder {
+            let maxParentLevel = parents[nodeIndex].map { nodeLevel[$0] }.max() ?? -1
+            nodeLevel[nodeIndex] = maxParentLevel + 1
+        }
+
+        // Group by level.
+        let maxLevel = nodeLevel.max() ?? 0
+        var levels = [[Int]](repeating: [], count: maxLevel + 1)
+        for (nodeIndex, level) in nodeLevel.enumerated() {
+            levels[level].append(nodeIndex)
+        }
+        return levels
+    }
 
     /// Builds a dependency DAG from a choice sequence, its tree, and the bind span index.
     ///
@@ -102,6 +139,7 @@ public struct ChoiceDependencyGraph: Sendable {
                 kind: .structural(.bindInner(regionIndex: regionIndex)),
                 isStructurallyConstant: isConstant,
                 scopeRange: region.boundRange,
+                bindDepth: bindIndex.bindDepth(at: region.innerRange.lowerBound),
                 dependents: []
             ))
         }
@@ -129,6 +167,7 @@ public struct ChoiceDependencyGraph: Sendable {
                         kind: .structural(.branchSelector),
                         isStructurallyConstant: false,
                         scopeRange: subtreeRange,
+                        bindDepth: nil,
                         dependents: []
                     ))
                 }
