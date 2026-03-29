@@ -25,30 +25,60 @@ extension ReductionState {
     ) throws -> (dag: ChoiceDependencyGraph?, progress: Bool) {
         phaseTracker.push(.baseDescent)
         defer { phaseTracker.pop() }
+
         var anyProgress = false
+        var lastDeletionWasGated = false
 
         while budget > 0 {
             // Branch simplification.
             if try runBranchSimplification(budget: &budget, scopeRange: scopeRange) {
                 anyProgress = true
+                lastBaseDescentFingerprint = nil
                 continue // Restart from 1a.
             }
 
             // Structural deletion (inner loop: restart on success).
+            // Fingerprint gate: if the structural skeleton hasn't changed since
+            // the last deletion pass that found nothing, skip the deletion loop.
+            // Value changes (binary search, batch zeroing) don't create new
+            // deletion opportunities — only structural changes do.
             var deletionMadeProgress = false
-            while budget > 0 {
-                let dag = rebuildDAGIfNeeded()
-                if try runStructuralDeletion(budget: &budget, dag: dag, scopeRange: scopeRange) {
-                    deletionMadeProgress = true
-                    anyProgress = true
-                } else {
-                    break
+            let deletionGated: Bool = {
+                guard let currentBindIndex = bindIndex else { return false }
+                let fingerprint = StructuralFingerprint.from(
+                    sequence, bindIndex: currentBindIndex
+                )
+                if let last = lastBaseDescentFingerprint, fingerprint == last {
+                    return true
+                }
+                return false
+            }()
+            lastDeletionWasGated = deletionGated
+            if deletionGated {
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .reducer,
+                        event: "deletion_fingerprint_gated",
+                        metadata: ["budget_remaining": "\(budget)"]
+                    )
+                }
+            } else {
+                while budget > 0 {
+                    let dag = rebuildDAGIfNeeded()
+                    if try runStructuralDeletion(budget: &budget, dag: dag, scopeRange: scopeRange) {
+                        deletionMadeProgress = true
+                        anyProgress = true
+                        lastBaseDescentFingerprint = nil
+                    } else {
+                        break
+                    }
                 }
             }
 
             // Joint bind-inner reduction.
             if try runJointBindInnerReduction(budget: &budget, cycle: cycle, scopeRange: scopeRange) {
                 anyProgress = true
+                lastBaseDescentFingerprint = nil
                 continue // Restart from 1a.
             }
 
@@ -59,6 +89,18 @@ extension ReductionState {
 
             // No step made progress; base descent fixed point reached.
             break
+        }
+
+        // Update the deletion fingerprint: if deletion found nothing AND wasn't
+        // gated, record the fingerprint so subsequent calls skip the deletion
+        // loop. Branch simplification and bind-inner reduction clear the
+        // fingerprint on success (structural changes invalidate the gate).
+        if anyProgress == false, lastDeletionWasGated == false {
+            if let currentBindIndex = bindIndex {
+                lastBaseDescentFingerprint = StructuralFingerprint.from(
+                    sequence, bindIndex: currentBindIndex
+                )
+            }
         }
 
         if isInstrumented {

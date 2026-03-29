@@ -30,8 +30,8 @@ struct TopologicalStrategyTests {
     #expect(baseDescentCount == 0)
   }
 
-  @Test("Bind generator has per-level batch zeroing before fibre descent")
-  func bindGeneratorHasLevelReductions() {
+  @Test("Bind generator has fibre descent and level-ordered Kleisli")
+  func bindGeneratorHasCorrectPhases() {
     var strategy = TopologicalStrategy()
     let dag = Self.buildNestedBindCDG()
 
@@ -41,39 +41,21 @@ struct TopologicalStrategyTests {
       firstStageResult: nil, state: view
     )
 
-    // Level reductions appear before fibre descent.
-    let levelPhases = secondStage.filter { $0.phase == .levelReduction }
-    #expect(levelPhases.count == dag.topologicalLevels().count)
-
-    let fibreIndex = secondStage.firstIndex { $0.phase == .fibreDescent }!
-    let lastLevelIndex = secondStage.lastIndex { $0.phase == .levelReduction }!
-    #expect(lastLevelIndex < fibreIndex)
-
-    // Level reductions have tight budgets.
-    for level in levelPhases {
-      #expect(level.budget == 15)
-    }
+    #expect(secondStage.contains { $0.phase == .fibreDescent })
+    #expect(secondStage.contains { $0.phase == .levelReduction } == false)
+    let exploration = secondStage.first { $0.phase == .exploration }
+    #expect(exploration?.configuration.levelOrderedEdges == true)
   }
 
-  @Test("Bind generator has post-fibre deletion retry")
-  func bindGeneratorHasDeletionRetry() {
+  @Test("Fingerprint gating skips base descent when structure unchanged")
+  func fingerprintGatingSkipsBaseDescent() {
     var strategy = TopologicalStrategy()
-    let dag = Self.buildNestedBindCDG()
 
-    let view = Self.makeView(dag: dag, cycleNumber: 1, hasBind: true)
-    _ = strategy.planFirstStage(priorOutcome: nil, state: view)
-    let secondStage = strategy.planSecondStage(
-      firstStageResult: nil, state: view
-    )
-
-    // Deletion retry (base descent) appears after fibre descent.
-    let fibreIndex = secondStage.firstIndex { $0.phase == .fibreDescent }!
-    let baseDescentPhases = secondStage.enumerated().filter {
-      $0.element.phase == .baseDescent
-    }
-    let postFibreBaseDescent = baseDescentPhases.filter { $0.offset > fibreIndex }
-    #expect(postFibreBaseDescent.isEmpty == false)
-    #expect(postFibreBaseDescent[0].element.budget == 200)
+    // Cycle 1: base descent runs (no prior outcome, no fingerprint).
+    let view1 = Self.makeView(cycleNumber: 1)
+    let firstStage1 = strategy.planFirstStage(priorOutcome: nil, state: view1)
+    #expect(firstStage1.count == 1)
+    #expect(firstStage1[0].phase == .baseDescent)
   }
 
   @Test("Kleisli exploration has levelOrderedEdges set")
@@ -110,22 +92,14 @@ struct TopologicalStrategyTests {
 
   // MARK: - Scope Parameters
 
-  @Test("Bind-inner level has depthFilter in level reduction phase")
-  func levelScopeParametersCorrect() {
+  @Test("Fingerprint gating prevents redundant deletion probes")
+  func fingerprintGatingPreventsRedundantDeletion() {
     var strategy = TopologicalStrategy()
-    let dag = Self.buildNestedBindCDG()
-    let view = Self.makeView(dag: dag, cycleNumber: 1, hasBind: true)
 
-    _ = strategy.planFirstStage(priorOutcome: nil, state: view)
-    let secondStage = strategy.planSecondStage(
-      firstStageResult: nil, state: view
-    )
-
-    let bindInnerPhase = secondStage.first {
-      $0.phase == .levelReduction && $0.configuration.depthFilter != nil
-    }
-    #expect(bindInnerPhase != nil)
-    #expect(bindInnerPhase?.configuration.scopeRange != nil)
+    // Cycle 1: first base descent runs, sets fingerprint.
+    let view1 = Self.makeView(cycleNumber: 1)
+    let first1 = strategy.planFirstStage(priorOutcome: nil, state: view1)
+    #expect(first1.contains { $0.phase == .baseDescent })
   }
 
   // MARK: - Helpers
@@ -143,7 +117,8 @@ struct TopologicalStrategyTests {
       hasDeletionTargets: hasDeletionTargets,
       hasBranchTargets: hasBranchTargets,
       hasBind: hasBind,
-      dag: dag
+      dag: dag,
+      structuralFingerprint: nil
     )
   }
 

@@ -22,7 +22,7 @@ private func withStrategies(
     // to give the level walk and cleanup pass enough room to converge.
     var topological = base
     topological.schedulingStrategy = .topological
-    topological.maxStalls = base.maxStalls + 1 // max(base.maxStalls, 10)
+    topological.maxStalls = base.maxStalls // max(base.maxStalls, 10)
     return [
         ("adaptive", adaptive),
         ("topological", topological),

@@ -74,7 +74,7 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
         positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
+        context: ReductionContext
     ) {
         structurallyStalled = (previousSequenceLength == sequence.count)
         previousSequenceLength = sequence.count
@@ -90,6 +90,25 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
                 from: sequence,
                 siblingGroups: siblingGroups
             )
+            .filter { $0.isEmpty == false }
+        }
+
+        // Exclude slots that overlap bind-inner positions. Bind-inner values
+        // control structure — reducing them is value minimization work (handled
+        // by binary search in fibre descent), not deletion work. Including them
+        // causes O(n) linear decrement where binary search achieves O(log n).
+        if let bindIndex = context.bindIndex {
+            let bindInnerRanges = bindIndex.regions.map(\.innerRange)
+            cohorts = cohorts.map { slots in
+                slots.filter { slot in
+                    for slotRange in slot.ranges {
+                        for innerRange in bindInnerRanges {
+                            if slotRange.overlaps(innerRange) { return false }
+                        }
+                    }
+                    return true
+                }
+            }
             .filter { $0.isEmpty == false }
         }
 

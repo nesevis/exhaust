@@ -1,16 +1,10 @@
-/// CDG-enhanced scheduling strategy that uses structural dependency metadata to improve two specific decisions within the adaptive pipeline.
+/// CDG-enhanced scheduling strategy that uses structural dependency metadata to improve specific decisions within the adaptive pipeline.
 ///
-/// Mirrors ``AdaptiveStrategy``'s cycle structure with two targeted additions:
+/// Mirrors ``AdaptiveStrategy``'s cycle structure with level-ordered Kleisli edges as the sole CDG enhancement. Composition edges are sorted by CDG topological level (parent-first) so child fibres are searched in the context of already-reduced parents.
 ///
-/// 1. **Post-fibre deletion retry**: a second base descent pass after fibre descent retries deletions that became viable because fibre descent reduced bind-inner values. The reject cache doesn't block this because the sequence changed (different Zobrist hashes).
-/// 2. **Level-ordered Kleisli edges**: composition edges are sorted by CDG topological level (parent-first) so child fibres are searched in the context of already-reduced parents.
-///
-/// For flat generators (no CDG nodes): both enhancements are inert — no deletion retry, no edges to reorder. The cycle is identical to ``AdaptiveStrategy``.
+/// For flat generators (no CDG nodes): the enhancement is inert — no edges to reorder. The cycle is identical to ``AdaptiveStrategy``.
 struct TopologicalStrategy: SchedulingStrategy {
   private static let phaseBudgetCeiling = 2000
-
-  /// Budget for the post-fibre deletion retry pass.
-  private static let deletionRetryBudget = 200
 
   // MARK: - Per-Cycle Tracking
 
@@ -18,6 +12,9 @@ struct TopologicalStrategy: SchedulingStrategy {
   private var cycleImproved = false
   private var lastPriorOutcome: CycleOutcome?
   private var structuralMinimisationWasSkipped = false
+
+  /// Fingerprint at the last cycle where base descent ran.
+  private var lastBaseDescentFingerprint: StructuralFingerprint?
 
   // MARK: - SchedulingStrategy
 
@@ -30,7 +27,7 @@ struct TopologicalStrategy: SchedulingStrategy {
     cycleImproved = false
     lastPriorOutcome = priorOutcome
 
-    // Same structural and behavioral gating as AdaptiveStrategy.
+    // Same gating as AdaptiveStrategy, including fingerprint gate.
     let noTargets = state.hasDeletionTargets == false && state.hasBranchTargets == false
     let priorBaseUnproductive: Bool = {
       guard let prior = lastPriorOutcome else { return false }
@@ -39,12 +36,19 @@ struct TopologicalStrategy: SchedulingStrategy {
       }
       return true
     }()
+    let fingerprintStale: Bool = {
+      guard let current = state.structuralFingerprint,
+            let last = lastBaseDescentFingerprint
+      else { return false }
+      return current == last
+    }()
 
-    if noTargets || priorBaseUnproductive {
+    if noTargets || priorBaseUnproductive || fingerprintStale {
       structuralMinimisationWasSkipped = true
       return []
     } else {
       structuralMinimisationWasSkipped = false
+      lastBaseDescentFingerprint = state.structuralFingerprint
       return [PlannedPhase(
         phase: .baseDescent,
         budget: Self.phaseBudgetCeiling,
@@ -76,27 +80,7 @@ struct TopologicalStrategy: SchedulingStrategy {
       ))
     }
 
-    // Enhancement 1: post-fibre deletion retry.
-    // After fibre descent reduces bind-inner values, deletions that previously
-    // failed may now succeed. The reject cache uses Zobrist hashes of the full
-    // probe sequence, so changed values produce different hashes — no cache
-    // blocking. Only runs when first-stage base descent actually ran (not
-    // skipped) — if structural minimisation was skipped, no deletions were
-    // attempted, so there is nothing to retry.
-    if structuralMinimisationWasSkipped == false,
-       state.dag != nil,
-       state.hasDeletionTargets || state.hasBranchTargets
-    {
-      phases.append(PlannedPhase(
-        phase: .baseDescent,
-        budget: Self.deletionRetryBudget,
-        configuration: PhaseConfiguration()
-      ))
-    }
-
-    // Enhancement 2: level-ordered Kleisli edges.
-    // Signal-driven exploration gating (same as AdaptiveStrategy), but with
-    // levelOrderedEdges so parent edges run before child edges.
+    // Level-ordered Kleisli edges.
     let allEdgesClean: Bool = {
       guard let prior = lastPriorOutcome,
             prior.totalEdges > 0
@@ -125,8 +109,14 @@ struct TopologicalStrategy: SchedulingStrategy {
       requiresStall: hasZeroingDependency == false
     ))
 
-    // Deletion probe when structural minimisation was skipped (same as AdaptiveStrategy).
-    if structuralMinimisationWasSkipped, state.hasDeletionTargets {
+    // Deletion probe — fingerprint-gated (same as AdaptiveStrategy).
+    let deletionProbeGated: Bool = {
+      guard let current = state.structuralFingerprint,
+            let last = lastBaseDescentFingerprint
+      else { return false }
+      return current == last
+    }()
+    if structuralMinimisationWasSkipped, state.hasDeletionTargets, deletionProbeGated == false {
       phases.append(PlannedPhase(
         phase: .baseDescent,
         budget: 100,
@@ -146,6 +136,9 @@ struct TopologicalStrategy: SchedulingStrategy {
     }
     if phase == .fibreDescent {
       previousFibreProgress = outcome.acceptances > 0
+    }
+    if outcome.structuralAcceptances > 0 {
+      lastBaseDescentFingerprint = nil
     }
   }
 }
