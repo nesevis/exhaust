@@ -1,10 +1,10 @@
-/// Self-contained reduction pass for a single topological CDG level.
+/// Depth-aware value minimization pass for a single topological CDG level.
 ///
-/// Combines structural simplification, value minimization, Kleisli exploration, and redistribution in a single method. Unlike the per-phase approach (where fibre descent, exploration, and redistribution are separate scheduler phases), this method runs all stages in sequence for one CDG level, using depth-aware span extraction directly.
+/// Extracts value spans at the level's bind depth and runs value encoders (zero, binary search, float reduction, linear scan) scoped to that level. Kleisli exploration and redistribution run at full-sequence scope in the scheduler cycle, not per-level.
 ///
-/// For bind-inner levels, `depthFilter` restricts value extraction to the correct bind depth. For branch-selector levels, `depthFilter` is nil and value extraction uses the scope range with the exclusion set. The covariant sweep is not used — the outer level walk provides depth iteration.
+/// For bind-inner levels, `depthFilter` restricts value extraction to the correct bind depth. For branch-selector levels, `depthFilter` is nil and value extraction uses the scope range with the exclusion set.
 extension ReductionState {
-  /// Runs a complete reduction sub-cycle for one topological CDG level.
+  /// Runs depth-aware value minimization for one topological CDG level.
   ///
   /// - Parameters:
   ///   - budget: Maximum property invocations for this level.
@@ -38,47 +38,13 @@ extension ReductionState {
     // Build convergence origins once for this pass.
     let cachedOrigins = convergenceCache.allEntries
 
-    // MARK: 1. Branch simplification (structural, scoped to this level)
-
-    let branchDecoderContext = DecoderContext(
-      depth: .specific(0),
-      bindIndex: bindIndex,
-      fallbackTree: fallbackTree,
-      strictness: .relaxed,
-      materializePicks: true
-    )
-    let branchDecoder = SequenceDecoder.for(branchDecoderContext)
-    if branchTreeDirty {
-      if case let .success(_, freshTree, _) = ReductionMaterializer.materialize(
-        gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
-        materializePicks: true
-      ) {
-        tree = freshTree
-      }
-      branchTreeDirty = false
-    }
-    let branchContext = ReductionContext(bindIndex: bindIndex)
-    for encoder in [promoteBranchesEncoder, pivotBranchesEncoder, swapSiblingsEncoder] as [any ComposableEncoder] {
-      guard legBudget.isExhausted == false else { break }
-      if try runComposable(
-        encoder, decoder: branchDecoder,
-        positionRange: scopeRange, context: branchContext,
-        structureChanged: true, budget: &legBudget
-      ) {
-        anyAccepted = true
-      }
-    }
-
-    // MARK: 2. Value minimization (depth-aware)
-
     let targetDepth = depthFilter ?? 0
-    let valueDecoderContext = DecoderContext(
-      depth: .specific(targetDepth),
-      bindIndex: bindIndex,
-      fallbackTree: fallbackTree,
-      strictness: .normal
-    )
-    let valueDecoder = SequenceDecoder.for(valueDecoderContext)
+    // Use guided decoder with fallback tree so positions at other depths
+    // retain their current values during property evaluation. A depth-specific
+    // decoder would fill other depths with PRNG, breaking the property.
+    let valueDecoder: SequenceDecoder = hasBind
+      ? .guided(fallbackTree: fallbackTree ?? tree)
+      : .exact()
     let valueContext = ReductionContext(
       bindIndex: bindIndex,
       convergedOrigins: cachedOrigins,
@@ -162,52 +128,6 @@ extension ReductionState {
     if let firstAccepted = firstAcceptedSlot {
       ReductionScheduler.moveToFront(firstAccepted, in: &trainOrder)
       anyAccepted = true
-    }
-
-    // MARK: 3. Kleisli exploration (scoped to edges at this level)
-
-    if legBudget.isExhausted == false {
-      var explorationBudget = legBudget.hardCap - legBudget.used
-      if try runKleisliExploration(
-        budget: &explorationBudget,
-        dag: dag,
-        edgeBudgetPolicy: .adaptive,
-        scopeRange: scopeRange
-      ) {
-        anyAccepted = true
-      }
-    }
-
-    // MARK: 4. Redistribution (scoped)
-
-    if legBudget.isExhausted == false {
-      let tailDecoderContext = DecoderContext(
-        depth: .global,
-        bindIndex: bindIndex,
-        fallbackTree: fallbackTree,
-        strictness: .normal
-      )
-      let tailDecoder = SequenceDecoder.for(tailDecoderContext)
-      let tailContext = ReductionContext(
-        bindIndex: bindIndex,
-        convergedOrigins: cachedOrigins,
-        dag: dag,
-        depthFilter: depthFilter
-      )
-      if try runComposable(
-        tandemEncoder, decoder: tailDecoder,
-        positionRange: scopeRange, context: tailContext,
-        structureChanged: hasBind, budget: &legBudget
-      ) {
-        anyAccepted = true
-      }
-      if try runComposable(
-        redistributeEncoder, decoder: tailDecoder,
-        positionRange: scopeRange, context: tailContext,
-        structureChanged: hasBind, budget: &legBudget
-      ) {
-        anyAccepted = true
-      }
     }
 
     budget -= legBudget.used

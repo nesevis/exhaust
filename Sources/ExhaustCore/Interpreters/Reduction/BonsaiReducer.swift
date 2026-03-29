@@ -6,7 +6,7 @@ public extension Interpreters {
     /// Configuration for the Bonsai reducer's pass pipeline.
     struct BonsaiReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
-        let maxStalls: Int
+        public var maxStalls: Int
         /// Beam search tuning for aligned deletion.
         let alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
         /// When `true`, run a one-shot post-processing pass after reduction stalls that reorders

@@ -342,6 +342,11 @@ public struct ReductionEdge: Sendable {
     /// for every upstream candidate. The ``KleisliComposition`` is
     /// unnecessary at this edge.
     public let isStructurallyConstant: Bool
+
+    /// The CDG topological level of the upstream node (max-parent-depth + 1).
+    ///
+    /// Level 0 = root nodes with no CDG parents. Used by ``TopologicalStrategy`` to sort edges parent-first so that child fibres are searched in the context of already-reduced parents.
+    public let topologicalLevel: Int
 }
 
 public extension ChoiceDependencyGraph {
@@ -355,6 +360,15 @@ public extension ChoiceDependencyGraph {
     /// Ordered by topological sort (roots first), so that upstream encoders for
     /// shallower edges run before downstream encoders that depend on their results.
     func reductionEdges() -> [ReductionEdge] {
+        // Build node-to-level lookup from topological levels (O(V+E)).
+        let levels = topologicalLevels()
+        var nodeToLevel = [Int: Int]()
+        for (level, nodeIndices) in levels.enumerated() {
+            for nodeIndex in nodeIndices {
+                nodeToLevel[nodeIndex] = level
+            }
+        }
+
         var edges: [ReductionEdge] = []
         for nodeIndex in topologicalOrder {
             let node = nodes[nodeIndex]
@@ -370,7 +384,8 @@ public extension ChoiceDependencyGraph {
                 upstreamRange: node.positionRange,
                 downstreamRange: scopeRange,
                 regionIndex: regionIndex,
-                isStructurallyConstant: node.isStructurallyConstant
+                isStructurallyConstant: node.isStructurallyConstant,
+                topologicalLevel: nodeToLevel[nodeIndex, default: 0]
             ))
         }
         return edges

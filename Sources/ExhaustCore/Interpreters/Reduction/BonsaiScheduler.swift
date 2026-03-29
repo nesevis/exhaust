@@ -385,7 +385,8 @@ enum BonsaiScheduler {
                 budget: &budget,
                 dag: dag,
                 edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy,
-                scopeRange: planned.configuration.scopeRange
+                scopeRange: planned.configuration.scopeRange,
+                levelOrderedEdges: planned.configuration.levelOrderedEdges
             )
             let exploreOutcome = state.phaseTracker.outcome(
                 for: .exploration, budgetAllocated: planned.budget
@@ -551,7 +552,7 @@ enum BonsaiScheduler {
             lastOutcome = outcome
             if outcome.improved {
                 stallBudget = config.maxStalls
-            } else {
+            } else if strategy.isForwardPassInProgress == false {
                 stallBudget -= 1
             }
         }

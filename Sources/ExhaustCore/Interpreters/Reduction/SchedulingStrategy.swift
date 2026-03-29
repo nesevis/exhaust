@@ -37,6 +37,15 @@ protocol SchedulingStrategy {
         phase: PlannedPhase.Phase,
         outcome: PhaseOutcome
     )
+
+    /// Whether the strategy's current forward pass is still in progress.
+    ///
+    /// When `true`, the scheduler does not decrement the stall budget even if the current cycle produced no improvement. This prevents multi-cycle forward passes (like ``TopologicalStrategy``'s level walk) from exhausting the stall budget before the full pass completes. Defaults to `false`.
+    var isForwardPassInProgress: Bool { get }
+}
+
+extension SchedulingStrategy {
+    var isForwardPassInProgress: Bool { false }
 }
 
 /// A single phase to dispatch within a cycle.
@@ -95,6 +104,11 @@ struct PhaseConfiguration {
     /// Used by branch-selector level sub-cycles to prevent premature convergence of bind-inner values that belong to deeper CDG levels. Computed by ``ChoiceDependencyGraph/exclusionRanges(forLevel:levels:scopeRange:)``.
     var exclusionRanges: [ClosedRange<Int>]?
 
+    /// When `true`, Kleisli exploration sorts composition edges by CDG topological level (parent-first) as primary key, with leverage/budget ratio as secondary key.
+    ///
+    /// Used by ``TopologicalStrategy`` so that parent bind-inner edges are explored before child edges, ensuring child fibres are searched in the context of already-reduced parents.
+    var levelOrderedEdges = false
+
     /// Creates a default configuration.
     init(
         edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100),
@@ -102,7 +116,8 @@ struct PhaseConfiguration {
         clearConvergence: Bool = false,
         depthFilter: Int? = nil,
         suppressCovariantSweep: Bool = false,
-        exclusionRanges: [ClosedRange<Int>]? = nil
+        exclusionRanges: [ClosedRange<Int>]? = nil,
+        levelOrderedEdges: Bool = false
     ) {
         self.edgeBudgetPolicy = edgeBudgetPolicy
         self.scopeRange = scopeRange
@@ -110,6 +125,7 @@ struct PhaseConfiguration {
         self.depthFilter = depthFilter
         self.suppressCovariantSweep = suppressCovariantSweep
         self.exclusionRanges = exclusionRanges
+        self.levelOrderedEdges = levelOrderedEdges
     }
 }
 
