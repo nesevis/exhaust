@@ -32,30 +32,11 @@ extension ReductionMaterializer {
         /// Cached end position — updated on scope push/pop.
         private var effectiveEnd: Int
 
-        /// Flat positions of all branch entries in the original prefix, in order.
-        ///
-        /// Each pick site produces exactly one branch entry in the flat sequence.
-        /// Picks are structurally fixed — the generator produces the same picks
-        /// in the same order regardless of value changes. This separate channel
-        /// ensures pick entries are read from their original positions even when
-        /// the main cursor drifts due to bind re-derivation in guided mode.
-        private let pickPositions: [Int]
-
-        /// Index into ``pickPositions`` for the next branch read.
-        private var pickIndex: Int = 0
-
         static var empty: Cursor {
             Cursor(from: ChoiceSequence())
         }
 
         init(from sequence: consuming ChoiceSequence) {
-            var picks = [Int]()
-            for index in 0 ..< sequence.count {
-                if case .branch = sequence[index] {
-                    picks.append(index)
-                }
-            }
-            pickPositions = picks
             entries = sequence
             effectiveEnd = entries.count
         }
@@ -187,29 +168,20 @@ extension ReductionMaterializer {
         }
 
         mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
-            guard exhausted == false else { return nil }
-            // Read from the separate pick position channel even when suspended.
-            // Value reads are blocked by suspension (bind re-derivation replaces
-            // them), but picks are structurally fixed — the generator produces
-            // the same picks in the same order regardless of bind content.
-            // Reading picks through suspension ensures branch simplification
-            // changes are honoured inside bind content.
-            guard pickIndex < pickPositions.count else { return nil }
-            let pickPos = pickPositions[pickIndex]
-            guard pickPos < entries.count, case let .branch(b) = entries[pickPos] else {
+            guard exhausted == false, isSuspended == false else { return nil }
+            skipGroups()
+            guard position < effectiveEnd else {
+                exhausted = true
                 return nil
             }
-            pickIndex &+= 1
-            // Also advance the main cursor past any branch entry at the current
-            // position, so value reads after a pick don't accidentally consume
-            // the branch entry through the main channel.
-            if isSuspended == false {
-                skipGroups()
-                if position < effectiveEnd, case .branch = entries[position] {
-                    position &+= 1
-                }
+            switch entries[position] {
+            case let .branch(b):
+                position &+= 1
+                return b
+            default:
+                exhausted = true
+                return nil
             }
-            return b
         }
 
         // MARK: Sequence markers
