@@ -631,8 +631,8 @@ extension ReductionMaterializer {
                 // ChoiceSequences (strips metadata, compares only values/branches/
                 // markers).
                 let innerValueChanged = innerTree.isGetSize == false
-                    && (innerFallback == nil
-                        || ChoiceSequence(innerTree) != ChoiceSequence(innerFallback!))
+                    && innerFallback != nil
+                    && ChoiceSequence(innerTree) != ChoiceSequence(innerFallback!)
                 if innerValueChanged {
                     let peeked = context.cursor.peekSequenceLength()
                     context.capturedBindBoundSequenceLength = peeked
