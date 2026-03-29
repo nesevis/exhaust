@@ -187,16 +187,17 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
 
         public static func == (lhs: Self, rhs: Self) -> Bool {
-            guard lhs.choice == rhs.choice, lhs.isRangeExplicit == rhs.isRangeExplicit else {
-                return false
-            }
-            // When the range is derived from runtime context (size scaling),
-            // it can differ between generation and reflection. Only compare
-            // validRange when it was explicitly specified by the user.
-            if lhs.isRangeExplicit {
-                return lhs.validRange == rhs.validRange
-            }
-            return true
+            lhs.choice == rhs.choice
+//            guard lhs.choice == rhs.choice, lhs.isRangeExplicit == rhs.isRangeExplicit else {
+//                return false
+//            }
+//            // When the range is derived from runtime context (size scaling),
+//            // it can differ between generation and reflection. Only compare
+//            // validRange when it was explicitly specified by the user.
+//            if lhs.isRangeExplicit {
+//                return lhs.validRange == rhs.validRange
+//            }
+//            return true
         }
     }
 }
