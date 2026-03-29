@@ -139,8 +139,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         /// Returning `.eq` lets the comparison fall through to the subtree entries that follow
         /// the branch marker, where actual structural and value differences decide the ordering.
         public func shortLexCompare(_ other: Branch) -> ShortlexOrder {
-            _ = other
-            return .eq
+            .eq
         }
     }
 

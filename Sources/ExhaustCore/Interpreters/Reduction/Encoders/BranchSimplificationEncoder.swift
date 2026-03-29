@@ -155,7 +155,12 @@ struct BranchSimplificationEncoder: ComposableEncoder {
                 candidateTree[site] = .group(candidateElements)
                 let candidateSequence = ChoiceSequence(candidateTree)
 
-                if candidateSequence.shortLexPrecedes(sequence) {
+                // Accept candidates that are shortlex-equal (not just strictly better).
+                // With branch-transparent shortlex, pivoting between same-arity branches
+                // (for example, add ↔ div) produces equal sequences. Allowing these through
+                // lets the decoder evaluate the semantic difference — the property check
+                // determines whether the alternative branch is useful.
+                if sequence.shortLexPrecedes(candidateSequence) == false {
                     candidates.append(candidateSequence)
                 }
             }
