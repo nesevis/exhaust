@@ -623,8 +623,17 @@ extension ReductionMaterializer {
                 // Their markers are `.group` (not `.bind`), so skip cursor
                 // suspension — skipBindBound() would scan for `.bind` markers
                 // and corrupt the cursor.
-                let isGetSizeBind = innerTree.isGetSize
-                if isGetSizeBind == false {
+                //
+                // For non-getSize binds, suspend only when the inner value changed.
+                // When unchanged, the bound structure is identical and prefix
+                // entries are valid — the cursor stays active so encoder
+                // modifications to bound content are honoured. Compare flattened
+                // ChoiceSequences (strips metadata, compares only values/branches/
+                // markers).
+                let innerValueChanged = innerTree.isGetSize == false
+                    && (innerFallback == nil
+                        || ChoiceSequence(innerTree) != ChoiceSequence(innerFallback!))
+                if innerValueChanged {
                     let peeked = context.cursor.peekSequenceLength()
                     context.capturedBindBoundSequenceLength = peeked
                     context.cursor.skipBindBound()
@@ -636,7 +645,7 @@ extension ReductionMaterializer {
                     fallbackTree: boundFallback
                 )
                 context.boundDepth -= 1
-                if isGetSizeBind == false {
+                if innerValueChanged {
                     context.cursor.resumeAfterBind()
                 }
                 guard let (boundValue, boundTree) = boundResult else { return nil }
