@@ -443,7 +443,6 @@ enum BonsaiScheduler {
                 metadata: [
                     "cycle": "\(state.currentCycle)",
                     "seq_len": "\(state.sequence.count)",
-                    "tree": "\(state.tree.debugDescription)",
                 ]
             )
         }

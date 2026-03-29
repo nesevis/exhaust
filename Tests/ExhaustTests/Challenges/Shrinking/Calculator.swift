@@ -35,12 +35,12 @@ struct CalculatorShrinkingChallenge {
             .randomOnly,
             .budget(.exorbitant),
 //            .replay(1337),
-            .reductionStrategy(.topological),
-//            .replay(8788901370880310582),
+//            .reductionStrategy(.topological),
+            .replay(10334882580811088565),
             //            .replay(1_117_838_118_804_311_299),
             .onReport { report = $0 }
         ) { expr in
-            //            print("Attempt: \(expr)")
+            print("Attempt: \(expr)")
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
             }

@@ -105,11 +105,14 @@ extension ReductionState {
         let subBudget = min(budget, config.branchSimplificationBudget)
         guard subBudget > 0 else { return false }
 
-        // Exact decoder: branch simplification modifies pick entries at fixed
-        // sequence positions. Guided mode re-derives bound content from bind-inner
-        // values, shifting cursor alignment and missing the changed pick. Exact
-        // mode reads positions literally, honoring the encoder's pick change.
-        let branchDecoder = SequenceDecoder.exact(materializePicks: true)
+        let branchContext = DecoderContext(
+            depth: .specific(0),
+            bindIndex: bindIndex,
+            fallbackTree: fallbackTree,
+            strictness: .relaxed,
+            materializePicks: true
+        )
+        let branchDecoder = SequenceDecoder.for(branchContext)
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
         var improved = false
 

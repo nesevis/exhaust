@@ -1158,6 +1158,7 @@ private func runReflectableBenchmark<Output>(
     config: Interpreters.BonsaiReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
+    var seenCEs = Set<String>()
     for value in failingValues {
         guard let tree = try? Interpreters.reflect(gen, with: value) else {
             continue
@@ -1180,6 +1181,9 @@ private func runReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
+//        if enableCounterExamples, seenCEs.insert(description).inserted {
+//            print("  (\(String(describing: value)) -> \(description))")
+//        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
@@ -1196,6 +1200,7 @@ private func runNonReflectableBenchmark<Output>(
     config: Interpreters.BonsaiReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
+    var seenCEs = Set<String>()
     for (value, tree) in failingPairs {
         var invocationCount = 0
         let countingProperty: (Output) -> Bool = { candidate in
@@ -1215,6 +1220,9 @@ private func runNonReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
+        if enableCounterExamples, seenCEs.insert(description).inserted {
+//            print("  (\(String(describing: value)) -> \(description))")
+        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,

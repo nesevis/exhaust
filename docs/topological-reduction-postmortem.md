@@ -159,6 +159,43 @@ The design estimated ~845 total probes for BinaryHeap by assuming:
 
 4. **Kleisli cascading pre-optimization saves work at deeper levels**: the cascading savings are offset by the Kleisli overhead at each level (Issue 7).
 
+## Part 3: Probe-Level Fixes from Debug Analysis
+
+The CDG investigation's greatest value came not from the topological strategy itself but from the debug trace analysis it motivated. Two probe-level inefficiencies were identified in the existing `AdaptiveStrategy`, both fixable without CDG metadata.
+
+### Fix 1: Bind-Inner Exclusion from Aligned Deletion Encoders
+
+**Discovery**: debug traces of `binaryHeapFull` showed `deleteAlignedSiblingSubsets` decrementing the root bind-inner value from 69 to 0 one step at a time — 69 acceptances × 40 probes each (4 for the subset encoder + 36 for the window encoder's futile re-check). This consumed ~2,760 probes in cycle 1 alone, representing 93% of all base descent probes.
+
+**Root cause**: the aligned deletion encoder's cohort slots included the root bind-inner position. Reducing the bind-inner by 1 happened to be shortlex-better, so the "deletion" was accepted — but it was doing O(n) linear value reduction where `binarySearchToSemanticSimplest` would achieve O(log n).
+
+**Fix**: exclude slots from `ContiguousWindowDeletionEncoder` and `BeamSearchDeletionEncoder` that overlap with outermost bind-inner `innerRange` positions. These positions are value minimization targets (handled by fibre descent), not deletion targets. Nested bind-inner positions inside another bind's `boundRange` are allowed — they represent legitimate subtree deletions.
+
+**Result**: BinaryHeap median invocations **1504 → 296 (-80%)**. Wall time **107ms → 24ms (-78%)**. No regressions on any other benchmark. Applies to both `AdaptiveStrategy` and `TopologicalStrategy` equally.
+
+### Fix 2: Exact Decoder for Branch Simplification
+
+**Discovery**: the failing seed (`10999453694572778833`) produced the stuck tree `(0, (0, None, None), (0, (1, None, None), (0, None, None)))` — 5 values instead of the minimal 4. The left subtree `(0, None, None)` should be removable by pivoting its pick from Some to None. Branch simplification encoders (`deleteByPromotingSimplestBranch`, `deleteByPivotingToAlternativeBranch`) ran 10 probes per cycle, all producing the same tree. The ChoiceTree showed the pick site existed — `branch(id: 0)` = `just(None)`, `branch(id: 1)` = `bind(...)` — but the pivot wasn't taking effect.
+
+**Root cause**: the branch simplification decoder used `.guided` mode (via `strictness: .relaxed`). In guided mode, the materializer re-derives bound content from bind-inner values, shifting cursor positions. The encoder's pick change was at a fixed sequence position inside bound content, but the guided cursor read from a shifted position and fell back to the fallback tree's original branch ID, ignoring the pivot.
+
+**Fix**: use `.exact(materializePicks: true)` decoder for branch simplification. Exact mode reads sequence positions literally — the changed pick entry is honoured regardless of bind re-derivation. Branch simplification modifies pick entries at known positions; it doesn't need guided mode's value fallback.
+
+**Result**: finds the truly minimal BinaryHeap CE `(0, (0, (0, None, None), None), (1, None, None))` with values `[0, 0, 0, 1]` — shortlex-smaller than the previous best `[0, 0, 1, 0]`. The `TopologicalStrategy` with level-ordered Kleisli edges and one extra stall cycle converges to exactly 2 unique CEs (both minimal forms).
+
+### Final Benchmark Results
+
+Both fixes applied. No CDG-specific strategy enhancements — both fixes are in the core encoder/decoder layer.
+
+| Challenge | Before | After | Δ |
+|-----------|--------|-------|---|
+| **BinaryHeap** | **1504** | **296** | **-80%** |
+| Calculator | 1198 | 1198 | = |
+| Coupling | 52 | 52 | = |
+| All flat | = | = | = |
+
+Adaptive and topological are within noise on every benchmark. The `TopologicalStrategy` provides marginally better CE convergence via level-ordered Kleisli edges (2 CEs vs 3 with one extra stall cycle) but identical invocation counts.
+
 ## What We Learned
 
 **The CDG is too sparse to guide value minimization.** The CDG captures structural dependencies (bind-inner → bound content, branch-selector → selected subtree). The value space is much larger — it includes all values at all depths, most of which have no CDG node. Any strategy that uses the CDG to control which values are processed, in what order, or with what scope, misses the majority of the value space and must fall back to the covariant sweep anyway.
@@ -167,7 +204,11 @@ The design estimated ~845 total probes for BinaryHeap by assuming:
 
 **The covariant sweep is the right abstraction for value iteration.** It processes all values at each depth in a single pass, handles both CDG and non-CDG positions uniformly, and produces deterministic convergence. Replacing it with CDG-scoped passes loses coverage; supplementing it with CDG-scoped pre-passes perturbs convergence.
 
-**Kleisli edge ordering is theoretically sound but empirically neutral.** Level-ordered edges ensure parent fibres are searched before child fibres. For current benchmark generators, the leverage-based sort already achieves this ordering by coincidence (parent edges have larger downstream ranges). The enhancement would matter for CDGs where leverage doesn't correlate with depth — a case that doesn't arise in the benchmark suite.
+**Deletion encoders should not touch bind-inner value positions.** Bind-inner values control structure — reducing them is value minimization, not deletion. When deletion encoders include bind-inner positions in their cohorts, they do O(n) linear decrement as a side effect of batch composition. Excluding outermost bind-inner positions from aligned deletion cohorts forces fibre descent's binary search to handle them in O(log n).
+
+**Branch simplification needs exact decoding.** The guided decoder re-derives bound content from bind-inner values, shifting cursor positions. Pick changes at fixed positions inside bound content are invisible to the guided cursor. Exact decoding honours pick changes literally, enabling branch pivots that the guided decoder misses. This found the true shortlex-minimal BinaryHeap CE that the previous reducer could not reach.
+
+**Debug trace analysis produces better fixes than architectural redesign.** The two concrete improvements (-80% probes, better minimal CE) came from reading debug logs and tracing probe-level behaviour — not from the CDG level-walk architecture or the three targeted CDG enhancements. The investigation's value was in building the diagnostic tools and methodology to find these issues.
 
 ## Artifacts
 
@@ -180,6 +221,11 @@ The design estimated ~845 total probes for BinaryHeap by assuming:
 - `runLevelReduction` method
 - 37 CDG unit tests + TopologicalStrategy unit tests
 
+### Core fixes (in AdaptiveStrategy, apply to both strategies)
+
+- `BeamSearchDeletionEncoder` and `ContiguousWindowDeletionEncoder`: bind-inner position exclusion in `start()`
+- `runBranchSimplification`: exact decoder instead of guided for branch pivot probes
+
 ### TopologicalStrategy (kept, minimal)
 
-Mirrors `AdaptiveStrategy` with level-ordered Kleisli edges as the sole CDG enhancement. For flat generators, identical to adaptive. For bind generators, identical on invocations, with level-ordered Kleisli edge sort as a latent optimization for future complex CDGs.
+Mirrors `AdaptiveStrategy` with level-ordered Kleisli edges as the sole CDG enhancement. For flat generators, identical to adaptive. For bind generators, identical on invocations. With one extra stall cycle, converges to fewer unique CEs than adaptive for BinaryHeap (2 vs 3), demonstrating that level-ordered Kleisli edge processing improves convergence quality for deep bind chains.

@@ -122,10 +122,15 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     public struct Branch: Hashable, Equatable, Sendable {
         public let id: UInt64
         public let validIDs: [UInt64]
+        /// The pick site identifier. Used by the guided cursor to match branch
+        /// entries to the correct pick operation when cursor positions drift
+        /// due to bind re-derivation.
+        public let siteID: UInt64
 
-        public init(id: UInt64, validIDs: [UInt64]) {
+        public init(id: UInt64, validIDs: [UInt64], siteID: UInt64 = 0) {
             self.id = id
             self.validIDs = validIDs
+            self.siteID = siteID
         }
 
         public func shortLexCompare(_ other: Branch) -> ShortlexOrder {
