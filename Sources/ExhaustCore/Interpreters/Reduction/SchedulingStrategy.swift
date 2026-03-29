@@ -160,11 +160,6 @@ struct ReductionStateView {
 
     /// The choice dependency graph built from the current sequence, or `nil` if no binds/picks.
     let dag: ChoiceDependencyGraph?
-
-    /// The structural fingerprint of the current sequence, or `nil` if no binds.
-    ///
-    /// Captures the sequence's marker/bind skeleton without values. Two sequences with the same fingerprint have identical deletion landscapes — only structural changes (not value changes) create new deletion opportunities.
-    let structuralFingerprint: StructuralFingerprint?
 }
 
 // MARK: - Adaptive Strategy
@@ -185,11 +180,6 @@ struct AdaptiveStrategy: SchedulingStrategy {
     private var lastPriorOutcome: CycleOutcome?
     private var structuralMinimisationWasSkipped: Bool = false
 
-    /// Fingerprint at the last cycle where base descent ran. When the current
-    /// fingerprint matches, the deletion landscape hasn't changed (only values
-    /// changed) and base descent is skipped — including the deletion probe.
-    private var lastBaseDescentFingerprint: StructuralFingerprint?
-
     mutating func planFirstStage(
         priorOutcome: CycleOutcome?,
         state: ReductionStateView
@@ -209,10 +199,6 @@ struct AdaptiveStrategy: SchedulingStrategy {
         // invariant under value changes — so "no structural acceptances last cycle"
         // means "no structural acceptances this cycle" with certainty.
         //
-        // Fingerprint gate: the structural fingerprint hasn't changed since the
-        // last base descent. Value changes (binary search, batch zeroing) don't
-        // create new deletion opportunities — only structural changes do. This
-        // prevents futile deletion retries during value convergence cycles.
         let noTargets = state.hasDeletionTargets == false && state.hasBranchTargets == false
         let priorBaseUnproductive: Bool = {
             guard let prior = lastPriorOutcome else { return false }
@@ -221,19 +207,12 @@ struct AdaptiveStrategy: SchedulingStrategy {
             }
             return true // gated last cycle — still no work
         }()
-        let fingerprintStale: Bool = {
-            guard let current = state.structuralFingerprint,
-                  let last = lastBaseDescentFingerprint
-            else { return false }
-            return current == last
-        }()
 
-        if noTargets || priorBaseUnproductive || fingerprintStale {
+        if noTargets || priorBaseUnproductive {
             structuralMinimisationWasSkipped = true
             return []
         } else {
             structuralMinimisationWasSkipped = false
-            lastBaseDescentFingerprint = state.structuralFingerprint
             return [PlannedPhase(
                 phase: .baseDescent,
                 budget: Self.phaseBudgetCeiling,
@@ -303,15 +282,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
         // may have reduced a value to zero or a no-op, making a previously-failed
         // deletion now viable. Run a lightweight structural pass at the end of the
         // cycle to catch this. Small budget — just enough for element deletions.
-        // Gated by fingerprint: if the structural skeleton hasn't changed, the
-        // deletion landscape is identical and the probe is futile.
-        let deletionProbeGated: Bool = {
-            guard let current = state.structuralFingerprint,
-                  let last = lastBaseDescentFingerprint
-            else { return false }
-            return current == last
-        }()
-        if structuralMinimisationWasSkipped, state.hasDeletionTargets, deletionProbeGated == false {
+        if structuralMinimisationWasSkipped, state.hasDeletionTargets {
             phases.append(PlannedPhase(
                 phase: .baseDescent,
                 budget: 100,
@@ -331,11 +302,6 @@ struct AdaptiveStrategy: SchedulingStrategy {
         }
         if phase == .fibreDescent {
             previousFibreProgress = outcome.acceptances > 0
-        }
-        // A structural acceptance in any phase invalidates the fingerprint —
-        // the deletion landscape may have changed.
-        if outcome.structuralAcceptances > 0 {
-            lastBaseDescentFingerprint = nil
         }
     }
 }

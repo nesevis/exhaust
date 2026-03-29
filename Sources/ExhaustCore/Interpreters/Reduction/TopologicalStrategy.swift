@@ -13,9 +13,6 @@ struct TopologicalStrategy: SchedulingStrategy {
   private var lastPriorOutcome: CycleOutcome?
   private var structuralMinimisationWasSkipped = false
 
-  /// Fingerprint at the last cycle where base descent ran.
-  private var lastBaseDescentFingerprint: StructuralFingerprint?
-
   // MARK: - SchedulingStrategy
 
   var isForwardPassInProgress: Bool { false }
@@ -27,7 +24,7 @@ struct TopologicalStrategy: SchedulingStrategy {
     cycleImproved = false
     lastPriorOutcome = priorOutcome
 
-    // Same gating as AdaptiveStrategy, including fingerprint gate.
+    // Same gating as AdaptiveStrategy.
     let noTargets = state.hasDeletionTargets == false && state.hasBranchTargets == false
     let priorBaseUnproductive: Bool = {
       guard let prior = lastPriorOutcome else { return false }
@@ -36,19 +33,12 @@ struct TopologicalStrategy: SchedulingStrategy {
       }
       return true
     }()
-    let fingerprintStale: Bool = {
-      guard let current = state.structuralFingerprint,
-            let last = lastBaseDescentFingerprint
-      else { return false }
-      return current == last
-    }()
 
-    if noTargets || priorBaseUnproductive || fingerprintStale {
+    if noTargets || priorBaseUnproductive {
       structuralMinimisationWasSkipped = true
       return []
     } else {
       structuralMinimisationWasSkipped = false
-      lastBaseDescentFingerprint = state.structuralFingerprint
       return [PlannedPhase(
         phase: .baseDescent,
         budget: Self.phaseBudgetCeiling,
@@ -109,14 +99,8 @@ struct TopologicalStrategy: SchedulingStrategy {
       requiresStall: hasZeroingDependency == false
     ))
 
-    // Deletion probe — fingerprint-gated (same as AdaptiveStrategy).
-    let deletionProbeGated: Bool = {
-      guard let current = state.structuralFingerprint,
-            let last = lastBaseDescentFingerprint
-      else { return false }
-      return current == last
-    }()
-    if structuralMinimisationWasSkipped, state.hasDeletionTargets, deletionProbeGated == false {
+    // Deletion probe (same as AdaptiveStrategy).
+    if structuralMinimisationWasSkipped, state.hasDeletionTargets {
       phases.append(PlannedPhase(
         phase: .baseDescent,
         budget: 100,
@@ -136,9 +120,6 @@ struct TopologicalStrategy: SchedulingStrategy {
     }
     if phase == .fibreDescent {
       previousFibreProgress = outcome.acceptances > 0
-    }
-    if outcome.structuralAcceptances > 0 {
-      lastBaseDescentFingerprint = nil
     }
   }
 }

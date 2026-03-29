@@ -42,11 +42,6 @@ final class ReductionState<Output> {
     /// Set on every acceptance. Cleared after ``runBranchSimplification(budget:)`` performs the materialization. Avoids redundant O(n) materializations when 1a is re-entered after 1b or 1c successes on an unchanged sequence.
     var branchTreeDirty = true
 
-    /// Structural fingerprint at the last `runBaseDescent` call that found no structural work.
-    ///
-    /// When the current fingerprint matches, `runBaseDescent` returns early — value changes don't create new deletion opportunities. Cleared on any structural acceptance (the sequence structure changed, so deletions may now succeed).
-    var lastBaseDescentFingerprint: StructuralFingerprint?
-
     // MARK: - Stats Tracking (cumulative, not included in Snapshot)
 
     /// Per-encoder probe counts accumulated across all cycles.
@@ -119,10 +114,7 @@ final class ReductionState<Output> {
             hasDeletionTargets: pruneOrder.isEmpty == false,
             hasBranchTargets: tree.containsPicks,
             hasBind: hasBind,
-            dag: buildDAG(),
-            structuralFingerprint: bindIndex.map {
-                StructuralFingerprint.from(sequence, bindIndex: $0)
-            }
+            dag: buildDAG()
         )
     }
 
@@ -660,10 +652,6 @@ extension ReductionState {
         }
 
         // Exploitation: run the standard two-phase pipeline on the relaxed state.
-        // Clear the base descent fingerprint — the speculative redistribution
-        // changed values, so structural deletions that previously failed may
-        // now succeed on the redistributed sequence.
-        lastBaseDescentFingerprint = nil
         var exploitRemaining = remaining - explorationBudget.used
         computeEncoderOrdering()
         let (dag, baseProgress) = try runBaseDescent(budget: &exploitRemaining)

@@ -329,7 +329,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return prefix + connector + "just(\(type))"
 
         case let .sequence(length, elements, meta):
-            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange!)"
+            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange)"
             for (index, element) in elements.enumerated() {
                 let isLastElement = index == elements.count - 1
                 result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)

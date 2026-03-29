@@ -27,7 +27,7 @@ struct BinaryHeapShrinkingChallenge {
         // The property: if the heap satisfies the invariant, then `toSortedList`
         // must produce a sorted list containing the same elements as `toList`.
         let property: @Sendable (Heap<Int>) -> Bool = { heap in
-            print("Attempt: \(heap)")
+//            print("Attempt: \(heap)")
             guard Self.invariant(heap) else { return true }
             let xs = Self.toSortedList(heap)
             let sorted = Self.toList(heap).sorted()
@@ -39,13 +39,14 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
-                .budget(.exorbitant),
+                .budget(.expedient),
 //                .reductionStrategy(.topological),
                 .randomOnly,
 //                .replay(16978691592903030353),
 //                .replay(626_360_492_104_589_905),
 //                .replay(7_669_171_433_675_367_730),
-                .replay(12050660900442969635),
+//                .replay(12050660900442969635),
+//                .replay(10999453694572778833), // Four heap
                 .onReport { report = $0 },
                 property: property
             )

@@ -90,18 +90,6 @@ struct TopologicalStrategyTests {
     // No harm — levelOrderedEdges on an empty edge list is a no-op.
   }
 
-  // MARK: - Scope Parameters
-
-  @Test("Fingerprint gating prevents redundant deletion probes")
-  func fingerprintGatingPreventsRedundantDeletion() {
-    var strategy = TopologicalStrategy()
-
-    // Cycle 1: first base descent runs, sets fingerprint.
-    let view1 = Self.makeView(cycleNumber: 1)
-    let first1 = strategy.planFirstStage(priorOutcome: nil, state: view1)
-    #expect(first1.contains { $0.phase == .baseDescent })
-  }
-
   // MARK: - Helpers
 
   private static func makeView(
@@ -117,8 +105,7 @@ struct TopologicalStrategyTests {
       hasDeletionTargets: hasDeletionTargets,
       hasBranchTargets: hasBranchTargets,
       hasBind: hasBind,
-      dag: dag,
-      structuralFingerprint: nil
+      dag: dag
     )
   }
 
