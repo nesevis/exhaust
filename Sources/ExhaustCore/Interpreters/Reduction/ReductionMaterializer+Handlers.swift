@@ -156,14 +156,20 @@ extension ReductionMaterializer {
             branchIDIdx += 1
         }
 
-        // Extract fallback branch info.
+        // Extract fallback branch info. For Gen.recursive, the pick site is wrapped
+        // in a bind — unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?
         let branchChoiceTree: ChoiceTree?
-        if let calleeFallback,
-           case let .group(children, _) = calleeFallback,
-           let selected = children.first,
-           case let .selected(inner) = selected,
-           case let .branch(_, _, id, _, choice) = inner
+        let effectiveFallback: ChoiceTree?
+        if case let .bind(_, bound) = calleeFallback {
+            effectiveFallback = bound
+        } else {
+            effectiveFallback = calleeFallback
+        }
+        if let effectiveFallback,
+           case let .group(children, _) = effectiveFallback,
+           let selected = children.first(where: \.isSelected)?.unwrapped,
+           case let .branch(_, _, id, _, choice) = selected
         {
             fbBranchId = id
             branchChoiceTree = choice
