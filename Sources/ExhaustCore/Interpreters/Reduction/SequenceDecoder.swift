@@ -13,14 +13,11 @@ public enum SequenceDecoder {
                 materializePicks: Bool = false, usePRNGFallback: Bool = false,
                 skipShortlexCheck: Bool = false, prngSalt: UInt64 = 0)
 
-    /// Two-pass materialization for branch simplification. The guided cursor is suspended inside bind content, making pick changes invisible. Pass 1 (exact) honours the pick change without suspension. Pass 2 (guided) re-derives bind content using the exact tree as fallback.
-    case exactThenGuided(materializePicks: Bool = false)
-
     /// Salt mixed into the reject cache key so the same candidate with a different PRNG salt
     /// gets an independent cache entry.
     var rejectCacheSalt: UInt64 {
         switch self {
-        case .exact, .exactThenGuided:
+        case .exact:
             0
         case let .guided(_, _, _, _, _, prngSalt):
             prngSalt
@@ -61,14 +58,6 @@ public enum SequenceDecoder {
                 materializePicks: materializePicks,
                 skipShortlexCheck: skipShortlexCheck,
                 prngSalt: prngSalt
-            )
-
-        case let .exactThenGuided(materializePicks):
-            decodeExactThenGuided(
-                candidate: consume candidate, gen: gen,
-                originalFallbackTree: tree,
-                originalSequence: originalSequence, property: property,
-                materializePicks: materializePicks
             )
         }
     }
@@ -146,53 +135,6 @@ public enum SequenceDecoder {
                 tree: freshTree,
                 output: output,
                 evaluations: 1,
-                decodingReport: decodingReport
-            )
-        case .rejected, .failed:
-            return nil
-        }
-    }
-
-    private func decodeExactThenGuided<Output>(
-        candidate: consuming ChoiceSequence,
-        gen: ReflectiveGenerator<Output>,
-        originalFallbackTree: ChoiceTree,
-        originalSequence: ChoiceSequence,
-        property: (Output) -> Bool,
-        materializePicks: Bool
-    ) -> ReductionResult<Output>? {
-        // Pass 1: exact mode — cursor not suspended, honours the pick change.
-        let exactTree: ChoiceTree
-        switch ReductionMaterializer.materialize(
-            gen, prefix: candidate,
-            mode: .exact, fallbackTree: originalFallbackTree,
-            materializePicks: materializePicks
-        ) {
-        case let .success(_, tree, _):
-            exactTree = tree
-        case .rejected, .failed:
-            return nil
-        }
-
-        // Pass 2: guided mode — re-derives bind content using the exact tree
-        // (which has the correct branch selection) as fallback.
-        let guidedSequence = ChoiceSequence(exactTree)
-        let seed = ZobristHash.hash(of: guidedSequence)
-        switch ReductionMaterializer.materialize(
-            gen,
-            prefix: guidedSequence,
-            mode: .guided(seed: seed, fallbackTree: exactTree),
-            materializePicks: materializePicks
-        ) {
-        case let .success(output, freshTree, decodingReport):
-            guard property(output) == false else { return nil }
-            let freshSequence = ChoiceSequence(freshTree)
-            guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
-            return ReductionResult(
-                sequence: freshSequence,
-                tree: freshTree,
-                output: output,
-                evaluations: 2,
                 decodingReport: decodingReport
             )
         case .rejected, .failed:

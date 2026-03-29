@@ -105,16 +105,12 @@ extension ReductionState {
         let subBudget = min(budget, config.branchSimplificationBudget)
         guard subBudget > 0 else { return false }
 
-        // For bind generators: two-pass decoder. The guided cursor is suspended
-        // inside bind content, making pick changes invisible. The exact pass
-        // honours the pick without suspension; the guided pass re-derives bind
-        // content using the exact tree as fallback.
-        // For non-bind generators: standard guided decoder. No cursor suspension
-        // issues, so the guided decoder handles pick changes correctly via the
-        // fallback tree mechanism.
-        let branchDecoder: SequenceDecoder = hasBind
-            ? .exactThenGuided(materializePicks: true)
-            : .guided(fallbackTree: fallbackTree, materializePicks: true)
+        // Guided decoder: conditional cursor suspension (inner-value comparison)
+        // keeps the cursor active when the bind-inner is unchanged, so pick
+        // changes inside bind content are visible in a single pass.
+        let branchDecoder: SequenceDecoder = .guided(
+            fallbackTree: fallbackTree, materializePicks: true
+        )
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
         var improved = false
 
