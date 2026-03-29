@@ -121,51 +121,22 @@ struct TopologicalStrategy: SchedulingStrategy {
 
     guard isDone == false else { return [] }
 
-    // Level sub-cycle: fibre descent, exploration, redistribution — all scoped.
-    var phases: [PlannedPhase] = []
-
+    // Level sub-cycle: single self-contained pass combining structural simplification,
+    // value minimization, Kleisli exploration, and redistribution — all scoped to this level.
     let levelConfig = PhaseConfiguration(
       scopeRange: currentScopeRange,
       depthFilter: currentDepthFilter,
-      suppressCovariantSweep: currentSuppressCovariantSweep,
       exclusionRanges: currentExclusionRanges
     )
-
-    // Fibre descent: scoped to level.
-    let fibreGated = baseProgress == false
-      && previousFibreProgress == false
-      && state.cycleNumber > 1
-      && state.allValueCoordinatesConverged
-    if fibreGated == false {
-      phases.append(PlannedPhase(
-        phase: .fibreDescent,
-        budget: Self.phaseBudgetCeiling,
-        configuration: levelConfig
-      ))
-    }
-
-    // Exploration: scoped to level's edges.
-    phases.append(PlannedPhase(
-      phase: .exploration,
-      budget: Self.phaseBudgetCeiling,
-      configuration: PhaseConfiguration(
-        edgeBudgetPolicy: .adaptive,
-        scopeRange: currentScopeRange
-      )
-    ))
-
-    // Redistribution: scoped to level.
-    phases.append(PlannedPhase(
-      phase: .relaxRound,
-      budget: Self.phaseBudgetCeiling,
-      configuration: PhaseConfiguration(scopeRange: currentScopeRange),
-      requiresStall: true
-    ))
 
     // Advance to next level for the next cycle.
     currentLevelIndex += 1
 
-    return phases
+    return [PlannedPhase(
+      phase: .levelReduction,
+      budget: Self.phaseBudgetCeiling,
+      configuration: levelConfig
+    )]
   }
 
   mutating func phaseCompleted(
@@ -175,7 +146,7 @@ struct TopologicalStrategy: SchedulingStrategy {
     if outcome.acceptances > 0 {
       currentCycleImproved = true
     }
-    if phase == .fibreDescent {
+    if phase == .fibreDescent || phase == .levelReduction {
       previousFibreProgress = outcome.acceptances > 0
     }
     // Structural acceptance triggers rebuild on next planFirstStage.

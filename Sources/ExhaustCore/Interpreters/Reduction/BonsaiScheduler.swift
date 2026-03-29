@@ -399,6 +399,25 @@ enum BonsaiScheduler {
                 for: .relaxRound, budgetAllocated: planned.budget
             )
             return (relaxOutcome, nil)
+
+        case .levelReduction:
+            var budget = planned.budget
+            guard let scopeRange = planned.configuration.scopeRange else {
+                return (state.phaseTracker.outcome(
+                    for: .levelReduction, budgetAllocated: planned.budget
+                ), nil)
+            }
+            _ = try state.runLevelReduction(
+                budget: &budget,
+                dag: dag,
+                scopeRange: scopeRange,
+                depthFilter: planned.configuration.depthFilter,
+                exclusionRanges: planned.configuration.exclusionRanges
+            )
+            let levelOutcome = state.phaseTracker.outcome(
+                for: .levelReduction, budgetAllocated: planned.budget
+            )
+            return (levelOutcome, nil)
         }
     }
 

@@ -59,6 +59,7 @@ struct PlannedPhase {
         case fibreDescent
         case exploration
         case relaxRound
+        case levelReduction
     }
 }
 

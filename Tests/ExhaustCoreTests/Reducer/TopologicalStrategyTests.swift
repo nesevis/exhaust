@@ -124,8 +124,7 @@ struct TopologicalStrategyTests {
     let secondStage1 = strategy.planSecondStage(
       firstStageResult: nil, state: view1
     )
-    #expect(secondStage1.contains { $0.phase == .fibreDescent })
-    #expect(secondStage1.contains { $0.phase == .exploration })
+    #expect(secondStage1.contains { $0.phase == .levelReduction })
 
     // Cycle 2: level 1.
     let view2 = Self.makeView(dag: dag, cycleNumber: 2, hasBind: true)
@@ -136,7 +135,7 @@ struct TopologicalStrategyTests {
     let secondStage2 = strategy.planSecondStage(
       firstStageResult: nil, state: view2
     )
-    #expect(secondStage2.contains { $0.phase == .fibreDescent })
+    #expect(secondStage2.contains { $0.phase == .levelReduction })
 
     // Cycle 3: cleanup.
     let view3 = Self.makeView(dag: dag, cycleNumber: 3, hasBind: true)
@@ -170,10 +169,10 @@ struct TopologicalStrategyTests {
       firstStageResult: nil, state: view
     )
 
-    let fibrePhase = secondStage.first { $0.phase == .fibreDescent }
-    #expect(fibrePhase != nil)
-    #expect(fibrePhase?.configuration.depthFilter != nil)
-    #expect(fibrePhase?.configuration.suppressCovariantSweep == true)
+    let levelPhase = secondStage.first { $0.phase == .levelReduction }
+    #expect(levelPhase != nil)
+    #expect(levelPhase?.configuration.depthFilter != nil)
+    #expect(levelPhase?.configuration.scopeRange != nil)
   }
 
   @Test("Branch-selector level has exclusion ranges")
@@ -196,14 +195,11 @@ struct TopologicalStrategyTests {
       firstStageResult: nil, state: view2
     )
 
-    let fibrePhase = secondStage2.first { $0.phase == .fibreDescent }
-    #expect(fibrePhase != nil)
-    // Branch-selector level: depthFilter is nil, exclusionRanges may be set.
-    #expect(fibrePhase?.configuration.depthFilter == nil)
-    #expect(fibrePhase?.configuration.suppressCovariantSweep == true)
-    // Exclusion ranges: the branch-selector at level 1 has no deeper nodes,
-    // so exclusion is empty for this fixture.
-    // (For a deeper fixture with level-2 nodes inside, exclusion would be non-empty.)
+    let levelPhase = secondStage2.first { $0.phase == .levelReduction }
+    #expect(levelPhase != nil)
+    // Branch-selector level: depthFilter is nil.
+    #expect(levelPhase?.configuration.depthFilter == nil)
+    #expect(levelPhase?.configuration.scopeRange != nil)
   }
 
   @Test("Cleanup phase has no suppression and no depthFilter")
