@@ -45,7 +45,8 @@ public enum Interpreters {
     /// It now takes the *final output value* as a constant target throughout the recursion.
     private static func reflectRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        onFinalOutput finalOutput: Any
+        onFinalOutput finalOutput: Any,
+        pickDepth: Int = 0
     ) throws -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {
         case let .pure(value):
@@ -57,7 +58,8 @@ public enum Interpreters {
             let intermediateResults = try interpretOperationBackward(
                 operation,
                 onFinalOutput: finalOutput,
-                outputType: Output.self
+                outputType: Output.self,
+                pickDepth: pickDepth
             )
 
             // 2. For each successful intermediate result...
@@ -65,7 +67,7 @@ public enum Interpreters {
                 (intermediateValue: Any, partialPath: [ChoiceTree]) in
                 let nextGen = try continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
-                let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+                let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput, pickDepth: pickDepth)
                 return finalResults.map { finalValue, restOfPath in
                     (finalValue, partialPath + restOfPath)
                 }
@@ -79,7 +81,8 @@ public enum Interpreters {
     private static func interpretOperationBackward(
         _ op: ReflectiveOperation,
         onFinalOutput finalOutput: Any,
-        outputType _: (some Any).Type
+        outputType _: (some Any).Type,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
         // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
@@ -87,14 +90,15 @@ public enum Interpreters {
             return try reflectContramapOperation(
                 transform: transform,
                 nextGen: nextGen,
-                finalOutput: finalOutput
+                finalOutput: finalOutput,
+                pickDepth: pickDepth
             )
 
         case let .prune(nextGen):
-            return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput)
+            return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput, pickDepth: pickDepth)
 
         case let .pick(choices):
-            return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
+            return try reflectPickOperation(choices: choices, finalOutput: finalOutput, pickDepth: pickDepth)
 
         case let .chooseBits(min, max, tag, isRangeExplicit):
             return try reflectChooseBitsOperation(
@@ -122,27 +126,29 @@ public enum Interpreters {
             return try reflectResizeOperation(
                 newSize: newSize,
                 nextGen: nextGen,
-                finalOutput: finalOutput
+                finalOutput: finalOutput,
+                pickDepth: pickDepth
             )
 
         case let .sequence(lengthGen, elementGen):
             return try reflectSequenceOperation(
                 lengthGen: lengthGen,
                 elementGen: elementGen,
-                finalOutput: finalOutput
+                finalOutput: finalOutput,
+                pickDepth: pickDepth
             )
 
         case let .zip(generators, _):
-            return try reflectZipOperation(generators: generators, finalOutput: finalOutput)
+            return try reflectZipOperation(generators: generators, finalOutput: finalOutput, pickDepth: pickDepth)
 
         case let .filter(gen, _, _, _):
-            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput, pickDepth: pickDepth)
 
         case let .classify(gen, _, _):
-            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput, pickDepth: pickDepth)
 
         case let .unique(gen, _, _):
-            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput, pickDepth: pickDepth)
 
         case let .transform(kind, inner):
             switch kind {
@@ -156,7 +162,7 @@ public enum Interpreters {
                         if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
                            roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
                         {
-                            let reflected = try reflectRecursive(inner, onFinalOutput: inverted)
+                            let reflected = try reflectRecursive(inner, onFinalOutput: inverted, pickDepth: pickDepth)
                             return reflected.map { result in
                                 (value: roundTripped, path: result.path)
                             }
@@ -181,8 +187,8 @@ public enum Interpreters {
                 // Reconstruct the bound generator from the extracted inner value.
                 let boundGen = try forward(innerValue)
                 // Reflect both: inner against the extracted value, bound against the final output.
-                let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
-                let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
+                let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue, pickDepth: pickDepth)
+                let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput, pickDepth: pickDepth)
                 // Combine paths: inner choices followed by bound choices.
                 return innerResults.flatMap { innerResult in
                     boundResults.map { boundResult in
@@ -206,21 +212,23 @@ public enum Interpreters {
     private static func reflectContramapOperation(
         transform: (Any) throws -> Any?,
         nextGen: ReflectiveGenerator<Any>,
-        finalOutput: Any
+        finalOutput: Any,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let subValue = try transform(finalOutput) else {
             throw ReflectionError.contramapWasWrongType
         }
-        return try reflectRecursive(nextGen, onFinalOutput: subValue).map { ($0.value, $0.path) }
+        return try reflectRecursive(nextGen, onFinalOutput: subValue, pickDepth: pickDepth).map { ($0.value, $0.path) }
     }
 
     @inline(__always)
     private static func reflectPruneOperation(
         nextGen: ReflectiveGenerator<Any>,
-        finalOutput: Any
+        finalOutput: Any,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         do {
-            return try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+            return try reflectRecursive(nextGen, onFinalOutput: finalOutput, pickDepth: pickDepth)
                 .map { ($0.value, $0.path) }
         } catch ReflectionError.reflectedNil {
             return []
@@ -229,16 +237,18 @@ public enum Interpreters {
 
     private static func reflectPickOperation(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        finalOutput: Any
+        finalOutput: Any,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchIDs = choices.map(\.id)
+        let augmentedSiteID = choices[0].siteID &+ UInt64(pickDepth)
         let results = try choices.flatMap {
             choice -> [(
                 value: Any, siteID: UInt64, weight: UInt64,
                 id: UInt64, isPicked: Bool, path: ChoiceTree
             )] in
             do {
-                let subPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
+                let subPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, pickDepth: pickDepth + 1)
                 let value = subPaths.firstNonNil(\.value)
 
                 var isPicked = false
@@ -256,7 +266,7 @@ public enum Interpreters {
                         guard let path = pathTree.first else {
                             return nil
                         }
-                        return (value, choice.siteID, choice.weight, choice.id, isPicked, path)
+                        return (value, augmentedSiteID, choice.weight, choice.id, isPicked, path)
                     }
                     .filter(\.isPicked)
 
@@ -340,9 +350,10 @@ public enum Interpreters {
     private static func reflectResizeOperation(
         newSize: UInt64,
         nextGen: ReflectiveGenerator<Any>,
-        finalOutput: Any
+        finalOutput: Any,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
-        let nestedResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+        let nestedResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput, pickDepth: pickDepth)
         return nestedResults.map { result in
             (value: result.value, path: [.resize(newSize: newSize, choices: result.path)])
         }
@@ -351,7 +362,8 @@ public enum Interpreters {
     private static func reflectSequenceOperation(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
-        finalOutput: Any
+        finalOutput: Any,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let targetArray = finalOutput as? any Sequence else {
             throw ReflectionError.inputWasWrongForSequence("\(finalOutput)")
@@ -368,7 +380,8 @@ public enum Interpreters {
             let targetLength = UInt64(targetArray.underestimatedCount)
             let lengthReflection = try reflectRecursive(
                 lengthGen,
-                onFinalOutput: targetLength
+                onFinalOutput: targetLength,
+                pickDepth: pickDepth
             )
             validRange = lengthReflection
                 .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
@@ -378,7 +391,8 @@ public enum Interpreters {
         for elementTarget in targetArray {
             let elementResults = try reflectRecursive(
                 elementGen,
-                onFinalOutput: elementTarget
+                onFinalOutput: elementTarget,
+                pickDepth: pickDepth
             )
             guard let (value, path) = elementResults.first else {
                 throw ReflectionError.couldNotReflectOnSequenceElement("\(elementTarget)")
@@ -397,7 +411,8 @@ public enum Interpreters {
 
     private static func reflectZipOperation(
         generators: ContiguousArray<ReflectiveGenerator<Any>>,
-        finalOutput: Any
+        finalOutput: Any,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let outputs = finalOutput as? [Any], outputs.count == generators.count else {
             throw ReflectionError.zipWasWrongLengthOrType
@@ -406,7 +421,7 @@ public enum Interpreters {
         var paths = [ChoiceTree]()
 
         for (generator, output) in zip(generators, outputs) {
-            let result = try Self.reflectRecursive(generator, onFinalOutput: output)
+            let result = try Self.reflectRecursive(generator, onFinalOutput: output, pickDepth: pickDepth)
             let argPath = result.flatMap(\.path)
             if argPath.count == 1 {
                 paths.append(argPath[0])
@@ -422,9 +437,10 @@ public enum Interpreters {
     @inline(__always)
     private static func reflectPassthroughOperation(
         gen: ReflectiveGenerator<Any>,
-        finalOutput: Any
+        finalOutput: Any,
+        pickDepth: Int
     ) throws -> [(value: Any, path: [ChoiceTree])] {
-        try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+        try reflectRecursive(gen, onFinalOutput: finalOutput, pickDepth: pickDepth).map { ($0.value, $0.path) }
     }
 
     public enum ReflectionError: LocalizedError, Equatable {
