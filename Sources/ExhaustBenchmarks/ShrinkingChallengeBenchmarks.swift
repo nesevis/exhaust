@@ -8,7 +8,7 @@ import Foundation
 // MARK: - Configuration
 
 let enableReport = true
-let enableCounterExamples = true
+let enableCounterExamples = false
 private let reductionCount = 100
 
 /// Returns both strategy variants of a base config.
@@ -1301,7 +1301,7 @@ private func printChallengeReport(name: String, results: [ReductionResult]) {
     let medianTime = String(format: "%.1f", median(times))
     let meanTime = String(format: "%.1f", mean(times))
 
-    print("[\(name)] invocations: median=\(medianInvocations) mean=\(meanInvocations) | time(ms): median=\(medianTime) mean=\(meanTime)")
+    print("[\(name)] invocations: median=\(medianInvocations) mean=\(meanInvocations) | time(ms): median=\(medianTime) mean=\(meanTime) counterexamples=\(uniqueCounterexamples.count)")
     if enableCounterExamples {
         print("[\(name)] unique counterexamples (\(uniqueCounterexamples.count)):")
         for counterexample in uniqueCounterexamples {
