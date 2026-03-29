@@ -85,37 +85,42 @@ struct BranchSimplificationEncoder: ComposableEncoder {
         let branches = extractBranchNodes(from: tree)
         guard branches.count >= 2 else { return [] }
 
-        let sorted = branches
-            .map { branch in
-                let seq = ChoiceSequence.flatten(
-                    branch.node,
-                    includingAllBranches: true
-                )
-                return (branch: branch, sequence: seq)
-            }
-            .sorted { lhs, rhs in lhs.sequence.shortLexPrecedes(rhs.sequence) }
-
         var candidates: [ChoiceSequence] = []
-        var targetIdx = sorted.count - 1
-        while targetIdx >= 1 {
-            let target = sorted[targetIdx]
+        var targetIdx = 0
+        while targetIdx < branches.count {
+            let target = branches[targetIdx]
+            let targetMasked = selectedBranchMaskedSiteID(of: target.node)
             var sourceIdx = 0
-            while sourceIdx < targetIdx {
-                let source = sorted[sourceIdx]
-                let sourceID = selectedBranchID(of: source.branch.node)
-                let targetID = selectedBranchID(of: target.branch.node)
-                if sourceID != targetID {
-                    var candidateTree = tree
-                    let sourceNode = source.branch.node.unwrapped
-                    candidateTree[target.branch.fingerprint] = sourceNode
-                    let candidateSequence = ChoiceSequence.flatten(candidateTree)
-                    if candidateSequence.shortLexPrecedes(sequence) {
-                        candidates.append(candidateSequence)
+            while sourceIdx < branches.count {
+                if sourceIdx != targetIdx {
+                    let source = branches[sourceIdx]
+                    // Only promote between sites from the same recursive generator
+                    // (matching depthMaskedSiteID). Skip if either lacks a site ID.
+                    guard let sourceMasked = selectedBranchMaskedSiteID(of: source.node),
+                          let targetMasked,
+                          sourceMasked == targetMasked
+                    else {
+                        sourceIdx += 1
+                        continue
+                    }
+                    let sourceID = selectedBranchID(of: source.node)
+                    let targetID = selectedBranchID(of: target.node)
+                    if sourceID != targetID {
+                        var candidateTree = tree
+                        let sourceNode = source.node.unwrapped
+                        candidateTree[target.fingerprint] = sourceNode
+                        let candidateSequence = ChoiceSequence.flatten(candidateTree)
+                        // Allow shortlex-equal candidates. With branch-transparent
+                        // shortlex, promoting between same-arity sites produces equal
+                        // sequences — the property check determines usefulness.
+                        if sequence.shortLexPrecedes(candidateSequence) == false {
+                            candidates.append(candidateSequence)
+                        }
                     }
                 }
                 sourceIdx += 1
             }
-            targetIdx -= 1
+            targetIdx += 1
         }
         return candidates
     }
@@ -183,6 +188,12 @@ private func extractBranchNodes(
         }
     }
     return results
+}
+
+private func selectedBranchMaskedSiteID(of group: ChoiceTree) -> UInt64? {
+    guard case let .group(array, _) = group else { return nil }
+    guard let selected = array.first(where: \.isSelected) else { return nil }
+    return selected.unwrapped.depthMaskedSiteID
 }
 
 private func selectedBranchID(of group: ChoiceTree) -> UInt64? {

@@ -161,6 +161,17 @@ public extension ChoiceTree {
         return false
     }
 
+    /// The site identifier with the depth contribution masked out, or `nil` if this node
+    /// is not a `.branch`.
+    ///
+    /// Mirrors ``ChoiceSequenceValue/Branch/depthMaskedSiteID``. Strips the last three
+    /// decimal digits from the site ID to recover a stable identifier shared across all
+    /// depths of the same recursive generator.
+    var depthMaskedSiteID: UInt64? {
+        guard case let .branch(siteID, _, _, _, _) = self else { return nil }
+        return siteID / 1000
+    }
+
     /// Whether this tree contains any pick sites (`.branch` nodes).
     /// Short-circuits on the first pick found.
     var containsPicks: Bool {
@@ -336,9 +347,10 @@ extension ChoiceTree: CustomDebugStringConvertible {
             }
             return result
 
-        case let .branch(_, weight, id, branchIDs, gen):
+        case let .branch(siteId, weight, id, branchIDs, gen):
             let index = branchIDs.firstIndex(of: id).map { $0 + 1 } ?? 0
-            var result = prefix + connector + "\(selected)branch(id: \(id), index: \(index), weight: \(weight), count: \(branchIDs.count))"
+            let fingerprintShort = String(format: "%08X", siteId & 0xFFFF_FFFF)
+            var result = prefix + connector + "\(selected)branch(siteId: \(fingerprintShort), id: \(id), index: \(index), weight: \(weight), count: \(branchIDs.count))"
             result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
             return result
 
