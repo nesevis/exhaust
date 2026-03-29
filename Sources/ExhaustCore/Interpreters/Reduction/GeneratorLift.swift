@@ -14,6 +14,10 @@ public struct GeneratorLift<Output>: Sendable {
     /// How to resolve values at each choice point during the lift.
     let mode: LiftMode
 
+    /// When true, the lifted tree stores all non-selected branch alternatives so that
+    /// downstream branch simplification encoders can see the full pick site.
+    let materializePicks: Bool
+
     /// Controls how values are resolved during the lift.
     public enum LiftMode: Sendable {
         /// Exact replay — rejects out-of-range values.
@@ -22,9 +26,10 @@ public struct GeneratorLift<Output>: Sendable {
         case guided(fallbackTree: ChoiceTree)
     }
 
-    public init(gen: ReflectiveGenerator<Output>, mode: LiftMode) {
+    public init(gen: ReflectiveGenerator<Output>, mode: LiftMode, materializePicks: Bool = false) {
         self.gen = gen
         self.mode = mode
+        self.materializePicks = materializePicks
     }
 
     /// Lifts the candidate sequence to produce a fresh tree and a lift report
@@ -51,7 +56,8 @@ public struct GeneratorLift<Output>: Sendable {
             gen,
             prefix: candidate,
             mode: materializerMode,
-            fallbackTree: fallbackTree
+            fallbackTree: fallbackTree,
+            materializePicks: materializePicks
         ) {
         case let .success(value: value, tree: freshTree, decodingReport: report):
             let freshSequence = ChoiceSequence(freshTree)

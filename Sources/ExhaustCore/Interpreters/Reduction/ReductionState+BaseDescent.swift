@@ -173,6 +173,23 @@ extension ReductionState {
             }
         }
 
+        // Bind substitution: replace a bind region with a deeper descendant's
+        // content. Uses exact decoding because the inner value changes.
+        if try runComposable(
+            bindSubstitutionEncoder,
+            decoder: .exact(),
+            positionRange: fullBranchRange,
+            context: branchReductionContext,
+            structureChanged: true,
+            budget: &legBudget
+        ) {
+            improved = true
+            if isInstrumented {
+                ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
+                                 metadata: ["subphase": "bind_substitution"])
+            }
+        }
+
         budget -= legBudget.used
         return improved
     }

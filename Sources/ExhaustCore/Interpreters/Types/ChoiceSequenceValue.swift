@@ -127,6 +127,18 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         /// due to bind re-derivation.
         public let siteID: UInt64
 
+        /// The site identifier with the depth contribution masked out.
+        ///
+        /// For `Gen.recursive`, the full ``siteID`` is `baseSiteID &+ remaining` where
+        /// `remaining` encodes the recursion depth (0 through maxDepth). Stripping the
+        /// last three decimal digits recovers a stable identifier that is shared across
+        /// all depths of the same recursive generator. Used by ``BindSubstitutionEncoder``
+        /// to confirm that two bind regions belong to the same recursive site before
+        /// substitution.
+        public var depthMaskedSiteID: UInt64 {
+            siteID / 1000
+        }
+
         public init(id: UInt64, validIDs: [UInt64], siteID: UInt64 = 0) {
             self.id = id
             self.validIDs = validIDs
