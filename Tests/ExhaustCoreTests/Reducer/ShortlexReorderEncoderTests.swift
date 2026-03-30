@@ -16,7 +16,7 @@ struct ShortlexReorderEncoderTests {
         // Siblings are the three bare values: 5, 3, 1
         // Sorted by shortlex key (unsigned): 1, 3, 5
         let seq: ChoiceSequence = [seqOpen, val(5), val(3), val(1), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         var encoder = ShortlexReorderEncoder()
         encoder.start(
@@ -41,7 +41,7 @@ struct ShortlexReorderEncoderTests {
     @Test("Already sorted group produces no probes")
     func alreadySortedNoProbes() {
         let seq: ChoiceSequence = [seqOpen, val(1), val(3), val(5), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         var encoder = ShortlexReorderEncoder()
         encoder.start(
@@ -58,7 +58,7 @@ struct ShortlexReorderEncoderTests {
     @Test("Single element group produces no probes")
     func singleElementNoProbes() {
         let seq: ChoiceSequence = [seqOpen, val(42), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         var encoder = ShortlexReorderEncoder()
         encoder.start(
@@ -77,7 +77,7 @@ struct ShortlexReorderEncoderTests {
         // Three elements out of order: [5, 1, 3]
         // Full sort would give [1, 3, 5] — if rejected, pairwise tries (5,1) swap → [1, 5, 3]
         let seq: ChoiceSequence = [seqOpen, val(5), val(1), val(3), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         var encoder = ShortlexReorderEncoder()
         encoder.start(
@@ -110,7 +110,7 @@ struct ShortlexReorderEncoderTests {
     @Test("Estimated cost returns nil when no work")
     func estimatedCostNil() {
         let seq: ChoiceSequence = [seqOpen, val(1), val(2), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         let encoder = ShortlexReorderEncoder()
         let cost = encoder.estimatedCost(
@@ -125,7 +125,7 @@ struct ShortlexReorderEncoderTests {
     @Test("Estimated cost returns count of out-of-order groups")
     func estimatedCostNonNil() {
         let seq: ChoiceSequence = [seqOpen, val(3), val(1), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         let encoder = ShortlexReorderEncoder()
         let cost = encoder.estimatedCost(
@@ -148,7 +148,7 @@ struct ShortlexReorderEncoderTests {
             grpOpen, val(1), grpClose,
             seqClose,
         ]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         var encoder = ShortlexReorderEncoder()
         encoder.start(
@@ -172,7 +172,7 @@ struct ShortlexReorderEncoderTests {
     @Test("Equal values produce no probes")
     func equalValuesNoProbes() {
         let seq: ChoiceSequence = [seqOpen, val(7), val(7), val(7), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         var encoder = ShortlexReorderEncoder()
         encoder.start(
@@ -189,7 +189,7 @@ struct ShortlexReorderEncoderTests {
     @Test("Two-element swap produces shortlex-smaller sequence")
     func twoElementSwap() {
         let seq: ChoiceSequence = [seqOpen, val(10), val(2), seqClose]
-        let tree = ChoiceTree.just("")
+        let tree = ChoiceTree.just
 
         var encoder = ShortlexReorderEncoder()
         encoder.start(

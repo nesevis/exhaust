@@ -109,7 +109,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         case let .pure(value):
             // The ChoiceTree value will be discarded from the caller if it's coming
             // from .chooseBits
-            return (value, .emptyJust)
+            return (value, .just)
 
         case let .impure(operation, continuation):
             switch operation {
@@ -183,7 +183,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             case let .just(value):
                 return try runContinuation(
                     result: value,
-                    calleeChoiceTree: .just("\(value)"),
+                    calleeChoiceTree: .just,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context

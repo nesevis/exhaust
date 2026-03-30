@@ -300,11 +300,11 @@ public enum BoundaryCoveringArrayReplay {
     private static func buildSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
         switch gen {
         case .pure:
-            .just("")
+            .just
         case let .impure(operation, _):
             switch operation {
             case .just:
-                .just("")
+                .just
             case let .contramap(_, next), let .prune(next):
                 buildSubTree(for: next)
             case let .transform(_, inner):

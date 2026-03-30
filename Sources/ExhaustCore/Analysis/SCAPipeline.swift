@@ -63,7 +63,7 @@ public protocol SCADomainBuilder {
 
 /// Command-type-only SCA domain builder — each position's domain is the set of command types.
 ///
-/// Requires all branches to be parameter-free (no choices in sub-generators). Produces `.just("")` sub-trees, which cannot satisfy parameterized branches during replay.
+/// Requires all branches to be parameter-free (no choices in sub-generators). Produces `.just` sub-trees, which cannot satisfy parameterized branches during replay.
 public struct CommandTypeSCABuilder: SCADomainBuilder {
     public init() {}
 

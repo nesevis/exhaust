@@ -52,7 +52,7 @@ struct ChoiceTreeTests {
     struct ContainsPicks {
         @Test("Leaf nodes without branches return false")
         func leafsReturnFalse() {
-            #expect(!ChoiceTree.just("x").containsPicks)
+            #expect(!ChoiceTree.just.containsPicks)
             #expect(!ChoiceTree.getSize(10).containsPicks)
 
             let choice = ChoiceTree.choice(
@@ -66,7 +66,7 @@ struct ChoiceTreeTests {
         func branchReturnsTrue() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0, 1],
-                choice: .just("")
+                choice: .just
             )
             #expect(branch.containsPicks)
         }
@@ -75,9 +75,9 @@ struct ChoiceTreeTests {
         func nestedBranchInGroup() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0],
-                choice: .just("")
+                choice: .just
             )
-            let group = ChoiceTree.group([.just("a"), branch])
+            let group = ChoiceTree.group([.just, branch])
             #expect(group.containsPicks)
         }
 
@@ -85,7 +85,7 @@ struct ChoiceTreeTests {
         func selectedBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0],
-                choice: .just("")
+                choice: .just
             )
             #expect(ChoiceTree.selected(branch).containsPicks)
         }
@@ -94,7 +94,7 @@ struct ChoiceTreeTests {
         func sequenceWithoutPicks() {
             let seq = ChoiceTree.sequence(
                 length: 2,
-                elements: [.just("a"), .just("b")],
+                elements: [.just, .just],
                 ChoiceMetadata(validRange: 0 ... 10)
             )
             #expect(!seq.containsPicks)
@@ -104,7 +104,7 @@ struct ChoiceTreeTests {
         func resizeWithBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0],
-                choice: .just("")
+                choice: .just
             )
             let resize = ChoiceTree.resize(newSize: 50, choices: [branch])
             #expect(resize.containsPicks)
@@ -117,7 +117,7 @@ struct ChoiceTreeTests {
     struct PickComplexityTests {
         @Test("Leaf nodes have zero complexity")
         func leafZero() {
-            #expect(ChoiceTree.just("x").pickComplexity == 0)
+            #expect(ChoiceTree.just.pickComplexity == 0)
             #expect(ChoiceTree.getSize(10).pickComplexity == 0)
         }
 
@@ -125,7 +125,7 @@ struct ChoiceTreeTests {
         func singleBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0, 1, 2],
-                choice: .just("")
+                choice: .just
             )
             // 3 branches * 2^0 = 3
             #expect(branch.pickComplexity == 3)
@@ -135,7 +135,7 @@ struct ChoiceTreeTests {
         func nestedBranches() {
             let inner = ChoiceTree.branch(
                 siteID: 1, weight: 1, id: 0, branchIDs: [0, 1],
-                choice: .just("")
+                choice: .just
             )
             let outer = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0, 1],
@@ -152,26 +152,26 @@ struct ChoiceTreeTests {
     struct ContainsWhere {
         @Test("Matching predicate on self returns true")
         func matchingSelf() {
-            let tree = ChoiceTree.just("target")
-            #expect(tree.contains { $0 == .just("target") })
+            let tree = ChoiceTree.just
+            #expect(tree.contains { $0 == .just })
         }
 
         @Test("Non-matching predicate returns false")
         func nonMatching() {
-            let tree = ChoiceTree.just("a")
-            #expect(!tree.contains { $0 == .just("b") })
+            let tree = ChoiceTree.just
+            #expect(tree.contains { $0 == .getSize(99) } == false)
         }
 
         @Test("Finds nested node in group")
         func findsNested() {
             let target = ChoiceTree.getSize(42)
-            let tree = ChoiceTree.group([.just("a"), target])
+            let tree = ChoiceTree.group([.just, target])
             #expect(tree.contains { $0 == target })
         }
 
         @Test("Searches through sequence elements")
         func searchesSequence() {
-            let target = ChoiceTree.just("found")
+            let target = ChoiceTree.just
             let seq = ChoiceTree.sequence(
                 length: 1,
                 elements: [target],
@@ -182,7 +182,7 @@ struct ChoiceTreeTests {
 
         @Test("Searches through resize children")
         func searchesResize() {
-            let target = ChoiceTree.just("found")
+            let target = ChoiceTree.just
             let resize = ChoiceTree.resize(newSize: 10, choices: [target])
             #expect(resize.contains { $0 == target })
         }
@@ -194,34 +194,34 @@ struct ChoiceTreeTests {
     struct MapTests {
         @Test("Transforms leaf node")
         func transformsLeaf() {
-            let tree = ChoiceTree.just("old")
+            let tree = ChoiceTree.just
             let result = tree.map { node in
-                if case .just = node { return .just("new") }
+                if case .just = node { return .getSize(99) }
                 return node
             }
-            #expect(result == .just("new"))
+            #expect(result == .getSize(99))
         }
 
         @Test("Recursively transforms group children")
         func transformsGroupChildren() {
-            let tree = ChoiceTree.group([.just("a"), .just("b")])
+            let tree = ChoiceTree.group([.just, .just])
             let result = tree.map { node in
-                if case let .just(s) = node { return .just(s.uppercased()) }
+                if case .just = node { return .getSize(0) }
                 return node
             }
-            #expect(result == .group([.just("A"), .just("B")]))
+            #expect(result == .group([.getSize(0), .getSize(0)]))
         }
 
         @Test("Recursively transforms sequence elements")
         func transformsSequence() {
             let meta = ChoiceMetadata(validRange: 0 ... 5)
-            let tree = ChoiceTree.sequence(length: 1, elements: [.just("x")], meta)
+            let tree = ChoiceTree.sequence(length: 1, elements: [.just], meta)
             let result = tree.map { node in
-                if case let .just(s) = node { return .just(s + "!") }
+                if case .just = node { return .getSize(1) }
                 return node
             }
             if case let .sequence(_, elements, _) = result {
-                #expect(elements == [.just("x!")])
+                #expect(elements == [.getSize(1)])
             } else {
                 Issue.record("Expected sequence")
             }
@@ -229,24 +229,24 @@ struct ChoiceTreeTests {
 
         @Test("Transforms through selected wrapper")
         func transformsSelected() {
-            let tree = ChoiceTree.selected(.just("inner"))
+            let tree = ChoiceTree.selected(.just)
             let result = tree.map { node in
-                if case let .just(s) = node { return .just(s.uppercased()) }
+                if case .just = node { return .getSize(2) }
                 return node
             }
-            #expect(result == .selected(.just("INNER")))
+            #expect(result == .selected(.getSize(2)))
         }
 
         @Test("Transforms through resize")
         func transformsResize() {
-            let tree = ChoiceTree.resize(newSize: 50, choices: [.just("a")])
+            let tree = ChoiceTree.resize(newSize: 50, choices: [.just])
             let result = tree.map { node in
-                if case let .just(s) = node { return .just(s + "!") }
+                if case .just = node { return .getSize(3) }
                 return node
             }
             if case let .resize(size, choices) = result {
                 #expect(size == 50)
-                #expect(choices == [.just("a!")])
+                #expect(choices == [.getSize(3)])
             } else {
                 Issue.record("Expected resize")
             }
@@ -260,7 +260,7 @@ struct ChoiceTreeTests {
         @Test("Non-explicit range is widened to full range")
         func nonExplicitWidened() {
             let meta = ChoiceMetadata(validRange: 2 ... 5, isRangeExplicit: false)
-            let tree = ChoiceTree.sequence(length: 3, elements: [.just("a")], meta)
+            let tree = ChoiceTree.sequence(length: 3, elements: [.just], meta)
             let result = tree.relaxingNonExplicitSequenceLengthRanges()
 
             if case let .sequence(_, _, newMeta) = result {
@@ -274,7 +274,7 @@ struct ChoiceTreeTests {
         @Test("Explicit range is preserved")
         func explicitPreserved() {
             let meta = ChoiceMetadata(validRange: 2 ... 5, isRangeExplicit: true)
-            let tree = ChoiceTree.sequence(length: 3, elements: [.just("a")], meta)
+            let tree = ChoiceTree.sequence(length: 3, elements: [.just], meta)
             let result = tree.relaxingNonExplicitSequenceLengthRanges()
 
             if case let .sequence(_, _, newMeta) = result {
@@ -287,7 +287,7 @@ struct ChoiceTreeTests {
 
         @Test("Non-sequence nodes pass through unchanged")
         func nonSequenceUnchanged() {
-            let tree = ChoiceTree.just("hello")
+            let tree = ChoiceTree.just
             let result = tree.relaxingNonExplicitSequenceLengthRanges()
             #expect(result == tree)
         }
@@ -299,21 +299,21 @@ struct ChoiceTreeTests {
     struct Unwrapped {
         @Test("Selected is unwrapped")
         func selectedUnwrapped() {
-            let inner = ChoiceTree.just("inner")
+            let inner = ChoiceTree.just
             let tree = ChoiceTree.selected(inner)
             #expect(tree.unwrapped == inner)
         }
 
         @Test("Nested selected is fully unwrapped")
         func nestedSelectedUnwrapped() {
-            let inner = ChoiceTree.just("deep")
+            let inner = ChoiceTree.just
             let tree = ChoiceTree.selected(.selected(inner))
             #expect(tree.unwrapped == inner)
         }
 
         @Test("Non-selected returns self")
         func nonSelectedReturnsSelf() {
-            let tree = ChoiceTree.just("hello")
+            let tree = ChoiceTree.just
             #expect(tree.unwrapped == tree)
         }
     }
@@ -326,7 +326,7 @@ struct ChoiceTreeTests {
         func extractsFromBranch() {
             let tree = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 42, branchIDs: [42],
-                choice: .just("")
+                choice: .just
             )
             #expect(tree.branchId == 42)
         }
@@ -335,14 +335,14 @@ struct ChoiceTreeTests {
         func extractsFromSelectedBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 7, branchIDs: [7],
-                choice: .just("")
+                choice: .just
             )
             #expect(ChoiceTree.selected(branch).branchId == 7)
         }
 
         @Test("Returns nil for non-branch")
         func nilForNonBranch() {
-            #expect(ChoiceTree.just("x").branchId == nil)
+            #expect(ChoiceTree.just.branchId == nil)
             #expect(ChoiceTree.getSize(5).branchId == nil)
         }
     }
@@ -356,8 +356,8 @@ private let choiceNode = ChoiceTree.choice(
 )
 private let branchNode = ChoiceTree.branch(
     siteID: 0, weight: 1, id: 1, branchIDs: [1, 2],
-    choice: .just("inner")
+    choice: .just
 )
-private let justNode = ChoiceTree.just("hello")
+private let justNode = ChoiceTree.just
 private let groupNode = ChoiceTree.group([justNode])
 private let getSizeNode = ChoiceTree.getSize(50)
