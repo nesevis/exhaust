@@ -43,7 +43,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
         positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
+        context: ReductionContext
     ) {
         self.sequence = sequence
         semanticStats = SequenceSemanticStats(sequence: sequence)
@@ -51,6 +51,8 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         orientationIndex = 0
         needsFirstProbe = true
         resetMonotoneState()
+
+        let bindIndex = context.bindIndex
 
         // Extract all numeric values.
         var candidates = [NumericCandidate]()
@@ -62,7 +64,8 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
             case let .value(v), let .reduced(v):
                 switch v.choice {
                 case .unsigned, .signed, .floating:
-                    candidates.append(NumericCandidate(index: i, value: v))
+                    let isInner = bindIndex?.bindRegionForInnerIndex(i) != nil
+                    candidates.append(NumericCandidate(index: i, value: v, isBindInner: isInner))
                 }
             default:
                 break
@@ -79,6 +82,13 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         while ci < candidates.count {
             var cj = ci + 1
             while cj < candidates.count {
+                // Never pair a bind-inner with a bound value. Modifying the inner
+                // changes the bound structure, making the bound modification meaningless.
+                // Inner-inner and bound-bound pairs are both valid.
+                if candidates[ci].isBindInner != candidates[cj].isBindInner {
+                    cj += 1
+                    continue
+                }
                 // Try both orientations so index ordering does not block useful redistributions.
                 for (lhs, rhs) in [(ci, cj), (cj, ci)] {
                     if let orientation = makeOrientation(
@@ -104,6 +114,8 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
     private struct NumericCandidate {
         let index: Int
         let value: ChoiceSequenceValue.Value
+        /// Whether this candidate sits inside a bind-inner range.
+        let isBindInner: Bool
     }
 
     private struct FloatRedistributionContext {
