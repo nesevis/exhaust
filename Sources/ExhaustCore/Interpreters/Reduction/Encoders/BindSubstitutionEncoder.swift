@@ -56,10 +56,39 @@ struct BindSubstitutionEncoder: ComposableEncoder {
 
     /// Builds candidates for ALL bind regions in the sequence.
     ///
-    /// For each bind region, finds all descendant bind regions (at any deeper level) and
-    /// constructs a candidate by setting the target's inner to the descendant's inner value
-    /// and splicing the descendant's bound content into the target's bound range.
+    /// Two strategies:
+    /// 1. **Depth substitution**: for each bind region, finds descendant bind regions and
+    ///    constructs a candidate by promoting the descendant to the target's position.
+    /// 2. **Sibling substitution**: for each pair of sibling bind regions (direct children
+    ///    of the same parent), constructs a candidate by splicing one sibling's inner+bound
+    ///    into the other's position and deleting the donor's span entirely.
     static func buildCandidates(
+        sequence: ChoiceSequence,
+        bindIndex: BindSpanIndex
+    ) -> [ChoiceSequence] {
+        var candidates: [ChoiceSequence] = []
+
+        // Strategy 1: depth substitution (existing).
+        candidates.append(
+            contentsOf: buildDepthSubstitutionCandidates(
+                sequence: sequence, bindIndex: bindIndex
+            )
+        )
+
+        // Strategy 2: sibling substitution (new).
+        candidates.append(
+            contentsOf: buildSiblingSubstitutionCandidates(
+                sequence: sequence, bindIndex: bindIndex
+            )
+        )
+
+        return candidates
+    }
+
+    // MARK: - Depth Substitution
+
+    /// Promotes a descendant bind region to replace an ancestor, reducing structural depth.
+    private static func buildDepthSubstitutionCandidates(
         sequence: ChoiceSequence,
         bindIndex: BindSpanIndex
     ) -> [ChoiceSequence] {
@@ -127,6 +156,64 @@ struct BindSubstitutionEncoder: ComposableEncoder {
 
                 if candidate.shortLexPrecedes(sequence) {
                     candidates.append(candidate)
+                }
+            }
+        }
+
+        return candidates
+    }
+
+    // MARK: - Sibling Substitution
+
+    /// For each pair of sibling bind regions, overwrites the target's inner+bound with
+    /// the donor's inner+bound, preserving both siblings in the sequence.
+    ///
+    /// The result has two copies of the donor's content. The duplicate gives subsequent
+    /// deletion passes a shortlex-smaller starting point from which to remove one copy.
+    private static func buildSiblingSubstitutionCandidates(
+        sequence: ChoiceSequence,
+        bindIndex: BindSpanIndex
+    ) -> [ChoiceSequence] {
+        var candidates: [ChoiceSequence] = []
+
+        for parent in bindIndex.regions {
+            let children = directChildRegions(of: parent, in: bindIndex)
+            guard children.count >= 2 else { continue }
+
+            for target in children {
+                for donor in children {
+                    guard target.bindSpanRange != donor.bindSpanRange else { continue }
+                    guard target.innerRange.upperBound < sequence.count,
+                          target.boundRange.upperBound < sequence.count,
+                          donor.innerRange.lowerBound < sequence.count,
+                          donor.boundRange.upperBound < sequence.count
+                    else { continue }
+
+                    // Both siblings must have the same inner+bound size for a clean
+                    // overwrite — different sizes would shift all subsequent positions.
+                    let targetContentSize = (target.innerRange.lowerBound ... target.boundRange.upperBound).count
+                    let donorContentSize = (donor.innerRange.lowerBound ... donor.boundRange.upperBound).count
+                    guard targetContentSize == donorContentSize else { continue }
+
+                    // Compatibility: inner value tags must match.
+                    guard let targetInner = sequence[target.innerRange.lowerBound].value,
+                          let donorInner = sequence[donor.innerRange.lowerBound].value,
+                          targetInner.choice.tag == donorInner.choice.tag
+                    else { continue }
+
+                    // Build candidate: overwrite target's inner+bound with donor's content.
+                    // Everything else (bind markers, donor's original, suffix) is unchanged.
+                    var candidate = ChoiceSequence()
+                    candidate.reserveCapacity(sequence.count)
+                    candidate.append(contentsOf: sequence[0 ..< target.innerRange.lowerBound])
+                    candidate.append(contentsOf: sequence[donor.innerRange.lowerBound ... donor.boundRange.upperBound])
+                    if target.boundRange.upperBound + 1 < sequence.count {
+                        candidate.append(contentsOf: sequence[(target.boundRange.upperBound + 1)...])
+                    }
+
+                    if candidate.shortLexPrecedes(sequence) {
+                        candidates.append(candidate)
+                    }
                 }
             }
         }
