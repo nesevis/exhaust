@@ -317,30 +317,18 @@ public struct ChoiceDependencyGraph: Sendable {
 
 /// A dependency edge in the CDG where a ``KleisliComposition`` can operate.
 ///
-/// Each edge connects a controlling position (bind-inner value) to a controlled
-/// subtree (bound content). The upstream encoder operates on the controlling
-/// position; the downstream encoder operates on the controlled subtree; the
-/// ``GeneratorLift`` bridges them.
+/// Each edge connects a controlling position (bind-inner value) to a controlled subtree (bound content). The upstream encoder operates on the controlling position; the downstream encoder operates on the controlled subtree; the ``GeneratorLift`` bridges them.
 public struct ReductionEdge: Sendable {
-    /// The controlling position — the upstream encoder operates here.
-    /// Its mutation is a base morphism because the CDG has an outgoing
-    /// dependency edge from this position.
+    /// The controlling position — the upstream encoder operates here. Its mutation is a base morphism because the CDG has an outgoing dependency edge from this position.
     public let upstreamRange: ClosedRange<Int>
 
-    /// The controlled subtree — the downstream encoder operates here.
-    /// Its mutation is a fibre morphism within the structure determined
-    /// by the upstream value.
+    /// The controlled subtree — the downstream encoder operates here. Its mutation is a fibre morphism within the structure determined by the upstream value.
     public let downstreamRange: ClosedRange<Int>
 
     /// The index of the bind region in ``BindSpanIndex``.
     public let regionIndex: Int
 
-    /// Whether the downstream structure is invariant under upstream
-    /// value changes (the bind closure ignores its argument — no nested
-    /// binds or picks in the bound subtree). When true, the lift is
-    /// trivial regardless of the upstream value: the same fibre exists
-    /// for every upstream candidate. The ``KleisliComposition`` is
-    /// unnecessary at this edge.
+    /// Whether the downstream structure is invariant under upstream value changes (the bind closure ignores its argument — no nested binds or picks in the bound subtree). When true, the lift is trivial regardless of the upstream value: the same fibre exists for every upstream candidate. The ``KleisliComposition`` is unnecessary at this edge.
     public let isStructurallyConstant: Bool
 
     /// The CDG topological level of the upstream node (max-parent-depth + 1).
@@ -352,13 +340,9 @@ public struct ReductionEdge: Sendable {
 public extension ChoiceDependencyGraph {
     /// Returns the dependency edges where ``KleisliComposition`` instances are meaningful.
     ///
-    /// Each edge connects a bind-inner node (controlling position) to its scope
-    /// (controlled subtree). Edges where the downstream structure is invariant
-    /// under upstream value changes are filtered out — the lift is trivial and
-    /// the composition is unnecessary.
+    /// Each edge connects a bind-inner node (controlling position) to its scope (controlled subtree). Edges where the downstream structure is invariant under upstream value changes are filtered out — the lift is trivial and the composition is unnecessary.
     ///
-    /// Ordered by topological sort (roots first), so that upstream encoders for
-    /// shallower edges run before downstream encoders that depend on their results.
+    /// Ordered by topological sort (roots first), so that upstream encoders for shallower edges run before downstream encoders that depend on their results.
     func reductionEdges() -> [ReductionEdge] {
         // Build node-to-level lookup from topological levels (O(V+E)).
         let levels = topologicalLevels()

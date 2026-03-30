@@ -79,14 +79,10 @@ struct PhaseConfiguration {
     /// How to allocate budget to composition edges in the exploration phase.
     var edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)
 
-    /// Optional scope restriction for the phase. When set, encoders only operate
-    /// within this position range. Used by ``TopologicalStrategy`` to focus each
-    /// cycle on a specific CDG node's region.
+    /// Optional scope restriction for the phase. When set, encoders only operate within this position range. Used by ``TopologicalStrategy`` to focus each cycle on a specific CDG node's region.
     var scopeRange: ClosedRange<Int>?
 
-    /// When `true`, fibre descent clears the convergence cache before running.
-    /// Used by ``TopologicalStrategy`` after a stall cycle to retry batch zeroing
-    /// with fresh convergence state.
+    /// When `true`, fibre descent clears the convergence cache before running. Used by ``TopologicalStrategy`` after a stall cycle to retry batch zeroing with fresh convergence state.
     var clearConvergence = false
 
     /// When non-nil, restricts fibre descent's span extraction to values at this bind depth.

@@ -135,8 +135,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         let distanceInSteps: UInt64
     }
 
-    /// One orientation of a pair: lhs is the value being moved toward its target,
-    /// rhs is the compensation side.
+    /// One orientation of a pair: lhs is the value being moved toward its target, rhs is the compensation side.
     private struct PairOrientation {
         let lhsIndex: Int
         let rhsIndex: Int
@@ -551,8 +550,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Computes redistributed choices for cross-type (float+integer) pairs.
     ///
-    /// Uses rational arithmetic with a common denominator to ensure integer constraints
-    /// are satisfied (integer sides must receive whole-number deltas).
+    /// Uses rational arithmetic with a common denominator to ensure integer constraints are satisfied (integer sides must receive whole-number deltas).
     private func mixedRedistributedPairChoices(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
@@ -604,8 +602,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Builds a float redistribution context for same-tag float pairs.
     ///
-    /// Converts both values and the lhs target to rational form with a common denominator,
-    /// enabling integer-step redistribution in the numerator space.
+    /// Converts both values and the lhs target to rational form with a common denominator, enabling integer-step redistribution in the numerator space.
     private func makeFloatRedistributionContext(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
@@ -663,8 +660,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Builds a mixed redistribution context for cross-type (float+integer) pairs.
     ///
-    /// At least one side must be floating-point. The step size equals the common denominator
-    /// when one side is integer, ensuring integer values remain integral after redistribution.
+    /// At least one side must be floating-point. The step size equals the common denominator when one side is integer, ensuring integer values remain integral after redistribution.
     private func makeMixedRedistributionContext(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
@@ -862,8 +858,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Returns a sorted pair of complexity keys for two `ChoiceValue`s.
     ///
-    /// Same-tag pairs use the native `shortlexKey`. Cross-type pairs map both values
-    /// onto the `FloatShortlex` scale via their absolute `Double` magnitude.
+    /// Same-tag pairs use the native `shortlexKey`. Cross-type pairs map both values onto the `FloatShortlex` scale via their absolute `Double` magnitude.
     private func sortedPairKeys(
         _ a: ChoiceValue,
         _ b: ChoiceValue

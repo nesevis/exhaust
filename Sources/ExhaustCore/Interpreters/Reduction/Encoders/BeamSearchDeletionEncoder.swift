@@ -7,12 +7,9 @@
 
 /// Non-contiguous subset deletion via beam search across aligned sibling containers.
 ///
-/// Bitmask-encoded subsets of aligned slots, evaluated layer-by-layer with bounded beam
-/// width. Falls back to uniform repair when a deletion candidate is rejected.
+/// Bitmask-encoded subsets of aligned slots, evaluated layer-by-layer with bounded beam width. Falls back to uniform repair when a deletion candidate is rejected.
 ///
-/// This is the second phase of aligned deletion — dominated by
-/// ``ContiguousWindowDeletionEncoder`` in the descriptor chain. Only runs when contiguous
-/// window search exhausts without finding improvements.
+/// This is the second phase of aligned deletion — dominated by ``ContiguousWindowDeletionEncoder`` in the descriptor chain. Only runs when contiguous window search exhausts without finding improvements.
 struct BeamSearchDeletionEncoder: ComposableEncoder {
     let name: EncoderName = .deleteAlignedSiblingSubsets
     let phase = ReductionPhase.structuralDeletion
@@ -52,8 +49,7 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
     private var beamEvaluationCount = 0
     private var lastRejectedCandidate = ChoiceSequence()
 
-    /// Detect structural stall: if sequence length hasn't decreased since last invocation,
-    /// beam search is unlikely to help (contiguous search already exhausted these slots).
+    /// Detect structural stall: if sequence length hasn't decreased since last invocation, beam search is unlikely to help (contiguous search already exhausted these slots).
     private var previousSequenceLength: Int?
     private var structurallyStalled = false
 

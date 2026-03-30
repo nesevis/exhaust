@@ -122,19 +122,12 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     public struct Branch: Hashable, Equatable, Sendable {
         public let id: UInt64
         public let validIDs: [UInt64]
-        /// The pick site identifier. Used by the guided cursor to match branch
-        /// entries to the correct pick operation when cursor positions drift
-        /// due to bind re-derivation.
+        /// The pick site identifier. Used by the guided cursor to match branch entries to the correct pick operation when cursor positions drift due to bind re-derivation.
         public let siteID: UInt64
 
         /// The site identifier with the depth contribution masked out.
         ///
-        /// For `Gen.recursive`, the full ``siteID`` is `baseSiteID &+ remaining` where
-        /// `remaining` encodes the recursion depth (0 through maxDepth). Stripping the
-        /// last three decimal digits recovers a stable identifier that is shared across
-        /// all depths of the same recursive generator. Used by ``BindSubstitutionEncoder``
-        /// to confirm that two bind regions belong to the same recursive site before
-        /// substitution.
+        /// For `Gen.recursive`, the full ``siteID`` is `baseSiteID &+ remaining` where `remaining` encodes the recursion depth (0 through maxDepth). Stripping the last three decimal digits recovers a stable identifier that is shared across all depths of the same recursive generator. Used by ``BindSubstitutionEncoder`` to confirm that two bind regions belong to the same recursive site before substitution.
         public var depthMaskedSiteID: UInt64 {
             siteID / 1000
         }
@@ -145,11 +138,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             self.siteID = siteID
         }
 
-        /// Branch picks are transparent to shortlex ordering. The selected alternative's index
-        /// is arbitrary (determined by declaration order in the user's generator), so comparing
-        /// it would make structural simplification depend on naming order rather than content.
-        /// Returning `.eq` lets the comparison fall through to the subtree entries that follow
-        /// the branch marker, where actual structural and value differences decide the ordering.
+        /// Branch picks are transparent to shortlex ordering. The selected alternative's index is arbitrary (determined by declaration order in the user's generator), so comparing it would make structural simplification depend on naming order rather than content. Returning `.eq` lets the comparison fall through to the subtree entries that follow the branch marker, where actual structural and value differences decide the ordering.
         public func shortLexCompare(_ other: Branch) -> ShortlexOrder {
             .eq
         }

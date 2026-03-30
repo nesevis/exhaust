@@ -49,10 +49,7 @@ final class ReductionState<Output> {
 
     /// Total materialization attempts (decoder invocations) during reduction.
     ///
-    /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta
-    /// for antichain and mutation pool direct decodes), `runKleisliExploration` (manual
-    /// accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()`
-    /// call outside `runComposable` must manually accumulate into this field.
+    /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta for antichain and mutation pool direct decodes), `runKleisliExploration` (manual accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()` call outside `runComposable` must manually accumulate into this field.
     var totalMaterializations: Int = 0
 
     // Decision tree profiling counters
@@ -122,9 +119,7 @@ final class ReductionState<Output> {
 
     /// Returns true when every value coordinate is either cached or already at its reduction target.
     ///
-    /// Used by the fibre descent gate (signal 4): when all coordinates are effectively converged
-    /// AND base descent made no structural progress AND Phase 2 stalled last cycle, further
-    /// Phase 2 probes would only re-confirm floors — skip it.
+    /// Used by the fibre descent gate (signal 4): when all coordinates are effectively converged AND base descent made no structural progress AND Phase 2 stalled last cycle, further Phase 2 probes would only re-confirm floors — skip it.
     ///
     /// A coordinate is effectively converged if:
     /// - It has a cached convergence floor (binary search ran and converged), OR
@@ -274,9 +269,7 @@ extension ReductionState {
 
     /// Invalidates convergence cache entries for coordinates that share a bind scope with any changed value.
     ///
-    /// When a value changes at index *i* within a bind region's span, other coordinates in the same
-    /// region may have converged in a context that included the old value at *i*. Those converged origins
-    /// are stale: the property's behavior at those coordinates can differ now that *i* changed.
+    /// When a value changes at index *i* within a bind region's span, other coordinates in the same region may have converged in a context that included the old value at *i*. Those converged origins are stale: the property's behavior at those coordinates can differ now that *i* changed.
     private func invalidateConvergenceCacheSiblings(
         oldSequence: ChoiceSequence,
         newSequence: ChoiceSequence,
@@ -441,8 +434,7 @@ extension ReductionState {
         return SequenceDecoder.for(context)
     }
 
-    /// Decoder for speculative deletion: PRNG fallback for deleted entries,
-    /// enabling repair with fresh (possibly shorter) values that satisfy filters.
+    /// Decoder for speculative deletion: PRNG fallback for deleted entries, enabling repair with fresh (possibly shorter) values that satisfy filters.
     func makeSpeculativeDecoder() -> SequenceDecoder {
         .guided(fallbackTree: nil, materializePicks: true, usePRNGFallback: true)
     }
@@ -580,8 +572,8 @@ extension ReductionState {
         let structuralAtCheckpoint = phaseTracker.counts[.relaxRound]?.structuralAcceptances ?? 0
 
         // Run RelaxRoundEncoder with exact decoder — no fallback, no shortlex check.
-        // Exact mode validates values against their explicit ranges, avoiding
-        // fallback-induced structural changes that break materialization.
+        // Exact mode validates values against their explicit ranges, rejecting
+        // structurally invalid relocations fast.
         let speculativeDecoder: SequenceDecoder = .exact()
         var explorationBudget = ReductionScheduler.LegBudget(hardCap: remaining)
         var relaxEncoder = RelaxRoundEncoder()

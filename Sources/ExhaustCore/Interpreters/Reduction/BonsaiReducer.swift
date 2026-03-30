@@ -9,8 +9,7 @@ public extension Interpreters {
         public var maxStalls: Int
         /// Beam search tuning for aligned deletion.
         let alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
-        /// When `true`, run a one-shot post-processing pass after reduction stalls that reorders
-        /// elements within type-homogeneous sibling groups into natural numeric order.
+        /// When `true`, run a one-shot post-processing pass after reduction stalls that reorders elements within type-homogeneous sibling groups into natural numeric order.
         public var humanOrderPostProcess: Bool = true
 
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
@@ -69,8 +68,7 @@ public extension Interpreters {
 public extension Interpreters {
     /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
     ///
-    /// Prefer the overload that accepts a pre-materialized `output` to avoid
-    /// a redundant materialization at the entry point.
+    /// Prefer the overload that accepts a pre-materialized `output` to avoid a redundant materialization at the entry point.
     static func bonsaiReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

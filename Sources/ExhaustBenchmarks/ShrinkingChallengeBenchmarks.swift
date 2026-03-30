@@ -25,7 +25,7 @@ private func withStrategies(
     topological.maxStalls = base.maxStalls // max(base.maxStalls, 10)
     return [
         ("adaptive", adaptive),
-        ("topological", topological),
+//        ("topological", topological),
     ]
 }
 
@@ -538,7 +538,7 @@ private func containsLiteralDivisionByZero(_ expr: Expr) -> Bool {
 }
 
 private func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
-    let leaf = #gen(.int(in: -10 ... 10))
+    let leaf = #gen(.int(in: -10 ... 10, scaling: .constant))
         .mapped(forward: { Expr.value($0) }, backward: { $0.intValue ?? 0 })
     
     let calculator = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
@@ -1163,13 +1163,22 @@ private func runReflectableBenchmark<Output>(
         guard let tree = try? Interpreters.reflect(gen, with: value) else {
             continue
         }
+        var isTargetValue = value as? Expr == Expr.div(.value(0), .add(.value(-10), .value(10)))
         var invocationCount = 0
         let countingProperty: (Output) -> Bool = { candidate in
             invocationCount += 1
+//            if isTargetValue {
+//                print("Attempt: \(candidate)")
+//            }
             return property(candidate)
         }
         var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+//        if isTargetValue {
+//            ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        } else {
+//            ExhaustLog.setConfiguration(.init(isEnabled: false, minimumLevel: .error, categoryMinimumLevels: [.reducer: .error], format: .human))
+//        }
         let result = try? Interpreters.bonsaiReduce(
             gen: gen,
             tree: tree,
@@ -1220,9 +1229,9 @@ private func runNonReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-        if enableCounterExamples, seenCEs.insert(description).inserted {
+//        if enableCounterExamples, seenCEs.insert(description).inserted {
 //            print("  (\(String(describing: value)) -> \(description))")
-        }
+//        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
@@ -1241,7 +1250,7 @@ private func generateFailingValues<Output>(
     maxRuns: UInt64 = 1_000_000
 ) -> [Output] {
     var values: [Output] = []
-    var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 80085, maxRuns: maxRuns)
+    var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: maxRuns)
     do {
         while let (value, _) = try iterator.next(), values.count < reductionCount {
             if property(value) == false {

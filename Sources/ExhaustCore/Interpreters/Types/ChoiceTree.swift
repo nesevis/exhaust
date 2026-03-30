@@ -38,9 +38,7 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
 
     /// Represents a nested group of choices that usually represent objects or tuples.
     ///
-    /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents
-    /// high-lane compositions (e.g. SIMD8+) from exploding the parameter count in covering arrays, and
-    /// isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
+    /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents high-lane compositions (for example SIMD8+) from exploding the parameter count in covering arrays, and isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
     indirect case group([ChoiceTree], isOpaque: Bool = false)
 
     /// Represents a size value retrieved from the generation context.
@@ -161,12 +159,9 @@ public extension ChoiceTree {
         return false
     }
 
-    /// The site identifier with the depth contribution masked out, or `nil` if this node
-    /// is not a `.branch`.
+    /// The site identifier with the depth contribution masked out, or `nil` if this node is not a `.branch`.
     ///
-    /// Mirrors ``ChoiceSequenceValue/Branch/depthMaskedSiteID``. Strips the last three
-    /// decimal digits from the site ID to recover a stable identifier shared across all
-    /// depths of the same recursive generator.
+    /// Mirrors ``ChoiceSequenceValue/Branch/depthMaskedSiteID``. Strips the last three decimal digits from the site ID to recover a stable identifier shared across all depths of the same recursive generator.
     var depthMaskedSiteID: UInt64? {
         guard case let .branch(siteID, _, _, _, _) = self else { return nil }
         return siteID / 1000

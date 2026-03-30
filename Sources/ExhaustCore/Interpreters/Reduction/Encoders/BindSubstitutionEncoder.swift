@@ -1,7 +1,6 @@
 /// Substitutes a bind region's content with a deeper descendant bind region's content.
 ///
-/// For each bind region in the sequence, finds all descendant bind regions within its
-/// bound content and constructs candidates by atomically:
+/// For each bind region in the sequence, finds all descendant bind regions within its bound content and constructs candidates by atomically:
 /// 1. Setting the target bind's inner value to the descendant's inner value.
 /// 2. Replacing the target's bound content with the descendant's bound content.
 ///
@@ -57,11 +56,8 @@ struct BindSubstitutionEncoder: ComposableEncoder {
     /// Builds candidates for ALL bind regions in the sequence.
     ///
     /// Two strategies:
-    /// 1. **Depth substitution**: for each bind region, finds descendant bind regions and
-    ///    constructs a candidate by promoting the descendant to the target's position.
-    /// 2. **Sibling substitution**: for each pair of sibling bind regions (direct children
-    ///    of the same parent), constructs a candidate by splicing one sibling's inner+bound
-    ///    into the other's position and deleting the donor's span entirely.
+    /// 1. **Depth substitution**: for each bind region, finds descendant bind regions and constructs a candidate by promoting the descendant to the target's position.
+    /// 2. **Sibling substitution**: for each pair of same-size sibling bind regions (direct children of the same parent), overwrites the target's inner+bound with the donor's content, preserving both siblings. The duplicate gives subsequent deletion passes a shortlex-smaller starting point.
     static func buildCandidates(
         sequence: ChoiceSequence,
         bindIndex: BindSpanIndex
@@ -165,11 +161,9 @@ struct BindSubstitutionEncoder: ComposableEncoder {
 
     // MARK: - Sibling Substitution
 
-    /// For each pair of sibling bind regions, overwrites the target's inner+bound with
-    /// the donor's inner+bound, preserving both siblings in the sequence.
+    /// For each pair of sibling bind regions, overwrites the target's inner+bound with the donor's inner+bound, preserving both siblings in the sequence.
     ///
-    /// The result has two copies of the donor's content. The duplicate gives subsequent
-    /// deletion passes a shortlex-smaller starting point from which to remove one copy.
+    /// The result has two copies of the donor's content. The duplicate gives subsequent deletion passes a shortlex-smaller starting point from which to remove one copy.
     private static func buildSiblingSubstitutionCandidates(
         sequence: ChoiceSequence,
         bindIndex: BindSpanIndex
@@ -223,8 +217,7 @@ struct BindSubstitutionEncoder: ComposableEncoder {
 
     // MARK: - Compatibility
 
-    /// Returns the ``ChoiceSequenceValue/Branch/depthMaskedSiteID`` of the first branch entry
-    /// within the given range, or `nil` if no branch is found.
+    /// Returns the ``ChoiceSequenceValue/Branch/depthMaskedSiteID`` of the first branch entry within the given range, or `nil` if no branch is found.
     private static func firstBranchMaskedSiteID(
         in range: ClosedRange<Int>,
         sequence: ChoiceSequence
