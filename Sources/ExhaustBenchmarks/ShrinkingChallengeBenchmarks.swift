@@ -8,8 +8,8 @@ import Foundation
 // MARK: - Configuration
 
 let enableReport = true
-let enableCounterExamples = true
-private let reductionCount = 50
+let enableCounterExamples = false
+private let reductionCount = 100
 
 /// Returns both strategy variants of a base config.
 private func withStrategies(
@@ -44,9 +44,9 @@ func registerShrinkingChallengeBenchmarks() {
     registerLargeUnionList()
     registerLengthList()
     registerNestedLists()
-    registerParser() // Not included
     registerReplacement() // Not included
-    registerReverse()
+//    registerReverse()
+//    registerParser() // Not included
 }
 
 // MARK: - Bound5
@@ -421,15 +421,92 @@ private func registerParser() {
     let coverageFinds = coverageFindsFailure(gen: gen, property: property)
     let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
-    for strategy in withStrategies() {
-        benchmark("Parser (\(strategy.name))") {
-            let results = runReflectableBenchmark(
+//    for strategy in withStrategies() {
+//        benchmark("Parser (\(strategy.name))") {
+//            let results = runReflectableBenchmark(
+//                gen: gen,
+//                property: property,
+//                failingValues: failingValues,
+//                config: strategy.config
+//            )
+//            if enableReport { printChallengeReport(name: "Parser (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
+//        }
+//    }
+
+    // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed,
+    // matching the methodology from MacIver & Donaldson Figure 13.
+    benchmark("Parser ECOOP (adaptive)") {
+        var adaptive = Interpreters.BonsaiReducerConfiguration.fast
+        adaptive.schedulingStrategy = .adaptive
+
+        let seedCount = 1000
+        let baseSeed: UInt64 = 1337
+        var sizes: [Int] = []
+        var invocations: [Int] = []
+        var uniqueCEs = Set<String>()
+
+        for i in 0 ..< seedCount {
+            let seed = baseSeed &+ UInt64(i)
+            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 10_000)
+
+            // Find first failure for this seed.
+            var failingValue: ParserLang?
+            var failingTree: ChoiceTree?
+            do {
+                while let (value, tree) = try iterator.next() {
+                    if property(value) == false {
+                        failingValue = value
+                        failingTree = tree
+                        break
+                    }
+                }
+            } catch {}
+            guard let value = failingValue, let tree = failingTree else { continue }
+
+            // Reflect and reduce.
+            var invocationCount = 0
+            let countingProperty: (ParserLang) -> Bool = { candidate in
+                invocationCount += 1
+                return property(candidate)
+            }
+            let result = try? Interpreters.bonsaiReduce(
                 gen: gen,
-                property: property,
-                failingValues: failingValues,
-                config: strategy.config
+                tree: tree,
+                output: value,
+                config: adaptive,
+                property: countingProperty
             )
-            if enableReport { printChallengeReport(name: "Parser (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
+            print("\(seed), \(invocationCount)")
+            let output = result?.1 ?? value
+            let outputSize = parserSize(output)
+            sizes.append(outputSize)
+            invocations.append(invocationCount)
+            uniqueCEs.insert(String(describing: output))
+        }
+
+        guard sizes.isEmpty == false else {
+            print("[Parser ECOOP] No failures found")
+            return
+        }
+        let meanSize = Double(sizes.reduce(0, +)) / Double(sizes.count)
+        let meanInvoc = Double(invocations.reduce(0, +)) / Double(sizes.count)
+        let sortedSizes = sizes.sorted()
+        let medianSize = sortedSizes.count % 2 == 0
+            ? Double(sortedSizes[sortedSizes.count / 2 - 1] + sortedSizes[sortedSizes.count / 2]) / 2.0
+            : Double(sortedSizes[sortedSizes.count / 2])
+
+        // 95% confidence interval for the mean.
+        let variance = sizes.map { pow(Double($0) - meanSize, 2) }.reduce(0, +) / Double(sizes.count - 1)
+        let stdError = sqrt(variance / Double(sizes.count))
+        let ciLow = String(format: "%.2f", meanSize - 1.96 * stdError)
+        let ciHigh = String(format: "%.2f", meanSize + 1.96 * stdError)
+
+        print("[Parser ECOOP] seeds=\(sizes.count) mean_size=\(String(format: "%.2f", meanSize)) (\(ciLow)–\(ciHigh)) median_size=\(String(format: "%.1f", medianSize)) mean_invocations=\(String(format: "%.1f", meanInvoc)) unique_CEs=\(uniqueCEs.count)")
+        if enableCounterExamples {
+            print("[Parser ECOOP] unique counterexamples (\(uniqueCEs.count)):")
+            for ce in uniqueCEs.sorted() {
+                print("  \(ce)")
+            }
         }
     }
 }
@@ -1032,6 +1109,41 @@ private func parserSplitTopLevel(_ input: Substring, separator: Character) -> [S
     return results
 }
 
+// MARK: - Parser Size Metric (matches SmartCheck/Hypothesis Support.hs)
+
+private func parserSize(_ lang: ParserLang) -> Int {
+    lang.modules.map { parserSize($0) }.reduce(0, +)
+        + lang.funcs.map { parserSize($0) }.reduce(0, +)
+}
+
+private func parserSize(_ mod: ParserMod) -> Int {
+    mod.imports.count + mod.exports.count
+}
+
+private func parserSize(_ function: ParserFunc) -> Int {
+    function.args.map { parserSize($0) }.reduce(0, +)
+        + function.body.map { parserSize($0) }.reduce(0, +)
+}
+
+private func parserSize(_ stmt: ParserStmt) -> Int {
+    switch stmt {
+    case let .assign(_, expression): 1 + parserSize(expression)
+    case let .alloc(_, expression): 1 + parserSize(expression)
+    case let .ret(expression): 1 + parserSize(expression)
+    }
+}
+
+private func parserSize(_ expression: ParserExp) -> Int {
+    switch expression {
+    case .int, .bool: 1
+    case let .not(inner): 1 + parserSize(inner)
+    case let .add(lhs, rhs), let .sub(lhs, rhs),
+         let .mul(lhs, rhs), let .div(lhs, rhs),
+         let .and(lhs, rhs), let .or(lhs, rhs):
+        1 + parserSize(lhs) + parserSize(rhs)
+    }
+}
+
 // MARK: - Parser Generators
 
 private var parserVarGen: ReflectiveGenerator<ParserVar> {
@@ -1143,7 +1255,7 @@ private var parserStmtGen: ReflectiveGenerator<ParserStmt> {
 }
 
 private var parserFuncGen: ReflectiveGenerator<ParserFunc> {
-    #gen(parserVarGen, parserExpGen(depth: 3).array(length: 1 ... 3), parserStmtGen.array(length: 1 ... 3))
+    #gen(parserVarGen, parserExpGen(depth: 3).array(length: 0 ... 3), parserStmtGen.array(length: 0 ... 3))
         .mapped(
             forward: { name, args, body in ParserFunc(name: name, args: args, body: body) },
             backward: { function in (function.name, function.args, function.body) }
@@ -1151,7 +1263,7 @@ private var parserFuncGen: ReflectiveGenerator<ParserFunc> {
 }
 
 private var parserModGen: ReflectiveGenerator<ParserMod> {
-    #gen(parserVarGen.array(length: 1 ... 3), parserVarGen.array(length: 1 ... 3))
+    #gen(parserVarGen.array(length: 0 ... 3), parserVarGen.array(length: 0 ... 3))
         .mapped(
             forward: { imports, exports in ParserMod(imports: imports, exports: exports) },
             backward: { mod in (mod.imports, mod.exports) }
@@ -1159,7 +1271,7 @@ private var parserModGen: ReflectiveGenerator<ParserMod> {
 }
 
 private var parserLangGen: ReflectiveGenerator<ParserLang> {
-    #gen(parserModGen.array(length: 1 ... 2), parserFuncGen.array(length: 1 ... 2))
+    #gen(parserModGen.array(length: 0 ... 2), parserFuncGen.array(length: 0 ... 2))
         .mapped(
             forward: { modules, funcs in ParserLang(modules: modules, funcs: funcs) },
             backward: { lang in (lang.modules, lang.funcs) }

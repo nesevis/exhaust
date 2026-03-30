@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 21/3/2026.
 //
 
+// swiftlint:disable force_try
+
 import Foundation
 import Testing
 @testable import Exhaust
@@ -28,16 +30,50 @@ struct ParserShrinkingChallenge {
 
     @Test("Parser, Full")
     func parserFull() throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        let knownBad = Lang(
+            modules: [
+                Mod(imports: [Var(name: "u"), Var(name: "o"), Var(name: "k")], exports: [Var(name: "y")])
+            ],
+            funcs: [
+                Func(
+                    name: Var(name: "j"),
+                    args: [
+                        .div(.and(.mul(.bool(true), .int(0)), .or(.bool(true), .bool(false))), .add(.mul(.int(1), .bool(true)), .mul(.bool(true), .bool(true)))),
+                        .or(.add(.add(.int(-4), .bool(true)), .add(.bool(false), .bool(true))), .or(.sub(.int(4), .int(8)), .sub(.bool(true), .bool(false)))),
+                        .int(3)
+                    ],
+                    body: [
+                        .ret(.mul(.and(.mul(.bool(false), .int(-10)), .or(.int(9), .bool(true))), .or(.bool(true), .mul(.int(-4), .bool(false)))))
+                    ]
+                ),
+                Func(
+                    name: Var(name: "q"),
+                    args: [
+                        .add(.mul(.div(.int(8), .int(1)), .mul(.bool(false), .int(8))), .mul(.or(.int(-2), .int(7)), .or(.int(-7), .int(9)))),
+                        .mul(.or(.div(.int(-3), .int(9)), .mul(.bool(true), .int(4))), .sub(.sub(.int(8), .int(7)), .div(.bool(true), .int(-6)))),
+                        .add(.and(.sub(.bool(true), .int(-10)), .div(.int(9), .bool(false))), .and(.add(.int(2), .bool(false)), .or(.int(-7), .int(4))))
+                    ],
+                    body: [
+                        .ret(.or(.and(.mul(.bool(true), .bool(true)), .and(.int(-7), .bool(false))), .and(.mul(.int(-9), .int(4)), .div(.bool(false), .int(3))))),
+                        .alloc(Var(name: "o"), .int(7)),
+                        .alloc(Var(name: "i"), .sub(.and(.div(.int(-4), .int(-6)), .div(.int(-2), .bool(false))), .mul(.or(.int(-6), .int(6)), .mul(.int(-8), .bool(true)))))
+                    ]
+                )
+            ]
+        )
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 Self.langGen,
 //                .randomOnly, // coverage takes a long time
+                .reflecting(knownBad),
                 .suppressIssueReporting,
                 .onReport { report = $0 }
             ) { lang in
-                Self.parse(Self.serialize(lang)) == lang
+                let encoded = try! JSONEncoder().encode(lang)
+                let decoded = try! JSONDecoder().decode(Lang.self, from: encoded)
+                return decoded == lang
             }
         )
         if let report { print("[PROFILE] Parser: \(report.profilingSummary)") }
@@ -55,7 +91,7 @@ struct ParserShrinkingChallenge {
 
     // MARK: - Types
 
-    struct Lang: Equatable, CustomDebugStringConvertible {
+    struct Lang: Equatable, Codable, CustomDebugStringConvertible {
         let modules: [Mod]
         let funcs: [Func]
 
@@ -64,7 +100,7 @@ struct ParserShrinkingChallenge {
         }
     }
 
-    struct Mod: Equatable, CustomDebugStringConvertible {
+    struct Mod: Equatable, Codable, CustomDebugStringConvertible {
         let imports: [Var]
         let exports: [Var]
 
@@ -73,7 +109,7 @@ struct ParserShrinkingChallenge {
         }
     }
 
-    struct Func: Equatable, CustomDebugStringConvertible {
+    struct Func: Equatable, Codable, CustomDebugStringConvertible {
         let name: Var
         let args: [Exp]
         let body: [Stmt]
@@ -83,7 +119,7 @@ struct ParserShrinkingChallenge {
         }
     }
 
-    enum Stmt: Equatable, CustomDebugStringConvertible {
+    enum Stmt: Equatable, Codable, CustomDebugStringConvertible {
         case assign(Var, Exp)
         case alloc(Var, Exp)
         case ret(Exp)
@@ -100,7 +136,7 @@ struct ParserShrinkingChallenge {
         }
     }
 
-    indirect enum Exp: Equatable, CustomDebugStringConvertible {
+    indirect enum Exp: Equatable, Codable, CustomDebugStringConvertible {
         case int(Int)
         case bool(Bool)
         case add(Exp, Exp)
@@ -124,9 +160,161 @@ struct ParserShrinkingChallenge {
             case let .or(lhs, rhs): "Or(\(lhs), \(rhs))"
             }
         }
+        
+        private enum CodingKeys: CodingKey {
+            case int
+            case bool
+            case add
+            case sub
+            case mul
+            case div
+            case not
+            case and
+            case or
+        }
+        
+        private enum IntCodingKeys: CodingKey {
+            case _0
+        }
+        
+        private enum BoolCodingKeys: CodingKey {
+            case _0
+        }
+        
+        private enum AddCodingKeys: CodingKey {
+            case _0
+            case _1
+        }
+        
+        private enum SubCodingKeys: CodingKey {
+            case _0
+            case _1
+        }
+        
+        private enum MulCodingKeys: CodingKey {
+            case _0
+            case _1
+        }
+        
+        private enum DivCodingKeys: CodingKey {
+            case _0
+            case _1
+        }
+        
+        private enum NotCodingKeys: CodingKey {
+            case _0
+        }
+        
+        private enum AndCodingKeys: CodingKey {
+            case _0
+            case _1
+        }
+        
+        private enum OrCodingKeys: CodingKey {
+            case _0
+            case _1
+        }
+        
+        init(from decoder: any Decoder) throws {
+            let container: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.CodingKeys> = try decoder.container(keyedBy: ParserShrinkingChallenge.Exp.CodingKeys.self)
+            
+            var allKeys: ArraySlice<ParserShrinkingChallenge.Exp.CodingKeys> = ArraySlice<ParserShrinkingChallenge.Exp.CodingKeys>(container.allKeys)
+            
+            guard let onlyKey = allKeys.popFirst(), allKeys.isEmpty else {
+                throw DecodingError.typeMismatch(ParserShrinkingChallenge.Exp.self, DecodingError.Context(codingPath: container.codingPath, debugDescription: "Invalid number of keys found, expected one.", underlyingError: nil))
+            }
+            switch onlyKey {
+            case .int:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.IntCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.IntCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.int)
+                
+                self = ParserShrinkingChallenge.Exp.int(try nestedContainer.decode(Int.self, forKey: ParserShrinkingChallenge.Exp.IntCodingKeys._0))
+            case .bool:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.BoolCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.BoolCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.bool)
+                
+                self = ParserShrinkingChallenge.Exp.bool(try nestedContainer.decode(Bool.self, forKey: ParserShrinkingChallenge.Exp.BoolCodingKeys._0))
+            case .add:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.AddCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AddCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.add)
+                
+                self = ParserShrinkingChallenge.Exp.add(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._1))
+            case .sub:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.SubCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.SubCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.sub)
+                
+                self = ParserShrinkingChallenge.Exp.sub(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._1))
+            case .mul:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.MulCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.MulCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.mul)
+                
+                self = ParserShrinkingChallenge.Exp.mul(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._1))
+            case .div:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.DivCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.DivCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.div)
+                
+                self = ParserShrinkingChallenge.Exp.div(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._1))
+            case .not:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.NotCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.NotCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.not)
+                
+                self = ParserShrinkingChallenge.Exp.not(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.NotCodingKeys._0))
+            case .and:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.AndCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AndCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.and)
+                
+                self = ParserShrinkingChallenge.Exp.and(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._1))
+            case .or:
+                let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.OrCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.OrCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.or)
+                
+                self = ParserShrinkingChallenge.Exp.or(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.OrCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.OrCodingKeys._1))
+            }
+            
+        }
+        
+        func encode(to encoder: any Encoder) throws {
+            var container: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.CodingKeys> = encoder.container(keyedBy: ParserShrinkingChallenge.Exp.CodingKeys.self)
+            
+            switch self {
+            case .int(let a0):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.IntCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.IntCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.int)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.IntCodingKeys._0)
+            case .bool(let a0):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.BoolCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.BoolCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.bool)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.BoolCodingKeys._0)
+            case .add(let a0, let a1):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.AddCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AddCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.add)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._0)
+                try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._1)
+            case .sub(let a0, let a1):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.SubCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.SubCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.sub)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._0)
+                try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._1)
+            case .mul(let a0, let a1):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.MulCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.MulCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.mul)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._0)
+                try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._1)
+            case .div(let a0, let a1):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.DivCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.DivCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.div)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._0)
+                try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._1)
+            case .not(let a0):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.NotCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.NotCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.not)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.NotCodingKeys._0)
+            case .and(let a1, let a0):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.AndCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AndCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.and)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._0)
+                try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._1)
+            case .or(let a1, let a0):
+                var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.AndCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AndCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.and)
+                
+                try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._0)
+                try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._1)
+            }
+        }
     }
 
-    struct Var: Equatable, CustomDebugStringConvertible {
+    struct Var: Equatable, Codable, CustomDebugStringConvertible {
         let name: String
 
         var debugDescription: String {
@@ -477,7 +665,7 @@ struct ParserShrinkingChallenge {
     static var varGen: ReflectiveGenerator<Var> {
         // Single lowercase ASCII letter — avoids Unicode/empty-name edge cases
         // that would break the serializer/parser roundtrip for non-bug reasons.
-        #gen(.int(in: 0 ... 25))
+        #gen(.int(in: 0 ... 25, scaling: .constant))
             .mapped(
                 forward: { Var(name: String(Character(UnicodeScalar(UInt8(97 + $0))))) },
                 backward: { Int($0.name.first?.asciiValue ?? 97) - 97 }
@@ -485,7 +673,7 @@ struct ParserShrinkingChallenge {
     }
 
     static func expGen(depth: UInt64) -> ReflectiveGenerator<Exp> {
-        let intLeaf = #gen(.int(in: -10 ... 10))
+        let intLeaf = #gen(.int(in: -10 ... 10, scaling: .constant))
             .mapped(
                 forward: { Exp.int($0) },
                 backward: { value in
@@ -599,7 +787,7 @@ struct ParserShrinkingChallenge {
     }
 
     static var funcGen: ReflectiveGenerator<Func> {
-        #gen(varGen, expGen(depth: 3).array(length: 1 ... 3), stmtGen.array(length: 1 ... 3))
+        #gen(varGen, expGen(depth: 3).array(length: 1 ... 3, scaling: .constant), stmtGen.array(length: 0 ... 3, scaling: .constant))
             .mapped(
                 forward: { name, args, body in Func(name: name, args: args, body: body) },
                 backward: { function in (function.name, function.args, function.body) }
@@ -607,7 +795,7 @@ struct ParserShrinkingChallenge {
     }
 
     static var modGen: ReflectiveGenerator<Mod> {
-        #gen(varGen.array(length: 1 ... 3), varGen.array(length: 1 ... 3))
+        #gen(varGen.array(length: 0 ... 3, scaling: .constant), varGen.array(length: 0 ... 3, scaling: .constant))
             .mapped(
                 forward: { imports, exports in Mod(imports: imports, exports: exports) },
                 backward: { mod in (mod.imports, mod.exports) }
@@ -615,7 +803,7 @@ struct ParserShrinkingChallenge {
     }
 
     static var langGen: ReflectiveGenerator<Lang> {
-        #gen(modGen.array(length: 1 ... 2), funcGen.array(length: 1 ... 2))
+        #gen(modGen.array(length: 1 ... 2, scaling: .constant), funcGen.array(length: 1 ... 2, scaling: .constant))
             .mapped(
                 forward: { modules, funcs in Lang(modules: modules, funcs: funcs) },
                 backward: { lang in (lang.modules, lang.funcs) }
