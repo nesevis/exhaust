@@ -82,7 +82,8 @@ public struct RelaxRoundEncoder: ComposableEncoder {
         // Sort order:
         // 1. Pairs where lhs is non-zero and rhs is at target (value relocation)
         //    come first, ordered by largest positional delta (rhs - lhs) descending.
-        //    Moving a value rightward in the sequence is shortlex-favorable.
+        //    Moving a value rightward zeroes an earlier sequence position, which is
+        //    the shortlex win.
         // 2. Remaining pairs (both non-zero) ordered by lhs distance descending —
         //    zero the largest values first.
         let seq = sequence
