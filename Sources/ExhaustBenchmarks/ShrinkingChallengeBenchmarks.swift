@@ -1,7 +1,7 @@
 // swiftlint:disable file_length function_body_length force_try
 
 import Benchmark
-import Exhaust
+@_spi(ExhaustInternal) import Exhaust
 import ExhaustCore
 import Foundation
 
@@ -9,7 +9,7 @@ import Foundation
 
 let enableReport = true
 let enableCounterExamples = true
-private let reductionCount = 100
+private let reductionCount = 50
 
 /// Returns both strategy variants of a base config.
 private func withStrategies(
@@ -44,8 +44,8 @@ func registerShrinkingChallengeBenchmarks() {
     registerLargeUnionList()
     registerLengthList()
     registerNestedLists()
-//    registerParser() // Not included
-//    registerReplacement() // Not included
+    registerParser() // Not included
+    registerReplacement() // Not included
     registerReverse()
 }
 
@@ -64,6 +64,8 @@ private func registerBound5() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Bound5")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Bound5 (\(strategy.name))") {
@@ -73,7 +75,7 @@ private func registerBound5() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Bound5 (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Bound5 (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -91,6 +93,8 @@ private func registerBinaryHeap() {
     }
 
     let failingPairs = generateFailingPairs(gen: gen, property: property, name: "BinaryHeap")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("BinaryHeap (\(strategy.name))") {
@@ -100,7 +104,7 @@ private func registerBinaryHeap() {
                 failingPairs: failingPairs,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "BinaryHeap (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "BinaryHeap (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -121,6 +125,8 @@ private func registerCalculator() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Calculator")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies(.slow) {
         benchmark("Calculator (\(strategy.name))") {
@@ -130,7 +136,7 @@ private func registerCalculator() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Calculator (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Calculator (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -155,6 +161,8 @@ private func registerCoupling() {
     }
 
     let failingPairs = generateFailingPairs(gen: gen, property: property, name: "Coupling")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Coupling (\(strategy.name))") {
@@ -164,7 +172,7 @@ private func registerCoupling() {
                 failingPairs: failingPairs,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Coupling (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Coupling (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -185,6 +193,8 @@ private func registerDeletion() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Deletion")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Deletion (\(strategy.name))") {
@@ -194,7 +204,7 @@ private func registerDeletion() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Deletion (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Deletion (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -214,6 +224,8 @@ private func registerDifferenceMustNotBeZero() {
         name: "DifferenceMustNotBeZero",
         maxRuns: 500_000
     )
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Difference: Must Not Be Zero (\(strategy.name))") {
@@ -223,7 +235,7 @@ private func registerDifferenceMustNotBeZero() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Difference: Must Not Be Zero (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Difference: Must Not Be Zero (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -244,6 +256,8 @@ private func registerDifferenceMustNotBeSmall() {
         name: "DifferenceMustNotBeSmall",
         maxRuns: 500_000
     )
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Difference: Must Not Be Small (\(strategy.name))") {
@@ -253,7 +267,7 @@ private func registerDifferenceMustNotBeSmall() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Difference: Must Not Be Small (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Difference: Must Not Be Small (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -274,6 +288,8 @@ private func registerDifferenceMustNotBeOne() {
         name: "DifferenceMustNotBeOne",
         maxRuns: 500_000
     )
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Difference: Must Not Be One (\(strategy.name))") {
@@ -283,7 +299,7 @@ private func registerDifferenceMustNotBeOne() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Difference: Must Not Be One (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Difference: Must Not Be One (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -298,6 +314,8 @@ private func registerDistinct() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Distinct")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Distinct (\(strategy.name))") {
@@ -307,7 +325,7 @@ private func registerDistinct() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Distinct (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Distinct (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -322,6 +340,8 @@ private func registerLargeUnionList() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "LargeUnionList")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("LargeUnionList (\(strategy.name))") {
@@ -331,7 +351,7 @@ private func registerLargeUnionList() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "LargeUnionList (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "LargeUnionList (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -346,6 +366,8 @@ private func registerLengthList() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "LengthList")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("LengthList (\(strategy.name))") {
@@ -355,7 +377,7 @@ private func registerLengthList() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "LengthList (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "LengthList (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -370,6 +392,8 @@ private func registerNestedLists() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "NestedLists")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("NestedLists (\(strategy.name))") {
@@ -379,7 +403,7 @@ private func registerNestedLists() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "NestedLists (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "NestedLists (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -394,6 +418,8 @@ private func registerParser() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Parser")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Parser (\(strategy.name))") {
@@ -403,7 +429,7 @@ private func registerParser() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Parser (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Parser (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -419,6 +445,8 @@ private func registerReplacement() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Replacement")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Replacement (\(strategy.name))") {
@@ -428,7 +456,7 @@ private func registerReplacement() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Replacement (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Replacement (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -443,6 +471,8 @@ private func registerReverse() {
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Reverse")
+    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     for strategy in withStrategies() {
         benchmark("Reverse (\(strategy.name))") {
@@ -452,7 +482,7 @@ private func registerReverse() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Reverse (\(strategy.name))", results: results) }
+            if enableReport { printChallengeReport(name: "Reverse (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
         }
     }
 }
@@ -1190,9 +1220,9 @@ private func runReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-//        if enableCounterExamples, seenCEs.insert(description).inserted {
-//            print("  (\(String(describing: value)) -> \(description))")
-//        }
+        if enableCounterExamples, seenCEs.insert(description).inserted {
+            print("  (\(String(describing: value)) -> \(description))")
+        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
@@ -1229,9 +1259,9 @@ private func runNonReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-//        if enableCounterExamples, seenCEs.insert(description).inserted {
-//            print("  (\(String(describing: value)) -> \(description))")
-//        }
+        if enableCounterExamples, seenCEs.insert(description).inserted {
+            print("  (\(String(describing: value)) -> \(description))")
+        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
@@ -1289,6 +1319,42 @@ private func generateFailingPairs<Output>(
     return pairs
 }
 
+// MARK: - Generation Metrics
+
+private func coverageFindsFailure<Output>(
+    gen: ReflectiveGenerator<Output>,
+    property: @escaping (Output) -> Bool
+) -> Bool {
+    let result = CoverageRunner.run(gen, coverageBudget: 200, property: property)
+    if case .failure = result { return true }
+    return false
+}
+
+private func measureIterationsToFirstFailure<Output>(
+    gen: ReflectiveGenerator<Output>,
+    property: @escaping (Output) -> Bool,
+    seeds: Int = 100,
+    maxIterations: UInt64 = 500
+) -> [Int] {
+    var counts: [Int] = []
+    for seed in 0 ..< seeds {
+        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: UInt64(seed), maxRuns: maxIterations)
+        var iteration = 0
+        var found = false
+        do {
+            while let (value, _) = try iterator.next() {
+                iteration += 1
+                if property(value) == false {
+                    found = true
+                    break
+                }
+            }
+        } catch {}
+        counts.append(found ? iteration : Int(maxIterations))
+    }
+    return counts
+}
+
 // MARK: - Reporting Infrastructure
 
 private struct ReductionResult {
@@ -1312,7 +1378,12 @@ private func mean(_ values: [Double]) -> Double {
     return values.reduce(0, +) / Double(values.count)
 }
 
-private func printChallengeReport(name: String, results: [ReductionResult]) {
+private func printChallengeReport(
+    name: String,
+    results: [ReductionResult],
+    foundWithCoveringArray: Bool,
+    iterationsToFirstFailure: [Int]
+) {
     let invocations = results.map { Double($0.propertyInvocations) }
     let times = results.map { $0.reductionMilliseconds }
     let uniqueCounterexamples = Set(results.map(\.counterexampleDescription)).sorted()
@@ -1322,7 +1393,11 @@ private func printChallengeReport(name: String, results: [ReductionResult]) {
     let medianTime = String(format: "%.1f", median(times))
     let meanTime = String(format: "%.1f", mean(times))
 
-    print("[\(name)] invocations: median=\(medianInvocations) mean=\(meanInvocations) | time(ms): median=\(medianTime) mean=\(meanTime) counterexamples=\(uniqueCounterexamples.count)")
+    let iterDoubles = iterationsToFirstFailure.map { Double($0) }
+    let medianIter = String(format: "%.0f", median(iterDoubles))
+    let meanIter = String(format: "%.1f", mean(iterDoubles))
+
+    print("[\(name)] invocations: median=\(medianInvocations) mean=\(meanInvocations) | time(ms): median=\(medianTime) mean=\(meanTime) counterexamples=\(uniqueCounterexamples.count) | coverage=\(foundWithCoveringArray) iterToFail: median=\(medianIter) mean=\(meanIter)")
     if enableCounterExamples {
         print("[\(name)] unique counterexamples (\(uniqueCounterexamples.count)):")
         for counterexample in uniqueCounterexamples {
