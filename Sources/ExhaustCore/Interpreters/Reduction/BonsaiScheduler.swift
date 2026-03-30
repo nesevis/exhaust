@@ -553,6 +553,11 @@ enum BonsaiScheduler {
             if outcome.improved {
                 stallBudget = config.maxStalls
             } else if strategy.isForwardPassInProgress == false {
+                // All value coordinates converged and no progress — the CE is at
+                // a fixed point. Exit immediately instead of burning stall budget.
+                if state.allValueCoordinatesConverged() {
+                    break
+                }
                 stallBudget -= 1
             }
         }
