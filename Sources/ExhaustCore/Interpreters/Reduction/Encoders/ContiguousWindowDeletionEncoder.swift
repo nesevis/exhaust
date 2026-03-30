@@ -50,7 +50,7 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
         positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
+        context: ReductionContext
     ) {
         self.sequence = sequence
         cohortIndex = 0
@@ -66,6 +66,23 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
                 from: sequence,
                 siblingGroups: siblingGroups
             )
+            .filter { $0.isEmpty == false }
+        }
+
+        // Exclude slots that overlap bind-inner positions (same filter as
+        // BeamSearchDeletionEncoder — see its start() for rationale).
+        if let bindIndex = context.bindIndex {
+            let bindInnerRanges = bindIndex.regions.map(\.innerRange)
+            cohorts = cohorts.map { slots in
+                slots.filter { slot in
+                    for slotRange in slot.ranges {
+                        for innerRange in bindInnerRanges {
+                            if slotRange.overlaps(innerRange) { return false }
+                        }
+                    }
+                    return true
+                }
+            }
             .filter { $0.isEmpty == false }
         }
 

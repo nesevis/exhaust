@@ -34,44 +34,71 @@ public struct RelaxRoundEncoder: ComposableEncoder {
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
         positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
+        context: ReductionContext
     ) {
         self.sequence = sequence
         probes = []
         probeIndex = 0
 
-        var candidates: [(index: Int, value: ChoiceSequenceValue.Value)] = []
+        let bindIndex = context.bindIndex
+
+        // Sources: non-zero values that can be zeroed.
+        // Sinks: all numeric values (including zeros) that can absorb magnitude.
+        var sources: [(index: Int, value: ChoiceSequenceValue.Value, isBindInner: Bool)] = []
+        var sinks: [(index: Int, value: ChoiceSequenceValue.Value, isBindInner: Bool)] = []
         var index = 0
         while index < sequence.count {
             if let value = sequence[index].value {
                 switch value.choice {
                 case .unsigned, .signed, .floating:
+                    let isInner = bindIndex?.bindRegionForInnerIndex(index) != nil
+                    sinks.append((index, value, isInner))
                     let target = value.choice.reductionTarget(
                         in: value.isRangeExplicit ? value.validRange : nil
                     )
                     if value.choice.bitPattern64 != target {
-                        candidates.append((index, value))
+                        sources.append((index, value, isInner))
                     }
                 }
             }
             index += 1
         }
 
-        // Build pairs: lhs (to be zeroed) × rhs (to absorb).
-        for ci in 0 ..< candidates.count {
-            for cj in 0 ..< candidates.count where ci != cj {
-                // Require same tag so delta arithmetic is meaningful.
-                guard candidates[ci].value.choice.tag == candidates[cj].value.choice.tag else {
+        // Build pairs: lhs (source, to be zeroed) × rhs (sink, to absorb).
+        // Never pair a bind-inner with a bound value — modifying the inner changes
+        // the bound structure, making the bound modification meaningless.
+        for source in sources {
+            for sink in sinks where source.index != sink.index {
+                guard source.value.choice.tag == sink.value.choice.tag else {
                     continue
                 }
-                probes.append((candidates[ci].index, candidates[cj].index))
+                guard source.isBindInner == sink.isBindInner else {
+                    continue
+                }
+                probes.append((source.index, sink.index))
             }
         }
 
-        // Sort by lhs distance descending — zero the largest values first.
+        // Sort order:
+        // 1. Pairs where lhs is non-zero and rhs is at target (value relocation)
+        //    come first, ordered by largest positional delta (rhs - lhs) descending.
+        //    Moving a value rightward zeroes an earlier sequence position, which is
+        //    the shortlex win.
+        // 2. Remaining pairs (both non-zero) ordered by lhs distance descending —
+        //    zero the largest values first.
         let seq = sequence
         probes.sort { lhs, rhs in
-            Self.distance(at: lhs.lhsIndex, in: seq) > Self.distance(at: rhs.lhsIndex, in: seq)
+            let lhsIsRelocation = Self.distance(at: lhs.rhsIndex, in: seq) == 0
+            let rhsIsRelocation = Self.distance(at: rhs.rhsIndex, in: seq) == 0
+            if lhsIsRelocation != rhsIsRelocation {
+                return lhsIsRelocation
+            }
+            if lhsIsRelocation {
+                let lhsDelta = lhs.rhsIndex - lhs.lhsIndex
+                let rhsDelta = rhs.rhsIndex - rhs.lhsIndex
+                return lhsDelta > rhsDelta
+            }
+            return Self.distance(at: lhs.lhsIndex, in: seq) > Self.distance(at: rhs.lhsIndex, in: seq)
         }
     }
 

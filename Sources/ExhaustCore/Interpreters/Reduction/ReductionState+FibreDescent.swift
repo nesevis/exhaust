@@ -18,7 +18,11 @@ extension ReductionState {
     /// Processes DAG leaf positions first, then sweeps bound-content values at intermediate bind depths from minimum upward (covariant). Returns `true` if any value reduction was committed.
     func runFibreDescent(
         budget: inout Int,
-        dag: ChoiceDependencyGraph?
+        dag: ChoiceDependencyGraph?,
+        scopeRange: ClosedRange<Int>? = nil,
+        depthFilter: Int? = nil,
+        suppressCovariantSweep: Bool = false,
+        exclusionRanges: [ClosedRange<Int>]? = nil
     ) throws -> Bool {
         phaseTracker.push(.fibreDescent)
         defer { phaseTracker.pop() }
@@ -61,8 +65,11 @@ extension ReductionState {
             }
         }()
 
-        // Compute target leaf ranges.
-        let leafRanges = computeLeafRanges(dag: dag)
+        // Compute target leaf ranges, optionally filtered to the scope.
+        var leafRanges = computeLeafRanges(dag: dag)
+        if let scope = scopeRange {
+            leafRanges = leafRanges.filter { scope.overlaps($0) }
+        }
 
         // Capture skeleton fingerprint before fibre descent starts.
         let prePhaseFingerprint = bindIndex.map {
@@ -95,7 +102,12 @@ extension ReductionState {
             repeat {
                 restartLeafRange = false
 
-                let leafSpans = extractValueSpans(in: leafRange)
+                var leafSpans = extractValueSpans(in: leafRange)
+                if let excluded = exclusionRanges {
+                    leafSpans = ChoiceDependencyGraph.applyExclusion(
+                        spans: leafSpans, excluding: excluded
+                    )
+                }
                 guard leafSpans.isEmpty == false else { break }
 
                 let floatSpans = leafSpans.filter { span in
@@ -109,7 +121,8 @@ extension ReductionState {
                 let leafContext = ReductionContext(
                     bindIndex: bindIndex,
                     convergedOrigins: cachedOrigins,
-                    dag: dag
+                    dag: dag,
+                    depthFilter: depthFilter
                 )
                 let activeFingerprint = needsFingerprintGuard ? prePhaseFingerprint : nil
 
@@ -168,7 +181,7 @@ extension ReductionState {
         // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runComposable call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
         let maxBindDepth = bindIndex?.maxBindDepth ?? 0
         let fullRange = 0 ... max(0, sequence.count - 1)
-        if maxBindDepth >= 1, legBudget.isExhausted == false {
+        if maxBindDepth >= 1, legBudget.isExhausted == false, suppressCovariantSweep == false {
             for depth in stride(from: 1, through: maxBindDepth, by: 1) {
                 guard legBudget.isExhausted == false else { break }
                 dominance.invalidate()
@@ -250,7 +263,8 @@ extension ReductionState {
         let tailContext = ReductionContext(
             bindIndex: bindIndex,
             convergedOrigins: cachedOrigins,
-            dag: dag
+            dag: dag,
+            depthFilter: depthFilter
         )
 
         // Shortlex reorder: sort siblings by shortlex key after values settle.

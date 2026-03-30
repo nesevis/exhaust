@@ -10,6 +10,7 @@ public enum EncoderName: String, Hashable, Sendable {
     case deleteContainerSpansWithRandomRepair
     case deleteAlignedSiblingWindows
     case deleteAlignedSiblingSubsets
+    case bindSubstitution
     case swapSiblings
     // Value minimization
     case zeroValue

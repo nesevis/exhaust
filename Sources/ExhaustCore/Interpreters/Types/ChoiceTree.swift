@@ -38,9 +38,7 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
 
     /// Represents a nested group of choices that usually represent objects or tuples.
     ///
-    /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents
-    /// high-lane compositions (e.g. SIMD8+) from exploding the parameter count in covering arrays, and
-    /// isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
+    /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents high-lane compositions (for example SIMD8+) from exploding the parameter count in covering arrays, and isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
     indirect case group([ChoiceTree], isOpaque: Bool = false)
 
     /// Represents a size value retrieved from the generation context.
@@ -159,6 +157,14 @@ public extension ChoiceTree {
             return true
         }
         return false
+    }
+
+    /// The site identifier with the depth contribution masked out, or `nil` if this node is not a `.branch`.
+    ///
+    /// Mirrors ``ChoiceSequenceValue/Branch/depthMaskedSiteID``. Strips the last three decimal digits from the site ID to recover a stable identifier shared across all depths of the same recursive generator.
+    var depthMaskedSiteID: UInt64? {
+        guard case let .branch(siteID, _, _, _, _) = self else { return nil }
+        return siteID / 1000
     }
 
     /// Whether this tree contains any pick sites (`.branch` nodes).
@@ -329,16 +335,17 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return prefix + connector + "just(\(type))"
 
         case let .sequence(length, elements, meta):
-            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange!)"
+            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange)"
             for (index, element) in elements.enumerated() {
                 let isLastElement = index == elements.count - 1
                 result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)
             }
             return result
 
-        case let .branch(_, weight, id, branchIDs, gen):
+        case let .branch(siteId, weight, id, branchIDs, gen):
             let index = branchIDs.firstIndex(of: id).map { $0 + 1 } ?? 0
-            var result = prefix + connector + "\(selected)branch(id: \(id), index: \(index), weight: \(weight), count: \(branchIDs.count))"
+            let fingerprintShort = String(format: "%08X", siteId & 0xFFFF_FFFF)
+            var result = prefix + connector + "\(selected)branch(siteId: \(fingerprintShort), id: \(id), index: \(index), weight: \(weight), count: \(branchIDs.count))"
             result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
             return result
 

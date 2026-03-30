@@ -1,3 +1,13 @@
+// MARK: - Strategy Kind
+
+/// Selects which scheduling strategy the reducer uses.
+public enum SchedulingStrategyKind: Sendable {
+    /// Phase-based scheduling: base descent → fibre descent → exploration → relax round.
+    case adaptive
+    /// Dependency-ordered scheduling: walks the CDG topologically.
+    case topological
+}
+
 // MARK: - Scheduling Strategy
 
 /// Provides scheduling decisions for the reduction cycle loop.
@@ -27,6 +37,15 @@ protocol SchedulingStrategy {
         phase: PlannedPhase.Phase,
         outcome: PhaseOutcome
     )
+
+    /// Whether the strategy's current forward pass is still in progress.
+    ///
+    /// When `true`, the scheduler does not decrement the stall budget even if the current cycle produced no improvement. This prevents multi-cycle forward passes (like ``TopologicalStrategy``'s level walk) from exhausting the stall budget before the full pass completes. Defaults to `false`.
+    var isForwardPassInProgress: Bool { get }
+}
+
+extension SchedulingStrategy {
+    var isForwardPassInProgress: Bool { false }
 }
 
 /// A single phase to dispatch within a cycle.
@@ -49,6 +68,7 @@ struct PlannedPhase {
         case fibreDescent
         case exploration
         case relaxRound
+        case levelReduction
     }
 }
 
@@ -59,9 +79,49 @@ struct PhaseConfiguration {
     /// How to allocate budget to composition edges in the exploration phase.
     var edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)
 
+    /// Optional scope restriction for the phase. When set, encoders only operate within this position range. Used by ``TopologicalStrategy`` to focus each cycle on a specific CDG node's region.
+    var scopeRange: ClosedRange<Int>?
+
+    /// When `true`, fibre descent clears the convergence cache before running. Used by ``TopologicalStrategy`` after a stall cycle to retry batch zeroing with fresh convergence state.
+    var clearConvergence = false
+
+    /// When non-nil, restricts fibre descent's span extraction to values at this bind depth.
+    ///
+    /// Used by the topological level walk to implement exclusive scope: each level's sub-cycle processes only values at its own bind depth, not nested content.
+    var depthFilter: Int?
+
+    /// When `true`, fibre descent skips the covariant depth sweep (depths 1 through `maxBindDepth`).
+    ///
+    /// Used by the topological level walk because the outer level iteration subsumes the sweep's purpose — values at deeper bind depths are processed at their own level's sub-cycle.
+    var suppressCovariantSweep = false
+
+    /// Position ranges to exclude from fibre descent's span extraction and redistribution.
+    ///
+    /// Used by branch-selector level sub-cycles to prevent premature convergence of bind-inner values that belong to deeper CDG levels. Computed by ``ChoiceDependencyGraph/exclusionRanges(forLevel:levels:scopeRange:)``.
+    var exclusionRanges: [ClosedRange<Int>]?
+
+    /// When `true`, Kleisli exploration sorts composition edges by CDG topological level (parent-first) as primary key, with leverage/budget ratio as secondary key.
+    ///
+    /// Used by ``TopologicalStrategy`` so that parent bind-inner edges are explored before child edges, ensuring child fibres are searched in the context of already-reduced parents.
+    var levelOrderedEdges = false
+
     /// Creates a default configuration.
-    init(edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)) {
+    init(
+        edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100),
+        scopeRange: ClosedRange<Int>? = nil,
+        clearConvergence: Bool = false,
+        depthFilter: Int? = nil,
+        suppressCovariantSweep: Bool = false,
+        exclusionRanges: [ClosedRange<Int>]? = nil,
+        levelOrderedEdges: Bool = false
+    ) {
         self.edgeBudgetPolicy = edgeBudgetPolicy
+        self.scopeRange = scopeRange
+        self.clearConvergence = clearConvergence
+        self.depthFilter = depthFilter
+        self.suppressCovariantSweep = suppressCovariantSweep
+        self.exclusionRanges = exclusionRanges
+        self.levelOrderedEdges = levelOrderedEdges
     }
 }
 
@@ -90,6 +150,12 @@ struct ReductionStateView {
 
     /// Whether the choice tree has branch nodes (picks) that branch simplification could operate on.
     let hasBranchTargets: Bool
+
+    /// Whether the generator has bind operations.
+    let hasBind: Bool
+
+    /// The choice dependency graph built from the current sequence, or `nil` if no binds/picks.
+    let dag: ChoiceDependencyGraph?
 }
 
 // MARK: - Adaptive Strategy
@@ -128,6 +194,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
         // the property. Phase 2 cannot create structural work — the base point is
         // invariant under value changes — so "no structural acceptances last cycle"
         // means "no structural acceptances this cycle" with certainty.
+        //
         let noTargets = state.hasDeletionTargets == false && state.hasBranchTargets == false
         let priorBaseUnproductive: Bool = {
             guard let prior = lastPriorOutcome else { return false }

@@ -43,7 +43,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
         positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
+        context: ReductionContext
     ) {
         self.sequence = sequence
         semanticStats = SequenceSemanticStats(sequence: sequence)
@@ -51,6 +51,8 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         orientationIndex = 0
         needsFirstProbe = true
         resetMonotoneState()
+
+        let bindIndex = context.bindIndex
 
         // Extract all numeric values.
         var candidates = [NumericCandidate]()
@@ -62,7 +64,8 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
             case let .value(v), let .reduced(v):
                 switch v.choice {
                 case .unsigned, .signed, .floating:
-                    candidates.append(NumericCandidate(index: i, value: v))
+                    let isInner = bindIndex?.bindRegionForInnerIndex(i) != nil
+                    candidates.append(NumericCandidate(index: i, value: v, isBindInner: isInner))
                 }
             default:
                 break
@@ -79,6 +82,13 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         while ci < candidates.count {
             var cj = ci + 1
             while cj < candidates.count {
+                // Never pair a bind-inner with a bound value. Modifying the inner
+                // changes the bound structure, making the bound modification meaningless.
+                // Inner-inner and bound-bound pairs are both valid.
+                if candidates[ci].isBindInner != candidates[cj].isBindInner {
+                    cj += 1
+                    continue
+                }
                 // Try both orientations so index ordering does not block useful redistributions.
                 for (lhs, rhs) in [(ci, cj), (cj, ci)] {
                     if let orientation = makeOrientation(
@@ -104,6 +114,8 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
     private struct NumericCandidate {
         let index: Int
         let value: ChoiceSequenceValue.Value
+        /// Whether this candidate sits inside a bind-inner range.
+        let isBindInner: Bool
     }
 
     private struct FloatRedistributionContext {
@@ -123,8 +135,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         let distanceInSteps: UInt64
     }
 
-    /// One orientation of a pair: lhs is the value being moved toward its target,
-    /// rhs is the compensation side.
+    /// One orientation of a pair: lhs is the value being moved toward its target, rhs is the compensation side.
     private struct PairOrientation {
         let lhsIndex: Int
         let rhsIndex: Int
@@ -539,8 +550,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Computes redistributed choices for cross-type (float+integer) pairs.
     ///
-    /// Uses rational arithmetic with a common denominator to ensure integer constraints
-    /// are satisfied (integer sides must receive whole-number deltas).
+    /// Uses rational arithmetic with a common denominator to ensure integer constraints are satisfied (integer sides must receive whole-number deltas).
     private func mixedRedistributedPairChoices(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
@@ -592,8 +602,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Builds a float redistribution context for same-tag float pairs.
     ///
-    /// Converts both values and the lhs target to rational form with a common denominator,
-    /// enabling integer-step redistribution in the numerator space.
+    /// Converts both values and the lhs target to rational form with a common denominator, enabling integer-step redistribution in the numerator space.
     private func makeFloatRedistributionContext(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
@@ -651,8 +660,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Builds a mixed redistribution context for cross-type (float+integer) pairs.
     ///
-    /// At least one side must be floating-point. The step size equals the common denominator
-    /// when one side is integer, ensuring integer values remain integral after redistribution.
+    /// At least one side must be floating-point. The step size equals the common denominator when one side is integer, ensuring integer values remain integral after redistribution.
     private func makeMixedRedistributionContext(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
@@ -850,8 +858,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     /// Returns a sorted pair of complexity keys for two `ChoiceValue`s.
     ///
-    /// Same-tag pairs use the native `shortlexKey`. Cross-type pairs map both values
-    /// onto the `FloatShortlex` scale via their absolute `Double` magnitude.
+    /// Same-tag pairs use the native `shortlexKey`. Cross-type pairs map both values onto the `FloatShortlex` scale via their absolute `Double` magnitude.
     private func sortedPairKeys(
         _ a: ChoiceValue,
         _ b: ChoiceValue

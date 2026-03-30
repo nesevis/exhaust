@@ -122,24 +122,25 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     public struct Branch: Hashable, Equatable, Sendable {
         public let id: UInt64
         public let validIDs: [UInt64]
+        /// The pick site identifier. Used by the guided cursor to match branch entries to the correct pick operation when cursor positions drift due to bind re-derivation.
+        public let siteID: UInt64
 
-        public init(id: UInt64, validIDs: [UInt64]) {
-            self.id = id
-            self.validIDs = validIDs
+        /// The site identifier with the depth contribution masked out.
+        ///
+        /// For `Gen.recursive`, the full ``siteID`` is `baseSiteID &+ remaining` where `remaining` encodes the recursion depth (0 through maxDepth). Stripping the last three decimal digits recovers a stable identifier that is shared across all depths of the same recursive generator. Used by ``BindSubstitutionEncoder`` to confirm that two bind regions belong to the same recursive site before substitution.
+        public var depthMaskedSiteID: UInt64 {
+            siteID / 1000
         }
 
+        public init(id: UInt64, validIDs: [UInt64], siteID: UInt64 = 0) {
+            self.id = id
+            self.validIDs = validIDs
+            self.siteID = siteID
+        }
+
+        /// Branch picks are transparent to shortlex ordering. The selected alternative's index is arbitrary (determined by declaration order in the user's generator), so comparing it would make structural simplification depend on naming order rather than content. Returning `.eq` lets the comparison fall through to the subtree entries that follow the branch marker, where actual structural and value differences decide the ordering.
         public func shortLexCompare(_ other: Branch) -> ShortlexOrder {
-            if validIDs == other.validIDs,
-               let lhsIndex = validIDs.firstIndex(of: id),
-               let rhsIndex = other.validIDs.firstIndex(of: other.id)
-            {
-                if lhsIndex < rhsIndex { return .lt }
-                if lhsIndex > rhsIndex { return .gt }
-                return .eq
-            }
-            if id < other.id { return .lt }
-            if id > other.id { return .gt }
-            return .eq
+            .eq
         }
     }
 
@@ -175,16 +176,17 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
 
         public static func == (lhs: Self, rhs: Self) -> Bool {
-            guard lhs.choice == rhs.choice, lhs.isRangeExplicit == rhs.isRangeExplicit else {
-                return false
-            }
-            // When the range is derived from runtime context (size scaling),
-            // it can differ between generation and reflection. Only compare
-            // validRange when it was explicitly specified by the user.
-            if lhs.isRangeExplicit {
-                return lhs.validRange == rhs.validRange
-            }
-            return true
+            lhs.choice == rhs.choice
+//            guard lhs.choice == rhs.choice, lhs.isRangeExplicit == rhs.isRangeExplicit else {
+//                return false
+//            }
+//            // When the range is derived from runtime context (size scaling),
+//            // it can differ between generation and reflection. Only compare
+//            // validRange when it was explicitly specified by the user.
+//            if lhs.isRangeExplicit {
+//                return lhs.validRange == rhs.validRange
+//            }
+//            return true
         }
     }
 }

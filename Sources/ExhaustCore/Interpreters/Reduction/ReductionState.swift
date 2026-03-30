@@ -47,12 +47,12 @@ final class ReductionState<Output> {
     /// Per-encoder probe counts accumulated across all cycles.
     var encoderProbes: [EncoderName: Int] = [:]
 
+    /// Sequence hash at which each encoder last exhausted with zero acceptances. When the current sequence hashes to the same value, `runComposable` skips the encoder entirely — no new reduction opportunities exist on an unchanged sequence.
+    private var exhaustionFingerprints: [EncoderName: UInt64] = [:]
+
     /// Total materialization attempts (decoder invocations) during reduction.
     ///
-    /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta
-    /// for antichain and mutation pool direct decodes), `runKleisliExploration` (manual
-    /// accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()`
-    /// call outside `runComposable` must manually accumulate into this field.
+    /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta for antichain and mutation pool direct decodes), `runKleisliExploration` (manual accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()` call outside `runComposable` must manually accumulate into this field.
     var totalMaterializations: Int = 0
 
     // Decision tree profiling counters
@@ -112,7 +112,9 @@ final class ReductionState<Output> {
             allValueCoordinatesConverged: allValueCoordinatesConverged(),
             cycleNumber: currentCycle,
             hasDeletionTargets: pruneOrder.isEmpty == false,
-            hasBranchTargets: tree.containsPicks
+            hasBranchTargets: tree.containsPicks,
+            hasBind: hasBind,
+            dag: buildDAG()
         )
     }
 
@@ -120,9 +122,7 @@ final class ReductionState<Output> {
 
     /// Returns true when every value coordinate is either cached or already at its reduction target.
     ///
-    /// Used by the fibre descent gate (signal 4): when all coordinates are effectively converged
-    /// AND base descent made no structural progress AND Phase 2 stalled last cycle, further
-    /// Phase 2 probes would only re-confirm floors — skip it.
+    /// Used by the fibre descent gate (signal 4): when all coordinates are effectively converged AND base descent made no structural progress AND Phase 2 stalled last cycle, further Phase 2 probes would only re-confirm floors — skip it.
     ///
     /// A coordinate is effectively converged if:
     /// - It has a cached convergence floor (binary search ran and converged), OR
@@ -182,6 +182,7 @@ final class ReductionState<Output> {
     // Encoders
     var promoteBranchesEncoder = BranchSimplificationEncoder(strategy: .promote)
     var pivotBranchesEncoder = BranchSimplificationEncoder(strategy: .pivot)
+    var bindSubstitutionEncoder = BindSubstitutionEncoder()
     var swapSiblingsEncoder = SiblingSwapEncoder()
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
@@ -271,9 +272,7 @@ extension ReductionState {
 
     /// Invalidates convergence cache entries for coordinates that share a bind scope with any changed value.
     ///
-    /// When a value changes at index *i* within a bind region's span, other coordinates in the same
-    /// region may have converged in a context that included the old value at *i*. Those converged origins
-    /// are stale: the property's behavior at those coordinates can differ now that *i* changed.
+    /// When a value changes at index *i* within a bind region's span, other coordinates in the same region may have converged in a context that included the old value at *i*. Those converged origins are stale: the property's behavior at those coordinates can differ now that *i* changed.
     private func invalidateConvergenceCacheSiblings(
         oldSequence: ChoiceSequence,
         newSequence: ChoiceSequence,
@@ -303,6 +302,10 @@ extension ReductionState {
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
         if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
+        let sequenceHash = ZobristHash.hash(of: sequence)
+        if encoder.phase == .structuralDeletion,
+           exhaustionFingerprints[encoder.name] == sequenceHash
+        { return false }
         let startSeqLen = sequence.count
         let startSequenceForCacheInvalidation = hasBind ? sequence : nil
         var encoder = encoder
@@ -402,6 +405,11 @@ extension ReductionState {
 
         if anyAccepted {
             dominance.recordSuccess(encoder.name)
+            if encoder.phase == .structuralDeletion {
+                exhaustionFingerprints[encoder.name] = nil
+            }
+        } else if probes > 0, encoder.phase == .structuralDeletion {
+            exhaustionFingerprints[encoder.name] = sequenceHash
         }
         if isInstrumented {
             if probes > 0 {
@@ -438,8 +446,7 @@ extension ReductionState {
         return SequenceDecoder.for(context)
     }
 
-    /// Decoder for speculative deletion: PRNG fallback for deleted entries,
-    /// enabling repair with fresh (possibly shorter) values that satisfy filters.
+    /// Decoder for speculative deletion: PRNG fallback for deleted entries, enabling repair with fresh (possibly shorter) values that satisfy filters.
     func makeSpeculativeDecoder() -> SequenceDecoder {
         .guided(fallbackTree: nil, materializePicks: true, usePRNGFallback: true)
     }
@@ -494,10 +501,12 @@ extension ReductionState {
 // MARK: - Encoder Ordering
 
 extension ReductionState {
-    /// Computes cost-based encoder ordering for the current sequence. Called once per cycle.
-    func computeEncoderOrdering() {
+    /// Computes cost-based encoder ordering for the current sequence.
+    ///
+    /// Called once per cycle in the adaptive strategy, or once per level sub-cycle in the topological strategy. When `depthFilter` is non-nil, cost estimation extracts spans at that bind depth only, ensuring encoder ordering reflects the scoped level's targets.
+    func computeEncoderOrdering(depthFilter: Int? = nil) {
         let fullRange = 0 ... max(0, sequence.count - 1)
-        let orderingContext = ReductionContext(bindIndex: bindIndex)
+        let orderingContext = ReductionContext(bindIndex: bindIndex, depthFilter: depthFilter)
         var valueCosts = [ReductionScheduler.ValueEncoderSlot: Int]()
         for slot in ReductionScheduler.ValueEncoderSlot.allCases {
             let cost: Int? = switch slot {
@@ -575,8 +584,8 @@ extension ReductionState {
         let structuralAtCheckpoint = phaseTracker.counts[.relaxRound]?.structuralAcceptances ?? 0
 
         // Run RelaxRoundEncoder with exact decoder — no fallback, no shortlex check.
-        // Exact mode validates values against their explicit ranges, avoiding
-        // fallback-induced structural changes that break materialization.
+        // Exact mode validates values against their explicit ranges, rejecting
+        // structurally invalid relocations fast.
         let speculativeDecoder: SequenceDecoder = .exact()
         var explorationBudget = ReductionScheduler.LegBudget(hardCap: remaining)
         var relaxEncoder = RelaxRoundEncoder()
