@@ -47,6 +47,9 @@ final class ReductionState<Output> {
     /// Per-encoder probe counts accumulated across all cycles.
     var encoderProbes: [EncoderName: Int] = [:]
 
+    /// Sequence hash at which each encoder last exhausted with zero acceptances. When the current sequence hashes to the same value, `runComposable` skips the encoder entirely — no new reduction opportunities exist on an unchanged sequence.
+    private var exhaustionFingerprints: [EncoderName: UInt64] = [:]
+
     /// Total materialization attempts (decoder invocations) during reduction.
     ///
     /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta for antichain and mutation pool direct decodes), `runKleisliExploration` (manual accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()` call outside `runComposable` must manually accumulate into this field.
@@ -299,6 +302,10 @@ extension ReductionState {
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
         if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
+        let sequenceHash = ZobristHash.hash(of: sequence)
+        if encoder.phase == .structuralDeletion,
+           exhaustionFingerprints[encoder.name] == sequenceHash
+        { return false }
         let startSeqLen = sequence.count
         let startSequenceForCacheInvalidation = hasBind ? sequence : nil
         var encoder = encoder
@@ -398,6 +405,11 @@ extension ReductionState {
 
         if anyAccepted {
             dominance.recordSuccess(encoder.name)
+            if encoder.phase == .structuralDeletion {
+                exhaustionFingerprints[encoder.name] = nil
+            }
+        } else if probes > 0, encoder.phase == .structuralDeletion {
+            exhaustionFingerprints[encoder.name] = sequenceHash
         }
         if isInstrumented {
             if probes > 0 {
