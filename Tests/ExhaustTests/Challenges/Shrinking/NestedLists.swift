@@ -21,7 +21,7 @@ struct NestedListsShrinkingChallenge {
      */
     @Test("Nested Lists")
     func nestedListsFull() {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let gen = #gen(.uint().array().array())
         print()
         var report: ExhaustReport?
@@ -30,8 +30,12 @@ struct NestedListsShrinkingChallenge {
             .suppressIssueReporting,
             .onReport { report = $0 }
 //            .replay(13580297670505979531)
-        ) { arr in
-            arr.map(\.count).reduce(0, +) <= 10
+        ) { arrs in
+            var count = 0
+            for arr in arrs {
+                count += arr.count
+            }
+            return count <= 10
         }
         if let report { print("[PROFILE] NestedLists: \(report.profilingSummary)") }
 

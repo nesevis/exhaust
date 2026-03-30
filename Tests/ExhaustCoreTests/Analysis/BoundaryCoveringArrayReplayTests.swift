@@ -100,7 +100,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
                 (1, Gen.just(false)),
             ])
             guard case let .boundary(profile) = ChoiceTreeAnalysis.analyze(gen) else {
-                guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
+                guard case .finite = ChoiceTreeAnalysis.analyze(gen) else {
                     Issue.record("Expected analyzable generator")
                     return
                 }
@@ -131,6 +131,67 @@ struct BoundaryCoveringArrayReplayUnitTests {
             let row = CoveringArrayRow(values: [badIndex])
             let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile)
             #expect(tree == nil)
+        }
+
+        @Test("Pick with boundary peer reaches buildPickTree via template path")
+        func pickWithBoundaryPeer() throws {
+            // A standalone small pick analyzes as finite, silently skipping
+            // the boundary tests above. Zipping with a boundary-domain generator
+            // forces the overall analysis to .boundary, so the pick appears as a
+            // .pick parameter and the template substitution path calls buildPickTree.
+            let gen = Gen.zip(
+                Gen.pick(choices: [
+                    (1, Gen.just(true)),
+                    (1, Gen.just(false)),
+                ]),
+                Gen.choose(in: 0 ... 10000)
+            )
+            let profile = try #require(analyzeBoundary(gen))
+
+            let hasPickParam = profile.parameters.contains { param in
+                if case .pick = param.kind { return true }
+                return false
+            }
+            #expect(hasPickParam, "Profile must contain a .pick parameter")
+
+            for pickIndex in 0 ..< UInt64(profile.parameters[0].values.count) {
+                var values: [UInt64] = [pickIndex]
+                for _ in 1 ..< profile.parameters.count {
+                    values.append(0)
+                }
+                let row = CoveringArrayRow(values: values)
+                let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile)
+                #expect(tree != nil, "Pick index \(pickIndex) should produce a tree")
+            }
+        }
+
+        @Test("Pick with boundary peer round-trips through replay")
+        func pickWithBoundaryPeerRoundTrip() throws {
+            let gen = Gen.zip(
+                Gen.pick(choices: [
+                    (1, Gen.just(true)),
+                    (1, Gen.just(false)),
+                ]),
+                Gen.choose(in: 0 ... 10000)
+            )
+            let profile = try #require(analyzeBoundary(gen))
+
+            var replayedCount = 0
+            for pickIndex in 0 ..< UInt64(profile.parameters[0].values.count) {
+                var values: [UInt64] = [pickIndex]
+                for _ in 1 ..< profile.parameters.count {
+                    values.append(0)
+                }
+                let row = CoveringArrayRow(values: values)
+                guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
+                    continue
+                }
+                let value: (Bool, Int)? = try Interpreters.replay(gen, using: tree)
+                if value != nil {
+                    replayedCount += 1
+                }
+            }
+            #expect(replayedCount > 0)
         }
     }
 

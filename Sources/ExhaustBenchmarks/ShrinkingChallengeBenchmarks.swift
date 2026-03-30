@@ -376,8 +376,15 @@ private func registerLengthList() {
 private func registerNestedLists() {
     let gen = #gen(.uint().array().array())
 
-    let property: @Sendable ([[UInt]]) -> Bool = { arr in
-        arr.map(\.count).reduce(0, +) <= 10
+    let property: @Sendable ([[UInt]]) -> Bool = { arrs in
+        var count = 0
+        for arr in arrs {
+            count += arr.count
+            if count > 10 {
+                return false
+            }
+        }
+        return count <= 10
     }
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "NestedLists")
