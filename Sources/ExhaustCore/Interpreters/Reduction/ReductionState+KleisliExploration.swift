@@ -19,8 +19,7 @@ extension ReductionState {
         budget: inout Int,
         dag: ChoiceDependencyGraph?,
         edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100),
-        scopeRange: ClosedRange<Int>? = nil,
-        levelOrderedEdges: Bool = false
+        scopeRange: ClosedRange<Int>? = nil
     ) throws -> Bool {
         phaseTracker.push(.exploration)
         defer { phaseTracker.pop() }
@@ -65,8 +64,7 @@ extension ReductionState {
             gen: gen,
             sequence: sequence,
             tree: tree,
-            fallbackTree: fallbackTree,
-            levelOrderedEdges: levelOrderedEdges
+            fallbackTree: fallbackTree
         )
 
         // Discovery lifts: predictFibreSizeAtTarget materializes once per structurally constant edge.
@@ -411,8 +409,7 @@ extension ReductionState {
         gen: FreerMonad<ReflectiveOperation, Output>,
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        fallbackTree: ChoiceTree?,
-        levelOrderedEdges: Bool = false
+        fallbackTree: ChoiceTree?
     ) -> [CompositionEdge<Output>] {
         var result = [CompositionEdge<Output>]()
         result.reserveCapacity(edges.count)
@@ -506,12 +503,7 @@ extension ReductionState {
         // Order by leverage / requiredBudget (descending). Higher score = more structural
         // impact per probe. Leverage is the downstream range size; required budget is the
         // predicted fibre size (capped at the covering budget for pairwise).
-        // When levelOrderedEdges is true, CDG topological level is the primary key
-        // (parent edges before child edges) with leverage/budget as secondary.
         result.sort { lhs, rhs in
-            if levelOrderedEdges, lhs.edge.topologicalLevel != rhs.edge.topologicalLevel {
-                return lhs.edge.topologicalLevel < rhs.edge.topologicalLevel
-            }
             let coveringCap = UInt64(FibreCoveringEncoder.coveringBudget)
             let lhsBudget = max(1, min(lhs.prediction.predictedSize, coveringCap))
             let rhsBudget = max(1, min(rhs.prediction.predictedSize, coveringCap))

@@ -124,7 +124,7 @@ struct Bound5ShrinkingChallenge {
 
         let rep = try #require(report)
         #expect(rep.propertyInvocations == 271)
-        #expect(rep.totalMaterializations == 445)
+        #expect(rep.totalMaterializations == 446)
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -194,7 +194,6 @@ struct Bound5ShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
-//                .reductionStrategy(.topological),
                 .randomOnly,
                 property: Self.property
             )

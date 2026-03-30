@@ -223,52 +223,6 @@ struct BonsaiSchedulerTests {
         #expect(result != nil)
     }
 
-    // MARK: - 8. Topological strategy integration
-
-    @Test("Topological strategy produces valid result for flat generator")
-    func topologicalFlatGeneratorConverges() throws {
-        let gen: ReflectiveGenerator<UInt64> = Gen.choose(in: 0 ... 1000)
-
-        let (tree, _) = try findFailingTree(gen: gen, seed: 42) { value in
-            value < 50
-        }
-
-        var topoConfig = Self.bonsaiConfig
-        topoConfig.schedulingStrategy = .topological
-
-        let (_, output) = try #require(
-            try BonsaiScheduler.run(
-                gen: gen, initialTree: tree, config: topoConfig
-            ) { $0 < 50 }
-        )
-
-        #expect(output >= 50)
-    }
-
-    @Test("Topological strategy converges for bind-dependent generator")
-    func topologicalBindGeneratorConverges() throws {
-        let gen = makeBoundArrayGen(innerRange: 1 ... 20, elementRange: 0 ... 100)
-
-        let (tree, _) = try findFailingTree(gen: gen, seed: 42) { output in
-            let arr = output as! [UInt64]
-            return arr.count <= 3
-        }
-
-        var topoConfig = Self.bonsaiConfig
-        topoConfig.schedulingStrategy = .topological
-
-        let (_, output) = try #require(
-            try BonsaiScheduler.run(
-                gen: gen, initialTree: tree, config: topoConfig
-            ) { output in
-                let arr = output as! [UInt64]
-                return arr.count <= 3
-            }
-        )
-
-        let arr = output as! [UInt64]
-        #expect(arr.count >= 4)
-    }
 }
 
 // MARK: - Helpers

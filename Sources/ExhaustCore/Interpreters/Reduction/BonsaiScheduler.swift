@@ -156,28 +156,15 @@ enum BonsaiScheduler {
 
         let isInstrumented = state.isInstrumented
 
-        switch config.schedulingStrategy {
-        case .adaptive:
-            var strategy = AdaptiveStrategy()
-            return try runWithStrategy(
-                &strategy,
-                state: state,
-                config: config,
-                gen: gen,
-                property: property,
-                isInstrumented: isInstrumented
-            )
-        case .topological:
-            var strategy = TopologicalStrategy()
-            return try runWithStrategy(
-                &strategy,
-                state: state,
-                config: config,
-                gen: gen,
-                property: property,
-                isInstrumented: isInstrumented
-            )
-        }
+        var strategy = AdaptiveStrategy()
+        return try runWithStrategy(
+            &strategy,
+            state: state,
+            config: config,
+            gen: gen,
+            property: property,
+            isInstrumented: isInstrumented
+        )
     }
 
     /// Runs the reduction cycle loop with the given strategy.
@@ -400,10 +387,7 @@ enum BonsaiScheduler {
             _ = try state.runFibreDescent(
                 budget: &budget,
                 dag: dag,
-                scopeRange: planned.configuration.scopeRange,
-                depthFilter: planned.configuration.depthFilter,
-                suppressCovariantSweep: planned.configuration.suppressCovariantSweep,
-                exclusionRanges: planned.configuration.exclusionRanges
+                scopeRange: planned.configuration.scopeRange
             )
 
             let fibreOutcome = state.phaseTracker.outcome(
@@ -417,8 +401,7 @@ enum BonsaiScheduler {
                 budget: &budget,
                 dag: dag,
                 edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy,
-                scopeRange: planned.configuration.scopeRange,
-                levelOrderedEdges: planned.configuration.levelOrderedEdges
+                scopeRange: planned.configuration.scopeRange
             )
             let exploreOutcome = state.phaseTracker.outcome(
                 for: .exploration, budgetAllocated: planned.budget
@@ -433,24 +416,6 @@ enum BonsaiScheduler {
             )
             return (relaxOutcome, nil)
 
-        case .levelReduction:
-            var budget = planned.budget
-            guard let scopeRange = planned.configuration.scopeRange else {
-                return (state.phaseTracker.outcome(
-                    for: .levelReduction, budgetAllocated: planned.budget
-                ), nil)
-            }
-            _ = try state.runLevelReduction(
-                budget: &budget,
-                dag: dag,
-                scopeRange: scopeRange,
-                depthFilter: planned.configuration.depthFilter,
-                exclusionRanges: planned.configuration.exclusionRanges
-            )
-            let levelOutcome = state.phaseTracker.outcome(
-                for: .levelReduction, budgetAllocated: planned.budget
-            )
-            return (levelOutcome, nil)
         }
     }
 
@@ -584,7 +549,7 @@ enum BonsaiScheduler {
             lastOutcome = outcome
             if outcome.improved {
                 stallBudget = config.maxStalls
-            } else if strategy.isForwardPassInProgress == false {
+            } else {
                 // All value coordinates converged and no progress — the CE is at
                 // a fixed point. Exit immediately instead of burning stall budget.
                 if state.allValueCoordinatesConverged() {

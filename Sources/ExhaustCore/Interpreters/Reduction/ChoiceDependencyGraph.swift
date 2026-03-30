@@ -76,109 +76,6 @@ public struct ChoiceDependencyGraph: Sendable {
     /// - Complexity: O(*V*²) space, O(*V* · *E*) construction time.
     let reachability: [Set<Int>]
 
-    /// Groups nodes by topological level — the longest path from any root to the node.
-    ///
-    /// Level 0 contains root nodes (no parents). Level k contains nodes whose deepest parent is at level k-1. All parents of a level-k node are guaranteed to be at levels < k. This is topological (max-parent-depth) assignment, not BFS distance.
-    ///
-    /// - Complexity: O(*V* + *E*) where *V* is the node count and *E* is the edge count.
-    public func topologicalLevels() -> [[Int]] {
-        guard nodes.isEmpty == false else { return [] }
-
-        // Build inverse adjacency: for each node, collect its parent indices.
-        var parents = [[Int]](repeating: [], count: nodes.count)
-        for (nodeIndex, node) in nodes.enumerated() {
-            for dependent in node.dependents {
-                parents[dependent].append(nodeIndex)
-            }
-        }
-
-        // Assign levels via max-parent-depth + 1, iterating in topological order.
-        var nodeLevel = [Int](repeating: 0, count: nodes.count)
-        for nodeIndex in topologicalOrder {
-            let maxParentLevel = parents[nodeIndex].map { nodeLevel[$0] }.max() ?? -1
-            nodeLevel[nodeIndex] = maxParentLevel + 1
-        }
-
-        // Group by level.
-        let maxLevel = nodeLevel.max() ?? 0
-        var levels = [[Int]](repeating: [], count: maxLevel + 1)
-        for (nodeIndex, level) in nodeLevel.enumerated() {
-            levels[level].append(nodeIndex)
-        }
-        return levels
-    }
-
-    /// Computes position ranges owned by CDG nodes at levels deeper than the given level, within the given scope.
-    ///
-    /// For bind-inner nodes, the excluded range is `positionRange.lowerBound ... scopeRange.upperBound` (control value + bound content). For branch-selector nodes, the excluded range is just `positionRange` (the pick entry). Used by branch-selector level sub-cycles to prevent premature convergence of deeper-level positions during fibre descent and redistribution.
-    ///
-    /// - Parameters:
-    ///   - level: The current level index. Nodes at levels > `level` are candidates for exclusion.
-    ///   - levels: Precomputed topological levels from ``topologicalLevels()``.
-    ///   - scopeRange: The current sub-cycle's scope range. Only nodes whose ranges fall within this scope are included.
-    public func exclusionRanges(
-        forLevel level: Int,
-        levels: [[Int]],
-        scopeRange: ClosedRange<Int>
-    ) -> [ClosedRange<Int>] {
-        var excluded: [ClosedRange<Int>] = []
-        for deeperLevel in (level + 1) ..< levels.count {
-            for nodeIndex in levels[deeperLevel] {
-                let node = nodes[nodeIndex]
-                let nodeRange: ClosedRange<Int>
-                if case .structural(.bindInner) = node.kind, let scope = node.scopeRange {
-                    // Bind-inner: exclude control value + bound content.
-                    nodeRange = node.positionRange.lowerBound ... scope.upperBound
-                } else {
-                    // Branch-selector: exclude pick entry only.
-                    nodeRange = node.positionRange
-                }
-                // Only include if the node's range falls within the current scope.
-                if scopeRange.overlaps(nodeRange) {
-                    excluded.append(nodeRange)
-                }
-            }
-        }
-        return excluded
-    }
-
-    /// Removes spans whose `range.lowerBound` falls within any excluded range.
-    ///
-    /// Used as a post-filter on `extractFilteredSpans` output to enforce the branch-selector depth exclusion.
-    public static func applyExclusion(
-        spans: [ChoiceSpan],
-        excluding ranges: [ClosedRange<Int>]
-    ) -> [ChoiceSpan] {
-        guard ranges.isEmpty == false else { return spans }
-        return spans.filter { span in
-            ranges.contains { $0.contains(span.range.lowerBound) } == false
-        }
-    }
-
-    /// Computes the scope range for a topological level's sub-cycle.
-    ///
-    /// For bind-inner nodes: `positionRange.lowerBound ... scopeRange.upperBound` (includes control value). For branch-selector nodes: the node's `scopeRange`. For multiple nodes at the same level: the convex hull of all individual ranges.
-    ///
-    /// - Returns: The scope range, or `nil` if the level has no nodes with scope ranges.
-    public func scopeRange(forNodesAtLevel nodeIndices: [Int]) -> ClosedRange<Int>? {
-        var lower = Int.max
-        var upper = Int.min
-        for nodeIndex in nodeIndices {
-            let node = nodes[nodeIndex]
-            if case .structural(.bindInner) = node.kind, let scope = node.scopeRange {
-                // Bind-inner: include the control value position and the bound content.
-                lower = min(lower, node.positionRange.lowerBound)
-                upper = max(upper, scope.upperBound)
-            } else if let scope = node.scopeRange {
-                // Branch-selector: use the selected subtree range.
-                lower = min(lower, scope.lowerBound)
-                upper = max(upper, scope.upperBound)
-            }
-        }
-        guard lower <= upper else { return nil }
-        return lower ... upper
-    }
-
     /// Builds a dependency DAG from a choice sequence, its tree, and the bind span index.
     ///
     /// Identifies bind-inner and branch-selector structural nodes, builds dependency edges between them, computes a topological ordering via Kahn's algorithm, and collects leaf positions.
@@ -330,29 +227,13 @@ public struct ReductionEdge: Sendable {
 
     /// Whether the downstream structure is invariant under upstream value changes (the bind closure ignores its argument — no nested binds or picks in the bound subtree). When true, the lift is trivial regardless of the upstream value: the same fibre exists for every upstream candidate. The ``KleisliComposition`` is unnecessary at this edge.
     public let isStructurallyConstant: Bool
-
-    /// The CDG topological level of the upstream node (max-parent-depth + 1).
-    ///
-    /// Level 0 = root nodes with no CDG parents. Used by ``TopologicalStrategy`` to sort edges parent-first so that child fibres are searched in the context of already-reduced parents.
-    public let topologicalLevel: Int
 }
 
 public extension ChoiceDependencyGraph {
     /// Returns the dependency edges where ``KleisliComposition`` instances are meaningful.
     ///
-    /// Each edge connects a bind-inner node (controlling position) to its scope (controlled subtree). Edges where the downstream structure is invariant under upstream value changes are filtered out — the lift is trivial and the composition is unnecessary.
-    ///
-    /// Ordered by topological sort (roots first), so that upstream encoders for shallower edges run before downstream encoders that depend on their results.
+    /// Each edge connects a bind-inner node (controlling position) to its scope (controlled subtree). Ordered by topological sort (roots first), so that upstream encoders for shallower edges run before downstream encoders that depend on their results.
     func reductionEdges() -> [ReductionEdge] {
-        // Build node-to-level lookup from topological levels (O(V+E)).
-        let levels = topologicalLevels()
-        var nodeToLevel = [Int: Int]()
-        for (level, nodeIndices) in levels.enumerated() {
-            for nodeIndex in nodeIndices {
-                nodeToLevel[nodeIndex] = level
-            }
-        }
-
         var edges: [ReductionEdge] = []
         for nodeIndex in topologicalOrder {
             let node = nodes[nodeIndex]
@@ -368,8 +249,7 @@ public extension ChoiceDependencyGraph {
                 upstreamRange: node.positionRange,
                 downstreamRange: scopeRange,
                 regionIndex: regionIndex,
-                isStructurallyConstant: node.isStructurallyConstant,
-                topologicalLevel: nodeToLevel[nodeIndex, default: 0]
+                isStructurallyConstant: node.isStructurallyConstant
             ))
         }
         return edges

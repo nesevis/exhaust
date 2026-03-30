@@ -40,7 +40,6 @@ struct BinaryHeapShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .budget(.expedient),
-//                .reductionStrategy(.topological),
                 .randomOnly,
                 .replay(7721779162233180381),
 //                .replay(16978691592903030353),

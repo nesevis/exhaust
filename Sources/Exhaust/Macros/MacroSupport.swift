@@ -38,7 +38,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var useRandomOnly = false
         var humanOrderPostProcess = true
         var visualize = false
-        var reductionStrategy: SchedulingStrategyKind = .adaptive
         var onReportClosure: ((ExhaustReport) -> Void)?
 
         for setting in settings {
@@ -57,8 +56,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 humanOrderPostProcess = true
             case .visualize:
                 visualize = true
-            case let .reductionStrategy(strategy):
-                reductionStrategy = strategy
             case let .onReport(closure):
                 onReportClosure = closure
             }
@@ -66,11 +63,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
-        let reductionConfig: Interpreters.BonsaiReducerConfiguration = {
-            var config = Interpreters.BonsaiReducerConfiguration(from: budget.reducerBudget)
-            config.schedulingStrategy = reductionStrategy
-            return config
-        }()
+        let reductionConfig = Interpreters.BonsaiReducerConfiguration(from: budget.reducerBudget)
 
         var report = ExhaustReport()
         defer { onReportClosure?(report) }

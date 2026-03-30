@@ -140,7 +140,6 @@ public enum ReducerPhaseIdentifier: Hashable, Sendable {
     case fibreDescent
     case exploration
     case relaxRound
-    case levelReduction
 }
 
 /// Attributes property invocations and acceptances to the outermost active reduction phase.

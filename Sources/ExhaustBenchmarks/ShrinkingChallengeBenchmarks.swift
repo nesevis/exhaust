@@ -11,22 +11,11 @@ let enableReport = true
 let enableCounterExamples = false
 private let reductionCount = 100
 
-/// Returns both strategy variants of a base config.
+/// Returns strategy variants of a base config.
 private func withStrategies(
     _ base: Interpreters.BonsaiReducerConfiguration = .fast
 ) -> [(name: String, config: Interpreters.BonsaiReducerConfiguration)] {
-    var adaptive = base
-    adaptive.schedulingStrategy = .adaptive
-    // Topological strategy needs more stall budget because each CDG level
-    // is a separate scheduler cycle. Use the base config but bump maxStalls
-    // to give the level walk and cleanup pass enough room to converge.
-    var topological = base
-    topological.schedulingStrategy = .topological
-    topological.maxStalls = base.maxStalls // max(base.maxStalls, 10)
-    return [
-        ("adaptive", adaptive),
-//        ("topological", topological),
-    ]
+    [("adaptive", base)]
 }
 
 // MARK: - Registration
