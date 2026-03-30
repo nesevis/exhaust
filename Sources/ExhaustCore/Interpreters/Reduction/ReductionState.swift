@@ -180,6 +180,7 @@ final class ReductionState<Output> {
     var humanReadableOrderingPass = HumanReadableOrderingPass()
 
     // Encoders
+    var promoteDirectDescendantEncoder = BranchSimplificationEncoder(strategy: .promoteDirectDescendant)
     var promoteBranchesEncoder = BranchSimplificationEncoder(strategy: .promote)
     var pivotBranchesEncoder = BranchSimplificationEncoder(strategy: .pivot)
     var bindSubstitutionEncoder = BindSubstitutionEncoder()

@@ -129,6 +129,21 @@ extension ReductionState {
         let branchReductionContext = ReductionContext(bindIndex: bindIndex)
         let fullBranchRange = scopeRange ?? (0 ... max(0, sequence.count - 1))
         if try runComposable(
+            promoteDirectDescendantEncoder,
+            decoder: branchDecoder,
+            positionRange: fullBranchRange,
+            context: branchReductionContext,
+            structureChanged: true,
+            budget: &legBudget
+        ) {
+            improved = true
+            if isInstrumented {
+                ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
+                                 metadata: ["subphase": "branch_promote_direct"])
+            }
+        }
+
+        if try runComposable(
             promoteBranchesEncoder,
             decoder: branchDecoder,
             positionRange: fullBranchRange,

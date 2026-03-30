@@ -7,13 +7,20 @@
 
 /// Simplifies branches in the choice tree by trying alternative selections.
 ///
-/// Two strategies:
-/// - ``Strategy/promote``: replaces complex branches with simpler ones from other branch sites (cross-group substitution).
+/// Three strategies:
+/// - ``Strategy/promoteDirectDescendant``: replaces a branch with a direct descendant branch of the same generator (parent-child collapse). O(N) per pass.
+/// - ``Strategy/promote``: replaces complex branches with simpler ones from any other branch site (cross-group substitution). O(N²) per pass.
 /// - ``Strategy/pivot``: moves the `.selected` marker to a non-selected alternative within the same branch group.
+///
+/// The `promoteDirectDescendant` strategy handles the common case of collapsing recursive
+/// depth one level at a time (for example, `Div(And(x,y), z)` → `And(x,y)`). It dominates
+/// `promote` — when direct descendant promotion makes progress, the expensive exhaustive
+/// search is skipped.
 ///
 /// Pre-computes all candidates in ``start()`` and yields them via ``nextProbe()``.
 struct BranchSimplificationEncoder: ComposableEncoder {
     enum Strategy {
+        case promoteDirectDescendant
         case promote
         case pivot
     }
@@ -22,6 +29,7 @@ struct BranchSimplificationEncoder: ComposableEncoder {
 
     var name: EncoderName {
         switch strategy {
+        case .promoteDirectDescendant: .promoteDirectDescendantBranch
         case .promote: .deleteByPromotingSimplestBranch
         case .pivot: .deleteByPivotingToAlternativeBranch
         }
@@ -48,6 +56,7 @@ struct BranchSimplificationEncoder: ComposableEncoder {
     ) -> Int? {
         guard sequence.isEmpty == false else { return nil }
         return switch strategy {
+        case .promoteDirectDescendant: 5
         case .promote: 20
         case .pivot: 10
         }
@@ -61,6 +70,8 @@ struct BranchSimplificationEncoder: ComposableEncoder {
     ) {
         candidateIndex = 0
         switch strategy {
+        case .promoteDirectDescendant:
+            candidates = Self.directDescendantPromotionCandidates(tree: tree, sequence: sequence)
         case .promote:
             candidates = Self.promotionCandidates(tree: tree, sequence: sequence)
         case .pivot:
@@ -73,6 +84,139 @@ struct BranchSimplificationEncoder: ComposableEncoder {
         let candidate = candidates[candidateIndex]
         candidateIndex += 1
         return candidate
+    }
+
+    // MARK: - Direct Descendant Promotion
+
+    /// Builds candidates that replace a branch group with one of its direct descendant
+    /// branch groups from the same generator.
+    ///
+    /// For each branch group in the tree, walks the selected branch's subtree to find
+    /// child branch groups with the same `depthMaskedSiteID`. Each such child is a
+    /// candidate to replace the parent, collapsing one level of recursive depth.
+    /// For example, `Div(And(x,y), Add(a,b))` yields two candidates: `And(x,y)` and `Add(a,b)`.
+    ///
+    /// Candidates are sorted shortlex-smallest-first so the simplest collapse is tried first.
+    private static func directDescendantPromotionCandidates(
+        tree: ChoiceTree,
+        sequence: ChoiceSequence
+    ) -> [ChoiceSequence] {
+        guard tree.contains(\.unwrapped.isBranch) else { return [] }
+
+        var candidates: [ChoiceSequence] = []
+
+        for element in tree.walk() {
+            guard case let .group(array, _) = element.node,
+                  array.contains(where: \.unwrapped.isBranch)
+            else { continue }
+
+            let parentMasked = selectedBranchMaskedSiteID(of: element.node)
+            guard let parentMasked else { continue }
+
+            // Find the selected branch's subtree and collect direct descendant
+            // branch groups with the same depthMaskedSiteID.
+            guard let selectedBranch = array.first(where: \.isSelected) else { continue }
+            let descendants = directDescendantBranchGroups(
+                in: selectedBranch.unwrapped,
+                matching: parentMasked
+            )
+            guard descendants.isEmpty == false else { continue }
+
+            for descendant in descendants {
+                var candidateTree = tree
+                candidateTree[element.fingerprint] = descendant
+                let candidateSequence = ChoiceSequence.flatten(candidateTree)
+                if sequence.shortLexPrecedes(candidateSequence) == false {
+                    candidates.append(candidateSequence)
+                }
+            }
+        }
+
+        // Sort shortlex-smallest-first so the simplest collapses are tried first.
+        candidates.sort { $0.shortLexPrecedes($1) }
+        return candidates
+    }
+
+    /// Finds direct descendant branch groups within a subtree that share the given
+    /// `depthMaskedSiteID`.
+    ///
+    /// "Direct descendant" means the first branch groups encountered when walking
+    /// down from the root — once a matching branch group is found, its children
+    /// are not searched (they would be grandchildren, not direct descendants).
+    private static func directDescendantBranchGroups(
+        in subtree: ChoiceTree,
+        matching targetMaskedSiteID: UInt64
+    ) -> [ChoiceTree] {
+        var results: [ChoiceTree] = []
+        collectDirectDescendantBranchGroups(
+            in: subtree,
+            matching: targetMaskedSiteID,
+            results: &results
+        )
+        return results
+    }
+
+    private static func collectDirectDescendantBranchGroups(
+        in node: ChoiceTree,
+        matching targetMaskedSiteID: UInt64,
+        results: inout [ChoiceTree]
+    ) {
+        switch node {
+        case let .group(children, _):
+            // Check if this group IS a matching branch group.
+            if children.contains(where: \.unwrapped.isBranch) {
+                if let maskedID = selectedBranchMaskedSiteID(of: node),
+                   maskedID == targetMaskedSiteID
+                {
+                    results.append(node)
+                    return // Don't recurse into this group's children.
+                }
+            }
+            // Not a matching branch group — recurse into children.
+            for child in children {
+                collectDirectDescendantBranchGroups(
+                    in: child.unwrapped,
+                    matching: targetMaskedSiteID,
+                    results: &results
+                )
+            }
+        case let .selected(inner):
+            collectDirectDescendantBranchGroups(
+                in: inner,
+                matching: targetMaskedSiteID,
+                results: &results
+            )
+        case let .bind(_, bound):
+            collectDirectDescendantBranchGroups(
+                in: bound,
+                matching: targetMaskedSiteID,
+                results: &results
+            )
+        case let .branch(_, _, _, _, choice):
+            collectDirectDescendantBranchGroups(
+                in: choice,
+                matching: targetMaskedSiteID,
+                results: &results
+            )
+        case let .sequence(_, elements, _):
+            for element in elements {
+                collectDirectDescendantBranchGroups(
+                    in: element,
+                    matching: targetMaskedSiteID,
+                    results: &results
+                )
+            }
+        case let .resize(_, choices):
+            for choice in choices {
+                collectDirectDescendantBranchGroups(
+                    in: choice,
+                    matching: targetMaskedSiteID,
+                    results: &results
+                )
+            }
+        default:
+            break
+        }
     }
 
     // MARK: - Promotion
@@ -182,7 +326,7 @@ private func extractBranchNodes(
     var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
     for element in tree.walk() {
         if case let .group(array, _) = element.node,
-           array.allSatisfy(\.unwrapped.isBranch)
+           array.contains(where: \.unwrapped.isBranch)
         {
             results.append((element.fingerprint, element.node))
         }
@@ -210,7 +354,7 @@ private func extractPickSites(from tree: ChoiceTree) -> [Fingerprint] {
     var results: [Fingerprint] = []
     for element in tree.walk() {
         if case let .group(array, _) = element.node,
-           array.allSatisfy(\.unwrapped.isBranch),
+           array.contains(where: \.unwrapped.isBranch),
            array.contains(where: \.isSelected),
            array.count >= 2
         {

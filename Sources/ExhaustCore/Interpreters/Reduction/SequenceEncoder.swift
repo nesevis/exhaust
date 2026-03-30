@@ -1,6 +1,7 @@
 /// Typed identifier for a sequence encoder, used in dominance pruning and logging.
 public enum EncoderName: String, Hashable, Sendable {
     // Structural deletion
+    case promoteDirectDescendantBranch
     case deleteByPromotingSimplestBranch
     case deleteByPivotingToAlternativeBranch
     case deleteContainerSpans

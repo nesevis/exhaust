@@ -53,6 +53,10 @@ struct EncoderDominance {
         // every contiguous window is a degenerate non-contiguous subset.
         case (.structuralDeletion, .deleteAlignedSiblingSubsets):
             succeeded.contains(.deleteAlignedSiblingWindows)
+        // Direct descendant promotion dominates full cross-group promotion:
+        // if collapsing to a direct child made progress, exhaustive search is deferred.
+        case (.structuralDeletion, .deleteByPromotingSimplestBranch):
+            succeeded.contains(.promoteDirectDescendantBranch)
         // Antichain delta-debugging dominates mutation pool pair enumeration:
         // the antichain's jointly-deletable subset subsumes individual and pair mutations.
         case (.structuralDeletion, .productSpaceAdaptive):
