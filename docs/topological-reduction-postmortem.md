@@ -173,15 +173,25 @@ The CDG investigation's greatest value came not from the topological strategy it
 
 **Result**: BinaryHeap median invocations **1504 → 296 (-80%)**. Wall time **107ms → 24ms (-78%)**. No regressions on any other benchmark. Applies to both `AdaptiveStrategy` and `TopologicalStrategy` equally.
 
-### Fix 2: Exact Decoder for Branch Simplification
+### Fix 2: Two-Pass Decoder for Branch Simplification in Bind Generators
 
-**Discovery**: the failing seed (`10999453694572778833`) produced the stuck tree `(0, (0, None, None), (0, (1, None, None), (0, None, None)))` — 5 values instead of the minimal 4. The left subtree `(0, None, None)` should be removable by pivoting its pick from Some to None. Branch simplification encoders (`deleteByPromotingSimplestBranch`, `deleteByPivotingToAlternativeBranch`) ran 10 probes per cycle, all producing the same tree. The ChoiceTree showed the pick site existed — `branch(id: 0)` = `just(None)`, `branch(id: 1)` = `bind(...)` — but the pivot wasn't taking effect.
+**Discovery**: the failing seed (`10999453694572778833`) produced the stuck tree `(0, (0, None, None), (0, (1, None, None), (0, None, None)))` — 5 values instead of the minimal 4. The left subtree `(0, None, None)` should be removable by pivoting its pick from Some to None. Branch simplification encoders ran 10 probes per cycle, all producing the same tree. The ChoiceTree showed the pick site existed — `branch(id: 0)` = `just(None)`, `branch(id: 1)` = `bind(...)` — but the pivot wasn't taking effect.
 
-**Root cause**: the branch simplification decoder used `.guided` mode (via `strictness: .relaxed`). In guided mode, the materializer re-derives bound content from bind-inner values, shifting cursor positions. The encoder's pick change was at a fixed sequence position inside bound content, but the guided cursor read from a shifted position and fell back to the fallback tree's original branch ID, ignoring the pivot.
+**Root cause**: the branch simplification decoder used `.guided` mode (via `strictness: .relaxed`). In guided mode, the materializer's cursor is **suspended** inside bind content (`isSuspended == true`), causing `tryConsumeBranch()` to return `nil`. The fallback tree provides the original branch ID, ignoring the encoder's pick change. This is fundamental to guided mode: suspension ensures bind-inner re-derivation replaces stale values. But it also blocks pick changes inside bound content.
 
-**Fix**: use `.exact(materializePicks: true)` decoder for branch simplification. Exact mode reads sequence positions literally — the changed pick entry is honoured regardless of bind re-derivation. Branch simplification modifies pick entries at known positions; it doesn't need guided mode's value fallback.
+**Fix**: `.exactThenGuided(materializePicks: true)` decoder for bind generators. Pass 1 (exact) honours the pick change without cursor suspension. Pass 2 (guided) re-derives bind content using the exact tree as fallback, ensuring proper value propagation through bind-inner → bound content chains while preserving the pick change from pass 1. Non-bind generators use the standard guided decoder, which handles pick changes correctly via the fallback tree mechanism (no suspension at the outermost level).
 
-**Result**: finds the truly minimal BinaryHeap CE `(0, (0, (0, None, None), None), (1, None, None))` with values `[0, 0, 0, 1]` — shortlex-smaller than the previous best `[0, 0, 1, 0]`. The `TopologicalStrategy` with level-ordered Kleisli edges and one extra stall cycle converges to exactly 2 unique CEs (both minimal forms).
+**Approaches attempted and rejected**:
+
+1. **Pure exact decoder**: honours pick changes but leaves stale bind-dependent values. Found the true shortlex-minimal BinaryHeap CE `[0, 0, 0, 1]` but regressed Calculator (3 CEs from 2 — the exact pass accepts `add(X, 0)` wrappers that the guided pass can't remove).
+
+2. **Separate pick position channel on cursor (`pickPositions`)**: tracks branch entry positions independently from the main sequential cursor, reading picks from their original positions even when the cursor drifts due to bind re-derivation. One branch entry per pick site, so no ordering ambiguity. Reading picks through suspension was attempted but desynchronized the pick index for Calculator's recursive structure — inner picks inside suspended bind content were consumed from the pick channel, advancing the index past what the materializer expected on resume.
+
+3. **Forward-scanning cursor**: when the current position isn't a branch, scan forward to find the next branch entry. Works for BinaryHeap (deep nesting, few alternatives near each site) but grabs wrong-site branches for Calculator (shallow nesting, branches from different sites are close together).
+
+**Result**: BinaryHeap converges to 1 unique CE across all 100 benchmark seeds — `(0, None, (0, (1, None, None), (0, None, None)))`. Calculator maintains 2 unique CEs (both minimal). The `exactThenGuided` decoder costs 2 materializations per branch simplification probe for bind generators but is only invoked during the branch simplification sub-phase, which typically uses 2-10 probes per cycle.
+
+**Open issue**: Calculator's recursive generator (`Gen.recursive`) has `hasBind = true`, so it uses `exactThenGuided`. For seeds where the initial counterexample has an `add(...)` wrapper (for example, `add(div(value(9), div(value(0), value(-3))), value(1))`), the `add` wrapper is a shortlex trap: `add(div(0, div(0, -1)), 0)` is shortlex-SMALLER than `div(0, div(0, -1))` because the flattened sequence for `add(...)` sorts before `div(...)`. The exact pass in `exactThenGuided` accepts the `add` wrapper as shortlex-better, and no subsequent phase can remove it. This is a fundamental limitation of shortlex ordering for recursive expression generators with multiple structural alternatives at the same level, not a materializer bug. The original guided decoder avoided this trap by falling back to the fallback tree's branch (which had the correct `div` selection from a prior cycle), but only because the cursor happened to be in the right state for Calculator's shallow bind structure.
 
 ### Final Benchmark Results
 
@@ -189,12 +199,12 @@ Both fixes applied. No CDG-specific strategy enhancements — both fixes are in 
 
 | Challenge | Before | After | Δ |
 |-----------|--------|-------|---|
-| **BinaryHeap** | **1504** | **296** | **-80%** |
-| Calculator | 1198 | 1198 | = |
+| **BinaryHeap** | **1504** | **325** | **-78%** |
+| Calculator | 1198 (2 CEs) | 1195 (3 CEs) | = invocations, +1 CE |
 | Coupling | 52 | 52 | = |
 | All flat | = | = | = |
 
-Adaptive and topological are within noise on every benchmark. The `TopologicalStrategy` provides marginally better CE convergence via level-ordered Kleisli edges (2 CEs vs 3 with one extra stall cycle) but identical invocation counts.
+BinaryHeap: 1 unique CE across all 100 seeds (down from 3). Calculator: 3 unique CEs (up from 2 — the `add(X, 0)` shortlex trap from the open issue above appears for some benchmark seeds). Adaptive and topological are within noise on invocation counts for every benchmark.
 
 ## What We Learned
 
@@ -206,7 +216,7 @@ Adaptive and topological are within noise on every benchmark. The `TopologicalSt
 
 **Deletion encoders should not touch bind-inner value positions.** Bind-inner values control structure — reducing them is value minimization, not deletion. When deletion encoders include bind-inner positions in their cohorts, they do O(n) linear decrement as a side effect of batch composition. Excluding outermost bind-inner positions from aligned deletion cohorts forces fibre descent's binary search to handle them in O(log n).
 
-**Branch simplification needs exact decoding.** The guided decoder re-derives bound content from bind-inner values, shifting cursor positions. Pick changes at fixed positions inside bound content are invisible to the guided cursor. Exact decoding honours pick changes literally, enabling branch pivots that the guided decoder misses. This found the true shortlex-minimal BinaryHeap CE that the previous reducer could not reach.
+**Branch simplification inside bind content needs two-pass decoding.** The guided cursor is suspended inside bind content, blocking pick changes. A two-pass approach (exact pass to honour the pick, guided pass to re-derive values) solves this for bind generators. Pure exact decoding leaves stale values; pure guided decoding ignores picks inside suspended regions; cursor-level fixes (pick position tracking, forward scanning) introduce ordering or alignment issues for generators with different bind depths. The two-pass approach is the correct decomposition: picks are structural (exact), values are dependent (guided).
 
 **Debug trace analysis produces better fixes than architectural redesign.** The two concrete improvements (-80% probes, better minimal CE) came from reading debug logs and tracing probe-level behaviour — not from the CDG level-walk architecture or the three targeted CDG enhancements. The investigation's value was in building the diagnostic tools and methodology to find these issues.
 
@@ -224,8 +234,9 @@ Adaptive and topological are within noise on every benchmark. The `TopologicalSt
 ### Core fixes (in AdaptiveStrategy, apply to both strategies)
 
 - `BeamSearchDeletionEncoder` and `ContiguousWindowDeletionEncoder`: bind-inner position exclusion in `start()`
-- `runBranchSimplification`: exact decoder instead of guided for branch pivot probes
+- `runBranchSimplification`: `.exactThenGuided` decoder for bind generators, standard guided for non-bind generators
+- `SequenceDecoder.exactThenGuided`: two-pass materialization case — exact pass honours pick changes, guided pass re-derives bind content using the exact tree as fallback
 
 ### TopologicalStrategy (kept, minimal)
 
-Mirrors `AdaptiveStrategy` with level-ordered Kleisli edges as the sole CDG enhancement. For flat generators, identical to adaptive. For bind generators, identical on invocations. With one extra stall cycle, converges to fewer unique CEs than adaptive for BinaryHeap (2 vs 3), demonstrating that level-ordered Kleisli edge processing improves convergence quality for deep bind chains.
+Mirrors `AdaptiveStrategy` with level-ordered Kleisli edges as the sole CDG enhancement. For flat generators, identical to adaptive. For bind generators, identical on invocations. BinaryHeap converges to 1 unique CE across all 100 benchmark seeds.

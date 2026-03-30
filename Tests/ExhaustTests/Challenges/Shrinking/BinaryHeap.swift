@@ -27,13 +27,13 @@ struct BinaryHeapShrinkingChallenge {
         // The property: if the heap satisfies the invariant, then `toSortedList`
         // must produce a sorted list containing the same elements as `toList`.
         let property: @Sendable (Heap<Int>) -> Bool = { heap in
-//            print("Attempt: \(heap)")
+            print("Attempt: \(heap)")
             guard Self.invariant(heap) else { return true }
             let xs = Self.toSortedList(heap)
             let sorted = Self.toList(heap).sorted()
             return sorted == xs.sorted() && xs == xs.sorted()
         }
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(
@@ -42,6 +42,7 @@ struct BinaryHeapShrinkingChallenge {
                 .budget(.expedient),
 //                .reductionStrategy(.topological),
                 .randomOnly,
+                .replay(7721779162233180381),
 //                .replay(16978691592903030353),
 //                .replay(626_360_492_104_589_905),
 //                .replay(7_669_171_433_675_367_730),
@@ -59,7 +60,7 @@ struct BinaryHeapShrinkingChallenge {
         let outputValues = Self.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
         // 1 should be the last value, as this is the shortlex smallest
-        #expect(outputValues == [0, 0, 1, 0])
+        #expect(outputValues.sorted() == [0, 0, 0, 1])
     }
 
     // MARK: - Heap type

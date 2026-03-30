@@ -25,8 +25,9 @@ struct CalculatorShrinkingChallenge {
      */
     
     @Test("Calculator, Full")
-    func calculatorFull() throws {
+    func calculatorfull() throws {
         let gen = #gen(Self.expression(depth: 4))
+        #examine(gen, samples: 40)
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let result = #exhaust(
@@ -34,10 +35,8 @@ struct CalculatorShrinkingChallenge {
             .suppressIssueReporting,
             .randomOnly,
             .budget(.exorbitant),
-//            .replay(1337),
-//            .reductionStrategy(.topological),
-            .replay(10334882580811088565),
-            //            .replay(1_117_838_118_804_311_299),
+//            .reflecting((div(value(-5), div(value(0), value(-10))))
+            .reflecting(Expr.div(.value(0), .add(.value(-10), .value(10)))),
             .onReport { report = $0 }
         ) { expr in
             print("Attempt: \(expr)")
@@ -122,7 +121,7 @@ struct CalculatorShrinkingChallenge {
     }
 
     static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
-        let leaf = #gen(.int(in: -10 ... 10))
+        let leaf = #gen(.int(in: -10 ... 10, scaling: .constant))
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
         
         let calculator = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
