@@ -98,7 +98,39 @@ enum BonsaiScheduler {
             collectStats: collectStats
         )
 
-        // Projection: zero structurally independent values.
+        // Branch projection: materialize with picks to get full branch alternatives,
+        // then try selecting the simplest branch at every site in one batch.
+        if case let .success(_, fullTree, _) = ReductionMaterializer.materialize(
+            gen, prefix: state.sequence, mode: .exact, fallbackTree: initialTree,
+            materializePicks: true
+        ) {
+            if let (result, probes) = state.branchProjectionPass.encode(
+                gen: gen,
+                tree: fullTree,
+                sequence: state.sequence,
+                property: property,
+                isInstrumented: state.isInstrumented
+            ) {
+                if state.collectStats {
+                    state.encoderProbes[.branchProjection, default: 0] += probes
+                    state.totalMaterializations += probes + 1
+                }
+                state.accept(
+                    ReductionResult(
+                        sequence: result.sequence,
+                        tree: result.tree,
+                        output: result.output,
+                        evaluations: probes,
+                        decodingReport: nil
+                    ),
+                    structureChanged: true
+                )
+            } else if state.collectStats {
+                state.totalMaterializations += 1
+            }
+        }
+
+        // Value projection: zero structurally independent values.
         if let result = state.freeCoordinateProjectionPass.encode(
             gen: gen,
             sequence: state.sequence,

@@ -29,6 +29,7 @@ public enum EncoderName: String, Hashable, Sendable {
     case relaxRound
     case kleisliComposition
     // Reduction passes
+    case branchProjection
     case freeCoordinateProjection
     case humanOrderReorder
 }

@@ -176,6 +176,7 @@ final class ReductionState<Output> {
     }
 
     // Closed reductions
+    var branchProjectionPass = BranchProjectionPass()
     var freeCoordinateProjectionPass = FreeCoordinateProjectionPass()
     var humanReadableOrderingPass = HumanReadableOrderingPass()
 
