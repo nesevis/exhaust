@@ -84,10 +84,17 @@ public extension ChoiceSequence {
         case let .branch(_, _, _, _, gen):
             flatten(gen, includingAllBranches: includingAllBranches, into: &output)
         case let .group(array, _):
-            if array.allSatisfy({ $0.isBranch || $0.isSelected }),
-               case let .selected(.branch(_, _, id, branchIDs, choice)) =
-               array.first(where: \.isSelected)
-            {
+            var idx = 0
+            var selectedBranchTree: ChoiceTree?
+            while idx < array.count {
+                let candidate = array[idx]
+                if candidate.isSelected && candidate.unwrapped.isBranch {
+                    selectedBranchTree = candidate
+                    break
+                }
+                idx += 1
+            }
+            if case let .selected(.branch(_, _, id, branchIDs, choice)) = selectedBranchTree {
                 output.append(.group(true))
                 output.append(.branch(.init(id: id, validIDs: branchIDs)))
                 let children = includingAllBranches ? array : [choice]
