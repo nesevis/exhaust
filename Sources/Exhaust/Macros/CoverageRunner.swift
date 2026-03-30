@@ -3,10 +3,10 @@
 // Analyzes the generator, then pulls rows from the density algorithm
 // (PullBasedCoveringArrayGenerator) one at a time, testing each against the
 // property. Stops on first failure or budget.
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
-enum CoverageRunner {
-    enum Result<Output> {
+public enum CoverageRunner {
+    public enum Result<Output> {
         /// Coverage found a counterexample.
         case failure(
             value: Output, tree: ChoiceTree,
@@ -24,7 +24,7 @@ enum CoverageRunner {
         case notApplicable
     }
 
-    static func run<Output>(
+    public static func run<Output>(
         _ gen: ReflectiveGenerator<Output>,
         coverageBudget: UInt64,
         property: (Output) -> Bool

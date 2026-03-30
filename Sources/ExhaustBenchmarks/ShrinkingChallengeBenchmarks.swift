@@ -1,7 +1,7 @@
 // swiftlint:disable file_length function_body_length force_try
 
 import Benchmark
-@_spi(ExhaustInternal) import Exhaust
+import Exhaust
 import ExhaustCore
 import Foundation
 
@@ -44,9 +44,9 @@ func registerShrinkingChallengeBenchmarks() {
     registerLargeUnionList()
     registerLengthList()
     registerNestedLists()
+    registerReverse()
     registerReplacement() // Not included
-//    registerReverse()
-//    registerParser() // Not included
+    registerParser() // Not included
 }
 
 // MARK: - Bound5
@@ -421,94 +421,94 @@ private func registerParser() {
     let coverageFinds = coverageFindsFailure(gen: gen, property: property)
     let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
-//    for strategy in withStrategies() {
-//        benchmark("Parser (\(strategy.name))") {
-//            let results = runReflectableBenchmark(
-//                gen: gen,
-//                property: property,
-//                failingValues: failingValues,
-//                config: strategy.config
-//            )
-//            if enableReport { printChallengeReport(name: "Parser (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
-//        }
-//    }
+    for strategy in withStrategies() {
+        benchmark("Parser (\(strategy.name))") {
+            let results = runReflectableBenchmark(
+                gen: gen,
+                property: property,
+                failingValues: failingValues,
+                config: strategy.config
+            )
+            if enableReport { printChallengeReport(name: "Parser (\(strategy.name))", results: results, foundWithCoveringArray: coverageFinds, iterationsToFirstFailure: iterToFail) }
+        }
+    }
 
     // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed,
     // matching the methodology from MacIver & Donaldson Figure 13.
-    benchmark("Parser ECOOP (adaptive)") {
-        var adaptive = Interpreters.BonsaiReducerConfiguration.fast
-        adaptive.schedulingStrategy = .adaptive
-
-        let seedCount = 1000
-        let baseSeed: UInt64 = 1337
-        var sizes: [Int] = []
-        var invocations: [Int] = []
-        var uniqueCEs = Set<String>()
-
-        for i in 0 ..< seedCount {
-            let seed = baseSeed &+ UInt64(i)
-            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 10_000)
-
-            // Find first failure for this seed.
-            var failingValue: ParserLang?
-            var failingTree: ChoiceTree?
-            do {
-                while let (value, tree) = try iterator.next() {
-                    if property(value) == false {
-                        failingValue = value
-                        failingTree = tree
-                        break
-                    }
-                }
-            } catch {}
-            guard let value = failingValue, let tree = failingTree else { continue }
-
-            // Reflect and reduce.
-            var invocationCount = 0
-            let countingProperty: (ParserLang) -> Bool = { candidate in
-                invocationCount += 1
-                return property(candidate)
-            }
-            let result = try? Interpreters.bonsaiReduce(
-                gen: gen,
-                tree: tree,
-                output: value,
-                config: adaptive,
-                property: countingProperty
-            )
-            print("\(seed), \(invocationCount)")
-            let output = result?.1 ?? value
-            let outputSize = parserSize(output)
-            sizes.append(outputSize)
-            invocations.append(invocationCount)
-            uniqueCEs.insert(String(describing: output))
-        }
-
-        guard sizes.isEmpty == false else {
-            print("[Parser ECOOP] No failures found")
-            return
-        }
-        let meanSize = Double(sizes.reduce(0, +)) / Double(sizes.count)
-        let meanInvoc = Double(invocations.reduce(0, +)) / Double(sizes.count)
-        let sortedSizes = sizes.sorted()
-        let medianSize = sortedSizes.count % 2 == 0
-            ? Double(sortedSizes[sortedSizes.count / 2 - 1] + sortedSizes[sortedSizes.count / 2]) / 2.0
-            : Double(sortedSizes[sortedSizes.count / 2])
-
-        // 95% confidence interval for the mean.
-        let variance = sizes.map { pow(Double($0) - meanSize, 2) }.reduce(0, +) / Double(sizes.count - 1)
-        let stdError = sqrt(variance / Double(sizes.count))
-        let ciLow = String(format: "%.2f", meanSize - 1.96 * stdError)
-        let ciHigh = String(format: "%.2f", meanSize + 1.96 * stdError)
-
-        print("[Parser ECOOP] seeds=\(sizes.count) mean_size=\(String(format: "%.2f", meanSize)) (\(ciLow)–\(ciHigh)) median_size=\(String(format: "%.1f", medianSize)) mean_invocations=\(String(format: "%.1f", meanInvoc)) unique_CEs=\(uniqueCEs.count)")
-        if enableCounterExamples {
-            print("[Parser ECOOP] unique counterexamples (\(uniqueCEs.count)):")
-            for ce in uniqueCEs.sorted() {
-                print("  \(ce)")
-            }
-        }
-    }
+//    benchmark("Parser ECOOP (adaptive)") {
+//        var adaptive = Interpreters.BonsaiReducerConfiguration.fast
+//        adaptive.schedulingStrategy = .adaptive
+//
+//        let seedCount = 1000
+//        let baseSeed: UInt64 = 1337
+//        var sizes: [Int] = []
+//        var invocations: [Int] = []
+//        var uniqueCEs = Set<String>()
+//
+//        for i in 0 ..< seedCount {
+//            let seed = baseSeed &+ UInt64(i)
+//            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 10_000)
+//
+//            // Find first failure for this seed.
+//            var failingValue: ParserLang?
+//            var failingTree: ChoiceTree?
+//            do {
+//                while let (value, tree) = try iterator.next() {
+//                    if property(value) == false {
+//                        failingValue = value
+//                        failingTree = tree
+//                        break
+//                    }
+//                }
+//            } catch {}
+//            guard let value = failingValue, let tree = failingTree else { continue }
+//
+//            // Reflect and reduce.
+//            var invocationCount = 0
+//            let countingProperty: (ParserLang) -> Bool = { candidate in
+//                invocationCount += 1
+//                return property(candidate)
+//            }
+//            let result = try? Interpreters.bonsaiReduce(
+//                gen: gen,
+//                tree: tree,
+//                output: value,
+//                config: adaptive,
+//                property: countingProperty
+//            )
+//            print("\(seed), \(invocationCount)")
+//            let output = result?.1 ?? value
+//            let outputSize = parserSize(output)
+//            sizes.append(outputSize)
+//            invocations.append(invocationCount)
+//            uniqueCEs.insert(String(describing: output))
+//        }
+//
+//        guard sizes.isEmpty == false else {
+//            print("[Parser ECOOP] No failures found")
+//            return
+//        }
+//        let meanSize = Double(sizes.reduce(0, +)) / Double(sizes.count)
+//        let meanInvoc = Double(invocations.reduce(0, +)) / Double(sizes.count)
+//        let sortedSizes = sizes.sorted()
+//        let medianSize = sortedSizes.count % 2 == 0
+//            ? Double(sortedSizes[sortedSizes.count / 2 - 1] + sortedSizes[sortedSizes.count / 2]) / 2.0
+//            : Double(sortedSizes[sortedSizes.count / 2])
+//
+//        // 95% confidence interval for the mean.
+//        let variance = sizes.map { pow(Double($0) - meanSize, 2) }.reduce(0, +) / Double(sizes.count - 1)
+//        let stdError = sqrt(variance / Double(sizes.count))
+//        let ciLow = String(format: "%.2f", meanSize - 1.96 * stdError)
+//        let ciHigh = String(format: "%.2f", meanSize + 1.96 * stdError)
+//
+//        print("[Parser ECOOP] seeds=\(sizes.count) mean_size=\(String(format: "%.2f", meanSize)) (\(ciLow)–\(ciHigh)) median_size=\(String(format: "%.1f", medianSize)) mean_invocations=\(String(format: "%.1f", meanInvoc)) unique_CEs=\(uniqueCEs.count)")
+//        if enableCounterExamples {
+//            print("[Parser ECOOP] unique counterexamples (\(uniqueCEs.count)):")
+//            for ce in uniqueCEs.sorted() {
+//                print("  \(ce)")
+//            }
+//        }
+//    }
 }
 
 // MARK: - Replacement
