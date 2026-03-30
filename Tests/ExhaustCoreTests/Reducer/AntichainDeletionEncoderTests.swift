@@ -23,7 +23,7 @@ struct AntichainDeletionEncoderTests {
     encoder.setCandidates(candidates)
     encoder.start(
       sequence: seq,
-      tree: ChoiceTree.just(""),
+      tree: ChoiceTree.just,
       positionRange: 0 ... max(0, seq.count - 1),
       context: ReductionContext()
     )
@@ -54,7 +54,7 @@ struct AntichainDeletionEncoderTests {
     encoder.setCandidates(candidates)
     encoder.start(
       sequence: seq,
-      tree: ChoiceTree.just(""),
+      tree: ChoiceTree.just,
       positionRange: 0 ... max(0, seq.count - 1),
       context: ReductionContext()
     )
@@ -81,7 +81,7 @@ struct AntichainDeletionEncoderTests {
     encoder.setCandidates(candidates)
     encoder.start(
       sequence: seq,
-      tree: ChoiceTree.just(""),
+      tree: ChoiceTree.just,
       positionRange: 0 ... max(0, seq.count - 1),
       context: ReductionContext()
     )
@@ -100,7 +100,7 @@ struct AntichainDeletionEncoderTests {
     encoder.setCandidates(candidates)
     encoder.start(
       sequence: seq,
-      tree: ChoiceTree.just(""),
+      tree: ChoiceTree.just,
       positionRange: 0 ... max(0, seq.count - 1),
       context: ReductionContext()
     )
@@ -121,7 +121,7 @@ struct AntichainDeletionEncoderTests {
     encoder.setCandidates(candidates)
     encoder.start(
       sequence: seq,
-      tree: ChoiceTree.just(""),
+      tree: ChoiceTree.just,
       positionRange: 0 ... max(0, seq.count - 1),
       context: ReductionContext()
     )
@@ -152,7 +152,7 @@ struct AntichainDeletionEncoderTests {
     encoder.setCandidates(candidates)
     encoder.start(
       sequence: seq,
-      tree: ChoiceTree.just(""),
+      tree: ChoiceTree.just,
       positionRange: 0 ... max(0, seq.count - 1),
       context: ReductionContext()
     )
@@ -184,7 +184,7 @@ struct AntichainDeletionEncoderTests {
 
     let cost = encoder.estimatedCost(
       sequence: seq,
-      tree: ChoiceTree.just(""),
+      tree: ChoiceTree.just,
       positionRange: 0 ... max(0, seq.count - 1),
       context: ReductionContext()
     )

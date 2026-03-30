@@ -166,10 +166,10 @@ struct ChoiceSequenceTests {
     @Test("Flatten mixed tree with non-choices")
     func flattenMixedTree() {
         let tree = ChoiceTree.group([
-            .just("constant"),
+            .just,
             .getSize(100),
             .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
-            .just("another constant"),
+            .just,
         ])
 
         let flattened = ChoiceSequence.flatten(tree)

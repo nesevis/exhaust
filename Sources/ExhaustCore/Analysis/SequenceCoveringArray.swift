@@ -97,7 +97,7 @@ public enum SequenceCoveringArray {
                 weight: chosen.weight,
                 id: chosen.id,
                 branchIDs: branchIDs,
-                choice: .just("")
+                choice: .just
             )
 
             elementTrees.append(.group([.selected(branch)]))
@@ -214,7 +214,7 @@ public enum SequenceCoveringArray {
 
     /// Converts a covering array row into a `ChoiceTree` using the SCA domain mapping.
     ///
-    /// For each position, decomposes the flat domain index into a branch selection plus concrete argument values. Branches with analyzed arguments get sub-trees encoding specific parameter values; parameter-free and unanalyzable branches get `.just("")` sub-trees (unanalyzable branches will receive random arguments during replay since the sub-tree carries no argument constraints).
+    /// For each position, decomposes the flat domain index into a branch selection plus concrete argument values. Branches with analyzed arguments get sub-trees encoding specific parameter values; parameter-free and unanalyzable branches get `.just` sub-trees (unanalyzable branches will receive random arguments during replay since the sub-tree carries no argument constraints).
     ///
     /// - Parameters:
     ///   - row: The covering array row with flat domain indices per position.
@@ -245,7 +245,7 @@ public enum SequenceCoveringArray {
             let subTree: ChoiceTree
             switch slot.argProfile {
             case .parameterFree, .unanalyzable:
-                subTree = .just("")
+                subTree = .just
             case let .analyzed(params):
                 let localIndex = valueIndex - slot.flatOffset
                 guard let argTree = buildArgTree(
@@ -278,7 +278,7 @@ public enum SequenceCoveringArray {
 
     /// Returns true if every branch in the pick has no parameters (no choices in sub-generators).
     ///
-    /// Command-type-only SCA produces `.just("")` sub-trees that can't satisfy parameterized branches during replay. Use this to gate command-type-only SCA on parameter-free branches.
+    /// Command-type-only SCA produces `.just` sub-trees that can't satisfy parameterized branches during replay. Use this to gate command-type-only SCA on parameter-free branches.
     public static func allBranchesParameterFree(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> Bool {

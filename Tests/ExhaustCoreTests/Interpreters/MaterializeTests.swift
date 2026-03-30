@@ -325,23 +325,6 @@ struct MaterializeTests {
         #expect(materialized == [])
     }
 
-    @Test("Materialize sequence with shrunk elements", .disabled("Size scaling changed from logarithmic to linear"))
-    func materializeSequenceShrunk() throws {
-        // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
-        var matIter2 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42)
-        let (_, tree) = try #require(matIter2.prefix(2).last)
-        var flattened = ChoiceSequence.flatten(tree)
-        let originalCount = flattened.count
-        flattened.remove(at: 2)
-        flattened.remove(at: 2)
-        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
-            Issue.record("Expected .success")
-            return
-        }
-        #expect(materialized.count < originalCount)
-    }
-
     @Test("Materialize with modified values reproduces modified output")
     func materializeModifiedValues() throws {
         let gen = Gen.choose(in: UInt64(0) ... 1000)

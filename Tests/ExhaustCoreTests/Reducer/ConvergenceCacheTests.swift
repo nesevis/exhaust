@@ -118,7 +118,7 @@ struct ConvergedOriginProbeSavingsTests {
         let spans = extractValueSpans(from: seq)
 
         var encoder = BinarySearchToSemanticSimplestEncoder()
-        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
+        encoder.start(sequence: seq, tree: .just, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
         while encoder.nextProbe(lastAccepted: false) != nil {}
 
         let records = encoder.convergenceRecords
@@ -163,7 +163,7 @@ struct ValidationProbeTests {
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
+        encoder.start(sequence: seq, tree: .just, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []
         while let probe = encoder.nextProbe(lastAccepted: false) {
@@ -188,7 +188,7 @@ struct ValidationProbeTests {
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
+        encoder.start(sequence: seq, tree: .just, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []
         var lastAccepted = false
@@ -221,7 +221,7 @@ struct LinearScanEncoderTests {
             scanDirection: .upward
         )
         encoder.start(
-            sequence: seq, tree: .just(""),
+            sequence: seq, tree: .just,
             positionRange: 0 ... 0,
             context: ReductionContext()
         )
@@ -242,7 +242,7 @@ struct LinearScanEncoderTests {
             scanDirection: .upward
         )
         encoder.start(
-            sequence: seq, tree: .just(""),
+            sequence: seq, tree: .just,
             positionRange: 0 ... 0,
             context: ReductionContext()
         )
@@ -266,7 +266,7 @@ struct LinearScanEncoderTests {
             scanDirection: .upward
         )
         encoder.start(
-            sequence: seq, tree: .just(""),
+            sequence: seq, tree: .just,
             positionRange: 0 ... 0,
             context: ReductionContext()
         )
@@ -291,7 +291,7 @@ struct LinearScanEncoderTests {
             scanDirection: .upward
         )
         encoder.start(
-            sequence: seq, tree: .just(""),
+            sequence: seq, tree: .just,
             positionRange: 0 ... 0,
             context: ReductionContext()
         )
@@ -312,7 +312,7 @@ struct LinearScanEncoderTests {
             scanDirection: .upward
         )
         let cost = encoder.estimatedCost(
-            sequence: seq, tree: .just(""),
+            sequence: seq, tree: .just,
             positionRange: 0 ... 0,
             context: ReductionContext()
         )
@@ -360,7 +360,7 @@ private func countAllRejectedProbes(
         : spans.map(\.range.lowerBound).min()! ... spans.map(\.range.upperBound).max()!
     encoder.start(
         sequence: sequence,
-        tree: .just(""),
+        tree: .just,
         positionRange: positionRange,
         context: ReductionContext(convergedOrigins: convergedOrigins)
     )

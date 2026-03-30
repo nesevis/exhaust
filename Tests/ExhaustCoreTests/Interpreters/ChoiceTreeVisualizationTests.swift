@@ -22,7 +22,7 @@ struct ChoiceTreeVisualizationTests {
 
     @Test("Single just renders centered diamond")
     func singleJust() {
-        let tree = ChoiceTree.just("Bool")
+        let tree = ChoiceTree.just
         let result = tree.visualization(width: 20)
         #expect(result.contains("✿"))
     }

@@ -19,10 +19,7 @@ extension ReductionState {
     func runFibreDescent(
         budget: inout Int,
         dag: ChoiceDependencyGraph?,
-        scopeRange: ClosedRange<Int>? = nil,
-        depthFilter: Int? = nil,
-        suppressCovariantSweep: Bool = false,
-        exclusionRanges: [ClosedRange<Int>]? = nil
+        scopeRange: ClosedRange<Int>? = nil
     ) throws -> Bool {
         phaseTracker.push(.fibreDescent)
         defer { phaseTracker.pop() }
@@ -102,12 +99,7 @@ extension ReductionState {
             repeat {
                 restartLeafRange = false
 
-                var leafSpans = extractValueSpans(in: leafRange)
-                if let excluded = exclusionRanges {
-                    leafSpans = ChoiceDependencyGraph.applyExclusion(
-                        spans: leafSpans, excluding: excluded
-                    )
-                }
+                let leafSpans = extractValueSpans(in: leafRange)
                 guard leafSpans.isEmpty == false else { break }
 
                 let floatSpans = leafSpans.filter { span in
@@ -121,8 +113,7 @@ extension ReductionState {
                 let leafContext = ReductionContext(
                     bindIndex: bindIndex,
                     convergedOrigins: cachedOrigins,
-                    dag: dag,
-                    depthFilter: depthFilter
+                    dag: dag
                 )
                 let activeFingerprint = needsFingerprintGuard ? prePhaseFingerprint : nil
 
@@ -181,7 +172,7 @@ extension ReductionState {
         // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runComposable call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
         let maxBindDepth = bindIndex?.maxBindDepth ?? 0
         let fullRange = 0 ... max(0, sequence.count - 1)
-        if maxBindDepth >= 1, legBudget.isExhausted == false, suppressCovariantSweep == false {
+        if maxBindDepth >= 1, legBudget.isExhausted == false {
             for depth in stride(from: 1, through: maxBindDepth, by: 1) {
                 guard legBudget.isExhausted == false else { break }
                 dominance.invalidate()
@@ -263,8 +254,7 @@ extension ReductionState {
         let tailContext = ReductionContext(
             bindIndex: bindIndex,
             convergedOrigins: cachedOrigins,
-            dag: dag,
-            depthFilter: depthFilter
+            dag: dag
         )
 
         // Shortlex reorder: sort siblings by shortlex key after values settle.

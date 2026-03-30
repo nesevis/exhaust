@@ -61,8 +61,8 @@ struct BindAwarenessTests {
 
     @Test("Bind debug description contains 'bind'")
     func bindDebugDescription() {
-        let inner = ChoiceTree.just("x")
-        let bound = ChoiceTree.just("y")
+        let inner = ChoiceTree.just
+        let bound = ChoiceTree.just
         let tree = ChoiceTree.bind(inner: inner, bound: bound)
 
         #expect(tree.debugDescription.contains("bind"))
@@ -70,8 +70,8 @@ struct BindAwarenessTests {
 
     @Test("Bind elementDescription wraps children in braces")
     func bindElementDescription() {
-        let inner = ChoiceTree.just("a")
-        let bound = ChoiceTree.just("b")
+        let inner = ChoiceTree.just
+        let bound = ChoiceTree.just
         let tree = ChoiceTree.bind(inner: inner, bound: bound)
 
         #expect(tree.elementDescription.contains("{"))

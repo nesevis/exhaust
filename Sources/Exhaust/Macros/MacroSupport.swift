@@ -38,9 +38,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var useRandomOnly = false
         var humanOrderPostProcess = true
         var visualize = false
-        var reductionStrategy: SchedulingStrategyKind = .adaptive
         var onReportClosure: ((ExhaustReport) -> Void)?
-
+        
         for setting in settings {
             switch setting {
             case let .budget(b):
@@ -57,24 +56,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 humanOrderPostProcess = true
             case .visualize:
                 visualize = true
-            case let .reductionStrategy(strategy):
-                reductionStrategy = strategy
             case let .onReport(closure):
                 onReportClosure = closure
             }
         }
-
+        
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
-        let reductionConfig: Interpreters.BonsaiReducerConfiguration = {
-            var config = Interpreters.BonsaiReducerConfiguration(from: budget.reducerBudget)
-            config.schedulingStrategy = reductionStrategy
-            return config
-        }()
-
+        let reductionConfig = Interpreters.BonsaiReducerConfiguration(from: budget.reducerBudget)
+        
         var report = ExhaustReport()
         defer { onReportClosure?(report) }
-
+        
         if let reflectingValue {
             do {
                 return try __reduceReflected(
@@ -103,7 +96,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 return reflectingValue
             }
         }
-
+        
         // --- Structured coverage phase ---
         let phaseTimingStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         var coveragePhaseEndTime = phaseTimingStart
@@ -174,7 +167,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             propertyInvocations: propertyInvocationCount
                         )
                         failure.replayHint =
-                            "No replay seed — found via systematic combinatorial coverage."
+                        "No replay seed — found via systematic combinatorial coverage."
                         let rendered = failure.render(
                             format: ExhaustLog.configuration.format
                         )
@@ -227,7 +220,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     )
                     return value
                 }
-
+                
                 // Reduction failed — report original
                 var failure = PropertyTestFailure(
                     counterexample: value,
@@ -261,7 +254,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     reduction: propertyInvocationCount
                 )
                 return nil
-
+                
             case let .exhaustive(iterations):
                 ExhaustLog.notice(
                     category: .propertyTest,
@@ -293,7 +286,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     reduction: 0
                 )
                 return nil
-
+                
             case let .partial(iterations, strength, rows, parameters, totalSpace, kind):
                 coverageIterations = iterations
                 ExhaustLog.notice(
@@ -309,7 +302,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         "kind": kind,
                     ]
                 )
-
+                
             case .notApplicable:
                 ExhaustLog.notice(
                     category: .propertyTest,
@@ -320,7 +313,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
         coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         // --- Random sampling phase (full maxIterations budget) ---
-
+        
         var iterations = 0
         var generator = ValueAndChoiceTreeInterpreter(
             gen,
@@ -329,7 +322,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             maxRuns: samplingBudget
         )
         let actualSeed = generator.baseSeed
-
+        
         do { while let (next, tree) = try generator.next() {
             iterations += 1
             if property(next) == false {
@@ -418,7 +411,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     )
                     return next
                 }
-
+                
                 // Reduction failed — report the original counterexample
                 let failure = PropertyTestFailure(
                     counterexample: next,
@@ -461,7 +454,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             )
             return nil
         }
-
+        
         let totalPropertyCalls = coverageIterations + iterations
         var passMetadata = [
             "iterations": "\(samplingBudget)",
@@ -496,9 +489,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         )
         return nil
     }
-
+    
     // MARK: - Explore
-
+    
     /// Runs a feedback-guided property test with hill-climbing mutation.
     /// This is the runtime target of the `#explore` macro expansion.
     @discardableResult
@@ -535,7 +528,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 generateRatio = r
             }
         }
-
+        
         var runner = ExploreRunner(
             gen: gen,
             property: property,
@@ -547,9 +540,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             scorer: scorer
         )
         let actualSeed = runner.baseSeed
-
+        
         let result = runner.run()
-
+        
         switch result {
         case let .failure(counterexample, shrunkSequence, original, iteration):
             let failure = PropertyTestFailure(
@@ -578,7 +571,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 )
             }
             return counterexample
-
+            
         case let .unshrunkFailure(counterexample, iteration):
             let failure = PropertyTestFailure(
                 counterexample: counterexample,
@@ -606,7 +599,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 )
             }
             return counterexample
-
+            
         case let .passed(iterations, poolSize):
             var passMetadata = [
                 "iterations": "\(iterations)",
@@ -623,9 +616,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             return nil
         }
     }
-
+    
     // MARK: - Example
-
+    
     /// Generates a single value from a generator. Runtime target of `#example` expansion.
     public static func __example<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -637,7 +630,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
         return value
     }
-
+    
     /// Generates an array of values from a generator. Runtime target of `#example` expansion.
     public static func __exampleArray<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -651,9 +644,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
         return results
     }
-
+    
     // MARK: - Examination
-
+    
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     ///
     /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
@@ -676,7 +669,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             column: column
         )
     }
-
+    
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     ///
     /// Falls back to choice-sequence comparison for non-`Equatable` types.
@@ -699,9 +692,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             column: column
         )
     }
-
+    
     // MARK: - Phase Timing
-
+    
     private static func logPhaseTimings(
         start: UInt64,
         coverageEnd: UInt64,
@@ -723,9 +716,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             ]
         )
     }
-
+    
     // MARK: - Reflecting
-
+    
     // swiftlint:disable:next function_parameter_count
     private static func __reduceReflected<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -743,7 +736,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         report: inout ExhaustReport
     ) throws -> Output? {
         let reflectStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-
+        
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
             ExhaustLog.error(
@@ -763,7 +756,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             report.setInvocations(coverage: 0, randomSampling: 0, reduction: 1)
             return nil
         }
-
+        
         guard let tree = try Interpreters.reflect(gen, with: value) else {
             let message = "reflecting: could not reflect value into choice tree"
             ExhaustLog.error(
@@ -783,9 +776,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             report.setInvocations(coverage: 0, randomSampling: 0, reduction: 1)
             return nil
         }
-
+        
         let reflectionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-
+        
         var propertyInvocationCount = 0
         let countingProperty: (Output) -> Bool = { value in
             propertyInvocationCount += 1
@@ -801,7 +794,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             property: countingProperty
         )
         report.applyReductionStats(reduceResult.stats)
-
+        
         if let (shrunkSequence, shrunkValue) = reduceResult.reduced {
             let failure = PropertyTestFailure(
                 counterexample: shrunkValue,
@@ -836,10 +829,10 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             report.reductionMilliseconds = reductionMs
             report.totalMilliseconds = totalMs
             report.setInvocations(
-            coverage: 0,
-            randomSampling: 0,
-            reduction: 1 + propertyInvocationCount
-        )
+                coverage: 0,
+                randomSampling: 0,
+                reduction: 1 + propertyInvocationCount
+            )
             if !suppressIssueReporting {
                 reportIssue(
                     rendered,
@@ -851,7 +844,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             }
             return shrunkValue
         }
-
+        
         // Reflection succeeded but reduction could not improve — return original
         let failure = PropertyTestFailure(
             counterexample: value,

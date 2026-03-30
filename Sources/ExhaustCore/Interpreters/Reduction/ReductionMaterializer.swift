@@ -161,7 +161,7 @@ extension ReductionMaterializer {
     ) throws -> (Output, ChoiceTree)? {
         switch gen {
         case let .pure(value):
-            return (value, .emptyJust)
+            return (value, .just)
 
         case let .impure(operation, continuation):
             switch operation {
@@ -227,7 +227,7 @@ extension ReductionMaterializer {
             case let .just(value):
                 let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try runContinuation(
-                    result: value, calleeChoiceTree: .just("\(value)"),
+                    result: value, calleeChoiceTree: .just,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )

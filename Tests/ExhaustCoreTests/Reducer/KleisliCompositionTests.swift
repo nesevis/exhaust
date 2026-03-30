@@ -20,7 +20,7 @@ struct KleisliCompositionTests {
         // Direct encoder call
         let allSpans = ChoiceSequence.extractAllValueSpans(from: sequence)
         var directEncoder = ZeroValueEncoder()
-        directEncoder.start(sequence: sequence, tree: .just(""), positionRange: 0 ... max(0, sequence.count - 1), context: ReductionContext())
+        directEncoder.start(sequence: sequence, tree: .just, positionRange: 0 ... max(0, sequence.count - 1), context: ReductionContext())
         var directProbes: [ChoiceSequence] = []
         while let probe = directEncoder.nextProbe(lastAccepted: false) {
             directProbes.append(probe)
@@ -159,7 +159,7 @@ struct KleisliCompositionTests {
             downstreamRange: fullRange
         )
         let fullPositionRange = 0 ... max(0, sequence.count - 1)
-        composed.start(sequence: sequence, tree: .just(""), positionRange: fullPositionRange, context: ReductionContext())
+        composed.start(sequence: sequence, tree: .just, positionRange: fullPositionRange, context: ReductionContext())
 
         // Identity upstream returns nil immediately — nothing to lift
         let firstProbe = composed.nextProbe(lastAccepted: false)

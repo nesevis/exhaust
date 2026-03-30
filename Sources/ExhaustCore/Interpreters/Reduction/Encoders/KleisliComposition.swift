@@ -44,7 +44,7 @@ public struct KleisliComposition<Output>: ComposableEncoder {
     // MARK: - Internal State
 
     /// The base tree before any upstream mutation.
-    private var baseTree: ChoiceTree = .just("")
+    private var baseTree: ChoiceTree = .just
     /// The reduction context passed to both encoders.
     private var context: ReductionContext = .init()
 

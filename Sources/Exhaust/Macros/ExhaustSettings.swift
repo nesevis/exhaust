@@ -91,9 +91,6 @@ public enum ExhaustSettings<Output> {
     /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
     case visualize
 
-    /// Selects the reduction scheduling strategy. Defaults to `.adaptive`.
-    case reductionStrategy(SchedulingStrategyKind)
-
     /// Registers a closure that receives an ``ExhaustReport`` with run statistics after the test completes.
     ///
     /// The closure fires synchronously before `#exhaust` returns, on every exit path (pass, fail, error, reflecting). Not `@Sendable` — executes on the calling task.

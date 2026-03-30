@@ -21,8 +21,8 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
 
     /// A deterministic or constant value that cannot be shrunk.
     ///
-    /// This is encoded into the generator and does not need to be part of the ``ChoiceTree``. The string value is a description of the value for debug purposes.
-    case just(String)
+    /// This is encoded into the generator and does not need to be part of the ``ChoiceTree``.
+    case just
 
     /// A node that represents the generation of a sequence. It explicitly captures the length and the choice trees for each of its elements.
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
@@ -58,8 +58,6 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
 }
 
 public extension ChoiceTree {
-    static let emptyJust = Self.just("")
-
     /// The number of entries this tree produces when flattened to a ``ChoiceSequence``.
     ///
     /// Matches the count of `ChoiceSequence.flatten(self)` without allocating.
@@ -331,8 +329,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 return prefix + connector + "choice(float: \(float)) \(displayRange)"
             }
 
-        case let .just(type):
-            return prefix + connector + "just(\(type))"
+        case .just:
+            return prefix + connector + "just"
 
         case let .sequence(length, elements, meta):
             var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange)"
@@ -390,8 +388,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case let .floating(float, _, _):
                 float.description
             }
-        case let .just(type):
-            "just(\(type))"
+        case .just:
+            "just"
         case let .sequence(_, elements, _):
             "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
         case let .branch(_, weight, id, _, gen):

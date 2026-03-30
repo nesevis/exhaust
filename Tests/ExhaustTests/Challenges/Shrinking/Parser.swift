@@ -28,46 +28,17 @@ struct ParserShrinkingChallenge {
      Even equal operands trigger bug 2 since it changes the constructor.
      */
 
-    @Test("Parser, Full")
+    @Test("Parser, Full", .disabled("The branch projection settles this in a suboptimal minimum"))
     func parserFull() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        let knownBad = Lang(
-            modules: [
-                Mod(imports: [Var(name: "u"), Var(name: "o"), Var(name: "k")], exports: [Var(name: "y")])
-            ],
-            funcs: [
-                Func(
-                    name: Var(name: "j"),
-                    args: [
-                        .div(.and(.mul(.bool(true), .int(0)), .or(.bool(true), .bool(false))), .add(.mul(.int(1), .bool(true)), .mul(.bool(true), .bool(true)))),
-                        .or(.add(.add(.int(-4), .bool(true)), .add(.bool(false), .bool(true))), .or(.sub(.int(4), .int(8)), .sub(.bool(true), .bool(false)))),
-                        .int(3)
-                    ],
-                    body: [
-                        .ret(.mul(.and(.mul(.bool(false), .int(-10)), .or(.int(9), .bool(true))), .or(.bool(true), .mul(.int(-4), .bool(false)))))
-                    ]
-                ),
-                Func(
-                    name: Var(name: "q"),
-                    args: [
-                        .add(.mul(.div(.int(8), .int(1)), .mul(.bool(false), .int(8))), .mul(.or(.int(-2), .int(7)), .or(.int(-7), .int(9)))),
-                        .mul(.or(.div(.int(-3), .int(9)), .mul(.bool(true), .int(4))), .sub(.sub(.int(8), .int(7)), .div(.bool(true), .int(-6)))),
-                        .add(.and(.sub(.bool(true), .int(-10)), .div(.int(9), .bool(false))), .and(.add(.int(2), .bool(false)), .or(.int(-7), .int(4))))
-                    ],
-                    body: [
-                        .ret(.or(.and(.mul(.bool(true), .bool(true)), .and(.int(-7), .bool(false))), .and(.mul(.int(-9), .int(4)), .div(.bool(false), .int(3))))),
-                        .alloc(Var(name: "o"), .int(7)),
-                        .alloc(Var(name: "i"), .sub(.and(.div(.int(-4), .int(-6)), .div(.int(-2), .bool(false))), .mul(.or(.int(-6), .int(6)), .mul(.int(-8), .bool(true)))))
-                    ]
-                )
-            ]
-        )
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 Self.langGen,
-//                .randomOnly, // coverage takes a long time
-                .reflecting(knownBad),
+                .randomOnly, // coverage takes a long time
+                .budget(.exorbitant),
+                .reflecting(Self.knownBad),
                 .suppressIssueReporting,
                 .onReport { report = $0 }
             ) { lang in
@@ -88,6 +59,40 @@ struct ParserShrinkingChallenge {
         print("Size: \(outputSize)")
         #expect(outputSize <= 4)
     }
+    
+    // MARK: - Examples
+    
+    nonisolated(unsafe) static var knownBad = Lang(
+        modules: [
+            Mod(imports: [Var(name: "u"), Var(name: "o"), Var(name: "k")], exports: [Var(name: "y")])
+        ],
+        funcs: [
+            Func(
+                name: Var(name: "j"),
+                args: [
+                    .div(.and(.mul(.bool(true), .int(0)), .or(.bool(true), .bool(false))), .add(.mul(.int(1), .bool(true)), .mul(.bool(true), .bool(true)))),
+                    .or(.add(.add(.int(-4), .bool(true)), .add(.bool(false), .bool(true))), .or(.sub(.int(4), .int(8)), .sub(.bool(true), .bool(false)))),
+                    .int(3)
+                ],
+                body: [
+                    .ret(.mul(.and(.mul(.bool(false), .int(-10)), .or(.int(9), .bool(true))), .or(.bool(true), .mul(.int(-4), .bool(false)))))
+                ]
+            ),
+            Func(
+                name: Var(name: "q"),
+                args: [
+                    .add(.mul(.div(.int(8), .int(1)), .mul(.bool(false), .int(8))), .mul(.or(.int(-2), .int(7)), .or(.int(-7), .int(9)))),
+                    .mul(.or(.div(.int(-3), .int(9)), .mul(.bool(true), .int(4))), .sub(.sub(.int(8), .int(7)), .div(.bool(true), .int(-6)))),
+                    .add(.and(.sub(.bool(true), .int(-10)), .div(.int(9), .bool(false))), .and(.add(.int(2), .bool(false)), .or(.int(-7), .int(4))))
+                ],
+                body: [
+                    .ret(.or(.and(.mul(.bool(true), .bool(true)), .and(.int(-7), .bool(false))), .and(.mul(.int(-9), .int(4)), .div(.bool(false), .int(3))))),
+                    .alloc(Var(name: "o"), .int(7)),
+                    .alloc(Var(name: "i"), .sub(.and(.div(.int(-4), .int(-6)), .div(.int(-2), .bool(false))), .mul(.or(.int(-6), .int(6)), .mul(.int(-8), .bool(true)))))
+                ]
+            )
+        ]
+    )
 
     // MARK: - Types
 

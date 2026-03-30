@@ -24,8 +24,6 @@ public extension Interpreters {
         /// Sub-budget for joint bind-inner reduction within base descent.
         var bindInnerReductionBudget: Int = 600
 
-        /// Which scheduling strategy to use for the reduction cycle loop.
-        public var schedulingStrategy: SchedulingStrategyKind = .adaptive
 
         private init(
             maxStalls: Int,

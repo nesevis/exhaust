@@ -111,7 +111,7 @@ public enum Interpreters {
 
         case let .just(value):
             // Avoid expensive string interpolation and prefix operations
-            return [(value: value, path: [.just("\(value)")])]
+            return [(value: value, path: [.just])]
 
         case .getSize:
             // We can't derive the `getSize` parameter when reflecting as it is normally used within a `bind`. However, `isRangeExplicit` on `.chooseBits` helps us determine whether to use the `min` and `max` on that case, or default to the fitting range according to the value's `BitPatternConvertible` conformance.
