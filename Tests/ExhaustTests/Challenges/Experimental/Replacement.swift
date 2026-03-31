@@ -33,7 +33,7 @@ struct ReplacementChallenge {
 
     @Test("Replacement, Full")
     func replacementFull() throws {
-        let gen = #gen(.int(in: 0 ... 1_000_000), .int(in: 2 ... 5).array())
+        let gen = #gen(.int(in: 0 ... 1_000_000), .int(in: 2 ... 10).array())
 
         var report: ExhaustReport?
         let output = try #require(
