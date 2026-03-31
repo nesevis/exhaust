@@ -80,6 +80,8 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
     case noValuesGenerated
     /// Reflection failed because the generator contains a forward-only `map` or `bind`.
     case forwardOnlyTransform(inputType: String, outputType: String, kind: String)
+    /// A filter's predicate passed less than 5% of the time over a meaningful sample.
+    case lowFilterValidityRate(fingerprint: UInt64, rate: Double, attempts: Int)
 
     public var description: String {
         switch self {
@@ -97,6 +99,8 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
             "Reflection blocked by forward-only map (\(inputType) → \(outputType)). Use .mapped(forward:backward:) to provide an inverse."
         case let .forwardOnlyTransform(inputType, outputType, _):
             "Reflection blocked by bind (\(inputType) → \(outputType)). This will prevent replay and reduction of externally created values of \(outputType)."
+        case let .lowFilterValidityRate(fingerprint, rate, attempts):
+            "Filter \(String(format: "%08X", fingerprint & 0xFFFF_FFFF)): validity rate \(String(format: "%.1f", rate * 100))% over \(attempts) attempts — generation is spending most of its budget on rejection. Consider widening the input range or relaxing the predicate."
         }
     }
 }
@@ -322,6 +326,16 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
         if valuesGenerated == 0 {
             failures.append(.noValuesGenerated)
+        }
+
+        for (fingerprint, observation) in iterator.filterObservations where observation.attempts >= 20 {
+            if observation.validityRate < 0.05 {
+                failures.append(.lowFilterValidityRate(
+                    fingerprint: fingerprint,
+                    rate: observation.validityRate,
+                    attempts: observation.attempts
+                ))
+            }
         }
 
         let report = ValidationReport(
