@@ -1514,4 +1514,99 @@ private func printChallengeReport(
     }
 }
 
+private func printStatsReport(name: String, results: [StatsReductionResult]) {
+    guard results.isEmpty == false else { return }
+
+    // Aggregate per-phase invocations across all cycles for each run.
+    var totalBaseInvocations = 0
+    var totalFibreInvocations = 0
+    var totalExplorationInvocations = 0
+    var totalRelaxInvocations = 0
+    var totalCycles = 0
+    var totalVerificationProbes = 0
+    var totalConvergedAtPhaseTwo = 0
+    var totalValueCoordsAtPhaseTwo = 0
+    var encoderProbeAggregates: [EncoderName: Int] = [:]
+
+    for result in results {
+        let stats = result.stats
+        totalCycles += stats.cycles
+        totalVerificationProbes += stats.verificationSweepProbes
+        totalConvergedAtPhaseTwo += stats.convergedCoordinatesAtPhaseTwoStart
+        totalValueCoordsAtPhaseTwo += stats.totalValueCoordinatesAtPhaseTwoStart
+
+        for (encoder, probes) in stats.encoderProbes {
+            encoderProbeAggregates[encoder, default: 0] += probes
+        }
+
+        for outcome in stats.cycleOutcomes {
+            if case let .ran(phase) = outcome.baseDescent {
+                totalBaseInvocations += phase.propertyInvocations
+            }
+            if case let .ran(phase) = outcome.fibreDescent {
+                totalFibreInvocations += phase.propertyInvocations
+            }
+            if case let .ran(phase) = outcome.exploration {
+                totalExplorationInvocations += phase.propertyInvocations
+            }
+            if case let .ran(phase) = outcome.relaxRound {
+                totalRelaxInvocations += phase.propertyInvocations
+            }
+        }
+    }
+
+    let count = Double(results.count)
+    let avgBase = Double(totalBaseInvocations) / count
+    let avgFibre = Double(totalFibreInvocations) / count
+    let avgExploration = Double(totalExplorationInvocations) / count
+    let avgRelax = Double(totalRelaxInvocations) / count
+    let avgCycles = Double(totalCycles) / count
+    let avgVerification = Double(totalVerificationProbes) / count
+    let reconfirmRatio: String = totalValueCoordsAtPhaseTwo > 0
+        ? String(format: "%.1f%%", Double(totalConvergedAtPhaseTwo) / Double(totalValueCoordsAtPhaseTwo) * 100)
+        : "n/a"
+
+    print("[\(name)] [STATS] avg/run: cycles=\(String(format: "%.1f", avgCycles)) base=\(String(format: "%.1f", avgBase)) fibre=\(String(format: "%.1f", avgFibre)) exploration=\(String(format: "%.1f", avgExploration)) relax=\(String(format: "%.1f", avgRelax)) verification=\(String(format: "%.1f", avgVerification)) reconfirm=\(reconfirmRatio)")
+
+    // Top encoders by probe count.
+    let sortedEncoders = encoderProbeAggregates.sorted { $0.value > $1.value }
+    let topEncoders = sortedEncoders.prefix(6).map { "\($0.key.rawValue)=\(String(format: "%.1f", Double($0.value) / count))" }
+    print("[\(name)] [STATS] avg probes: \(topEncoders.joined(separator: " "))")
+
+    // Per-cycle breakdown (aggregated across all runs).
+    let maxCycle = results.flatMap(\.stats.cycleOutcomes).map(\.cycle).max() ?? 0
+    if maxCycle > 0 {
+        for cycleNum in 1 ... maxCycle {
+            var baseSum = 0
+            var fibreSum = 0
+            var relaxSum = 0
+            var baseAcceptSum = 0
+            var fibreAcceptSum = 0
+            var relaxAcceptSum = 0
+            var runsWithThisCycle = 0
+            for result in results {
+                let matching = result.stats.cycleOutcomes.filter { $0.cycle == cycleNum }
+                if matching.isEmpty == false { runsWithThisCycle += 1 }
+                for outcome in matching {
+                    if case let .ran(phase) = outcome.baseDescent {
+                        baseSum += phase.propertyInvocations
+                        baseAcceptSum += phase.acceptances
+                    }
+                    if case let .ran(phase) = outcome.fibreDescent {
+                        fibreSum += phase.propertyInvocations
+                        fibreAcceptSum += phase.acceptances
+                    }
+                    if case let .ran(phase) = outcome.relaxRound {
+                        relaxSum += phase.propertyInvocations
+                        relaxAcceptSum += phase.acceptances
+                    }
+                }
+            }
+            guard runsWithThisCycle > 0 else { continue }
+            let divisor = Double(runsWithThisCycle)
+            print("[\(name)] [STATS] cycle \(cycleNum) (\(runsWithThisCycle) runs): base=\(String(format: "%.1f", Double(baseSum) / divisor))/\(String(format: "%.1f", Double(baseAcceptSum) / divisor))a fibre=\(String(format: "%.1f", Double(fibreSum) / divisor))/\(String(format: "%.1f", Double(fibreAcceptSum) / divisor))a relax=\(String(format: "%.1f", Double(relaxSum) / divisor))/\(String(format: "%.1f", Double(relaxAcceptSum) / divisor))a")
+        }
+    }
+}
+
 // swiftlint:enable file_length function_body_length force_try
