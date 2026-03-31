@@ -8,8 +8,8 @@
 /// - **Deletion**: `deleteContainerSpans` or `deleteAlignedSiblingWindows` ⇒ `deleteContainerSpansWithRandomRepair`
 /// - **Deletion**: `deleteAlignedSiblingWindows` ⇒ `deleteAlignedSiblingSubsets`
 /// - **Deletion**: `productSpaceBatch` ⇒ `productSpaceAdaptive`
-/// - **Value minimization**: `zeroValue` ⇒ `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
-/// - **Value minimization**: `zeroValue` or `binarySearchToSemanticSimplest` ⇒ `linearScan`
+/// - **Value minimization**: `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
+/// - **Value minimization**: `binarySearchToSemanticSimplest` ⇒ `linearScan`
 ///
 /// The dominance relation is scoped per hom-set: success in one hom-set (for example, deletion)
 /// does not affect dominance in another (for example, value minimization). The scheduler resets
@@ -61,17 +61,22 @@ struct EncoderDominance {
         // the antichain's jointly-deletable subset subsumes individual and pair mutations.
         case (.structuralDeletion, .productSpaceAdaptive):
             succeeded.contains(.productSpaceBatch)
-        // Zero is the best binary-search-to-semantic-simplest can achieve.
-        case (.valueMinimization, .binarySearchToSemanticSimplest):
-            succeeded.contains(.zeroValue)
-        // Binary-search-to-semantic-simplest finds values ≤ any nonzero target.
+        // Binary-search-to-semantic-simplest subsumes range-minimum search:
+        // semantic-simplest finds values ≤ any nonzero range-minimum target.
+        //
+        // zeroValue does NOT dominate binary search: dominance is per-encoder
+        // (global), not per-coordinate. ZeroValue zeroing coordinate *i*
+        // should not suppress binary search at coordinate *j* where the
+        // value is far from zero.
         case (.valueMinimization, .binarySearchToRangeMinimum):
-            succeeded.contains(.zeroValue)
-                || succeeded.contains(.binarySearchToSemanticSimplest)
-        // Linear scan covers a bounded subrange that binary search already searched. NOTE: this edge is per-encoder (global), not per-coordinate. LinearScan fires on .nonMonotoneGap signals at specific coordinates where binary search detected non-monotonicity. If binary search succeeded at a DIFFERENT coordinate, this skip suppresses LinearScan at coordinates where it is genuinely needed. Revisit whether this should be per-coordinate or removed entirely.
+            succeeded.contains(.binarySearchToSemanticSimplest)
+        // Linear scan covers a bounded subrange that binary search already
+        // searched at specific coordinates (nonMonotoneGap signals). Per-encoder
+        // dominance from binary search is imprecise — binary search may have
+        // succeeded at a different coordinate — but acceptable because
+        // linearScan is a fallback that runs at signal sites only.
         case (.valueMinimization, .linearScan):
-            succeeded.contains(.zeroValue)
-                || succeeded.contains(.binarySearchToSemanticSimplest)
+            succeeded.contains(.binarySearchToSemanticSimplest)
         default:
             false
         }
