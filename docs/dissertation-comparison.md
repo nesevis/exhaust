@@ -188,16 +188,16 @@ The dissertation describes two shrinking systems:
 
 ### Exhaust's BonsaiReducer (`Interpreters/Reduction/`)
 
-Exhaust implements a categorical reduction pipeline with 13 composable encoders across four phases, organised by the enc/dec separation from Sepulveda-Jimenez. The original 20 monolithic encoders were consolidated: four span-deletion encoders became one `DeletionEncoder` parameterised by span category, two binary search encoders merged into `BinarySearchEncoder` with a `Configuration` enum, two branch encoders became `BranchSimplificationEncoder`, and aligned window deletion split into a contiguous/beam dominance pair. All encoders conform to `ComposableEncoder` — a role-agnostic protocol where the factory assigns each encoder to a role (upstream, downstream, standalone) based on CDG position. The `ReductionMaterializer` (the decoder) re-runs the generator against each candidate to produce a fresh `ChoiceTree` with current metadata. The categorical framework enables composability (Kleisli composition of encoder pairs through a generator lift) and principled phase ordering via `MorphismDescriptor` with dominance edges.
+Exhaust implements a categorical reduction pipeline with 24 composable encoders across four phases, organised by the enc/dec separation from Sepulveda-Jimenez. All encoders conform to `ComposableEncoder` — a role-agnostic protocol where the factory assigns each encoder to a role (upstream, downstream, standalone) based on CDG position. The `ReductionMaterializer` (the decoder) re-runs the generator against each candidate to produce a fresh `ChoiceTree` with current metadata. The categorical framework enables composability (Kleisli composition of encoder pairs through a generator lift) and principled phase ordering via `MorphismDescriptor` with dominance edges.
 
-#### The 5-phase pipeline
+#### The 4-phase pipeline
 
 Phases progress from exact encoders (guaranteed shortlex improvement) through bounded (re-derivation introduces slack) to speculative (may temporarily worsen before improving):
 
 | Phase | Guarantee | Encoders |
 |---|---|---|
-| structuralDeletion | Exact | `DeletionEncoder` (parameterised by span category), `BranchSimplificationEncoder` (promote/pivot), `ContiguousWindowDeletionEncoder`, `BeamSearchDeletionEncoder` |
-| valueMinimization | Exact or bounded | `ZeroValueEncoder`, `BinarySearchEncoder` (.rangeMinimum/.semanticSimplest), `ReduceFloatEncoder`, `LinearScanEncoder`, `ProductSpaceAdaptiveEncoder` |
+| structuralDeletion | Exact | `DeletionEncoder` (parameterised by span category), `BranchSimplificationEncoder` (promote/pivot), `ContiguousWindowDeletionEncoder`, `BeamSearchDeletionEncoder`, `AntichainDeletionEncoder`, `SiblingSwapEncoder`, `BindSubstitutionEncoder` |
+| valueMinimization | Exact or bounded | `ZeroValueEncoder`, `BinarySearchEncoder` (.rangeMinimum/.semanticSimplest), `ReduceFloatEncoder`, `LinearScanEncoder`, `ProductSpaceAdaptiveEncoder`, `ShortlexReorderEncoder`, `RegimeProbeEncoder` |
 | redistribution | Bounded | `RedistributeByTandemReductionEncoder`, `RedistributeAcrossValueContainersEncoder` |
 | exploration | Speculative | `RelaxRoundEncoder`, `KleisliComposition` with `DownstreamPick` (selects `FibreCoveringEncoder` or `ZeroValueEncoder` based on fibre characteristics) |
 
@@ -208,7 +208,7 @@ Phases progress from exact encoders (guaranteed shortlex improvement) through bo
 | `subTrees` | `deleteByPromotingSimplestBranch` | Operates on `ChoiceTree` rather than flat sequences — replaces shallow branches with deeper, simpler ones at structurally compatible pick sites |
 | `zeroDraws` | `zeroValue`, `binarySearchToSemanticSimplest`, `deleteFreeStandingValues` | Split into adaptive zero-fill, batched binary search toward semantic simplest, and individual value deletion |
 | `swapBits` | `binarySearchToRangeMinimum`, `reduceFloat` | Binary search toward range minimum with specialised float handling (truncation, cross-zero probing, NaN/infinity normalisation, as-integer-ratio simplification) |
-| (none) | The remaining 14 encoders | Bind-aware passes, structural deletion variants, redistribution, Kleisli exploration — all without dissertation equivalents |
+| (none) | The remaining 19 encoders | Bind-aware passes, structural deletion variants, redistribution, Kleisli exploration — all without dissertation equivalents |
 
 #### BonsaiScheduler's four-phase pipeline
 
@@ -219,7 +219,7 @@ The scheduler exploits the `ChoiceTree.bind(inner:, bound:)` structure for depth
 - **Kleisli exploration** (Phase 3, when both stall): compositions propose upstream mutations, lift them through the generator via `GeneratorLift`, then search the resulting fibre with `DownstreamPick` (selects exhaustive, pairwise, or zero-value strategy based on fibre characteristics)
 - **Relax-round** (Phase 4, when all stall): redistributes values to escape local minima, then exploits via a full Phase 1 + Phase 2 pipeline, with checkpoint/rollback acceptance
 
-The scheduler is parameterised by a `SchedulingStrategy` protocol. `StaticStrategy` reproduces the fixed phase ordering. `AdaptiveStrategy` skips Phase 1 when span extraction proves no structural work exists, adapts per-edge composition budgets based on prior-cycle observations, and uses signal-driven gating (convergence signals, edge observations) for Phase 3 and Phase 4 dispatch. On BinaryHeap (15 cycles), the adaptive strategy saves 17% of materializations with a 36% wall-clock speedup.
+The scheduler is parameterised by a `SchedulingStrategy` protocol. The sole implementation, `AdaptiveStrategy`, skips Phase 1 when span extraction proves no structural work exists, adapts per-edge composition budgets based on prior-cycle observations, and uses signal-driven gating (convergence signals, edge observations) for Phase 3 and Phase 4 dispatch. On BinaryHeap (15 cycles), the adaptive strategy saves 17% of materializations with a 36% wall-clock speedup.
 
 #### Key architectural differences from the dissertation
 
@@ -243,7 +243,7 @@ The scheduler is parameterised by a `SchedulingStrategy` protocol. `StaticStrate
 
 **Float-specific reduction**: `ReduceFloatEncoder` has extensive Hypothesis-inspired float handling — truncation shrinks, integral-float binary reduction, as-integer-ratio reduction, cross-zero probing, NaN/infinity normalisation. The dissertation mentions floats only in passing.
 
-**Verdict: Massively expanded.** The dissertation's three passes (`subTrees`, `zeroDraws`, `swapBits`) establish the principle. Exhaust's 13 composable encoders across four categorical phases implement a production-grade reduction system with bind-aware scheduling, Kleisli composition with runtime downstream selection, adaptive probing, convergence signal feedback, non-monotonicity detection, adaptive scheduling with Phase 1 skip, float specialisation, cross-container redistribution, and fibre-based exploration. The core idea (shrink the choice sequence, replay through the generator) is faithful; the execution is categorically organised and an order of magnitude more sophisticated.
+**Verdict: Massively expanded.** The dissertation's three passes (`subTrees`, `zeroDraws`, `swapBits`) establish the principle. Exhaust's 24 composable encoders across four categorical phases implement a production-grade reduction system with bind-aware scheduling, Kleisli composition with runtime downstream selection, adaptive probing, convergence signal feedback, non-monotonicity detection, adaptive scheduling with Phase 1 skip, float specialisation, cross-container redistribution, and fibre-based exploration. The core idea (shrink the choice sequence, replay through the generator) is faithful; the execution is categorically organised and an order of magnitude more sophisticated.
 
 ---
 
@@ -278,7 +278,7 @@ The correctness properties the dissertation establishes — soundness, completen
 | Stack safety | Relies on Haskell laziness | Explicit `sequence`/`zip` operations | Necessary for Swift |
 | Filter/validity | Implicit in CGS predicate | Reified as `.filter` operation | More explicit |
 | Interpreter count | 7+ (exploring generality) | 5 core interpreters + BonsaiScheduler | Narrower but deeper |
-| Test case reduction | 3 passes (`subTrees`, `zeroDraws`, `swapBits`) | 13 composable encoders across 4 categorical phases with Kleisli composition, convergence signals, adaptive scheduling, non-monotonicity detection, float specialisation | Massively expanded |
+| Test case reduction | 3 passes (`subTrees`, `zeroDraws`, `swapBits`) | 24 composable encoders across 4 categorical phases with Kleisli composition, convergence signals, adaptive scheduling, non-monotonicity detection, float specialisation | Massively expanded |
 | Combinatorial coverage | Not addressed | Unified ChoiceTree analysis → automatic t-way covering arrays (IPOG) for finite domains + boundary value synthesis for large domains | Novel — draws on Lei & Kacker (ECBS 2007), Kuhn et al. (IEEE TSE 2004), and NIST SP 800-142 |
 | Example-based generation | `reflect -> analyzeWeights -> genWithWeights` | Not yet implemented | Future opportunity |
 | Partial completion | `complete` interpreter | Not yet implemented | Future opportunity |
@@ -294,7 +294,7 @@ Where Exhaust adds genuine novelty is in:
 
 - The **reification of `map`/`bind`** as `.transform` — fusing Xia et al.'s `comap` with monadic `>>=` to make bind dependencies visible to every interpreter, enabling depth-ordered reduction.
 - The **offline CGS pipeline** (warmup → fitness sharing → adaptive smoothing).
-- The **BonsaiReducer** — 13 composable encoders across four categorical phases (Sepulveda-Jimenez), with bind-aware scheduling, Kleisli composition through a generator lift with runtime downstream selection (`DownstreamPick`), typed convergence signals for cross-cycle encoder feedback, non-monotonicity detection via `LinearScanEncoder`, adaptive scheduling (`SchedulingStrategy` protocol with Phase 1 skip and signal-driven gating), float specialisation, and fibre-based exploration via covering arrays.
+- The **BonsaiReducer** — 24 composable encoders across four categorical phases (Sepulveda-Jimenez), with bind-aware scheduling, Kleisli composition through a generator lift with runtime downstream selection (`DownstreamPick`), typed convergence signals for cross-cycle encoder feedback, non-monotonicity detection via `LinearScanEncoder`, adaptive scheduling (`SchedulingStrategy` protocol with Phase 1 skip and signal-driven gating), float specialisation, and fibre-based exploration via covering arrays.
 - The **`Gen.recursive` combinator** — transparent recursive generator composition with per-layer CGS tuning, no dissertation equivalent.
 - The **sequence length subdivision** preprocessing.
 - The **reification of filter/classify/unique** into the operation set.

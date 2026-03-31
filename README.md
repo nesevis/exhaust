@@ -29,7 +29,7 @@ Exhaust works in two modes:
 If the property fails, Exhaust finds a counterexample and automatically reduces it to its minimal form. Here's what that looks like:
 
 ```
-Property failed (iteration 3/100, seed 8837201)
+Property failed (iteration 3/200, seed 8DZR69)
   array.sorted() == array.sorted().sorted()
 
 Counterexample:
@@ -47,7 +47,7 @@ Reduction diff:
 
 Property invoked: 47 times
 
-Reproduce: .replay(8837201)
+Reproduce: .replay("8DZR69")
 ```
 
 Exhaust found a five-element counterexample and reduced it to two elements — the minimal case that violates the property.
@@ -174,12 +174,13 @@ Configure behavior with settings:
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.samplingBudget(n)` | 100 | Random sampling budget (runs after structured coverage) |
-| `.coverageBudget(n)` | 2000 | Maximum test cases for structured coverage |
-| `.randomOnly` | off | Skip structured coverage, use only random sampling |
-| `.replay(seed)` | — | Deterministic reproduction of a specific run |
-| `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)) |
-| `.reductionBudget(.fast\|.slow)` | `.fast` | Controls how aggressively reduction searches for a smaller counterexample. `.slow` widens beam search and allows more stalls before terminating. |
+| `.budget(.expedient)` | default | 200 coverage rows, 200 random samples, fast reduction. |
+| `.budget(.expensive)` | — | 500 coverage rows, 500 random samples, fast reduction. |
+| `.budget(.exorbitant)` | — | 2000 coverage rows, 2000 random samples, slow reduction. |
+| `.budget(.custom(...))` | — | Explicit values for coverage, sampling, and reduction budgets. |
+| `.randomOnly` | off | Skip structured coverage, use only random sampling. |
+| `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
+| `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and shrinks your generator. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
 
@@ -420,7 +421,7 @@ Sync and async commands can be mixed freely in the same contract.
 
 ### Settings
 
-Contract tests accept the same settings as `#exhaust` (`.samplingBudget`, `.coverageBudget`, `.replay`, `.randomOnly`), plus:
+Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.randomOnly`), plus:
 
 | Setting | Default | Effect |
 |---|---|---|
