@@ -599,7 +599,10 @@ extension ReductionState {
             sequence: sequence,
             tree: tree,
             positionRange: relaxRange,
-            context: ReductionContext(bindIndex: bindIndex)
+            context: ReductionContext(
+                bindIndex: bindIndex,
+                convergedOrigins: convergenceCache.allEntries
+            )
         )
         var lastAccepted = false
         var redistributionAccepted = false

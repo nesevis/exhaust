@@ -79,26 +79,22 @@ public struct RelaxRoundEncoder: ComposableEncoder {
             }
         }
 
-        // Sort order:
-        // 1. Pairs where lhs is non-zero and rhs is at target (value relocation)
-        //    come first, ordered by largest positional delta (rhs - lhs) descending.
-        //    Moving a value rightward zeroes an earlier sequence position, which is
-        //    the shortlex win.
-        // 2. Remaining pairs (both non-zero) ordered by lhs distance descending —
-        //    zero the largest values first.
+        // Sort by Nash-gap regret: pairs where both coordinates are stuck far from
+        // their targets have the most redistributable energy. Coordinates with a
+        // zeroingDependency signal have explicitly demonstrated coupling and receive
+        // a bonus. Tiebreaker: positional delta (larger = better shortlex win).
         let seq = sequence
+        let origins = context.convergedOrigins
         probes.sort { lhs, rhs in
-            let lhsIsRelocation = Self.distance(at: lhs.rhsIndex, in: seq) == 0
-            let rhsIsRelocation = Self.distance(at: rhs.rhsIndex, in: seq) == 0
-            if lhsIsRelocation != rhsIsRelocation {
-                return lhsIsRelocation
+            let lhsScore = Self.pairRegret(lhs, in: seq, origins: origins)
+            let rhsScore = Self.pairRegret(rhs, in: seq, origins: origins)
+            if lhsScore != rhsScore {
+                return lhsScore > rhsScore
             }
-            if lhsIsRelocation {
-                let lhsDelta = lhs.rhsIndex - lhs.lhsIndex
-                let rhsDelta = rhs.rhsIndex - rhs.lhsIndex
-                return lhsDelta > rhsDelta
-            }
-            return Self.distance(at: lhs.lhsIndex, in: seq) > Self.distance(at: rhs.lhsIndex, in: seq)
+            // Tiebreaker: prefer zeroing an earlier position (larger positional delta).
+            let lhsDelta = lhs.rhsIndex - lhs.lhsIndex
+            let rhsDelta = rhs.rhsIndex - rhs.lhsIndex
+            return lhsDelta > rhsDelta
         }
     }
 
@@ -108,8 +104,11 @@ public struct RelaxRoundEncoder: ComposableEncoder {
     private var probes: [(lhsIndex: Int, rhsIndex: Int)] = []
     private var probeIndex = 0
 
+    /// Maximum number of candidate pairs to evaluate before stopping. With Nash-gap tier sorting, the highest-priority pairs (both coordinates coupled) are tried first. Capping the probe count avoids wasting materializations on low-priority pairs that are unlikely to produce productive redistributions.
+    private static let probeLimit = 24
+
     public mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
-        while probeIndex < probes.count {
+        while probeIndex < min(probes.count, Self.probeLimit) {
             let pair = probes[probeIndex]
             probeIndex += 1
 
@@ -182,7 +181,33 @@ public struct RelaxRoundEncoder: ComposableEncoder {
         return nil
     }
 
-    // MARK: - Helpers
+    // MARK: - Nash-Gap Regret
+
+    /// Computes the priority score for a candidate pair, ranked by dependency tier then combined regret.
+    ///
+    /// Pairs where both coordinates have ``ConvergenceSignal/zeroingDependency`` signals form the highest tier — redistributing value between two coupled coordinates is far more likely to unlock joint improvement than redistributing involving an independent coordinate. Within each tier, pairs are ordered by combined regret (bit-pattern distance from each coordinate's reduction target). The tier is encoded in bits 62-63 so it always dominates the regret tiebreaker.
+    private static func pairRegret(
+        _ pair: (lhsIndex: Int, rhsIndex: Int),
+        in sequence: ChoiceSequence,
+        origins: [Int: ConvergedOrigin]?
+    ) -> UInt64 {
+        let lhsRegret = distance(at: pair.lhsIndex, in: sequence)
+        let rhsRegret = distance(at: pair.rhsIndex, in: sequence)
+        let baseRegret = lhsRegret &+ rhsRegret
+
+        guard let origins else { return baseRegret }
+
+        let lhsHasDependency = origins[pair.lhsIndex]?.signal == .zeroingDependency
+        let rhsHasDependency = origins[pair.rhsIndex]?.signal == .zeroingDependency
+
+        // Higher boost = higher priority in the sort.
+        let tierBoost: UInt64 = switch (lhsHasDependency, rhsHasDependency) {
+        case (true, true): 2
+        case (true, false), (false, true): 1
+        default: 0
+        }
+        return (tierBoost << 62) | min(baseRegret, (1 << 62) - 1)
+    }
 
     private static func distance(at index: Int, in sequence: ChoiceSequence) -> UInt64 {
         guard let value = sequence[index].value else { return 0 }
