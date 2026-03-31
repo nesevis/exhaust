@@ -684,8 +684,8 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         let choiceCount = choices.count
         let minDeadObservations: UInt64 = 30
 
-        var liveChoiceMap = ContiguousArray<Int>()
-        liveChoiceMap.reserveCapacity(choiceCount)
+        var liveChoiceIndices = ContiguousArray<Int>()
+        liveChoiceIndices.reserveCapacity(choiceCount)
         if let accumulator = cgsState.fitnessAccumulator {
             for (i, choice) in choices.enumerated() {
                 let key = FitnessAccumulator.SiteChoiceKey(
@@ -697,18 +697,18 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 {
                     continue
                 }
-                liveChoiceMap.append(i)
+                liveChoiceIndices.append(i)
             }
-            if liveChoiceMap.isEmpty {
-                liveChoiceMap = ContiguousArray(0 ..< choiceCount)
+            if liveChoiceIndices.isEmpty {
+                liveChoiceIndices = ContiguousArray(0 ..< choiceCount)
             }
         } else {
-            liveChoiceMap = ContiguousArray(0 ..< choiceCount)
+            liveChoiceIndices = ContiguousArray(0 ..< choiceCount)
         }
 
         // Single live choice after elimination — skip derivative evaluation
-        if liveChoiceMap.count == 1 {
-            let selectedChoice = choices[liveChoiceMap[0]]
+        if liveChoiceIndices.count == 1 {
+            let selectedChoice = choices[liveChoiceIndices[0]]
             _ = context.prng.next()
 
             var branchContext = derivativeContext
@@ -743,8 +743,8 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // This allows adaptive stopping when the relative ranking is decided,
         // rather than exhausting the full budget per choice independently.
         var derivatives = ContiguousArray<ReflectiveGenerator<FinalOutput>>()
-        derivatives.reserveCapacity(liveChoiceMap.count)
-        for i in liveChoiceMap {
+        derivatives.reserveCapacity(liveChoiceIndices.count)
+        for i in liveChoiceIndices {
             let derivative = try choices[i].generator._bind { innerValue in
                 try continuation(innerValue).erase()
             }
@@ -757,7 +757,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         sampling: for round in 0 ..< effectiveSampleCount {
             completedRounds = round + 1
-            for (derivIdx, choiceIdx) in liveChoiceMap.enumerated() {
+            for (derivIdx, choiceIdx) in liveChoiceIndices.enumerated() {
                 do {
                     let result = try LightweightSampler.sample(
                         derivatives[derivIdx],
@@ -798,7 +798,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // 1b. Record fitness data for live choices only (dead choices are
         // not evaluated and should not accumulate phantom observations)
         if let accumulator = cgsState.fitnessAccumulator {
-            for choiceIdx in liveChoiceMap {
+            for choiceIdx in liveChoiceIndices {
                 let choice = choices[choiceIdx]
                 accumulator.record(
                     siteID: choice.siteID,
@@ -811,9 +811,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         // 2. Build weighted choices — dead choices get weight 0,
         // live choices with all-zero fitness fall back to equal weights
-        let allLiveZero = liveChoiceMap.allSatisfy { fitnesses[$0] == 0 }
+        let allLiveZero = liveChoiceIndices.allSatisfy { fitnesses[$0] == 0 }
         var isLive = ContiguousArray(repeating: false, count: choiceCount)
-        for i in liveChoiceMap {
+        for i in liveChoiceIndices {
             isLive[i] = true
         }
         var weightedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
