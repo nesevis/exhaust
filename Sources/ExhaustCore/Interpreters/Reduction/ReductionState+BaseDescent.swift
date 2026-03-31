@@ -280,16 +280,23 @@ extension ReductionState {
                     ) {
                         slotAccepted = true
                     }
-                    // Beam search: dominance check skips if contiguous accepted.
-                    if try runComposable(
-                        beamSearchEncoder,
-                        decoder: scopeDecoder,
-                        positionRange: fullRange,
-                        context: deletionContext,
-                        structureChanged: true,
-                        budget: &legBudget
-                    ) {
-                        slotAccepted = true
+                    // Beam search: non-contiguous subset deletion via bitmask
+                    // enumeration. Skip for small bind-free sequences where
+                    // contiguous window + adaptive deletion already cover the
+                    // search space. Bind generators need beam search even at
+                    // small sizes because non-contiguous element deletions
+                    // within bound regions enable bind-inner reduction.
+                    if sequence.count >= 30 {
+                        if try runComposable(
+                            beamSearchEncoder,
+                            decoder: scopeDecoder,
+                            positionRange: fullRange,
+                            context: deletionContext,
+                            structureChanged: true,
+                            budget: &legBudget
+                        ) {
+                            slotAccepted = true
+                        }
                     }
                 } else {
                     guard targets.isEmpty == false else { continue }
