@@ -127,12 +127,19 @@ struct AdaptiveStrategy: SchedulingStrategy {
     private var cycleImproved: Bool = false
     private var lastPriorOutcome: CycleOutcome?
     private var structuralMinimisationWasSkipped: Bool = false
+    private var previousZeroingDependencyCount: Int = 0
 
     mutating func planFirstStage(
         priorOutcome: CycleOutcome?,
         state: ReductionStateView
     ) -> [PlannedPhase] {
         cycleImproved = false
+        // Track whether the zeroing-dependency count increased since the
+        // last cycle we checked. This lets planSecondStage detect truly new
+        // signals rather than re-triggering on a stale cumulative count.
+        if let prior = lastPriorOutcome {
+            previousZeroingDependencyCount = prior.zeroingDependencyCount
+        }
         lastPriorOutcome = priorOutcome
 
         // Skip Phase 1 when structural work is provably absent or empirically unproductive.
@@ -215,15 +222,18 @@ struct AdaptiveStrategy: SchedulingStrategy {
         }
 
         // zeroingDependency escalation: run relax-round even when prior phases
-        // made progress, if the prior cycle detected coupled coordinates where
-        // batch zeroing failed but individual zeroing succeeded. Redistribution
-        // is the natural recovery path for coupled coordinates.
-        let hasZeroingDependency = (lastPriorOutcome?.zeroingDependencyCount ?? 0) > 0
+        // made progress, if the prior cycle detected NEW coupled coordinates
+        // where batch zeroing failed but individual zeroing succeeded. Only new
+        // signals (count increased vs the cycle before) trigger escalation —
+        // a stale count from an earlier cycle should not permanently force
+        // relax-round to run unconditionally.
+        let priorZeroingDep = lastPriorOutcome?.zeroingDependencyCount ?? 0
+        let hasNewZeroingDependency = priorZeroingDep > previousZeroingDependencyCount
         phases.append(PlannedPhase(
             phase: .relaxRound,
             budget: Self.phaseBudgetCeiling,
             configuration: PhaseConfiguration(),
-            requiresStall: hasZeroingDependency == false
+            requiresStall: hasNewZeroingDependency == false
         ))
 
         // Deletion probe: when structural minimisation was skipped, value minimisation
