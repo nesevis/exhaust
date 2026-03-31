@@ -8,11 +8,11 @@
 ///
 /// Bundles the finite domain profile, optional argument mapping, and strength cap so the caller does not need to thread these values separately.
 public struct SCADomain {
-    /// The finite domain profile for IPOG.
+    /// The finite domain profile for covering array generation.
     public let profile: FiniteDomainProfile
     /// Argument mapping for decomposing flat domain indices back to branch + argument values. Nil for command-type-only domains.
     public let mapping: SCADomainMapping?
-    /// Upper bound on interaction strength for ``CoveringArray/bestFitting(budget:profile:maxStrength:)``.
+    /// Upper bound on interaction strength for covering array generation.
     public let maxStrength: Int
 
     /// Converts a covering array row into a ``ChoiceTree`` suitable for replay.
@@ -84,7 +84,7 @@ public struct CommandTypeSCABuilder: SCADomainBuilder {
 
 /// Argument-aware SCA domain builder — flattens branch argument domains via threshold normalization.
 ///
-/// Each position's domain is the sum of all branch contributions: parameter-free branches contribute 1, analyzed branches contribute the product of their parameter domain sizes, and unanalyzable branches contribute 1 (random arguments at replay). Caps interaction strength at t=2 when any branch has analyzed arguments to avoid combinatorially expensive IPOG runs.
+/// Each position's domain is the sum of all branch contributions: parameter-free branches contribute 1, analyzed branches contribute the product of their parameter domain sizes, and unanalyzable branches contribute 1 (random arguments at replay). Caps interaction strength at t=2 when any branch has analyzed arguments to keep covering array sizes manageable.
 public struct ArgumentAwareSCABuilder: SCADomainBuilder {
     public init() {}
 

@@ -99,20 +99,22 @@ struct SCADomainBuildTreeTests {
             strengthCap: 3
         )!
 
-        let covering = CoveringArray.bestFitting(
-            budget: 2000,
-            profile: domain.profile,
-            maxStrength: domain.maxStrength
-        )!
+        var generator = PullBasedCoveringArrayGenerator(
+            domainSizes: domain.profile.domainSizes,
+            strength: min(domain.maxStrength, domain.profile.parameterCount, 4)
+        )
+        defer { generator.deallocate() }
 
         let lengthRange = UInt64(0) ... UInt64(3)
         var treeCount = 0
-        for row in covering.rows {
+        var rowCount = 0
+        while let row = generator.next() {
+            rowCount += 1
             if domain.buildTree(row: row, sequenceLengthRange: lengthRange) != nil {
                 treeCount += 1
             }
         }
-        #expect(treeCount == covering.rows.count)
+        #expect(treeCount == rowCount)
     }
 
     @Test("Builds tree from domain with mapping (argument-aware)")
@@ -130,18 +132,15 @@ struct SCADomainBuildTreeTests {
         }
         #expect(domain.mapping != nil)
 
-        guard let covering = CoveringArray.bestFitting(
-            budget: 2000,
-            profile: domain.profile,
-            maxStrength: domain.maxStrength
-        ) else {
-            Issue.record("CoveringArray.bestFitting returned nil")
-            return
-        }
+        var generator = PullBasedCoveringArrayGenerator(
+            domainSizes: domain.profile.domainSizes,
+            strength: min(domain.maxStrength, domain.profile.parameterCount, 4)
+        )
+        defer { generator.deallocate() }
 
         let lengthRange = UInt64(0) ... UInt64(3)
         var treeCount = 0
-        for row in covering.rows {
+        while let row = generator.next() {
             if domain.buildTree(row: row, sequenceLengthRange: lengthRange) != nil {
                 treeCount += 1
             }

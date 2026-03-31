@@ -364,14 +364,9 @@ func runSCACoverage<Command>(
         return nil
     }
 
-    // Cap interaction strength so IPOG stays under ~100ms for any sequence length.
-    // IPOG's vertical growth enumerates C(seqLen, t) parameter combinations, which
-    // explodes at high t: C(20, 6) = 38,760 vs C(20, 3) = 1,140.
-    //
-    // Measured on M4 with 2 command types (BuggyCounterSpec):
-    //   seqLen  5 @ t≤6:  2ms    seqLen 15 @ t≤3: 35ms
-    //   seqLen  8 @ t≤5: 31ms    seqLen 20 @ t≤3: 94ms
-    //   seqLen 10 @ t≤4: 40ms    seqLen 30 @ t≤2: 18ms
+    // Cap interaction strength based on sequence length. Higher strength gives better
+    // coverage but the number of covering array rows grows with C(seqLen, t).
+    // Short sequences can afford high strength; long sequences fall back to pairwise.
     let strengthCap = switch seqLen {
     case ...6: 6
     case ...8: 5
@@ -398,28 +393,27 @@ func runSCACoverage<Command>(
         return nil
     }
 
-    guard let covering = CoveringArray.bestFitting(
-        budget: coverageBudget,
-        profile: domain.profile,
-        maxStrength: domain.maxStrength
-    ) else {
+    let domainSizes = domain.profile.domainSizes
+    let strength = min(domain.maxStrength, domainSizes.count, 4)
+    guard strength >= 2 else {
         ExhaustLog.notice(
             category: .propertyTest,
             event: "sca_coverage_skipped",
-            metadata: [
-                "reason": "covering array exceeds budget",
-                "budget": "\(coverageBudget)",
-                "command_types": "\(pickChoices.count)",
-                "sequence_length": "\(seqLen)",
-            ]
+            "Too few parameters for covering array (need >= 2)"
         )
         return nil
     }
 
+    var generator = PullBasedCoveringArrayGenerator(
+        domainSizes: domainSizes,
+        strength: strength
+    )
+    defer { generator.deallocate() }
+
     let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
     var iterations = 0
-    for row in covering.rows {
+    while iterations < coverageBudget, let row = generator.next() {
         let tree: ChoiceTree? = domain.buildTree(row: row, sequenceLengthRange: lengthRange)
         guard let tree else { continue }
 
@@ -450,11 +444,11 @@ func runSCACoverage<Command>(
         category: .propertyTest,
         event: "sca_coverage",
         metadata: [
-            "strength": "\(covering.strength)",
-            "rows": "\(covering.rows.count)",
-            "iterations": "\(iterations)",
-            "sequence_length": "\(seqLen)",
             "command_types": "\(pickChoices.count)",
+            "iterations": "\(iterations)",
+            "rows": "\(iterations)",
+            "sequence_length": "\(seqLen)",
+            "strength": "\(strength)",
         ]
     )
 

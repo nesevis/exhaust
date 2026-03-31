@@ -4,23 +4,23 @@ import Foundation
 //
 // An SCA guarantees every t-way ordered permutation of command types appears in at least one test sequence. Mathematically equivalent to a standard covering array where each parameter is a sequence position and each domain value is a command type. See Kuhn, Raunak & Kacker, "Ordered t-way Combinations for Testing State-based Systems".
 //
-// With argument-aware domains, each position's domain is the flattened union of (commandType × argumentCombinations), giving IPOG the ability to cover both command ordering AND argument value interactions across positions.
+// With argument-aware domains, each position's domain is the flattened union of (commandType × argumentCombinations), giving the covering array generator the ability to cover both command ordering AND argument value interactions across positions.
 
 /// Builds covering arrays over command-type orderings for state-machine testing.
 ///
-/// Each position in the command sequence becomes a parameter whose domain is the set of command types (pick branches). IPOG generates rows that guarantee every t-way ordered permutation of command types is tested.
+/// Each position in the command sequence becomes a parameter whose domain is the set of command types (pick branches). The covering array generator produces rows that guarantee every t-way ordered permutation of command types is tested.
 ///
 /// When branches have analyzable arguments, the domain per position is the flattened union of `(commandType × argumentCombinations)`. Branches with small finite parameters contribute all values; branches with large ranges contribute boundary-value representatives. Unanalyzable branches fall back to 1 domain value with random arguments at replay.
 ///
-/// For `c` command types, sequence length `L`, strength `t`, IPOG produces roughly `c^t × log(L)` rows.
+/// For `c` command types, sequence length `L`, strength `t`, the covering array produces roughly `c^t × log(L)` rows.
 /// - 5 commands, length 10, t=2: ~40–50 rows
 /// - 10 commands, length 15, t=2: ~150–200 rows
 public enum SequenceCoveringArray {
     /// Computes the per-parameter finite threshold for SCA domain construction, derived from the covering array budget.
     ///
-    /// At strength t=2, IPOG produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to boundary-value representatives.
+    /// At strength t=2, the covering array produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to boundary-value representatives.
     ///
-    /// The floor of 2 ensures every parameter retains at least its extremes. Param-free and unanalyzable branches use only 1 slot each, so analyzed branches effectively inherit leftover capacity — `bestFitting` provides the final rejection if the heuristic overshoots.
+    /// The floor of 2 ensures every parameter retains at least its extremes. Param-free and unanalyzable branches use only 1 slot each, so analyzed branches effectively inherit leftover capacity.
     public static func computeThreshold(
         budget: UInt64,
         sequenceLength: Int,

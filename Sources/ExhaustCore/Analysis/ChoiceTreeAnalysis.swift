@@ -7,7 +7,7 @@
 ///
 /// ## What It Does
 ///
-/// Runs a generator through the ``ValueAndChoiceTreeInterpreter`` (VACTI) with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches points. Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as finite-domain (all parameters have at most 256 values) or boundary-domain (some parameters have large ranges, requiring synthetic boundary value representatives). Returns a ``FiniteDomainProfile`` or ``BoundaryDomainProfile`` that downstream code uses to build covering arrays via the IPOG algorithm.
+/// Runs a generator through the ``ValueAndChoiceTreeInterpreter`` (VACTI) with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches points. Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as finite-domain (all parameters have at most 256 values) or boundary-domain (some parameters have large ranges, requiring synthetic boundary value representatives). Returns a ``FiniteDomainProfile`` or ``BoundaryDomainProfile`` that downstream code uses to build covering arrays.
 ///
 /// ## Why This Matters
 ///
@@ -372,8 +372,8 @@ public enum ChoiceTreeAnalysis {
     // a sequence node. The length parameter tests {0, 1, 2} (intersected
     // with the declared length range). Element analysis is capped at two
     // slots to keep the total parameter count tractable — a 4-element
-    // sequence would add 1 length + 4×N element parameters, making IPOG
-    // prohibitively expensive.
+    // sequence would add 1 length + 4×N element parameters, making covering
+    // array generation prohibitively expensive.
 
     private static func walkSequence(
         length _: UInt64,

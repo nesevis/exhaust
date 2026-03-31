@@ -7,7 +7,7 @@ import ExhaustCore
 /// Three phases, executed in order:
 ///
 /// **1. Structured coverage** (default budget: 200 test cases). Analyzes the generator to identify its independent parameters — numeric ranges, branch selections, and sequence lengths. If the generator is analyzable:
-/// - For small parameter domains (each having 256 or fewer values): constructs a t-way covering array using the IPOG algorithm. Strength is chosen adaptively — the strongest covering that fits the budget. If the entire combinatorial space fits, every combination is tested exhaustively.
+/// - For small parameter domains (each having 256 or fewer values): constructs a t-way covering array using a greedy density algorithm (Bryce and Colbourn 2009). Rows are generated lazily and tested immediately — the macro stops as soon as a failure is found. If the entire combinatorial space fits the budget, every combination is tested exhaustively.
 /// - For large parameter domains: synthesizes boundary values (domain edges, plus/minus 1 neighbors, midpoint, zero, and type-specific values like NaN and DST transitions) and constructs a covering array over those representatives.
 /// - Each covering array row is replayed through the generator to produce a concrete test case. If the property fails on any row, the macro proceeds directly to test case reduction.
 ///
@@ -84,7 +84,7 @@ public macro exhaust<T, R>(
 ///
 /// Three phases, executed in order:
 ///
-/// **1. Structured coverage** (default budget: 2000 test cases). Builds a covering array over the command-type domain — each parameter is a position in the command sequence, each domain value is a command type. IPOG generates rows that guarantee every t-way ordered permutation of command types is tested.
+/// **1. Structured coverage** (default budget: 2000 test cases). Builds a covering array over the command-type domain — each parameter is a position in the command sequence, each domain value is a command type. Rows are generated lazily using a greedy density algorithm and tested immediately, stopping as soon as a failure is found.
 ///
 /// **2. Random sampling** (default: 100 iterations). Generates random command sequences with weighted command selection.
 ///

@@ -149,7 +149,7 @@ private struct PartialSliceRef {
 
 /// Tracks coverage for one specific t-tuple of parameter indices.
 ///
-/// Unlike the FIPOG ``CoverageSlice`` (which stores only `t-1` partner params because the new parameter is implicit), this stores all `t` parameter indices because any slice can be evaluated at any column fill step.
+/// Stores all `t` parameter indices because any slice can be evaluated at any column fill step.
 private struct PullCoverageSlice {
     var bits: PullBitVector
     let strides: (UInt32, UInt32, UInt32, UInt32)

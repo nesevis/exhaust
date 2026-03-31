@@ -33,7 +33,7 @@ public enum BoundaryParameterKind: @unchecked Sendable {
     case finiteChooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
 }
 
-/// Result of boundary analysis — a synthetic finite domain suitable for IPOG.
+/// Result of boundary analysis — a synthetic finite domain suitable for covering array generation.
 public struct BoundaryDomainProfile: @unchecked Sendable {
     public let parameters: [BoundaryParameter]
     /// The original ChoiceTree from VACTI, used as a template for covering array replay.

@@ -292,10 +292,14 @@ struct BoundaryCoveringArrayReplayUnitTests {
         func zipRoundTrip() throws {
             let gen = Gen.zip(Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000))
             let profile = try #require(analyzeBoundary(gen))
-            let covering = try #require(CoveringArray.bestFitting(budget: 100, boundaryProfile: profile))
+            var generator = PullBasedCoveringArrayGenerator(
+                domainSizes: profile.domainSizes,
+                strength: min(profile.parameterCount, 4)
+            )
+            defer { generator.deallocate() }
 
             var replayedCount = 0
-            for row in covering.rows {
+            while let row = generator.next() {
                 guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
                     continue
                 }
@@ -313,10 +317,14 @@ struct BoundaryCoveringArrayReplayUnitTests {
         func arrayRoundTrip() throws {
             let gen = Gen.arrayOf(Gen.choose(in: 0 ... 10000), within: 0 ... 2, scaling: .constant)
             let profile = try #require(analyzeBoundary(gen))
-            let covering = try #require(CoveringArray.bestFitting(budget: 100, boundaryProfile: profile))
+            var generator = PullBasedCoveringArrayGenerator(
+                domainSizes: profile.domainSizes,
+                strength: min(profile.parameterCount, 4)
+            )
+            defer { generator.deallocate() }
 
             var replayedCount = 0
-            for row in covering.rows {
+            while let row = generator.next() {
                 guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
                     continue
                 }

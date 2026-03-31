@@ -22,6 +22,5 @@ public typealias ReductionStats = ExhaustCore.ReductionStats
 // MARK: - Internal typealiases
 
 typealias ChoiceTreeAnalysis = ExhaustCore.ChoiceTreeAnalysis
-typealias CoveringArray = ExhaustCore.CoveringArray
 typealias CoveringArrayReplay = ExhaustCore.CoveringArrayReplay
 typealias ChoiceSequence = ExhaustCore.ChoiceSequence
