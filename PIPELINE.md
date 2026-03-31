@@ -1,6 +1,6 @@
 # Exhaust Pipeline
 
-*Last updated: 2026-03-25*
+*Last updated: 2026-03-31*
 
 This diagram shows what happens when you run `#exhaust` with a generator and a property. Exhaust first tries to systematically cover the generator's parameter space using structured coverage. If the generator isn't analyzable, or coverage doesn't find a failure, it falls back to random sampling. When a failure is found, the Bonsai reducer shrinks it through alternating phases of structural and value minimization, guided by an adaptive scheduler that skips unproductive phases and re-checks when conditions change. The result is a minimal counterexample reported back to the test.
 
@@ -31,39 +31,43 @@ flowchart TD
 
     subgraph REDUCE ["Bonsai Reducer: receives failing value + choice tree"]
         direction TB
-        SCHED["Schedule reduction"] --> PROJ
+        SCHED["Schedule reduction"] --> BRANCH
 
-        PROJ["Phase 0, free coordinate projection: zero out all positions that no structural decision depends on"] --> BD
+        BRANCH["Branch projection: at every pick site, try the shortlex-simplest branch alternative. Batch probe, then binary search over subsets on failure."] --> PROJ
 
-        subgraph CYCLE ["Cycle loop, until stall budget exhausted"]
+        PROJ["Free coordinate projection: zero out all positions that no structural decision depends on"] --> BD
+
+        subgraph CYCLE ["Cycle loop, until convergence or stall budget exhausted"]
             direction TB
             BD{"Structural work available and prior cycle productive?"} -->|"Yes"| BD_RUN
             BD -->|"No, skip"| FD
 
-            BD_RUN["Phase 1, structural minimization: promote and reorder branches, delete contiguous spans, reduce bind-inner values"] --> FD
+            BD_RUN["Base descent: promote and reorder branches, delete contiguous spans, reduce bind-inner values"] --> FD
 
-            FD["Phase 2, value minimization: coordinate descent over dependency graph, binary search, linear scan, zero-value encoders, shortlex sibling reordering"] --> EXP_GATE
+            FD["Fibre descent: coordinate descent over dependency graph, binary search, linear scan, zero-value encoders, shortlex sibling reordering"] --> EXP_GATE
 
             EXP_GATE{"Prior cycle edges not all exhausted clean, and no earlier phase accepted?"} -->|"Yes"| EXP
             EXP_GATE -->|"No, skip"| RLX_GATE
 
-            EXP["Phase 3, exploration: compose multi-step reductions, escape local minima"] --> RLX_GATE
+            EXP["Exploration: compose multi-step reductions, escape local minima"] --> RLX_GATE
 
             RLX_GATE{"Coupled coordinates detected, or no earlier phase accepted?"} -->|"Yes"| RLX
             RLX_GATE -->|"No, skip"| PROBE
 
-            RLX["Phase 4, relax-round: temporarily worsen then re-descend, escape coupled dependencies"] --> PROBE
+            RLX["Relax round: temporarily worsen then re-descend, escape coupled dependencies"] --> PROBE
 
-            PROBE{"Phase 1 was skipped and deletion targets exist?"} -->|"Yes"| PROBE_RUN
-            PROBE -->|"No"| STALL
+            PROBE{"Base descent was skipped and deletion targets exist?"} -->|"Yes"| PROBE_RUN
+            PROBE -->|"No"| CONV
 
-            PROBE_RUN["Deletion probe: lightweight structural pass to check if value changes enabled new deletions"] --> STALL
+            PROBE_RUN["Deletion probe: lightweight structural pass to check if value changes enabled new deletions"] --> CONV
 
-            STALL{"Improved? (shortlex order)"}
-            STALL -->|"Yes, reset stall budget"| BD
-            STALL -->|"No, decrement"| STALL2{"Stall budget exhausted?"}
-            STALL2 -->|"No"| BD
-            STALL2 -->|"Yes"| DONE
+            CONV{"Improved? (shortlex order)"}
+            CONV -->|"Yes, reset stall budget"| BD
+            CONV -->|"No"| CONV2{"All value coordinates converged?"}
+            CONV2 -->|"Yes, fixed point reached"| DONE
+            CONV2 -->|"No, decrement stall budget"| STALL{"Stall budget exhausted?"}
+            STALL -->|"No"| BD
+            STALL -->|"Yes"| DONE
         end
 
         DONE["Human-readable ordering: reorder elements into natural numeric order"]
@@ -72,10 +76,4 @@ flowchart TD
     DONE --> REPORT
 
     REPORT["Render failure: shrunk counterexample, diff from original, replay seed, invocation count"] --> ISSUE["Report failure back to the test, return minimal counterexample"]
-
-    style REDUCE fill:#e8eaf6,stroke:#3949ab,color:#1a237e
-    style CYCLE fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
-    style PASS fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-    style PASS2 fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-    style ISSUE fill:#fce4ec,stroke:#c62828,color:#b71c1c
 ```
