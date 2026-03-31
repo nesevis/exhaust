@@ -135,108 +135,127 @@ public struct ExhaustTestMacro: ExpressionMacro {
     }
 }
 
-// MARK: - #expect → #require Rewriting
+// MARK: - Detection Closure Rewriting
 
-/// Rewrites `#expect(...)` calls to `try #require(...)` in a closure body.
+/// Rewrites `#expect` and `#require` calls in a closure body to use `__ExhaustRuntime.__detectRequire`.
 ///
-/// Only rewrites top-level statements and statements inside control flow blocks.
-/// Does not recurse into nested closures. Leaves `#require` calls unchanged.
+/// This replaces Swift Testing assertion macros with plain throwing function calls that don't
+/// call `Issue.record()`, producing no test output during reduction. Both boolean checks and
+/// optional unwraps are handled:
+///
+/// - `#expect(condition)` → `try __ExhaustRuntime.__detectRequire(condition)`
+/// - `try #require(condition)` → `try __ExhaustRuntime.__detectRequire(condition)`
+/// - `let x = try #require(optional)` → `let x = try __ExhaustRuntime.__detectRequire(optional)`
+///
+/// Does not recurse into nested closures.
 private func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
-    let rewrittenStatements = CodeBlockItemListSyntax(
-        closure.statements.map { statement in
-            statement.with(\.item, rewriteItem(statement.item))
-        }
-    )
-    return closure.with(\.statements, rewrittenStatements)
+    let rewriter = DetectionRewriter(viewMode: .sourceAccurate)
+    return rewriter.rewrite(closure).cast(ClosureExprSyntax.self)
 }
 
-/// Rewrites a single code block item, converting `#expect` → `try #require`.
-private func rewriteItem(_ item: CodeBlockItemSyntax.Item) -> CodeBlockItemSyntax.Item {
-    // Direct #expect(condition) → if (condition) == false { throw __ExhaustRuntime.DetectionFailure() }
-    if let macroExpr = item.as(MacroExpansionExprSyntax.self),
-       macroExpr.macroName.text == "expect" {
-        let leadingTrivia = macroExpr.pound.leadingTrivia
-        // Extract the condition argument (first unlabeled argument)
-        guard let conditionArg = macroExpr.arguments.first else {
-            return item
-        }
-        let condition = conditionArg.expression.trimmedDescription
-        let ifStmt: ExprSyntax = """
-        \(raw: leadingTrivia)if (\(raw: condition)) == false { throw __ExhaustRuntime.DetectionFailure() }
-        """
-        return CodeBlockItemSyntax.Item(ifStmt)
+/// Rewrites `#expect`/`#require` calls in the property closure to include explicit `sourceLocation:` parameters.
+///
+/// In a macro expansion, `#_sourceLocation` resolves to the expansion site (the `#exhaust` line),
+/// not the original assertion line. This rewriter uses `MacroExpansionContext.location(of:)` to
+/// get each assertion's original source location and injects it as an explicit argument.
+private class SourceLocationRewriter: SyntaxRewriter {
+    let context: any MacroExpansionContext
+    private var closureDepth = 0
+
+    init(context: some MacroExpansionContext, viewMode: SyntaxTreeViewMode) {
+        self.context = context
+        super.init(viewMode: viewMode)
     }
 
-    // try #expect(condition) → same rewrite (drop the try)
-    if let tryExpr = item.as(TryExprSyntax.self),
-       let macroExpr = tryExpr.expression.as(MacroExpansionExprSyntax.self),
-       macroExpr.macroName.text == "expect" {
-        let leadingTrivia = tryExpr.tryKeyword.leadingTrivia
-        guard let conditionArg = macroExpr.arguments.first else {
-            return item
-        }
-        let condition = conditionArg.expression.trimmedDescription
-        let ifStmt: ExprSyntax = """
-        \(raw: leadingTrivia)if (\(raw: condition)) == false { throw __ExhaustRuntime.DetectionFailure() }
-        """
-        return CodeBlockItemSyntax.Item(ifStmt)
+    override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {
+        closureDepth += 1
+        defer { closureDepth -= 1 }
+        if closureDepth > 1 { return ExprSyntax(node) }
+        return super.visit(node)
     }
 
-    // #require stays as #require — it already throws
-    if let macroExpr = item.as(MacroExpansionExprSyntax.self),
-       macroExpr.macroName.text == "require" {
-        // Wrap in try if not already
-        let leadingTrivia = macroExpr.pound.leadingTrivia
-        let requireWithoutTrivia = macroExpr.with(\.pound, macroExpr.pound.with(\.leadingTrivia, []))
-        let tryExpr = TryExprSyntax(
-            tryKeyword: .keyword(.try, leadingTrivia: leadingTrivia, trailingTrivia: .space),
-            expression: ExprSyntax(requireWithoutTrivia)
+    override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
+        guard node.macroName.text == "expect" || node.macroName.text == "require" else {
+            return super.visit(node)
+        }
+        // Check if sourceLocation: is already specified
+        let hasSourceLocation = node.arguments.contains { $0.label?.text == "sourceLocation" }
+        if hasSourceLocation { return ExprSyntax(node) }
+
+        guard let location = context.location(of: node, at: .afterLeadingTrivia, filePathMode: .filePath) else {
+            // If location is unavailable, pass through unchanged.
+            return ExprSyntax(node)
+        }
+        guard let fileIDLocation = context.location(of: node, at: .afterLeadingTrivia, filePathMode: .fileID) else {
+            return ExprSyntax(node)
+        }
+
+        // Add sourceLocation: parameter with the original source location
+        var arguments = node.arguments
+        // Add trailing comma to the last existing argument
+        if var lastArg = arguments.last {
+            lastArg.trailingComma = .commaToken(trailingTrivia: .space)
+            arguments = LabeledExprListSyntax(arguments.dropLast() + [lastArg])
+        }
+        let sourceLocationArg = LabeledExprSyntax(
+            label: .identifier("sourceLocation"),
+            colon: .colonToken(trailingTrivia: .space),
+            expression: ExprSyntax(
+                "Testing.SourceLocation(fileID: \(fileIDLocation.file), filePath: \(location.file), line: \(location.line), column: \(location.column))" as ExprSyntax
+            )
         )
-        return CodeBlockItemSyntax.Item(ExprSyntax(tryExpr))
-    }
+        arguments = LabeledExprListSyntax(arguments + [sourceLocationArg])
 
-    // Recurse into control flow bodies (if, guard, for, while, do, switch)
-    // but not into nested closures.
-    if let ifExpr = item.as(IfExprSyntax.self) {
-        return CodeBlockItemSyntax.Item(ExprSyntax(rewriteIf(ifExpr)))
+        return ExprSyntax(node.with(\.arguments, arguments))
     }
-    if let guardStmt = item.as(GuardStmtSyntax.self) {
-        let body = rewriteCodeBlock(guardStmt.body)
-        return CodeBlockItemSyntax.Item(StmtSyntax(guardStmt.with(\.body, body)))
-    }
-    if let doStmt = item.as(DoStmtSyntax.self) {
-        let body = rewriteCodeBlock(doStmt.body)
-        return CodeBlockItemSyntax.Item(StmtSyntax(doStmt.with(\.body, body)))
-    }
-    if let forStmt = item.as(ForStmtSyntax.self) {
-        let body = rewriteCodeBlock(forStmt.body)
-        return CodeBlockItemSyntax.Item(StmtSyntax(forStmt.with(\.body, body)))
-    }
-    if let whileStmt = item.as(WhileStmtSyntax.self) {
-        let body = rewriteCodeBlock(whileStmt.body)
-        return CodeBlockItemSyntax.Item(StmtSyntax(whileStmt.with(\.body, body)))
-    }
-
-    return item
 }
 
-private func rewriteIf(_ ifExpr: IfExprSyntax) -> IfExprSyntax {
-    var result = ifExpr.with(\.body, rewriteCodeBlock(ifExpr.body))
-    if let elseBody = ifExpr.elseBody {
-        switch elseBody {
-        case let .codeBlock(block):
-            result = result.with(\.elseBody, .codeBlock(rewriteCodeBlock(block)))
-        case let .ifExpr(nestedIf):
-            result = result.with(\.elseBody, .ifExpr(rewriteIf(nestedIf)))
+/// Replaces `#expect` and `#require` macro expansions with `__ExhaustRuntime.__detectRequire` calls.
+/// Skips nested closures (depth > 0) since their assertions are their own.
+private class DetectionRewriter: SyntaxRewriter {
+    private var closureDepth = 0
+
+    override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {
+        closureDepth += 1
+        defer { closureDepth -= 1 }
+        if closureDepth > 1 {
+            // Nested closure — don't rewrite its assertions.
+            return ExprSyntax(node)
         }
+        return super.visit(node)
     }
-    return result
-}
 
-private func rewriteCodeBlock(_ block: CodeBlockSyntax) -> CodeBlockSyntax {
-    block.with(\.statements, CodeBlockItemListSyntax(
-        block.statements.map { $0.with(\.item, rewriteItem($0.item)) }
-    ))
+    override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
+        guard node.macroName.text == "expect" || node.macroName.text == "require" else {
+            return super.visit(node)
+        }
+        guard let firstArg = node.arguments.first else {
+            return ExprSyntax(node)
+        }
+        // Replace #expect/#require(args...) with __ExhaustRuntime.__detectRequire(firstArg)
+        let call = FunctionCallExprSyntax(
+            leadingTrivia: node.pound.leadingTrivia,
+            calledExpression: MemberAccessExprSyntax(
+                base: DeclReferenceExprSyntax(baseName: .identifier("__ExhaustRuntime")),
+                period: .periodToken(),
+                name: .identifier("__detectRequire")
+            ),
+            leftParen: .leftParenToken(),
+            arguments: LabeledExprListSyntax([
+                LabeledExprSyntax(expression: firstArg.expression.trimmed),
+            ]),
+            rightParen: .rightParenToken()
+        )
+        // If the original was #expect (not already inside a try), wrap in try.
+        // If it was #require, it's already inside a TryExprSyntax — the parent handles try.
+        if node.macroName.text == "expect" {
+            return ExprSyntax(TryExprSyntax(
+                tryKeyword: .keyword(.try, leadingTrivia: node.pound.leadingTrivia, trailingTrivia: .space),
+                expression: ExprSyntax(call.with(\.leadingTrivia, []))
+            ))
+        }
+        return ExprSyntax(call)
+    }
 }
 
 // MARK: - Shared Expansion Logic
@@ -265,12 +284,18 @@ private func expandExhaust(
         .replacingOccurrences(of: "\"", with: "\\\"")
         .replacingOccurrences(of: "\n", with: "\\n")
 
-    let closureText = trailingClosure.trimmedDescription
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
     if runtimeFunction == "__exhaustExpect" {
         // Void path: pass both the original closure (for final re-run with #expect)
-        // and a detection closure (with #expect → #require, for pipeline via try/catch).
+        // and a detection closure (with #expect → __detectRequire, for pipeline via try/catch).
+        //
+        // Rewrite property closure to inject explicit sourceLocation: on each #expect/#require.
+        // Without this, #_sourceLocation resolves to the #exhaust expansion site.
+        let sourceLocationRewriter = SourceLocationRewriter(context: context, viewMode: .sourceAccurate)
+        let propertyWithLocations = sourceLocationRewriter.rewrite(trailingClosure).cast(ClosureExprSyntax.self)
+
+        // Detection closure: #expect/#require → __detectRequire (silent, no Issue.record).
         let detectionClosure = rewriteExpectToRequire(trailingClosure)
         let detectionText = detectionClosure.description
 
@@ -284,7 +309,7 @@ private func expandExhaust(
             line: #line,
             column: #column,
             function: #function,
-            property: \(raw: closureText),
+            property: \(propertyWithLocations),
             detection: \(raw: detectionText)
         )
         """
@@ -300,7 +325,7 @@ private func expandExhaust(
         line: #line,
         column: #column,
         function: #function,
-        property: \(raw: closureText)
+        property: \(trailingClosure)
     )
     """
 }

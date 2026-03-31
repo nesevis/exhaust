@@ -21,6 +21,16 @@ struct BinaryHeapShrinkingChallenge {
      */
 
     // MARK: - Tests
+    
+    @Test("Binary Heap Shrinking Challenge", .disabled())
+    func binaryHeapChallenge() throws {
+        #exhaust(Self.gen) { heap in
+            #expect(Self.invariant(heap))
+            let xs = Self.toSortedList(heap)
+            let sorted = Self.toList(heap).sorted()
+            #expect(sorted == xs)
+        }
+    }
 
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {

@@ -6,21 +6,19 @@ import ExhaustCore
 ///
 /// Three phases, executed in order:
 ///
-/// **1. Structured coverage** (default budget: 2000 test cases). Analyzes the generator to identify its independent parameters — numeric ranges, branch selections, and sequence lengths. If the generator is analyzable:
+/// **1. Structured coverage** (default budget: 200 test cases). Analyzes the generator to identify its independent parameters — numeric ranges, branch selections, and sequence lengths. If the generator is analyzable:
 /// - For small parameter domains (each having 256 or fewer values): constructs a t-way covering array using the IPOG algorithm. Strength is chosen adaptively — the strongest covering that fits the budget. If the entire combinatorial space fits, every combination is tested exhaustively.
 /// - For large parameter domains: synthesizes boundary values (domain edges, plus/minus 1 neighbors, midpoint, zero, and type-specific values like NaN and DST transitions) and constructs a covering array over those representatives.
 /// - Each covering array row is replayed through the generator to produce a concrete test case. If the property fails on any row, the macro proceeds directly to test case reduction.
 ///
-/// **2. Random sampling** (default: 100 iterations). Generates values using a seeded PRNG. Each value is tested against the property. Skipped entirely if structured coverage already tested every combination exhaustively.
+/// **2. Random sampling** (default: 200 iterations). Generates values using a seeded PRNG. Each value is tested against the property. Skipped entirely if structured coverage already tested every combination exhaustively.
 ///
 /// **3. Test case reduction**. When a failing test case is found (in either phase), the macro reduces it to a simpler counterexample. The generator's choice tree is flattened to a linear choice sequence, then a series of simplification passes — structural deletion, value minimization, and reordering — are applied repeatedly until no pass can simplify further. The reduced counterexample is reported as a test failure with a replay seed for reproducibility.
 ///
 /// ## Settings
 ///
-/// - `.samplingBudget(_)`: upper bound on random sampling iterations (default 100). Additive with the coverage budget.
-/// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 200).
-/// - `.replay(_)`: fixed seed for deterministic reproduction. Skips structured coverage.
-/// - `.reductionBudget(_)`: controls test case reduction aggressiveness (`.fast` or `.slow`).
+/// - `.budget(_)`: controls iteration budgets for coverage, sampling, and reduction. Presets: `.expedient` (200/200, default), `.expensive` (500/500), `.exorbitant` (2000/2000), or `.custom(coverage:sampling:reduction:)`.
+/// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
 /// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
 /// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppressIssueReporting`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
@@ -29,14 +27,14 @@ import ExhaustCore
 ///
 /// Trailing closure (source code captured):
 /// ```swift
-/// let counterexample = #exhaust(personGen, .samplingBudget(1000)) { person in
+/// let counterexample = #exhaust(personGen, .budget(.expensive)) { person in
 ///     person.age >= 0
 /// }
 /// ```
 ///
 /// Function reference (no source capture):
 /// ```swift
-/// let counterexample = #exhaust(personGen, .replay(42), property: isValid)
+/// let counterexample = #exhaust(personGen, .replay("8DZR69"), property: isValid)
 /// ```
 ///
 /// - Returns: The reduced counterexample if the property fails, or `nil` if all test cases pass.

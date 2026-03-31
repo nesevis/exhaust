@@ -32,9 +32,23 @@ struct StringAnagramChallenge {
      - The reducer must coordinate deletions and simplifications across two
        independent container boundaries
 
-     Expected smallest counterexample: ([a, b], [b, a])
+     Expected smallest counterexample: ([(space), !], [!, (space)])
      Two arrays of the two smallest values in the range, in swapped order.
      */
+    
+    @Test("String Anagram #expect", .disabled("Example"))
+    func stringAnagramExpect() throws {
+        let charGen = #gen(.asciiString())
+            .filter { $0.count >= 2 }
+        let gen = #gen(charGen, charGen)
+        
+        let failingValueFromElsewhere = ("dcba", "abcd")
+        
+        #exhaust(gen, .reflecting(failingValueFromElsewhere)) { a, b in
+            guard a != b, a.count == b.count else { return }
+            #expect(a.sorted() != b.sorted())
+        }
+    }
 
     @Test("String anagram")
     func stringAnagram() throws {

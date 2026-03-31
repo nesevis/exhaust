@@ -24,11 +24,32 @@ private func withKnownIssue(
 #endif
 
 public enum __ExhaustRuntime { // swiftlint:disable:this type_name
-    /// Thrown by the detection closure when a rewritten `#expect` condition evaluates to `false`.
+    /// Thrown by the detection closure when a rewritten `#expect`/`#require` fails.
     ///
     /// This is a plain error — not a Swift Testing issue — so it produces no test output.
     /// The pipeline's try/catch detects it as a property failure without any console noise.
     public struct DetectionFailure: Error {} // swiftlint:disable:this nesting
+
+    /// Detection replacement for `#expect(_ condition: Bool)` and `#require(_ condition: Bool)`.
+    ///
+    /// Throws ``DetectionFailure`` when the condition is `false`.
+    /// Does not call `Issue.record()` — produces no Swift Testing output.
+    public static func __detectRequire(_ condition: Bool) throws { // swiftlint:disable:this identifier_name
+        if condition == false {
+            throw DetectionFailure()
+        }
+    }
+
+    /// Detection replacement for `#require<T>(_ optionalValue: T?)`.
+    ///
+    /// Throws ``DetectionFailure`` when the value is `nil`. Returns the unwrapped value otherwise.
+    /// Does not call `Issue.record()` — produces no Swift Testing output.
+    public static func __detectRequire<Value>(_ value: Value?) throws -> Value { // swiftlint:disable:this identifier_name
+        guard let unwrapped = value else {
+            throw DetectionFailure()
+        }
+        return unwrapped
+    }
     /// Runs a property test with the given generator, settings, and property.
     /// This is the runtime target of the `#exhaust` macro expansion.
     ///
@@ -69,7 +90,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
-        var humanOrderPostProcess = true
         var visualize = false
         var onReportClosure: ((ExhaustReport) -> Void)?
         
@@ -95,8 +115,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 reflectingValue = value
             case .randomOnly:
                 useRandomOnly = true
-            case .humanOrderPostProcess:
-                humanOrderPostProcess = true
             case .visualize:
                 visualize = true
             case let .onReport(closure):
@@ -128,7 +146,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     gen,
                     value: reflectingValue,
                     reductionConfig: reductionConfig,
-                    humanOrderPostProcess: humanOrderPostProcess,
                     visualize: visualize,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
@@ -204,7 +221,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         tree: shrinkTree,
                         output: value,
                         config: reductionConfig,
-                        humanOrderPostProcess: humanOrderPostProcess,
                         visualize: visualize,
                         property: countingProperty
                     )
@@ -393,7 +409,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         tree: tree,
                         output: next,
                         config: reductionConfig,
-                        humanOrderPostProcess: humanOrderPostProcess,
                         visualize: visualize,
                         property: countingProperty
                     )
@@ -953,7 +968,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
         reductionConfig: Interpreters.BonsaiReducerConfiguration,
-        humanOrderPostProcess: Bool,
         visualize: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
@@ -1018,7 +1032,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             tree: tree,
             output: value,
             config: reductionConfig,
-            humanOrderPostProcess: humanOrderPostProcess,
             visualize: visualize,
             property: countingProperty
         )
