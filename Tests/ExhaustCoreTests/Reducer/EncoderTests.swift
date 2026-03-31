@@ -726,13 +726,13 @@ struct EncoderDominanceTests {
     func crossDepthLeakage() {
         var dominance = EncoderDominance()
 
-        // Simulate depth-2 iteration: zeroValue succeeds.
-        dominance.recordSuccess(.zeroValue)
-        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
+        // Simulate depth-2 iteration: binarySearchToSemanticSimplest succeeds.
+        dominance.recordSuccess(.binarySearchToSemanticSimplest)
+        #expect(dominance.shouldSkip(.binarySearchToRangeMinimum, phase: .valueMinimization))
 
-        // Transitioning to depth 1 should invalidate, so binarySearchToSemanticSimplest is NOT skipped.
+        // Transitioning to depth 1 should invalidate, so binarySearchToRangeMinimum is NOT skipped.
         dominance.invalidate()
-        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization) == false)
+        #expect(dominance.shouldSkip(.binarySearchToRangeMinimum, phase: .valueMinimization) == false)
     }
 
     @Test("Success in deletion dominance does not leak across depth boundaries after invalidation")
@@ -753,10 +753,18 @@ struct EncoderDominanceTests {
         var dominance = EncoderDominance()
 
         // Record success — dominated encoder should be skipped.
-        dominance.recordSuccess(.zeroValue)
-        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
+        dominance.recordSuccess(.binarySearchToSemanticSimplest)
+        #expect(dominance.shouldSkip(.binarySearchToRangeMinimum, phase: .valueMinimization))
         // Without invalidation, it stays skipped (this is the bug scenario).
-        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
+        #expect(dominance.shouldSkip(.binarySearchToRangeMinimum, phase: .valueMinimization))
+    }
+
+    @Test("zeroValue does not dominate binary search (per-encoder, not per-coordinate)")
+    func zeroValueDoesNotDominateBinarySearch() {
+        var dominance = EncoderDominance()
+        dominance.recordSuccess(.zeroValue)
+        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization) == false)
+        #expect(dominance.shouldSkip(.binarySearchToRangeMinimum, phase: .valueMinimization) == false)
     }
 
     @Test("deleteAlignedSiblingWindows success causes deleteContainerSpansWithRandomRepair to be skipped")
