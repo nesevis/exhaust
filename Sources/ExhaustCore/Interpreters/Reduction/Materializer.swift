@@ -30,6 +30,8 @@ public enum Materializer {
     }
 
     /// Result of a reduction materialization attempt.
+    ///
+    /// All cases carry an optional ``DecodingReport`` containing resolution tier counts and per-fingerprint filter observations from the materialization pass.
     public enum Result<Output> {
         /// Materialization succeeded with a value and fresh tree.
         case success(value: Output, tree: ChoiceTree, decodingReport: DecodingReport?)

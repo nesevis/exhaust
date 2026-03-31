@@ -53,7 +53,7 @@ struct ProductSpaceEncoderTests {
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        encoder.dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         let candidates = Array(encoder.encode(sequence: sequence, targets: .wholeSequence))
         // Should produce candidates for the inner value (100 -> 0).
@@ -93,7 +93,7 @@ struct ProductSpaceEncoderTests {
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        encoder.dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         let candidates = Array(encoder.encode(sequence: sequence, targets: .wholeSequence))
 
@@ -121,17 +121,17 @@ struct ProductSpaceEncoderTests {
 
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
         // Verify DAG has an edge from outer to inner.
-        let topology = dag.bindInnerTopology()
+        let topology = dependencyGraph.bindInnerTopology()
         #expect(topology.count == 2)
         // First in topological order should be the outer bind (region 0).
         #expect(topology[0].regionIndex == 0)
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = dag
+        encoder.dependencyGraph = dependencyGraph
 
         let candidates = Array(encoder.encode(sequence: sequence, targets: .wholeSequence))
         #expect(candidates.isEmpty == false)
@@ -166,7 +166,7 @@ struct ProductSpaceEncoderTests {
 
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(
+        let dependencyGraph = ChoiceDependencyGraph.build(
             from: sequence, tree: outerBind, bindIndex: bindIndex
         )
 
@@ -186,7 +186,7 @@ struct ProductSpaceEncoderTests {
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = dag
+        encoder.dependencyGraph = dependencyGraph
         encoder.dependentDomains = dependentDomains
 
         let candidates = Array(encoder.encode(
@@ -241,7 +241,7 @@ struct ProductSpaceEncoderTests {
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        encoder.dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         let candidates = Array(encoder.encode(sequence: sequence, targets: .wholeSequence))
 
@@ -378,9 +378,9 @@ struct ProductSpaceEncoderTests {
         let tree = ChoiceTree.group([bind1, bind2])
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        let topology = dag.bindInnerTopology()
+        let topology = dependencyGraph.bindInnerTopology()
         #expect(topology.count == 2)
         for entry in topology {
             #expect(entry.dependsOn.isEmpty)
@@ -397,9 +397,9 @@ struct ProductSpaceEncoderTests {
 
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
-        let topology = dag.bindInnerTopology()
+        let topology = dependencyGraph.bindInnerTopology()
         #expect(topology.count == 2)
 
         // First in topological order: outer (region 0), depends on nothing among bind-inners.

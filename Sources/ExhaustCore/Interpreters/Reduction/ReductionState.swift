@@ -123,7 +123,7 @@ final class ReductionState<Output> {
             hasDeletionTargets: pruneOrder.isEmpty == false,
             hasBranchTargets: tree.containsPicks,
             hasBind: hasBind,
-            dag: buildDAG()
+            dependencyGraph: buildDAG()
         )
     }
 
@@ -682,8 +682,8 @@ extension ReductionState {
         // Exploitation: run the standard two-phase pipeline on the relaxed state.
         var exploitRemaining = remaining - explorationBudget.used
         computeEncoderOrdering()
-        let (dag, baseProgress) = try runBaseDescent(budget: &exploitRemaining)
-        let fibreProgress = try runFibreDescent(budget: &exploitRemaining, dag: dag)
+        let (dependencyGraph, baseProgress) = try runBaseDescent(budget: &exploitRemaining)
+        let fibreProgress = try runFibreDescent(budget: &exploitRemaining, dependencyGraph: dependencyGraph)
 
         // Pipeline acceptance: final state must shortlex-precede checkpoint.
         if sequence.shortLexPrecedes(checkpoint.sequence) {

@@ -18,7 +18,7 @@ extension ReductionState {
     /// Processes DAG leaf positions first, then sweeps bound-content values at intermediate bind depths from minimum upward (covariant). Returns `true` if any value reduction was committed.
     func runFibreDescent(
         budget: inout Int,
-        dag: ChoiceDependencyGraph?,
+        dependencyGraph: ChoiceDependencyGraph?,
         scopeRange: ClosedRange<Int>? = nil
     ) throws -> Bool {
         phaseTracker.push(.fibreDescent)
@@ -63,7 +63,7 @@ extension ReductionState {
         }()
 
         // Compute target leaf ranges, optionally filtered to the scope.
-        var leafRanges = computeLeafRanges(dag: dag)
+        var leafRanges = computeLeafRanges(dependencyGraph: dependencyGraph)
         if let scope = scopeRange {
             leafRanges = leafRanges.filter { scope.overlaps($0) }
         }
@@ -83,7 +83,7 @@ extension ReductionState {
             let structureChanged = isInBound && hasBind
             let needsFingerprintGuard: Bool
             if structureChanged, let currentBindIndex = bindIndex {
-                let isConstant = dag?.nodes.contains { node in
+                let isConstant = dependencyGraph?.nodes.contains { node in
                     guard case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind,
                           regionIndex < currentBindIndex.regions.count else { return false }
                     let region = currentBindIndex.regions[regionIndex]
@@ -113,7 +113,7 @@ extension ReductionState {
                 let leafContext = ReductionContext(
                     bindIndex: bindIndex,
                     convergedOrigins: cachedOrigins,
-                    dag: dag,
+                    dependencyGraph: dependencyGraph,
                     filterValidityRates: filterValiditySnapshot
                 )
                 let activeFingerprint = needsFingerprintGuard ? prePhaseFingerprint : nil
@@ -185,7 +185,7 @@ extension ReductionState {
                 let depthContext = ReductionContext(
                     bindIndex: bindIndex,
                     convergedOrigins: cachedOrigins,
-                    dag: dag,
+                    dependencyGraph: dependencyGraph,
                     depthFilter: depth,
                     filterValidityRates: filterValiditySnapshot
                 )
@@ -252,7 +252,7 @@ extension ReductionState {
         let tailContext = ReductionContext(
             bindIndex: bindIndex,
             convergedOrigins: cachedOrigins,
-            dag: dag,
+            dependencyGraph: dependencyGraph,
             filterValidityRates: filterValiditySnapshot
         )
 
@@ -307,10 +307,10 @@ extension ReductionState {
     /// Computes ordered leaf ranges for fibre descent.
     ///
     /// Uses DAG leaf positions when available. For bind-free generators, uses all value spans at depth 0. Leaves inside bind-bound subtrees are ordered first (structural proximity ordering).
-    func computeLeafRanges(dag: ChoiceDependencyGraph?) -> [ClosedRange<Int>] {
-        if let dag {
+    func computeLeafRanges(dependencyGraph: ChoiceDependencyGraph?) -> [ClosedRange<Int>] {
+        if let dependencyGraph {
             // Sort: leaves inside bind-bound subtrees first, then by position ascending.
-            return dag.leafPositions.sorted { lhs, rhs in
+            return dependencyGraph.leafPositions.sorted { lhs, rhs in
                 let lhsInBound = bindIndex?.isInBoundSubtree(lhs.lowerBound) ?? false
                 let rhsInBound = bindIndex?.isInBoundSubtree(rhs.lowerBound) ?? false
                 if lhsInBound != rhsInBound {

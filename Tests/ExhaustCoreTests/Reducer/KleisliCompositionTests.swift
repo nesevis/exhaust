@@ -176,8 +176,8 @@ struct KleisliCompositionTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
-        let edges = dag.reductionEdges()
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let edges = dependencyGraph.reductionEdges()
 
         #expect(edges.isEmpty == false, "Bind generator should have at least one reduction edge")
         for edge in edges {
@@ -203,8 +203,8 @@ struct KleisliCompositionTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
-        let edges = dag.reductionEdges()
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let edges = dependencyGraph.reductionEdges()
 
         #expect(edges.isEmpty, "Bind-free generator should have no reduction edges")
     }

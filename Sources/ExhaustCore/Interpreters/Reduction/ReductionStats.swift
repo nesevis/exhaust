@@ -1,6 +1,6 @@
 /// Statistics collected from a single Bonsai reduction run.
 ///
-/// Captures per-encoder probe counts, materialization attempts, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionState`` during reduction and extracted at the end of the pipeline.
+/// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionState`` during reduction and extracted at the end of the pipeline.
 public struct ReductionStats: Sendable {
     /// Per-encoder probe counts accumulated across all cycles.
     public var encoderProbes: [EncoderName: Int]

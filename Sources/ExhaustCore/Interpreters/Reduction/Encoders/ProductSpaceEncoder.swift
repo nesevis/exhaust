@@ -54,7 +54,7 @@ struct ProductSpaceBatchEncoder {
     var bindIndex: BindSpanIndex?
 
     /// Set by the caller before invocation. Used to determine enumeration order for dependent axes.
-    var dag: ChoiceDependencyGraph?
+    var dependencyGraph: ChoiceDependencyGraph?
 
     /// Holds pre-computed downstream domains for dependent axes.
     ///
@@ -100,8 +100,8 @@ struct ProductSpaceBatchEncoder {
         // Determine enumeration order and dependency mapping from DAG topology.
         let enumerationOrder: [Int]
         var downstreamToUpstreamTuplePosition = [Int: Int]()
-        if let dag {
-            let topology = dag.bindInnerTopology()
+        if let dependencyGraph {
+            let topology = dependencyGraph.bindInnerTopology()
             var regionToAxis = [Int: Int]()
             for (axisIndex, axis) in axes.enumerated() {
                 regionToAxis[axis.regionIndex] = axisIndex
@@ -120,7 +120,7 @@ struct ProductSpaceBatchEncoder {
                     continue
                 }
                 for dependentNodeIndex in entry.dependsOn {
-                    let nodeKind = dag.nodes[dependentNodeIndex].kind
+                    let nodeKind = dependencyGraph.nodes[dependentNodeIndex].kind
                     if case let .structural(.bindInner(regionIndex: downstreamRegion)) = nodeKind {
                         downstreamToUpstreamTuplePosition[downstreamRegion] = upstreamTuplePosition
                     }

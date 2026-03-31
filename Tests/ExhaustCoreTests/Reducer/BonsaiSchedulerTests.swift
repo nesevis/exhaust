@@ -153,8 +153,8 @@ struct BonsaiSchedulerTests {
         )
 
         let bindSpanIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
-        let leafRanges = state.computeLeafRanges(dag: dag)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
+        let leafRanges = state.computeLeafRanges(dependencyGraph: dependencyGraph)
 
         // Bound leaves should come first in the ordering.
         guard leafRanges.count >= 2 else {

@@ -19,7 +19,7 @@ struct MutationPoolEntry {
 ///
 /// The sequential adaptive loop in Phase 1b finds the largest batch of same-depth, same-category spans that is individually accepted. Two non-overlapping batches that are each rejected individually may be jointly accepted (property still fails when both are deleted). `MutationPool` collects individual deletion candidates and composes disjoint pairs, ranked by total deleted length.
 ///
-/// - SeeAlso: ``ReductionState/runStructuralDeletion(budget:dag:)``
+/// - SeeAlso: ``ReductionState/runStructuralDeletion(budget:dependencyGraph:)``
 enum MutationPool {
     static let individualLimit = 20
     static let pairLimit = 190 // C(20, 2)

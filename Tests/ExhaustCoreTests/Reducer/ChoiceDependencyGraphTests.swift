@@ -20,12 +20,12 @@ struct ChoiceDependencyGraphTests {
         ])
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.isEmpty)
-        #expect(dag.topologicalOrder.isEmpty)
+        #expect(dependencyGraph.nodes.isEmpty)
+        #expect(dependencyGraph.topologicalOrder.isEmpty)
         // Positions 1 and 2 are values, not inside any structural node.
-        #expect(dag.leafPositions == [1 ... 2])
+        #expect(dependencyGraph.leafPositions == [1 ... 2])
     }
 
     @Test("Single bind produces one structural node and one leaf")
@@ -36,15 +36,15 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.count == 1)
-        #expect(dag.nodes[0].kind == .structural(.bindInner(regionIndex: 0)))
-        #expect(dag.nodes[0].positionRange == 1 ... 1)
-        #expect(dag.nodes[0].dependents.isEmpty)
-        #expect(dag.topologicalOrder == [0])
+        #expect(dependencyGraph.nodes.count == 1)
+        #expect(dependencyGraph.nodes[0].kind == .structural(.bindInner(regionIndex: 0)))
+        #expect(dependencyGraph.nodes[0].positionRange == 1 ... 1)
+        #expect(dependencyGraph.nodes[0].dependents.isEmpty)
+        #expect(dependencyGraph.topologicalOrder == [0])
         // Position 2 (bound value) is a leaf.
-        #expect(dag.leafPositions == [2 ... 2])
+        #expect(dependencyGraph.leafPositions == [2 ... 2])
     }
 
     @Test("Nested binds produce two structural nodes with edge from outer to inner")
@@ -58,29 +58,29 @@ struct ChoiceDependencyGraphTests {
         // Flattened: .bind(true)[0], .value(10)[1], .bind(true)[2], .value(20)[3], .value(30)[4], .bind(false)[5], .bind(false)[6]
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
-        #expect(dag.nodes.count == 2)
+        #expect(dependencyGraph.nodes.count == 2)
 
         // Outer bind-inner at position 1, inner bind-inner at position 3.
-        let outerNode = dag.nodes.first { $0.positionRange == 1 ... 1 }
-        let innerNode = dag.nodes.first { $0.positionRange == 3 ... 3 }
+        let outerNode = dependencyGraph.nodes.first { $0.positionRange == 1 ... 1 }
+        let innerNode = dependencyGraph.nodes.first { $0.positionRange == 3 ... 3 }
         #expect(outerNode != nil)
         #expect(innerNode != nil)
 
         // Outer has inner as dependent (inner's positionRange 3...3 overlaps outer's scope 2...5).
-        let outerIdx = dag.nodes.firstIndex { $0.positionRange == 1 ... 1 }!
-        let innerIdx = dag.nodes.firstIndex { $0.positionRange == 3 ... 3 }!
-        #expect(dag.nodes[outerIdx].dependents.contains(innerIdx))
-        #expect(dag.nodes[innerIdx].dependents.contains(outerIdx) == false)
+        let outerIdx = dependencyGraph.nodes.firstIndex { $0.positionRange == 1 ... 1 }!
+        let innerIdx = dependencyGraph.nodes.firstIndex { $0.positionRange == 3 ... 3 }!
+        #expect(dependencyGraph.nodes[outerIdx].dependents.contains(innerIdx))
+        #expect(dependencyGraph.nodes[innerIdx].dependents.contains(outerIdx) == false)
 
         // Topological order: outer before inner.
-        let outerOrder = dag.topologicalOrder.firstIndex(of: outerIdx)!
-        let innerOrder = dag.topologicalOrder.firstIndex(of: innerIdx)!
+        let outerOrder = dependencyGraph.topologicalOrder.firstIndex(of: outerIdx)!
+        let innerOrder = dependencyGraph.topologicalOrder.firstIndex(of: innerIdx)!
         #expect(outerOrder < innerOrder)
 
         // Leaf: position 4 (value(30)).
-        #expect(dag.leafPositions == [4 ... 4])
+        #expect(dependencyGraph.leafPositions == [4 ... 4])
     }
 
     @Test("Independent binds produce two unconnected structural nodes")
@@ -97,15 +97,15 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.count == 2)
-        #expect(dag.nodes[0].dependents.isEmpty)
-        #expect(dag.nodes[1].dependents.isEmpty)
-        #expect(dag.topologicalOrder.count == 2)
+        #expect(dependencyGraph.nodes.count == 2)
+        #expect(dependencyGraph.nodes[0].dependents.isEmpty)
+        #expect(dependencyGraph.nodes[1].dependents.isEmpty)
+        #expect(dependencyGraph.topologicalOrder.count == 2)
 
         // Leaf positions: the two bound values.
-        #expect(dag.leafPositions.count == 2)
+        #expect(dependencyGraph.leafPositions.count == 2)
     }
 
     @Test("Branch inside bind creates edge from bind-inner to branch selector")
@@ -125,27 +125,27 @@ struct ChoiceDependencyGraphTests {
         // Flattened: .bind(true)[0], .value(5)[1], .group(true)[2], .branch(...)[3], .value(200)[4], .group(false)[5], .bind(false)[6]
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.count == 2)
+        #expect(dependencyGraph.nodes.count == 2)
 
-        let bindInnerIdx = dag.nodes.firstIndex { $0.kind == .structural(.bindInner(regionIndex: 0)) }!
-        let branchIdx = dag.nodes.firstIndex { $0.kind == .structural(.branchSelector) }!
+        let bindInnerIdx = dependencyGraph.nodes.firstIndex { $0.kind == .structural(.bindInner(regionIndex: 0)) }!
+        let branchIdx = dependencyGraph.nodes.firstIndex { $0.kind == .structural(.branchSelector) }!
 
-        #expect(dag.nodes[bindInnerIdx].positionRange == 1 ... 1)
-        #expect(dag.nodes[branchIdx].positionRange == 3 ... 3)
+        #expect(dependencyGraph.nodes[bindInnerIdx].positionRange == 1 ... 1)
+        #expect(dependencyGraph.nodes[branchIdx].positionRange == 3 ... 3)
 
         // Bind-inner's scope (bound range 2...5) contains branch at 3 → edge.
-        #expect(dag.nodes[bindInnerIdx].dependents.contains(branchIdx))
-        #expect(dag.nodes[branchIdx].dependents.contains(bindInnerIdx) == false)
+        #expect(dependencyGraph.nodes[bindInnerIdx].dependents.contains(branchIdx))
+        #expect(dependencyGraph.nodes[branchIdx].dependents.contains(bindInnerIdx) == false)
 
         // Topological order: bind-inner before branch.
-        let bindOrder = dag.topologicalOrder.firstIndex(of: bindInnerIdx)!
-        let branchOrder = dag.topologicalOrder.firstIndex(of: branchIdx)!
+        let bindOrder = dependencyGraph.topologicalOrder.firstIndex(of: bindInnerIdx)!
+        let branchOrder = dependencyGraph.topologicalOrder.firstIndex(of: branchIdx)!
         #expect(bindOrder < branchOrder)
 
         // Leaf: position 4.
-        #expect(dag.leafPositions == [4 ... 4])
+        #expect(dependencyGraph.leafPositions == [4 ... 4])
     }
 
     @Test("Branch at top level produces one structural node")
@@ -163,14 +163,14 @@ struct ChoiceDependencyGraphTests {
         // Flattened: .group(true)[0], .branch(...)[1], .value(20)[2], .group(false)[3]
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.count == 1)
-        #expect(dag.nodes[0].kind == .structural(.branchSelector))
-        #expect(dag.nodes[0].positionRange == 1 ... 1)
-        #expect(dag.nodes[0].dependents.isEmpty)
-        #expect(dag.topologicalOrder == [0])
-        #expect(dag.leafPositions == [2 ... 2])
+        #expect(dependencyGraph.nodes.count == 1)
+        #expect(dependencyGraph.nodes[0].kind == .structural(.branchSelector))
+        #expect(dependencyGraph.nodes[0].positionRange == 1 ... 1)
+        #expect(dependencyGraph.nodes[0].dependents.isEmpty)
+        #expect(dependencyGraph.topologicalOrder == [0])
+        #expect(dependencyGraph.leafPositions == [2 ... 2])
     }
 
     @Test("getSize-bind is transparent and produces no structural nodes")
@@ -182,11 +182,11 @@ struct ChoiceDependencyGraphTests {
         // getSize-bind flattens as group, not bind: .group(true)[0], .value(42)[1], .group(false)[2]
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.isEmpty)
-        #expect(dag.topologicalOrder.isEmpty)
-        #expect(dag.leafPositions == [1 ... 1])
+        #expect(dependencyGraph.nodes.isEmpty)
+        #expect(dependencyGraph.topologicalOrder.isEmpty)
+        #expect(dependencyGraph.leafPositions == [1 ... 1])
     }
 
     // MARK: - 0b: Structural Constancy
@@ -202,10 +202,10 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.count == 1)
-        #expect(dag.nodes[0].isStructurallyConstant)
+        #expect(dependencyGraph.nodes.count == 1)
+        #expect(dependencyGraph.nodes[0].isStructurallyConstant)
     }
 
     @Test("Bind with nested bind in bound subtree is structurally dependent")
@@ -219,10 +219,10 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         // Outer bind-inner node should NOT be structurally constant.
-        let outerNode = dag.nodes.first { $0.positionRange == 1 ... 1 }
+        let outerNode = dependencyGraph.nodes.first { $0.positionRange == 1 ... 1 }
         #expect(outerNode != nil)
         #expect(outerNode!.isStructurallyConstant == false)
     }
@@ -243,10 +243,10 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes.count == 2) // bind-inner + branch selector
-        let bindNode = dag.nodes.first { $0.positionRange == 1 ... 1 }
+        #expect(dependencyGraph.nodes.count == 2) // bind-inner + branch selector
+        let bindNode = dependencyGraph.nodes.first { $0.positionRange == 1 ... 1 }
         #expect(bindNode != nil)
         #expect(bindNode!.isStructurallyConstant == false)
     }
@@ -366,9 +366,9 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
-        for node in dag.nodes {
+        for node in dependencyGraph.nodes {
             if case .structural(.bindInner) = node.kind {
                 let expected = bindIndex.bindDepth(at: node.positionRange.lowerBound)
                 #expect(node.bindDepth == expected)
@@ -392,9 +392,9 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        let branchNode = dag.nodes.first { $0.kind == .structural(.branchSelector) }!
+        let branchNode = dependencyGraph.nodes.first { $0.kind == .structural(.branchSelector) }!
         #expect(branchNode.bindDepth == nil)
     }
 
@@ -408,10 +408,10 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
-        let outerNode = dag.nodes.first { $0.positionRange == 1 ... 1 }!
-        let innerNode = dag.nodes.first { $0.positionRange == 3 ... 3 }!
+        let outerNode = dependencyGraph.nodes.first { $0.positionRange == 1 ... 1 }!
+        let innerNode = dependencyGraph.nodes.first { $0.positionRange == 3 ... 3 }!
         #expect(outerNode.bindDepth == 0)
         #expect(innerNode.bindDepth == 1)
     }
@@ -429,9 +429,9 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        #expect(dag.nodes[0].isStructurallyConstant)
+        #expect(dependencyGraph.nodes[0].isStructurallyConstant)
     }
 
     @Test("Structure-controlling bind (nested bind in bound) is not structurally constant")
@@ -445,9 +445,9 @@ struct ChoiceDependencyGraphTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dependencyGraph = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
-        let outerNode = dag.nodes.first { $0.positionRange == 1 ... 1 }!
+        let outerNode = dependencyGraph.nodes.first { $0.positionRange == 1 ... 1 }!
         #expect(outerNode.isStructurallyConstant == false)
     }
 

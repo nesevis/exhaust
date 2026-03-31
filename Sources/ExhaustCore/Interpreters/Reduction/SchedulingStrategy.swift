@@ -107,7 +107,7 @@ struct ReductionStateView {
     let hasBind: Bool
 
     /// The choice dependency graph built from the current sequence, or `nil` if no binds/picks.
-    let dag: ChoiceDependencyGraph?
+    let dependencyGraph: ChoiceDependencyGraph?
 }
 
 // MARK: - Adaptive Strategy

@@ -113,7 +113,7 @@ public struct ReductionContext {
     public let convergedOrigins: [Int: ConvergedOrigin]?
 
     /// The choice dependency graph, or `nil` if not available.
-    public let dag: ChoiceDependencyGraph?
+    public let dependencyGraph: ChoiceDependencyGraph?
 
     /// When non-nil, restricts the encoder to value spans at this bind depth.
     ///
@@ -129,14 +129,14 @@ public struct ReductionContext {
     public init(
         bindIndex: BindSpanIndex? = nil,
         convergedOrigins: [Int: ConvergedOrigin]? = nil,
-        dag: ChoiceDependencyGraph? = nil,
+        dependencyGraph: ChoiceDependencyGraph? = nil,
         depthFilter: Int? = nil,
         cycle: Int = 0,
         filterValidityRates: [UInt64: FilterObservation]? = nil
     ) {
         self.bindIndex = bindIndex
         self.convergedOrigins = convergedOrigins
-        self.dag = dag
+        self.dependencyGraph = dependencyGraph
         self.depthFilter = depthFilter
         self.cycle = cycle
         self.filterValidityRates = filterValidityRates

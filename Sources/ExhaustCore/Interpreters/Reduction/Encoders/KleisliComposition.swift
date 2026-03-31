@@ -237,7 +237,7 @@ public struct KleisliComposition<Output>: ComposableEncoder {
             let downstreamContext = ReductionContext(
                 bindIndex: context.bindIndex.flatMap { _ in BindSpanIndex(from: liftResult.sequence) },
                 convergedOrigins: downstreamOrigins.isEmpty ? nil : downstreamOrigins,
-                dag: context.dag
+                dependencyGraph: context.dependencyGraph
             )
             downstream.start(
                 sequence: liftResult.sequence,

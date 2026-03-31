@@ -13,12 +13,12 @@ extension ReductionState {
   /// Returns candidates sorted by `deletedLength` descending so the delta-debugging binary split places high-impact nodes in the first half. Excludes nodes with no deletable spans in any slot category.
   func collectAntichainCandidates(
     antichainNodes: [Int],
-    dag: ChoiceDependencyGraph
+    dependencyGraph: ChoiceDependencyGraph
   ) -> [(nodeIndex: Int, spans: [ChoiceSpan], deletedLength: Int)] {
     var candidates = [(nodeIndex: Int, spans: [ChoiceSpan], deletedLength: Int)]()
 
     for nodeIndex in antichainNodes {
-      guard let scopeRange = dag.nodes[nodeIndex].scopeRange else {
+      guard let scopeRange = dependencyGraph.nodes[nodeIndex].scopeRange else {
         continue
       }
 

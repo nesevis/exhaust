@@ -28,7 +28,8 @@ public enum SequenceDecoder {
 
     /// Materializes a candidate and checks feasibility against the property.
     ///
-    /// - Returns: A ``ShrinkResult`` if the candidate produces a failing output that is shortlex-smaller than the original, or `nil` if the candidate is rejected.
+    /// - Parameter filterObservations: Accumulator for per-fingerprint filter predicate observations. Merged from every materialization's ``DecodingReport``, including rejected and failed attempts.
+    /// - Returns: A ``ReductionResult`` if the candidate produces a failing output that is shortlex-smaller than the original, or `nil` if the candidate is rejected.
     public func decode<Output>(
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,

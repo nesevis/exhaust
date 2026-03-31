@@ -11,11 +11,9 @@ public enum ResolutionTier: UInt8, Sendable {
     case prng = 2
 }
 
-/// Aggregate fidelity score for a guided materialization pass.
+/// Diagnostics collected during a single materialization pass.
 ///
-/// Counts how many coordinates were resolved at each ``ResolutionTier`` and exposes a single
-/// ``fidelity`` score in `[0, 1]` that measures how closely the lift preserved the original
-/// value assignment.
+/// Tracks per-coordinate resolution tier counts (how closely the canonical lift preserved the original value assignment) and per-fingerprint filter predicate observations. Resolution tier data is meaningful for guided mode; filter observations are populated in both exact and guided modes.
 public struct DecodingReport: Sendable {
     private var exactCarryForwardCount = 0
     private var fallbackTreeCount = 0

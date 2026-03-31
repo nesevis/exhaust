@@ -17,15 +17,15 @@ extension ReductionState {
     /// Returns `true` if the exploration found a net improvement.
     func runKleisliExploration(
         budget: inout Int,
-        dag: ChoiceDependencyGraph?,
+        dependencyGraph: ChoiceDependencyGraph?,
         edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100),
         scopeRange: ClosedRange<Int>? = nil
     ) throws -> Bool {
         phaseTracker.push(.exploration)
         defer { phaseTracker.pop() }
-        guard hasBind, let dag, let bindSpanIndex = bindIndex else { return false }
+        guard hasBind, let dependencyGraph, let bindSpanIndex = bindIndex else { return false }
 
-        var edges = dag.reductionEdges()
+        var edges = dependencyGraph.reductionEdges()
         // When scoped, only explore edges whose upstream falls within the scope.
         if let scope = scopeRange {
             edges = edges.filter { scope.overlaps($0.upstreamRange) }
@@ -123,7 +123,7 @@ extension ReductionState {
             let context = ReductionContext(
                 bindIndex: bindSpanIndex,
                 convergedOrigins: convergenceCache.allEntries,
-                dag: dag
+                dependencyGraph: dependencyGraph
             )
             // Do not pass converged origins to the composition. The convergence
             // cache records floors established by the standalone pipeline — values

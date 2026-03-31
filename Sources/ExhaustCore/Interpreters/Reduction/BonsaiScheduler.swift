@@ -224,14 +224,14 @@ enum BonsaiScheduler {
                 var verificationBudget = Self.computeVerificationBudget(
                     state: state, config: config
                 )
-                let dag = state.hasBind
+                let dependencyGraph = state.hasBind
                     ? ChoiceDependencyGraph.build(
                         from: state.sequence,
                         tree: state.tree,
                         bindIndex: state.bindIndex ?? BindSpanIndex(from: state.sequence)
                     )
                     : nil
-                _ = try state.runFibreDescent(budget: &verificationBudget, dag: dag)
+                _ = try state.runFibreDescent(budget: &verificationBudget, dependencyGraph: dependencyGraph)
 
                 state.convergenceCache = savedCache
 
@@ -363,19 +363,19 @@ enum BonsaiScheduler {
     private static func dispatchPhase(
         _ planned: PlannedPhase,
         state: ReductionState<some Any>,
-        dag: ChoiceDependencyGraph?
-    ) throws -> (outcome: PhaseOutcome, dag: ChoiceDependencyGraph?) {
+        dependencyGraph: ChoiceDependencyGraph?
+    ) throws -> (outcome: PhaseOutcome, dependencyGraph: ChoiceDependencyGraph?) {
         switch planned.phase {
         case .baseDescent:
             var budget = planned.budget
-            let (producedDag, _) = try state.runBaseDescent(
+            let (producedDependencyGraph, _) = try state.runBaseDescent(
                 budget: &budget, cycle: state.currentCycle,
                 scopeRange: planned.configuration.scopeRange
             )
             let baseOutcome = state.phaseTracker.outcome(
                 for: .baseDescent, budgetAllocated: planned.budget
             )
-            return (baseOutcome, producedDag)
+            return (baseOutcome, producedDependencyGraph)
 
         case .fibreDescent:
             var budget = planned.budget
@@ -384,7 +384,7 @@ enum BonsaiScheduler {
             }
             _ = try state.runFibreDescent(
                 budget: &budget,
-                dag: dag,
+                dependencyGraph: dependencyGraph,
                 scopeRange: planned.configuration.scopeRange
             )
 
@@ -397,7 +397,7 @@ enum BonsaiScheduler {
             var budget = planned.budget
             _ = try state.runKleisliExploration(
                 budget: &budget,
-                dag: dag,
+                dependencyGraph: dependencyGraph,
                 edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy,
                 scopeRange: planned.configuration.scopeRange
             )
@@ -442,7 +442,7 @@ enum BonsaiScheduler {
             )
         }
 
-        var dag: ChoiceDependencyGraph? = state.buildDAG()
+        var dependencyGraph: ChoiceDependencyGraph? = state.buildDAG()
 
         // Stage 1: phases that run unconditionally (structural minimization).
         let firstStagePhases = strategy.planFirstStage(
@@ -454,8 +454,8 @@ enum BonsaiScheduler {
 
         var firstStageResult: PhaseOutcome?
         for planned in firstStagePhases {
-            let (outcome, producedDag) = try Self.dispatchPhase(planned, state: state, dag: dag)
-            dag = producedDag ?? dag
+            let (outcome, producedDependencyGraph) = try Self.dispatchPhase(planned, state: state, dependencyGraph: dependencyGraph)
+            dependencyGraph = producedDependencyGraph ?? dependencyGraph
             if outcome.acceptances > 0 { cycleImproved = true }
             strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
             firstStageResult = outcome
@@ -473,7 +473,7 @@ enum BonsaiScheduler {
                 continue
             }
 
-            let (outcome, _) = try Self.dispatchPhase(planned, state: state, dag: dag)
+            let (outcome, _) = try Self.dispatchPhase(planned, state: state, dependencyGraph: dependencyGraph)
             if outcome.acceptances > 0 { cycleImproved = true }
             strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
             phaseDispositions[planned.phase] = .ran(outcome)
