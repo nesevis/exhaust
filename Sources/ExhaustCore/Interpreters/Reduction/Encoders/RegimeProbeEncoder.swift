@@ -21,7 +21,7 @@ struct RegimeProbeEncoder: ComposableEncoder {
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
         positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
+        context: ReductionContext
     ) {
         emitted = false
         var candidate = sequence
@@ -29,14 +29,20 @@ struct RegimeProbeEncoder: ComposableEncoder {
         var index = 0
         while index < candidate.count {
             if let value = candidate[index].value {
-                let target = ZeroValueEncoder.simplestTarget(for: value)
-                if target != value.choice {
-                    needsRun = true
-                    candidate[index] = .value(.init(
-                        choice: target,
-                        validRange: value.validRange,
-                        isRangeExplicit: value.isRangeExplicit
-                    ))
+                // Skip bind-inner controlling values — zeroing these changes the
+                // bound structure (array lengths, dependent ranges), which belongs
+                // in base descent, not in the regime probe's value-only sweep.
+                let isBindInner = context.bindIndex?.bindRegionForInnerIndex(index) != nil
+                if isBindInner == false {
+                    let target = ZeroValueEncoder.simplestTarget(for: value)
+                    if target != value.choice {
+                        needsRun = true
+                        candidate[index] = .value(.init(
+                            choice: target,
+                            validRange: value.validRange,
+                            isRangeExplicit: value.isRangeExplicit
+                        ))
+                    }
                 }
             }
             index += 1
