@@ -1,5 +1,5 @@
 #if canImport(Testing)
-import Testing
+@_weakLinked import Testing
 import ExhaustCore
 
 /// Configuration carried by the `.exhaust(...)` trait, accessible to `#exhaust` at runtime via `@TaskLocal`.

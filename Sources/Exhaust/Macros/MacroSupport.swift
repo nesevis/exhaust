@@ -7,7 +7,7 @@ import ExhaustCore
 import IssueReporting
 
 #if canImport(Testing)
-import Testing
+@_weakLinked import Testing
 #else
 // Noop shim — withKnownIssue just runs the body.
 // The matching closure is never called, so #expect failures go undetected.
