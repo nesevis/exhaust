@@ -8,7 +8,7 @@ import Foundation
 // MARK: - Configuration
 
 let enableReport = true
-let enableCounterExamples = true
+let enableCounterExamples = false
 private let reductionCount = 100
 
 /// Returns strategy variants of a base config.
@@ -510,7 +510,7 @@ private func registerParser() {
 // MARK: - Replacement
 
 private func registerReplacement() {
-    let gen = #gen(.int(in: 0 ... 1_000_000), .int(in: 2 ... 5).array())
+    let gen = #gen(.int(in: 0 ... 1_000_000), .int(in: 2 ... 10).array())
 
     let property: @Sendable ((Int, [Int])) -> Bool = { pair in
         let (initial, multipliers) = pair
@@ -1498,6 +1498,8 @@ private func printChallengeReport(
 
     let medianInvocations = String(format: "%.1f", median(invocations))
     let meanInvocations = String(format: "%.1f", mean(invocations))
+    let minInvocations = invocations.min().map { String(format: "%.0f", $0) } ?? "n/a"
+    let maxInvocations = invocations.max().map { String(format: "%.0f", $0) } ?? "n/a"
     let medianTime = String(format: "%.1f", median(times))
     let meanTime = String(format: "%.1f", mean(times))
 
@@ -1505,7 +1507,7 @@ private func printChallengeReport(
     let medianIter = String(format: "%.0f", median(iterDoubles))
     let meanIter = String(format: "%.1f", mean(iterDoubles))
 
-    print("[\(name)] invocations: median=\(medianInvocations) mean=\(meanInvocations) | time(ms): median=\(medianTime) mean=\(meanTime) counterexamples=\(uniqueCounterexamples.count) | coverage=\(foundWithCoveringArray) iterToFail: median=\(medianIter) mean=\(meanIter)")
+    print("[\(name)] invocations: median=\(medianInvocations) mean=\(meanInvocations) min=\(minInvocations) max=\(maxInvocations) | time(ms): median=\(medianTime) mean=\(meanTime) counterexamples=\(uniqueCounterexamples.count) | coverage=\(foundWithCoveringArray) iterToFail: median=\(medianIter) mean=\(meanIter)")
     if enableCounterExamples {
         print("[\(name)] unique counterexamples (\(uniqueCounterexamples.count)):")
         for counterexample in uniqueCounterexamples {
