@@ -9,9 +9,6 @@ public extension Interpreters {
         public var maxStalls: Int
         /// Beam search tuning for aligned deletion.
         let alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
-        /// When `true`, run a one-shot post-processing pass after reduction stalls that reorders elements within type-homogeneous sibling groups into natural numeric order.
-        public var humanOrderPostProcess: Bool = true
-
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
 
@@ -72,12 +69,10 @@ public extension Interpreters {
         tree: ChoiceTree,
         output: Output,
         config: BonsaiReducerConfiguration,
-        humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         var bonsaiConfig = config
-        bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
         bonsaiConfig.visualize = visualize
 
         if visualize {
@@ -113,18 +108,16 @@ public extension Interpreters {
 
     /// Bonsai reducer with statistics collection.
     ///
-    /// Returns both the reduction result and accumulated per-encoder probe counts and materialization totals. The existing ``bonsaiReduce(gen:tree:output:config:humanOrderPostProcess:visualize:property:)`` signature is unchanged — only callers that need statistics use this variant.
+    /// Returns both the reduction result and accumulated per-encoder probe counts and materialization totals. The existing ``bonsaiReduce(gen:tree:output:config:visualize:property:)`` signature is unchanged — only callers that need statistics use this variant.
     static func bonsaiReduceCollectingStats<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         output: Output,
         config: BonsaiReducerConfiguration,
-        humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
         property: (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         var bonsaiConfig = config
-        bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
         bonsaiConfig.visualize = visualize
 
         if visualize {

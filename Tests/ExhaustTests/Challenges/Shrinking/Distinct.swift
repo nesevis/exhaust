@@ -30,7 +30,7 @@ struct DistinctShrinkingChallenge {
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
-            .humanOrderPostProcess,
+
             .replay(5_023_515_172_476_973_421),
             .onReport { report = $0 }
         ) {
@@ -48,7 +48,7 @@ struct DistinctShrinkingChallenge {
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
-            .humanOrderPostProcess,
+
             .reflecting(value),
             .onReport { report = $0 }
         ) {

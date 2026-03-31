@@ -56,7 +56,7 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .humanOrderPostProcess,
+
             .onReport { report = $0 },
             property: Self.property
         )
@@ -77,7 +77,7 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .humanOrderPostProcess,
+
             .onReport { report = $0 },
             property: Self.property
         )
@@ -97,7 +97,7 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .humanOrderPostProcess,
+
             .onReport { report = $0 },
             property: Self.property
         )
@@ -120,7 +120,7 @@ struct LargeUnionListShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(list),
-                .humanOrderPostProcess,
+    
                 property: Self.property
             )
 

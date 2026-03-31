@@ -127,10 +127,6 @@ public enum ExhaustSettings<Output> {
     /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds directly to random sampling. Useful for benchmarking, comparing coverage strategies, or when the analysis overhead is unwanted.
     case randomOnly
 
-    /// Reorders elements within type-homogeneous sibling groups into natural numeric order
-    /// after test case reduction completes.
-    case humanOrderPostProcess
-
     /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
     case visualize
 
