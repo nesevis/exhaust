@@ -14,6 +14,8 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
     public let failures: [ValidationFailure]
     /// Total wall-clock time for the validation run, in seconds.
     public let elapsedTime: Double
+    /// Per-fingerprint filter predicate observations accumulated during generation.
+    public let filterObservations: [UInt64: FilterObservation]
 
     /// Whether the validation passed with no failures.
     public var passed: Bool {
@@ -51,6 +53,12 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
         lines.append("  Unique sequences:      \(uniqueChoiceSequences)/\(valuesGenerated) (\(String(format: "%.1f", uniquenessRate * 100))%)")
         let perSampleMs = averageTimePerSample * 1000
         lines.append("  Avg time per sample:   \(String(format: "%.2f", perSampleMs)) ms\(isSlowGenerator ? " (slow)" : "")")
+        if filterObservations.isEmpty == false {
+            for (fingerprint, observation) in filterObservations.sorted(by: { $0.key < $1.key }) {
+                let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
+                lines.append("  Filter \(fingerprintShort):       \(observation.passes)/\(observation.attempts) (\(String(format: "%.1f", observation.validityRate * 100))%)")
+            }
+        }
         if failures.isEmpty {
             lines.append("  Result: PASSED")
         } else {
@@ -323,7 +331,8 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
             replayDeterminismSuccesses: determinismSuccesses,
             uniqueChoiceSequences: uniqueSequences.count,
             failures: failures,
-            elapsedTime: elapsedSeconds
+            elapsedTime: elapsedSeconds,
+            filterObservations: iterator.filterObservations
         )
 
         for failure in report.failures {

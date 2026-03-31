@@ -116,6 +116,9 @@ public struct ExhaustReport: Sendable {
     /// Composition edges where the downstream bailed before completing coverage.
     public var fibreBailCount: Int = 0
 
+    /// Per-fingerprint filter predicate observations accumulated during reduction.
+    public var filterObservations: [UInt64: FilterObservation] = [:]
+
     /// Per-cycle phase outcome data.
     public var cycleOutcomes: [CycleOutcome] = []
 
@@ -204,6 +207,7 @@ public struct ExhaustReport: Sendable {
         fibreExhaustedCleanCount = stats.fibreExhaustedCleanCount
         fibreExhaustedWithFailureCount = stats.fibreExhaustedWithFailureCount
         fibreBailCount = stats.fibreBailCount
+        filterObservations = stats.filterObservations
         cycleOutcomes = stats.cycleOutcomes
     }
 }

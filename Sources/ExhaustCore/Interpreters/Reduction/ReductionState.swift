@@ -50,6 +50,9 @@ final class ReductionState<Output> {
     /// Sequence hash at which each encoder last exhausted with zero acceptances. When the current sequence hashes to the same value, `runComposable` skips the encoder entirely — no new reduction opportunities exist on an unchanged sequence.
     private var exhaustionFingerprints: [EncoderName: UInt64] = [:]
 
+    /// Per-fingerprint filter predicate observations accumulated across all materializations.
+    var filterObservations: [UInt64: FilterObservation] = [:]
+
     /// Total materialization attempts (decoder invocations) during reduction.
     ///
     /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta for antichain and mutation pool direct decodes), `runKleisliExploration` (manual accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()` call outside `runComposable` must manually accumulate into this field.
@@ -101,7 +104,13 @@ final class ReductionState<Output> {
         stats.fibreExhaustedWithFailureCount = fibreExhaustedWithFailureCount
         stats.fibreBailCount = fibreBailCount
         stats.cycleOutcomes = statsCycleOutcomes
+        stats.filterObservations = filterObservations
         return stats
+    }
+
+    /// Snapshot of accumulated filter observations for ``ReductionContext``, or `nil` if empty.
+    var filterValiditySnapshot: [UInt64: FilterObservation]? {
+        filterObservations.isEmpty ? nil : filterObservations
     }
 
     // MARK: - State View
@@ -332,10 +341,15 @@ extension ReductionState {
         var probes = 0
         var accepted = 0
         let budgetBefore = budget.used
+        var localFilterObservations: [UInt64: FilterObservation] = [:]
         defer {
             if collectStats {
                 encoderProbes[encoder.name, default: 0] += probes
                 totalMaterializations += (budget.used - budgetBefore)
+            }
+            for (fingerprint, observation) in localFilterObservations {
+                filterObservations[fingerprint, default: FilterObservation()].attempts += observation.attempts
+                filterObservations[fingerprint, default: FilterObservation()].passes += observation.passes
             }
         }
         var lastDecodingReport: DecodingReport?
@@ -349,7 +363,8 @@ extension ReductionState {
             }
             if let result = try decoder.decode(
                 candidate: probe, gen: gen, tree: tree,
-                originalSequence: sequence, property: property
+                originalSequence: sequence, property: property,
+                filterObservations: &localFilterObservations
             ) {
                 budget.recordMaterialization()
                 phaseTracker.recordInvocation()

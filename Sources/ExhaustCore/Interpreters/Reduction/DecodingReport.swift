@@ -76,4 +76,7 @@ public struct DecodingReport: Sendable {
     var isReliableForConvergenceCache: Bool {
         coverage >= Self.convergenceCacheCoverageThreshold
     }
+
+    /// Per-fingerprint filter predicate observations accumulated during this materialization.
+    var filterObservations: [UInt64: FilterObservation] = [:]
 }

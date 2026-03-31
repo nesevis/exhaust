@@ -79,6 +79,11 @@ public struct ReductionStats: Sendable {
     /// Number of composition edges where the downstream bailed before completing coverage.
     public var fibreBailCount: Int
 
+    // MARK: - Filter Observations
+
+    /// Per-fingerprint filter predicate observations accumulated across all materializations.
+    public var filterObservations: [UInt64: FilterObservation] = [:]
+
     // MARK: - Per-Phase Outcomes
 
     /// Per-cycle phase outcome data, collected when stats collection is enabled.

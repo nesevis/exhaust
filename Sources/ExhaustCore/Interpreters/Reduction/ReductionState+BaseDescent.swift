@@ -126,7 +126,7 @@ extension ReductionState {
             branchTreeDirty = false
         }
 
-        let branchReductionContext = ReductionContext(bindIndex: bindIndex)
+        let branchReductionContext = ReductionContext(bindIndex: bindIndex, filterValidityRates: filterValiditySnapshot)
         let fullBranchRange = scopeRange ?? (0 ... max(0, sequence.count - 1))
         if try runComposable(
             promoteDirectDescendantEncoder,
@@ -243,7 +243,7 @@ extension ReductionState {
             // Deletions change sequence length, invalidating span positions for remaining
             // encoders. A descriptor chain would process stale spans — per-encoder restart
             // ensures each encoder gets fresh spans.
-            let deletionContext = ReductionContext(bindIndex: bindIndex)
+            let deletionContext = ReductionContext(bindIndex: bindIndex, filterValidityRates: filterValiditySnapshot)
             let fullRange = scopeRange ?? (0 ... max(0, sequence.count - 1))
 
             for slot in pruneOrder {
@@ -457,7 +457,7 @@ extension ReductionState {
                 allCandidates, bindIndex: bindSpanIndex
             )
 
-            let chainContext = ReductionContext(bindIndex: bindSpanIndex, dag: bindDag)
+            let chainContext = ReductionContext(bindIndex: bindSpanIndex, dag: bindDag, filterValidityRates: filterValiditySnapshot)
             let fullRange = scopeRange ?? (0 ... max(0, sequence.count - 1))
             let guidedDecoder: SequenceDecoder = .guided(fallbackTree: fallbackTree ?? tree)
 
@@ -510,7 +510,7 @@ extension ReductionState {
                 fallbackTree: nil, usePRNGFallback: true,
                 prngSalt: UInt64(cycle)
             )
-            let adaptiveContext = ReductionContext(bindIndex: bindSpanIndex)
+            let adaptiveContext = ReductionContext(bindIndex: bindSpanIndex, filterValidityRates: filterValiditySnapshot)
             while legBudget.isExhausted == false {
                 if try runComposable(
                     productSpaceAdaptiveEncoder, decoder: adaptivePRNGDecoder,
@@ -545,7 +545,8 @@ extension ReductionState {
             // This is slightly broader than the pre-extracted spans but acceptable — extra spans
             // are non-bind-inner values that the encoder will attempt to reduce (harmless, same decoder).
             let bindInnerContext = ReductionContext(
-                bindIndex: bindIndex
+                bindIndex: bindIndex,
+                filterValidityRates: filterValiditySnapshot
             )
             for slot in trainOrder {
                 guard legBudget.isExhausted == false else { break }

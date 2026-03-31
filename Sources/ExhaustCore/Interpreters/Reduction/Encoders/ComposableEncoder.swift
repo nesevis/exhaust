@@ -123,18 +123,23 @@ public struct ReductionContext {
     /// The current reduction cycle number. Used by encoders to timestamp convergence records.
     public let cycle: Int
 
+    /// Per-fingerprint filter validity counts from prior materializations, or `nil` if empty.
+    public let filterValidityRates: [UInt64: FilterObservation]?
+
     public init(
         bindIndex: BindSpanIndex? = nil,
         convergedOrigins: [Int: ConvergedOrigin]? = nil,
         dag: ChoiceDependencyGraph? = nil,
         depthFilter: Int? = nil,
-        cycle: Int = 0
+        cycle: Int = 0,
+        filterValidityRates: [UInt64: FilterObservation]? = nil
     ) {
         self.bindIndex = bindIndex
         self.convergedOrigins = convergedOrigins
         self.dag = dag
         self.depthFilter = depthFilter
         self.cycle = cycle
+        self.filterValidityRates = filterValidityRates
     }
 }
 

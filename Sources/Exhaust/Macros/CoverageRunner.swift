@@ -157,7 +157,7 @@ public enum CoverageRunner {
                 return RowFailure(value: value, tree: freshTree)
             }
             return nil
-        case .rejected, .failed:
+        case .rejected(_), .failed(_):
             return nil
         }
     }

@@ -34,7 +34,8 @@ public enum SequenceDecoder {
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
+        filterObservations: inout [UInt64: FilterObservation]
     ) throws -> ReductionResult<Output>? {
         switch self {
         case let .exact(materializePicks):
@@ -42,7 +43,8 @@ public enum SequenceDecoder {
                 candidate: consume candidate, gen: gen,
                 fallbackTree: tree,
                 originalSequence: originalSequence, property: property,
-                materializePicks: materializePicks
+                materializePicks: materializePicks,
+                filterObservations: &filterObservations
             )
 
         case let .guided(
@@ -57,9 +59,28 @@ public enum SequenceDecoder {
                 originalSequence: originalSequence, property: property,
                 materializePicks: materializePicks,
                 skipShortlexCheck: skipShortlexCheck,
-                prngSalt: prngSalt
+                prngSalt: prngSalt,
+                filterObservations: &filterObservations
             )
         }
+    }
+
+    /// Materializes a candidate and checks feasibility against the property.
+    ///
+    /// Convenience overload that discards filter observations.
+    public func decode<Output>(
+        candidate: consuming ChoiceSequence,
+        gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        originalSequence: ChoiceSequence,
+        property: (Output) -> Bool
+    ) throws -> ReductionResult<Output>? {
+        var discarded: [UInt64: FilterObservation] = [:]
+        return try decode(
+            candidate: consume candidate, gen: gen, tree: tree,
+            originalSequence: originalSequence, property: property,
+            filterObservations: &discarded
+        )
     }
 
     // MARK: - Decode Implementations
@@ -70,14 +91,16 @@ public enum SequenceDecoder {
         fallbackTree: ChoiceTree,
         originalSequence _: ChoiceSequence,
         property: (Output) -> Bool,
-        materializePicks: Bool
+        materializePicks: Bool,
+        filterObservations: inout [UInt64: FilterObservation]
     ) -> ReductionResult<Output>? {
         switch Materializer.materialize(
             gen, prefix: consume candidate,
             mode: .exact, fallbackTree: fallbackTree,
             materializePicks: materializePicks
         ) {
-        case let .success(output, freshTree, _):
+        case let .success(output, freshTree, decodingReport):
+            mergeFilterObservations(from: decodingReport, into: &filterObservations)
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
             return ReductionResult(
@@ -87,7 +110,8 @@ public enum SequenceDecoder {
                 evaluations: 1,
                 decodingReport: nil
             )
-        case .rejected, .failed:
+        case let .rejected(decodingReport), let .failed(decodingReport):
+            mergeFilterObservations(from: decodingReport, into: &filterObservations)
             return nil
         }
     }
@@ -101,7 +125,8 @@ public enum SequenceDecoder {
         property: (Output) -> Bool,
         materializePicks: Bool,
         skipShortlexCheck: Bool = false,
-        prngSalt: UInt64 = 0
+        prngSalt: UInt64 = 0,
+        filterObservations: inout [UInt64: FilterObservation]
     ) -> ReductionResult<Output>? {
         let seed = ZobristHash.hash(of: candidate) &+ prngSalt
         switch Materializer.materialize(
@@ -115,6 +140,7 @@ public enum SequenceDecoder {
             materializePicks: materializePicks
         ) {
         case let .success(output, freshTree, decodingReport):
+            mergeFilterObservations(from: decodingReport, into: &filterObservations)
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
             if skipShortlexCheck == false {
@@ -137,7 +163,8 @@ public enum SequenceDecoder {
                 evaluations: 1,
                 decodingReport: decodingReport
             )
-        case .rejected, .failed:
+        case let .rejected(decodingReport), let .failed(decodingReport):
+            mergeFilterObservations(from: decodingReport, into: &filterObservations)
             return nil
         }
     }
@@ -171,6 +198,19 @@ public enum SequenceDecoder {
                 return .guided(fallbackTree: context.fallbackTree, materializePicks: picks)
             }
             return .exact(materializePicks: picks)
+        }
+    }
+
+    // MARK: - Filter Observation Merging
+
+    private func mergeFilterObservations(
+        from report: DecodingReport?,
+        into accumulator: inout [UInt64: FilterObservation]
+    ) {
+        guard let report, report.filterObservations.isEmpty == false else { return }
+        for (fingerprint, observation) in report.filterObservations {
+            accumulator[fingerprint, default: FilterObservation()].attempts += observation.attempts
+            accumulator[fingerprint, default: FilterObservation()].passes += observation.passes
         }
     }
 }

@@ -42,6 +42,11 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         context.baseSeed
     }
 
+    /// Per-fingerprint filter predicate observations accumulated across all generation runs.
+    public var filterObservations: [UInt64: FilterObservation] {
+        context.filterObservations
+    }
+
     // MARK: - Iterator
 
     public mutating func next() throws -> Element? {
@@ -236,7 +241,10 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                         return nil
                     }
 
-                    if predicate(result) {
+                    let passed = predicate(result)
+                    context.filterObservations[fingerprint, default: FilterObservation()]
+                        .recordAttempt(passed: passed)
+                    if passed {
                         return try runContinuation(
                             result: result,
                             calleeChoiceTree: tree,

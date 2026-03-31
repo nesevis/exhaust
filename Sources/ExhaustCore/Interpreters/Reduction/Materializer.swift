@@ -32,13 +32,11 @@ public enum Materializer {
     /// Result of a reduction materialization attempt.
     public enum Result<Output> {
         /// Materialization succeeded with a value and fresh tree.
-        ///
-        /// `decodingReport` is populated for guided mode only (`nil` for exact mode).
         case success(value: Output, tree: ChoiceTree, decodingReport: DecodingReport?)
         /// Exact mode: out-of-range or structural mismatch — candidate is invalid.
-        case rejected
+        case rejected(decodingReport: DecodingReport?)
         /// Guided mode: filter or generation failure.
-        case failed
+        case failed(decodingReport: DecodingReport?)
     }
 
     /// Materialize a generator using the given prefix and mode.
@@ -82,23 +80,31 @@ public enum Materializer {
             size: 100,
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
             materializePicks: materializePicks,
-            decodingReport: mode.isGuided ? DecodingReport() : nil
+            decodingReport: DecodingReport()
         )
 
         do {
             guard let (value, tree) = try generateRecursive(
                 gen, with: (), context: &context, fallbackTree: resolvedFallbackTree
             ) else {
+                var report = context.decodingReport
+                report?.filterObservations = context.filterObservations
                 switch mode {
-                case .exact: return .rejected
-                case .guided: return .failed
+                case .exact: return .rejected(decodingReport: report)
+                case .guided: return .failed(decodingReport: report)
                 }
             }
-            return .success(value: value, tree: tree, decodingReport: context.decodingReport)
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .success(value: value, tree: tree, decodingReport: report)
         } catch is RejectionError {
-            return .rejected
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .rejected(decodingReport: report)
         } catch {
-            return .failed
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .failed(decodingReport: report)
         }
     }
 }
@@ -257,12 +263,15 @@ extension Materializer {
                     continuationFallback: continuationFallback
                 )
 
-            case let .filter(gen, _, _, predicate):
+            case let .filter(gen, fingerprint, _, predicate):
                 let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 guard let (result, tree) = try generateRecursive(
                     gen, with: inputValue, context: &context, fallbackTree: calleeFallback
                 ) else { return nil }
-                guard predicate(result) else { return nil }
+                let passed = predicate(result)
+                context.filterObservations[fingerprint, default: FilterObservation()]
+                    .recordAttempt(passed: passed)
+                guard passed else { return nil }
                 return try runContinuation(
                     result: result, calleeChoiceTree: tree,
                     continuation: continuation, inputValue: inputValue,
@@ -368,6 +377,8 @@ extension Materializer {
         /// Accumulates per-coordinate resolution tier data for guided mode.
         /// `nil` for exact mode and pure-generate mode.
         var decodingReport: DecodingReport?
+        /// Per-fingerprint filter predicate observations accumulated during this materialization.
+        var filterObservations: [UInt64: FilterObservation] = [:]
         /// Tracks how many pick operations deep the interpreter has descended.
         /// Combined with the base siteID to disambiguate recursive generator depths.
         var pickDepth: UInt64 = 0

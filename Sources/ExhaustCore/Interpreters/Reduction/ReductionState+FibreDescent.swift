@@ -113,7 +113,8 @@ extension ReductionState {
                 let leafContext = ReductionContext(
                     bindIndex: bindIndex,
                     convergedOrigins: cachedOrigins,
-                    dag: dag
+                    dag: dag,
+                    filterValidityRates: filterValiditySnapshot
                 )
                 let activeFingerprint = needsFingerprintGuard ? prePhaseFingerprint : nil
 
@@ -185,7 +186,8 @@ extension ReductionState {
                     bindIndex: bindIndex,
                     convergedOrigins: cachedOrigins,
                     dag: dag,
-                    depthFilter: depth
+                    depthFilter: depth,
+                    filterValidityRates: filterValiditySnapshot
                 )
                 let hasValueSpansAtDepth = spanCache.valueSpans(
                     at: depth, from: sequence, bindIndex: bindIndex
@@ -250,7 +252,8 @@ extension ReductionState {
         let tailContext = ReductionContext(
             bindIndex: bindIndex,
             convergedOrigins: cachedOrigins,
-            dag: dag
+            dag: dag,
+            filterValidityRates: filterValiditySnapshot
         )
 
         // Shortlex reorder: sort siblings by shortlex key after values settle.
