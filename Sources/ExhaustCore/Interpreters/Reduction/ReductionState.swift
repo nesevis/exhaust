@@ -348,8 +348,11 @@ extension ReductionState {
                 totalMaterializations += (budget.used - budgetBefore)
             }
             for (fingerprint, observation) in localFilterObservations {
-                filterObservations[fingerprint, default: FilterObservation()].attempts += observation.attempts
-                filterObservations[fingerprint, default: FilterObservation()].passes += observation.passes
+                if filterObservations[fingerprint] == nil {
+                    filterObservations[fingerprint] = FilterObservation()
+                }
+                filterObservations[fingerprint]!.attempts += observation.attempts
+                filterObservations[fingerprint]!.passes += observation.passes
             }
         }
         var lastDecodingReport: DecodingReport?

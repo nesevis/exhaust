@@ -242,8 +242,10 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     }
 
                     let passed = predicate(result)
-                    context.filterObservations[fingerprint, default: FilterObservation()]
-                        .recordAttempt(passed: passed)
+                    if context.filterObservations[fingerprint] == nil {
+                        context.filterObservations[fingerprint] = FilterObservation()
+                    }
+                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
                     if passed {
                         return try runContinuation(
                             result: result,
@@ -690,8 +692,13 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             return nil
         }
         for (label, classifier) in classifiers where classifier(result) {
-            context.classifications[fingerprint, default: [:]][label, default: []]
-                .insert(context.runs)
+            if context.classifications[fingerprint] == nil {
+                context.classifications[fingerprint] = [:]
+            }
+            if context.classifications[fingerprint]![label] == nil {
+                context.classifications[fingerprint]![label] = []
+            }
+            context.classifications[fingerprint]![label]!.insert(context.runs)
         }
         return try runContinuation(
             result: result,

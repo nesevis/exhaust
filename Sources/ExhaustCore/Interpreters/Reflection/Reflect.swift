@@ -261,14 +261,14 @@ public enum Interpreters {
                         .contains(convertible.bitPattern64) ?? false
                 }
 
-                return reflectionPaths
-                    .compactMap { value, pathTree in
-                        guard let path = pathTree.first else {
-                            return nil
-                        }
-                        return (value, augmentedSiteID, choice.weight, choice.id, isPicked, path)
+                var results: [(value: Any, siteID: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []
+                if isPicked {
+                    for (value, pathTree) in reflectionPaths {
+                        guard let path = pathTree.first else { continue }
+                        results.append((value, augmentedSiteID, choice.weight, choice.id, true, path))
                     }
-                    .filter(\.isPicked)
+                }
+                return results
 
             } catch let error as ReflectionError {
                 switch error {
