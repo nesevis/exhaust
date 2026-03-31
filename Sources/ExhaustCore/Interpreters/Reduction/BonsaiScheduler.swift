@@ -334,23 +334,21 @@ enum BonsaiScheduler {
         var bestSequence = state.bestSequence
         var bestOutput = state.bestOutput
 
-        if config.humanOrderPostProcess {
-            if let humanResult = state.humanReadableOrderingPass.encode(
-                gen: gen,
-                sequence: bestSequence,
-                tree: state.tree,
-                property: property
-            ) {
-                if state.collectStats {
-                    state.encoderProbes[.humanOrderReorder, default: 0] +=
-                        humanResult.materializations
-                    state.totalMaterializations += humanResult.materializations
-                }
-                bestSequence = humanResult.result.sequence
-                bestOutput = humanResult.result.output
-                if isInstrumented {
-                    ExhaustLog.notice(category: .reducer, event: "human_order_accepted")
-                }
+        if let humanResult = state.humanReadableOrderingPass.encode(
+            gen: gen,
+            sequence: bestSequence,
+            tree: state.tree,
+            property: property
+        ) {
+            if state.collectStats {
+                state.encoderProbes[.humanOrderReorder, default: 0] +=
+                    humanResult.materializations
+                state.totalMaterializations += humanResult.materializations
+            }
+            bestSequence = humanResult.result.sequence
+            bestOutput = humanResult.result.output
+            if isInstrumented {
+                ExhaustLog.notice(category: .reducer, event: "human_order_accepted")
             }
         }
 

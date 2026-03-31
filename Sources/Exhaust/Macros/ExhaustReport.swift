@@ -4,6 +4,9 @@ import ExhaustCore
 ///
 /// Delivered via the ``ExhaustSettings/onReport(_:)`` setting. Contains phase timing, invocation counts, per-encoder probe breakdown, and profiling data for the reduction planning decision tree.
 public struct ExhaustReport: Sendable {
+    /// The PRNG seed used for random sampling, if any.
+    public var seed: UInt64?
+
     /// Time spent in the structured coverage phase, in milliseconds.
     public var coverageMilliseconds: Double = 0
 

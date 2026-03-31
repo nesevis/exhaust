@@ -40,8 +40,18 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         switch setting {
         case let .budget(b):
             budget = b
-        case let .replay(s):
-            seed = s
+        case let .replay(replaySeed):
+            seed = replaySeed.resolve()
+            if seed == nil {
+                reportIssue(
+                    "Invalid replay seed: \(replaySeed)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return nil
+            }
         case .suppressIssueReporting:
             suppressIssueReporting = true
         case .randomOnly:

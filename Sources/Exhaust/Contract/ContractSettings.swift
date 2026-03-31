@@ -7,7 +7,9 @@ public enum ContractSettings {
     case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay.
-    case replay(UInt64)
+    ///
+    /// Accepts a raw `UInt64` or a Crockford Base32 string.
+    case replay(ReplaySeed)
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     case suppressIssueReporting

@@ -36,8 +36,18 @@ public func __runContract<Spec: ContractSpec>(
         switch setting {
         case let .budget(b):
             budget = b
-        case let .replay(s):
-            seed = s
+        case let .replay(replaySeed):
+            seed = replaySeed.resolve()
+            if seed == nil {
+                reportIssue(
+                    "Invalid replay seed: \(replaySeed)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return nil
+            }
         case .suppressIssueReporting:
             suppressIssueReporting = true
         case .randomOnly:
@@ -286,7 +296,7 @@ func renderFailure<Spec: ContractSpecBase>(
 
     if let seed = result.seed {
         lines.append("")
-        lines.append("Reproduce: .replay(\(seed))")
+        lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
     }
 
     return lines.joined(separator: "\n")
@@ -467,7 +477,7 @@ func buildExhaustSettings<Output>(
         )),
     ]
     if let seed {
-        settings.append(.replay(seed))
+        settings.append(.replay(.numeric(seed)))
     }
     if suppressIssueReporting {
         settings.append(.suppressIssueReporting)

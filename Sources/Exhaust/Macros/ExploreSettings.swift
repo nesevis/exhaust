@@ -16,7 +16,9 @@ public enum ExploreSettings {
     case samplingBudget(UInt64)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
-    case replay(UInt64)
+    ///
+    /// Accepts a raw `UInt64` or a Crockford Base32 string.
+    case replay(ReplaySeed)
 
     /// The test case reduction configuration to use when a counterexample is found.
     case reductionBudget(ReducerBudget)

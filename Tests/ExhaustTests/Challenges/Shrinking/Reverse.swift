@@ -23,7 +23,7 @@ struct ReverseShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .humanOrderPostProcess,
+
             .replay(33_556_013_978_236_435),
             .onReport { report = $0 }
         ) { arr in

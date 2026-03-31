@@ -1,6 +1,6 @@
 public extension Interpreters {
     /// Configuration presets for the reducer's test case reduction strategies.
-    enum ReductionBudget {
+    enum ReductionBudget: Sendable {
         /// Tuning parameters for the beam search used by aligned sibling deletion.
         struct AlignedDeletionBeamSearchTuning {
             let minBeamWidth: Int

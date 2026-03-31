@@ -318,7 +318,7 @@ struct DistinctScalingVariant {
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
-            .humanOrderPostProcess,
+
             .reflecting([1337, 80085, 69, 67]),
             .onReport { report = $0 }
         ) {
@@ -348,7 +348,7 @@ struct LargeUnionListScalingVariant {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .humanOrderPostProcess,
+
             .onReport { report = $0 }
         ) { arr in
             Set(arr.flatMap(\.self)).count <= 4
@@ -404,7 +404,7 @@ struct ReverseScalingVariant {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .humanOrderPostProcess,
+
             .onReport { report = $0 }
         ) { arr in
             arr.elementsEqual(arr.reversed())

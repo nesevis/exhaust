@@ -8,6 +8,43 @@
 // ```
 import ExhaustCore
 
+/// A replay seed for deterministic reproduction, accepting either a raw `UInt64` or a Crockford Base32 string.
+///
+/// ```swift
+/// .replay(42)                // UInt64 literal
+/// .replay("3RT5GH8KM2")     // Crockford Base32
+/// ```
+public enum ReplaySeed: Sendable {
+    /// A raw numeric seed.
+    case numeric(UInt64)
+    /// A Crockford Base32 encoded seed string.
+    case encoded(String)
+
+    /// Resolves the seed to a `UInt64` value.
+    ///
+    /// - Returns: The numeric seed, or `nil` if the encoded string is invalid.
+    public func resolve() -> UInt64? {
+        switch self {
+        case let .numeric(value):
+            value
+        case let .encoded(string):
+            CrockfordBase32.decode(string)
+        }
+    }
+}
+
+extension ReplaySeed: ExpressibleByIntegerLiteral {
+    public init(integerLiteral value: UInt64) {
+        self = .numeric(value)
+    }
+}
+
+extension ReplaySeed: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = .encoded(value)
+    }
+}
+
 /// Controls the iteration budgets for coverage, random sampling, and reduction.
 ///
 /// Three named presets cover common use cases. Use `.custom` for fine-grained control.
@@ -17,7 +54,7 @@ import ExhaustCore
 /// | `.expedient` | 200 | 200 | `.fast` |
 /// | `.expensive` | 500 | 500 | `.fast` |
 /// | `.exorbitant` | 2000 | 2000 | `.slow` |
-public enum ExhaustBudget {
+public enum ExhaustBudget: Sendable {
     /// 200 coverage rows, 200 random samplings, fast reduction. The default for property tests.
     case expedient
     /// 500 coverage rows, 500 random samplings, fast reduction. The default for contract tests.
@@ -63,7 +100,13 @@ public enum ExhaustSettings<Output> {
     case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
-    case replay(UInt64)
+    ///
+    /// Accepts a raw `UInt64` or a Crockford Base32 string:
+    /// ```swift
+    /// .replay(42)                // numeric
+    /// .replay("3RT5GH8KM2")     // Crockford Base32
+    /// ```
+    case replay(ReplaySeed)
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///
@@ -83,10 +126,6 @@ public enum ExhaustSettings<Output> {
     ///
     /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds directly to random sampling. Useful for benchmarking, comparing coverage strategies, or when the analysis overhead is unwanted.
     case randomOnly
-
-    /// Reorders elements within type-homogeneous sibling groups into natural numeric order
-    /// after test case reduction completes.
-    case humanOrderPostProcess
 
     /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
     case visualize
