@@ -11,12 +11,12 @@ struct ConvergenceCacheUnitTests {
         #expect(cache.isEmpty)
         #expect(cache.convergedOrigin(at: 0) == nil)
 
-        cache.record(index: 5, convergedOrigin: makeOrigin(bound: 42, configuration: .binarySearchRangeMinimum))
+        cache.record(index: 5, convergedOrigin: makeOrigin(bound: 42, configuration: .binarySearchSemanticSimplest))
         #expect(cache.isEmpty == false)
 
         let entry = cache.convergedOrigin(at: 5)
         #expect(entry?.bound == 42)
-        #expect(entry?.configuration == .binarySearchRangeMinimum)
+        #expect(entry?.configuration == .binarySearchSemanticSimplest)
         #expect(entry?.signal == .monotoneConvergence)
         #expect(cache.convergedOrigin(at: 0) == nil)
     }
@@ -24,7 +24,7 @@ struct ConvergenceCacheUnitTests {
     @Test("invalidateAll clears all entries")
     func invalidateAll() {
         var cache = ConvergenceCache()
-        cache.record(index: 0, convergedOrigin: makeOrigin(bound: 10, configuration: .binarySearchRangeMinimum))
+        cache.record(index: 0, convergedOrigin: makeOrigin(bound: 10, configuration: .binarySearchSemanticSimplest))
         cache.record(index: 1, convergedOrigin: makeOrigin(bound: 20, configuration: .binarySearchSemanticSimplest))
         #expect(cache.isEmpty == false)
 
@@ -43,7 +43,7 @@ struct ConvergenceCacheUnitTests {
     @Test("allEntries returns populated dictionary")
     func allEntriesPopulated() {
         var cache = ConvergenceCache()
-        cache.record(index: 3, convergedOrigin: makeOrigin(bound: 100, configuration: .binarySearchRangeMinimum))
+        cache.record(index: 3, convergedOrigin: makeOrigin(bound: 100, configuration: .binarySearchSemanticSimplest))
         let entries = cache.allEntries
         #expect(entries?.count == 1)
         #expect(entries?[3]?.bound == 100)
@@ -52,7 +52,7 @@ struct ConvergenceCacheUnitTests {
     @Test("Later records overwrite earlier ones at the same index")
     func overwrite() {
         var cache = ConvergenceCache()
-        cache.record(index: 0, convergedOrigin: makeOrigin(bound: 10, configuration: .binarySearchRangeMinimum))
+        cache.record(index: 0, convergedOrigin: makeOrigin(bound: 10, configuration: .binarySearchSemanticSimplest))
         cache.record(index: 0, convergedOrigin: makeOrigin(bound: 20, configuration: .binarySearchSemanticSimplest))
         let entry = cache.convergedOrigin(at: 0)
         #expect(entry?.bound == 20)
@@ -134,13 +134,13 @@ struct ConvergedOriginProbeSavingsTests {
         let spans = extractValueSpans(from: seq)
 
         let coldCount = countAllRejectedProbes(
-            BinarySearchToRangeMinimumEncoder(),
+            BinarySearchToSemanticSimplestEncoder(),
             sequence: seq, spans: spans
         )
         let warmCount = countAllRejectedProbes(
-            BinarySearchToRangeMinimumEncoder(),
+            BinarySearchToSemanticSimplestEncoder(),
             sequence: seq, spans: spans,
-            convergedOrigins: [0: makeOrigin(bound: value, configuration: .binarySearchRangeMinimum)]
+            convergedOrigins: [0: makeOrigin(bound: value, configuration: .binarySearchSemanticSimplest)]
         )
 
         #expect(coldCount >= 15)
@@ -159,10 +159,10 @@ struct ValidationProbeTests {
         let seq = makeUnsignedSequence([10000])
         let spans = extractValueSpans(from: seq)
         let convergedOrigins: [Int: ConvergedOrigin] = [
-            0: makeOrigin(bound: 5000, configuration: .binarySearchRangeMinimum),
+            0: makeOrigin(bound: 5000, configuration: .binarySearchSemanticSimplest),
         ]
 
-        var encoder = BinarySearchToRangeMinimumEncoder()
+        var encoder = BinarySearchToSemanticSimplestEncoder()
         encoder.start(sequence: seq, tree: .just, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []
@@ -184,10 +184,10 @@ struct ValidationProbeTests {
         let seq = makeUnsignedSequence([10000])
         let spans = extractValueSpans(from: seq)
         let convergedOrigins: [Int: ConvergedOrigin] = [
-            0: makeOrigin(bound: 5000, configuration: .binarySearchRangeMinimum),
+            0: makeOrigin(bound: 5000, configuration: .binarySearchSemanticSimplest),
         ]
 
-        var encoder = BinarySearchToRangeMinimumEncoder()
+        var encoder = BinarySearchToSemanticSimplestEncoder()
         encoder.start(sequence: seq, tree: .just, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []

@@ -570,16 +570,6 @@ extension ReductionState {
                         accepted += 1
                         ReductionScheduler.moveToFront(.binarySearchToZero, in: &trainOrder)
                     }
-                case .binarySearchToTarget:
-                    if try runComposable(
-                        binarySearchToTargetEncoder, decoder: trainDecoder,
-                        positionRange: bindInnerRange, context: bindInnerContext,
-                        structureChanged: true,
-                        budget: &legBudget
-                    ) {
-                        accepted += 1
-                        ReductionScheduler.moveToFront(.binarySearchToTarget, in: &trainOrder)
-                    }
                 case .reduceFloat:
                     if try runComposable(
                         reduceFloatEncoder, decoder: trainDecoder,

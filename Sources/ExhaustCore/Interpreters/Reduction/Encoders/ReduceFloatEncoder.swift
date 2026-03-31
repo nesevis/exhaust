@@ -372,7 +372,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
             convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
                 signal: .monotoneConvergence,
-                configuration: .binarySearchRangeMinimum,
+                configuration: .binarySearchSemanticSimplest,
                 cycle: currentCycle
             )
             return nil
@@ -463,7 +463,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
             convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
                 signal: .monotoneConvergence,
-                configuration: .binarySearchRangeMinimum,
+                configuration: .binarySearchSemanticSimplest,
                 cycle: currentCycle
             )
             return nil

@@ -16,7 +16,6 @@ public enum EncoderName: String, Hashable, Sendable {
     // Value minimization
     case zeroValue
     case binarySearchToSemanticSimplest
-    case binarySearchToRangeMinimum
     case reduceFloat
     case productSpaceBatch
     case productSpaceAdaptive

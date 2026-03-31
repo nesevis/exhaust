@@ -14,7 +14,7 @@ public struct BinarySearchToSemanticSimplestEncoder: ComposableEncoder {
     private var inner: BinarySearchEncoder
 
     public init() {
-        inner = BinarySearchEncoder(configuration: .semanticSimplest)
+        inner = BinarySearchEncoder()
     }
 
     public var name: EncoderName {

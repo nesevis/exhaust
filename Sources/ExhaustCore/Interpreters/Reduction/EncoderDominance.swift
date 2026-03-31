@@ -8,7 +8,6 @@
 /// - **Deletion**: `deleteContainerSpans` or `deleteAlignedSiblingWindows` ⇒ `deleteContainerSpansWithRandomRepair`
 /// - **Deletion**: `deleteAlignedSiblingWindows` ⇒ `deleteAlignedSiblingSubsets`
 /// - **Deletion**: `productSpaceBatch` ⇒ `productSpaceAdaptive`
-/// - **Value minimization**: `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
 /// - **Value minimization**: `binarySearchToSemanticSimplest` ⇒ `linearScan`
 ///
 /// The dominance relation is scoped per hom-set: success in one hom-set (for example, deletion)
@@ -61,15 +60,6 @@ struct EncoderDominance {
         // the antichain's jointly-deletable subset subsumes individual and pair mutations.
         case (.structuralDeletion, .productSpaceAdaptive):
             succeeded.contains(.productSpaceBatch)
-        // Binary-search-to-semantic-simplest subsumes range-minimum search:
-        // semantic-simplest finds values ≤ any nonzero range-minimum target.
-        //
-        // zeroValue does NOT dominate binary search: dominance is per-encoder
-        // (global), not per-coordinate. ZeroValue zeroing coordinate *i*
-        // should not suppress binary search at coordinate *j* where the
-        // value is far from zero.
-        case (.valueMinimization, .binarySearchToRangeMinimum):
-            succeeded.contains(.binarySearchToSemanticSimplest)
         // Linear scan covers a bounded subrange that binary search already
         // searched at specific coordinates (nonMonotoneGap signals). Per-encoder
         // dominance from binary search is imprecise — binary search may have

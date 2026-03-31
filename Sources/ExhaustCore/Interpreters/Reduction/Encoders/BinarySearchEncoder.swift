@@ -5,45 +5,20 @@
 //  Created by Chris Kolbu on 23/3/2026.
 //
 
-/// Binary-searches each target value toward a reduction target, with configurable direction and cross-zero support.
+/// Binary-searches each target value toward its semantic simplest form.
 ///
-/// Two configurations:
-/// - ``Configuration/rangeMinimum``: downward-only search toward each value's range minimum (or semantic simplest if outside recorded range). No cross-zero phase.
-/// - ``Configuration/semanticSimplest``: bidirectional search (downward or upward depending on relative position). After convergence, a cross-zero phase walks shortlex key space to find simpler signed values.
-///
-/// This encoder unifies `BinarySearchToRangeMinimumEncoder` and `BinarySearchToSemanticSimplestEncoder`.
+/// Bidirectional search (downward or upward depending on relative position to the target). After convergence, a cross-zero phase walks shortlex key space downward for signed integers to find simpler values that bit-pattern search cannot reach.
 public struct BinarySearchEncoder: ComposableEncoder {
-    /// Determines search direction and whether cross-zero probes run after convergence.
-    public enum Configuration {
-        /// Downward binary search toward range minimum. Skips targets where the current value is already below the target. No cross-zero phase.
-        case rangeMinimum
-        /// Bidirectional binary search toward semantic simplest. After convergence, walks shortlex key space downward for signed integers to find simpler values that bit-pattern search cannot reach.
-        case semanticSimplest
-    }
-
-    public let configuration: Configuration
     public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
 
-    public var name: EncoderName {
-        switch configuration {
-        case .rangeMinimum: .binarySearchToRangeMinimum
-        case .semanticSimplest: .binarySearchToSemanticSimplest
-        }
-    }
+    public var name: EncoderName { .binarySearchToSemanticSimplest }
 
     public let phase = ReductionPhase.valueMinimization
 
     /// The encoder configuration as a convergence cache discriminant.
-    var encoderConfiguration: EncoderConfiguration {
-        switch configuration {
-        case .rangeMinimum: .binarySearchRangeMinimum
-        case .semanticSimplest: .binarySearchSemanticSimplest
-        }
-    }
+    var encoderConfiguration: EncoderConfiguration { .binarySearchSemanticSimplest }
 
-    public init(configuration: Configuration) {
-        self.configuration = configuration
-    }
+    public init() {}
 
     // MARK: - ComposableEncoder
 
@@ -99,11 +74,6 @@ public struct BinarySearchEncoder: ComposableEncoder {
                 continue
             }
 
-            // In rangeMinimum mode, only search downward — skip targets below the current value.
-            if configuration == .rangeMinimum, currentBP < targetBP {
-                index += 1
-                continue
-            }
 
             let convergedOrigin = convergedOrigins?[seqIdx]
             let isConvergedOrigined: Bool
@@ -205,12 +175,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
     private var savedEntry: ChoiceSequenceValue?
     private var currentCycle: Int = 0
 
-    private var costPerTarget: Int {
-        switch configuration {
-        case .rangeMinimum: 64
-        case .semanticSimplest: 80
-        }
-    }
+    private var costPerTarget: Int { 80 }
 
     // MARK: - Probe Loop
 
@@ -396,8 +361,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
 
     /// Attempts to enter the cross-zero phase for the given target. Returns true if cross-zero was entered (caller should `continue` the probe loop); false if not applicable.
     private mutating func tryCrossZeroEntry(for state: TargetState) -> Bool {
-        guard configuration == .semanticSimplest,
-              state.choiceTag.isSigned
+        guard state.choiceTag.isSigned
         else { return false }
         if state.isConvergedOrigined {
             let currentBP = sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0

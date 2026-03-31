@@ -37,7 +37,6 @@ extension ReductionScheduler {
     enum ValueEncoderSlot: CaseIterable {
         case zeroValue
         case binarySearchToZero
-        case binarySearchToTarget
         case reduceFloat
     }
 

@@ -28,9 +28,8 @@ public enum ConvergenceSignal: Hashable, Sendable {
 
 /// Identifies the encoder configuration that produced a convergence record.
 ///
-/// The factory uses this to reject cache entries from a different configuration. When the factory switches from `.binarySearchSemanticSimplest` to `.binarySearchRangeMinimum` for the same position between cycles, the cached bound from the upward search is not meaningful as a downward starting point. The configuration discriminant catches this.
+/// The factory uses this to reject cache entries from a different configuration so that warm-start data from one encoder does not pollute another's search.
 public enum EncoderConfiguration: Hashable, Sendable {
-    case binarySearchRangeMinimum
     case binarySearchSemanticSimplest
     case linearScan
     case zeroValue

@@ -188,7 +188,6 @@ final class ReductionState<Output> {
     var swapSiblingsEncoder = SiblingSwapEncoder()
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
-    var binarySearchToTargetEncoder = BinarySearchToRangeMinimumEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
     var contiguousWindowEncoder = ContiguousWindowDeletionEncoder()
     var beamSearchEncoder: BeamSearchDeletionEncoder
@@ -530,12 +529,6 @@ extension ReductionState {
                 )
             case .binarySearchToZero:
                 binarySearchToZeroEncoder.estimatedCost(
-                    sequence: sequence, tree: tree,
-                    positionRange: fullRange,
-                    context: orderingContext
-                )
-            case .binarySearchToTarget:
-                binarySearchToTargetEncoder.estimatedCost(
                     sequence: sequence, tree: tree,
                     positionRange: fullRange,
                     context: orderingContext

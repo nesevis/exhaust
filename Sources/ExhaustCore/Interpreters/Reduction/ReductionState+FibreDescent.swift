@@ -125,8 +125,6 @@ extension ReductionState {
                         zeroValueEncoder
                     case .binarySearchToZero where leafSpans.isEmpty == false:
                         binarySearchToZeroEncoder
-                    case .binarySearchToTarget where leafSpans.isEmpty == false:
-                        binarySearchToTargetEncoder
                     case .reduceFloat where floatSpans.isEmpty == false:
                         reduceFloatEncoder
                     default:
@@ -204,8 +202,6 @@ extension ReductionState {
                         zeroValueEncoder
                     case .binarySearchToZero where hasValueSpansAtDepth:
                         binarySearchToZeroEncoder
-                    case .binarySearchToTarget where hasValueSpansAtDepth:
-                        binarySearchToTargetEncoder
                     case .reduceFloat where hasFloatsAtDepth:
                         reduceFloatEncoder
                     default:
