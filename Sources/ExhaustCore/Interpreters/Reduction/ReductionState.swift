@@ -252,6 +252,7 @@ final class ReductionState<Output> {
 extension ReductionState {
     func accept(_ result: ReductionResult<Output>, structureChanged: Bool) {
         phaseTracker.recordAcceptance(structural: structureChanged)
+        let oldSequence = sequence
         sequence = result.sequence
         tree = result.tree
         output = result.output
@@ -259,7 +260,16 @@ extension ReductionState {
         branchTreeDirty = true
         if structureChanged {
             spanCache.invalidate()
-            convergenceCache.invalidateAll()
+            // For bind-free generators, structural changes are pure deletions.
+            // Remap convergence entries to their new positions instead of
+            // invalidating them, so fibre descent can warm-start from cached
+            // floors on the next pass. The remap method falls back to
+            // invalidateAll() if the new sequence is not a strict subsequence.
+            if hasBind == false {
+                convergenceCache.remap(from: oldSequence, to: sequence)
+            } else {
+                convergenceCache.invalidateAll()
+            }
             edgeObservations.removeAll(keepingCapacity: true)
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
         }

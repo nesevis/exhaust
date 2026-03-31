@@ -99,6 +99,43 @@ struct ConvergenceCache {
         entries.removeAll(keepingCapacity: true)
     }
 
+    /// Remaps entries from old positions to new positions after a pure deletion.
+    ///
+    /// Walks both sequences with two pointers. Matching entries at `old[i] == new[j]` produce a position mapping `i → j`. Entries at deleted positions are dropped. Falls back to ``invalidateAll()`` if the new sequence is not a strict subsequence of the old (insertion or replacement detected).
+    mutating func remap(from oldSequence: ChoiceSequence, to newSequence: ChoiceSequence) {
+        guard entries.isEmpty == false else { return }
+        guard newSequence.count < oldSequence.count else {
+            invalidateAll()
+            return
+        }
+
+        var remapped: [Int: ConvergedOrigin] = [:]
+        remapped.reserveCapacity(entries.count)
+        var newIndex = 0
+
+        for oldIndex in 0 ..< oldSequence.count {
+            guard newIndex < newSequence.count else {
+                // Remaining old entries are deleted — skip.
+                break
+            }
+            if oldSequence[oldIndex] == newSequence[newIndex] {
+                if let origin = entries[oldIndex] {
+                    remapped[newIndex] = origin
+                }
+                newIndex += 1
+            }
+            // else: old[oldIndex] was deleted, advance old only.
+        }
+
+        // If we didn't consume all of newSequence, it's not a pure deletion — fall back.
+        if newIndex < newSequence.count {
+            invalidateAll()
+            return
+        }
+
+        entries = remapped
+    }
+
     /// Invalidates all entries whose index falls within the given range.
     mutating func invalidate(in range: ClosedRange<Int>) {
         for index in entries.keys where range.contains(index) {
