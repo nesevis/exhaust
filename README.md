@@ -137,7 +137,7 @@ let personGen = #gen(.string(length: 1...20), .int(in: 0...120)) { name, age in
 
 ## Recursive Generators
 
-Some domains are naturally recursive — trees, nested JSON, abstract syntax trees. `.recursive` lets you define generators that reference themselves, with a depth limit to keep things finite:
+Some domains are naturally recursive — trees, nested JSON, abstract syntax trees. `.recursive` lets you define generators that reference themselves, with a depth range to keep things finite:
 
 ```swift
 indirect enum JSONValue: Equatable {
@@ -146,18 +146,18 @@ indirect enum JSONValue: Equatable {
     case array([JSONValue])
 }
 
-let jsonGen: ReflectiveGenerator<JSONValue> = .recursive(base: .null, maxDepth: 5) { recurse, remaining in
+let jsonGen = #gen(.recursive(base: .null, depthRange: 0...5) { recurse, remaining in
     .oneOf(weighted:
         (2, .just(.null)),
-        (2, ReflectiveGenerator<Int>.int(in: 0...99).map { JSONValue.int($0) }),
+        (2, .int(in: 0...99).map { JSONValue.int($0) }),
         (Int(remaining), recurse().array(length: 0...3).map { JSONValue.array($0) })
     )
-}
+})
 ```
 
-At each level, `remaining` counts down from `maxDepth`, and `recurse()` produces a generator for the next level. When depth is exhausted, only the base case is used. The `weighted` parameter biases toward leaves so that generated trees stay manageable, while `remaining` naturally reduces branching as recursion deepens.
+At each level, `remaining` counts down from the maximum depth, and `recurse()` produces a generator for the next level. When depth is exhausted, only the base case is used. The `weighted` parameter biases toward leaves so that generated trees stay manageable, while `remaining` naturally reduces branching as recursion deepens.
 
-Recursive generators are fully transparent to reflection and reduction — Exhaust can shrink a deeply nested tree down to its minimal failing subtree.
+The depth itself is drawn from `depthRange` as a shrinkable choice — the reducer can collapse entire subtrees by shrinking the depth toward the range's lower bound. Recursive generators are fully transparent to reflection and reduction.
 
 ## Running Properties
 
@@ -242,14 +242,15 @@ The `.onReport` setting delivers an `ExhaustReport` with timing and invocation d
 Sometimes you already have a failing value — from a bug report, a production log, or a test fixture — and want to find the simplest version that still fails. The `.reflecting` setting skips generation, reflects your value through the generator, and reduces it:
 
 ```swift
-@Test func minimizeBugReport() {
+@Test
+func minimizeBugReport() {
     let gen = #gen(.int().array(length: 3...30))
     let fromBugReport = [1337, 80085, 69, 67]
 
     #exhaust(gen, .reflecting(fromBugReport)) {
-        Set($0).count < 3
+        #expect(Set($0).count < 3)
     }
-    // Reduces to [0, -1, 1]
+    // Reduces to [-1, 0, 1]
 }
 ```
 
@@ -269,7 +270,7 @@ let celsius = #gen(.double(in: -273.15...1000.0))
 
 The `#gen` macro uses `mapped` automatically when it can synthesize a backward mapping — for structs it extracts properties by label, and for enum cases it uses pattern matching. For custom transformations where Exhaust can't infer the reverse, provide it explicitly.
 
-`bound` is the bidirectional equivalent of `.bind` (`.flatMap`). Note that `.bind` is less commonly bidirectional than `.map` — the dependent generator often can't be reversed — but when it is, prefer `bound` for the same reasons.
+`bound` is the bidirectional equivalent of `.bind` (`.flatMap`). The `backward` function is a comap: given the final output, it extracts the inner value that was used to select the dependent generator. This enables reflection through the bind — without it, Exhaust can generate and reduce but cannot reflect a concrete value backward through the dependency.
 
 ### Reflectable vs. Forward-Only
 
@@ -300,7 +301,7 @@ Add validity constraints with `.filter`:
 let evenGen = #gen(.int().filter { $0 % 2 == 0 })
 ```
 
-Most property-based testing frameworks implement filters as rejection sampling — generate a value, test the predicate, throw it away and retry if it fails. This works when the valid region is large, but becomes impractical when valid values are sparse (balanced trees, well-formed inputs, values satisfying multiple constraints).
+Most property-based testing frameworks implement filters as rejection sampling: generate a value, test the predicate, throw it away and retry if it fails. This works when the valid region is large, but becomes impractical when valid values are sparse (balanced trees, well-formed inputs, values satisfying multiple constraints).
 
 Exhaust takes a different approach by default. Because generators are inspectable data structures, the framework can analyze the generator's branching points and measure how often each branch leads to a value that satisfies the predicate. It then reweights the branches to favor valid outputs before generation begins — a technique called Choice Gradient Sampling (CGS). The result is that filtered generators produce valid values efficiently even when the acceptance rate under rejection sampling would be vanishingly small.
 
