@@ -135,6 +135,110 @@ public struct ExhaustTestMacro: ExpressionMacro {
     }
 }
 
+// MARK: - #expect → #require Rewriting
+
+/// Rewrites `#expect(...)` calls to `try #require(...)` in a closure body.
+///
+/// Only rewrites top-level statements and statements inside control flow blocks.
+/// Does not recurse into nested closures. Leaves `#require` calls unchanged.
+private func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
+    let rewrittenStatements = CodeBlockItemListSyntax(
+        closure.statements.map { statement in
+            statement.with(\.item, rewriteItem(statement.item))
+        }
+    )
+    return closure.with(\.statements, rewrittenStatements)
+}
+
+/// Rewrites a single code block item, converting `#expect` → `try #require`.
+private func rewriteItem(_ item: CodeBlockItemSyntax.Item) -> CodeBlockItemSyntax.Item {
+    // Direct #expect(condition) → if (condition) == false { throw __ExhaustRuntime.DetectionFailure() }
+    if let macroExpr = item.as(MacroExpansionExprSyntax.self),
+       macroExpr.macroName.text == "expect" {
+        let leadingTrivia = macroExpr.pound.leadingTrivia
+        // Extract the condition argument (first unlabeled argument)
+        guard let conditionArg = macroExpr.arguments.first else {
+            return item
+        }
+        let condition = conditionArg.expression.trimmedDescription
+        let ifStmt: ExprSyntax = """
+        \(raw: leadingTrivia)if (\(raw: condition)) == false { throw __ExhaustRuntime.DetectionFailure() }
+        """
+        return CodeBlockItemSyntax.Item(ifStmt)
+    }
+
+    // try #expect(condition) → same rewrite (drop the try)
+    if let tryExpr = item.as(TryExprSyntax.self),
+       let macroExpr = tryExpr.expression.as(MacroExpansionExprSyntax.self),
+       macroExpr.macroName.text == "expect" {
+        let leadingTrivia = tryExpr.tryKeyword.leadingTrivia
+        guard let conditionArg = macroExpr.arguments.first else {
+            return item
+        }
+        let condition = conditionArg.expression.trimmedDescription
+        let ifStmt: ExprSyntax = """
+        \(raw: leadingTrivia)if (\(raw: condition)) == false { throw __ExhaustRuntime.DetectionFailure() }
+        """
+        return CodeBlockItemSyntax.Item(ifStmt)
+    }
+
+    // #require stays as #require — it already throws
+    if let macroExpr = item.as(MacroExpansionExprSyntax.self),
+       macroExpr.macroName.text == "require" {
+        // Wrap in try if not already
+        let leadingTrivia = macroExpr.pound.leadingTrivia
+        let requireWithoutTrivia = macroExpr.with(\.pound, macroExpr.pound.with(\.leadingTrivia, []))
+        let tryExpr = TryExprSyntax(
+            tryKeyword: .keyword(.try, leadingTrivia: leadingTrivia, trailingTrivia: .space),
+            expression: ExprSyntax(requireWithoutTrivia)
+        )
+        return CodeBlockItemSyntax.Item(ExprSyntax(tryExpr))
+    }
+
+    // Recurse into control flow bodies (if, guard, for, while, do, switch)
+    // but not into nested closures.
+    if let ifExpr = item.as(IfExprSyntax.self) {
+        return CodeBlockItemSyntax.Item(ExprSyntax(rewriteIf(ifExpr)))
+    }
+    if let guardStmt = item.as(GuardStmtSyntax.self) {
+        let body = rewriteCodeBlock(guardStmt.body)
+        return CodeBlockItemSyntax.Item(StmtSyntax(guardStmt.with(\.body, body)))
+    }
+    if let doStmt = item.as(DoStmtSyntax.self) {
+        let body = rewriteCodeBlock(doStmt.body)
+        return CodeBlockItemSyntax.Item(StmtSyntax(doStmt.with(\.body, body)))
+    }
+    if let forStmt = item.as(ForStmtSyntax.self) {
+        let body = rewriteCodeBlock(forStmt.body)
+        return CodeBlockItemSyntax.Item(StmtSyntax(forStmt.with(\.body, body)))
+    }
+    if let whileStmt = item.as(WhileStmtSyntax.self) {
+        let body = rewriteCodeBlock(whileStmt.body)
+        return CodeBlockItemSyntax.Item(StmtSyntax(whileStmt.with(\.body, body)))
+    }
+
+    return item
+}
+
+private func rewriteIf(_ ifExpr: IfExprSyntax) -> IfExprSyntax {
+    var result = ifExpr.with(\.body, rewriteCodeBlock(ifExpr.body))
+    if let elseBody = ifExpr.elseBody {
+        switch elseBody {
+        case let .codeBlock(block):
+            result = result.with(\.elseBody, .codeBlock(rewriteCodeBlock(block)))
+        case let .ifExpr(nestedIf):
+            result = result.with(\.elseBody, .ifExpr(rewriteIf(nestedIf)))
+        }
+    }
+    return result
+}
+
+private func rewriteCodeBlock(_ block: CodeBlockSyntax) -> CodeBlockSyntax {
+    block.with(\.statements, CodeBlockItemListSyntax(
+        block.statements.map { $0.with(\.item, rewriteItem($0.item)) }
+    ))
+}
+
 // MARK: - Shared Expansion Logic
 
 /// Expands the trailing-closure form of `#exhaust`.
@@ -163,6 +267,28 @@ private func expandExhaust(
 
     let closureText = trailingClosure.trimmedDescription
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
+
+    if runtimeFunction == "__exhaustExpect" {
+        // Void path: pass both the original closure (for final re-run with #expect)
+        // and a detection closure (with #expect → #require, for pipeline via try/catch).
+        let detectionClosure = rewriteExpectToRequire(trailingClosure)
+        let detectionText = detectionClosure.description
+
+        return """
+        __ExhaustRuntime.__exhaustExpect(
+            \(raw: generatorExpr),
+            settings: \(raw: settingsArray),
+            sourceCode: "\(raw: sourceCode)",
+            fileID: #fileID,
+            filePath: #filePath,
+            line: #line,
+            column: #column,
+            function: #function,
+            property: \(raw: closureText),
+            detection: \(raw: detectionText)
+        )
+        """
+    }
 
     return """
     __ExhaustRuntime.\(raw: runtimeFunction)(

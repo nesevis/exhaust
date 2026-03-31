@@ -24,6 +24,11 @@ private func withKnownIssue(
 #endif
 
 public enum __ExhaustRuntime { // swiftlint:disable:this type_name
+    /// Thrown by the detection closure when a rewritten `#expect` condition evaluates to `false`.
+    ///
+    /// This is a plain error — not a Swift Testing issue — so it produces no test output.
+    /// The pipeline's try/catch detects it as a property failure without any console noise.
+    public struct DetectionFailure: Error {} // swiftlint:disable:this nesting
     /// Runs a property test with the given generator, settings, and property.
     /// This is the runtime target of the `#exhaust` macro expansion.
     ///
@@ -99,6 +104,17 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             }
         }
         
+        // Merge trait configuration — trait provides defaults, inline settings override.
+        #if canImport(Testing)
+        if let traitConfig = ExhaustTraitConfiguration.current {
+            // Budget: trait is the default, only applied if no inline .budget was specified.
+            let hasInlineBudget = settings.contains { if case .budget = $0 { return true } else { return false } }
+            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                budget = traitBudget
+            }
+        }
+        #endif
+
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
         let reductionConfig = Interpreters.BonsaiReducerConfiguration(from: budget.reducerBudget)
@@ -532,25 +548,20 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     // MARK: - Void Property (Swift Testing #expect / #require)
 
-    /// Wraps a `(Output) throws -> Void` property into `(Output) -> Bool` using `withKnownIssue`.
+    /// Wraps a throwing `Void`-returning closure into `(Output) -> Bool` via try/catch.
     ///
-    /// During each invocation, `withKnownIssue(isIntermittent: true)` suppresses all `#expect` failures
-    /// and thrown errors. The `matching:` closure sets `didFail` as a side effect to detect failure.
-    /// When `Testing` is not available, the noop shim just runs the body — only thrown errors are detected.
-    private static func wrapVoidProperty<Output>(
-        _ property: @escaping @Sendable (Output) throws -> Void
+    /// The detection closure has `#expect` rewritten to `#require` by the macro,
+    /// so assertion failures throw and are caught here. No `withKnownIssue` needed.
+    private static func wrapDetectionProperty<Output>(
+        _ detection: @escaping @Sendable (Output) throws -> Void
     ) -> @Sendable (Output) -> Bool {
         { value in
-            // Both closures execute synchronously on the same thread within withKnownIssue.
-            nonisolated(unsafe) var didFail = false
-            // The matcher always returns true, so errors are always absorbed — try? is safe.
-            try? withKnownIssue(isIntermittent: true) {
-                try property(value)
-            } matching: { _ in
-                didFail = true
+            do {
+                try detection(value)
                 return true
+            } catch {
+                return false
             }
-            return didFail == false
         }
     }
 
@@ -568,20 +579,83 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         line: UInt = #line,
         column: UInt = #column,
         function: StaticString = #function,
-        property: @Sendable (Output) throws -> Void
+        property: @Sendable (Output) throws -> Void,
+        detection: @Sendable (Output) throws -> Void
     ) -> Output? {
-        withoutActuallyEscaping(property) { property in
-            let boolProperty = wrapVoidProperty(property)
+        withoutActuallyEscaping(detection) { detection in
+            let boolProperty = wrapDetectionProperty(detection)
+
+            // Wrap the entire pipeline in withKnownIssue to suppress #require issues
+            // from the detection closure during coverage/sampling/reduction.
+            // The final re-run (outside this scope) produces the user-facing #expect output.
+            nonisolated(unsafe) var pipelineResult: Output?
+            nonisolated(unsafe) var capturedSeed: UInt64?
+            try? withKnownIssue(isIntermittent: true) {
+
+            // Replay regression seeds from the trait before the normal pipeline.
+            #if canImport(Testing)
+            let suppressIssueReportingForRegressions = settings.contains { setting in
+                if case .suppressIssueReporting = setting { return true }
+                return false
+            }
+            if let traitConfig = ExhaustTraitConfiguration.current {
+                for encodedSeed in traitConfig.regressions {
+                    guard let seed = CrockfordBase32.decode(encodedSeed) else {
+                        reportIssue(
+                            "Invalid regression seed: \(encodedSeed)",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                        continue
+                    }
+                    let replayResult = __exhaust(
+                        gen,
+                        settings: [
+                            .replay(.numeric(seed)),
+                            .suppressIssueReporting,
+                        ] + settings.filter { setting in
+                            // Forward budget from inline settings; trait budget is merged by __exhaust.
+                            if case .budget = setting { return true }
+                            return false
+                        },
+                        sourceCode: sourceCode,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                        function: function,
+                        property: boolProperty
+                    )
+                    if replayResult == nil {
+                        if suppressIssueReportingForRegressions == false {
+                            reportIssue(
+                                "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column
+                            )
+                        }
+                    } else if let counterexample = replayResult {
+                        // Regression seed still fails — store for final re-run outside withKnownIssue.
+                        pipelineResult = counterexample
+                        capturedSeed = seed
+                        return // exit withKnownIssue scope
+                    }
+                }
+            }
+            #endif
 
             // Capture the actual seed from the Bool pipeline via .onReport.
-            var capturedSeed: UInt64?
             var augmentedSettings = settings + [.suppressIssueReporting]
             augmentedSettings.append(.onReport { report in
                 capturedSeed = report.seed
             })
 
             // Delegate to the Bool pipeline with suppressed issue reporting.
-            let counterexample = __exhaust(
+            pipelineResult = __exhaust(
                 gen,
                 settings: augmentedSettings,
                 sourceCode: sourceCode,
@@ -593,7 +667,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 property: boolProperty
             )
 
-            guard let counterexample else { return nil }
+            } // withKnownIssue — all #require issues from the detection closure are now suppressed.
+
+            guard let counterexample = pipelineResult else { return nil }
 
             // When suppressIssueReporting is set, the caller is asserting on the return value.
             // Skip the final re-run and replay message.

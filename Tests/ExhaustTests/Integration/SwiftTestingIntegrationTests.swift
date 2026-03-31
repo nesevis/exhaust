@@ -192,4 +192,73 @@ import ExhaustCore
         let seed = ReplaySeed.encoded("INVALID!!!")
         #expect(seed.resolve() == nil)
     }
+
+    // MARK: - Configuration Trait
+
+    @Test(.exhaust(.expensive))
+    func traitSetsBudget() {
+        // The trait sets .expensive (sampling: 500). Verify the trait budget is applied
+        // instead of the default .expedient (200) by checking the iteration count.
+        var capturedReport: ExhaustReport?
+        let result = #exhaust(
+            #gen(.int(in: Int.min ... Int.max)),
+            .suppressIssueReporting,
+            .randomOnly,
+            .onReport { report in
+                capturedReport = report
+            }
+        ) { _ in
+            true // always passes — runs the full sampling budget
+        }
+        #expect(result == nil)
+        // .expensive sampling budget is 500; .expedient would be 200.
+        #expect(capturedReport?.randomSamplingInvocations == 500, "Trait should set .expensive budget (500), not default .expedient (200)")
+    }
+
+    @Test(.exhaust(.expedient))
+    func traitBudgetOverriddenByInline() {
+        // Trait sets .expedient, inline sets a custom budget. Inline should win.
+        var capturedReport: ExhaustReport?
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 10)),
+            .suppressIssueReporting,
+            .budget(.custom(coverage: 0, sampling: 5, reduction: .fast)),
+            .randomOnly,
+            .onReport { report in
+                capturedReport = report
+            }
+        ) { value in
+            value >= 0
+        }
+        #expect(result == nil)
+        // The inline budget of 5 sampling iterations should be used, not the trait's .expedient (200).
+        #expect(capturedReport?.randomSamplingInvocations ?? 0 <= 5)
+    }
+
+    @Test(.exhaust(regressions: "1A"))
+    func traitWithRegressionSeedThatFails() {
+        // Seed "1A" (= 42) should reproduce a counterexample for value < 50 on 0...100.
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .suppressIssueReporting
+        ) { value in
+            #expect(value < 50)
+        }
+        #expect(result != nil, "Regression seed should find a counterexample")
+    }
+
+    @Test(.exhaust(.expedient, regressions: "0"))
+    func traitWithPassingRegressionSeed() {
+        // Seed "0" should produce a value that passes value >= 0 on 0...100.
+        // The regression "now passes" warning should be emitted as an issue.
+        // Since suppressing, we just verify the pipeline continues to the normal run.
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .suppressIssueReporting
+        ) { value in
+            #expect(value >= 0)
+        }
+        #expect(result == nil, "All values in 0...100 should pass")
+    }
 }
+    

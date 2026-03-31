@@ -54,7 +54,7 @@ extension ReplaySeed: ExpressibleByStringLiteral {
 /// | `.expedient` | 200 | 200 | `.fast` |
 /// | `.expensive` | 500 | 500 | `.fast` |
 /// | `.exorbitant` | 2000 | 2000 | `.slow` |
-public enum ExhaustBudget {
+public enum ExhaustBudget: Sendable {
     /// 200 coverage rows, 200 random samplings, fast reduction. The default for property tests.
     case expedient
     /// 500 coverage rows, 500 random samplings, fast reduction. The default for contract tests.
