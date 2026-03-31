@@ -304,8 +304,15 @@ extension ReductionState {
                         ? makeSpeculativeDecoder()
                         : scopeDecoder
                     let category = slot.spanCategory
+                    var deletionEncoder = DeletionEncoder(spanCategory: category, spans: targets)
+                    // For sequence element deletion inside bind-controlled regions,
+                    // also decrement the bind-inner value so the candidate has a
+                    // consistent (shorter) structure that the exact decoder accepts.
+                    if category == .sequenceElements {
+                        deletionEncoder.bindInnerValueIndex = scope.bindInnerValueIndex
+                    }
                     if try runComposable(
-                        DeletionEncoder(spanCategory: category, spans: targets),
+                        deletionEncoder,
                         decoder: decoder,
                         positionRange: fullRange,
                         context: deletionContext,
@@ -743,7 +750,17 @@ extension ReductionState {
                 let region = bindSpanIndex.regions[regionIndex]
                 let boundRange = region.boundRange
                 let boundDepth = bindSpanIndex.bindDepth(at: boundRange.lowerBound)
-                scopes.append(DeletionScope(positionRange: boundRange, depth: boundDepth))
+                // Find the value entry in the inner range that controls the bound sequence length.
+                var innerValueIndex: Int?
+                for index in region.innerRange where sequence[index].value != nil {
+                    innerValueIndex = index
+                    break
+                }
+                scopes.append(DeletionScope(
+                    positionRange: boundRange,
+                    depth: boundDepth,
+                    bindInnerValueIndex: innerValueIndex
+                ))
             case .structural(.branchSelector):
                 guard let subtreeRange = node.scopeRange else { continue }
                 let depth = bindIndex?.bindDepth(at: subtreeRange.lowerBound) ?? 0
@@ -778,4 +795,14 @@ struct DeletionScope {
 
     /// The bind depth for decoder selection.
     let depth: Int
+
+    /// Sequence index of the bind-inner value that controls the sequence length within this scope.
+    /// Set for bind-inner scopes where the inner value determines the bound sequence length.
+    let bindInnerValueIndex: Int?
+
+    init(positionRange: ClosedRange<Int>?, depth: Int, bindInnerValueIndex: Int? = nil) {
+        self.positionRange = positionRange
+        self.depth = depth
+        self.bindInnerValueIndex = bindInnerValueIndex
+    }
 }
