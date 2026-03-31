@@ -4,6 +4,7 @@
 // to signal that this is macro infrastructure, not public API.
 import Darwin
 import ExhaustCore
+import Foundation
 import IssueReporting
 
 #if canImport(Testing)
@@ -92,7 +93,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var useRandomOnly = false
         var visualize = false
         var onReportClosure: ((ExhaustReport) -> Void)?
-        
+
         for setting in settings {
             switch setting {
             case let .budget(b):
@@ -177,7 +178,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "coverage_skipped",
-                "Coverage phase skipped (randomOnly mode)"
+                "Coverage phase skipped"
             )
         } else if seed != nil {
             ExhaustLog.notice(
@@ -722,6 +723,211 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
             return counterexample
         }
+    }
+
+    // MARK: - Async Property
+
+    /// Runs a property test with an async `Bool`-returning property closure.
+    ///
+    /// Wraps the async property into a synchronous closure using `Task` + `DispatchSemaphore`, then dispatches the entire synchronous core (coverage, sampling, reduction) onto a GCD thread where semaphore-blocking is safe. This avoids deadlocking the cooperative thread pool.
+    @discardableResult
+    public static func __exhaustAsync<Output>( // swiftlint:disable:this function_parameter_count
+        _ gen: ReflectiveGenerator<Output>,
+        settings: [ExhaustSettings<Output>],
+        sourceCode: String?,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        function: StaticString = #function,
+        property: @escaping @Sendable (Output) async throws -> Bool
+    ) async -> Output? {
+        let syncProperty: @Sendable (Output) -> Bool = { value in
+            let valueBox = SendableBox(value)
+            let resultBox = SendableBox(false)
+            let semaphore = DispatchSemaphore(value: 0)
+            Task { @Sendable in
+                resultBox.value = (try? await property(valueBox.value)) ?? false
+                semaphore.signal()
+            }
+            semaphore.wait()
+            return resultBox.value
+        }
+
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                let result = __exhaust(
+                    gen,
+                    settings: settings,
+                    sourceCode: sourceCode,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    function: function,
+                    property: syncProperty
+                )
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
+    /// Runs a property test with an async `Void`-returning property that uses `#expect`/`#require` for assertions.
+    ///
+    /// Wraps the async detection closure into a synchronous `Bool`-returning form, dispatches the pipeline onto a GCD thread via `withCheckedContinuation`, then performs the final re-run in the async context so `#expect` failures record naturally with reduced values.
+    @discardableResult
+    public static func __exhaustExpectAsync<Output>( // swiftlint:disable:this function_body_length function_parameter_count
+        _ gen: ReflectiveGenerator<Output>,
+        settings: [ExhaustSettings<Output>],
+        sourceCode: String?,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        function: StaticString = #function,
+        property: @escaping @Sendable (Output) async throws -> Void,
+        detection: @escaping @Sendable (Output) async throws -> Void
+    ) async -> Output? {
+        // Wrap async detection into sync Bool (Task + semaphore, called from GCD thread).
+        let syncDetection: @Sendable (Output) -> Bool = { value in
+            let valueBox = SendableBox(value)
+            let resultBox = SendableBox(true)
+            let semaphore = DispatchSemaphore(value: 0)
+            Task { @Sendable in
+                do {
+                    try await detection(valueBox.value)
+                } catch {
+                    resultBox.value = false
+                }
+                semaphore.signal()
+            }
+            semaphore.wait()
+            return resultBox.value
+        }
+
+        // Capture pipeline output across the GCD boundary.
+        nonisolated(unsafe) var pipelineResult: Output?
+        nonisolated(unsafe) var capturedSeed: UInt64?
+
+        // Dispatch the sync core (with withKnownIssue wrapping) onto a GCD thread.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async {
+                try? withKnownIssue(isIntermittent: true) {
+
+                // Replay regression seeds from the trait before the normal pipeline.
+                #if canImport(Testing)
+                let suppressIssueReportingForRegressions = settings.contains { setting in
+                    if case .suppressIssueReporting = setting { return true }
+                    return false
+                }
+                if let traitConfig = ExhaustTraitConfiguration.current {
+                    for encodedSeed in traitConfig.regressions {
+                        guard let seed = CrockfordBase32.decode(encodedSeed) else {
+                            reportIssue(
+                                "Invalid regression seed: \(encodedSeed)",
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column
+                            )
+                            continue
+                        }
+                        let replayResult = __exhaust(
+                            gen,
+                            settings: [
+                                .replay(.numeric(seed)),
+                                .suppressIssueReporting,
+                            ] + settings.filter { setting in
+                                if case .budget = setting { return true }
+                                return false
+                            },
+                            sourceCode: sourceCode,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            function: function,
+                            property: syncDetection
+                        )
+                        if replayResult == nil {
+                            if suppressIssueReportingForRegressions == false {
+                                reportIssue(
+                                    "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                                    fileID: fileID,
+                                    filePath: filePath,
+                                    line: line,
+                                    column: column
+                                )
+                            }
+                        } else if let counterexample = replayResult {
+                            pipelineResult = counterexample
+                            capturedSeed = seed
+                            return // exit withKnownIssue scope
+                        }
+                    }
+                }
+                #endif
+
+                // Capture the actual seed from the Bool pipeline via .onReport.
+                var augmentedSettings = settings + [.suppressIssueReporting]
+                augmentedSettings.append(.onReport { report in
+                    capturedSeed = report.seed
+                })
+
+                // Delegate to the Bool pipeline with suppressed issue reporting.
+                pipelineResult = __exhaust(
+                    gen,
+                    settings: augmentedSettings,
+                    sourceCode: sourceCode,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    function: function,
+                    property: syncDetection
+                )
+
+                } // withKnownIssue
+
+                continuation.resume()
+            }
+        }
+
+        guard let counterexample = pipelineResult else { return nil }
+
+        // When suppressIssueReporting is set, the caller is asserting on the return value.
+        let suppressIssueReporting = settings.contains { setting in
+            if case .suppressIssueReporting = setting { return true }
+            return false
+        }
+        if suppressIssueReporting == false {
+            // Final re-run in the async context — #expect failures record naturally with reduced values.
+            do {
+                try await property(counterexample)
+            } catch {
+                // Error propagates to Swift Testing naturally.
+            }
+
+            // Emit the replay seed as the only Exhaust artifact.
+            let replayMessage: String
+            if let seed = capturedSeed {
+                let encoded = CrockfordBase32.encode(seed)
+                replayMessage = "Reproduce: .replay(\"\(encoded)\")"
+                print("exhaust:\(function):replay:\(encoded)")
+            } else {
+                replayMessage = "No replay seed — found via systematic combinatorial coverage."
+            }
+
+            reportIssue(
+                replayMessage,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
+
+        return counterexample
     }
 
     // MARK: - Explore

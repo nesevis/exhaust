@@ -105,6 +105,100 @@ struct ExhaustMacroTests {
         )
     }
 
+    // MARK: - Async Expansion Tests
+
+    @Test("Async Bool trailing closure expands to __exhaustAsync")
+    func asyncBoolTrailingClosure() {
+        let asyncMacros: [String: any Macro.Type] = [
+            "exhaust": ExhaustAsyncTestMacro.self,
+        ]
+        assertMacroExpansion(
+            """
+            #exhaust(personGen) { person in
+                await actor.validate(person)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustAsync(
+                personGen,
+                settings: [],
+                sourceCode: "await actor.validate(person)",
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { person in
+                await actor.validate(person)
+            }
+            )
+            """,
+            macros: asyncMacros
+        )
+    }
+
+    @Test("Async Void trailing closure with #expect expands to __exhaustExpectAsync")
+    func asyncVoidTrailingClosure() {
+        let asyncMacros: [String: any Macro.Type] = [
+            "exhaust": ExhaustAsyncTestMacro.self,
+        ]
+        assertMacroExpansion(
+            """
+            #exhaust(personGen) { person in
+                let result = await actor.validate(person)
+                #expect(result)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpectAsync(
+                personGen,
+                settings: [],
+                sourceCode: "let result = await actor.validate(person)\\n#expect(result)",
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { person in
+                let result = await actor.validate(person)
+                #expect(result)
+            },
+                detection: { person in
+                let result = await actor.validate(person)
+                try __ExhaustRuntime.__detectRequire(result)
+            }
+            )
+            """,
+            macros: asyncMacros
+        )
+    }
+
+    @Test("Async function reference expands to __exhaustAsync")
+    func asyncFunctionReference() {
+        let asyncMacros: [String: any Macro.Type] = [
+            "exhaust": ExhaustAsyncTestMacro.self,
+        ]
+        assertMacroExpansion(
+            """
+            #exhaust(personGen, property: asyncIsValid)
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustAsync(
+                personGen,
+                settings: [],
+                sourceCode: nil,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: asyncIsValid
+            )
+            """,
+            macros: asyncMacros
+        )
+    }
+
     @Test("Missing property produces error")
     func missingProperty() {
         assertMacroExpansion(

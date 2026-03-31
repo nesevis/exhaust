@@ -8,14 +8,6 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
-/// Mutable box for passing a value-type spec across the Task boundary.
-final class SpecBox<Spec>: @unchecked Sendable {
-    var spec: Spec
-    init(_ spec: Spec) {
-        self.spec = spec
-    }
-}
-
 /// Runs an async contract property test for the given specification type.
 ///
 /// Generates command sequences using the spec's synthesized `commandGenerator`, executes each sequence against a fresh instance using async `run`/`checkInvariants`, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
@@ -74,22 +66,22 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     // This closure is called from a GCD thread where semaphore.wait() is safe.
     nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
     let property: @Sendable ([Spec.Command]) -> Bool = { commands in
-        let box = SpecBox(specInit())
-        let resultBox = SpecBox(true)
+        let box = SendableBox(specInit())
+        let resultBox = SendableBox(true)
         let semaphore = DispatchSemaphore(value: 0)
 
         Task { @Sendable in
             for command in commands {
                 do {
-                    try await box.spec.run(command)
-                    try await box.spec.checkInvariants()
+                    try await box.value.run(command)
+                    try await box.value.checkInvariants()
                 } catch is ContractSkip {
                     continue
                 } catch is ContractCheckFailure {
-                    resultBox.spec = false
+                    resultBox.value = false
                     break
                 } catch {
-                    resultBox.spec = false
+                    resultBox.value = false
                     break
                 }
             }
@@ -97,7 +89,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         }
 
         semaphore.wait()
-        return resultBox.spec
+        return resultBox.value
     }
 
     // Snapshot mutable settings into let bindings for Sendable capture.

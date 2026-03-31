@@ -39,100 +39,103 @@ public struct ExhaustTestMacro: ExpressionMacro {
         }
     }
 
-    /// Determines whether a trailing closure should use the Void assertion path.
-    ///
-    /// Returns `true` (Void path) when the closure body cannot be a Bool-returning predicate:
-    /// - Multi-statement closures with no `return <value>`.
-    /// - Single statements that are control flow (`if`, `guard`, `for`, `while`, `do`, `switch`).
-    /// - Single statements that are `#expect` or `#require` macro invocations.
-    ///
-    /// Returns `false` (Bool path) when the closure looks like a predicate:
-    /// - Single-expression closures (implicit return of a value).
-    /// - Multi-statement closures containing `return <value>`.
-    private static func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
-        let statements = closure.statements
+}
 
-        if statements.count > 1 {
-            return containsReturnWithValue(statements) == false
+// MARK: - Closure Analysis Helpers
+
+/// Determines whether a trailing closure should use the Void assertion path.
+///
+/// Returns `true` (Void path) when the closure body cannot be a Bool-returning predicate:
+/// - Multi-statement closures with no `return <value>`.
+/// - Single statements that are control flow (`if`, `guard`, `for`, `while`, `do`, `switch`).
+/// - Single statements that are `#expect` or `#require` macro invocations.
+///
+/// Returns `false` (Bool path) when the closure looks like a predicate:
+/// - Single-expression closures (implicit return of a value).
+/// - Multi-statement closures containing `return <value>`.
+func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
+    let statements = closure.statements
+
+    if statements.count > 1 {
+        return containsReturnWithValue(statements) == false
+    }
+
+    guard let onlyStatement = statements.first else { return true }
+
+    let item = onlyStatement.item
+
+    // Control flow statements are not value-returning expressions — Void path.
+    if isControlFlowStatement(Syntax(item)) {
+        return true
+    }
+
+    // #expect(...) or #require(...)
+    if let macroExpr = item.as(MacroExpansionExprSyntax.self) {
+        let name = macroExpr.macroName.text
+        if name == "expect" || name == "require" {
+            return true
         }
+    }
 
-        guard let onlyStatement = statements.first else { return true }
+    // try #require(...)
+    if let tryExpr = item.as(TryExprSyntax.self),
+       let macroExpr = tryExpr.expression.as(MacroExpansionExprSyntax.self) {
+        let name = macroExpr.macroName.text
+        if name == "expect" || name == "require" {
+            return true
+        }
+    }
 
-        let item = onlyStatement.item
+    // Single expression that returns a value — Bool path.
+    return false
+}
 
-        // Control flow statements are not value-returning expressions — Void path.
-        if isControlFlowStatement(Syntax(item)) {
+/// Checks whether a syntax node represents a control flow statement (if, guard, for, while, do, switch).
+private func isControlFlowStatement(_ node: Syntax) -> Bool {
+    node.is(IfExprSyntax.self)
+        || node.is(GuardStmtSyntax.self)
+        || node.is(ForStmtSyntax.self)
+        || node.is(WhileStmtSyntax.self)
+        || node.is(RepeatStmtSyntax.self)
+        || node.is(DoStmtSyntax.self)
+        || node.is(SwitchExprSyntax.self)
+        || node.is(ThrowStmtSyntax.self)
+        || node.as(ExpressionStmtSyntax.self).map { isControlFlowStatement(Syntax($0.expression)) } ?? false
+}
+
+/// Checks whether any statement in the closure body is a `return` with an expression value.
+private func containsReturnWithValue(_ statements: CodeBlockItemListSyntax) -> Bool {
+    for statement in statements {
+        // Direct return statement
+        if let returnStmt = statement.item.as(ReturnStmtSyntax.self),
+           returnStmt.expression != nil {
             return true
         }
 
-        // #expect(...) or #require(...)
-        if let macroExpr = item.as(MacroExpansionExprSyntax.self) {
-            let name = macroExpr.macroName.text
-            if name == "expect" || name == "require" {
-                return true
-            }
+        // Return inside if/else, guard, switch, for, while, do/catch
+        if containsReturnWithValueRecursive(Syntax(statement.item)) {
+            return true
         }
+    }
+    return false
+}
 
-        // try #require(...)
-        if let tryExpr = item.as(TryExprSyntax.self),
-           let macroExpr = tryExpr.expression.as(MacroExpansionExprSyntax.self) {
-            let name = macroExpr.macroName.text
-            if name == "expect" || name == "require" {
-                return true
-            }
+/// Recursively walks a syntax node looking for `return <value>` statements.
+private func containsReturnWithValueRecursive(_ node: Syntax) -> Bool {
+    for child in node.children(viewMode: .sourceAccurate) {
+        if let returnStmt = child.as(ReturnStmtSyntax.self),
+           returnStmt.expression != nil {
+            return true
         }
-
-        // Single expression that returns a value — Bool path.
-        return false
-    }
-
-    /// Checks whether a syntax node represents a control flow statement (if, guard, for, while, do, switch).
-    private static func isControlFlowStatement(_ node: Syntax) -> Bool {
-        node.is(IfExprSyntax.self)
-            || node.is(GuardStmtSyntax.self)
-            || node.is(ForStmtSyntax.self)
-            || node.is(WhileStmtSyntax.self)
-            || node.is(RepeatStmtSyntax.self)
-            || node.is(DoStmtSyntax.self)
-            || node.is(SwitchExprSyntax.self)
-            || node.is(ThrowStmtSyntax.self)
-            || node.as(ExpressionStmtSyntax.self).map { isControlFlowStatement(Syntax($0.expression)) } ?? false
-    }
-
-    /// Checks whether any statement in the closure body is a `return` with an expression value.
-    private static func containsReturnWithValue(_ statements: CodeBlockItemListSyntax) -> Bool {
-        for statement in statements {
-            // Direct return statement
-            if let returnStmt = statement.item.as(ReturnStmtSyntax.self),
-               returnStmt.expression != nil {
-                return true
-            }
-
-            // Return inside if/else, guard, switch, for, while, do/catch
-            if containsReturnWithValueRecursive(Syntax(statement.item)) {
-                return true
-            }
+        // Don't recurse into nested closures — their returns are their own
+        if child.is(ClosureExprSyntax.self) {
+            continue
         }
-        return false
-    }
-
-    /// Recursively walks a syntax node looking for `return <value>` statements.
-    private static func containsReturnWithValueRecursive(_ node: Syntax) -> Bool {
-        for child in node.children(viewMode: .sourceAccurate) {
-            if let returnStmt = child.as(ReturnStmtSyntax.self),
-               returnStmt.expression != nil {
-                return true
-            }
-            // Don't recurse into nested closures — their returns are their own
-            if child.is(ClosureExprSyntax.self) {
-                continue
-            }
-            if containsReturnWithValueRecursive(child) {
-                return true
-            }
+        if containsReturnWithValueRecursive(child) {
+            return true
         }
-        return false
     }
+    return false
 }
 
 // MARK: - Detection Closure Rewriting
@@ -334,7 +337,8 @@ private func expandExhaust(
 private func expandExhaustFunctionReference(
     of node: some FreestandingMacroExpansionSyntax,
     args: [LabeledExprListSyntax.Element],
-    in context: some MacroExpansionContext
+    in context: some MacroExpansionContext,
+    runtimeFunction: String = "__exhaust"
 ) throws -> ExprSyntax {
     guard args.count >= 2 else {
         context.diagnose(Diagnostic(
@@ -359,7 +363,7 @@ private func expandExhaustFunctionReference(
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
     return """
-    __ExhaustRuntime.__exhaust(
+    __ExhaustRuntime.\(raw: runtimeFunction)(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
         sourceCode: nil,
@@ -371,4 +375,40 @@ private func expandExhaustFunctionReference(
         property: \(raw: propertyExpr)
     )
     """
+}
+
+// MARK: - Async Property Macro
+
+/// Expression macro that expands `#exhaust(gen, .settings...) { value in await ... }` into a call to
+/// `__ExhaustRuntime.__exhaustAsync(...)` or `__ExhaustRuntime.__exhaustExpectAsync(...)`.
+///
+/// Identical to ``ExhaustTestMacro`` but emits the async runtime variants. Swift's overload resolution
+/// routes here when the trailing closure's type is `(T) async throws -> R`.
+public struct ExhaustAsyncTestMacro: ExpressionMacro {
+    public static func expansion(
+        of node: some FreestandingMacroExpansionSyntax,
+        in context: some MacroExpansionContext
+    ) throws -> ExprSyntax {
+        let args = node.arguments.map(\.self)
+
+        if let trailingClosure = node.trailingClosure {
+            let runtimeFunction = closureIsVoidReturning(trailingClosure)
+                ? "__exhaustExpectAsync"
+                : "__exhaustAsync"
+            return try expandExhaust(
+                of: node,
+                args: args,
+                trailingClosure: trailingClosure,
+                in: context,
+                runtimeFunction: runtimeFunction
+            )
+        } else {
+            return try expandExhaustFunctionReference(
+                of: node,
+                args: args,
+                in: context,
+                runtimeFunction: "__exhaustAsync"
+            )
+        }
+    }
 }

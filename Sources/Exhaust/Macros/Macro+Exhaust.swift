@@ -65,6 +65,19 @@ public macro exhaust<T, R>(
     property: (T) throws -> R
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
+/// Runs a property test with an async property closure.
+///
+/// Identical to the synchronous `#exhaust` overload but for properties that require `await` — for example, properties that call actor-isolated methods. Must be called with `await` since the expanded function is `async`. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; the async property closure is bridged via `Task` + semaphore.
+///
+/// - Returns: The reduced counterexample if the property fails, or `nil` if all test cases pass.
+@freestanding(expression)
+@discardableResult
+public macro exhaust<T, R>(
+    _ gen: ReflectiveGenerator<T>,
+    _ settings: ExhaustSettings<T>...,
+    property: (T) async throws -> R
+) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
+
 /// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts (invariants, postconditions, and optional model comparisons) hold after every step.
 ///
 /// ## How It Works
