@@ -79,8 +79,14 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         }
     }
 
+    /// One layer of the derivative context stack, recording how to reconstruct a full generator from a single choice site's sub-generator.
+    ///
+    /// During CGS derivative evaluation, the interpreter descends into a specific choice site. Each level of descent pushes a frame that captures the surrounding context (bind continuation or zip siblings) so that ``DerivativeContext/apply(_:)`` can reassemble the complete generator by replaying the frames in reverse.
     public enum DerivativeFrame {
+        /// A bind continuation encountered on the path to the target choice site.
         case bind(continuation: (Any) throws -> ReflectiveGenerator<Any>)
+
+        /// A zip component: the target site is inside the `index`-th child of a zip. `completed` holds already-generated values for earlier children, `allGenerators` holds all children's generators, and `continuation` is the downstream bind.
         case zipComponent(
             index: Int,
             completed: [Any],

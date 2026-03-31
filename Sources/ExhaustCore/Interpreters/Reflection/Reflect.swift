@@ -41,13 +41,16 @@ public enum Interpreters {
 
     // MARK: - Private Recursive Engine
 
-    /// The main recursive engine for reflection.
-    /// It now takes the *final output value* as a constant target throughout the recursion.
+    /// Reflects a target output value backward through a generator, reconstructing the choice tree path that produces it.
+    ///
+    /// Walks the ``FreerMonad`` spine in reverse: for `.pure`, returns the value directly; for `.impure`, calls ``interpretOperationBackward(_:onFinalOutput:outputType:pickDepth:)`` to determine which intermediate values could have produced the target, then recurses through the continuation for each candidate. The `finalOutput` is threaded unchanged through the entire recursion — each operation extracts its own intermediate from it.
+    ///
+    /// - Returns: All (value, path) pairs where the generator can produce `finalOutput`. Multiple results arise from non-injective pick operations.
     private static func reflectRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         onFinalOutput finalOutput: Any,
         pickDepth: Int = 0
-    ) throws -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
+    ) throws -> [(value: Output, path: [ChoiceTree])] {
         switch gen {
         case let .pure(value):
             // The pure value is the result for this path. No check needed here.
@@ -77,7 +80,9 @@ public enum Interpreters {
 
     // MARK: - Backward Interpreter for Individual Operations
 
-    /// This helper interprets a single operation. It receives the overall final output and determines what to do based on its own semantics.
+    /// Interprets a single ``ReflectiveOperation`` in the backward direction, producing candidate intermediate values and partial choice tree paths.
+    ///
+    /// For chooseBits: inverts the bit-pattern encoding to recover the original value. For pick: tries each branch's sub-generator via ``reflectRecursive`` and returns the branch whose output matches `finalOutput`. For sequence: reflects each element independently. For contramap: applies the backward transform to extract the inner value from `finalOutput`.
     private static func interpretOperationBackward(
         _ op: ReflectiveOperation,
         onFinalOutput finalOutput: Any,

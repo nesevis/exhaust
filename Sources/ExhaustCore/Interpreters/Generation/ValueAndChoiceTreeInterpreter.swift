@@ -104,6 +104,11 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
 
     // MARK: - Recursive Engine
 
+    /// Interprets a generator in the forward direction, producing a value and the corresponding ``ChoiceTree``.
+    ///
+    /// Walks the ``FreerMonad`` spine: `.pure` returns immediately; `.impure` dispatches the ``ReflectiveOperation`` to the appropriate handler (chooseBits, pick, sequence, filter, and so on), then feeds the result into the continuation. The `inputValue` carries the contramap input for prune/contramap operations; it is `()` at the top-level call.
+    ///
+    /// - Returns: The generated value paired with its choice tree, or `nil` if generation fails (for example, filter exhaustion or PRNG budget exceeded).
     static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
@@ -349,6 +354,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         return nil
     }
 
+    /// Generates the inner value of a contramap operation, then feeds it through the continuation.
+    ///
+    /// Contramap does not produce its own choice tree node — the inner generator's tree is passed through unchanged. The `inputValue` is forwarded to the inner generator so that prune/contramap chains compose correctly.
     @inline(__always)
     private static func handleContramap<Output>(
         _ nextGen: ReflectiveGenerator<Any>,

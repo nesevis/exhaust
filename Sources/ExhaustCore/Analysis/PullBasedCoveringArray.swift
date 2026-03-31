@@ -149,7 +149,7 @@ private struct PartialSliceRef {
 
 /// Tracks coverage for one specific t-tuple of parameter indices.
 ///
-/// Stores all `t` parameter indices because any slice can be evaluated at any column fill step.
+/// Stores all `t` parameter indices because any slice can be evaluated at any column fill step. The `strides` tuple encodes the mixed-radix multipliers for converting a tuple of domain values into a flat bit-vector index: for strength `t`, the first `t - 1` entries are meaningful (the last stride is implicitly 1). For example, at t=3 with domain sizes (d0, d1, d2), strides are (d1 * d2, d2, 1, unused). `paramIndices` and `strides` are stored as fixed-size 4-tuples rather than arrays to avoid heap allocation in this performance-critical structure.
 private struct PullCoverageSlice {
     var bits: PullBitVector
     let strides: (UInt32, UInt32, UInt32, UInt32)

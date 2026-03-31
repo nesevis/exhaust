@@ -159,6 +159,9 @@ public enum ChoiceTreeAnalysis {
     // detects pick patterns (group containing a .selected child) and
     // routes to walkPick; otherwise recurses into children.
 
+    /// Recursively walks a ``ChoiceTree``, extracting independent parameters into `parameters`.
+    ///
+    /// For `.choice` nodes, delegates to `walkChoice`. For `.group` nodes, detects pick patterns (a group containing a `.selected` child) and routes to `walkPick`; otherwise recurses into children. Returns `false` if the tree contains structure that cannot be analyzed (getSize, resize, bare branch).
     private static func walkTree(
         _ tree: ChoiceTree,
         parameters: inout [BoundaryParameter]

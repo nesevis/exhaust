@@ -207,6 +207,9 @@ public enum BoundaryCoveringArrayReplay {
 
     // MARK: - Tree Builders
 
+    /// Converts a covering array value index into a ``ChoiceTree`` leaf for a chooseBits parameter.
+    ///
+    /// Looks up the concrete bit pattern at `valueIndex` in the parameter's boundary value table, then wraps it in a `.choice` node with the original range metadata so the materializer can validate it.
     private static func buildChooseBitsTree(
         param: BoundaryParameter,
         valueIndex: UInt64,
