@@ -601,7 +601,7 @@ extension ReductionState {
         ))
 
         // Discovery lift: materialise at the target upstream value.
-        let liftResult = ReductionMaterializer.materialize(
+        let liftResult = Materializer.materialize(
             gen,
             prefix: modified,
             mode: .exact,

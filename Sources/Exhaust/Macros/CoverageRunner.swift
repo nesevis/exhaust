@@ -145,11 +145,11 @@ public enum CoverageRunner {
         guard let tree = profile.buildTree(from: row) else { return nil }
 
         let prefix = ChoiceSequence(tree)
-        let mode = ReductionMaterializer.Mode.guided(
+        let mode = Materializer.Mode.guided(
             seed: UInt64(rowIndex),
             fallbackTree: nil
         )
-        switch ReductionMaterializer.materialize(
+        switch Materializer.materialize(
             gen, prefix: prefix, mode: mode
         ) {
         case let .success(value, freshTree, _):

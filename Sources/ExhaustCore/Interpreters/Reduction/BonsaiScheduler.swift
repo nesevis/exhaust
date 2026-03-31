@@ -27,7 +27,7 @@ enum BonsaiScheduler {
         property: @escaping (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         let prefix = ChoiceSequence.flatten(initialTree)
-        guard case let .success(output, _, _) = ReductionMaterializer.materialize(
+        guard case let .success(output, _, _) = Materializer.materialize(
             gen, prefix: prefix, mode: .exact, fallbackTree: initialTree
         ) else {
             return nil
@@ -100,7 +100,7 @@ enum BonsaiScheduler {
 
         // Branch projection: materialize with picks to get full branch alternatives,
         // then try selecting the simplest branch at every site in one batch.
-        if case let .success(_, fullTree, _) = ReductionMaterializer.materialize(
+        if case let .success(_, fullTree, _) = Materializer.materialize(
             gen, prefix: state.sequence, mode: .exact, fallbackTree: initialTree,
             materializePicks: true
         ) {

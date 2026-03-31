@@ -133,7 +133,7 @@ struct ReflectAndFlattenTests {
         // Flatten the reflected tree
         let flattened = ChoiceSequence.flatten(tree)
 
-        guard case let .success(materialised, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialised, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }
@@ -484,7 +484,7 @@ struct ReflectAndFlattenTests {
         flattened.remove(at: 2)
         flattened.remove(at: 2)
 
-        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }
@@ -512,7 +512,7 @@ struct ReflectAndFlattenTests {
         // Mess with it
         flattened[2] = .value(.init(choice: .unsigned(64, .uint64), validRange: nil))
 
-        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }
@@ -539,7 +539,7 @@ struct ReflectAndFlattenTests {
         let candidate = try #require(sequenceStarts.last)
         sequence.removeSubrange((candidate - 1) ... candidate)
         try #require(ChoiceSequence.validate(sequence))
-        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }

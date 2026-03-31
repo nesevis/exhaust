@@ -93,7 +93,7 @@ struct BonsaiSchedulerTests {
         }
 
         let prefix = ChoiceSequence.flatten(tree)
-        guard case let .success(output, freshTree, _) = ReductionMaterializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(output, freshTree, _) = Materializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) else {
             Issue.record("Failed to materialize initial tree")
             return
         }
@@ -133,7 +133,7 @@ struct BonsaiSchedulerTests {
         }
 
         let prefix = ChoiceSequence.flatten(tree)
-        guard case let .success(output, freshTree, _) = ReductionMaterializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(output, freshTree, _) = Materializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) else {
             Issue.record("Failed to materialize")
             return
         }

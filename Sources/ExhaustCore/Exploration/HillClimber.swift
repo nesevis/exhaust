@@ -58,7 +58,7 @@ public enum HillClimber {
         var probePRNG = Xoshiro256(seed: probePRNGSeed)
 
         // Materialize the seed to get baseline
-        guard case let .success(baselineValue, _, _) = ReductionMaterializer.materialize(
+        guard case let .success(baselineValue, _, _) = Materializer.materialize(
             gen, prefix: currentSequence, mode: .guided(seed: probePRNG.next(), fallbackTree: nil)
         ) else {
             return .unchanged(probesUsed: 0)
@@ -127,7 +127,7 @@ public enum HillClimber {
                         var probe = currentSequence
                         probe[i] = newEntry
 
-                        let probeResult = ReductionMaterializer.materialize(
+                        let probeResult = Materializer.materialize(
                             gen,
                             prefix: probe,
                             mode: .guided(
@@ -206,7 +206,7 @@ public enum HillClimber {
                     var probe = currentSequence
                     probe[i] = .branch(.init(id: altID, validIDs: b.validIDs))
 
-                    let branchResult = ReductionMaterializer.materialize(
+                    let branchResult = Materializer.materialize(
                         gen,
                         prefix: probe,
                         mode: .guided(

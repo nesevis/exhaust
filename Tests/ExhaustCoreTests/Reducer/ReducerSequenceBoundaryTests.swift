@@ -207,7 +207,7 @@ struct ReducerSequenceBoundaryTests {
         )
 
         // The output should be materializable from the reduced sequence
-        guard case .success = ReductionMaterializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
+        guard case .success = Materializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }
@@ -226,7 +226,7 @@ struct ReducerSequenceBoundaryTests {
             try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
-        guard case let .success(rematerialized, _, _) = ReductionMaterializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }

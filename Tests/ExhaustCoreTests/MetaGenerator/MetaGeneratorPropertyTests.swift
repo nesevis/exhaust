@@ -70,7 +70,7 @@ struct MetaGeneratorPropertyTests {
                 guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { continue }
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { continue }
                 #expect(
                     anyEquals(materialized, replayed),
                     "Materialize disagrees with replay for recipe: \(recipe)"
@@ -377,7 +377,7 @@ struct MetaGeneratorPropertyTests {
                 guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { continue }
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { continue }
                 #expect(
                     anyEquals(materialized, replayed),
                     "Zip materialize disagrees with replay for recipe: \(recipe)"

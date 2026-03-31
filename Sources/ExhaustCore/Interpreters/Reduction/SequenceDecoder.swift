@@ -72,7 +72,7 @@ public enum SequenceDecoder {
         property: (Output) -> Bool,
         materializePicks: Bool
     ) -> ReductionResult<Output>? {
-        switch ReductionMaterializer.materialize(
+        switch Materializer.materialize(
             gen, prefix: consume candidate,
             mode: .exact, fallbackTree: fallbackTree,
             materializePicks: materializePicks
@@ -104,7 +104,7 @@ public enum SequenceDecoder {
         prngSalt: UInt64 = 0
     ) -> ReductionResult<Output>? {
         let seed = ZobristHash.hash(of: candidate) &+ prngSalt
-        switch ReductionMaterializer.materialize(
+        switch Materializer.materialize(
             gen,
             prefix: consume candidate,
             mode: .guided(

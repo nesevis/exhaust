@@ -11,7 +11,7 @@
 ///
 /// Group markers are transparently skipped. Sequence markers are handled explicitly.
 /// Bind handling (skip/suspend/resume) is mode-dependent — callers decide whether to invoke them.
-extension ReductionMaterializer {
+extension Materializer {
     struct Cursor: ~Copyable {
         private let entries: ChoiceSequence
         private(set) var position: Int = 0

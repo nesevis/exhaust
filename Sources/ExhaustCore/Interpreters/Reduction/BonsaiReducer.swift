@@ -91,7 +91,7 @@ public extension Interpreters {
         }
 
         if visualize, let (resultSequence, _) = result {
-            let resultTree = ReductionMaterializer.materialize(
+            let resultTree = Materializer.materialize(
                 gen,
                 prefix: resultSequence,
                 mode: .exact,
@@ -136,7 +136,7 @@ public extension Interpreters {
         }
 
         if visualize, let (resultSequence, _) = result.reduced {
-            let resultTree = ReductionMaterializer.materialize(
+            let resultTree = Materializer.materialize(
                 gen,
                 prefix: resultSequence,
                 mode: .exact,
@@ -161,7 +161,7 @@ public extension Interpreters {
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         let prefix = ChoiceSequence.flatten(tree)
-        guard case let .success(output, _, _) = ReductionMaterializer.materialize(
+        guard case let .success(output, _, _) = Materializer.materialize(
             gen, prefix: prefix, mode: .exact, fallbackTree: tree
         ) else {
             return nil

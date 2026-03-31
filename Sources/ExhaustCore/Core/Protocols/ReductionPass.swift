@@ -34,7 +34,7 @@ public extension ReductionPass {
         fallbackTree: ChoiceTree?,
         property: (Output) -> Bool
     ) -> ReductionPassResult<Output>? {
-        let mode: ReductionMaterializer.Mode
+        let mode: Materializer.Mode
         if let fallbackTree {
             let seed = ZobristHash.hash(of: candidate)
             mode = .guided(seed: seed, fallbackTree: fallbackTree)
@@ -42,7 +42,7 @@ public extension ReductionPass {
             mode = .exact
         }
 
-        switch ReductionMaterializer.materialize(gen, prefix: candidate, mode: mode) {
+        switch Materializer.materialize(gen, prefix: candidate, mode: mode) {
         case let .success(output, freshTree, _):
             guard property(output) == false else { return nil }
             return ReductionPassResult(

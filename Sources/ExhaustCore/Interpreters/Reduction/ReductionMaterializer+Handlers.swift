@@ -9,7 +9,7 @@
 
 // MARK: - Operation Handlers
 
-extension ReductionMaterializer {
+extension Materializer {
     @inline(__always)
     static func handleContramap<Output>(
         _ nextGen: ReflectiveGenerator<Any>,

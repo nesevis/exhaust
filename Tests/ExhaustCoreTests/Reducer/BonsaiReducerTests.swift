@@ -132,7 +132,7 @@ struct BonsaiReducerIntegrationTests {
         #expect(property(shrunkOutput) == false)
 
         // The shrunk sequence must be valid (materializable)
-        guard case let .success(replayedOutput, _, _) = ReductionMaterializer.materialize(gen, prefix: shrunkSequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(replayedOutput, _, _) = Materializer.materialize(gen, prefix: shrunkSequence, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }

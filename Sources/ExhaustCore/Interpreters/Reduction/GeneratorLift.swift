@@ -36,7 +36,7 @@ public struct GeneratorLift<Output>: Sendable {
     /// - Parameter seed: PRNG seed for guided mode. Different seeds produce different value assignments in the bound fibre. Ignored in exact mode.
     /// - Returns: `nil` if the lift rejected the candidate (out of range, structural mismatch).
     public func lift(_ candidate: ChoiceSequence, seed: UInt64 = 0) -> LiftResult<Output>? {
-        let materializerMode: ReductionMaterializer.Mode
+        let materializerMode: Materializer.Mode
         let fallbackTree: ChoiceTree?
 
         switch mode {
@@ -48,7 +48,7 @@ public struct GeneratorLift<Output>: Sendable {
             fallbackTree = tree
         }
 
-        switch ReductionMaterializer.materialize(
+        switch Materializer.materialize(
             gen,
             prefix: candidate,
             mode: materializerMode,

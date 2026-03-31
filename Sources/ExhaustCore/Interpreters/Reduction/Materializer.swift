@@ -1,5 +1,5 @@
 //
-//  ReductionMaterializer.swift
+//  Materializer.swift
 //  Exhaust
 //
 
@@ -16,7 +16,7 @@
 /// Guided mode computes the canonical cartesian lift in the simple fibration over trace space. The trace space is fibred: the base is the set of trace structures (which choice points exist and what controls them), and above each structure sits a fibre — the set of value assignments compatible with that structure. A structural reduction is a morphism in the base; guided mode lifts it canonically by replaying the current value assignment into the new fibre, carrying forward each value where it fits in the new domain and falling back to the fallback tree or PRNG otherwise. The three-tier resolution (prefix → fallback tree → PRNG) approximates this lift for the common case where the new domain is a strict subset of the old domain and the carried-forward value would be out of range. The canonical lift itself — carrying the value unchanged — is the unique cartesian morphism in the simple fibration (Dagnino & Gavazzo, LMCS 20:2, 2024, Example 3.5).
 ///
 /// The result intentionally omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata. The tree is the single source of truth.
-public enum ReductionMaterializer {
+public enum Materializer {
     /// Controls how values are resolved at each choice point.
     public enum Mode {
         /// Replay all values from prefix. Reject out-of-range inner values, clamp bound values.
@@ -105,7 +105,7 @@ public enum ReductionMaterializer {
 
 // MARK: - Internal Types
 
-extension ReductionMaterializer {
+extension Materializer {
     /// Sentinel thrown when exact mode encounters an out-of-range inner value or exhausted prefix.
     struct RejectionError: Error {}
 
@@ -122,8 +122,8 @@ extension ReductionMaterializer {
     }
 }
 
-extension ReductionMaterializer.Mode {
-    var internalMode: ReductionMaterializer.InternalMode {
+extension Materializer.Mode {
+    var internalMode: Materializer.InternalMode {
         switch self {
         case .exact: .exact
         case .guided: .guided
@@ -140,7 +140,7 @@ extension ReductionMaterializer.Mode {
 
 // MARK: - Recursive Engine
 
-extension ReductionMaterializer {
+extension Materializer {
     /// Split a fallback tree into callee and continuation portions for non-group operations.
     @inline(__always)
     static func decomposeNonGroupFallback(
@@ -347,7 +347,7 @@ extension ReductionMaterializer {
 
 // MARK: - Context
 
-extension ReductionMaterializer {
+extension Materializer {
     struct Context: ~Copyable {
         var cursor: Cursor
         var prng: Xoshiro256
@@ -376,4 +376,4 @@ extension ReductionMaterializer {
 
 // MARK: - InternalMode Equatable
 
-extension ReductionMaterializer.InternalMode: Equatable {}
+extension Materializer.InternalMode: Equatable {}

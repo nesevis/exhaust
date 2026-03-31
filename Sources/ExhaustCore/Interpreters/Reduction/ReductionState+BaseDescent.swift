@@ -117,7 +117,7 @@ extension ReductionState {
         // Re-materialize with picks so branch encoders see all non-selected alternatives.
         // Skip if the tree is already up to date (no acceptance since last materialization).
         if branchTreeDirty {
-            if case let .success(_, freshTree, _) = ReductionMaterializer.materialize(
+            if case let .success(_, freshTree, _) = Materializer.materialize(
                 gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
                 materializePicks: true
             ) {
@@ -683,7 +683,7 @@ extension ReductionState {
                     // These materializations are not budgeted — they are structural
                     // discovery, not candidate evaluation. Tracked for profiling visibility.
                     phaseTracker.recordInvocation()
-                    let replayResult = ReductionMaterializer.materialize(
+                    let replayResult = Materializer.materialize(
                         gen, prefix: modified, mode: .exact, fallbackTree: tree
                     )
 
