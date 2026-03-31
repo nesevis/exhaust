@@ -812,9 +812,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // 2. Build weighted choices — dead choices get weight 0,
         // live choices with all-zero fitness fall back to equal weights
         let allLiveZero = liveChoiceIndices.allSatisfy { fitnesses[$0] == 0 }
-        var isLive = ContiguousArray(repeating: false, count: choiceCount)
+        var choiceIsLive = ContiguousArray(repeating: false, count: choiceCount)
         for i in liveChoiceIndices {
-            isLive[i] = true
+            choiceIsLive[i] = true
         }
         var weightedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         weightedChoices.reserveCapacity(choices.count)
@@ -822,7 +822,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             weightedChoices.append(ReflectiveOperation.PickTuple(
                 siteID: choice.siteID,
                 id: choice.id,
-                weight: allLiveZero ? (isLive[i] ? 1 : 0) : fitnesses[i],
+                weight: allLiveZero ? (choiceIsLive[i] ? 1 : 0) : fitnesses[i],
                 generator: choice.generator
             ))
         }

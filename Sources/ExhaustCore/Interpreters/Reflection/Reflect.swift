@@ -248,8 +248,8 @@ public enum Interpreters {
                 id: UInt64, isPicked: Bool, path: ChoiceTree
             )] in
             do {
-                let subPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, pickDepth: pickDepth + 1)
-                let value = subPaths.firstNonNil(\.value)
+                let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, pickDepth: pickDepth + 1)
+                let value = reflectionPaths.firstNonNil(\.value)
 
                 var isPicked = false
                 if let equatableOutput = finalOutput as? any Equatable,
@@ -261,7 +261,7 @@ public enum Interpreters {
                         .contains(convertible.bitPattern64) ?? false
                 }
 
-                return subPaths
+                return reflectionPaths
                     .compactMap { value, pathTree in
                         guard let path = pathTree.first else {
                             return nil

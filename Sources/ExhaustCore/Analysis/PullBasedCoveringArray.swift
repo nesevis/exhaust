@@ -457,8 +457,8 @@ public struct PullBasedCoveringArrayGenerator {
     /// Evaluates partial coverage density for a candidate value across non-completing slices.
     ///
     /// Each non-completing slice's contribution is the count of compatible uncovered tuples divided by the range size (the product of unfilled domain sizes). This matches Bryce & Colbourn's unrestricted density: free factors are weighted by 1/|V_f|, so the contribution represents the *probability* that a random assignment to the unfilled factors would cover an uncovered tuple.
-    private func evaluatePartialCoverage(col: Int, candidate: UInt16) -> Double {
-        let partialRefs = partialSlicesByColumn[col]
+    private func evaluatePartialCoverage(column: Int, candidate: UInt16) -> Double {
+        let partialRefs = partialSlicesByColumn[column]
         let partialCount = partialRefs.count
         if partialCount == 0 { return 0 }
 
@@ -491,17 +491,17 @@ public struct PullBasedCoveringArrayGenerator {
     // MARK: - Strength-Specialized Row Fill
 
     private mutating func fillRow2() {
-        var col = 0
-        while col < paramCount {
-            let relevantSlices = slicesByColumn[col]
+        var column = 0
+        while column < paramCount {
+            let relevantSlices = slicesByColumn[column]
             let relevantCount = relevantSlices.count
-            let domain = ordering.reorderedDomainSizes[col]
+            let domain = ordering.reorderedDomainSizes[column]
             var bestValue: UInt16 = 0
             var bestGain = -1.0
 
             var candidate: UInt16 = 0
             while candidate < domain {
-                rowBuffer[col] = candidate
+                rowBuffer[column] = candidate
                 var gain = 0.0
 
                 // Exact gain from completing slices (tuples fully determined at this column).
@@ -519,7 +519,7 @@ public struct PullBasedCoveringArrayGenerator {
                 }
 
                 // Density-weighted partial gain from non-completing slices.
-                gain += evaluatePartialCoverage(col: col, candidate: candidate)
+                gain += evaluatePartialCoverage(column: column, candidate: candidate)
 
                 if gain > bestGain {
                     bestGain = gain
@@ -528,23 +528,23 @@ public struct PullBasedCoveringArrayGenerator {
                 candidate &+= 1
             }
 
-            rowBuffer[col] = bestValue
-            col &+= 1
+            rowBuffer[column] = bestValue
+            column &+= 1
         }
     }
 
     private mutating func fillRow3() {
-        var col = 0
-        while col < paramCount {
-            let relevantSlices = slicesByColumn[col]
+        var column = 0
+        while column < paramCount {
+            let relevantSlices = slicesByColumn[column]
             let relevantCount = relevantSlices.count
-            let domain = ordering.reorderedDomainSizes[col]
+            let domain = ordering.reorderedDomainSizes[column]
             var bestValue: UInt16 = 0
             var bestGain = -1.0
 
             var candidate: UInt16 = 0
             while candidate < domain {
-                rowBuffer[col] = candidate
+                rowBuffer[column] = candidate
                 var gain = 0.0
 
                 var slicePos = 0
@@ -561,7 +561,7 @@ public struct PullBasedCoveringArrayGenerator {
                     slicePos &+= 1
                 }
 
-                gain += evaluatePartialCoverage(col: col, candidate: candidate)
+                gain += evaluatePartialCoverage(column: column, candidate: candidate)
 
                 if gain > bestGain {
                     bestGain = gain
@@ -570,23 +570,23 @@ public struct PullBasedCoveringArrayGenerator {
                 candidate &+= 1
             }
 
-            rowBuffer[col] = bestValue
-            col &+= 1
+            rowBuffer[column] = bestValue
+            column &+= 1
         }
     }
 
     private mutating func fillRow4() {
-        var col = 0
-        while col < paramCount {
-            let relevantSlices = slicesByColumn[col]
+        var column = 0
+        while column < paramCount {
+            let relevantSlices = slicesByColumn[column]
             let relevantCount = relevantSlices.count
-            let domain = ordering.reorderedDomainSizes[col]
+            let domain = ordering.reorderedDomainSizes[column]
             var bestValue: UInt16 = 0
             var bestGain = -1.0
 
             var candidate: UInt16 = 0
             while candidate < domain {
-                rowBuffer[col] = candidate
+                rowBuffer[column] = candidate
                 var gain = 0.0
 
                 var slicePos = 0
@@ -604,7 +604,7 @@ public struct PullBasedCoveringArrayGenerator {
                     slicePos &+= 1
                 }
 
-                gain += evaluatePartialCoverage(col: col, candidate: candidate)
+                gain += evaluatePartialCoverage(column: column, candidate: candidate)
 
                 if gain > bestGain {
                     bestGain = gain
@@ -613,8 +613,8 @@ public struct PullBasedCoveringArrayGenerator {
                 candidate &+= 1
             }
 
-            rowBuffer[col] = bestValue
-            col &+= 1
+            rowBuffer[column] = bestValue
+            column &+= 1
         }
     }
 
@@ -622,9 +622,9 @@ public struct PullBasedCoveringArrayGenerator {
 
     /// Marks all tuples covered by the current row across all slices.
     private mutating func markCoverage() {
-        var col = 0
-        while col < paramCount {
-            let relevantSlices = slicesByColumn[col]
+        var column = 0
+        while column < paramCount {
+            let relevantSlices = slicesByColumn[column]
             let relevantCount = relevantSlices.count
 
             var slicePos = 0
@@ -659,7 +659,7 @@ public struct PullBasedCoveringArrayGenerator {
                 }
                 slicePos &+= 1
             }
-            col &+= 1
+            column &+= 1
         }
     }
 }

@@ -258,7 +258,7 @@ public enum ChoiceTreeAnalysis {
             return false
         }
 
-        let tag = value.tag
+        let typeTag = value.tag
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
         let isSmall = !overflow && domainSize < finiteDomainThreshold
 
@@ -268,18 +268,18 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: tag)
+                kind: .finiteChooseBits(range: range, tag: typeTag)
             )
             parameters.append(param)
         } else {
             let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
-                min: range.lowerBound, max: range.upperBound, tag: tag
+                min: range.lowerBound, max: range.upperBound, tag: typeTag
             )
             let param = BoundaryParameter(
                 index: parameters.count,
                 values: boundaryValues,
                 domainSize: UInt64(boundaryValues.count),
-                kind: .chooseBits(range: range, tag: tag)
+                kind: .chooseBits(range: range, tag: typeTag)
             )
             parameters.append(param)
         }
@@ -484,7 +484,7 @@ public enum ChoiceTreeAnalysis {
             return false
         }
 
-        let tag = value.tag
+        let typeTag = value.tag
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
         let isSmall = !overflow && domainSize < finiteDomainThreshold
 
@@ -494,18 +494,18 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: tag)
+                kind: .finiteChooseBits(range: range, tag: typeTag)
             )
             parameters.append(param)
         } else {
             let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
-                min: range.lowerBound, max: range.upperBound, tag: tag
+                min: range.lowerBound, max: range.upperBound, tag: typeTag
             )
             let param = BoundaryParameter(
                 index: parameters.count,
                 values: boundaryValues,
                 domainSize: UInt64(boundaryValues.count),
-                kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: tag)
+                kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: typeTag)
             )
             parameters.append(param)
         }
