@@ -12,6 +12,8 @@ struct PropertyTestFailure<Output> {
     let blueprint: String?
     let propertyInvocations: Int?
     var replayHint: String?
+    /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
+    var transparent: Bool = false
 
     func render(format: ExhaustLog.Format) -> String {
         switch format {
@@ -25,10 +27,15 @@ struct PropertyTestFailure<Output> {
     // MARK: - Human format
 
     private func renderHuman() -> String {
+        if transparent {
+            return renderHumanTransparent()
+        }
+
         var lines: [String] = []
 
         if let seed {
-            lines.append("Property failed (iteration \(iteration)/\(samplingBudget), seed \(seed))")
+            let encodedSeed = CrockfordBase32.encode(seed)
+            lines.append("Property failed (iteration \(iteration)/\(samplingBudget), seed \(encodedSeed))")
         } else {
             lines.append("Property failed (iteration \(iteration)/\(samplingBudget))")
         }
@@ -61,13 +68,24 @@ struct PropertyTestFailure<Output> {
 
         if let seed {
             lines.append("")
-            lines.append("Reproduce: .replay(\(seed))")
+            lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
         } else if let replayHint {
             lines.append("")
             lines.append(replayHint)
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    /// Renders only the replay seed — the `#expect` assertions provide per-value detail.
+    private func renderHumanTransparent() -> String {
+        if let seed {
+            return "Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")"
+        } else if let replayHint {
+            return replayHint
+        } else {
+            return "Property failed (no replay seed available)"
+        }
     }
 
     // MARK: - LLM-optimized format
@@ -79,7 +97,8 @@ struct PropertyTestFailure<Output> {
         var parts: [String] = []
         parts.append("\"event\":\"property_failed\"")
         if let seed {
-            parts.append("\"seed\":\(seed)")
+            let encodedSeed = CrockfordBase32.encode(seed)
+            parts.append("\"seed\":\"\(encodedSeed)\"")
         }
         parts.append("\"iteration\":\(iteration)")
         parts.append("\"samplingBudget\":\(samplingBudget)")
@@ -88,12 +107,14 @@ struct PropertyTestFailure<Output> {
             parts.append("\"source\":\"\(escapeJSON(sourceCode))\"")
         }
 
-        parts.append("\"counterexample\":\"\(escapeJSON(counterexampleDump))\"")
+        if transparent == false {
+            parts.append("\"counterexample\":\"\(escapeJSON(counterexampleDump))\"")
 
-        if let original {
-            var originalDump = ""
-            customDump(original, to: &originalDump)
-            parts.append("\"original\":\"\(escapeJSON(originalDump))\"")
+            if let original {
+                var originalDump = ""
+                customDump(original, to: &originalDump)
+                parts.append("\"original\":\"\(escapeJSON(originalDump))\"")
+            }
         }
 
         if let propertyInvocations {
@@ -101,7 +122,8 @@ struct PropertyTestFailure<Output> {
         }
 
         if let seed {
-            parts.append("\"replay\":\".replay(\(seed))\"")
+            let encodedSeed = CrockfordBase32.encode(seed)
+            parts.append("\"replay\":\".replay(\\\"\(encodedSeed)\\\")\"")
         } else if let replayHint {
             parts.append("\"replayHint\":\"\(escapeJSON(replayHint))\"")
         }

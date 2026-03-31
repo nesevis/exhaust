@@ -40,12 +40,31 @@ import ExhaustCore
 /// ```
 ///
 /// - Returns: The reduced counterexample if the property fails, or `nil` if all test cases pass.
+///
+/// ## Property Signatures
+///
+/// The property closure can return `Bool` or `Void`:
+///
+/// **Boolean predicate** — returns `true` for passing values:
+/// ```swift
+/// #exhaust(personGen) { person in person.age >= 0 }
+/// ```
+///
+/// **Swift Testing assertions** — uses `#expect` or `#require`:
+/// ```swift
+/// #exhaust(personGen) { person in
+///     #expect(person.age >= 0)
+///     #expect(person.name.isEmpty == false)
+/// }
+/// ```
+///
+/// The `Void` path detects `#expect` failures automatically (including inside helper functions) using `withKnownIssue`. After reduction, the property is re-run one final time without suppression so `#expect` failures record with the reduced values. The only Exhaust artifact is the replay seed.
 @freestanding(expression)
 @discardableResult
-public macro exhaust<T>(
+public macro exhaust<T, R>(
     _ gen: ReflectiveGenerator<T>,
     _ settings: ExhaustSettings<T>...,
-    property: (T) throws -> Bool
+    property: (T) throws -> R
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
 /// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts (invariants, postconditions, and optional model comparisons) hold after every step.

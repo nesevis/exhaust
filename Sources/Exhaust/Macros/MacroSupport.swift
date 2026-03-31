@@ -6,6 +6,23 @@ import Darwin
 import ExhaustCore
 import IssueReporting
 
+#if canImport(Testing)
+import Testing
+#else
+// Noop shim — withKnownIssue just runs the body.
+// The matching closure is never called, so #expect failures go undetected.
+// Only thrown errors (from #require or manual throws) signal failure.
+private struct _NoopIssue {} // swiftlint:disable:this type_name
+
+private func withKnownIssue(
+    isIntermittent: Bool = false,
+    _ body: () throws -> Void,
+    matching: @escaping @Sendable (_NoopIssue) -> Bool = { _ in true }
+) rethrows {
+    try body()
+}
+#endif
+
 public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Runs a property test with the given generator, settings, and property.
     /// This is the runtime target of the `#exhaust` macro expansion.
@@ -18,6 +35,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ///   - filePath: The file path of the call site (injected by macro expansion).
     ///   - line: The line number of the call site (injected by macro expansion).
     ///   - column: The column number of the call site (injected by macro expansion).
+    ///   - function: The enclosing function name (injected by macro expansion).
     ///   - property: The property to test — returns `true` for passing values.
     /// - Returns: The shrunk counterexample if the property failed, or `nil` if all iterations passed.
     @discardableResult
@@ -29,8 +47,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column,
-        property: @Sendable (Output) -> Bool
+        function: StaticString = #function,
+        property: @Sendable (Output) throws -> Bool
     ) -> Output? {
+        // The macro declaration is `throws -> R` so the parameter is throwing.
+        // Wrap into non-throwing for the internal pipeline (thrown errors → false).
+        // Uses withoutActuallyEscaping since the wrapper doesn't outlive this function.
+        return withoutActuallyEscaping(property) { property in
+        // Shadows the parameter so all downstream call sites use the non-throwing version.
+        let property: @Sendable (Output) -> Bool = { value in
+            (try? property(value)) ?? false
+        }
+
         var budget = ExhaustBudget.expedient
         var seed: UInt64?
         var suppressIssueReporting = false
@@ -44,8 +72,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             switch setting {
             case let .budget(b):
                 budget = b
-            case let .replay(s):
-                seed = s
+            case let .replay(replaySeed):
+                seed = replaySeed.resolve()
+                if seed == nil {
+                    reportIssue(
+                        "Invalid replay seed: \(replaySeed)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    return nil
+                }
             case .suppressIssueReporting:
                 suppressIssueReporting = true
             case let .reflecting(value):
@@ -322,7 +360,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             maxRuns: samplingBudget
         )
         let actualSeed = generator.baseSeed
-        
+        report.seed = actualSeed
+
         do { while let (next, tree) = try generator.next() {
             iterations += 1
             if property(next) == false {
@@ -488,10 +527,114 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             reduction: 0
         )
         return nil
+        } // withoutActuallyEscaping
     }
-    
+
+    // MARK: - Void Property (Swift Testing #expect / #require)
+
+    /// Wraps a `(Output) throws -> Void` property into `(Output) -> Bool` using `withKnownIssue`.
+    ///
+    /// During each invocation, `withKnownIssue(isIntermittent: true)` suppresses all `#expect` failures
+    /// and thrown errors. The `matching:` closure sets `didFail` as a side effect to detect failure.
+    /// When `Testing` is not available, the noop shim just runs the body — only thrown errors are detected.
+    private static func wrapVoidProperty<Output>(
+        _ property: @escaping @Sendable (Output) throws -> Void
+    ) -> @Sendable (Output) -> Bool {
+        { value in
+            // Both closures execute synchronously on the same thread within withKnownIssue.
+            nonisolated(unsafe) var didFail = false
+            // The matcher always returns true, so errors are always absorbed — try? is safe.
+            try? withKnownIssue(isIntermittent: true) {
+                try property(value)
+            } matching: { _ in
+                didFail = true
+                return true
+            }
+            return didFail == false
+        }
+    }
+
+    /// Runs a property test with a `Void`-returning property that uses `#expect`/`#require` for assertions.
+    ///
+    /// Wraps the property into a `Bool`-returning form via `withKnownIssue`, delegates to the existing pipeline,
+    /// then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
+    @discardableResult
+    public static func __exhaustExpect<Output>( // swiftlint:disable:this function_body_length function_parameter_count
+        _ gen: ReflectiveGenerator<Output>,
+        settings: [ExhaustSettings<Output>],
+        sourceCode: String?,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        function: StaticString = #function,
+        property: @Sendable (Output) throws -> Void
+    ) -> Output? {
+        withoutActuallyEscaping(property) { property in
+            let boolProperty = wrapVoidProperty(property)
+
+            // Capture the actual seed from the Bool pipeline via .onReport.
+            var capturedSeed: UInt64?
+            var augmentedSettings = settings + [.suppressIssueReporting]
+            augmentedSettings.append(.onReport { report in
+                capturedSeed = report.seed
+            })
+
+            // Delegate to the Bool pipeline with suppressed issue reporting.
+            let counterexample = __exhaust(
+                gen,
+                settings: augmentedSettings,
+                sourceCode: sourceCode,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                function: function,
+                property: boolProperty
+            )
+
+            guard let counterexample else { return nil }
+
+            // When suppressIssueReporting is set, the caller is asserting on the return value.
+            // Skip the final re-run and replay message.
+            let suppressIssueReporting = settings.contains { setting in
+                if case .suppressIssueReporting = setting { return true }
+                return false
+            }
+            if suppressIssueReporting == false {
+                // Final re-run without withKnownIssue — #expect failures record naturally with reduced values.
+                do {
+                    try property(counterexample)
+                } catch {
+                    // Error propagates to Swift Testing naturally.
+                }
+
+                // Emit the replay seed as the only Exhaust artifact.
+                let replayMessage: String
+                if let seed = capturedSeed {
+                    let encoded = CrockfordBase32.encode(seed)
+                    replayMessage = "Reproduce: .replay(\"\(encoded)\")"
+                    // Structured replay tag for agents
+                    print("exhaust:\(function):replay:\(encoded)")
+                } else {
+                    replayMessage = "No replay seed — found via systematic combinatorial coverage."
+                }
+
+                reportIssue(
+                    replayMessage,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            }
+
+            return counterexample
+        }
+    }
+
     // MARK: - Explore
-    
+
     /// Runs a feedback-guided property test with hill-climbing mutation.
     /// This is the runtime target of the `#explore` macro expansion.
     @discardableResult
@@ -516,8 +659,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             switch setting {
             case let .samplingBudget(n):
                 samplingBudget = n
-            case let .replay(s):
-                seed = s
+            case let .replay(replaySeed):
+                seed = replaySeed.resolve()
+                if seed == nil {
+                    reportIssue(
+                        "Invalid replay seed: \(replaySeed)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    return nil
+                }
             case let .reductionBudget(config):
                 reductionConfig = config
             case .suppressIssueReporting:

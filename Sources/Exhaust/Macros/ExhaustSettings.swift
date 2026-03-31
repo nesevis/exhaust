@@ -8,6 +8,43 @@
 // ```
 import ExhaustCore
 
+/// A replay seed for deterministic reproduction, accepting either a raw `UInt64` or a Crockford Base32 string.
+///
+/// ```swift
+/// .replay(42)                // UInt64 literal
+/// .replay("3RT5GH8KM2")     // Crockford Base32
+/// ```
+public enum ReplaySeed: Sendable {
+    /// A raw numeric seed.
+    case numeric(UInt64)
+    /// A Crockford Base32 encoded seed string.
+    case encoded(String)
+
+    /// Resolves the seed to a `UInt64` value.
+    ///
+    /// - Returns: The numeric seed, or `nil` if the encoded string is invalid.
+    public func resolve() -> UInt64? {
+        switch self {
+        case let .numeric(value):
+            value
+        case let .encoded(string):
+            CrockfordBase32.decode(string)
+        }
+    }
+}
+
+extension ReplaySeed: ExpressibleByIntegerLiteral {
+    public init(integerLiteral value: UInt64) {
+        self = .numeric(value)
+    }
+}
+
+extension ReplaySeed: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = .encoded(value)
+    }
+}
+
 /// Controls the iteration budgets for coverage, random sampling, and reduction.
 ///
 /// Three named presets cover common use cases. Use `.custom` for fine-grained control.
@@ -63,7 +100,13 @@ public enum ExhaustSettings<Output> {
     case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
-    case replay(UInt64)
+    ///
+    /// Accepts a raw `UInt64` or a Crockford Base32 string:
+    /// ```swift
+    /// .replay(42)                // numeric
+    /// .replay("3RT5GH8KM2")     // Crockford Base32
+    /// ```
+    case replay(ReplaySeed)
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///
