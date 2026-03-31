@@ -60,6 +60,7 @@ Exhaust found a five-element counterexample and reduced it to two elements — t
 - [Composing Generators](#composing-generators)
 - [Recursive Generators](#recursive-generators)
 - [Running Properties](#running-properties)
+  - [Using `#expect` and `#require`](#using-expect-and-require)
   - [Run Statistics](#run-statistics)
 - [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)
 - [Quick Examples](#quick-examples)
@@ -183,6 +184,46 @@ Configure behavior with settings:
 | `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and shrinks your generator. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
+
+### Using `#expect` and `#require`
+
+Instead of returning a `Bool`, you can write Swift Testing assertions directly inside `#exhaust`:
+
+```swift
+@Test func sortedArrayIsSorted() {
+    #exhaust(.int(in: -10...10).array(length: 0...20)) { array in
+        let sorted = array.sorted()
+        for i in sorted.indices.dropLast() {
+            #expect(sorted[i] <= sorted[i + 1])
+        }
+    }
+}
+```
+
+When the closure contains `#expect`, `#require`, or multiple statements, `#exhaust` automatically switches to a mode that treats any assertion failure or thrown error as a counterexample. During reduction, assertion failures are suppressed so that test output stays clean. Once the minimal counterexample is found, the closure runs one final time with native `#expect`/`#require` reporting, so the failure message you see in the test log describes the reduced value.
+
+`#require` works for optional unwrapping:
+
+```swift
+@Test func parsedValueIsPositive() {
+    #exhaust(#gen(.string(length: 1...5, alphabet: .decimalDigits))) { digits in
+        let number = try #require(Int(digits))
+        #expect(number > 0)
+    }
+}
+```
+
+You can also throw errors directly — any thrown error counts as a failure:
+
+```swift
+#exhaust(gen) { value in
+    if value.isInvalid {
+        throw ValidationError()
+    }
+}
+```
+
+The `Bool`-returning form still works. `#exhaust` decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path, everything else uses the assertion path.
 
 ### Run Statistics
 
