@@ -186,13 +186,6 @@ The paper defines the algebra; Exhaust supplies:
 
 ## 4. Combinatorial Testing: Covering Arrays
 
-**Lei & Kacker, "IPOG: A General Strategy for T-Way Software Testing" (ECBS 2007)**
-
-### What Exhaust takes
-
-- The foundational theory of **t-way covering arrays** for systematic combinatorial testing. When `ChoiceTreeAnalysis` identifies a finite or boundary-value domain, a covering array generator produces a compact test suite guaranteeing every t-tuple of parameter values appears in at least one test case.
-- IPOG (via the FIPOG-style builder in `CoveringArray.swift`) remains in the codebase for the contract-testing (SCA) pipeline where batch construction is appropriate.
-
 **Bryce & Colbourn, "A density-based greedy algorithm for higher strength covering arrays" (STVR 2009)**
 
 ### What Exhaust takes
@@ -247,13 +240,12 @@ The covering array infrastructure is also reused inside the BonsaiReducer. `Fibr
 ### Key files
 
 - `Sources/ExhaustCore/Analysis/ChoiceTreeAnalysis.swift`
-- `Sources/ExhaustCore/Analysis/CoveringArray.swift`
+- `Sources/ExhaustCore/Analysis/PullBasedCoveringArray.swift`
 - `Sources/Exhaust/Macros/CoverageRunner.swift`
 - `Sources/ExhaustCore/Interpreters/Reduction/Encoders/FibreCoveringEncoder.swift`
 
 ### Cross-references
 
-- [lei_kacker_ipog_tway_testing.pdf](lei_kacker_ipog_tway_testing.pdf) — the IPOG paper
 - [do_judge_a_book_by_its_cover.pdf](do_judge_a_book_by_its_cover.pdf) — the ESOP 2021 paper
 - [dissertation-comparison.md](dissertation-comparison.md), Section 3 (Partially addressed: enumerate) — comparison with Goldstein's `enumerate` interpreter
 
@@ -458,5 +450,5 @@ Exhaust:          faithful translation of Goldstein's architecture
 
 The remaining influences are additive rather than structural:
 - Tjoa et al. shapes the CGS tuning pipeline (Section 5) but does not affect the core representation or reduction architecture.
-- Lei & Kacker and Kuhn et al. provide the coverage analysis layer (Section 4), which is an independent capability built on the same ChoiceTree infrastructure.
+- Bryce & Colbourn and Kuhn et al. provide the coverage analysis layer (Section 4), which is an independent capability built on the same ChoiceTree infrastructure.
 - Tseng (Section 8) provides the convergence guarantee for the block coordinate descent; Ghani et al. (Section 8) suggests a possible unification of the termination and fibred decomposition arguments into a single fibred induction principle.

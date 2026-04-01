@@ -35,7 +35,7 @@
 /// - More than 20 parameters are extracted (covering array construction cost grows combinatorially).
 /// - Zero parameters are extracted.
 ///
-/// - SeeAlso: ``CoveringArray``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
+/// - SeeAlso: ``PullBasedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
 public enum ChoiceTreeAnalysis {
     public enum AnalysisResult {
         /// All parameters have at most 256 values. Eligible for exhaustive enumeration or t-way covering.

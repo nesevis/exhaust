@@ -39,7 +39,7 @@ public enum SequenceCoveringArray {
     /// - Parameters:
     ///   - sequenceLength: Number of positions in each test sequence.
     ///   - pickChoices: The command types available at each position (from `Gen.pick`).
-    /// - Returns: A profile suitable for `CoveringArray.bestFitting` or `.generate`.
+    /// - Returns: A profile suitable for ``PullBasedCoveringArrayGenerator``.
     public static func buildProfile(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
