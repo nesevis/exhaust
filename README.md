@@ -4,6 +4,9 @@
 [![Platforms](https://img.shields.io/badge/Platforms-macOS%2015%20%7C%20iOS%2018%20%7C%20Mac%20Catalyst%2018%20%7C%20tvOS%2018%20%7C%20visionOS%202%20%7C%20watchOS%2011-blue)](https://developer.apple.com)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
+> [!Note]
+> Exhaust is under active development. Some APIs may change before the 1.0 release.
+
 ## Why `#expect` when you can `#exhaust`?
 
 Exhaust is a property-based testing framework for Swift. Instead of writing individual test cases by hand, you describe the rules your code must obey and let Exhaust find the violations.
