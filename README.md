@@ -468,7 +468,6 @@ Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.r
 | Setting | Default | Effect |
 |---|---|---|
 | `commandLimit:` | (required) | Maximum number of commands per test iteration. |
-| `.argumentAwareCoverage` | off | Include command argument values in coverage domain construction. |
 
 ## How It Works
 

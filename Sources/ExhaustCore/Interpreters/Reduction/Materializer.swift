@@ -53,7 +53,8 @@ public enum Materializer {
         prefix: consuming ChoiceSequence,
         mode: Mode,
         fallbackTree: ChoiceTree? = nil,
-        materializePicks: Bool = false
+        materializePicks: Bool = false,
+        precomputedSeed: UInt64? = nil
     ) -> Result<Output> {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -61,7 +62,7 @@ public enum Materializer {
 
         switch mode {
         case .exact:
-            seed = ZobristHash.hash(of: prefix)
+            seed = precomputedSeed ?? ZobristHash.hash(of: prefix)
             // In exact mode, the fallback tree is used for `.getSize` extraction only,
             // not for value fallback (all values come from the prefix).
             resolvedFallbackTree = fallbackTree

@@ -1,61 +1,30 @@
 import ExhaustCore
 import Testing
 
-// MARK: - CommandTypeSCABuilder
+// MARK: - SCADomain.build
 
-@Suite("CommandTypeSCABuilder")
-struct CommandTypeSCABuilderTests {
-    @Test("Builds domain for parameter-free branches")
+@Suite("SCADomain.build")
+struct SCADomainBuildTests {
+    @Test("Builds domain for parameter-free branches with full strength cap")
     func parameterFreeBranches() {
         let pickChoices = makeParameterFreeChoices(count: 3)
-        let builder = CommandTypeSCABuilder()
-        let domain = builder.buildDomain(
+        let domain = SCADomain.build(
             sequenceLength: 5,
             pickChoices: pickChoices,
             coverageBudget: 2000,
-            strengthCap: 4
+            strengthCap: 5
         )
         #expect(domain != nil)
-        #expect(domain?.mapping == nil)
-        #expect(domain?.maxStrength == 4)
+        #expect(domain?.mapping != nil)
+        // No analyzed arguments, so strength cap passes through
+        #expect(domain?.maxStrength == 5)
         #expect(domain?.profile.parameters.count == 5)
-        #expect(domain?.profile.parameters[0].domainSize == 3)
     }
 
-    @Test("Returns nil when branches have parameters")
-    func rejectsParameterizedBranches() {
-        let pickChoices = makeParameterizedChoices()
-        let builder = CommandTypeSCABuilder()
-        let domain = builder.buildDomain(
-            sequenceLength: 5,
-            pickChoices: pickChoices,
-            coverageBudget: 2000,
-            strengthCap: 4
-        )
-        #expect(domain == nil)
-    }
-
-    @Test("Passes through strength cap unchanged")
-    func strengthCapPassthrough() {
-        let pickChoices = makeParameterFreeChoices(count: 2)
-        let builder = CommandTypeSCABuilder()
-
-        let domain2 = builder.buildDomain(sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 2)
-        let domain6 = builder.buildDomain(sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 6)
-        #expect(domain2?.maxStrength == 2)
-        #expect(domain6?.maxStrength == 6)
-    }
-}
-
-// MARK: - ArgumentAwareSCABuilder
-
-@Suite("ArgumentAwareSCABuilder")
-struct ArgumentAwareSCABuilderTests {
     @Test("Builds domain with argument mapping for parameterized branches")
     func parameterizedBranches() {
         let pickChoices = makeParameterizedChoices()
-        let builder = ArgumentAwareSCABuilder()
-        let domain = builder.buildDomain(
+        let domain = SCADomain.build(
             sequenceLength: 4,
             pickChoices: pickChoices,
             coverageBudget: 2000,
@@ -67,20 +36,14 @@ struct ArgumentAwareSCABuilderTests {
         #expect(domain!.maxStrength <= 2)
     }
 
-    @Test("Builds domain for parameter-free branches with full strength cap")
-    func parameterFreeBranches() {
-        let pickChoices = makeParameterFreeChoices(count: 3)
-        let builder = ArgumentAwareSCABuilder()
-        let domain = builder.buildDomain(
-            sequenceLength: 5,
-            pickChoices: pickChoices,
-            coverageBudget: 2000,
-            strengthCap: 5
-        )
-        #expect(domain != nil)
-        #expect(domain?.mapping != nil)
-        // No analyzed arguments, so strength cap passes through
-        #expect(domain?.maxStrength == 5)
+    @Test("Passes through strength cap for parameter-free branches")
+    func strengthCapPassthrough() {
+        let pickChoices = makeParameterFreeChoices(count: 2)
+
+        let domain2 = SCADomain.build(sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 2)
+        let domain6 = SCADomain.build(sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 6)
+        #expect(domain2?.maxStrength == 2)
+        #expect(domain6?.maxStrength == 6)
     }
 }
 
@@ -88,11 +51,10 @@ struct ArgumentAwareSCABuilderTests {
 
 @Suite("SCADomain.buildTree")
 struct SCADomainBuildTreeTests {
-    @Test("Builds tree from domain without mapping (command-type-only)")
-    func buildTreeWithoutMapping() {
+    @Test("Builds tree from domain with parameter-free branches")
+    func buildTreeParameterFree() {
         let pickChoices = makeParameterFreeChoices(count: 3)
-        let builder = CommandTypeSCABuilder()
-        let domain = builder.buildDomain(
+        let domain = SCADomain.build(
             sequenceLength: 3,
             pickChoices: pickChoices,
             coverageBudget: 2000,
@@ -117,17 +79,16 @@ struct SCADomainBuildTreeTests {
         #expect(treeCount == rowCount)
     }
 
-    @Test("Builds tree from domain with mapping (argument-aware)")
-    func buildTreeWithMapping() {
+    @Test("Builds tree from domain with parameterized branches")
+    func buildTreeParameterized() {
         let pickChoices = makeParameterizedChoices()
-        let builder = ArgumentAwareSCABuilder()
-        guard let domain = builder.buildDomain(
+        guard let domain = SCADomain.build(
             sequenceLength: 3,
             pickChoices: pickChoices,
             coverageBudget: 2000,
             strengthCap: 2
         ) else {
-            Issue.record("ArgumentAwareSCABuilder returned nil")
+            Issue.record("SCADomain.build returned nil")
             return
         }
         #expect(domain.mapping != nil)
@@ -151,8 +112,7 @@ struct SCADomainBuildTreeTests {
     @Test("buildTree returns nil for row with wrong value count")
     func mismatchedRowReturnsNil() {
         let pickChoices = makeParameterFreeChoices(count: 2)
-        let builder = CommandTypeSCABuilder()
-        let domain = builder.buildDomain(
+        let domain = SCADomain.build(
             sequenceLength: 3,
             pickChoices: pickChoices,
             coverageBudget: 2000,
@@ -163,32 +123,6 @@ struct SCADomainBuildTreeTests {
         let badRow = CoveringArrayRow(values: [0, 1])
         let tree = domain.buildTree(row: badRow, sequenceLengthRange: 0 ... 3)
         #expect(tree == nil)
-    }
-}
-
-// MARK: - Builder Selection
-
-@Suite("SCADomainBuilder selection")
-struct SCADomainBuilderSelectionTests {
-    @Test("Protocol dispatch selects correct builder")
-    func protocolDispatch() {
-        let pickChoices = makeParameterFreeChoices(count: 2)
-        let commandTypeBuilder: any SCADomainBuilder = CommandTypeSCABuilder()
-        let argAwareBuilder: any SCADomainBuilder = ArgumentAwareSCABuilder()
-
-        let domain1 = commandTypeBuilder.buildDomain(
-            sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 4
-        )
-        let domain2 = argAwareBuilder.buildDomain(
-            sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 4
-        )
-
-        // Both should succeed for parameter-free branches
-        #expect(domain1 != nil)
-        #expect(domain2 != nil)
-        // Command-type has no mapping; argument-aware always has mapping
-        #expect(domain1?.mapping == nil)
-        #expect(domain2?.mapping != nil)
     }
 }
 

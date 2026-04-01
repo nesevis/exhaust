@@ -1,8 +1,6 @@
-// SCA pipeline decomposition: composable stages for sequence covering array construction.
+// SCA pipeline: domain construction for sequence covering arrays.
 //
-// Breaks the monolithic SequenceCoveringArray call pattern into a protocol-based pipeline
-// where domain construction is interchangeable. The two existing paths (command-type-only
-// and argument-aware) become concrete conformers of SCADomainBuilder.
+// Analyzes pick branches to build a domain profile suitable for covering array generation. Parameter-free branches contribute one domain value each; branches with analyzable arguments contribute the product of their parameter domain sizes. Gracefully degrades to command-type-only orderings when all branches are parameter-free.
 
 /// Result of SCA domain construction — carries everything needed for covering array generation and tree replay.
 ///
@@ -10,7 +8,7 @@
 public struct SCADomain {
     /// The finite domain profile for covering array generation.
     public let profile: FiniteDomainProfile
-    /// Argument mapping for decomposing flat domain indices back to branch + argument values. Nil for command-type-only domains.
+    /// Argument mapping for decomposing flat domain indices back to branch + argument values. Nil when all branches are parameter-free.
     public let mapping: SCADomainMapping?
     /// Upper bound on interaction strength for covering array generation.
     public let maxStrength: Int
@@ -37,58 +35,18 @@ public struct SCADomain {
             )
         }
     }
-}
 
-/// A stage in the SCA construction pipeline that builds a domain profile from pick choices.
-///
-/// Each conformer represents a different analysis strategy for SCA domains. ``CommandTypeSCABuilder`` produces simple command-type orderings; ``ArgumentAwareSCABuilder`` flattens branch argument domains for pairwise argument coverage. The pipeline consumer (``ContractRunner``) selects the appropriate builder based on settings and delegates all domain-specific logic to it.
-public protocol SCADomainBuilder {
     /// Builds an SCA domain from pick choices and sequence metadata.
+    ///
+    /// Each position's domain is the sum of all branch contributions: parameter-free branches contribute 1, analyzed branches contribute the product of their parameter domain sizes, and unanalyzable branches contribute 1 (random arguments at replay). Caps interaction strength at t=2 when any branch has analyzed arguments to keep covering array sizes manageable.
     ///
     /// - Parameters:
     ///   - sequenceLength: Number of positions in each test sequence.
     ///   - pickChoices: The command types available at each position.
-    ///   - coverageBudget: The covering array row budget, used for threshold computation in argument-aware builders.
+    ///   - coverageBudget: The covering array row budget, used for threshold computation.
     ///   - strengthCap: Upper bound on interaction strength derived from sequence length.
-    /// - Returns: An ``SCADomain`` ready for covering array construction, or nil if the builder's preconditions are not met.
-    func buildDomain(
-        sequenceLength: Int,
-        pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        coverageBudget: UInt64,
-        strengthCap: Int
-    ) -> SCADomain?
-}
-
-// MARK: - Concrete Builders
-
-/// Command-type-only SCA domain builder — each position's domain is the set of command types.
-///
-/// Requires all branches to be parameter-free (no choices in sub-generators). Produces `.just` sub-trees, which cannot satisfy parameterized branches during replay.
-public struct CommandTypeSCABuilder: SCADomainBuilder {
-    public init() {}
-
-    public func buildDomain(
-        sequenceLength: Int,
-        pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        coverageBudget _: UInt64,
-        strengthCap: Int
-    ) -> SCADomain? {
-        guard SequenceCoveringArray.allBranchesParameterFree(pickChoices) else { return nil }
-        let profile = SequenceCoveringArray.buildProfile(
-            sequenceLength: sequenceLength,
-            pickChoices: pickChoices
-        )
-        return SCADomain(profile: profile, mapping: nil, maxStrength: strengthCap)
-    }
-}
-
-/// Argument-aware SCA domain builder — flattens branch argument domains via threshold normalization.
-///
-/// Each position's domain is the sum of all branch contributions: parameter-free branches contribute 1, analyzed branches contribute the product of their parameter domain sizes, and unanalyzable branches contribute 1 (random arguments at replay). Caps interaction strength at t=2 when any branch has analyzed arguments to keep covering array sizes manageable.
-public struct ArgumentAwareSCABuilder: SCADomainBuilder {
-    public init() {}
-
-    public func buildDomain(
+    /// - Returns: An ``SCADomain`` ready for covering array construction, or nil if no branches can be analyzed.
+    public static func build(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         coverageBudget: UInt64,

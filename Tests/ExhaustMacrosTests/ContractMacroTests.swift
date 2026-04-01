@@ -64,6 +64,48 @@ struct ContractMacroTests {
             macros: testMacros
         )
     }
+
+    @Test("#exhaust contract without commandLimit")
+    func contractWithoutCommandLimit() {
+        assertMacroExpansion(
+            """
+            #exhaust(Spec.self)
+            """,
+            expandedSource: """
+            __runContract(
+                Spec.self,
+                commandLimit: nil,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("#exhaust contract without commandLimit but with settings")
+    func contractWithoutCommandLimitWithSettings() {
+        assertMacroExpansion(
+            """
+            #exhaust(Spec.self, .suppressIssueReporting)
+            """,
+            expandedSource: """
+            __runContract(
+                Spec.self,
+                commandLimit: nil,
+                settings: [.suppressIssueReporting],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: testMacros
+        )
+    }
 }
 
 @Suite("@Contract declaration macro tests")

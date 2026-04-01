@@ -3,6 +3,7 @@
 // Generates command sequences, executes them against a fresh spec instance, and detects postcondition / invariant violations. Integrates with the existing coverage + random + reduction pipeline.
 import CustomDump
 import ExhaustCore
+import Foundation
 import IssueReporting
 
 /// Runs a contract property test for the given specification type.
@@ -20,7 +21,7 @@ import IssueReporting
 @discardableResult
 public func __runContract<Spec: ContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int,
+    commandLimit: Int?,
     settings: [ContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
@@ -31,7 +32,6 @@ public func __runContract<Spec: ContractSpec>(
     var seed: UInt64?
     var suppressIssueReporting = false
     var useRandomOnly = false
-    var useArgumentAwareCoverage = false
     for setting in settings {
         switch setting {
         case let .budget(b):
@@ -52,18 +52,21 @@ public func __runContract<Spec: ContractSpec>(
             suppressIssueReporting = true
         case .randomOnly:
             useRandomOnly = true
-        case .argumentAwareCoverage:
-            useArgumentAwareCoverage = true
         }
     }
     let samplingBudget = budget.samplingBudget
     let coverageBudget = budget.coverageBudget
     let reductionConfig = budget.reducerBudget
 
-    // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can shrink sequences below the user's minimum — the minimum is a generation hint, not a shrinking floor.
     let commandGen = Spec.commandGenerator
-    let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
-        length: 0 ... commandLimit,
+    let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
+        commandGen: commandGen,
+        coverageBudget: coverageBudget
+    )
+
+    // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can shrink sequences below the user's minimum — the minimum is a generation hint, not a shrinking floor.
+    let seqGen = commandGen.array(
+        length: 0 ... resolvedCommandLimit,
         scaling: .constant
     )
 
@@ -106,10 +109,9 @@ public func __runContract<Spec: ContractSpec>(
         scaResult = runSCACoverage(
             seqGen: seqGen,
             commandGen: commandGen,
-            commandLimit: commandLimit,
+            commandLimit: resolvedCommandLimit,
             coverageBudget: coverageBudget,
             reductionConfig: reductionConfig,
-            argumentAware: useArgumentAwareCoverage,
             property: property
         )
     }
@@ -324,11 +326,81 @@ func extractPickChoices(
     return choices
 }
 
+/// Estimates a default command limit from the command generator's structure and the coverage budget.
+///
+/// Pre-analyzes pick branches to determine the per-position domain size, then computes the sequence length at which SCA rows (at t=2) would exhaust the budget. The result is the larger of this budget ceiling and an exploration floor based on the number of command types, ensuring sequences are long enough for each command to appear several times.
+func estimateCommandLimit<Command>(
+    commandGen: ReflectiveGenerator<Command>,
+    coverageBudget: UInt64
+) -> Int {
+    guard let pickChoices = extractPickChoices(from: commandGen) else {
+        return 10
+    }
+
+    let branchCount = pickChoices.count
+
+    // Pre-analyze branch argument domains to estimate the per-position domain size.
+    // Use sequenceLength=10 as initial estimate for threshold computation;
+    // the threshold is under a sqrt so it is not very sensitive to this value.
+    let threshold = SequenceCoveringArray.computeThreshold(
+        budget: coverageBudget,
+        sequenceLength: 10,
+        branchCount: branchCount
+    )
+    let branchProfiles = SequenceCoveringArray.analyzeBranches(
+        pickChoices,
+        threshold: threshold
+    )
+    var domainSize: UInt64 = 0
+    for profile in branchProfiles {
+        let contribution: UInt64 = switch profile {
+        case .parameterFree, .unanalyzable:
+            1
+        case let .analyzed(params):
+            params.reduce(UInt64(1)) { acc, param in
+                let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
+                return overflow ? .max : product
+            }
+        }
+        let (sum, overflow) = domainSize.addingReportingOverflow(contribution)
+        domainSize = overflow ? .max : sum
+    }
+
+    // Budget ceiling: at t=2, covering array rows ≈ d² × ln(L).
+    // Solving for L: L = e^(B / d²).
+    // For small domains this is huge (budget is not the bottleneck);
+    // for large domains it can be < 2.
+    let d = Double(min(domainSize, UInt64(Int.max)))
+    let d2 = max(d * d, 1.0)
+    let ratio = Double(coverageBudget) / d2
+    let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 1000)) : 2
+
+    // Exploration floor: enough for each command type to appear several times,
+    // ensuring the random phase can reach meaningful state depths.
+    let explorationFloor = max(branchCount * 3, 6)
+
+    let limit = max(explorationFloor, budgetCeiling)
+
+    ExhaustLog.notice(
+        category: .propertyTest,
+        event: "estimated_command_limit",
+        metadata: [
+            "command_limit": "\(limit)",
+            "command_types": "\(branchCount)",
+            "domain_size": "\(domainSize)",
+            "budget_ceiling": "\(budgetCeiling)",
+            "exploration_floor": "\(explorationFloor)",
+        ]
+    )
+
+    return limit
+}
+
 /// Runs SCA coverage for contract command sequences.
 ///
-/// By default, builds a covering array over command-type orderings only, keeping domains small enough for higher interaction strengths (t=3, t=4). When `argumentAware` is true, each position's domain is the flattened union of `(commandType × argumentCombinations)`, giving pairwise coverage of argument value interactions at the cost of capping at t=2.
+/// Builds a covering array where each position's domain is the flattened union of `(commandType × argumentCombinations)`. Parameter-free branches contribute one domain value each; analyzed branches contribute the product of their parameter domain sizes. When any branch has analyzed arguments, interaction strength caps at t=2 to keep covering array sizes manageable; otherwise higher strengths (up to t=6 for short sequences) are used.
 ///
-/// If `bestFitting` rejects the domain as too large, SCA is skipped and the caller falls through to random sampling.
+/// If domain construction fails or the domain is too small for pairwise coverage, SCA is skipped and the caller falls through to random sampling.
 /// Return type for SCA coverage: the shrunk (or unshrunk) failing sequence plus the original.
 typealias SCAResult<Command> = (commands: [Command], original: [Command])
 
@@ -338,7 +410,6 @@ func runSCACoverage<Command>(
     commandLimit: Int,
     coverageBudget: UInt64,
     reductionConfig: ReducerBudget,
-    argumentAware: Bool,
     property: @escaping @Sendable ([Command]) -> Bool
 ) -> SCAResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -351,14 +422,13 @@ func runSCACoverage<Command>(
     }
 
     let seqLen = commandLimit
-    guard seqLen >= 2, pickChoices.count >= 2 else {
+    guard seqLen >= 2 else {
         ExhaustLog.notice(
             category: .propertyTest,
             event: "sca_coverage_skipped",
             metadata: [
                 "sequence_length": "\(commandLimit)",
-                "command_types": "\(pickChoices.count)",
-                "reason": "too few positions or command types for SCA (need >= 2 of each)",
+                "reason": "sequence length must be >= 2 for SCA",
             ]
         )
         return nil
@@ -375,11 +445,7 @@ func runSCACoverage<Command>(
     default: 2
     }
 
-    let builder: any SCADomainBuilder = argumentAware
-        ? ArgumentAwareSCABuilder()
-        : CommandTypeSCABuilder()
-
-    guard let domain = builder.buildDomain(
+    guard let domain = SCADomain.build(
         sequenceLength: seqLen,
         pickChoices: pickChoices,
         coverageBudget: coverageBudget,
@@ -388,7 +454,7 @@ func runSCACoverage<Command>(
         ExhaustLog.notice(
             category: .propertyTest,
             event: "sca_coverage_skipped",
-            "Domain construction failed — branches may have parameterized sub-generators without argumentAwareCoverage"
+            "Domain construction failed — branches could not be analyzed"
         )
         return nil
     }

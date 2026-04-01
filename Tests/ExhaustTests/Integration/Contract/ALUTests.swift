@@ -14,7 +14,6 @@ struct ALUTests {
             #exhaust(
                 ALUSpec.self,
                 commandLimit: 8,
-                .argumentAwareCoverage,
                 .suppressIssueReporting
             )
         )

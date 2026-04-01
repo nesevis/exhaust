@@ -16,9 +16,4 @@ public enum ContractSettings {
 
     /// Disables structured coverage analysis of command orderings.
     case randomOnly
-
-    /// Includes command argument values in SCA domain construction.
-    ///
-    /// By default, SCA covers command-type orderings only, keeping the domain small enough for higher interaction strengths (t=3, t=4). With this setting, each position's domain is the flattened union of `(commandType × argumentCombinations)`, giving pairwise coverage of both command ordering and argument value interactions — at the cost of larger domains that typically cap at t=2.
-    case argumentAwareCoverage
 }

@@ -23,6 +23,40 @@ public enum ZobristHash {
         return hash
     }
 
+    /// Computes the hash of `probe` incrementally from a cached `baseHash` and `baseSequence`.
+    ///
+    /// Scans for differing positions between `baseSequence` and `probe`, then XOR-updates the
+    /// base hash with removed and added contributions. Avoids splitmix64 mixing for unchanged
+    /// elements. For k changed positions out of n total, cost is O(n) comparison + O(k) mixing
+    /// instead of O(n) mixing.
+    static func incrementalHash(
+        baseHash: UInt64,
+        baseSequence: ChoiceSequence,
+        probe: ChoiceSequence
+    ) -> UInt64 {
+        var hash = baseHash
+        let commonCount = min(baseSequence.count, probe.count)
+        var i = 0
+        while i < commonCount {
+            if baseSequence[i] != probe[i] {
+                hash ^= contribution(at: i, baseSequence[i])
+                hash ^= contribution(at: i, probe[i])
+            }
+            i += 1
+        }
+        // Tail of base (probe is shorter): remove trailing contributions.
+        while i < baseSequence.count {
+            hash ^= contribution(at: i, baseSequence[i])
+            i += 1
+        }
+        // Tail of probe (probe is longer): add trailing contributions.
+        while i < probe.count {
+            hash ^= contribution(at: i, probe[i])
+            i += 1
+        }
+        return hash
+    }
+
     /// Position-dependent hash contribution of a single element.
     /// Uses splitmix64 mixing for good avalanche with XOR combination.
     static func contribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {

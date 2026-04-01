@@ -32,7 +32,6 @@ struct HeapMergeTests {
                 HeapMergeContract.self,
                 commandLimit: 12,
                 .budget(.exorbitant),
-//                .argumentAwareCoverage,
                 .suppressIssueReporting,
                 .replay(2_244_429_497_963_284_422)
             )
@@ -59,7 +58,6 @@ struct HeapAliasingTests {
                 HeapAliasingContract.self,
                 commandLimit: 20,
                 .suppressIssueReporting,
-//                .argumentAwareCoverage
                 .replay(6_161_601_321_680_111_336)
             )
         )
