@@ -36,7 +36,8 @@ public enum SequenceDecoder {
         tree: ChoiceTree,
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool,
-        filterObservations: inout [UInt64: FilterObservation]
+        filterObservations: inout [UInt64: FilterObservation],
+        precomputedHash: UInt64? = nil
     ) throws -> ReductionResult<Output>? {
         switch self {
         case let .exact(materializePicks):
@@ -45,7 +46,8 @@ public enum SequenceDecoder {
                 fallbackTree: tree,
                 originalSequence: originalSequence, property: property,
                 materializePicks: materializePicks,
-                filterObservations: &filterObservations
+                filterObservations: &filterObservations,
+                precomputedHash: precomputedHash
             )
 
         case let .guided(
@@ -61,7 +63,8 @@ public enum SequenceDecoder {
                 materializePicks: materializePicks,
                 skipShortlexCheck: skipShortlexCheck,
                 prngSalt: prngSalt,
-                filterObservations: &filterObservations
+                filterObservations: &filterObservations,
+                precomputedHash: precomputedHash
             )
         }
     }
@@ -93,12 +96,14 @@ public enum SequenceDecoder {
         originalSequence _: ChoiceSequence,
         property: (Output) -> Bool,
         materializePicks: Bool,
-        filterObservations: inout [UInt64: FilterObservation]
+        filterObservations: inout [UInt64: FilterObservation],
+        precomputedHash: UInt64? = nil
     ) -> ReductionResult<Output>? {
         switch Materializer.materialize(
             gen, prefix: consume candidate,
             mode: .exact, fallbackTree: fallbackTree,
-            materializePicks: materializePicks
+            materializePicks: materializePicks,
+            precomputedSeed: precomputedHash
         ) {
         case let .success(output, freshTree, decodingReport):
             mergeFilterObservations(from: decodingReport, into: &filterObservations)
@@ -127,9 +132,10 @@ public enum SequenceDecoder {
         materializePicks: Bool,
         skipShortlexCheck: Bool = false,
         prngSalt: UInt64 = 0,
-        filterObservations: inout [UInt64: FilterObservation]
+        filterObservations: inout [UInt64: FilterObservation],
+        precomputedHash: UInt64? = nil
     ) -> ReductionResult<Output>? {
-        let seed = ZobristHash.hash(of: candidate) &+ prngSalt
+        let seed = (precomputedHash ?? ZobristHash.hash(of: candidate)) &+ prngSalt
         switch Materializer.materialize(
             gen,
             prefix: consume candidate,

@@ -328,6 +328,10 @@ extension ReductionState {
         { return false }
         let startSeqLen = sequence.count
         let startSequenceForCacheInvalidation = hasBind ? sequence : nil
+        // Capture the base sequence for incremental hashing. Encoder probes are
+        // derived from this snapshot — even after acceptance changes self.sequence,
+        // the diff between probe and baseSequence stays small.
+        let baseSequence = sequence
         var encoder = encoder
         encoder.start(
             sequence: sequence,
@@ -359,7 +363,12 @@ extension ReductionState {
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             guard budget.isExhausted == false else { break }
             probes += 1
-            let cacheKey = ZobristHash.hash(of: probe) &+ cacheSalt
+            let probeHash = ZobristHash.incrementalHash(
+                baseHash: sequenceHash,
+                baseSequence: baseSequence,
+                probe: probe
+            )
+            let cacheKey = probeHash &+ cacheSalt
             if rejectCache.contains(cacheKey) {
                 lastAccepted = false
                 continue
@@ -367,7 +376,8 @@ extension ReductionState {
             if let result = try decoder.decode(
                 candidate: probe, gen: gen, tree: tree,
                 originalSequence: sequence, property: property,
-                filterObservations: &localFilterObservations
+                filterObservations: &localFilterObservations,
+                precomputedHash: probeHash
             ) {
                 budget.recordMaterialization()
                 phaseTracker.recordInvocation()
