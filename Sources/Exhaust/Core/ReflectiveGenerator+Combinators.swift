@@ -18,7 +18,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Function to transform reflection targets back to original type
     /// - Returns: A generator producing values of the new output type
     /// - Throws: Rethrows errors from the transformation functions
-    @inlinable
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Value
@@ -35,7 +34,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Partial path to extract the original value from the new type
     /// - Returns: A generator producing values of the new output type
     /// - Throws: Rethrows errors from the forward transformation
-    @inlinable
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
         backward: some PartialPath<NewOutput, Value>
@@ -58,7 +56,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Partial path to transform back during reflection
     /// - Returns: A generator producing optional values of the new type
     /// - Throws: Errors from path extraction during setup
-    @inlinable
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: some PartialPath<NewOutput, Value>
@@ -81,7 +78,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Function to transform back during reflection
     /// - Returns: A generator producing optional values of the new type
     /// - Throws: Errors from path extraction during setup
-    @inlinable
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: @Sendable @escaping (NewOutput) throws -> Value
@@ -98,7 +94,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// - Parameter path: Partial path to extract the new value from the generated value
     /// - Returns: A generator producing optional values of the extracted type
-    @inlinable
     func map<NewOutput>(
         _ path: some PartialPath<Value, NewOutput>
     ) throws -> ReflectiveGenerator<NewOutput?> {
@@ -119,7 +114,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// **Reflection behavior**: When reflecting on `nil`, throws `ReflectionError.reflectedNil` to signal that the non-optional branch should be pruned. When reflecting on `.some(value)`, extracts the wrapped value for the underlying generator to reflect on.
     ///
     /// - Returns: A generator that produces optional versions of the original values
-    @inlinable
     func asOptional() -> ReflectiveGenerator<Value?> {
         let description = String(describing: Value.self)
         return .impure(operation: .contramap(
@@ -150,7 +144,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///     ("large", { $0 > 90 })
     /// )
     /// ```
-    @inlinable
     func classify(
         _ classifiers: (String, @Sendable (Value) -> Bool)...
     ) -> ReflectiveGenerator<Value> {
@@ -167,7 +160,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```swift
     /// let small = #gen(.int().array()).resize(10)
     /// ```
-    @inlinable
     func resize(_ newSize: UInt64) -> ReflectiveGenerator<Value> {
         Gen.liftF(.resize(newSize: newSize, next: erase()))
     }
@@ -197,7 +189,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - type: Strategy for satisfying the predicate. Defaults to ``FilterType/auto``.
     ///   - predicate: Validity condition that generated values must satisfy.
     /// - Returns: A filtered generator that only produces valid values.
-    @inlinable
     func filter(
         _ type: FilterType = .auto,
         _ predicate: @Sendable @escaping (Value) -> Bool,
@@ -238,7 +229,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique choice sequences.
-    @inlinable
     func unique(
         fileID: String = #fileID,
         line: UInt = #line
@@ -260,7 +250,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
-    @inlinable
     func unique(
         by keyPath: KeyPath<Value, some Hashable & Sendable>,
         fileID: String = #fileID,
@@ -280,7 +269,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
-    @inlinable
     func unique(
         by transform: @Sendable @escaping (Value) -> some Hashable,
         fileID: String = #fileID,
@@ -330,6 +318,25 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.recursive(base: base, depthRange: depthRange, extend: extend)
     }
 
+    /// Creates a recursive generator with a constant base case value.
+    ///
+    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
+    /// TODO: Code example needs updating
+    /// ```swift
+    /// .recursive(base: .leaf, depthRange: 1...5) { recurse, remaining in
+    ///     guard remaining > 1 else { return .just(.leaf) }
+    ///     .oneOf(weighted:
+    ///         (1, .just(.leaf)),
+    ///         (Int(remaining), #gen(recurse(), .uint(in: 0...9), recurse()).map { .node($0, $1, $2) })
+    ///     )
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - base: The ground value used when recursion bottoms out
+    ///   - maxDepth: Maximum number of recursive layers to unfold
+    ///   - extend: Closure that builds one recursive layer from the previous layer
+    /// - Returns: A generator that produces recursive values with depth-controlled structure
     static func recursive(
         base: Value,
         depthRange: ClosedRange<UInt64>,
@@ -366,6 +373,15 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
+    // Creates a recursive generator with a generator base case and a shrinkable depth range.
+    ///
+    /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it shrinkable. The reducer can collapse subtrees by shrinking the depth toward the range's lower bound.
+    ///
+    /// - Parameters:
+    ///   - base: Generator for the base case
+    ///   - depthRange: Range of depths to draw from (lower bound can be 0 for fully collapsible trees)
+    ///   - extend: Closure that builds one recursive layer from the previous layer
+    /// - Returns: A generator that produces recursive values with depth-controlled structure
     static func recursive(
         base: ReflectiveGenerator<Value>,
         depthRange: ClosedRange<UInt64>,
@@ -407,7 +423,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// - Parameter transform: A function to apply to each generated value
     /// - Returns: A generator producing the transformed values
-    @inlinable
     func map<NewValue>(
         _ transform: @Sendable @escaping (Value) throws -> NewValue
     ) rethrows -> ReflectiveGenerator<NewValue> {
@@ -436,7 +451,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// - Parameter transform: A function that takes the generated value and returns a new generator
     /// - Returns: A generator that sequences the two computations
-    @inlinable
     func bind<NewValue>(
         _ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>
     ) rethrows -> ReflectiveGenerator<NewValue> {
@@ -471,7 +485,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - forward: Function that takes the generated value and returns a new generator
     ///   - backward: Function that extracts the inner value from the final output
     /// - Returns: A generator that sequences the two computations with bidirectional support
-    @inlinable
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
         backward: @Sendable @escaping (NewValue) throws -> Value
@@ -489,7 +502,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - forward: Function that takes the generated value and returns a new generator
     ///   - backward: Partial path to extract the inner value from the final output
     /// - Returns: A generator that sequences the two computations with bidirectional support
-    @inlinable
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
         backward: some PartialPath<NewValue, Value>

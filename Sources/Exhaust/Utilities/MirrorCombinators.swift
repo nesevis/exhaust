@@ -151,7 +151,6 @@ public extension __ExhaustRuntime {
     /// Scalar conversion for `BinaryInteger` → `BinaryInteger` (e.g. `UInt64` → `Int`).
     ///
     /// This is **macro infrastructure** — the `#gen` macro emits calls to `_macroMapScalar` for single-generator, unlabeled-argument closures like `{ Int($0) }`. Swift's overload resolution picks the most constrained matching overload at compile time.
-    @inlinable
     static func _macroMapScalar<Input: BinaryInteger, Output: BinaryInteger>(
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
@@ -160,7 +159,6 @@ public extension __ExhaustRuntime {
     }
 
     /// Scalar conversion for `BinaryFloatingPoint` → `BinaryFloatingPoint` (e.g. `Double` → `Float`).
-    @inlinable
     static func _macroMapScalar<Input: BinaryFloatingPoint, Output: BinaryFloatingPoint>(
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
@@ -169,7 +167,6 @@ public extension __ExhaustRuntime {
     }
 
     /// Unconstrained fallback — forward-only when no numeric protocol matches.
-    @inlinable
     static func _macroMapScalar<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
