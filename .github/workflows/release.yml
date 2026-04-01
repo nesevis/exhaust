@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          git fetch --tags --force
+          NOTES=$(git tag -l --format='%(contents)' "$TAG")
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build XCFramework
+        run: bash Scripts/build-xcframework.sh
+
+      - name: Compute checksum
+        id: checksum
+        run: |
+          CHECKSUM=$(swift package compute-checksum Frameworks/ExhaustCore.xcframework.zip)
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+
+      - name: Update Package.swift and re-tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          CHECKSUM: ${{ steps.checksum.outputs.checksum }}
+        run: |
+          URL="https://github.com/nesevis/exhaust/releases/download/$TAG/ExhaustCore.xcframework.zip"
+          sed -i '' \
+            "s|.binaryTarget(name: \"ExhaustCore\", path: \"Frameworks/ExhaustCore.xcframework\")|.binaryTarget(name: \"ExhaustCore\", url: \"$URL\", checksum: \"$CHECKSUM\")|" \
+            Package.swift
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "release/$TAG"
+          git add Package.swift
+          git commit -m "Update Package.swift with xcframework URL for $TAG"
+          git tag -f "$TAG"
+          git push origin "release/$TAG"
+          git push origin "$TAG" --force
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          NOTES: ${{ steps.tag.outputs.notes }}
+        run: |
+          if [ -n "$NOTES" ]; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "$NOTES" \
+              "Frameworks/ExhaustCore.xcframework.zip#ExhaustCore.xcframework.zip"
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              "Frameworks/ExhaustCore.xcframework.zip#ExhaustCore.xcframework.zip"
+          fi
