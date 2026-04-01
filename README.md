@@ -59,6 +59,7 @@ Exhaust found a five-element counterexample and reduced it to two elements — t
 - [Building Generators](#building-generators)
 - [Composing Generators](#composing-generators)
 - [Recursive Generators](#recursive-generators)
+- [Metamorphic Testing](#metamorphic-testing)
 - [Running Properties](#running-properties)
   - [Using `#expect` and `#require`](#using-expect-and-require)
   - [Run Statistics](#run-statistics)
@@ -158,6 +159,35 @@ let jsonGen = #gen(.recursive(base: .null, depthRange: 0...5) { recurse, remaini
 At each level, `remaining` counts down from the maximum depth, and `recurse()` produces a generator for the next level. When depth is exhausted, only the base case is used. The `weighted` parameter biases toward leaves so that generated trees stay manageable, while `remaining` naturally reduces branching as recursion deepens.
 
 The depth itself is drawn from `depthRange` as a shrinkable choice — the reducer can collapse entire subtrees by shrinking the depth toward the range's lower bound. Recursive generators are fully transparent to reflection and reduction.
+
+## Metamorphic Testing
+
+Metamorphic testing checks relationships between outputs: if you transform the input in a known way, the output should change in a predictable way. The `.metamorph` combinator separates input setup from the property itself, the same way Arrange/Act/Assert separates a unit test.
+
+Without `metamorph`, setup and assertion are interleaved in the property closure:
+
+```swift
+#exhaust(.int().array(length: 0...100)) { array in
+    let stdlib = array.sorted()
+    let custom = mySort(array)
+    stdlib == custom
+}
+```
+
+With `metamorph`, input preparation moves to the generator and the property reads as a pure assertion:
+
+```swift
+let gen = #gen(.int().array(length: 0...100))
+    .metamorph({ $0.sorted() }, { mySort($0) })
+
+#exhaust(gen) { (original, stdlib, custom) in
+    stdlib == custom
+}
+```
+
+The original value is always at tuple position zero, followed by the transformed copies. Transforms can return different types — for example `{ $0.count }` alongside `{ $0.sorted() }` produces a tuple of `(original, Int, [Int])`.
+
+Each transform receives its own independently generated copy — identical in value but independent in identity. This means transforms can call mutating methods or hold references without affecting each other, which makes `metamorph` safe for reference types and in-place algorithms. When a failure is found, Exhaust reduces the original value and all transformed copies follow automatically.
 
 ## Running Properties
 
