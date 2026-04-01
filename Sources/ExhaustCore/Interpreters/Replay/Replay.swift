@@ -186,6 +186,26 @@ extension Interpreters {
                     }
                     result = boundValue
                 }
+            case let .metamorphic(transforms, _):
+                // Tree is transparent — save choices, replay inner N+1 times from the same snapshot.
+                let savedChoices = choices
+                guard let original = try replayWithChoicesHelper(
+                    inner, choices: &choices
+                ) else {
+                    return nil
+                }
+                var results: [Any] = [original]
+                results.reserveCapacity(transforms.count + 1)
+                for transform in transforms {
+                    var replayChoices = savedChoices
+                    guard let copy = try replayWithChoicesHelper(
+                        inner, choices: &replayChoices
+                    ) else {
+                        return nil
+                    }
+                    try results.append(transform(copy))
+                }
+                result = results
             }
             let nextGen = try continuation(result)
             return try replayWithChoicesHelper(nextGen, choices: &choices)
@@ -550,6 +570,20 @@ extension Interpreters {
                     }
                     result = boundValue
                 }
+            case let .metamorphic(transforms, _):
+                // Tree is transparent — replay inner N+1 times from the same script.
+                guard let original = try replayRecursive(inner, with: script) else {
+                    return nil
+                }
+                var results: [Any] = [original]
+                results.reserveCapacity(transforms.count + 1)
+                for transform in transforms {
+                    guard let copy = try replayRecursive(inner, with: script) else {
+                        return nil
+                    }
+                    try results.append(transform(copy))
+                }
+                result = results
             }
             return try runContinuation(result)
         }

@@ -322,6 +322,14 @@ extension Materializer {
                         context: &context, calleeFallback: calleeFallback,
                         continuationFallback: continuationFallback
                     )
+                case .metamorphic:
+                    // Transparent: no callee tree node — fallback passes through (same as .map).
+                    return try handleTransform(
+                        kind: kind, inner: inner,
+                        continuation: continuation, inputValue: inputValue,
+                        context: &context, calleeFallback: fallbackTree,
+                        continuationFallback: nil
+                    )
                 }
             }
         }

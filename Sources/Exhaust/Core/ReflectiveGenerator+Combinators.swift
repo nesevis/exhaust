@@ -436,6 +436,54 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         ))
     }
 
+    /// Generates independent copies of this generator's value and applies a different transform to each.
+    ///
+    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Shrinking reduces only the source value — all transformed copies follow deterministically.
+    ///
+    /// ```swift
+    /// let pair = #gen(.string()).metamorph({ $0.uppercased() }, { $0.count })
+    /// // pair: Gen<(String, String, Int)>
+    /// //   .0 = original, .1 = uppercased copy, .2 = count of a copy
+    /// ```
+    ///
+    /// - Parameter transform: Functions that derive follow-up values from independent copies of the source.
+    /// - Returns: A generator producing `(original, transformed...)` tuples.
+    func metamorph<each Transformed>(
+        _ transform: repeat @escaping (Value) -> each Transformed
+    ) -> ReflectiveGenerator<(Value, repeat each Transformed)> {
+        var erasedTransforms: [(Any) throws -> Any] = []
+        func add<Result>(_ function: @escaping (Value) -> Result) {
+            erasedTransforms.append { function($0 as! Value) as Any }
+        }
+        repeat add(each transform)
+
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .transform(
+                kind: .metamorphic(
+                    transforms: erasedTransforms,
+                    inputType: Value.self
+                ),
+                inner: erase()
+            ),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        // `tuple.0` crashes the Swift 6.2 compiler (signal 5) on tuples with parameter packs.
+        return Gen.contramap(
+            { (tuple: (Value, repeat each Transformed)) -> Value in
+                Mirror(reflecting: tuple).children.first!.value as! Value
+            },
+            impure._map { (values: [Any]) -> (Value, repeat each Transformed) in
+                var index = 0
+                func next<Element>(_: Element.Type) -> Element {
+                    defer { index += 1 }
+                    return values[index] as! Element
+                }
+                return (next(Value.self), repeat next((each Transformed).self))
+            }
+        )
+    }
+
     /// Chains this generator with a dependent generator.
     ///
     /// Use `bind` when the next generator depends on the value produced by this one.

@@ -514,20 +514,29 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - Transform
 
             case let .transform(kind, inner):
-                guard let innerValue = try generateRecursive(
-                    inner,
-                    with: inputValue,
-                    context: &context,
-                    predicate: predicate,
-                    sampleCount: sampleCount,
-                    cgsState: &cgsState,
-                    derivativeContext: derivativeContext
-                ) else { return nil }
                 let result: Any
                 switch kind {
                 case let .map(forward, _, _):
+                    guard let innerValue = try generateRecursive(
+                        inner,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        derivativeContext: derivativeContext
+                    ) else { return nil }
                     result = try forward(innerValue)
                 case let .bind(forward, _, _, _):
+                    guard let innerValue = try generateRecursive(
+                        inner,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        derivativeContext: derivativeContext
+                    ) else { return nil }
                     let boundGen = try forward(innerValue)
                     guard let boundValue = try generateRecursive(
                         boundGen,
@@ -539,6 +548,33 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         derivativeContext: derivativeContext
                     ) else { return nil }
                     result = boundValue
+                case let .metamorphic(transforms, _):
+                    let savedState = (context.prng.seed, context.prng.currentState)
+                    guard let original = try generateRecursive(
+                        inner,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        derivativeContext: derivativeContext
+                    ) else { return nil }
+                    var results: [Any] = [original]
+                    results.reserveCapacity(transforms.count + 1)
+                    for transform in transforms {
+                        context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                        guard let copy = try generateRecursive(
+                            inner,
+                            with: inputValue,
+                            context: &context,
+                            predicate: predicate,
+                            sampleCount: sampleCount,
+                            cgsState: &cgsState,
+                            derivativeContext: derivativeContext
+                        ) else { return nil }
+                        try results.append(transform(copy))
+                    }
+                    result = results
                 }
                 return try runContinuation(
                     result: result,

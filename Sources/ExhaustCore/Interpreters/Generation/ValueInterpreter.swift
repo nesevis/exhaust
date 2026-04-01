@@ -436,16 +436,21 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context: inout GenerationContext,
         runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
-        guard let innerValue = try generateRecursive(
-            inner, with: inputValue, context: &context
-        ) else {
-            return nil
-        }
         let result: Any
         switch kind {
         case let .map(forward, _, _):
+            guard let innerValue = try generateRecursive(
+                inner, with: inputValue, context: &context
+            ) else {
+                return nil
+            }
             result = try forward(innerValue)
         case let .bind(forward, _, _, _):
+            guard let innerValue = try generateRecursive(
+                inner, with: inputValue, context: &context
+            ) else {
+                return nil
+            }
             let boundGen = try forward(innerValue)
             guard let boundValue = try generateRecursive(
                 boundGen, with: inputValue, context: &context
@@ -453,6 +458,25 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 return nil
             }
             result = boundValue
+        case let .metamorphic(transforms, _):
+            let savedState = (context.prng.seed, context.prng.currentState)
+            guard let original = try generateRecursive(
+                inner, with: inputValue, context: &context
+            ) else {
+                return nil
+            }
+            var results: [Any] = [original]
+            results.reserveCapacity(transforms.count + 1)
+            for transform in transforms {
+                context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                guard let copy = try generateRecursive(
+                    inner, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                try results.append(transform(copy))
+            }
+            result = results
         }
         return try runContinuation(result, &context)
     }

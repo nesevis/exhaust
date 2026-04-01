@@ -161,6 +161,8 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             case let .bind(_, backward, inputType, outputType):
                 let direction = backward != nil ? "bind↔" : "bind→"
                 kindDesc = "\(direction): \(inputType) → \(outputType)"
+            case let .metamorphic(transforms, inputType):
+                kindDesc = "metamorphic(\(transforms.count)×): \(inputType)"
             }
             let innerDesc = inner.treeDescription(
                 prefix: childPrefix,
