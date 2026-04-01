@@ -367,4 +367,16 @@ public enum TransformKind {
         inputType: Any.Type,
         outputType: Any.Type
     )
+
+    /// Generates independent copies of the inner value and applies a different transform to each.
+    ///
+    /// The interpreter saves PRNG state before generating the inner value, then restores and re-generates for each transform to produce independent copies. The result is an ``Array`` of ``Any`` where index zero is the untransformed original (for reflection backward) and indices one through N are the transformed copies.
+    ///
+    /// - Parameters:
+    ///   - transforms: Type-erased transform functions, one per copy.
+    ///   - inputType: The metatype of the inner generator's output, for diagnostics.
+    case metamorphic(
+        transforms: [(Any) throws -> Any],
+        inputType: Any.Type
+    )
 }

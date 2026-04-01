@@ -21,7 +21,6 @@ extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Function to transform reflection targets back to original type
     /// - Returns: A generator producing values of the new output type
     /// - Throws: Rethrows errors from the transformation functions
-    @inlinable
     func _mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
         backward: @escaping (NewOutput) throws -> Value

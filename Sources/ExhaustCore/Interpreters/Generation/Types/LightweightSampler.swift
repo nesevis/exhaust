@@ -167,16 +167,21 @@ public enum LightweightSampler {
                 )
 
             case let .transform(kind, inner):
-                guard let innerValue = try eval(
-                    inner, with: inputValue, rng: &rng, size: size
-                ) else {
-                    return nil
-                }
                 let result: Any
                 switch kind {
                 case let .map(forward, _, _):
+                    guard let innerValue = try eval(
+                        inner, with: inputValue, rng: &rng, size: size
+                    ) else {
+                        return nil
+                    }
                     result = try forward(innerValue)
                 case let .bind(forward, _, _, _):
+                    guard let innerValue = try eval(
+                        inner, with: inputValue, rng: &rng, size: size
+                    ) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
                     guard let boundValue = try eval(
                         boundGen, with: inputValue, rng: &rng, size: size
@@ -184,6 +189,25 @@ public enum LightweightSampler {
                         return nil
                     }
                     result = boundValue
+                case let .metamorphic(transforms, _):
+                    let savedState = (rng.seed, rng.currentState)
+                    guard let original = try eval(
+                        inner, with: inputValue, rng: &rng, size: size
+                    ) else {
+                        return nil
+                    }
+                    var results: [Any] = [original]
+                    results.reserveCapacity(transforms.count + 1)
+                    for transform in transforms {
+                        rng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                        guard let copy = try eval(
+                            inner, with: inputValue, rng: &rng, size: size
+                        ) else {
+                            return nil
+                        }
+                        try results.append(transform(copy))
+                    }
+                    result = results
                 }
                 return try cont(
                     result, continuation,

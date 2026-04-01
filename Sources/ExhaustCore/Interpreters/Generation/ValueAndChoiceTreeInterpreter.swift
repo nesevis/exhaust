@@ -647,32 +647,54 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         inputValue: some Any,
         context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
-        guard let (innerValue, innerTree) = try generateRecursive(
-            inner,
-            with: inputValue,
-            context: &context
-        ) else {
-            return nil
-        }
         let result: Any
-        var resultTree = innerTree
+        let resultTree: ChoiceTree
         switch kind {
         case let .map(forward, _, _):
+            guard let (innerValue, innerTree) = try generateRecursive(
+                inner, with: inputValue, context: &context
+            ) else {
+                return nil
+            }
             result = try forward(innerValue)
+            resultTree = innerTree
         case let .bind(forward, _, _, _):
+            guard let (innerValue, innerTree) = try generateRecursive(
+                inner, with: inputValue, context: &context
+            ) else {
+                return nil
+            }
             let boundGen = try forward(innerValue)
             let savedMaterializePicks = context.materializePicks
             context.materializePicks = false
             defer { context.materializePicks = savedMaterializePicks }
             guard let (boundValue, boundTree) = try generateRecursive(
-                boundGen,
-                with: inputValue,
-                context: &context
+                boundGen, with: inputValue, context: &context
             ) else {
                 return nil
             }
             result = boundValue
             resultTree = .bind(inner: innerTree, bound: boundTree)
+        case let .metamorphic(transforms, _):
+            let savedState = (context.prng.seed, context.prng.currentState)
+            guard let (original, innerTree) = try generateRecursive(
+                inner, with: inputValue, context: &context
+            ) else {
+                return nil
+            }
+            var results: [Any] = [original]
+            results.reserveCapacity(transforms.count + 1)
+            for transform in transforms {
+                context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                guard let (copy, _) = try generateRecursive(
+                    inner, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                try results.append(transform(copy))
+            }
+            result = results
+            resultTree = innerTree
         }
         return try runContinuation(
             result: result,

@@ -1,5 +1,5 @@
 //
-//  ReductionMaterializer+Handlers.swift
+//  Materializer+Handlers.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 25/3/2026.
@@ -669,6 +669,23 @@ extension Materializer {
                     context: &context, continuationFallback: continuationFallback
                 )
             }
+
+        case let .metamorphic(transforms, _):
+            // Transparent like .map. Copies replay from innerTree because the cursor has already advanced past inner's choices; PRNG save/restore alone is insufficient.
+            guard let (original, innerTree) = try generateRecursive(
+                inner, with: inputValue, context: &context, fallbackTree: calleeFallback
+            ) else { return nil }
+            var results: [Any] = [original]
+            results.reserveCapacity(transforms.count + 1)
+            for transform in transforms {
+                guard let copy = try Interpreters.replay(inner, using: innerTree) else { return nil }
+                try results.append(transform(copy))
+            }
+            return try runContinuation(
+                result: results as Any, calleeChoiceTree: innerTree,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, continuationFallback: continuationFallback
+            )
         }
     }
 }
