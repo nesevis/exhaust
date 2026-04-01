@@ -33,8 +33,8 @@ Structurally identical. The existential intermediate type is handled via `Any` +
 | Dissertation | Exhaust | Notes |
 |---|---|---|
 | `Pick [Labeled (Gen a)]` | `.pick(choices: ContiguousArray<PickTuple>)` | Exhaust adds `siteID` for CGS tracking and `weight: UInt64` per choice |
-| `Lmap (b -> Maybe a)` | `.contramap(transform: (Any) -> Any?, next:)` | Same semantics — partial lens. Exhaust bundles the sub-generator with the operation |
-| `Prune` | `.prune(next:)` | Identical: handles `nil` from contramap |
+| `Lmap (c -> d)` | `.contramap(transform: (Any) -> Any?, next:)` | Contravariant annotation. Exhaust's transform returns `Any?` (partial), while Goldstein's `Lmap` takes a total function — the partiality is handled by `Prune` in both systems |
+| `Prune` | `.prune(next:)` | Handles `nil` from a partial contramap, pruning infeasible branches |
 | `ChooseInteger (Int, Int)` | `.chooseBits(min: UInt64, max: UInt64, tag:, isRangeExplicit:)` | Exhaust generalizes to all `BitPatternConvertible` types via `TypeTag` — handles Int, Float, Bool at the bit-pattern level. Characters are represented as integral indices into a `CharacterSet`, not as direct bit patterns |
 | `GetSize` | `.getSize` | Identical |
 | `Resize Int` | `.resize(newSize:, next:)` | Identical |
@@ -49,7 +49,7 @@ Structurally identical. The existential intermediate type is handled via `Any` +
 | `.filter(gen:, fingerprint:, filterType:, predicate:)` | Explicit validity marker for CGS optimization |
 | `.classify(gen:, fingerprint:, classifiers:)` | Distribution statistics and coverage reporting |
 | `.unique(gen:, fingerprint:, keyExtractor:)` | Deduplication via choice-sequence or key-based tracking |
-| `.transform(kind:, inner:)` | Reifies `map`/`bind` as inspectable data. `TransformKind.bind` fuses `comap` with `>>=` (Xia et al. ESOP 2019), making bind dependencies visible to every interpreter — VACTI records them as `ChoiceTree.bind`, the reducer exploits them for depth-ordered reduction. See [academic-influences.md](academic-influences.md), Section 2 |
+| `.transform(kind:, inner:)` | Reifies `map`/`bind` as inspectable data. `TransformKind.bind` fuses `comap` with `bind` (building on Xia et al. ESOP 2019), making bind dependencies visible to every interpreter — the generative interpreter records them as `ChoiceTree.bind`, the reducer exploits them for depth-ordered reduction. See [academic-influences.md](academic-influences.md), Section 2 |
 
 **Verdict: Superset.** All 6 dissertation operations are present with faithful semantics. Exhaust adds 7 more for practical concerns: stack safety (`sequence`), ergonomics (`zip`, `just`), observability (`filter`, `classify`, `unique`), and structural visibility (`.transform` — see Section 5 and 6 for how this enables the bind-aware reducer). The `filter` operation is particularly notable — the dissertation handles validity constraints at the CGS level, but Exhaust reifies them into the operation set so any interpreter can react to them.
 
@@ -78,8 +78,7 @@ Plus `probabilityOf` and `enumerate` as sketched extensions.
 | `OnlineCGSInterpreter` | CGS algorithm (Fig 3.3) | `Interpreters/Adaptation/OnlineCGSInterpreter.swift` |
 | `Reflect` | reflect | `Interpreters/Reflection/Reflect.swift` |
 | `Replay` | parse | `Interpreters/Replay/Replay.swift` |
-| `ReductionMaterializer` | parse (during reduction) | `Interpreters/Reduction/ReductionMaterializer.swift` |
-| `BonsaiScheduler` | choices + shrinking passes | Validity-preserving shrinking via categorical enc/dec pipeline |
+| `Materializer` | parse (during reduction) | `Interpreters/Reduction/Materializer.swift` |
 
 ### Not yet implemented
 
@@ -93,7 +92,7 @@ These dissertation concepts have no direct Exhaust equivalent:
 
 The dissertation's `enumerate` interpreter exhaustively interprets `Pick` to produce all possible values. Exhaust takes a different approach to the same goal via **unified ChoiceTree analysis + t-way covering arrays** (`Sources/ExhaustCore/Analysis/`).
 
-`ChoiceTreeAnalysis` runs the generator through VACTI (`ValueAndChoiceTreeInterpreter`) with `materializePicks = true`, which evaluates the full generator — including all bind chains — and produces a `ChoiceTree` capturing every random decision made during generation. The analysis then walks this tree to extract a parameter model:
+`ChoiceTreeAnalysis` runs the generator through the `ValueAndChoiceTreeInterpreter` with `materializePicks = true`, which evaluates the full generator — including all bind chains — and produces a `ChoiceTree` capturing every random decision made during generation. The analysis then walks this tree to extract a parameter model:
 
 - **Finite parameters** — `chooseBits` with explicit ranges ≤256 values, or `pick` between pure branches
 - **Boundary parameters** — `chooseBits` with large ranges, synthesized down to boundary representatives (`{min, min+1, midpoint, max-1, max, 0 if in range}` for integers; special IEEE 754 values for floats)
@@ -134,7 +133,7 @@ This is where Exhaust diverges most significantly — and most interestingly —
 Rewrites `sequence` length generators by splitting `chooseBits` ranges into 4 subranges wrapped in synthetic `pick` operations. This converts opaque continuous decisions into discrete choices that CGS can guide. _No dissertation equivalent_ — it's a practical necessity because Exhaust's `chooseBits` is richer than the dissertation's `ChooseInteger`.
 
 **Stage 1 — Online CGS warmup** (`OnlineCGSInterpreter`):
-Faithful to the dissertation's algorithm. Defunctionalized continuation frames (`DerivativeContext`) build derivatives and sample per-branch fitness. The key difference: results are accumulated into a `FitnessAccumulator` rather than used directly. This is a fixed warmup phase (default 200 runs), not a per-value decision.
+Faithful to the dissertation's algorithm. Defunctionalized continuation frames (`DerivativeContext`) build derivatives and sample per-branch fitness. The key difference: results are accumulated into a `FitnessAccumulator` rather than used directly. This is a fixed warmup phase (default 400 runs), not a per-value decision.
 
 **Stage 2 — Weight baking** (`bakeWeights`):
 Converts accumulated fitness data into static pick weights. Four strategies:
@@ -161,11 +160,12 @@ Per-site entropy analysis identifies bottleneck sites (where one choice dominate
 
 **Dissertation**: Flat bit strings and bracketed choice sequences (e.g., `(10(1(100)0))`). Shrinking operates on these strings via `subTrees`, `zeroDraws`, and `swapBits` passes to find the shortlex minimum.
 
-**Exhaust**: Dual representation:
-- `ChoiceTree` — hierarchical, with cases for `choice`, `just`, `sequence`, `branch`, `group`, `selected`, `getSize`, `resize`, `bind`. Preserves structural information from generation. The `bind(inner:, bound:)` case is architecturally significant — it records data dependencies from `.transform(.bind(...))` operations, enabling the BonsaiScheduler's depth-ordered reduction.
+**Exhaust**: Three representations:
+- `ChoiceTree` — hierarchical, with cases for `choice`, `just`, `sequence`, `branch`, `group`, `selected`, `getSize`, `resize`, `bind`. Preserves structural information from generation. The `bind(inner:, bound:)` case is architecturally significant — it records data dependencies from `.transform(.bind(...))` operations, enabling the Bonsai reducer's depth-ordered reduction.
 - `ChoiceSequence` — flat `ContiguousArray<ChoiceSequenceValue>` for mutation and reduction.
+- `ChoiceDependencyGraph` — a DAG over the `ChoiceSequence` that classifies each position as structural (bind-inner or branch-selector) or leaf, tracks scope ranges and bind depths, and connects controlling positions to their dependents. Built from the `ChoiceTree` and `BindSpanIndex`, it drives encoder role assignment, depth-scoped reduction, and Kleisli composition edge selection.
 
-The hierarchical `ChoiceTree` is richer than anything in the dissertation. It enables structural manipulation (e.g., the `Reducer` can swap subtrees or zero out groups while respecting generator structure), whereas the dissertation's flat bit strings require the shrinking passes to rediscover structure.
+The hierarchical `ChoiceTree` and the dependency graph are richer than anything in the dissertation. They enable structural manipulation (the reducer can swap subtrees, zero out groups, or scope reduction to a specific bind depth), whereas the dissertation's flat bit strings require the shrinking passes to rediscover structure.
 
 ---
 
@@ -184,11 +184,9 @@ The dissertation describes two shrinking systems:
 
 **Reflective shrinking** (§4.6.2): The dissertation's novel contribution. Implements a `choices` backward interpretation that extracts bracketed choice sequences from any value — even ones not produced by the generator. This enables shrinking externally provided values (e.g., a user-submitted bug report). Table 4.1 shows reflective shrinking matches Hypothesis's `genericShrink` quality across 5 SmartCheck benchmarks.
 
-**Reflective mutation** (§4.6.3): Applies the same principle to HypoFuzz-style fuzzing — mutate the choice sequence rather than the value, guaranteeing structural validity.
-
 ### Exhaust's BonsaiReducer (`Interpreters/Reduction/`)
 
-Exhaust implements a categorical reduction pipeline with 24 composable encoders across four phases, organised by the enc/dec separation from Sepulveda-Jimenez. All encoders conform to `ComposableEncoder` — a role-agnostic protocol where the factory assigns each encoder to a role (upstream, downstream, standalone) based on CDG position. The `ReductionMaterializer` (the decoder) re-runs the generator against each candidate to produce a fresh `ChoiceTree` with current metadata. The categorical framework enables composability (Kleisli composition of encoder pairs through a generator lift) and principled phase ordering via `MorphismDescriptor` with dominance edges.
+Exhaust implements a categorical reduction pipeline with 23 composable encoders across four phases, organised by the enc/dec separation from Sepulveda-Jimenez. All encoders conform to `ComposableEncoder` — a role-agnostic protocol where the factory assigns each encoder to a role (upstream, downstream, standalone) based on CDG position. The `Materializer` (the decoder) re-runs the generator against each candidate to produce a fresh `ChoiceTree` with current metadata. The categorical framework enables composability (Kleisli composition of encoder pairs through a generator lift) and principled phase ordering via `EncoderDominance` with dominance edges.
 
 #### The 4-phase pipeline
 
@@ -197,7 +195,7 @@ Phases progress from exact encoders (guaranteed shortlex improvement) through bo
 | Phase | Guarantee | Encoders |
 |---|---|---|
 | structuralDeletion | Exact | `DeletionEncoder` (parameterised by span category), `BranchSimplificationEncoder` (promote/pivot), `ContiguousWindowDeletionEncoder`, `BeamSearchDeletionEncoder`, `AntichainDeletionEncoder`, `SiblingSwapEncoder`, `BindSubstitutionEncoder` |
-| valueMinimization | Exact or bounded | `ZeroValueEncoder`, `BinarySearchEncoder` (.rangeMinimum/.semanticSimplest), `ReduceFloatEncoder`, `LinearScanEncoder`, `ProductSpaceAdaptiveEncoder`, `ShortlexReorderEncoder`, `RegimeProbeEncoder` |
+| valueMinimization | Exact or bounded | `ZeroValueEncoder`, `BinarySearchEncoder` (.semanticSimplest), `ReduceFloatEncoder`, `LinearScanEncoder`, `ProductSpaceAdaptiveEncoder`, `ShortlexReorderEncoder`, `RegimeProbeEncoder` |
 | redistribution | Bounded | `RedistributeByTandemReductionEncoder`, `RedistributeAcrossValueContainersEncoder` |
 | exploration | Speculative | `RelaxRoundEncoder`, `KleisliComposition` with `DownstreamPick` (selects `FibreCoveringEncoder` or `ZeroValueEncoder` based on fibre characteristics) |
 
@@ -207,12 +205,12 @@ Phases progress from exact encoders (guaranteed shortlex improvement) through bo
 |---|---|---|
 | `subTrees` | `deleteByPromotingSimplestBranch` | Operates on `ChoiceTree` rather than flat sequences — replaces shallow branches with deeper, simpler ones at structurally compatible pick sites |
 | `zeroDraws` | `zeroValue`, `binarySearchToSemanticSimplest`, `deleteFreeStandingValues` | Split into adaptive zero-fill, batched binary search toward semantic simplest, and individual value deletion |
-| `swapBits` | `binarySearchToRangeMinimum`, `reduceFloat` | Binary search toward range minimum with specialised float handling (truncation, cross-zero probing, NaN/infinity normalisation, as-integer-ratio simplification) |
-| (none) | The remaining 19 encoders | Bind-aware passes, structural deletion variants, redistribution, Kleisli exploration — all without dissertation equivalents |
+| `swapBits` | `binarySearchToSemanticSimplest`, `reduceFloat` | Binary search toward semantic simplest with specialised float handling (truncation, cross-zero probing, NaN/infinity normalisation, as-integer-ratio simplification) |
+| (none) | The remaining encoders | Bind-aware passes, structural deletion variants, redistribution, Kleisli exploration — all without dissertation equivalents |
 
-#### BonsaiScheduler's four-phase pipeline
+#### The Bonsai reducer's reduction pipeline
 
-The scheduler exploits the `ChoiceTree.bind(inner:, bound:)` structure for depth-ordered reduction — a capability the dissertation's flat bit strings do not support:
+The reducer exploits the `ChoiceTree.bind(inner:, bound:)` structure for depth-ordered reduction — a capability the dissertation's flat bit strings do not support:
 
 - **Base descent** (Phase 1): structural deletion encoders remove unnecessary structure
 - **Fibre descent** (Phase 2): value minimisation encoders reduce values within the current structure, sweeping from minimum bind depth upward so shallow values settle before deeper ones
@@ -223,15 +221,15 @@ The scheduler is parameterised by a `SchedulingStrategy` protocol. The sole impl
 
 #### Key architectural differences from the dissertation
 
-**Categorical enc/dec separation**: Encoders propose pure mutations; the `ReductionMaterializer` decodes them by re-running the generator. This separation (from Sepulveda-Jimenez) enables composability — `KleisliComposition` composes two `ComposableEncoder`s through a `GeneratorLift` — and principled phase ordering via `MorphismDescriptor` with dominance edges.
+**Categorical enc/dec separation**: Encoders propose pure mutations; the `Materializer` decodes them by re-running the generator. This separation (from Sepulveda-Jimenez) enables composability — `KleisliComposition` composes two `ComposableEncoder`s through a `GeneratorLift` — and principled phase ordering via `EncoderDominance` with dominance edges.
 
 **Shortlex ordering as the invariant**: Like Hypothesis and the dissertation, all candidates must satisfy `shortLexPrecedes(original)`. But Exhaust's richer `ChoiceSequence` (typed values rather than raw bits) makes shortlex comparisons more semantically meaningful.
 
-**Bind-depth ordering**: The `BindSpanIndex` builds a structural index of every bind region. BonsaiScheduler's covariant sweep reduces bound-content values from minimum bind depth upward, settling shallow depths first so that deeper depths reduce in the correct context. The dissertation has no notion of bind dependencies.
+**Bind-depth ordering**: The `BindSpanIndex` builds a structural index of every bind region. The Bonsai reducer's covariant sweep reduces bound-content values from minimum bind depth upward, settling shallow depths first so that deeper depths reduce in the correct context. The dissertation has no notion of bind dependencies.
 
 **Adaptive probing via `findInteger`**: Many encoders use `AdaptiveProbe.findInteger()` — a binary-search-like strategy that finds the largest batch of changes that can be made while preserving the failing property. The dissertation's passes are fixed-step; Exhaust's adapt to the landscape.
 
-**Budget constraints**: Expensive encoders (especially `deleteAlignedSiblingWindows` with its beam search) are budget-constrained. `CycleBudget` allocates across legs using dynamic cost estimates from each encoder's Big-O model and the current tree shape. `LegBudget` enforces per-leg hard caps with stall patience. The dissertation doesn't discuss computational budgets.
+**Budget constraints**: Expensive encoders (especially `deleteAlignedSiblingWindows` with its beam search) are budget-constrained. Each phase uses a flat materialization ceiling; `estimatedCost` drives encoder ordering within a phase (cheapest first), and move-to-front adaptation promotes encoders that accept probes. The dissertation doesn't discuss computational budgets.
 
 **Kleisli composition**: `KleisliComposition` composes an upstream and downstream `ComposableEncoder` through a `GeneratorLift` — the upstream proposes a structural mutation, the lift re-derives the fibre (producing a fresh tree and sequence), and the downstream searches the fibre via `DownstreamPick` (runtime selection of exhaustive, pairwise, or zero-value strategy based on actual fibre characteristics). This is a direct instantiation of Sepulveda-Jimenez §7 (Kleisli generalisation), enabling cross-level exploration that neither the dissertation nor Hypothesis addresses.
 
@@ -239,11 +237,11 @@ The scheduler is parameterised by a `SchedulingStrategy` protocol. The sole impl
 
 **Adaptive scheduling**: The `SchedulingStrategy` protocol separates scheduling decisions from the orchestration skeleton. `AdaptiveStrategy` skips Phase 1 when span extraction proves no structural work exists (no generator lifts wasted), adapts per-edge composition budgets based on prior-cycle observations, and uses signal-driven gating for Phases 3 and 4. The dissertation's shrinking passes run unconditionally.
 
-**Tiered materialisation**: `ReductionMaterializer` uses three-tier resolution: prefix replay → fallback tree → PRNG. This handles stale ranges from upstream mutations gracefully, a practical concern that arises when shrinking changes upstream choices that affect downstream ranges.
+**Tiered materialisation**: The `Materializer` in guided mode uses three-tier resolution: prefix replay → fallback tree → PRNG. This handles stale ranges from upstream mutations gracefully, a practical concern that arises when shrinking changes upstream choices that affect downstream ranges.
 
 **Float-specific reduction**: `ReduceFloatEncoder` has extensive Hypothesis-inspired float handling — truncation shrinks, integral-float binary reduction, as-integer-ratio reduction, cross-zero probing, NaN/infinity normalisation. The dissertation mentions floats only in passing.
 
-**Verdict: Massively expanded.** The dissertation's three passes (`subTrees`, `zeroDraws`, `swapBits`) establish the principle. Exhaust's 24 composable encoders across four categorical phases implement a production-grade reduction system with bind-aware scheduling, Kleisli composition with runtime downstream selection, adaptive probing, convergence signal feedback, non-monotonicity detection, adaptive scheduling with Phase 1 skip, float specialisation, cross-container redistribution, and fibre-based exploration. The core idea (shrink the choice sequence, replay through the generator) is faithful; the execution is categorically organised and an order of magnitude more sophisticated.
+**Verdict: Massively expanded.** The dissertation's three passes (`subTrees`, `zeroDraws`, `swapBits`) establish the principle. Exhaust's 23 composable encoders across four categorical phases implement a production-grade reduction system with bind-aware scheduling, Kleisli composition with runtime downstream selection, adaptive probing, convergence signal feedback, non-monotonicity detection, adaptive scheduling with Phase 1 skip, float specialisation, cross-container redistribution, and fibre-based exploration. The core idea (shrink the choice sequence, replay through the generator) is faithful; the execution is categorically organised and an order of magnitude more sophisticated.
 
 ---
 
@@ -274,15 +272,15 @@ The correctness properties the dissertation establishes — soundness, completen
 | Choice representation | Flat bit strings, bracketed sequences | Hierarchical `ChoiceTree` + flat `ChoiceSequence` | Richer — enables structural manipulation |
 | CGS algorithm | Online, per-value | Offline, amortized warmup + baked weights | Same core, different deployment strategy |
 | Diversity preservation | Not addressed | Fitness sharing, UCB, adaptive smoothing | Novel extension |
-| Continuous values | `ChooseInteger (Int, Int)` | `chooseBits` with `TypeTag` for Int/Float/Char/Bool | Generalized |
+| Continuous values | `ChooseInteger (Int, Int)` | `chooseBits` with `TypeTag` | Generalized |
 | Stack safety | Relies on Haskell laziness | Explicit `sequence`/`zip` operations | Necessary for Swift |
 | Filter/validity | Implicit in CGS predicate | Reified as `.filter` operation | More explicit |
-| Interpreter count | 7+ (exploring generality) | 5 core interpreters + BonsaiScheduler | Narrower but deeper |
-| Test case reduction | 3 passes (`subTrees`, `zeroDraws`, `swapBits`) | 24 composable encoders across 4 categorical phases with Kleisli composition, convergence signals, adaptive scheduling, non-monotonicity detection, float specialisation | Massively expanded |
-| Combinatorial coverage | Not addressed | Unified ChoiceTree analysis → automatic t-way covering arrays (pull-based density algorithm) for finite domains + boundary value synthesis for large domains | Novel — draws on Bryce & Colbourn (STVR 2009), Kuhn et al. (IEEE TSE 2004), and NIST SP 800-142 |
+| Interpreter count | 7+ (exploring generality) | 6 interpreters | Narrower but deeper |
+| Test case reduction | 3 passes (`subTrees`, `zeroDraws`, `swapBits`) | 23 composable encoders across 4 categorical phases with Kleisli composition, convergence signals, adaptive scheduling, non-monotonicity detection, float specialisation | Massively expanded |
+| Combinatorial coverage | Not addressed | Unified ChoiceTree analysis → automatic t-way covering arrays (pull-based density algorithm) for finite domains + boundary value synthesis for large domains | Novel — draws on Bryce & Colbourn (STVR 2009) and Kuhn et al. (IEEE TSE 2004) |
 | Example-based generation | `reflect -> analyzeWeights -> genWithWeights` | Not yet implemented | Future opportunity |
 | Partial completion | `complete` interpreter | Not yet implemented | Future opportunity |
-| Enumeration | `enumerate` interpreter | Unified ChoiceTree analysis with automatic exhaustive enumeration (small domains) and boundary value coverage (large domains) | Different approach — via VACTI-generated ChoiceTree walk + covering arrays + replay, not a dedicated interpreter |
+| Enumeration | `enumerate` interpreter | Unified ChoiceTree analysis with automatic exhaustive enumeration (small domains) and boundary value coverage (large domains) | Different approach — via generative interpreter ChoiceTree walk + covering arrays + replay, not a dedicated interpreter |
 
 ---
 
@@ -292,14 +290,14 @@ Exhaust is a **faithful implementation** of the dissertation's core theory — t
 
 Where Exhaust adds genuine novelty is in:
 
-- The **reification of `map`/`bind`** as `.transform` — fusing Xia et al.'s `comap` with monadic `>>=` to make bind dependencies visible to every interpreter, enabling depth-ordered reduction.
+- The **reification of `map`/`bind`** as `.transform` — fusing `comap` (building on Xia et al.) with monadic `bind` to make bind dependencies visible to every interpreter, enabling depth-ordered reduction.
 - The **offline CGS pipeline** (warmup → fitness sharing → adaptive smoothing).
-- The **BonsaiReducer** — 24 composable encoders across four categorical phases (Sepulveda-Jimenez), with bind-aware scheduling, Kleisli composition through a generator lift with runtime downstream selection (`DownstreamPick`), typed convergence signals for cross-cycle encoder feedback, non-monotonicity detection via `LinearScanEncoder`, adaptive scheduling (`SchedulingStrategy` protocol with Phase 1 skip and signal-driven gating), float specialisation, and fibre-based exploration via covering arrays.
+- The **BonsaiReducer** — 23 composable encoders across four categorical phases (Sepulveda-Jimenez), with bind-aware scheduling, Kleisli composition through a generator lift with runtime downstream selection (`DownstreamPick`), typed convergence signals for cross-cycle encoder feedback, non-monotonicity detection via `LinearScanEncoder`, adaptive scheduling (`SchedulingStrategy` protocol with Phase 1 skip and signal-driven gating), float specialisation, and fibre-based exploration via covering arrays.
 - The **`Gen.recursive` combinator** — transparent recursive generator composition with per-layer CGS tuning, no dissertation equivalent.
 - The **sequence length subdivision** preprocessing.
 - The **reification of filter/classify/unique** into the operation set.
 - **Automatic combinatorial coverage** via unified ChoiceTree analysis.
 
-The coverage system is particularly notable: `ChoiceTreeAnalysis` runs the generator through VACTI to produce a `ChoiceTree`, then walks it to extract a parameter model — handling not just finite domains but also large-range boundary value synthesis and sequence parameters. This approach sees through opaque bind chains that defeat recursive generator walkers, because VACTI evaluates the full generator before analysis begins. The extracted parameters feed pull-based density covering arrays for t-way combinatorial coverage, composing boundary value analysis (selecting *which values* to test) with interaction testing (ensuring *combinations* of those values are covered) — the standard practice recommended by NIST SP 800-142. This leverages the inspectability of the freer monad representation in a way the dissertation doesn't explore: using a forward interpretation (VACTI) to enable structural analysis that selects a fundamentally different testing strategy.
+The coverage system is particularly notable: `ChoiceTreeAnalysis` runs the generator through the `ValueAndChoiceTreeInterpreter` to produce a `ChoiceTree`, then walks it to extract a parameter model — handling not just finite domains but also large-range boundary value synthesis and sequence parameters. This approach sees through opaque bind chains that defeat recursive generator walkers, because the generative interpreter evaluates the full generator before analysis begins. The extracted parameters feed pull-based density covering arrays for t-way combinatorial coverage, composing boundary value analysis (selecting *which values* to test) with interaction testing (ensuring *combinations* of those values are covered). This leverages the inspectability of the freer monad representation in a way the dissertation doesn't explore: using a forward interpretation (the `ValueAndChoiceTreeInterpreter`) to enable structural analysis that selects a fundamentally different testing strategy.
 
 What Exhaust hasn't yet explored are the dissertation's more **speculative interpretations** — completers, `probabilityOf`, and the example-based generation workflow. These represent the dissertation's exploration of what's possible with the freer monad representation, and they remain available as future directions since the underlying architecture supports them.

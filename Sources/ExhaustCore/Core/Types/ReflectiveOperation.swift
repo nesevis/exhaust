@@ -48,7 +48,7 @@
 ///   GetSize         → getSize
 ///   Resize          → resize
 ///
-/// The remaining six cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`.
+/// The remaining seven cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`, `transform`.
 ///
 public enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
