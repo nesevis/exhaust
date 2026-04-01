@@ -101,7 +101,6 @@ public macro exhaust<T, R>(
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.reductionBudget(_)`: controls reduction aggressiveness.
 /// - `.randomOnly`: disables structured coverage analysis.
-/// - `.argumentAwareCoverage`: includes command argument values in SCA domain construction.
 ///
 /// ## Example
 ///
@@ -116,7 +115,7 @@ public macro exhaust<T, R>(
 @discardableResult
 public macro exhaust<Spec: ContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int,
+    commandLimit: Int? = nil,
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
 
@@ -129,6 +128,6 @@ public macro exhaust<Spec: ContractSpec>(
 @discardableResult
 public macro exhaust<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int,
+    commandLimit: Int? = nil,
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncContractMacro")

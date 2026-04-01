@@ -16,7 +16,7 @@ import IssueReporting
 @discardableResult
 public func __runContractAsync<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int,
+    commandLimit: Int?,
     settings: [ContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
@@ -27,7 +27,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     var seed: UInt64?
     var suppressIssueReporting = false
     var useRandomOnly = false
-    var useArgumentAwareCoverage = false
     for setting in settings {
         switch setting {
         case let .budget(b):
@@ -48,8 +47,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             suppressIssueReporting = true
         case .randomOnly:
             useRandomOnly = true
-        case .argumentAwareCoverage:
-            useArgumentAwareCoverage = true
         }
     }
 
@@ -58,8 +55,13 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     let coverageBudget = budget.coverageBudget
     let reductionConfig = budget.reducerBudget
 
-    let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
-        length: 0 ... commandLimit
+    let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
+        commandGen: commandGen,
+        coverageBudget: coverageBudget
+    )
+
+    let seqGen = commandGen.array(
+        length: 0 ... resolvedCommandLimit
     )
 
     // The sync property closure runs async spec methods via Task + semaphore.
@@ -98,7 +100,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     let replaySeed = seed
     nonisolated(unsafe) let reduction = reductionConfig
     let randomOnly = useRandomOnly
-    let argAwareCoverage = useArgumentAwareCoverage
 
     // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
     typealias SearchResult = ([Spec.Command], ContractFailureInfo<Spec.Command>)
@@ -110,10 +111,9 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                 scaResult = runSCACoverage(
                     seqGen: seqGen,
                     commandGen: commandGen,
-                    commandLimit: commandLimit,
+                    commandLimit: resolvedCommandLimit,
                     coverageBudget: covBudget,
                     reductionConfig: reduction,
-                    argumentAware: argAwareCoverage,
                     property: property
                 )
             }
