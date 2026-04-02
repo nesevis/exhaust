@@ -9,12 +9,12 @@
 
 ## Why `#expect` when you can `#exhaust`?
 
-Exhaust is a property-based testing framework for Swift. Instead of writing individual test cases by hand, you describe the rules your code must obey and let Exhaust find the violations.
+Exhaust is a property-based testing library for Swift. Instead of writing individual test cases by hand, you describe the rules your code must obey and let Exhaust find the violations.
 
 - **Structured coverage** — boundary values and parameter interactions are tested systematically before random sampling begins, so edge cases are covered by design rather than luck.
 - **Automatic reduction** — when a failure is found, Exhaust reduces it to the smallest possible counterexample, typically within 100ms. No custom shrink functions needed.
 - **Contract testing** — generate random sequences of commands against a stateful system and verify that invariants hold after every step.
-- **Inspectable generators** — generators are data structures, not opaque closures. The framework runs them forward to generate, backward to decompose, and replays them for deterministic reproduction.
+- **Inspectable generators** — generators are data structures, not opaque closures. The library runs them forward to generate, backward to decompose, and replays them for deterministic reproduction.
 
 Exhaust works in two modes:
 
@@ -365,7 +365,7 @@ let evenGen = #gen(.int().filter { $0 % 2 == 0 })
 
 Most property-based testing frameworks implement filters as rejection sampling: generate a value, test the predicate, throw it away and retry if it fails. This works when the valid region is large, but becomes impractical when valid values are sparse (balanced trees, well-formed inputs, values satisfying multiple constraints).
 
-Exhaust takes a different approach by default. Because generators are inspectable data structures, the framework can analyze the generator's branching points and measure how often each branch leads to a value that satisfies the predicate. It then reweights the branches to favor valid outputs before generation begins — a technique called Choice Gradient Sampling (CGS). The result is that filtered generators produce valid values efficiently even when the acceptance rate under rejection sampling would be vanishingly small.
+Exhaust takes a different approach by default. Because generators are inspectable data structures, it can analyze the generator's branching points and measure how often each branch leads to a value that satisfies the predicate. It then reweights the branches to favor valid outputs before generation begins — a technique called Choice Gradient Sampling (CGS). The result is that filtered generators produce valid values efficiently even when the acceptance rate under rejection sampling would be vanishingly small.
 
 You can select the strategy explicitly:
 
