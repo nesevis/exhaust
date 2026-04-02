@@ -256,7 +256,36 @@ You can also throw errors directly — any thrown error counts as a failure:
 }
 ```
 
-The `Bool`-returning form still works. `#exhaust` decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path, everything else uses the assertion path.
+`#exhaust` supports four closure shapes:
+
+```swift
+// Predicate — return true if the property holds
+#exhaust(gen) { value in
+    value.isValid == true
+}
+
+// Predicate, async
+await #exhaust(gen) { value in
+    await value.validate()
+}
+
+// Assertion — any thrown error or #expect failure is a counterexample
+#exhaust(gen) { value in
+    let result = try value.process()
+    #expect(result.count > 0)
+}
+
+// Assertion, async
+await #exhaust(gen) { value in
+    let result = try await value.process()
+    #expect(result.count > 0)
+}
+```
+
+`#exhaust` decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path, everything else uses the assertion path.
+
+> [!Tip]
+> The property closure may be called thousands of times during coverage, sampling, and reduction. Keep it as fast as possible — avoid disk I/O, network calls, and expensive setup. If your system under test requires heavyweight initialization, do it once outside the closure and pass it in.
 
 ### Run Statistics
 
