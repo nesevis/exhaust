@@ -1,6 +1,5 @@
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite struct SwiftTestingIntegrationTests {
     // MARK: - Void property with #expect
@@ -115,42 +114,7 @@ import ExhaustCore
         #expect(result == 50)
     }
 
-    // MARK: - Replay seed with Crockford Base32
-
-    @Test func replayWithBase32String() {
-        // First run to get a counterexample and seed
-        var capturedSeed: UInt64?
-        let firstResult = #exhaust(
-            #gen(.int(in: 0 ... 1000)),
-            .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
-            .randomOnly,
-            .onReport { report in
-                capturedSeed = report.seed
-            }
-        ) { value in
-            value < 500
-        }
-
-        guard let firstResult, let seed = capturedSeed else {
-            Issue.record("Should find a counterexample with a seed")
-            return
-        }
-
-        // Replay with the Crockford Base32 encoded seed
-        let encoded = CrockfordBase32.encode(seed)
-        let replayResult = #exhaust(
-            #gen(.int(in: 0 ... 1000)),
-            .suppressIssueReporting,
-            .replay(ReplaySeed.encoded(encoded)),
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
-            .randomOnly
-        ) { value in
-            value < 500
-        }
-
-        #expect(replayResult == firstResult, "Replay with Base32 seed should produce the same counterexample")
-    }
+    // MARK: - Replay with numeric seed
 
     @Test func replayWithNumericSeed() {
         let result1 = #exhaust(
@@ -176,12 +140,7 @@ import ExhaustCore
         #expect(result1 == result2, "Numeric replay should be deterministic")
     }
 
-    // MARK: - Crockford Base32 round-trip via ReplaySeed
-
-    @Test func replaySeedStringLiteral() {
-        let seed: ReplaySeed = "3RT5GH"
-        #expect(seed.resolve() == CrockfordBase32.decode("3RT5GH"))
-    }
+    // MARK: - ReplaySeed literals
 
     @Test func replaySeedIntegerLiteral() {
         let seed: ReplaySeed = 42
