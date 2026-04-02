@@ -512,7 +512,7 @@ The framework supports three execution modes:
 - **Reflection (backward)** — given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what powers `.reflecting` and automatic reduction without custom shrink functions.
 - **Replay** — a recorded sequence of choices is fed back to reproduce the exact same value, powering deterministic reproduction via `.replay(seed)`.
 
-Reduction operates on the recorded sequences and trees of choices rather than the output value, making it type-agnostic and preserving all generator invariants.
+Reduction operates on the recorded sequences and trees of choices rather than the output value, making it type-agnostic and preserving all generator invariants. A failing test case has two independent aspects: its *shape* (how many values exist and how they depend on each other) and its *values* (what those values are). The reducer treats these as separate problems. Each cycle first simplifies the shape — remove elements, flatten branches, shorten sequences — then simplifies the values within that fixed shape — drive numbers toward zero, simplify floats. This repeats until neither makes progress. When both stall, the reducer tries to escape: searching shape and values jointly along dependency edges, or temporarily worsening one value to unlock progress elsewhere.
 
 ## Requirements
 
