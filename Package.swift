@@ -36,10 +36,6 @@ let package = Package(
             name: "Exhaust",
             targets: ["Exhaust"]
         ),
-        .library(
-            name: "ExhaustCore",
-            targets: ["ExhaustCore"]
-        ),
     ],
     traits: [
         .trait(name: "CasePathable", description: "Adds PartialPath conformance for AnyCasePath from swift-case-paths"),
@@ -65,6 +61,9 @@ let package = Package(
                 .product(name: "CustomDump", package: "swift-custom-dump"),
                 .product(name: "CasePaths", package: "swift-case-paths", condition: .when(traits: ["CasePathable"])),
             ],
+            swiftSettings: usePrecompiled
+                ? [.unsafeFlags(["-Xfrontend", "-experimental-package-interface-load"])]
+                : [],
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]
@@ -112,6 +111,9 @@ let package = Package(
 )
 
 if usePrecompiled == false {
+    package.products.append(
+        .library(name: "ExhaustCore", targets: ["ExhaustCore"])
+    )
     package.targets.append(
         .testTarget(
             name: "ExhaustCoreTests",

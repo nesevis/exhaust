@@ -6,7 +6,7 @@ PACKAGE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${PACKAGE_DIR}/.build/xcframework-staging"
 OUTPUT_DIR="${PACKAGE_DIR}/Frameworks"
 
-EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface)
+EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface -Xswiftc -package-name -Xswiftc exhaust)
 IOS_SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 IOS_DEPLOYMENT_TARGET="18.0"
 
@@ -100,6 +100,10 @@ collect() {
     if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.private.swiftinterface" ]; then
         cp "${build_products}/ExhaustCore.build/ExhaustCore.private.swiftinterface" \
            "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.private.swiftinterface"
+    fi
+    if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" ]; then
+        cp "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" \
+           "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.package.swiftinterface"
     fi
 }
 

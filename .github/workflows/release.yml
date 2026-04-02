@@ -15,10 +15,13 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
       - name: Resolve tag
         id: tag
@@ -46,6 +49,13 @@ jobs:
           CHECKSUM: ${{ steps.checksum.outputs.checksum }}
         run: |
           URL="https://github.com/nesevis/exhaust/releases/download/$TAG/ExhaustCore.xcframework.zip"
+
+          # Switch to precompiled mode
+          sed -i '' \
+            's|let usePrecompiled = ProcessInfo.processInfo.environment\["EXHAUST_RELEASE"\] != nil|let usePrecompiled = true|' \
+            Package.swift
+
+          # Point binary target at the release URL
           sed -i '' \
             "s|.binaryTarget(name: \"ExhaustCore\", path: \"Frameworks/ExhaustCore.xcframework\")|.binaryTarget(name: \"ExhaustCore\", url: \"$URL\", checksum: \"$CHECKSUM\")|" \
             Package.swift
@@ -56,8 +66,14 @@ jobs:
           git add Package.swift
           git commit -m "Update Package.swift with xcframework URL for $TAG"
           git tag -f "$TAG"
-          git push origin "release/$TAG"
+          git push origin "release/$TAG" --force
           git push origin "$TAG" --force
+
+      - name: Delete existing release if present
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh release delete "$TAG" --yes 2>/dev/null || true
 
       - name: Create release
         env:
