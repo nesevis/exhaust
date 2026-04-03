@@ -26,6 +26,8 @@ Exhaust shamelessly adopts three insights from Hypothesis and this paper:
 - Unit tests to verify edge cases
 - The notion of a `Bundle` for stateful contract testing
 
+
+
 - [Test Case Reduction via Test Case Generation: Insights from the Hypothesis Reducer](https://www.semanticscholar.org/paper/Test-Case-Reduction-via-Test-Case-Generation%3A-from-MacIver-Donaldson/6d72e1bd7743f12b48e20f7d234407e37b67e009) (2020)
 - [Improving Binary Search by Guessing](https://notebook.drmaciver.com/posts/2019-04-30-13:03.html)
 
@@ -53,10 +55,22 @@ Their _Density_ algorithm provides a way to do pull-based/lazy covering array ge
 
 Hillel’s primary area of focus is formal methods (he’s got a book out!) but he has written extensively about testing and PBT in particular for a long time. [Blog](https://www.hillelwayne.com)
 
+### Johannes Link
+
+Johannes Link’s [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust’s test case reducer.
+
+### Swift Testing
+
+Exhaust’s macros were modelled on those in Swift Testing, including naming conventions and its closure analysis code.
+
 ### Hedgehog
 
 Hedgehog’s size cycling and scaling API was a big inspiration for how Exhaust manages complexity scaling during random generation. [Github](https://github.com/jkachmar/haskell-hedgehog/)
 
-### Johannes Link
+### Fast-check, jqwik, and CsCheck
 
-Johannes Link’s [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust’s test case reducer.
+I used tests from these libraries to help verify Exhaust’s reduction code
+
+- [Fast-check](https://fast-check.dev/) JS/TS
+- [jqwik](https://jqwik.net/) Java/Kotlin
+- [CsCheck](https://github.com/AnthonyLloyd/CsCheck) C#

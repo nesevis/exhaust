@@ -16,4 +16,9 @@ public enum ContractSettings {
 
     /// Disables structured coverage analysis of command orderings.
     case randomOnly
+
+    /// Collects per-example statistics in the OpenPBTStats JSON Lines format and attaches the result to the test run.
+    ///
+    /// Each test example produces one JSON line with status, a `customDump` representation, and complexity features derived from the choice tree. Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.
+    case collectOpenPBTStats
 }

@@ -27,19 +27,13 @@ struct CalculatorShrinkingChallenge {
     @Test("Calculator, Full")
     func calculatorfull() throws {
         let gen = #gen(Self.expression(depth: 4))
-        #examine(gen, samples: 40)
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        var report: ExhaustReport?
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
             .randomOnly,
             .budget(.exorbitant),
-//            .reflecting((div(value(-5), div(value(0), value(-10))))
-            .reflecting(Expr.div(.value(0), .add(.value(-10), .value(10)))),
-            .onReport { report = $0 }
+            .collectOpenPBTStats
         ) { expr in
-            print("Attempt: \(expr)")
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
             }
@@ -52,10 +46,7 @@ struct CalculatorShrinkingChallenge {
                 return false
             }
         }
-        print("Output: \(result)")
-        if let report { print("[PROFILE] Calculator: \(report.profilingSummary)") }
-        #expect(result == .div(.value(0), .add(.value(0), .value(0))) ||
-                result == .div(.value(0), .div(.value(0), .value(-1))))
+        #expect(result == .div(.value(0), .add(.value(0), .value(0))))
     }
 
     // MARK: - Types

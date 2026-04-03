@@ -217,6 +217,7 @@ Configure behavior with settings:
 | `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and shrinks your generator. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
+| `.collectOpenPBTStats` | off | Collects per-example statistics and attaches them to the test run in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. See [Test Observability](#test-observability). |
 
 ### Using `#expect` and `#require`
 
@@ -298,6 +299,20 @@ The `.onReport` setting delivers an `ExhaustReport` with timing and invocation d
     value.isValid
 }
 ```
+
+### Test Observability
+
+The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format and attaches it to the test run. You can inspect the attached `.jsonl` file with the [Tyche](https://tyche-pbt.github.io/tyche-extension/) data inspector to visualize input distributions, sample breakdowns, and individual test examples.
+
+```swift
+#exhaust(gen, .collectOpenPBTStats) { value in
+    value.isValid
+}
+```
+
+Each line records the example's pass/fail status, a `customDump` representation, and automatically derived complexity features from the choice tree — no manual event annotations required. Filter rejections from CGS or rejection sampling are surfaced as `gave_up` entries.
+
+The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAttachment` when running under XCTest. Contract tests support `.collectOpenPBTStats` through `ContractSettings`.
 
 ## Reflecting and Reducing Known Values
 
@@ -525,7 +540,7 @@ Sync and async commands can be mixed freely in the same contract.
 
 ### Settings
 
-Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.randomOnly`), plus:
+Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.randomOnly`, `.collectOpenPBTStats`), plus:
 
 | Setting | Default | Effect |
 |---|---|---|

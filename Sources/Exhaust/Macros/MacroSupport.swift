@@ -2,10 +2,15 @@
 //
 // The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`)
 // to signal that this is macro infrastructure, not public API.
+import CustomDump
 import Darwin
 import ExhaustCore
 import Foundation
 import IssueReporting
+
+#if canImport(XCTest)
+@_weakLinked import XCTest
+#endif
 
 #if canImport(Testing)
 @_weakLinked import Testing
@@ -13,7 +18,7 @@ import IssueReporting
 // Noop shim — withKnownIssue just runs the body.
 // The matching closure is never called, so #expect failures go undetected.
 // Only thrown errors (from #require or manual throws) signal failure.
-private struct _NoopIssue {} // swiftlint:disable:this type_name
+private struct _NoopIssue {}
 
 private func withKnownIssue(
     isIntermittent: Bool = false,
@@ -93,6 +98,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var useRandomOnly = false
         var visualize = false
         var onReportClosure: ((ExhaustReport) -> Void)?
+        var collectOpenPBTStats = false
 
         for setting in settings {
             switch setting {
@@ -120,6 +126,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 visualize = true
             case let .onReport(closure):
                 onReportClosure = closure
+            case .collectOpenPBTStats:
+                collectOpenPBTStats = true
             }
         }
         
@@ -140,6 +148,34 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         
         var report = ExhaustReport()
         defer { onReportClosure?(report) }
+
+        let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
+            ? OpenPBTStatsAccumulator(propertyName: "\(function)")
+            : nil
+        defer {
+            if let statsAccumulator {
+                let jsonl = statsAccumulator.finalize()
+                if jsonl.isEmpty == false {
+                    let attachmentName = "\(function)-openpbtstats.jsonl"
+                    switch TestContext.current {
+                    #if canImport(Testing)
+                    case .swiftTesting:
+                        Attachment.record(jsonl, named: attachmentName)
+                    #endif
+                    #if canImport(XCTest)
+                    case .xcTest:
+                        let xctAttachment = XCTAttachment(data: Data(jsonl.utf8), uniformTypeIdentifier: "public.json")
+                        xctAttachment.name = attachmentName
+                        XCTContext.runActivity(named: "OpenPBTStats") { activity in
+                            activity.add(xctAttachment)
+                        }
+                    #endif
+                    default:
+                        break
+                    }
+                }
+            }
+        }
         
         if let reflectingValue {
             do {
@@ -191,7 +227,14 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             let coverageResult = CoverageRunner.run(
                 gen,
                 coverageBudget: coverageBudget,
-                property: property
+                property: property,
+                onExample: statsAccumulator.map { accumulator in
+                    { value, tree, passed in
+                        var representation = ""
+                        customDump(value, to: &representation)
+                        accumulator.record(representation: representation, passed: passed, tree: tree, phase: .coverage)
+                    }
+                }
             )
             coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             switch coverageResult {
@@ -265,6 +308,15 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             randomSampling: 0,
                             reduction: propertyInvocationCount
                         )
+                        if let statsAccumulator {
+                            var representation = ""
+                            customDump(shrunkValue, to: &representation)
+                            statsAccumulator.recordReduced(
+                                representation: representation,
+                                tree: .just,
+                                reductionSeconds: report.reductionMilliseconds / 1000
+                            )
+                        }
                         if !suppressIssueReporting {
                             reportIssue(
                                 rendered,
@@ -395,9 +447,60 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         let actualSeed = generator.baseSeed
         report.seed = actualSeed
 
-        do { while let (next, tree) = try generator.next() {
+        var previousFilterObservations: [UInt64: FilterObservation] = [:]
+
+        do { while true {
+            if statsAccumulator != nil {
+                previousFilterObservations = generator.filterObservations
+            }
+            let generateStart = statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
+            guard let (next, tree) = try generator.next() else { break }
+            let generateEnd = statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
             iterations += 1
-            if property(next) == false {
+
+            // Compute per-example filter deltas when collecting stats.
+            var filterAttempts: Int?
+            var filterRejections: Int?
+            if statsAccumulator != nil {
+                let currentObservations = generator.filterObservations
+                var totalAttempts = 0
+                var totalPasses = 0
+                for (fingerprint, observation) in currentObservations {
+                    let previous = previousFilterObservations[fingerprint]
+                    totalAttempts += observation.attempts - (previous?.attempts ?? 0)
+                    totalPasses += observation.passes - (previous?.passes ?? 0)
+                }
+                if totalAttempts > 0 {
+                    filterAttempts = totalAttempts
+                    filterRejections = totalAttempts - totalPasses
+                }
+            }
+
+            let testStart = statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
+            let passed = property(next)
+            let testEnd = statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
+
+            if let statsAccumulator {
+                let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
+                let testSeconds = Double(testEnd - testStart) / 1_000_000_000
+                var representation = ""
+                customDump(next, to: &representation)
+                statsAccumulator.record(
+                    representation: representation,
+                    passed: passed,
+                    tree: tree,
+                    phase: .random,
+                    generateSeconds: generateSeconds,
+                    testSeconds: testSeconds,
+                    filterAttempts: filterAttempts,
+                    filterRejections: filterRejections
+                )
+                if let rejections = filterRejections, rejections > 0 {
+                    statsAccumulator.recordDiscards(count: rejections, phase: .random)
+                }
+            }
+
+            if passed == false {
                 generationPhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                 var propertyInvocationCount = 0
                 let countingProperty: (Output) -> Bool = { value in
@@ -456,6 +559,15 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             randomSampling: iterations,
                             reduction: propertyInvocationCount
                         )
+                        if let statsAccumulator {
+                            var representation = ""
+                            customDump(shrunkValue, to: &representation)
+                            statsAccumulator.recordReduced(
+                                representation: representation,
+                                tree: .just,
+                                reductionSeconds: report.reductionMilliseconds / 1000
+                            )
+                        }
                         if !suppressIssueReporting {
                             reportIssue(
                                 rendered,

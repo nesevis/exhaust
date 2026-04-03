@@ -1,4 +1,4 @@
-import ExhaustCore
+@testable import ExhaustCore
 import Testing
 
 // MARK: - SCADomain.build

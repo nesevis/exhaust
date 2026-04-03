@@ -424,3 +424,94 @@ extension ChoiceTree: CustomDebugStringConvertible {
         return nil
     }
 }
+
+// MARK: - Normalized Complexity Scores
+
+/// Summary statistics derived from per-choice-point normalized scores.
+public struct ComplexityFeatures: Sendable {
+    /// Number of choice points in the tree.
+    public let choiceCount: Int
+    /// Minimum normalized score across all choice points.
+    public let min: Double
+    /// Maximum normalized score across all choice points.
+    public let max: Double
+    /// Arithmetic mean of all normalized scores.
+    public let mean: Double
+    /// Median of all normalized scores.
+    public let median: Double
+
+    /// Derives summary statistics from an array of normalized scores.
+    ///
+    /// - Returns: `nil` when the scores array is empty.
+    public static func from(_ scores: [Double]) -> ComplexityFeatures? {
+        guard scores.isEmpty == false else { return nil }
+        let sorted = scores.sorted()
+        let count = sorted.count
+        let medianValue: Double
+        if count % 2 == 0 {
+            medianValue = (sorted[count / 2 - 1] + sorted[count / 2]) / 2.0
+        } else {
+            medianValue = sorted[count / 2]
+        }
+        return ComplexityFeatures(
+            choiceCount: count,
+            min: sorted[0],
+            max: sorted[count - 1],
+            mean: sorted.reduce(0.0, +) / Double(count),
+            median: medianValue
+        )
+    }
+}
+
+public extension ChoiceTree {
+    /// Computes a normalized complexity score for each choice point in the tree.
+    ///
+    /// Each score is in [0, 1] and represents where the chosen value sits within its allowable range. A score of 0 means the minimum was chosen, 1 means the maximum. The length of the returned array is itself a signal — more complex values produce more choice points.
+    func normalizedScores() -> [Double] {
+        var scores: [Double] = []
+        collectNormalizedScores(into: &scores)
+        return scores
+    }
+
+    private func collectNormalizedScores(into scores: inout [Double]) {
+        switch self {
+        case let .choice(value, metadata):
+            if let range = metadata.validRange, range.upperBound > range.lowerBound {
+                let position = Double(value.bitPattern64 - range.lowerBound) / Double(range.upperBound - range.lowerBound)
+                scores.append(Swift.min(position, 1.0))
+            }
+
+        case let .sequence(length, elements, metadata):
+            if let range = metadata.validRange, range.upperBound > range.lowerBound {
+                let position = Double(length - range.lowerBound) / Double(range.upperBound - range.lowerBound)
+                scores.append(Swift.min(position, 1.0))
+            }
+            for element in elements {
+                element.collectNormalizedScores(into: &scores)
+            }
+
+        case let .branch(_, _, _, _, choice):
+            choice.collectNormalizedScores(into: &scores)
+
+        case let .group(children, _):
+            for child in children {
+                child.collectNormalizedScores(into: &scores)
+            }
+
+        case let .bind(inner, bound):
+            inner.collectNormalizedScores(into: &scores)
+            bound.collectNormalizedScores(into: &scores)
+
+        case let .selected(child):
+            child.collectNormalizedScores(into: &scores)
+
+        case let .resize(_, choices):
+            for child in choices {
+                child.collectNormalizedScores(into: &scores)
+            }
+
+        case .just, .getSize:
+            break
+        }
+    }
+}
