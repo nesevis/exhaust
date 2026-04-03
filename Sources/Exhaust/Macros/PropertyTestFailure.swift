@@ -39,9 +39,6 @@ struct PropertyTestFailure<Output> {
         } else {
             lines.append("Property failed (iteration \(iteration)/\(samplingBudget))")
         }
-        if let sourceCode {
-            lines.append("  \(sourceCode)")
-        }
 
         lines.append("")
         lines.append("Counterexample:")
