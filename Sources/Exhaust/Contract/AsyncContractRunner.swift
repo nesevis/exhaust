@@ -47,6 +47,8 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             suppressIssueReporting = true
         case .randomOnly:
             useRandomOnly = true
+        case .collectOpenPBTStats:
+            break // Async contract tests do not yet support OpenPBTStats collection.
         }
     }
 

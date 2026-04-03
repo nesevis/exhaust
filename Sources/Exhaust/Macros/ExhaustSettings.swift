@@ -134,4 +134,11 @@ public enum ExhaustSettings<Output> {
     ///
     /// The closure fires synchronously before `#exhaust` returns, on every exit path (pass, fail, error, reflecting). Not `@Sendable` — executes on the calling task.
     case onReport((ExhaustReport) -> Void)
+
+    /// Collects per-example statistics in the OpenPBTStats JSON Lines format and attaches the result to the test run.
+    ///
+    /// Each test example produces one JSON line with status, a `customDump` representation, and complexity features derived from the choice tree. The accumulated JSONL is recorded as a test attachment (Swift Testing `Attachment` or XCTest `XCTAttachment`) when the test completes.
+    ///
+    /// Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.
+    case collectOpenPBTStats
 }

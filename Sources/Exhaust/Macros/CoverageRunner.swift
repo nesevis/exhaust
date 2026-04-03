@@ -27,7 +27,8 @@ public enum CoverageRunner {
     public static func run<Output>(
         _ gen: ReflectiveGenerator<Output>,
         coverageBudget: UInt64,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
+        onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
         guard let analysis = ChoiceTreeAnalysis.analyze(gen) else {
             return .notApplicable
@@ -71,16 +72,19 @@ public enum CoverageRunner {
             var iterations = 0
             var rowIndex = 0
             while rowIndex < budget, let row = generator.next() {
-                let result = testRow(
+                let rowResult = testRow(
                     gen, row: row, rowIndex: rowIndex,
                     profile: profile, property: property
                 )
-                if let result {
-                    return .failure(
-                        value: result.value, tree: result.tree, iteration: iterations + 1,
-                        strength: strength, rows: rowIndex + 1,
-                        parameters: paramCount, totalSpace: totalSpace, kind: kind
-                    )
+                if let rowResult {
+                    onExample?(rowResult.value, rowResult.tree, rowResult.passed)
+                    if rowResult.passed == false {
+                        return .failure(
+                            value: rowResult.value, tree: rowResult.tree, iteration: iterations + 1,
+                            strength: strength, rows: rowIndex + 1,
+                            parameters: paramCount, totalSpace: totalSpace, kind: kind
+                        )
+                    }
                 }
                 rowIndex += 1
                 iterations += 1
@@ -102,16 +106,19 @@ public enum CoverageRunner {
         var rowIndex = 0
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
             let row = CoveringArrayRow(values: [UInt64(rowIndex)])
-            let result = testRow(
+            let rowResult = testRow(
                 gen, row: row, rowIndex: rowIndex,
                 profile: profile, property: property
             )
-            if let result {
-                return .failure(
-                    value: result.value, tree: result.tree, iteration: iterations + 1,
-                    strength: 1, rows: rowIndex + 1,
-                    parameters: paramCount, totalSpace: totalSpace, kind: kind
-                )
+            if let rowResult {
+                onExample?(rowResult.value, rowResult.tree, rowResult.passed)
+                if rowResult.passed == false {
+                    return .failure(
+                        value: rowResult.value, tree: rowResult.tree, iteration: iterations + 1,
+                        strength: 1, rows: rowIndex + 1,
+                        parameters: paramCount, totalSpace: totalSpace, kind: kind
+                    )
+                }
             }
             rowIndex += 1
             iterations += 1
@@ -129,19 +136,22 @@ public enum CoverageRunner {
 
     // MARK: - Row Testing
 
-    private struct RowFailure<Output> {
+    private struct RowResult<Output> {
         let value: Output
         let tree: ChoiceTree
+        let passed: Bool
     }
 
     /// Builds a tree from a covering array row, materializes it, and tests the property.
+    ///
+    /// Returns `nil` when materialization fails (row is skipped). Otherwise returns the value, its choice tree, and whether the property passed.
     private static func testRow<Output>(
         _ gen: ReflectiveGenerator<Output>,
         row: CoveringArrayRow,
         rowIndex: Int,
         profile: any CoverageProfile,
         property: (Output) -> Bool
-    ) -> RowFailure<Output>? {
+    ) -> RowResult<Output>? {
         guard let tree = profile.buildTree(from: row) else { return nil }
 
         let prefix = ChoiceSequence(tree)
@@ -153,10 +163,8 @@ public enum CoverageRunner {
             gen, prefix: prefix, mode: mode
         ) {
         case let .success(value, freshTree, _):
-            if property(value) == false {
-                return RowFailure(value: value, tree: freshTree)
-            }
-            return nil
+            let passed = property(value)
+            return RowResult(value: value, tree: freshTree, passed: passed)
         case .rejected(_), .failed(_):
             return nil
         }

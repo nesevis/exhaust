@@ -32,6 +32,7 @@ public func __runContract<Spec: ContractSpec>(
     var seed: UInt64?
     var suppressIssueReporting = false
     var useRandomOnly = false
+    var collectOpenPBTStats = false
     for setting in settings {
         switch setting {
         case let .budget(b):
@@ -52,6 +53,8 @@ public func __runContract<Spec: ContractSpec>(
             suppressIssueReporting = true
         case .randomOnly:
             useRandomOnly = true
+        case .collectOpenPBTStats:
+            collectOpenPBTStats = true
         }
     }
     let samplingBudget = budget.samplingBudget
@@ -139,7 +142,8 @@ public func __runContract<Spec: ContractSpec>(
                 seed: seed,
                 reductionConfig: reductionConfig,
                 suppressIssueReporting: true,
-                useRandomOnly: useRandomOnly || skipGenericCoverage
+                useRandomOnly: useRandomOnly || skipGenericCoverage,
+                collectOpenPBTStats: collectOpenPBTStats
             ),
             sourceCode: nil,
             fileID: fileID,
@@ -527,7 +531,8 @@ func buildExhaustSettings<Output>(
     seed: UInt64?,
     reductionConfig: ReducerBudget,
     suppressIssueReporting: Bool,
-    useRandomOnly: Bool
+    useRandomOnly: Bool,
+    collectOpenPBTStats: Bool = false
 ) -> [ExhaustSettings<Output>] {
     var settings: [ExhaustSettings<Output>] = [
         .budget(.custom(
@@ -544,6 +549,9 @@ func buildExhaustSettings<Output>(
     }
     if useRandomOnly {
         settings.append(.randomOnly)
+    }
+    if collectOpenPBTStats {
+        settings.append(.collectOpenPBTStats)
     }
     return settings
 }

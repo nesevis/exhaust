@@ -1,5 +1,4 @@
-// Closure analysis for #gen macro — detects struct/class initializer calls
-// and extracts argument labels for automatic backward mapping synthesis.
+// Closure analysis for #gen macro — detects struct/class initializer calls and extracts argument labels for automatic backward mapping synthesis.
 //
 // Adapted from Swift Testing's ConditionArgumentParsing.swift approach for
 // analyzing closure bodies at the syntax level.
