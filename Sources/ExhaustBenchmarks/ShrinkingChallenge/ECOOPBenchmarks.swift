@@ -146,6 +146,7 @@ func registerECOOPBenchmarks() {
 
 private struct SeedResult {
     let seed: UInt64
+    let generationIterations: Int
     let invocations: Int
     let generationMilliseconds: Double
     let reductionMilliseconds: Double
@@ -175,8 +176,10 @@ private func registerECOOPChallenge<Output>(
             var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: maxGenerationRuns)
             var failingValue: Output?
             var failingTree: ChoiceTree?
+            var generationIterations = 0
             do {
                 while let (value, tree) = try iterator.next() {
+                    generationIterations += 1
                     if property(value) == false {
                         failingValue = value
                         failingTree = tree
@@ -207,6 +210,7 @@ private func registerECOOPChallenge<Output>(
             let output = result?.1 ?? value
             results.append(SeedResult(
                 seed: seed,
+                generationIterations: generationIterations,
                 invocations: invocationCount,
                 generationMilliseconds: generationMs,
                 reductionMilliseconds: reductionMs,
@@ -232,11 +236,13 @@ private func printECOOPReport(
         return
     }
 
+    let genIterations = results.map { Double($0.generationIterations) }
     let invocations = results.map { Double($0.invocations) }
     let genTimes = results.map { $0.generationMilliseconds }
     let reduceTimes = results.map { $0.reductionMilliseconds }
     let uniqueCEs = Set(results.map(\.counterexampleDescription))
 
+    let genIterStats = summaryStats(genIterations)
     let invocStats = summaryStats(invocations)
     let genStats = summaryStats(genTimes)
     let reduceStats = summaryStats(reduceTimes)
@@ -248,19 +254,20 @@ private func printECOOPReport(
         sizeReport = " mean_size=\(f2(sizeStats.mean)) (\(f2(sizeStats.ciLow))–\(f2(sizeStats.ciHigh)))"
     }
 
-    print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | gen(ms): mean=\(f1(genStats.mean)) median=\(f1(genStats.median)) | reduce(ms): mean=\(f1(reduceStats.mean)) (\(f1(reduceStats.ciLow))–\(f1(reduceStats.ciHigh))) median=\(f1(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
+    print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | gen(ms): mean=\(f1(genStats.mean)) median=\(f1(genStats.median)) | reduce(ms): mean=\(f1(reduceStats.mean)) (\(f1(reduceStats.ciLow))–\(f1(reduceStats.ciHigh))) median=\(f1(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
     if enableCounterExamples {
         // Group seeds by counterexample for reproducibility.
         var seedsByCE: [String: [UInt64]] = [:]
         for result in results {
             seedsByCE[result.counterexampleDescription, default: []].append(result.seed)
         }
+        let sortedCEs = seedsByCE.sorted { $0.value.count > $1.value.count }
         print("[\(name) ECOOP] unique counterexamples (\(uniqueCEs.count)):")
-        for counterexample in uniqueCEs.sorted() {
-            let seeds = seedsByCE[counterexample] ?? []
+        for (counterexample, seeds) in sortedCEs {
+            let percentage = String(format: "%.1f", Double(seeds.count) / Double(foundCount) * 100)
             let seedPreview = seeds.prefix(3).map { String($0) }.joined(separator: ", ")
             let suffix = seeds.count > 3 ? ", ... (\(seeds.count) total)" : " (\(seeds.count) total)"
-            print("  \(counterexample) — seeds: \(seedPreview)\(suffix)")
+            print("  \(percentage)% \(counterexample) — seeds: \(seedPreview)\(suffix)")
         }
     }
 }
