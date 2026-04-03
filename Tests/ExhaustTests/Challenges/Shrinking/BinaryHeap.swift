@@ -37,20 +37,21 @@ struct BinaryHeapShrinkingChallenge {
         // The property: if the heap satisfies the invariant, then `toSortedList`
         // must produce a sorted list containing the same elements as `toList`.
         let property: @Sendable (Heap<Int>) -> Bool = { heap in
-            print("Attempt: \(heap)")
+//            print("Attempt: \(heap)")
             guard Self.invariant(heap) else { return true }
             let xs = Self.toSortedList(heap)
             let sorted = Self.toList(heap).sorted()
             return sorted == xs.sorted() && xs == xs.sorted()
         }
+
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(
-                Self.gen,
+                Self.gen.unique(),
                 .suppressIssueReporting,
-                .budget(.expedient),
+                .replay(1584),
                 .randomOnly,
-                .collectOpenPBTStats,
+//                .collectOpenPBTStats,
 //                .replay(7721779162233180381),
 //                .replay(16978691592903030353),
 //                .replay(626_360_492_104_589_905),
@@ -58,6 +59,7 @@ struct BinaryHeapShrinkingChallenge {
 //                .replay(12050660900442969635),
 //                .replay(10999453694572778833), // Four heap
                 .onReport { report = $0 },
+//                .logging(.debug, .jsonl),
                 property: property
             )
         )
@@ -68,7 +70,7 @@ struct BinaryHeapShrinkingChallenge {
         if let report { print("[PROFILE] BinaryHeap: \(report.profilingSummary)") }
         let outputValues = Self.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
-        // 1 should be the last value, as this is the shortlex smallest
+        // 1 *should* be the last value, as this is the shortlex smallest, but
         #expect(outputValues.sorted() == [0, 0, 0, 1])
     }
 
@@ -151,7 +153,7 @@ struct BinaryHeapShrinkingChallenge {
     /// Generates valid min-heaps by threading a minimum value through `bind`.
     /// Uses `bind` to constrain child values >= parent, so all generated heaps
     /// satisfy the invariant by construction.
-    static func heapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
+    static func binaryHeapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
         let maxVal = 100
         let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
 
@@ -161,24 +163,25 @@ struct BinaryHeapShrinkingChallenge {
 
         let nodeGen = #gen(.int(in: min ... maxVal))
             .bind { value in
-                #gen(heapGen(min: value, depth: depth / 2), heapGen(min: value, depth: depth / 2))
-                    .mapped(
-                        forward: { left, right in Heap.node(value, left, right) },
-                        backward: { heap in
-                            switch heap {
-                            case let .node(_, left, right): (left, right)
-                            case .empty: (.empty, .empty)
-                            }
+                #gen(
+                    binaryHeapGen(min: value, depth: depth / 2),
+                    binaryHeapGen(min: value, depth: depth / 2)
+                )
+                .mapped(
+                    forward: { left, right in Heap.node(value, left, right) },
+                    backward: { heap in
+                        switch heap {
+                        case let .node(_, left, right): (left, right)
+                        case .empty: (.empty, .empty)
                         }
-                    )
+                    }
+                )
             }
 
-        return #gen(.oneOf(weighted:
-            (1, emptyGen),
-            (7, nodeGen)))
+        return #gen(.oneOf(weighted: (1, emptyGen), (5, nodeGen)))
     }
 
-    static let gen = heapGen(depth: 6)
+    static let gen = binaryHeapGen(depth: 10)
 }
 
 extension BinaryHeapShrinkingChallenge.Heap: CustomDebugStringConvertible {

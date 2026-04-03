@@ -31,8 +31,10 @@ struct LargeUnionListShrinkingChallenge {
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
-            .replay(15_224_596_561_927_679_090),
+            .replay(2079),
             .onReport { report = $0 },
+            .budget(.exorbitant),
+            .logging(.debug, .keyValue),
             property: Self.property
         )
         if let report { print("[PROFILE] LargeUnionList: \(report.profilingSummary)") }
@@ -74,7 +76,6 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-
             .onReport { report = $0 },
             .logging(.debug),
             property: Self.property
