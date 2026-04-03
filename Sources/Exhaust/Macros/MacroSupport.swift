@@ -69,7 +69,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ///   - column: The column number of the call site (injected by macro expansion).
     ///   - function: The enclosing function name (injected by macro expansion).
     ///   - property: The property to test — returns `true` for passing values.
-    /// - Returns: The shrunk counterexample if the property failed, or `nil` if all iterations passed.
+    /// - Returns: The reduced counterexample if the property failed, or `nil` if all iterations passed.
     @discardableResult
     public static func __exhaust<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -275,15 +275,15 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         property: countingProperty
                     )
                     report.applyReductionStats(reduceResult.stats)
-                    if let (shrunkSequence, shrunkValue) = reduceResult.reduced {
+                    if let (reducedSequence, reducedValue) = reduceResult.reduced {
                         var failure = PropertyTestFailure(
-                            counterexample: shrunkValue,
+                            counterexample: reducedValue,
                             original: value,
                             sourceCode: sourceCode,
                             seed: nil,
                             iteration: iteration,
                             samplingBudget: samplingBudget,
-                            blueprint: shrunkSequence.shortString,
+                            blueprint: reducedSequence.shortString,
                             propertyInvocations: propertyInvocationCount
                         )
                         failure.replayHint =
@@ -316,7 +316,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         )
                         if let statsAccumulator {
                             var representation = ""
-                            customDump(shrunkValue, to: &representation)
+                            customDump(reducedValue, to: &representation)
                             statsAccumulator.recordReduced(
                                 representation: representation,
                                 tree: .just,
@@ -332,7 +332,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 column: column
                             )
                         }
-                        return shrunkValue
+                        return reducedValue
                     }
                 } catch {
                     reportIssue(
@@ -523,15 +523,15 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         property: countingProperty
                     )
                     report.applyReductionStats(reduceResult.stats)
-                    if let (shrunkSequence, shrunkValue) = reduceResult.reduced {
+                    if let (reducedSequence, reducedValue) = reduceResult.reduced {
                         let failure = PropertyTestFailure(
-                            counterexample: shrunkValue,
+                            counterexample: reducedValue,
                             original: next,
                             sourceCode: sourceCode,
                             seed: actualSeed,
                             iteration: iterations,
                             samplingBudget: samplingBudget,
-                            blueprint: shrunkSequence.shortString,
+                            blueprint: reducedSequence.shortString,
                             propertyInvocations: propertyInvocationCount
                         )
                         let rendered = failure.render(format: logFormat)
@@ -542,8 +542,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         )
                         ExhaustLog.debug(
                             category: .propertyTest,
-                            event: "shrunk_blueprint",
-                            "\(shrunkSequence.shortString)"
+                            event: "reduced_blueprint",
+                            "\(reducedSequence.shortString)"
                         )
                         let reductionEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                         logPhaseTimings(
@@ -567,7 +567,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         )
                         if let statsAccumulator {
                             var representation = ""
-                            customDump(shrunkValue, to: &representation)
+                            customDump(reducedValue, to: &representation)
                             statsAccumulator.recordReduced(
                                 representation: representation,
                                 tree: .just,
@@ -583,7 +583,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 column: column
                             )
                         }
-                        return shrunkValue
+                        return reducedValue
                     }
                 } catch {
                     reportIssue(
@@ -1152,7 +1152,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         let result = runner.run()
         
         switch result {
-        case let .failure(counterexample, shrunkSequence, original, iteration):
+        case let .failure(counterexample, reducedSequence, original, iteration):
             let failure = PropertyTestFailure(
                 counterexample: counterexample,
                 original: original,
@@ -1160,7 +1160,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 seed: actualSeed,
                 iteration: Int(iteration),
                 samplingBudget: samplingBudget,
-                blueprint: shrunkSequence.shortString,
+                blueprint: reducedSequence.shortString,
                 propertyInvocations: nil
             )
             let rendered = failure.render(format: logFormat)
@@ -1180,7 +1180,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             }
             return counterexample
             
-        case let .unshrunkFailure(counterexample, iteration):
+        case let .unreducedFailure(counterexample, iteration):
             let failure = PropertyTestFailure(
                 counterexample: counterexample,
                 original: nil as Output?,
@@ -1402,15 +1402,15 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         )
         report.applyReductionStats(reduceResult.stats)
         
-        if let (shrunkSequence, shrunkValue) = reduceResult.reduced {
+        if let (reducedSequence, reducedValue) = reduceResult.reduced {
             let failure = PropertyTestFailure(
-                counterexample: shrunkValue,
+                counterexample: reducedValue,
                 original: value,
                 sourceCode: sourceCode,
                 seed: nil,
                 iteration: 1,
                 samplingBudget: 1,
-                blueprint: shrunkSequence.shortString,
+                blueprint: reducedSequence.shortString,
                 propertyInvocations: propertyInvocationCount
             )
             let rendered = failure.render(format: ExhaustLog.configuration.format)
@@ -1449,7 +1449,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     column: column
                 )
             }
-            return shrunkValue
+            return reducedValue
         }
         
         // Reflection succeeded but reduction could not improve — return original

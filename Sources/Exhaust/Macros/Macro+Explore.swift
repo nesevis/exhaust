@@ -17,7 +17,7 @@
 // let counterexample = #explore(personGen, .replay(42), scorer: scoreFn, property: isValid)
 // ```
 //
-// - Returns: The shrunk counterexample if the property fails, or `nil` if all iterations pass.
+// - Returns: The reduced counterexample if the property fails, or `nil` if all iterations pass.
 import ExhaustCore
 
 @freestanding(expression)

@@ -8,12 +8,12 @@ public enum ExploreResult<Output> {
     /// A counterexample was found and reduced.
     case failure(
         counterexample: Output,
-        shrunkSequence: ChoiceSequence,
+        reducedSequence: ChoiceSequence,
         original: Output,
         iteration: UInt64
     )
     /// A counterexample was found but reduction failed.
-    case unshrunkFailure(counterexample: Output, iteration: UInt64)
+    case unreducedFailure(counterexample: Output, iteration: UInt64)
     /// All iterations passed without finding a failure.
     case passed(iterations: UInt64, poolSize: Int)
 }
@@ -86,7 +86,7 @@ public struct ExploreRunner<Output>: ~Copyable {
             iteration += 1
 
             if property(value) == false {
-                return shrinkAndReturn(value: value, tree: tree, iteration: iteration)
+                return reduceAndReturn(value: value, tree: tree, iteration: iteration)
             }
 
             let sequence = ChoiceSequence(tree)
@@ -137,7 +137,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 switch result {
                 case let .counterexample(value, tree, probesUsed):
                     iteration += UInt64(probesUsed)
-                    return shrinkAndReturn(
+                    return reduceAndReturn(
                         value: value,
                         tree: tree,
                         iteration: iteration,
@@ -173,7 +173,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         guard let (value, tree) = try? singleInterpreter.next() else { return nil }
 
         if property(value) == false {
-            return shrinkAndReturn(value: value, tree: tree, iteration: iteration)
+            return reduceAndReturn(value: value, tree: tree, iteration: iteration)
         }
 
         let sequence = ChoiceSequence(tree)
@@ -195,7 +195,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     /// Reduce a failing value and return the result.
     ///
     /// Always reflects to get a structurally correct tree, since `materializePicks: false` trees lack unselected branches needed by reducer strategies.
-    private func shrinkAndReturn(
+    private func reduceAndReturn(
         value: Output,
         tree: ChoiceTree,
         iteration: UInt64,
@@ -203,22 +203,22 @@ public struct ExploreRunner<Output>: ~Copyable {
     ) -> ExploreResult<Output> {
         do {
             let reflected = try Interpreters.reflect(gen, with: value)
-            let shrinkTree: ChoiceTree = if let reflected {
+            let reduceTree: ChoiceTree = if let reflected {
                 reflected
             } else {
                 tree
             }
 
-            if let (shrunkSequence, shrunkValue) = try Interpreters.bonsaiReduce(
+            if let (reducedSequence, reducedValue) = try Interpreters.bonsaiReduce(
                 gen: gen,
-                tree: shrinkTree,
+                tree: reduceTree,
                 output: value,
                 config: .init(from: reductionConfig),
                 property: property
             ) {
                 return .failure(
-                    counterexample: shrunkValue,
-                    shrunkSequence: shrunkSequence,
+                    counterexample: reducedValue,
+                    reducedSequence: reducedSequence,
                     original: value,
                     iteration: iteration
                 )
@@ -226,10 +226,10 @@ public struct ExploreRunner<Output>: ~Copyable {
         } catch {
             ExhaustLog.error(
                 category: .propertyTest,
-                event: "explore_shrink_error",
+                event: "explore_reduce_error",
                 "\(error)"
             )
         }
-        return .unshrunkFailure(counterexample: value, iteration: iteration)
+        return .unreducedFailure(counterexample: value, iteration: iteration)
     }
 }

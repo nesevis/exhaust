@@ -141,7 +141,7 @@ struct ExploreIntegrationTests {
         switch result {
         case let .failure(counterexample, _, _, _):
             #expect(counterexample >= 50)
-        case let .unshrunkFailure(counterexample, _):
+        case let .unreducedFailure(counterexample, _):
             #expect(counterexample >= 50)
         case .passed:
             // May not always find failure
@@ -262,7 +262,7 @@ struct ExploreIntegrationTests {
         switch result {
         case let .failure(ce, _, _, _):
             #expect(ce >= 900)
-        case let .unshrunkFailure(ce, _):
+        case let .unreducedFailure(ce, _):
             #expect(ce >= 900)
         case .passed:
             // May not always find failure

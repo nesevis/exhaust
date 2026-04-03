@@ -32,7 +32,7 @@ struct CalculatorShrinkingChallenge {
             .suppressIssueReporting,
             .randomOnly,
             .budget(.exorbitant),
-            .collectOpenPBTStats
+            .logging(.trace, .keyValue)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true

@@ -19,7 +19,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     case branch(Branch)
     /// An individual numeric value.
     case value(Value)
-    /// A value that has been set to its semantically simplest form and should not be individually shrunk further.
+    /// A value that has been set to its semantically simplest form and should not be individually reduced further.
     case reduced(Value)
     /// Bind scope markers (`true` = open, `false` = close).
     /// The first child is the inner subtree; the second is the bound subtree.

@@ -110,7 +110,7 @@ public macro exhaust<T, R>(
 /// }
 /// ```
 ///
-/// - Returns: A ``ContractResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
+/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: ContractSpec>(
@@ -123,7 +123,7 @@ public macro exhaust<Spec: ContractSpec>(
 ///
 /// Identical to the synchronous `#exhaust(Spec.self, commandLimit:)` overload but for types conforming to ``AsyncContractSpec``. Must be called with `await` since the expanded function is `async`. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; async `run`/`checkInvariants` calls are bridged via `Task` + semaphore.
 ///
-/// - Returns: A ``ContractResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
+/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: AsyncContractSpec>(

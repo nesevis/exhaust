@@ -73,7 +73,7 @@ public func __runContract<Spec: ContractSpec>(
         coverageBudget: coverageBudget
     )
 
-    // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can shrink sequences below the user's minimum — the minimum is a generation hint, not a shrinking floor.
+    // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can reduce sequences below the user's minimum — the minimum is a generation hint, not a reduction floor.
     let seqGen = commandGen.array(
         length: 0 ... resolvedCommandLimit,
         scaling: .constant
@@ -170,7 +170,7 @@ public func __runContract<Spec: ContractSpec>(
         return nil
     }
 
-    // Re-execute the shrunk sequence to build the trace and capture SUT state.
+    // Re-execute the reduced sequence to build the trace and capture SUT state.
     let (trace, spec) = buildTrace(failingSequence, specType: specType)
 
     let result = ContractResult<Spec>(
@@ -295,8 +295,8 @@ func renderFailure<Spec: ContractSpecBase>(
     // Show reduction diff when the original sequence is available and differs.
     if let original = failureInfo.originalCommands, original.count > result.commands.count {
         let originalDescriptions = original.map { "\($0)" }
-        let shrunkDescriptions = result.commands.map { "\($0)" }
-        if let reductionDiff = diff(originalDescriptions, shrunkDescriptions) {
+        let reducedDescriptions = result.commands.map { "\($0)" }
+        if let reductionDiff = diff(originalDescriptions, reducedDescriptions) {
             lines.append("")
             lines.append("Reduction diff:")
             for line in reductionDiff.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -414,7 +414,7 @@ func estimateCommandLimit<Command>(
 /// Builds a covering array where each position's domain is the flattened union of `(commandType × argumentCombinations)`. Parameter-free branches contribute one domain value each; analyzed branches contribute the product of their parameter domain sizes. When any branch has analyzed arguments, interaction strength caps at t=2 to keep covering array sizes manageable; otherwise higher strengths (up to t=6 for short sequences) are used.
 ///
 /// If domain construction fails or the domain is too small for pairwise coverage, SCA is skipped and the caller falls through to random sampling.
-/// Return type for SCA coverage: the shrunk (or unshrunk) failing sequence plus the original.
+/// Return type for SCA coverage: the reduced (or unreduced) failing sequence plus the original.
 typealias SCAResult<Command> = (commands: [Command], original: [Command])
 
 func runSCACoverage<Command>(
@@ -504,16 +504,16 @@ func runSCACoverage<Command>(
         if property(value) == false {
             // Reflect to get a structurally correct tree with materialized picks,
             // since coverage-built trees lack unselected branches needed by reducer strategies.
-            let shrinkTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
+            let reduceTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
-            if let (_, shrunkValue) = try? Interpreters.bonsaiReduce(
+            if let (_, reducedValue) = try? Interpreters.bonsaiReduce(
                 gen: seqGen,
-                tree: shrinkTree,
+                tree: reduceTree,
                 output: value,
                 config: .init(from: reductionConfig),
                 property: property
             ) {
-                return (shrunkValue, value)
+                return (reducedValue, value)
             }
             return (value, value)
         }

@@ -134,7 +134,7 @@ public final class OpenPBTStatsAccumulator {
         }
     }
 
-    /// Records the shrunk counterexample after reduction.
+    /// Records the reduced counterexample after reduction.
     public func recordReduced(
         representation: String,
         tree: ChoiceTree,
@@ -157,10 +157,10 @@ public final class OpenPBTStatsAccumulator {
             runStart: runStart,
             property: propertyName,
             status: "failed",
-            statusReason: "shrunk counterexample",
+            statusReason: "reduced counterexample",
             representation: representation,
             features: features,
-            howGenerated: "shrunk",
+            howGenerated: "reduced",
             timing: ["reduce": reductionSeconds]
         )
 
