@@ -303,7 +303,7 @@ The `.onReport` setting delivers an `ExhaustReport` with timing and invocation d
 
 ### Test Observability
 
-The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format and attaches it to the test run. You can inspect the attached `.jsonl` file with the [Tyche](https://tyche-pbt.github.io/tyche-extension/) data inspector to visualize input distributions, sample breakdowns, and individual test examples.
+The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats](https://dl.acm.org/doi/fullHtml/10.1145/3654777.3676407) JSON Lines format and attaches it to the test run. You can inspect the attached `.jsonl` file with the [Tyche](https://tyche-pbt.github.io/tyche-extension/) data inspector to visualize input distributions, sample breakdowns, and individual test examples.
 
 ```swift
 #exhaust(gen, .collectOpenPBTStats) { value in
@@ -314,6 +314,16 @@ The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats
 Each line records the example's pass/fail status, a `customDump` representation, and automatically derived complexity features from the choice tree — no manual event annotations required. Filter rejections from CGS or rejection sampling are surfaced as `gave_up` entries.
 
 The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAttachment` when running under XCTest. Contract tests support `.collectOpenPBTStats` through `ContractSettings`.
+
+#### Why this matters
+
+A property test that passes does not mean the generator is good — it may mean the generator never reaches the interesting part of the input space. OpenPBTStats data helps you answer three questions that passing tests hide:
+
+1. **How many inputs were actually valid?** If a large proportion of generated values are discarded by filters, the generator is wasting its budget on rejected samples. The sample breakdown shows this directly — a high `gave_up` count signals that the generator needs restructuring or that CGS tuning should be enabled.
+2. **How are values distributed?** Complexity features (derived from the choice tree) reveal whether generated values cluster around simple cases or spread across the domain. A generator that always produces small arrays or zero-heavy integers may miss bugs that only appear at scale. Visualizing the `complexity_mean` distribution in Tyche can expose these blind spots.
+3. **Are any regions of the input space missing?** By inspecting individual examples and their features, you can check whether boundary values, large inputs, and negative cases all appear. If an important region is absent, the generator or its filter predicates may need adjustment.
+
+Tyche renders these signals as interactive charts — sample breakdowns, feature distributions, and per-example drill-down — so you can diagnose generator quality visually rather than reading thousands of lines of test output.
 
 ## Reflecting and Reducing Known Values
 

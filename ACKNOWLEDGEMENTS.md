@@ -11,7 +11,9 @@ Along the way I went down many rabbit holes; sometimes I even came back up with 
 Exhaust would not exist without the foundation laid out in his thesis: the Freer monad-based reflective generator that reifies effects as inspectable data; the notion of _interpreting_ a generator bidirectionally; Choice Gradient optimisation.
 
 - [Property-based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content) (2024)
-- [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (Goldstein as co-author)
+- [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Goldstein as co-author)
+- [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842) (2023)
+- [Tyche: Making Sense of PBT Effectiveness](https://dl.acm.org/doi/10.1145/3654777.3676407) (2024)
 
 ## David MacIver, Alastair Donaldson and Hypothesis
 
@@ -25,7 +27,6 @@ Exhaust shamelessly adopts three insights from Hypothesis and this paper:
 - Adaptive binary search
 - Unit tests to verify edge cases
 - The notion of a `Bundle` for stateful contract testing
-
 
 
 - [Test Case Reduction via Test Case Generation: Insights from the Hypothesis Reducer](https://www.semanticscholar.org/paper/Test-Case-Reduction-via-Test-Case-Generation%3A-from-MacIver-Donaldson/6d72e1bd7743f12b48e20f7d234407e37b67e009) (2020)
@@ -74,3 +75,7 @@ I used tests from these libraries to help verify Exhaust’s reduction code
 - [Fast-check](https://fast-check.dev/) JS/TS
 - [jqwik](https://jqwik.net/) Java/Kotlin
 - [CsCheck](https://github.com/AnthonyLloyd/CsCheck) C#
+
+### Pointfree
+
+[Pointfree](https://www.pointfree.co)'s excellent libraries [Custom Dump](https://github.com/pointfreeco/swift-custom-dump) is used to output counterexamples and diffs in a standardised way, and [Swift Issue Reporting](https://github.com/pointfreeco/swift-issue-reporting) is used for surfacing issues in Swift Testing and XCTest.
