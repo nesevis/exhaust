@@ -8,36 +8,43 @@
 import Foundation
 import OSLog
 
-package enum ExhaustLog {
-    package enum Level: Int, CaseIterable, Comparable, Sendable {
-        case trace = 0
-        case debug
-        case info
-        case notice
-        case warning
-        case error
-        case critical
+/// Log verbosity level for Exhaust test runs.
+public enum LogLevel: Int, CaseIterable, Comparable, Sendable {
+    case trace = 0
+    case debug
+    case info
+    case notice
+    case warning
+    case error
+    case critical
 
-        package static func < (lhs: Self, rhs: Self) -> Bool {
-            lhs.rawValue < rhs.rawValue
-        }
-
-        fileprivate var osLogType: OSLogType {
-            switch self {
-            case .trace, .debug:
-                .debug
-            case .info:
-                .info
-            case .notice, .warning:
-                .default
-            case .error:
-                .error
-            case .critical:
-                .fault
-            }
-        }
+    public static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.rawValue < rhs.rawValue
     }
 
+    package var osLogType: OSLogType {
+        switch self {
+        case .trace, .debug:
+            .debug
+        case .info:
+            .info
+        case .notice, .warning:
+            .default
+        case .error:
+            .error
+        case .critical:
+            .fault
+        }
+    }
+}
+
+/// Log output format for Exhaust test runs.
+public enum LogFormat: String, Sendable {
+    case keyValue
+    case jsonl
+}
+
+package enum ExhaustLog {
     package enum Category: String, CaseIterable, Hashable, Sendable {
         case core
         case extensions
@@ -50,22 +57,17 @@ package enum ExhaustLog {
         case propertyTest
     }
 
-    package enum Format: String, Sendable {
-        case human
-        case llmOptimized
-    }
-
     package struct Configuration: Sendable {
         package var isEnabled: Bool
-        package var minimumLevel: Level
-        package var categoryMinimumLevels: [Category: Level]
-        package var format: Format
+        package var minimumLevel: LogLevel
+        package var categoryMinimumLevels: [Category: LogLevel]
+        package var format: LogFormat
 
         package init(
             isEnabled: Bool = true,
-            minimumLevel: Level = .notice,
-            categoryMinimumLevels: [Category: Level] = [:],
-            format: Format = .human
+            minimumLevel: LogLevel = .notice,
+            categoryMinimumLevels: [Category: LogLevel] = [:],
+            format: LogFormat = .keyValue
         ) {
             self.isEnabled = isEnabled
             self.minimumLevel = minimumLevel
@@ -73,7 +75,7 @@ package enum ExhaustLog {
             self.format = format
         }
 
-        package mutating func setMinimumLevel(_ level: Level, for category: Category) {
+        package mutating func setMinimumLevel(_ level: LogLevel, for category: Category) {
             categoryMinimumLevels[category] = level
         }
 
@@ -86,21 +88,13 @@ package enum ExhaustLog {
         _configuration
     }
 
-    package static func setConfiguration(_ configuration: Configuration) {
-        _configuration = configuration
-    }
-
-    package static func updateConfiguration(_ update: (inout Configuration) -> Void) {
-        update(&_configuration)
-    }
-
     @inline(__always)
-    package static func isEnabled(_ level: Level, for category: Category = .core) -> Bool {
+    package static func isEnabled(_ level: LogLevel, for category: Category = .core) -> Bool {
         shouldLog(level, category: category, configuration: _configuration)
     }
 
     package static func log(
-        _ level: Level,
+        _ level: LogLevel,
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -253,7 +247,7 @@ package enum ExhaustLog {
     }
 
     private static func _log(
-        _ level: Level,
+        _ level: LogLevel,
         category: Category,
         event: String,
         message: () -> String,
@@ -276,12 +270,26 @@ package enum ExhaustLog {
             line: line,
             format: configuration.format
         )
-        print(rendered)
-//        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
+//        print(rendered)
+        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
     }
 
     private static let subsystem = "com.exhaust"
-    private nonisolated(unsafe) static var _configuration = Configuration()
+    @TaskLocal private static var _configuration = Configuration()
+
+    package static func withConfiguration<Result>(
+        _ configuration: Configuration,
+        body: () throws -> Result
+    ) rethrows -> Result {
+        try $_configuration.withValue(configuration) { try body() }
+    }
+
+    package static func withConfiguration<Result>(
+        _ configuration: Configuration,
+        body: () async throws -> Result
+    ) async rethrows -> Result {
+        try await $_configuration.withValue(configuration) { try await body() }
+    }
 
     private static let coreLogger = Logger(subsystem: subsystem, category: Category.core.rawValue)
     private static let extensionsLogger = Logger(
@@ -319,7 +327,7 @@ package enum ExhaustLog {
 
     @inline(__always)
     private static func shouldLog(
-        _ level: Level,
+        _ level: LogLevel,
         category: Category,
         configuration: Configuration
     ) -> Bool {
@@ -354,22 +362,22 @@ package enum ExhaustLog {
     }
 
     private static func render(
-        level: Level,
+        level: LogLevel,
         category: Category,
         event: String,
         message: String,
         metadata: [String: String],
         file: String,
         line: UInt,
-        format: Format
+        format: LogFormat
     ) -> String {
         switch format {
-        case .human:
-            let metadataDescription = renderHumanMetadata(metadata)
+        case .keyValue:
+            let metadataDescription = renderKeyValueMetadata(metadata)
             let messagePart = message.isEmpty ? "" : " \(message)"
             return "[\(category.rawValue)] [\(level)] [\(event)]\(messagePart)\(metadataDescription)"
-        case .llmOptimized:
-            return renderLLMLogLine(
+        case .jsonl:
+            return renderJSONLLogLine(
                 category: category,
                 level: level,
                 event: event,
@@ -381,7 +389,7 @@ package enum ExhaustLog {
         }
     }
 
-    private static func renderHumanMetadata(_ metadata: [String: String]) -> String {
+    private static func renderKeyValueMetadata(_ metadata: [String: String]) -> String {
         guard metadata.isEmpty == false else {
             return ""
         }
@@ -392,16 +400,16 @@ package enum ExhaustLog {
         return " \(pairs)"
     }
 
-    private static func renderLLMLogLine(
+    private static func renderJSONLLogLine(
         category: Category,
-        level: Level,
+        level: LogLevel,
         event: String,
         message: String,
         file: String,
         line: UInt,
         metadata: [String: String]
     ) -> String {
-        let logLine = LLMLogLine(
+        let logLine = JSONLLogLine(
             kind: "exhaust_log",
             category: category.rawValue,
             level: "\(level)",
@@ -421,7 +429,7 @@ package enum ExhaustLog {
     }
 }
 
-private struct LLMLogLine: Encodable {
+private struct JSONLLogLine: Encodable {
     let kind: String
     let category: String
     let level: String

@@ -43,7 +43,6 @@ struct BinaryHeapShrinkingChallenge {
             let sorted = Self.toList(heap).sorted()
             return sorted == xs.sorted() && xs == xs.sorted()
         }
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(

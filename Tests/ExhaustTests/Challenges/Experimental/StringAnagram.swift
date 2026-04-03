@@ -61,8 +61,6 @@ struct StringAnagramChallenge {
             return a.sorted() != b.sorted()
         }
 
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-
         // "dcba" and "abcd" as byte arrays — a known anagram pair
         let value = ("dcba", "abcd")
         #expect(property(value.0, value.1) == false)
@@ -71,6 +69,7 @@ struct StringAnagramChallenge {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .logging(.debug),
 
             property: property
         )

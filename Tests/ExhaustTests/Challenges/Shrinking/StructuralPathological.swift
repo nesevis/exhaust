@@ -330,8 +330,6 @@ struct StructuralPathologicalChallenge {
         // saving Phase 2's re-confirmation probes (ZeroValue all-at-once + individual probes).
         let gen = #gen(.uint(in: 0 ... 100)).array(length: 10)
 
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-
         var report: ExhaustReport?
         let output = #exhaust(
             gen,

@@ -35,13 +35,6 @@ struct NashGapValidation {
             .int(in: 0 ... 30)
         )
 
-        ExhaustLog.setConfiguration(.init(
-            isEnabled: true,
-            minimumLevel: .info,
-            categoryMinimumLevels: [.reducer: .debug],
-            format: .human
-        ))
-
         // Large counterexample where all constraints are satisfied.
         let value = (18, 22, 15, 25, 28, 19, 27, 20)
 
@@ -50,7 +43,8 @@ struct NashGapValidation {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .onReport { report = $0 }
+            .onReport { report = $0 },
+            .logging(.debug)
         ) { a, b, c, d, e, f, g, h in
             // Fails when: both coupled sums >= 10 AND all four independent values >= 15.
             a + b < 10 || c + d < 10 || e < 15 || f < 15 || g < 15 || h < 15
@@ -87,13 +81,6 @@ struct NashGapValidation {
             .int(in: 0 ... 40)
         )
 
-        ExhaustLog.setConfiguration(.init(
-            isEnabled: true,
-            minimumLevel: .info,
-            categoryMinimumLevels: [.reducer: .debug],
-            format: .human
-        ))
-
         let value = (12, 28, 19, 35, 8, 27, 38, 22, 31, 25)
 
         var report: ExhaustReport?
@@ -101,7 +88,8 @@ struct NashGapValidation {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .onReport { report = $0 }
+            .onReport { report = $0 },
+            .logging(.debug)
         ) { a, b, c, d, e, f, g, h, i, j in
             a + b < 8 || c + d < 8 || e + f < 8 || g < 20 || h < 20 || i < 20 || j < 20
         }

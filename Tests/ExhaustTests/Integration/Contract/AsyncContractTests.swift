@@ -77,11 +77,11 @@ struct AsyncContractTests {
 
     @Test("Async contract with SCA coverage finds and shrinks failure")
     func asyncWithCoverage() async {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let result = await #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 20,
-            .suppressIssueReporting
+            .suppressIssueReporting,
+            .logging(.debug)
         )
         #expect(result != nil, "Should find a failure")
         if let result {

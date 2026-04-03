@@ -33,6 +33,8 @@ public func __runContract<Spec: ContractSpec>(
     var suppressIssueReporting = false
     var useRandomOnly = false
     var collectOpenPBTStats = false
+    var logLevel: LogLevel = .error
+    var logFormat: LogFormat = .keyValue
     for setting in settings {
         switch setting {
         case let .budget(b):
@@ -55,8 +57,12 @@ public func __runContract<Spec: ContractSpec>(
             useRandomOnly = true
         case .collectOpenPBTStats:
             collectOpenPBTStats = true
+        case let .logging(level, format):
+            logLevel = level
+            logFormat = format
         }
     }
+    return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
     let samplingBudget = budget.samplingBudget
     let coverageBudget = budget.coverageBudget
     let reductionConfig = budget.reducerBudget
@@ -143,7 +149,9 @@ public func __runContract<Spec: ContractSpec>(
                 reductionConfig: reductionConfig,
                 suppressIssueReporting: true,
                 useRandomOnly: useRandomOnly || skipGenericCoverage,
-                collectOpenPBTStats: collectOpenPBTStats
+                collectOpenPBTStats: collectOpenPBTStats,
+                logLevel: logLevel,
+                logFormat: logFormat
             ),
             sourceCode: nil,
             fileID: fileID,
@@ -194,6 +202,7 @@ public func __runContract<Spec: ContractSpec>(
     }
 
     return result
+    } // withConfiguration
 }
 
 // MARK: - Trace building
@@ -532,7 +541,9 @@ func buildExhaustSettings<Output>(
     reductionConfig: ReducerBudget,
     suppressIssueReporting: Bool,
     useRandomOnly: Bool,
-    collectOpenPBTStats: Bool = false
+    collectOpenPBTStats: Bool = false,
+    logLevel: LogLevel = .error,
+    logFormat: LogFormat = .keyValue
 ) -> [ExhaustSettings<Output>] {
     var settings: [ExhaustSettings<Output>] = [
         .budget(.custom(
@@ -553,5 +564,6 @@ func buildExhaustSettings<Output>(
     if collectOpenPBTStats {
         settings.append(.collectOpenPBTStats)
     }
+    settings.append(.logging(logLevel, logFormat))
     return settings
 }

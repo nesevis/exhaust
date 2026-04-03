@@ -18,7 +18,6 @@ struct ReverseShrinkingChallenge {
     @Test("Reverse, Full")
     func reverseFull() {
         let gen = #gen(.uint()).array(length: 1 ... 1000)
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let output = #exhaust(
             gen,

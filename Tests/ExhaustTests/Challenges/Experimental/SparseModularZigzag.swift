@@ -69,7 +69,6 @@ struct SparseModularZigzagChallenge {
     /// This is the non-monotone gap problem at scale. The linearScan encoder handles small gaps (remaining range ≤ 64), but the gap from 23 to 18 in the modular landscape is too wide for it to bridge, and the coordinates are coupled so it can't scan them independently.
     @Test("Sparse modular zigzag")
     func sparseModularZigzag() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let value = try #require(
             #exhaust(
@@ -78,6 +77,7 @@ struct SparseModularZigzagChallenge {
                 .budget(.exorbitant),
                 .replay(11_933_936_430_368_835_868),
                 .onReport { report = $0 },
+                .logging(.debug),
                 property: Self.property
             )
         )

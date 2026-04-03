@@ -170,7 +170,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             )
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
-                category: .generation,
+                category: .adaptation,
                 event: "uniqueness_budget_exhausted",
                 metadata: [
                     "unique_count": "\(context.runs)",

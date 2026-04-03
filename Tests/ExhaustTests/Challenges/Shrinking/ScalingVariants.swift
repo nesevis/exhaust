@@ -63,7 +63,6 @@ struct BinaryHeapScalingVariant {
     func binaryHeap(variant: ScalingVariant) throws {
         let scaling: SizeScaling<Int> = variant.scaling()
         let gen = Self.heapGen(depth: 6, scaling: scaling)
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let property: @Sendable (Heap) -> Bool = { heap in
             guard BinaryHeapShrinkingChallenge.invariant(heap) else { return true }
             let xs = BinaryHeapShrinkingChallenge.toSortedList(heap)
@@ -208,7 +207,6 @@ struct CalculatorScalingVariant {
 struct CouplingScalingVariant {
     @Test("Scaling variant", arguments: [ScalingVariant.constant])
     func coupling(variant: ScalingVariant) throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let intScaling: SizeScaling<Int> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
 

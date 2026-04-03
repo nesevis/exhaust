@@ -30,8 +30,6 @@ struct ParserShrinkingChallenge {
 
     @Test("Parser, Full", .disabled("The branch projection settles this in a suboptimal minimum"))
     func parserFull() throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(

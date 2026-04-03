@@ -30,7 +30,6 @@ struct CoupledZigzagChallenge {
 
     @Test("Coupled zigzag via bind")
     func coupledZigzag() throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let gen = #gen(.int(in: 0 ... 500))
             .bind { m in
                 #gen(.int(in: 0 ... 500)).map { n in (m, n) }

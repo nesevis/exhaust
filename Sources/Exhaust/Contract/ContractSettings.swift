@@ -21,4 +21,9 @@ public enum ContractSettings {
     ///
     /// Each test example produces one JSON line with status, a `customDump` representation, and complexity features derived from the choice tree. Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.
     case collectOpenPBTStats
+
+    /// Controls log verbosity and format for this contract test run.
+    ///
+    /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
+    case logging(LogLevel, LogFormat = .keyValue)
 }

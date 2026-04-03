@@ -16,7 +16,6 @@ struct ExploreVsExhaustTests {
             .unique()
             .filter { $0.isValidBST() }
         
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let result = #exhaust(
             gen,
             .budget(.expensive),

@@ -37,7 +37,6 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Single")
     func bound5Single() {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
@@ -55,7 +54,6 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 1")
     func bound5Pathological() {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-18914, -2906, 9816],
             b: [7672, 16087, 24512],
@@ -80,7 +78,6 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 2")
     func bound5Pathological2() {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-10709],
             b: [29251, 31661],
@@ -112,7 +109,6 @@ struct Bound5ShrinkingChallenge {
             d: [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794],
             e: [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856]
         )
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
@@ -139,7 +135,6 @@ struct Bound5ShrinkingChallenge {
             d: [-4862, 11017, 12831, 19004],
             e: [-25748, 8284, -13626, 12773, 4040]
         )
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
@@ -156,12 +151,11 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, pathological 5")
     func bound5Pathological5() {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .replay(12_394_678_611_125_950_626),
+            .logging(.debug),
             property: Self.property
         )
 
@@ -171,8 +165,6 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, covering array time")
     func bound5CoveringArray() {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
@@ -187,8 +179,6 @@ struct Bound5ShrinkingChallenge {
     func bound5Many() {
         let bound5s = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
-        // ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-
         for bound5 in bound5s {
             let output = #exhaust(
                 Self.gen,

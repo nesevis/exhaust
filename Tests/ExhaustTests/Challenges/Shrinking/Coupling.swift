@@ -41,7 +41,6 @@ struct CouplingShrinkingChallenge {
 
     @Test("Coupling")
     func couplingChallenge() throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var report: ExhaustReport?
         let value = try #require(
             #exhaust(
@@ -58,7 +57,6 @@ struct CouplingShrinkingChallenge {
 
     @Test("Coupling Pathological 1")
     func couplingPathlogical1() throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
         var report: ExhaustReport?
         let value = try #require(
             #exhaust(

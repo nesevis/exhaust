@@ -16,20 +16,20 @@ struct PropertyTestFailure<Output> {
     /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
     var transparent: Bool = false
 
-    func render(format: ExhaustLog.Format) -> String {
+    func render(format: LogFormat) -> String {
         switch format {
-        case .human:
-            renderHuman()
-        case .llmOptimized:
-            renderLLMOptimized()
+        case .keyValue:
+            renderKeyValue()
+        case .jsonl:
+            renderJSONL()
         }
     }
 
-    // MARK: - Human format
+    // MARK: - Key-value format
 
-    private func renderHuman() -> String {
+    private func renderKeyValue() -> String {
         if transparent {
-            return renderHumanTransparent()
+            return renderKeyValueTransparent()
         }
 
         var lines: [String] = []
@@ -76,7 +76,7 @@ struct PropertyTestFailure<Output> {
     }
 
     /// Renders only the replay seed — the `#expect` assertions provide per-value detail.
-    private func renderHumanTransparent() -> String {
+    private func renderKeyValueTransparent() -> String {
         if let seed {
             return "Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")"
         } else if let replayHint {
@@ -86,9 +86,9 @@ struct PropertyTestFailure<Output> {
         }
     }
 
-    // MARK: - LLM-optimized format
+    // MARK: - JSONL format
 
-    private func renderLLMOptimized() -> String {
+    private func renderJSONL() -> String {
         var counterexampleDump = ""
         customDump(counterexample, to: &counterexampleDump)
 
@@ -101,7 +101,7 @@ struct PropertyTestFailure<Output> {
 
         let encodedSeed = seed.map { CrockfordBase32.encode($0) }
 
-        let logLine = LLMLogLine(
+        let logLine = JSONLLogLine(
             event: "property_failed",
             seed: encodedSeed,
             iteration: iteration,
@@ -123,9 +123,9 @@ struct PropertyTestFailure<Output> {
     }
 }
 
-// MARK: - LLM log line
+// MARK: - JSONL log line
 
-private struct LLMLogLine: Encodable {
+private struct JSONLLogLine: Encodable {
     let event: String
     let seed: String?
     let iteration: Int

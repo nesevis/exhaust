@@ -50,7 +50,6 @@ struct HeapMergeTests {
 struct HeapAliasingTests {
     @Test("Sorted-splice merge violates heap property after repeated self-merges")
     func spliceMergeBug() throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
         // Legacy: 90 invocations, 31ms, CE 5 steps
         // Bonsai: 151 invocations, 26ms, CE 5 steps
         let result = try #require(

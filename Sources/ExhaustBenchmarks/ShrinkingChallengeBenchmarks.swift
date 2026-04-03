@@ -1312,11 +1312,6 @@ private func runReflectableBenchmark<Output>(
         }
         var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-//        if isTargetValue {
-//            ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-//        } else {
-//            ExhaustLog.setConfiguration(.init(isEnabled: false, minimumLevel: .error, categoryMinimumLevels: [.reducer: .error], format: .human))
-//        }
         let result = try? Interpreters.bonsaiReduce(
             gen: gen,
             tree: tree,

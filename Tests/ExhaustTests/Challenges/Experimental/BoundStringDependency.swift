@@ -15,7 +15,6 @@ struct DependentStringChallenge {
      */
     @Test("Bound string dependency")
     func boundStringDependency() {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let gen = #gen(.int(in: 0 ... 10)).bound(
             forward: { .string(length: UInt64($0) ... UInt64($0)) },
             backward: \.count
@@ -23,7 +22,8 @@ struct DependentStringChallenge {
 
         let output = #exhaust(
             gen,
-            .suppressIssueReporting
+            .suppressIssueReporting,
+            .logging(.debug)
         ) { value in
             !(4 ... 5 ~= value.count)
         }

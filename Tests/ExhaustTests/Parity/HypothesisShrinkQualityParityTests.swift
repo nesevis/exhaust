@@ -187,7 +187,6 @@ struct HypothesisShrinkQualityParityTests {
             let property: ((Int, Int)) -> Bool = { pair in
                 pair.0 + gap != pair.1
             }
-//            ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
             let output = try reduce(gen, startingAt: start, property: property)
             #expect(property(output) == false)
             #expect(output == (0, gap))

@@ -36,24 +36,25 @@ struct BonsaiReducerIntegrationTests {
             }
         )
 
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        var failingTree: ChoiceTree?
-        while let (value, tree) = try iterator.next() {
-            if value.count > 2 {
-                failingTree = tree
-                break
+        try ExhaustLog.withConfiguration(.init(minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .keyValue)) {
+            var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
+            var failingTree: ChoiceTree?
+            while let (value, tree) = try iterator.next() {
+                if value.count > 2 {
+                    failingTree = tree
+                    break
+                }
             }
+
+            let tree = try #require(failingTree)
+            #expect(tree.containsBind)
+
+            let (_, shrunk) = try #require(
+                try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
+            )
+
+            #expect(shrunk == [0, 0, 0])
         }
-
-        let tree = try #require(failingTree)
-        #expect(tree.containsBind)
-
-        let (_, shrunk) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
-        )
-
-        #expect(shrunk == [0, 0, 0])
     }
 
     @Test("Non-bind degenerate case: maxBindDepth == 0, single coordinate")

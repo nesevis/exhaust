@@ -17,6 +17,8 @@ public typealias ReducerBudget = Interpreters.ReductionBudget
 public typealias GeneratorError = ExhaustCore.GeneratorError
 public typealias EncoderName = ExhaustCore.EncoderName
 public typealias ReductionStats = ExhaustCore.ReductionStats
+public typealias LogLevel = ExhaustCore.LogLevel
+public typealias LogFormat = ExhaustCore.LogFormat
 
 // MARK: - Package typealiases
 

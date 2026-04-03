@@ -99,6 +99,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var visualize = false
         var onReportClosure: ((ExhaustReport) -> Void)?
         var collectOpenPBTStats = false
+        var logLevel: LogLevel = .error
+        var logFormat: LogFormat = .keyValue
 
         for setting in settings {
             switch setting {
@@ -128,9 +130,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 onReportClosure = closure
             case .collectOpenPBTStats:
                 collectOpenPBTStats = true
+            case let .logging(level, format):
+                logLevel = level
+                logFormat = format
             }
         }
-        
+
+        return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
         // Merge trait configuration — trait provides defaults, inline settings override.
         #if canImport(Testing)
         if let traitConfig = ExhaustTraitConfiguration.current {
@@ -283,7 +289,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         failure.replayHint =
                         "No replay seed — found via systematic combinatorial coverage."
                         let rendered = failure.render(
-                            format: ExhaustLog.configuration.format
+                            format: logFormat
                         )
                         ExhaustLog.error(
                             category: .propertyTest,
@@ -356,7 +362,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     propertyInvocations: propertyInvocationCount
                 )
                 failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
-                let rendered = failure.render(format: ExhaustLog.configuration.format)
+                let rendered = failure.render(format: logFormat)
                 ExhaustLog.error(
                     category: .propertyTest,
                     event: "property_failed",
@@ -528,7 +534,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             blueprint: shrunkSequence.shortString,
                             propertyInvocations: propertyInvocationCount
                         )
-                        let rendered = failure.render(format: ExhaustLog.configuration.format)
+                        let rendered = failure.render(format: logFormat)
                         ExhaustLog.error(
                             category: .propertyTest,
                             event: "property_failed",
@@ -606,7 +612,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     blueprint: nil,
                     propertyInvocations: propertyInvocationCount
                 )
-                let rendered = failure.render(format: ExhaustLog.configuration.format)
+                let rendered = failure.render(format: logFormat)
                 ExhaustLog.error(
                     category: .propertyTest,
                     event: "property_failed",
@@ -671,6 +677,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             reduction: 0
         )
         return nil
+        } // withConfiguration
         } // withoutActuallyEscaping
     }
 
@@ -710,6 +717,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         property: @Sendable (Output) throws -> Void,
         detection: @Sendable (Output) throws -> Void
     ) -> Output? {
+        var logLevel: LogLevel = .error
+        var logFormat: LogFormat = .keyValue
+        for setting in settings {
+            if case let .logging(level, format) = setting {
+                logLevel = level
+                logFormat = format
+            }
+        }
+
+        return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
         withoutActuallyEscaping(detection) { detection in
             let boolProperty = wrapDetectionProperty(detection)
 
@@ -835,6 +852,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
             return counterexample
         }
+        } // withConfiguration
     }
 
     // MARK: - Async Property
@@ -854,6 +872,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         function: StaticString = #function,
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> Output? {
+        var logLevel: LogLevel = .error
+        var logFormat: LogFormat = .keyValue
+        for setting in settings {
+            if case let .logging(level, format) = setting {
+                logLevel = level
+                logFormat = format
+            }
+        }
+
+        return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
         let syncProperty: @Sendable (Output) -> Bool = { value in
             let valueBox = SendableBox(value)
             let resultBox = SendableBox(false)
@@ -882,6 +910,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 continuation.resume(returning: result)
             }
         }
+        } // withConfiguration
     }
 
     /// Runs a property test with an async `Void`-returning property that uses `#expect`/`#require` for assertions.
@@ -900,6 +929,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         property: @escaping @Sendable (Output) async throws -> Void,
         detection: @escaping @Sendable (Output) async throws -> Void
     ) async -> Output? {
+        var logLevel: LogLevel = .error
+        var logFormat: LogFormat = .keyValue
+        for setting in settings {
+            if case let .logging(level, format) = setting {
+                logLevel = level
+                logFormat = format
+            }
+        }
+
+        return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
         // Wrap async detection into sync Bool (Task + semaphore, called from GCD thread).
         let syncDetection: @Sendable (Output) -> Bool = { value in
             let valueBox = SendableBox(value)
@@ -1040,6 +1079,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
 
         return counterexample
+        } // withConfiguration
     }
 
     // MARK: - Explore
@@ -1064,6 +1104,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
+        var logLevel: LogLevel = .error
+        var logFormat: LogFormat = .keyValue
         for setting in settings {
             switch setting {
             case let .samplingBudget(n):
@@ -1088,9 +1130,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 poolCapacity = n
             case let .generateRatio(r):
                 generateRatio = r
+            case let .logging(level, format):
+                logLevel = level
+                logFormat = format
             }
         }
-        
+
+        return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
         var runner = ExploreRunner(
             gen: gen,
             property: property,
@@ -1117,7 +1163,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 blueprint: shrunkSequence.shortString,
                 propertyInvocations: nil
             )
-            let rendered = failure.render(format: ExhaustLog.configuration.format)
+            let rendered = failure.render(format: logFormat)
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "explore_property_failed",
@@ -1145,7 +1191,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 blueprint: nil,
                 propertyInvocations: nil
             )
-            let rendered = failure.render(format: ExhaustLog.configuration.format)
+            let rendered = failure.render(format: logFormat)
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "explore_property_failed",
@@ -1177,8 +1223,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             )
             return nil
         }
+        } // withConfiguration
     }
-    
+
     // MARK: - Example
     
     /// Generates a single value from a generator. Runtime target of `#example` expansion.

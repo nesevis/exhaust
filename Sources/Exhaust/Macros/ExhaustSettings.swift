@@ -141,4 +141,12 @@ public enum ExhaustSettings<Output> {
     ///
     /// Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.
     case collectOpenPBTStats
+
+    /// Controls log verbosity and format for this test run.
+    ///
+    /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
+    /// ```swift
+    /// #exhaust(gen, .logging(.debug)) { value in ... }
+    /// ```
+    case logging(LogLevel, LogFormat = .keyValue)
 }

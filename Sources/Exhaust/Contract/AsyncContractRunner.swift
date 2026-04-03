@@ -27,6 +27,8 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     var seed: UInt64?
     var suppressIssueReporting = false
     var useRandomOnly = false
+    var logLevel: LogLevel = .error
+    var logFormat: LogFormat = .keyValue
     for setting in settings {
         switch setting {
         case let .budget(b):
@@ -49,9 +51,13 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             useRandomOnly = true
         case .collectOpenPBTStats:
             break // Async contract tests do not yet support OpenPBTStats collection.
+        case let .logging(level, format):
+            logLevel = level
+            logFormat = format
         }
     }
 
+    return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
     let commandGen = Spec.commandGenerator
     let samplingBudget = budget.samplingBudget
     let coverageBudget = budget.coverageBudget
@@ -138,7 +144,9 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                         seed: replaySeed,
                         reductionConfig: reduction,
                         suppressIssueReporting: true,
-                        useRandomOnly: randomOnly || skipGenericCoverage
+                        useRandomOnly: randomOnly || skipGenericCoverage,
+                        logLevel: logLevel,
+                        logFormat: logFormat
                     ),
                     sourceCode: nil,
                     fileID: fileID,
@@ -196,6 +204,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     }
 
     return result
+    } // withConfiguration
 }
 
 // MARK: - Async trace building
