@@ -1,4 +1,5 @@
 import Benchmark
 
-registerShrinkingChallengeBenchmarks()
+//registerShrinkingChallengeBenchmarks()
+registerECOOPBenchmarks()
 Benchmark.main()

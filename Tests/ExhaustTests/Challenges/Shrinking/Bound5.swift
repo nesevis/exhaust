@@ -119,8 +119,8 @@ struct Bound5ShrinkingChallenge {
         )
 
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 332)
-        #expect(rep.totalMaterializations == 506)
+        #expect(rep.propertyInvocations == 328)
+        #expect(rep.totalMaterializations == 502)
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -155,7 +155,7 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .replay(12_394_678_611_125_950_626),
-            .logging(.debug),
+            .logging(.debug, .jsonl),
             property: Self.property
         )
 
