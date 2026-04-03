@@ -8,8 +8,8 @@
 import Foundation
 import OSLog
 
-public enum ExhaustLog {
-    public enum Level: Int, CaseIterable, Comparable, Sendable {
+package enum ExhaustLog {
+    package enum Level: Int, CaseIterable, Comparable, Sendable {
         case trace = 0
         case debug
         case info
@@ -18,7 +18,7 @@ public enum ExhaustLog {
         case error
         case critical
 
-        public static func < (lhs: Self, rhs: Self) -> Bool {
+        package static func < (lhs: Self, rhs: Self) -> Bool {
             lhs.rawValue < rhs.rawValue
         }
 
@@ -38,7 +38,7 @@ public enum ExhaustLog {
         }
     }
 
-    public enum Category: String, CaseIterable, Hashable, Sendable {
+    package enum Category: String, CaseIterable, Hashable, Sendable {
         case core
         case extensions
         case generation
@@ -50,18 +50,18 @@ public enum ExhaustLog {
         case propertyTest
     }
 
-    public enum Format: String, Sendable {
+    package enum Format: String, Sendable {
         case human
         case llmOptimized
     }
 
-    public struct Configuration: Sendable {
-        public var isEnabled: Bool
-        public var minimumLevel: Level
-        public var categoryMinimumLevels: [Category: Level]
-        public var format: Format
+    package struct Configuration: Sendable {
+        package var isEnabled: Bool
+        package var minimumLevel: Level
+        package var categoryMinimumLevels: [Category: Level]
+        package var format: Format
 
-        public init(
+        package init(
             isEnabled: Bool = true,
             minimumLevel: Level = .notice,
             categoryMinimumLevels: [Category: Level] = [:],
@@ -73,33 +73,33 @@ public enum ExhaustLog {
             self.format = format
         }
 
-        public mutating func setMinimumLevel(_ level: Level, for category: Category) {
+        package mutating func setMinimumLevel(_ level: Level, for category: Category) {
             categoryMinimumLevels[category] = level
         }
 
-        public mutating func clearMinimumLevel(for category: Category) {
+        package mutating func clearMinimumLevel(for category: Category) {
             categoryMinimumLevels[category] = nil
         }
     }
 
-    public static var configuration: Configuration {
+    package static var configuration: Configuration {
         _configuration
     }
 
-    public static func setConfiguration(_ configuration: Configuration) {
+    package static func setConfiguration(_ configuration: Configuration) {
         _configuration = configuration
     }
 
-    public static func updateConfiguration(_ update: (inout Configuration) -> Void) {
+    package static func updateConfiguration(_ update: (inout Configuration) -> Void) {
         update(&_configuration)
     }
 
     @inline(__always)
-    public static func isEnabled(_ level: Level, for category: Category = .core) -> Bool {
+    package static func isEnabled(_ level: Level, for category: Category = .core) -> Bool {
         shouldLog(level, category: category, configuration: _configuration)
     }
 
-    public static func log(
+    package static func log(
         _ level: Level,
         category: Category = .core,
         event: String,
@@ -119,7 +119,7 @@ public enum ExhaustLog {
         )
     }
 
-    public static func trace(
+    package static func trace(
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -138,7 +138,7 @@ public enum ExhaustLog {
         )
     }
 
-    public static func debug(
+    package static func debug(
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -157,7 +157,7 @@ public enum ExhaustLog {
         )
     }
 
-    public static func info(
+    package static func info(
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -176,7 +176,7 @@ public enum ExhaustLog {
         )
     }
 
-    public static func notice(
+    package static func notice(
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -195,7 +195,7 @@ public enum ExhaustLog {
         )
     }
 
-    public static func warning(
+    package static func warning(
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -214,7 +214,7 @@ public enum ExhaustLog {
         )
     }
 
-    public static func error(
+    package static func error(
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -233,7 +233,7 @@ public enum ExhaustLog {
         )
     }
 
-    public static func critical(
+    package static func critical(
         category: Category = .core,
         event: String,
         _ message: @autoclosure @escaping () -> String = "",
@@ -369,10 +369,15 @@ public enum ExhaustLog {
             let messagePart = message.isEmpty ? "" : " \(message)"
             return "[\(category.rawValue)] [\(level)] [\(event)]\(messagePart)\(metadataDescription)"
         case .llmOptimized:
-            let metadataDescription = renderLLMMetadata(metadata)
-            return """
-            {"kind":"exhaust_log","category":"\(escapeJSON(category.rawValue))","level":"\(level)","event":"\(escapeJSON(event))","message":"\(escapeJSON(message))","file":"\(escapeJSON(file))","line":\(line),"metadata":{\(metadataDescription)}}
-            """
+            return renderLLMLogLine(
+                category: category,
+                level: level,
+                event: event,
+                message: message,
+                file: file,
+                line: line,
+                metadata: metadata
+            )
         }
     }
 
