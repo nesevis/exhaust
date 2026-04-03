@@ -468,6 +468,9 @@ public enum Interpreters {
         case forwardOnlyMap(inputType: String, outputType: String)
         /// Reflection failed because a forward-only `bind` was detected.
         case forwardOnlyBind(inputType: String, outputType: String)
+        /// Reflection failed because a metamorphic transform was detected.
+        /// Metamorph transforms are forward-only and cannot be reflected backward.
+        case forwardOnlyMetamorph
 
         public var errorDescription: String? {
             switch self {
@@ -475,6 +478,8 @@ public enum Interpreters {
                 "Reflection failed — forward-only map (\(inputType) → \(outputType)) detected. Consider using .mapped(forward:backward:) instead."
             case let .forwardOnlyBind(inputType, outputType):
                 "Reflection failed — forward-only bind (\(inputType) → \(outputType)) detected."
+            case .forwardOnlyMetamorph:
+                "Reflection failed — metamorphic transforms are forward-only and cannot be reflected backward."
             default:
                 nil
             }

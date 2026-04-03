@@ -465,7 +465,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 ),
                 inner: erase()
             ),
-            continuation: { .pure($0 as! [Any]) }
+            continuation: {
+                guard let array = $0 as? [Any] else {
+                    throw Interpreters.ReflectionError.forwardOnlyMetamorph
+                }
+                return .pure(array)
+            }
         )
 
         // `tuple.0` crashes the Swift 6.2 compiler (signal 5) on tuples with parameter packs.
