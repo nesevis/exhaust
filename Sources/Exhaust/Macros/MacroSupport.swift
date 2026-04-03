@@ -259,7 +259,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 )
                 // Reflect to get a structurally correct tree with materialized picks,
                 // since coverage-built trees lack unselected branches needed by reducer strategies.
-                let shrinkTree = (try? Interpreters.reflect(gen, with: value)) ?? tree
+                let reductionTree = (try? Interpreters.reflect(gen, with: value)) ?? tree
                 var propertyInvocationCount = 0
                 let countingProperty: (Output) -> Bool = { value in
                     propertyInvocationCount += 1
@@ -268,7 +268,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 do {
                     let reduceResult = try Interpreters.bonsaiReduceCollectingStats(
                         gen: gen,
-                        tree: shrinkTree,
+                        tree: reductionTree,
                         output: value,
                         config: reductionConfig,
                         visualize: visualize,

@@ -46,9 +46,9 @@ public extension ChoiceSequence {
         self = Self.flatten(tree)
     }
 
-    /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes.
+    /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/reduction purposes.
     ///
-    /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in shrink passes.
+    /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in reduction passes.
     static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
         var result = ChoiceSequence()
         result.reserveCapacity(64)

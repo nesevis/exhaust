@@ -5,7 +5,7 @@
 //  Created by Codex on 21/2/2026.
 //
 
-/// Utilities for float-specific shortlex/shrink ordering.
+/// Utilities for float-specific shortlex/reduction ordering.
 public enum FloatShortlex {
     public static let simpleIntegerUpperBound = 72_057_594_037_927_936.0 // 2^56
 

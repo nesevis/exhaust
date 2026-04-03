@@ -92,7 +92,7 @@ public macro exhaust<T, R>(
 ///
 /// ## Parameters
 ///
-/// - `commandLimit`: The maximum number of commands per generated sequence. The reducer can shrink below this value.
+/// - `commandLimit`: The maximum number of commands per generated sequence. The reducer can reduce below this value.
 ///
 /// ## Settings
 ///

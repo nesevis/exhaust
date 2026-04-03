@@ -624,9 +624,9 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
               targetValue.isFinite
         else { return nil }
 
-        guard let lhsRatio = FloatShrink.integerRatio(for: lhsValue, tag: tag),
-              let rhsRatio = FloatShrink.integerRatio(for: rhsValue, tag: tag),
-              let targetRatio = FloatShrink.integerRatio(for: targetValue, tag: tag),
+        guard let lhsRatio = FloatReduction.integerRatio(for: lhsValue, tag: tag),
+              let rhsRatio = FloatReduction.integerRatio(for: rhsValue, tag: tag),
+              let targetRatio = FloatReduction.integerRatio(for: targetValue, tag: tag),
               let lhsAndRhsDenominator = leastCommonMultiple(
                   lhsRatio.denominator,
                   rhsRatio.denominator
@@ -719,7 +719,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         switch choice {
         case let .floating(value, _, tag):
             guard value.isFinite else { return nil }
-            return FloatShrink.integerRatio(for: value, tag: tag)
+            return FloatReduction.integerRatio(for: value, tag: tag)
         case let .signed(value, _, _):
             return (value, 1)
         case let .unsigned(value, _):
@@ -741,7 +741,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
             guard case let .floating(targetValue, _, _) = targetChoice,
                   targetValue.isFinite
             else { return nil }
-            return FloatShrink.integerRatio(for: targetValue, tag: tag)
+            return FloatReduction.integerRatio(for: targetValue, tag: tag)
         case let .signed(_, _, tag):
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),

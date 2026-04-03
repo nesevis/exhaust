@@ -58,7 +58,7 @@ public extension ChoiceValue {
         }
     }
 
-    /// The bit pattern of the ideal shrink target for this value type.
+    /// The bit pattern of the ideal reduction target for this value type.
     /// - Unsigned: lowest valid bit pattern (smallest value)
     /// - Signed/Float: 0's bit pattern if in range, else the range bound closest to 0's bit pattern
     func reductionTarget(in range: ClosedRange<UInt64>?) -> UInt64 {

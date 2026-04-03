@@ -441,7 +441,7 @@ extension GeneratorTuning {
         let composedElementPredicate: (Any) -> Bool = { _ in
             // We can't meaningfully compose through the sequence continuation
             // without knowing the full array context, so return true to keep
-            // all element branches available for shrinking
+            // all element branches available for reduction
             true
         }
 

@@ -5,14 +5,14 @@
 
 /// Result of an exploration run.
 public enum ExploreResult<Output> {
-    /// A counterexample was found and shrunk.
+    /// A counterexample was found and reduced.
     case failure(
         counterexample: Output,
         shrunkSequence: ChoiceSequence,
         original: Output,
         iteration: UInt64
     )
-    /// A counterexample was found but shrinking failed.
+    /// A counterexample was found but reduction failed.
     case unshrunkFailure(counterexample: Output, iteration: UInt64)
     /// All iterations passed without finding a failure.
     case passed(iterations: UInt64, poolSize: Int)
@@ -192,7 +192,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         return nil
     }
 
-    /// Shrink a failing value and return the result.
+    /// Reduce a failing value and return the result.
     ///
     /// Always reflects to get a structurally correct tree, since `materializePicks: false` trees lack unselected branches needed by reducer strategies.
     private func shrinkAndReturn(

@@ -10,16 +10,16 @@ import Foundation
 // MARK: - Academic Provenance
 
 //
-// The dissertation (Goldstein §3.3.3, §4.6) represents randomness as flat bit-string choice sequences. Exhaust adds this hierarchical ChoiceTree to preserve structural information (sequence boundaries, branch sites, nesting) for targeted shrinking and replay. The flat representation is in ChoiceSequence.swift.
+// The dissertation (Goldstein §3.3.3, §4.6) represents randomness as flat bit-string choice sequences. Exhaust adds this hierarchical ChoiceTree to preserve structural information (sequence boundaries, branch sites, nesting) for targeted reduction and replay. The flat representation is in ChoiceSequence.swift.
 
 /// A tree of choices that captures every decision made during generation.
 ///
-/// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, shrink, or analyze generated values.
+/// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, reduce, or analyze generated values.
 public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
 
-    /// A deterministic or constant value that cannot be shrunk.
+    /// A deterministic or constant value that cannot be reduced.
     ///
     /// This is encoded into the generator and does not need to be part of the ``ChoiceTree``.
     case just
@@ -333,7 +333,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return prefix + connector + "just"
 
         case let .sequence(length, elements, meta):
-            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange)"
+            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange.map { "\($0)" } ?? "nil")"
             for (index, element) in elements.enumerated() {
                 let isLastElement = index == elements.count - 1
                 result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)

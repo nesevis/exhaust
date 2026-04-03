@@ -1,12 +1,12 @@
 //
-//  FloatShrink.swift
+//  FloatReduction.swift
 //  Exhaust
 //
-//  Created by Codex on 21/2/2026.
+//  Created by Chris Kolbu on 21/2/2026.
 //
 
-/// Utilities for float-specific shrinking phases used by `reduceValues`.
-public enum FloatShrink {
+/// Utilities for float-specific reduction phases used by `reduceValues`.
+public enum FloatReduction {
     public static let doubleMantissaBits = 52
 
     public static let doubleExponentBias = 1023

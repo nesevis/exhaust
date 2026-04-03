@@ -16,7 +16,7 @@
 /// Traditional generators lose the connection between values and the randomness that produced them.
 /// ReflectiveGenerator **reconstructs that connection**, enabling:
 ///
-/// - **Shrinking without traces**: Shrink any value, even from crash reports or external sources
+/// - **Reduction without traces**: Reduce any value, even from crash reports or external sources
 /// - **Mutation testing**: Modify values while preserving validity constraints
 /// - **Example-based generation**: Generate similar values to provided examples
 /// - **Validation**: Check if values could have been produced by a generator
@@ -61,7 +61,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function
     /// extracts the inner generator's input from the final output, enabling reflection (and therefore
-    /// shrinking) through the bind.
+    /// reduction) through the bind.
     ///
     /// - **Forward**: Takes the inner value `A` and returns a dependent generator over `B`
     /// - **Backward**: Extracts `A` from a `B` — the `comap` annotation at bind sites (Xia et al. ESOP 2019)

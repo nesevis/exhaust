@@ -1,5 +1,5 @@
 // Operations for generating collections like arrays and dictionaries.
-// These combinators handle the complexities of generating structured data with proper shrinking behavior.
+// These combinators handle the complexities of generating structured data with proper reduction behavior.
 
 public extension Gen {
     /// Creates a generator for an array of random values.
@@ -157,7 +157,7 @@ public extension Gen {
 
     /// Shuffles the output of an array generator into a random permutation.
     ///
-    /// Uses a sort-key approach: generates one random `UInt64` per element, then sorts the array by those keys. This produces a uniform permutation and shrinks cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial shrinking is well-behaved.
+    /// Uses a sort-key approach: generates one random `UInt64` per element, then sorts the array by those keys. This produces a uniform permutation and reduces cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
     ///
     /// - Parameter gen: An array generator whose output should be shuffled
     /// - Returns: A generator that produces a randomly permuted array
@@ -253,7 +253,7 @@ public extension Gen {
 
     /// Creates a generator for a contiguous subrange of a generated collection.
     ///
-    /// Composes the input generator with `slice(of:)` via `bind`, producing the collection's `SubSequence` type. Shrinking comes for free: `slice(of:)` already shrinks toward shorter subranges and earlier start positions, and the inner generator shrinks its elements independently.
+    /// Composes the input generator with `slice(of:)` via `bind`, producing the collection's `SubSequence` type. Reduction comes for free: `slice(of:)` already reduces toward shorter subranges and earlier start positions, and the inner generator reduces its elements independently.
     ///
     /// - Parameter gen: A generator that produces a collection
     /// - Returns: A generator that produces a contiguous subrange of the generated collection

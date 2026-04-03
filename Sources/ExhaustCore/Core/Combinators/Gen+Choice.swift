@@ -7,7 +7,7 @@ public extension Gen {
     ///
     /// This combinator enables probabilistic generation where different outcomes have different likelihoods. The weights don't need to sum to any particular value - they're interpreted as relative frequencies.
     ///
-    /// During shrinking, the system will try simpler choices first based on their position in the choices array and their weights.
+    /// During reduction, the system will try simpler choices first based on their position in the choices array and their weights.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators
@@ -43,7 +43,7 @@ public extension Gen {
     ///
     /// This combinator enables probabilistic generation where different outcomes have different likelihoods. The weights don't need to sum to any particular value - they're interpreted as relative frequencies.
     ///
-    /// During shrinking, the system will try simpler choices first based on their position in the choices array and their weights.
+    /// During reduction, the system will try simpler choices first based on their position in the choices array and their weights.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators
@@ -109,7 +109,7 @@ public extension Gen {
                 return index
             },
             Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
-                // We're using round-robin indexing here so that the lookup does not fail when shrinking
+                // We're using round-robin indexing here so that the lookup does not fail when reducing
                 ._map { collection[$0 % count] }
         )
     }
@@ -120,7 +120,7 @@ public extension Gen {
     ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
         let count = collection.count
         return Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
-            // We're using round-robin indexing here so that the lookup does not fail when shrinking
+            // We're using round-robin indexing here so that the lookup does not fail when reducing
             ._map { collection[$0 % count] }
     }
 

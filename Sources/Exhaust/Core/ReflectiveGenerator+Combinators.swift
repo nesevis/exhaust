@@ -348,9 +348,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.recursive(base: Gen.just(base), depthRange: depthRange, extend: extend)
     }
 
-    /// Creates a recursive generator with a generator base case and a shrinkable depth range.
+    /// Creates a recursive generator with a generator base case and a reducible depth range.
     ///
-    /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it shrinkable. The reducer can collapse subtrees by shrinking the depth toward the range's lower bound.
+    /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
     /// - Parameters:
     ///   - base: Generator for the base case
@@ -373,9 +373,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
-    // Creates a recursive generator with a generator base case and a shrinkable depth range.
+    // Creates a recursive generator with a generator base case and a reducible depth range.
     ///
-    /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it shrinkable. The reducer can collapse subtrees by shrinking the depth toward the range's lower bound.
+    /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
     /// - Parameters:
     ///   - base: Generator for the base case
@@ -438,7 +438,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Generates independent copies of this generator's value and applies a different transform to each.
     ///
-    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Shrinking reduces only the source value — all transformed copies follow deterministically.
+    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value — all transformed copies follow deterministically.
     ///
     /// ```swift
     /// let pair = #gen(.string()).metamorph({ $0.uppercased() }, { $0.count })
@@ -522,7 +522,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function
     /// extracts the inner generator's input from the final output, enabling reflection (and therefore
-    /// shrinking) through the bind.
+    /// reduction) through the bind.
     ///
     /// - **Forward**: Takes the inner value `A` and returns a dependent generator over `B`
     /// - **Backward**: Extracts `A` from a `B` — the `comap` annotation at bind sites (Xia et al. ESOP 2019)

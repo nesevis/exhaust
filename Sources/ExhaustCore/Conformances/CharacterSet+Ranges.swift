@@ -43,7 +43,7 @@ public struct ScalarRangeSet: Sendable {
 
     /// Maps a flat index in `0..<scalarCount` to the corresponding `Unicode.Scalar`.
     /// Uses binary search over cumulative range sizes for O(log n) lookup.
-    /// Out-of-range indices are clamped so the shrinker can safely explore candidates.
+    /// Out-of-range indices are clamped so the reducer can safely explore candidates.
     public func scalar(at index: Int) -> Unicode.Scalar {
         let clamped = min(max(index, 0), scalarCount - 1)
         let rangeIndex = rangeIndex(forFlatIndex: clamped)

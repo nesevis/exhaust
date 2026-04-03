@@ -11,7 +11,7 @@ public extension ReflectiveGenerator {
     ///
     /// Produces URLs with a random scheme (`http` or `https`), host (two to three labels of three to ten lowercase alphanumeric characters), zero to three path segments, and zero to two query parameters. All generated strings are valid URL components, so the resulting URL always parses successfully.
     ///
-    /// This generator is forward-only — reflection and shrinking operate on the underlying string components but cannot decompose a URL back into its generator inputs.
+    /// This generator is forward-only — reflection and reduction operate on the underlying string components but cannot decompose a URL back into its generator inputs.
     ///
     /// ```swift
     /// let gen = #gen(.url())

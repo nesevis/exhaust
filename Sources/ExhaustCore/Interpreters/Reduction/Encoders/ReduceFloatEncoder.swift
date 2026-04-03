@@ -193,7 +193,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
             candidates.append(targetBP)
         }
 
-        for special in FloatShrink.specialValues(for: target.tag) {
+        for special in FloatReduction.specialValues(for: target.tag) {
             guard let candidateChoice = floatingChoice(
                 from: special,
                 tag: target.tag,
@@ -281,8 +281,8 @@ struct ReduceFloatEncoder: ComposableEncoder {
 
     private mutating func prepareRatioBinarySearch(target: FloatTarget) {
         guard target.currentValue.isFinite,
-              abs(target.currentValue) <= FloatShrink.maxPreciseInteger(for: target.tag),
-              let ratio = FloatShrink.integerRatio(for: target.currentValue, tag: target.tag)
+              abs(target.currentValue) <= FloatReduction.maxPreciseInteger(for: target.tag),
+              let ratio = FloatReduction.integerRatio(for: target.currentValue, tag: target.tag)
         else {
             return
         }

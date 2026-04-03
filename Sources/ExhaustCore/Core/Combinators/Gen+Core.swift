@@ -26,7 +26,7 @@ public extension Gen {
 
     /// Applies a pruning operation to a generator.
     ///
-    /// Pruning is used during shrinking to eliminate branches that don't contribute to the final result. This optimization helps make property-based testing more efficient by focusing on relevant test cases.
+    /// Pruning is used during reduction to eliminate branches that don't contribute to the final result. This optimization helps make property-based testing more efficient by focusing on relevant test cases.
     ///
     /// - Parameter generator: The generator to apply pruning to
     /// - Returns: A generator with pruning applied

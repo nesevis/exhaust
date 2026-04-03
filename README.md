@@ -12,7 +12,7 @@
 Exhaust is a property-based testing library for Swift. Instead of writing individual test cases by hand, you describe the rules your code must obey and let Exhaust find the violations.
 
 - **Structured coverage** — boundary values and parameter interactions are tested systematically before random sampling begins, so edge cases are covered by design rather than luck.
-- **Automatic reduction** — when a failure is found, Exhaust reduces it to the smallest possible counterexample, typically within 100ms. No custom shrink functions needed.
+- **Automatic reduction** — when a failure is found, Exhaust reduces it to the smallest possible counterexample, typically within 100ms. No custom reduction functions needed.
 - **Contract testing** — generate random sequences of commands against a stateful system and verify that invariants hold after every step.
 - **Inspectable generators** — generators are data structures, not opaque closures. The library runs them forward to generate, backward to decompose, and replays them for deterministic reproduction.
 
@@ -161,7 +161,7 @@ let jsonGen = #gen(.recursive(base: .null, depthRange: 0...5) { recurse, remaini
 
 At each level, `remaining` counts down from the maximum depth, and `recurse()` produces a generator for the next level. When depth is exhausted, only the base case is used. The `weighted` parameter biases toward leaves so that generated trees stay manageable, while `remaining` naturally reduces branching as recursion deepens.
 
-The depth itself is drawn from `depthRange` as a shrinkable choice — the reducer can collapse entire subtrees by shrinking the depth toward the range's lower bound. Recursive generators are fully transparent to reflection and reduction.
+The depth itself is drawn from `depthRange` as a reducible choice — the reducer can collapse entire subtrees by driving the depth toward the range's lower bound. Recursive generators are fully transparent to reflection and reduction.
 
 ## Metamorphic Testing
 
@@ -215,9 +215,10 @@ Configure behavior with settings:
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
 | `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). |
-| `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and shrinks your generator. |
+| `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and reduces your generator. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
 | `.collectOpenPBTStats` | off | Collects per-example statistics and attaches them to the test run in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. See [Test Observability](#test-observability). |
+| `.logging(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. Use `.logging(.debug, .jsonl)` for structured JSON output. |
 
 ### Using `#expect` and `#require`
 
@@ -540,7 +541,7 @@ Sync and async commands can be mixed freely in the same contract.
 
 ### Settings
 
-Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.randomOnly`, `.collectOpenPBTStats`), plus:
+Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.randomOnly`, `.collectOpenPBTStats`, `.logging`), plus:
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -553,7 +554,7 @@ Generators in Exhaust are inspectable data structures, not opaque closures. This
 The framework supports three execution modes:
 
 - **Generation (forward)** — the generator is interpreted to produce a value, recording every choice made along the way. This is the normal path during test execution.
-- **Reflection (backward)** — given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what powers `.reflecting` and automatic reduction without custom shrink functions.
+- **Reflection (backward)** — given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what powers `.reflecting` and automatic reduction without custom reduction functions.
 - **Replay** — a recorded sequence of choices is fed back to reproduce the exact same value, powering deterministic reproduction via `.replay(seed)`.
 
 Reduction operates on the recorded sequences and trees of choices rather than the output value, making it type-agnostic and preserving all generator invariants. A failing test case has two independent aspects: its *shape* (how many values exist and how they depend on each other) and its *values* (what those values are). The reducer treats these as separate problems. Each cycle first simplifies the shape — remove elements, flatten branches, shorten sequences — then simplifies the values within that fixed shape — drive numbers toward zero, simplify floats. This repeats until neither makes progress. When both stall, the reducer tries to escape: searching shape and values jointly along dependency edges, or temporarily worsening one value to unlock progress elsewhere.

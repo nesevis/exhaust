@@ -75,7 +75,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
         // Stage 0: Preprocess — subdivide sequence lengths into picks over subranges
         // so CGS can guide length decisions (chooseBits sites are opaque to CGS).
         // We bake into the *original* generator to preserve structural compatibility
-        // with choice trees (needed for filter replay and shrinking).
+        // with choice trees (needed for filter replay and reduction).
         let subdivisionContext = SubdivisionContext()
         let subdivided = try subdivideSequenceLengths(generator, context: subdivisionContext)
 
