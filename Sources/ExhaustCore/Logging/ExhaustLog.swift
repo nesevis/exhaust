@@ -387,32 +387,42 @@ public enum ExhaustLog {
         return " \(pairs)"
     }
 
-    private static func renderLLMMetadata(_ metadata: [String: String]) -> String {
-        metadata
-            .sorted(by: { $0.key < $1.key })
-            .map { "\"\(escapeJSON($0.key))\":\"\(escapeJSON($0.value))\"" }
-            .joined(separator: ",")
-    }
-
-    private static func escapeJSON(_ value: String) -> String {
-        var escaped = ""
-        escaped.reserveCapacity(value.count)
-        for character in value {
-            switch character {
-            case "\\":
-                escaped += "\\\\"
-            case "\"":
-                escaped += "\\\""
-            case "\n":
-                escaped += "\\n"
-            case "\r":
-                escaped += "\\r"
-            case "\t":
-                escaped += "\\t"
-            default:
-                escaped.append(character)
-            }
+    private static func renderLLMLogLine(
+        category: Category,
+        level: Level,
+        event: String,
+        message: String,
+        file: String,
+        line: UInt,
+        metadata: [String: String]
+    ) -> String {
+        let logLine = LLMLogLine(
+            kind: "exhaust_log",
+            category: category.rawValue,
+            level: "\(level)",
+            event: event,
+            message: message,
+            file: file,
+            line: line,
+            metadata: metadata
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        guard let data = try? encoder.encode(logLine),
+              let json = String(data: data, encoding: .utf8) else {
+            return "{\"kind\":\"exhaust_log\"}"
         }
-        return escaped
+        return json
     }
+}
+
+private struct LLMLogLine: Encodable {
+    let kind: String
+    let category: String
+    let level: String
+    let event: String
+    let message: String
+    let file: String
+    let line: UInt
+    let metadata: [String: String]
 }

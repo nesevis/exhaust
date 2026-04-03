@@ -1,5 +1,6 @@
 import CustomDump
 import ExhaustCore
+import Foundation
 
 struct PropertyTestFailure<Output> {
     let counterexample: Output
@@ -91,62 +92,47 @@ struct PropertyTestFailure<Output> {
         var counterexampleDump = ""
         customDump(counterexample, to: &counterexampleDump)
 
-        var parts: [String] = []
-        parts.append("\"event\":\"property_failed\"")
-        if let seed {
-            let encodedSeed = CrockfordBase32.encode(seed)
-            parts.append("\"seed\":\"\(encodedSeed)\"")
-        }
-        parts.append("\"iteration\":\(iteration)")
-        parts.append("\"samplingBudget\":\(samplingBudget)")
-
-        if let sourceCode {
-            parts.append("\"source\":\"\(escapeJSON(sourceCode))\"")
+        var originalDump: String?
+        if transparent == false, let original {
+            var dump = ""
+            customDump(original, to: &dump)
+            originalDump = dump
         }
 
-        if transparent == false {
-            parts.append("\"counterexample\":\"\(escapeJSON(counterexampleDump))\"")
+        let encodedSeed = seed.map { CrockfordBase32.encode($0) }
 
-            if let original {
-                var originalDump = ""
-                customDump(original, to: &originalDump)
-                parts.append("\"original\":\"\(escapeJSON(originalDump))\"")
-            }
+        let logLine = LLMLogLine(
+            event: "property_failed",
+            seed: encodedSeed,
+            iteration: iteration,
+            samplingBudget: samplingBudget,
+            counterexample: transparent ? nil : counterexampleDump,
+            original: originalDump,
+            propertyInvocations: propertyInvocations,
+            replay: encodedSeed.map { ".replay(\"\($0)\")" },
+            replayHint: encodedSeed == nil ? replayHint : nil
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        guard let data = try? encoder.encode(logLine),
+              let json = String(data: data, encoding: .utf8) else {
+            return "{\"event\":\"property_failed\"}"
         }
-
-        if let propertyInvocations {
-            parts.append("\"propertyInvocations\":\(propertyInvocations)")
-        }
-
-        if let seed {
-            let encodedSeed = CrockfordBase32.encode(seed)
-            parts.append("\"replay\":\".replay(\\\"\(encodedSeed)\\\")\"")
-        } else if let replayHint {
-            parts.append("\"replayHint\":\"\(escapeJSON(replayHint))\"")
-        }
-
-        return "{\(parts.joined(separator: ","))}"
+        return json
     }
+}
 
-    private func escapeJSON(_ value: String) -> String {
-        var escaped = ""
-        escaped.reserveCapacity(value.count)
-        for character in value {
-            switch character {
-            case "\\":
-                escaped += "\\\\"
-            case "\"":
-                escaped += "\\\""
-            case "\n":
-                escaped += "\\n"
-            case "\r":
-                escaped += "\\r"
-            case "\t":
-                escaped += "\\t"
-            default:
-                escaped.append(character)
-            }
-        }
-        return escaped
-    }
+// MARK: - LLM log line
+
+private struct LLMLogLine: Encodable {
+    let event: String
+    let seed: String?
+    let iteration: Int
+    let samplingBudget: UInt64
+    let counterexample: String?
+    let original: String?
+    let propertyInvocations: Int?
+    let replay: String?
+    let replayHint: String?
 }
