@@ -135,6 +135,18 @@ struct ConvergenceCache {
         entries = remapped
     }
 
+    /// Invalidates entries at positions where the value changed between two same-length sequences.
+    ///
+    /// After value-only changes (reorder, redistribution) the sequence length is unchanged but cached convergence bounds may reference a different value than what now occupies that position. This drops exactly those stale entries while preserving valid warm-start bounds at untouched positions.
+    mutating func invalidateWhereMoved(from oldSequence: ChoiceSequence, to newSequence: ChoiceSequence) {
+        guard entries.isEmpty == false else { return }
+        for index in entries.keys {
+            if oldSequence[index] != newSequence[index] {
+                entries.removeValue(forKey: index)
+            }
+        }
+    }
+
     /// Invalidates all entries whose index falls within the given range.
     mutating func invalidate(in range: ClosedRange<Int>) {
         for index in entries.keys where range.contains(index) {

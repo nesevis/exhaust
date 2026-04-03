@@ -195,13 +195,11 @@ final class ReductionState<Output> {
     var pivotBranchesEncoder = BranchSimplificationEncoder(strategy: .pivot)
     var bindSubstitutionEncoder = BindSubstitutionEncoder()
     var swapSiblingsEncoder = SiblingSwapEncoder()
-    var subtreeTransplantEncoder = SubtreeTransplantEncoder()
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
     var contiguousWindowEncoder = ContiguousWindowDeletionEncoder()
     var beamSearchEncoder: BeamSearchDeletionEncoder
-    var shortlexReorderEncoder = ShortlexReorderEncoder()
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
     var antichainDeletionEncoder = AntichainDeletionEncoder()
@@ -282,6 +280,7 @@ extension ReductionState {
             edgeObservations.removeAll(keepingCapacity: true)
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
         }
+        // Convergence cache correctness for value-only changes (redistribution) relies on positions being stable: stale bounds produce harmless no-op searches (lo > hi), not incorrect overshoots. If a value-permuting encoder is added, use convergenceCache.invalidateWhereMoved to drop stale entries.
         if hasBind {
             bestSequence = sequence
             bestOutput = output

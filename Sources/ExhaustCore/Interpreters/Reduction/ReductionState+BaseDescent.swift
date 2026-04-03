@@ -205,23 +205,6 @@ extension ReductionState {
             }
         }
 
-        // Subtree transplant: move elements between sibling sequences in a group.
-        // Runs after bind substitution so vertical simplification completes first.
-        if try runComposable(
-            subtreeTransplantEncoder,
-            decoder: .exact(),
-            positionRange: fullBranchRange,
-            context: branchReductionContext,
-            structureChanged: true,
-            budget: &legBudget
-        ) {
-            improved = true
-            if isInstrumented {
-                ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
-                                 metadata: ["subphase": "subtree_transplant"])
-            }
-        }
-
         budget -= legBudget.used
         return improved
     }

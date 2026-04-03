@@ -256,17 +256,6 @@ extension ReductionState {
             filterValidityRates: filterValiditySnapshot
         )
 
-        // Shortlex reorder: sort siblings by shortlex key after values settle.
-        if legBudget.isExhausted == false {
-            if try runComposable(
-                shortlexReorderEncoder, decoder: tailDecoder,
-                positionRange: fullRange, context: tailContext,
-                structureChanged: hasBind, budget: &legBudget
-            ) {
-                anyAccepted = true
-            }
-        }
-
         // Redistribution (once at end of fibre descent).
         if legBudget.isExhausted == false {
             if try runComposable(

@@ -13,7 +13,6 @@ public enum EncoderName: String, Hashable, Sendable {
     case deleteAlignedSiblingSubsets
     case bindSubstitution
     case swapSiblings
-    case transplantSiblingSubtree
     // Value minimization
     case zeroValue
     case binarySearchToSemanticSimplest
