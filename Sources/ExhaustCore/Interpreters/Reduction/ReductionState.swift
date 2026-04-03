@@ -195,6 +195,7 @@ final class ReductionState<Output> {
     var pivotBranchesEncoder = BranchSimplificationEncoder(strategy: .pivot)
     var bindSubstitutionEncoder = BindSubstitutionEncoder()
     var swapSiblingsEncoder = SiblingSwapEncoder()
+    var subtreeTransplantEncoder = SubtreeTransplantEncoder()
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
