@@ -70,9 +70,12 @@ public extension ChoiceGraph {
     /// - SeeAlso: ``ChoiceDependencyGraph/reductionEdges()``
     func reductionEdges() -> [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] {
         var edges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] = []
-        for nodeID in topologicalOrder {
-            let node = nodes[nodeID]
+        // Iterate all bind nodes, not just those in topologicalOrder.
+        // Every bind has a reduction edge regardless of whether its bound subtree
+        // contains other structural nodes.
+        for node in nodes {
             guard case let .bind(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue } // Active binds only.
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
@@ -165,45 +168,14 @@ public extension ChoiceGraph {
         }
     }
 
-    /// Returns the ``ChoiceSequence`` position ranges that are leaf positions (value entries not inside any structural node's range).
+    /// Returns the sequence positions of all active `chooseBits` leaf nodes.
     ///
-    /// - SeeAlso: ``ChoiceDependencyGraph/leafPositions``
-    func leafPositions(sequenceCount: Int) -> [ClosedRange<Int>] {
-        // Collect position ranges of structural nodes (bind-inner, pick).
-        var structuralPositions = Set<Int>()
-        for node in nodes {
-            switch node.kind {
-            case .bind, .pick:
-                if let range = node.positionRange {
-                    for position in range {
-                        structuralPositions.insert(position)
-                    }
-                }
-            case .chooseBits, .zip, .sequence:
-                break
-            }
+    /// This is the graph's natural definition of leaf positions — every value-producing node with a non-nil position range. This differs from the CDG's `leafPositions`, which partitions the flat sequence around structural node ranges. The graph's model is richer: every leaf has an explicit node with type metadata.
+    func leafPositions() -> [ClosedRange<Int>] {
+        nodes.compactMap { node in
+            guard case .chooseBits = node.kind else { return nil }
+            return node.positionRange
         }
-
-        // Leaf positions are value entries not in structural ranges.
-        var leafRanges: [ClosedRange<Int>] = []
-        var currentStart: Int?
-        for position in 0 ..< sequenceCount {
-            let isLeaf = structuralPositions.contains(position) == false
-            if isLeaf {
-                if currentStart == nil {
-                    currentStart = position
-                }
-            } else {
-                if let start = currentStart {
-                    leafRanges.append(start ... (position - 1))
-                    currentStart = nil
-                }
-            }
-        }
-        if let start = currentStart {
-            leafRanges.append(start ... (sequenceCount - 1))
-        }
-        return leafRanges
     }
 }
 

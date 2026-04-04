@@ -674,13 +674,20 @@ struct ChoiceGraphBuilder {
     /// Assembles the final ``ChoiceGraph`` from collected nodes and edges.
     private func assembleGraph() -> ChoiceGraph {
         // Post-walk: compute dependency edges from bind node metadata.
+        // Every bind has a fundamental dependency: inner child → bound child.
+        // Additionally, the inner child depends on any structural (bind/pick) nodes
+        // nested within the bound subtree.
         var allDependencyEdges = dependencyEdges
         for node in nodes {
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
-            // Add edges from the inner child to all structural nodes in the bound subtree.
+
+            // The fundamental dependency: inner → bound.
+            allDependencyEdges.append(DependencyEdge(source: innerChildID, target: boundChildID))
+
+            // Additional edges to structural nodes deeper in the bound subtree.
             var stack = [boundChildID]
             while stack.isEmpty == false {
                 let current = stack.removeLast()
@@ -688,7 +695,9 @@ struct ChoiceGraphBuilder {
                 let target = nodes[current]
                 switch target.kind {
                 case .bind, .pick:
-                    allDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
+                    if current != boundChildID {
+                        allDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
+                    }
                 case .chooseBits, .zip, .sequence:
                     break
                 }

@@ -34,6 +34,9 @@ final class ReductionState<Output> {
     var statsCycleOutcomes: [CycleOutcome] = []
     var convergenceInstrumentation: ConvergenceInstrumentation?
 
+    /// The ``ChoiceGraph`` built from the current tree for Phase 2 validation. Built alongside the CDG and compared when instrumented. Not consumed by any encoder — read-only.
+    var choiceGraph: ChoiceGraph?
+
     /// The current cycle number, set by the scheduler at the top of each cycle.
     var currentCycle = 0
 
@@ -251,6 +254,7 @@ final class ReductionState<Output> {
             beamTuning: config.alignedDeletionBeamSearchTuning
         )
         convergenceInstrumentation = isInstrumented ? ConvergenceInstrumentation() : nil
+        choiceGraph = isInstrumented ? ChoiceGraph.build(from: tree) : nil
     }
 }
 
@@ -279,6 +283,11 @@ extension ReductionState {
             }
             edgeObservations.removeAll(keepingCapacity: true)
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
+            if isInstrumented {
+                choiceGraph = ChoiceGraph.build(from: tree)
+            }
+        } else if isInstrumented {
+            choiceGraph?.updateSourceSinkAnnotations()
         }
         // Convergence cache correctness for value-only changes (redistribution) relies on positions being stable: stale bounds produce harmless no-op searches (lo > hi), not incorrect overshoots. If a value-permuting encoder is added, use convergenceCache.invalidateWhereMoved to drop stale entries.
         if hasBind {
