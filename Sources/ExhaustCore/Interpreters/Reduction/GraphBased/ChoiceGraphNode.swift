@@ -23,7 +23,7 @@
 ///
 /// ## sequence
 /// Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materialiser derives actual length from element count, not from the length generator's output.
-public enum ChoiceGraphNodeKind: Sendable {
+public enum ChoiceGraphNodeKind {
     /// Leaf value with type, range, and current value.
     case chooseBits(ChooseBitsMetadata)
 
@@ -43,7 +43,7 @@ public enum ChoiceGraphNodeKind: Sendable {
 // MARK: - Per-Kind Metadata
 
 /// Metadata for a ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf node.
-public struct ChooseBitsMetadata: Sendable {
+public struct ChooseBitsMetadata {
     /// Semantic type of the value.
     public let typeTag: TypeTag
 
@@ -58,7 +58,7 @@ public struct ChooseBitsMetadata: Sendable {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.
-public struct PickMetadata: Sendable {
+public struct PickMetadata {
     /// Pick site identifier including depth encoding for recursive generators.
     public let siteID: UInt64
 
@@ -76,7 +76,7 @@ public struct PickMetadata: Sendable {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/bind(_:)`` dependency node.
-public struct BindMetadata: Sendable {
+public struct BindMetadata {
     /// Whether the bound subtree contains no nested binds or picks, meaning the inner value controls ranges and counts but not tree shape.
     public let isStructurallyConstant: Bool
 
@@ -91,13 +91,13 @@ public struct BindMetadata: Sendable {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.
-public struct ZipMetadata: Sendable {
+public struct ZipMetadata {
     /// When true, coverage analysis skips this subtree.
     public let isOpaque: Bool
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/sequence(_:)`` node.
-public struct SequenceMetadata: Sendable {
+public struct SequenceMetadata {
     /// Explicit length range from ``ChoiceMetadata``, if any. Constrains deletion — the reducer cannot delete below the lower bound. This is metadata on the node, not a containment edge to a child.
     public let lengthConstraint: ClosedRange<UInt64>?
 
@@ -110,7 +110,7 @@ public struct SequenceMetadata: Sendable {
 /// A node in the ``ChoiceGraph`` representing a value-structural operation in the generator.
 ///
 /// Each node stores its identity, kind with per-kind metadata, position mapping to the flat ``ChoiceSequence``, and parent-child relationships forming the containment tree.
-public struct ChoiceGraphNode: Sendable {
+public struct ChoiceGraphNode {
     /// Stable identity assigned during graph construction.
     public let id: Int
 

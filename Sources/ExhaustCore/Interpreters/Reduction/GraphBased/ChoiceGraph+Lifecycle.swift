@@ -8,12 +8,12 @@
 public extension ChoiceGraph {
     /// Rebuilds the bound subtree of a bind node from a new ``ChoiceTree``.
     ///
-    /// Walks the new bound tree, replaces the old bound subgraph in place, and recomputes dependency edges within the region. The static part of the bind node (the node itself, its dependency edge to the inner, its containment edge from its parent) is preserved. Call ``recomputeAntichainsAndEdges()`` after this to refresh type-compatibility edges and antichains.
+    /// Walks the new bound tree, replaces the old bound subgraph in place, and recomputes dependency edges within the region. The static part of the bind node (the node itself, its dependency edge to the inner, its containment edge from its parent) is preserved. Type-compatibility edges and source/sink annotations are invalidated and will be recomputed lazily on next access.
     ///
     /// - Parameters:
     ///   - bindNodeID: The bind node whose bound subtree changed.
     ///   - newBoundTree: The new bound ``ChoiceTree`` produced by `forward(newValue)`.
-    mutating func rebuildBoundSubtree(
+    func rebuildBoundSubtree(
         bindNodeID: Int,
         newBoundTree: ChoiceTree
     ) {
@@ -30,7 +30,6 @@ public extension ChoiceGraph {
         removeNodesAndEdges(nodeIDs: oldBoundNodeIDs)
 
         // Walk the new bound tree into the graph at the same offset.
-        var builder = ChoiceGraphBuilder()
         let rebuilt = ChoiceGraphBuilder.buildSubtree(
             from: newBoundTree,
             startingOffset: boundRange.lowerBound,
@@ -57,18 +56,18 @@ public extension ChoiceGraph {
             )
         }
 
-        _ = builder
+        invalidateDerivedEdges()
     }
 
     /// Updates a pick node after a branch pivot.
     ///
-    /// The previously-active branch becomes inactive (nil position ranges on all its subtree nodes). The newly-active branch's subtree is populated from the materialised result. This is a structural change triggering downstream recomputations.
+    /// The previously-active branch becomes inactive (nil position ranges on all its subtree nodes). The newly-active branch's subtree is populated from the materialised result. This is a structural change that invalidates derived edges.
     ///
     /// - Parameters:
     ///   - pickNodeID: The pick node whose selection changed.
     ///   - newSelectedID: The branch ID of the newly selected branch.
     ///   - newTree: The new ``ChoiceTree`` for the pick site, produced by the materialiser.
-    mutating func updateBranchSelection(
+    func updateBranchSelection(
         pickNodeID: Int,
         newSelectedID: UInt64,
         newTree: ChoiceTree
@@ -88,9 +87,6 @@ public extension ChoiceGraph {
                 newSelectedChildIndex = index
                 break
             }
-            // For non-pick children (the branch subtrees), check if they correspond
-            // to the new branch ID. This requires the branch ID to be stored on the child.
-            // For now, use the index directly if the new tree provides it.
         }
 
         // Update the pick node's metadata.
@@ -107,70 +103,8 @@ public extension ChoiceGraph {
             children: pickNode.children,
             parent: pickNode.parent
         )
-    }
-}
 
-// MARK: - Antichain and Edge Recomputation
-
-public extension ChoiceGraph {
-    /// Recomputes type-compatibility edges and source/sink annotations from the current node state.
-    ///
-    /// Called after any structural acceptance (bind rebuild, branch pivot, deletion). Recomputes the deletion antichain, groups leaves by ``TypeTag``, and creates type-compatibility edges between matching leaves within the antichain.
-    mutating func recomputeAntichainsAndEdges() {
-        // Recompute type-compatibility edges.
-        var newTypeEdges: [TypeCompatibilityEdge] = []
-        let activeLeaves = nodes.filter { node in
-            if case .chooseBits = node.kind, node.positionRange != nil {
-                return true
-            }
-            return false
-        }
-
-        // Group by TypeTag.
-        var leafNodesByTag: [TypeTag: [Int]] = [:]
-        for leaf in activeLeaves {
-            if case let .chooseBits(metadata) = leaf.kind {
-                leafNodesByTag[metadata.typeTag, default: []].append(leaf.id)
-            }
-        }
-
-        // Add edges between all pairs within each type group.
-        for (tag, leafIDs) in leafNodesByTag where leafIDs.count >= 2 {
-            var indexA = 0
-            while indexA < leafIDs.count {
-                var indexB = indexA + 1
-                while indexB < leafIDs.count {
-                    // Only connect antichain members (independent nodes).
-                    if areIndependent(leafIDs[indexA], leafIDs[indexB]) {
-                        newTypeEdges.append(TypeCompatibilityEdge(
-                            nodeA: leafIDs[indexA],
-                            nodeB: leafIDs[indexB],
-                            typeTag: tag
-                        ))
-                    }
-                    indexB += 1
-                }
-                indexA += 1
-            }
-        }
-        typeCompatibilityEdges = newTypeEdges
-
-        // Refresh source/sink annotations.
-        updateSourceSinkAnnotations()
-    }
-
-    /// Updates source/sink annotations from current leaf values.
-    ///
-    /// Called on any acceptance (structural or value). A non-zero leaf is a source; a zero-valued leaf is a sink.
-    mutating func updateSourceSinkAnnotations() {
-        var newStatus: [Int: SourceSinkStatus] = [:]
-        for node in nodes {
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
-            let isZero = metadata.value.bitPattern64 == 0
-            newStatus[node.id] = isZero ? .sink : .source
-        }
-        sourceSinkStatus = newStatus
+        invalidateDerivedEdges()
     }
 
     /// Invalidates sensitivity flags for all leaves within a bind node's bound subtree.
@@ -223,17 +157,16 @@ extension ChoiceGraph {
         return result
     }
 
-    /// Removes nodes and all edges referencing them.
-    mutating func removeNodesAndEdges(nodeIDs: Set<Int>) {
+    /// Removes nodes and all edges referencing them. Invalidates derived edges.
+    func removeNodesAndEdges(nodeIDs: Set<Int>) {
         containmentEdges.removeAll { nodeIDs.contains($0.source) || nodeIDs.contains($0.target) }
         dependencyEdges.removeAll { nodeIDs.contains($0.source) || nodeIDs.contains($0.target) }
         selfSimilarityEdges.removeAll { nodeIDs.contains($0.nodeA) || nodeIDs.contains($0.nodeB) }
-        typeCompatibilityEdges.removeAll { nodeIDs.contains($0.nodeA) || nodeIDs.contains($0.nodeB) }
-        sourceSinkStatus = sourceSinkStatus.filter { nodeIDs.contains($0.key) == false }
+        invalidateDerivedEdges()
     }
 
     /// Sets position ranges to nil for all nodes in a subtree.
-    mutating func depopulateSubtree(rootID: Int) {
+    func depopulateSubtree(rootID: Int) {
         var stack = [rootID]
         while stack.isEmpty == false {
             let current = stack.removeLast()

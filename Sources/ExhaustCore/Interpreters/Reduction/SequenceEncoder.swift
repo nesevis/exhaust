@@ -31,4 +31,11 @@ public enum EncoderName: String, Hashable, Sendable {
     case branchProjection
     case freeCoordinateProjection
     case humanOrderReorder
+    // Graph-based encoders
+    case graphDeletion
+    case graphValueSearch
+    case graphRedistribution
+    case graphBranchPivot
+    case graphSubstitution
+    case graphKleisliFibre
 }

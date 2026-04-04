@@ -753,8 +753,6 @@ struct ChoiceGraphBuilder {
             containmentEdges: containmentEdges,
             dependencyEdges: allDependencyEdges,
             selfSimilarityEdges: selfSimilarityEdges,
-            typeCompatibilityEdges: [],
-            sourceSinkStatus: [:],
             topologicalOrder: topologicalOrder,
             reachability: reachability
         )

@@ -287,7 +287,7 @@ extension ReductionState {
                 choiceGraph = ChoiceGraph.build(from: tree)
             }
         } else if isInstrumented {
-            choiceGraph?.updateSourceSinkAnnotations()
+            choiceGraph?.invalidateDerivedEdges()
         }
         // Convergence cache correctness for value-only changes (redistribution) relies on positions being stable: stale bounds produce harmless no-op searches (lo > hi), not incorrect overshoots. If a value-permuting encoder is added, use convergenceCache.invalidateWhereMoved to drop stale entries.
         if hasBind {

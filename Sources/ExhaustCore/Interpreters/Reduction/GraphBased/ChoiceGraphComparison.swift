@@ -8,7 +8,7 @@
 /// Result of comparing a ``ChoiceGraph`` against the existing ``ChoiceDependencyGraph`` and ``BindSpanIndex``.
 ///
 /// Each check validates superset-or-equal: the graph must provide at least what the existing system provides. Additional results (larger antichain, more edges) are expected improvements, not failures.
-public struct ChoiceGraphComparisonResult: Sendable {
+public struct ChoiceGraphComparisonResult {
     /// Individual check results.
     public var checks: [CheckResult] = []
 
@@ -18,7 +18,7 @@ public struct ChoiceGraphComparisonResult: Sendable {
     }
 
     /// A single comparison check.
-    public struct CheckResult: Sendable {
+    public struct CheckResult {
         /// Name of the check.
         public let name: String
 
@@ -87,7 +87,7 @@ public enum ChoiceGraphComparison {
         cdg: ChoiceDependencyGraph
     ) -> ChoiceGraphComparisonResult.CheckResult {
         let cdgAntichain = cdg.maximalAntichain()
-        let graphAntichain = graph.deletionAntichain()
+        let graphAntichain = graph.deletionAntichain
 
         // Map CDG antichain members to position ranges for comparison.
         let cdgPositions = Set(cdgAntichain.map { cdg.nodes[$0].positionRange })
@@ -179,7 +179,7 @@ public enum ChoiceGraphComparison {
         sequence: ChoiceSequence
     ) -> ChoiceGraphComparisonResult.CheckResult {
         let cdgLeafPositions = cdg.leafPositions
-        let graphLeafPositions = graph.leafPositions()
+        let graphLeafPositions = graph.leafPositions
 
         // Flatten to individual positions for comparison.
         let cdgPositionSet = Set(cdgLeafPositions.flatMap { $0.lowerBound ... $0.upperBound })
@@ -211,7 +211,7 @@ public enum ChoiceGraphComparison {
         cdg: ChoiceDependencyGraph
     ) -> ChoiceGraphComparisonResult.CheckResult {
         let cdgEdges = cdg.reductionEdges()
-        let graphEdges = graph.reductionEdges()
+        let graphEdges = graph.reductionEdges
 
         let passed = graphEdges.count >= cdgEdges.count
         return .init(

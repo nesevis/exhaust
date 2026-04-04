@@ -101,6 +101,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var collectOpenPBTStats = false
         var logLevel: LogLevel = .error
         var logFormat: LogFormat = .keyValue
+        var reducerKind: ReducerKind = .bonsai
 
         for setting in settings {
             switch setting {
@@ -133,6 +134,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             case let .logging(level, format):
                 logLevel = level
                 logFormat = format
+            case let .reducer(kind):
+                reducerKind = kind
             }
         }
 
@@ -189,6 +192,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     gen,
                     value: reflectingValue,
                     reductionConfig: reductionConfig,
+                    reducerKind: reducerKind,
                     visualize: visualize,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
@@ -266,14 +270,26 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return property(value)
                 }
                 do {
-                    let reduceResult = try Interpreters.bonsaiReduceCollectingStats(
-                        gen: gen,
-                        tree: reductionTree,
-                        output: value,
-                        config: reductionConfig,
-                        visualize: visualize,
-                        property: countingProperty
-                    )
+                    let reduceResult: (reduced: (ChoiceSequence, Output)?, stats: ReductionStats)
+                    switch reducerKind {
+                    case .bonsai:
+                        reduceResult = try Interpreters.bonsaiReduceCollectingStats(
+                            gen: gen,
+                            tree: reductionTree,
+                            output: value,
+                            config: reductionConfig,
+                            visualize: visualize,
+                            property: countingProperty
+                        )
+                    case .choiceGraph:
+                        reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
+                            gen: gen,
+                            tree: reductionTree,
+                            output: value,
+                            config: reductionConfig,
+                            property: countingProperty
+                        )
+                    }
                     report.applyReductionStats(reduceResult.stats)
                     if let (reducedSequence, reducedValue) = reduceResult.reduced {
                         var failure = PropertyTestFailure(
@@ -514,14 +530,26 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return property(value)
                 }
                 do {
-                    let reduceResult = try Interpreters.bonsaiReduceCollectingStats(
-                        gen: gen,
-                        tree: tree,
-                        output: next,
-                        config: reductionConfig,
-                        visualize: visualize,
-                        property: countingProperty
-                    )
+                    let reduceResult: (reduced: (ChoiceSequence, Output)?, stats: ReductionStats)
+                    switch reducerKind {
+                    case .bonsai:
+                        reduceResult = try Interpreters.bonsaiReduceCollectingStats(
+                            gen: gen,
+                            tree: tree,
+                            output: next,
+                            config: reductionConfig,
+                            visualize: visualize,
+                            property: countingProperty
+                        )
+                    case .choiceGraph:
+                        reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
+                            gen: gen,
+                            tree: tree,
+                            output: next,
+                            config: reductionConfig,
+                            property: countingProperty
+                        )
+                    }
                     report.applyReductionStats(reduceResult.stats)
                     if let (reducedSequence, reducedValue) = reduceResult.reduced {
                         let failure = PropertyTestFailure(
@@ -1333,6 +1361,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
         reductionConfig: Interpreters.BonsaiReducerConfiguration,
+        reducerKind: ReducerKind,
         visualize: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
@@ -1392,14 +1421,26 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             propertyInvocationCount += 1
             return property(value)
         }
-        let reduceResult = try Interpreters.bonsaiReduceCollectingStats(
-            gen: gen,
-            tree: tree,
-            output: value,
-            config: reductionConfig,
-            visualize: visualize,
-            property: countingProperty
-        )
+        let reduceResult: (reduced: (ChoiceSequence, Output)?, stats: ReductionStats)
+        switch reducerKind {
+        case .bonsai:
+            reduceResult = try Interpreters.bonsaiReduceCollectingStats(
+                gen: gen,
+                tree: tree,
+                output: value,
+                config: reductionConfig,
+                visualize: visualize,
+                property: countingProperty
+            )
+        case .choiceGraph:
+            reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
+                gen: gen,
+                tree: tree,
+                output: value,
+                config: reductionConfig,
+                property: countingProperty
+            )
+        }
         report.applyReductionStats(reduceResult.stats)
         
         if let (reducedSequence, reducedValue) = reduceResult.reduced {

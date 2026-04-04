@@ -94,6 +94,14 @@ public enum ExhaustBudget: Sendable {
     }
 }
 
+/// Selects which reduction algorithm to use when shrinking a counterexample.
+public enum ReducerKind: Sendable {
+    /// The default Bonsai reducer (Kleisli composition, fibre descent, relax-round).
+    case bonsai
+    /// The graph-based reducer (ChoiceGraph, four graph encoders in a cycle loop).
+    case choiceGraph
+}
+
 /// Configuration options for `#exhaust` property tests, passed as variadic arguments to control test behavior.
 public enum ExhaustSettings<Output> {
     /// Controls iteration budgets for coverage, random sampling, and reduction. Defaults to `.expedient` (200 coverage rows, 200 random samplings, fast reduction).
@@ -149,4 +157,7 @@ public enum ExhaustSettings<Output> {
     /// #exhaust(gen, .logging(.debug)) { value in ... }
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
+
+    /// Selects the reduction algorithm. Defaults to `.bonsai`.
+    case reducer(ReducerKind)
 }

@@ -6,7 +6,7 @@
 /// Statistics collected during ``ChoiceGraph`` construction and lifecycle operations.
 ///
 /// Accumulated by the builder during construction and updated by lifecycle methods. Gate logging on `isInstrumented` using the existing ``ExhaustLog`` pattern.
-public struct ChoiceGraphStats: Sendable {
+public struct ChoiceGraphStats {
     /// Total node count in the graph (all kinds, active and inactive).
     public var nodeCount: Int
 

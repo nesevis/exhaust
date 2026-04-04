@@ -317,7 +317,7 @@ struct ChoiceGraphTests {
         ])
 
         let graph = ChoiceGraph.build(from: tree)
-        let antichain = graph.deletionAntichain()
+        let antichain = graph.deletionAntichain
 
         // The zip node has children, so it's a candidate. Individual leaves have no children.
         // The antichain should contain at most the zip node.
@@ -335,7 +335,7 @@ struct ChoiceGraphTests {
         ])
 
         let graph = ChoiceGraph.build(from: tree)
-        let leaves = graph.leafNodes()
+        let leaves = graph.leafNodes
 
         #expect(leaves.count == 2)
         for leafID in leaves {
@@ -362,7 +362,7 @@ struct ChoiceGraphTests {
         let graphA = ChoiceGraph.build(from: treeA)
         let graphB = ChoiceGraph.build(from: treeB)
 
-        #expect(graphA.structuralFingerprint() != graphB.structuralFingerprint())
+        #expect(graphA.structuralFingerprint != graphB.structuralFingerprint)
     }
 
     @Test("Structural fingerprint is stable for same tree")
@@ -375,6 +375,6 @@ struct ChoiceGraphTests {
         let graphA = ChoiceGraph.build(from: tree)
         let graphB = ChoiceGraph.build(from: tree)
 
-        #expect(graphA.structuralFingerprint() == graphB.structuralFingerprint())
+        #expect(graphA.structuralFingerprint == graphB.structuralFingerprint)
     }
 }

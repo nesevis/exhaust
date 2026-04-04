@@ -14,14 +14,14 @@
 /// - **Dependency** (directed): bind-inner → bound content. Ordering constraint — parent before child. Topological sort and reachability operate here.
 /// - **Containment** (directed, no ordering constraint): parent → child in the tree. Defines independence structure for antichain computation.
 /// - **Self-similarity** (undirected): between active pick nodes with matching `depthMaskedSiteID`. Substitution candidates.
-/// - **Type-compatibility** (undirected): between antichain members with compatible types. Redistribution candidates.
+/// - **Type-compatibility** (undirected): between antichain members with compatible types. Redistribution candidates. Computed lazily on first access.
 ///
 /// ## Lifecycle
 ///
-/// The static skeleton (zip/pick topology, containment and self-similarity edges) is built once. Dynamic regions (bind subtrees, sequence elements) are rebuilt on structural acceptance. Type-compatibility edges and source/sink annotations are recomputed as needed. See ``ChoiceGraph/rebuildBoundSubtree(bindNodeID:newBoundTree:sequence:)`` and related lifecycle methods.
+/// The static skeleton (zip/pick topology, containment and self-similarity edges) is built once. Dynamic regions (bind subtrees, sequence elements) are rebuilt on structural acceptance. Type-compatibility edges and source/sink annotations are computed lazily on first access and invalidated by structural mutations.
 ///
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``SelfSimilarityEdge``, ``TypeCompatibilityEdge``
-public struct ChoiceGraph: Sendable {
+public final class ChoiceGraph {
     /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``.
     public var nodes: [ChoiceGraphNode]
 
@@ -34,17 +34,59 @@ public struct ChoiceGraph: Sendable {
     /// Self-similarity edges between active pick nodes with matching `depthMaskedSiteID`.
     public var selfSimilarityEdges: [SelfSimilarityEdge]
 
-    /// Type-compatibility edges between antichain members with matching types. Recomputed on structural acceptance.
-    public var typeCompatibilityEdges: [TypeCompatibilityEdge]
-
-    /// Per-node source/sink status for redistribution. Updated on any acceptance.
-    public var sourceSinkStatus: [Int: SourceSinkStatus]
-
     /// Node IDs in dependency order (roots first). Computed via Kahn's algorithm on dependency edges.
     public let topologicalOrder: [Int]
 
     /// Transitive closure of dependency edges. `reachability[i]` contains all node IDs reachable from node `i`.
     public let reachability: [Int: Set<Int>]
+
+    // MARK: - Lazy Edge State
+
+    /// Cached type-compatibility edges. Computed on first access via ``computeTypeCompatibilityEdges()``, invalidated by ``invalidateDerivedEdges()``.
+    private var _typeCompatibilityEdges: [TypeCompatibilityEdge]?
+
+    /// Cached source/sink annotations. Computed on first access via ``computeSourceSinkAnnotations()``, invalidated by ``invalidateDerivedEdges()``.
+    private var _sourceSinkStatus: [Int: SourceSinkStatus]?
+
+    /// Type-compatibility edges between antichain members with matching types. Computed lazily on first access and cached until invalidated by a structural mutation.
+    public var typeCompatibilityEdges: [TypeCompatibilityEdge] {
+        if let cached = _typeCompatibilityEdges { return cached }
+        let computed = computeTypeCompatibilityEdges()
+        _typeCompatibilityEdges = computed
+        return computed
+    }
+
+    /// Per-node source/sink status for redistribution. Computed lazily on first access and cached until invalidated.
+    public var sourceSinkStatus: [Int: SourceSinkStatus] {
+        if let cached = _sourceSinkStatus { return cached }
+        let computed = computeSourceSinkAnnotations()
+        _sourceSinkStatus = computed
+        return computed
+    }
+
+    /// Drops cached type-compatibility edges and source/sink annotations, forcing recomputation on next access.
+    func invalidateDerivedEdges() {
+        _typeCompatibilityEdges = nil
+        _sourceSinkStatus = nil
+    }
+
+    // MARK: - Init
+
+    init(
+        nodes: [ChoiceGraphNode],
+        containmentEdges: [ContainmentEdge],
+        dependencyEdges: [DependencyEdge],
+        selfSimilarityEdges: [SelfSimilarityEdge],
+        topologicalOrder: [Int],
+        reachability: [Int: Set<Int>]
+    ) {
+        self.nodes = nodes
+        self.containmentEdges = containmentEdges
+        self.dependencyEdges = dependencyEdges
+        self.selfSimilarityEdges = selfSimilarityEdges
+        self.topologicalOrder = topologicalOrder
+        self.reachability = reachability
+    }
 }
 
 // MARK: - Construction
@@ -52,7 +94,7 @@ public struct ChoiceGraph: Sendable {
 public extension ChoiceGraph {
     /// Builds a ``ChoiceGraph`` from a choice tree.
     ///
-    /// The tree contains all structural and value information needed for graph construction.
+    /// The tree contains all structural and value information needed for graph construction. Type-compatibility edges and source/sink annotations are deferred until first access.
     ///
     /// - Parameter tree: The generator's compositional structure.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
@@ -63,19 +105,16 @@ public extension ChoiceGraph {
 // MARK: - Dependency Queries
 
 public extension ChoiceGraph {
-    /// Returns dependency edges where Kleisli composition is meaningful.
+    /// Dependency edges where Kleisli composition is meaningful.
     ///
     /// Each edge connects a bind-inner node (controlling position) to its scope (controlled subtree). Ordered by topological sort (roots first).
     ///
     /// - SeeAlso: ``ChoiceDependencyGraph/reductionEdges()``
-    func reductionEdges() -> [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] {
+    var reductionEdges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] {
         var edges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] = []
-        // Iterate all bind nodes, not just those in topologicalOrder.
-        // Every bind has a reduction edge regardless of whether its bound subtree
-        // contains other structural nodes.
         for node in nodes {
             guard case let .bind(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue } // Active binds only.
+            guard node.positionRange != nil else { continue }
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
@@ -88,12 +127,12 @@ public extension ChoiceGraph {
         return edges
     }
 
-    /// Returns bind-inner nodes in topological order with their dependency edges restricted to other bind-inner nodes.
+    /// Bind-inner nodes in topological order with their dependency edges restricted to other bind-inner nodes.
     ///
     /// - SeeAlso: ``ChoiceDependencyGraph/bindInnerTopology()``
-    func bindInnerTopology() -> [(nodeID: Int, bindDepth: Int, dependsOn: [Int])] {
+    var bindInnerTopology: [(nodeID: Int, bindDepth: Int, dependsOn: [Int])] {
         var bindInnerNodeIDs = Set<Int>()
-        var bindInnerInfo: [Int: Int] = [:] // nodeID → bindDepth
+        var bindInnerInfo: [Int: Int] = [:]
 
         for node in nodes {
             guard case let .bind(metadata) = node.kind else { continue }
@@ -131,13 +170,12 @@ public extension ChoiceGraph {
 // MARK: - Containment Queries
 
 public extension ChoiceGraph {
-    /// Computes a maximal antichain over structural boundary nodes (nodes with children, excluding individual chooseBits leaves).
+    /// Maximal antichain over structural boundary nodes (nodes with children, excluding individual chooseBits leaves).
     ///
     /// Greedy construction: sort by subtree size descending, add each node if independent of all existing members. Produces a maximal antichain (cannot be extended) but not necessarily the maximum. Phase 4 upgrades to Dilworth/Hopcroft-Karp.
     ///
     /// - SeeAlso: ``ChoiceDependencyGraph/maximalAntichain()``
-    func deletionAntichain() -> [Int] {
-        // Structural boundary nodes: populated nodes that have children (not individual leaves).
+    var deletionAntichain: [Int] {
         let candidates = nodes.filter { node in
             node.positionRange != nil
                 && node.children.isEmpty == false
@@ -159,8 +197,8 @@ public extension ChoiceGraph {
         return antichain
     }
 
-    /// Returns all leaf node IDs (chooseBits nodes with non-nil position range).
-    func leafNodes() -> [Int] {
+    /// All leaf node IDs (chooseBits nodes with non-nil position range).
+    var leafNodes: [Int] {
         nodes.compactMap { node in
             guard case .chooseBits = node.kind else { return nil }
             guard node.positionRange != nil else { return nil }
@@ -171,7 +209,7 @@ public extension ChoiceGraph {
     /// Returns the sequence positions of all active `chooseBits` leaf nodes.
     ///
     /// This is the graph's natural definition of leaf positions — every value-producing node with a non-nil position range. This differs from the CDG's `leafPositions`, which partitions the flat sequence around structural node ranges. The graph's model is richer: every leaf has an explicit node with type metadata.
-    func leafPositions() -> [ClosedRange<Int>] {
+    var leafPositions: [ClosedRange<Int>] {
         nodes.compactMap { node in
             guard case .chooseBits = node.kind else { return nil }
             return node.positionRange
@@ -257,7 +295,7 @@ public extension ChoiceGraph {
     /// Computes a structural fingerprint over the dynamic region topology.
     ///
     /// Uses an FNV-1a-style rolling hash over node kinds and their position ranges in the dynamic regions (bind subtrees, sequence elements). A change in fingerprint indicates a structural change. The binary changed/unchanged signal is sufficient for the fibre descent guard.
-    func structuralFingerprint() -> UInt64 {
+    var structuralFingerprint: UInt64 {
         var hash: UInt64 = 14_695_981_039_346_656_037 // FNV offset basis
         for node in nodes {
             guard node.positionRange != nil else { continue }
@@ -276,5 +314,60 @@ public extension ChoiceGraph {
             }
         }
         return hash
+    }
+}
+
+// MARK: - Lazy Edge Computation
+
+extension ChoiceGraph {
+    /// Computes type-compatibility edges from the current node state.
+    ///
+    /// Groups active `chooseBits` leaves by ``TypeTag`` and creates edges between all antichain-independent pairs within each group.
+    private func computeTypeCompatibilityEdges() -> [TypeCompatibilityEdge] {
+        let activeLeaves = nodes.filter { node in
+            if case .chooseBits = node.kind, node.positionRange != nil {
+                return true
+            }
+            return false
+        }
+
+        var leafNodesByTag: [TypeTag: [Int]] = [:]
+        for leaf in activeLeaves {
+            if case let .chooseBits(metadata) = leaf.kind {
+                leafNodesByTag[metadata.typeTag, default: []].append(leaf.id)
+            }
+        }
+
+        var edges: [TypeCompatibilityEdge] = []
+        for (tag, leafIDs) in leafNodesByTag where leafIDs.count >= 2 {
+            var indexA = 0
+            while indexA < leafIDs.count {
+                var indexB = indexA + 1
+                while indexB < leafIDs.count {
+                    if areIndependent(leafIDs[indexA], leafIDs[indexB]) {
+                        edges.append(TypeCompatibilityEdge(
+                            nodeA: leafIDs[indexA],
+                            nodeB: leafIDs[indexB],
+                            typeTag: tag
+                        ))
+                    }
+                    indexB += 1
+                }
+                indexA += 1
+            }
+        }
+        return edges
+    }
+
+    /// Computes source/sink annotations from current leaf values.
+    private func computeSourceSinkAnnotations() -> [Int: SourceSinkStatus] {
+        var status: [Int: SourceSinkStatus] = [:]
+        for node in nodes {
+            guard case let .chooseBits(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
+            let isZero = metadata.value.bitPattern64 == 0
+            status[node.id] = isZero ? .sink : .source
+        }
+        return status
     }
 }
