@@ -64,10 +64,48 @@ public final class ChoiceGraph {
         return computed
     }
 
-    /// Drops cached type-compatibility edges and source/sink annotations, forcing recomputation on next access.
+    /// Drops cached type-compatibility edges, source/sink annotations, and convergence data on leaf nodes, forcing recomputation on next access.
     func invalidateDerivedEdges() {
         _typeCompatibilityEdges = nil
         _sourceSinkStatus = nil
+        clearConvergenceData()
+    }
+
+    /// Writes convergence records from an encoder pass onto the corresponding leaf nodes.
+    ///
+    /// - Parameter records: Map from flat sequence index to the convergence floor at that position.
+    func recordConvergence(_ records: [Int: ConvergedOrigin]) {
+        for (sequenceIndex, origin) in records {
+            guard let nodeIndex = nodes.firstIndex(where: { node in
+                guard case .chooseBits = node.kind else { return false }
+                return node.positionRange?.lowerBound == sequenceIndex
+            }) else { continue }
+            guard case var .chooseBits(metadata) = nodes[nodeIndex].kind else { continue }
+            metadata.convergedOrigin = origin
+            nodes[nodeIndex] = ChoiceGraphNode(
+                id: nodes[nodeIndex].id,
+                kind: .chooseBits(metadata),
+                positionRange: nodes[nodeIndex].positionRange,
+                children: nodes[nodeIndex].children,
+                parent: nodes[nodeIndex].parent
+            )
+        }
+    }
+
+    /// Clears convergence data from all leaf nodes.
+    private func clearConvergenceData() {
+        for index in nodes.indices {
+            guard case var .chooseBits(metadata) = nodes[index].kind else { continue }
+            guard metadata.convergedOrigin != nil else { continue }
+            metadata.convergedOrigin = nil
+            nodes[index] = ChoiceGraphNode(
+                id: nodes[index].id,
+                kind: .chooseBits(metadata),
+                positionRange: nodes[index].positionRange,
+                children: nodes[index].children,
+                parent: nodes[index].parent
+            )
+        }
     }
 
     // MARK: - Init

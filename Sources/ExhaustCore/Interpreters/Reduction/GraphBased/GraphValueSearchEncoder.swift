@@ -145,17 +145,22 @@ public struct GraphValueSearchEncoder: GraphEncoder {
             // Skip floating-point values — they use a separate encoder.
             guard metadata.typeTag.isFloatingPoint == false else { continue }
 
+            // Warm-start from cached convergence floor if available and configuration matches.
+            let convergedOrigin = metadata.convergedOrigin
+            let validConvergedOrigin = (convergedOrigin?.configuration == .binarySearchSemanticSimplest)
+                ? convergedOrigin : nil
+
             let stepper: DirectionalStepper
+            let isConvergedOrigined: Bool
+            let effectiveBound: UInt64
             if currentBitPattern > targetBitPattern {
-                stepper = .downward(BinarySearchStepper(
-                    lo: targetBitPattern,
-                    hi: currentBitPattern
-                ))
+                effectiveBound = validConvergedOrigin?.bound ?? targetBitPattern
+                isConvergedOrigined = validConvergedOrigin != nil
+                stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBitPattern))
             } else {
-                stepper = .upward(MaxBinarySearchStepper(
-                    lo: currentBitPattern,
-                    hi: targetBitPattern
-                ))
+                effectiveBound = validConvergedOrigin?.bound ?? targetBitPattern
+                isConvergedOrigined = validConvergedOrigin != nil
+                stepper = .upward(MaxBinarySearchStepper(lo: currentBitPattern, hi: effectiveBound))
             }
 
             leaves.append(LeafTarget(
@@ -166,8 +171,8 @@ public struct GraphValueSearchEncoder: GraphEncoder {
                 currentBitPattern: currentBitPattern,
                 targetBitPattern: targetBitPattern,
                 stepper: stepper,
-                isConvergedOrigined: false,
-                convergedOriginBound: targetBitPattern
+                isConvergedOrigined: isConvergedOrigined,
+                convergedOriginBound: effectiveBound
             ))
         }
     }

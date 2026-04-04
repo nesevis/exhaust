@@ -5,15 +5,16 @@
 
 // MARK: - Choice Graph Scheduler
 
-/// Drives the four graph encoders in a cycle loop until convergence or stall budget exhaustion.
+/// Drives the six graph encoders in a cycle loop until convergence or stall budget exhaustion.
 ///
 /// Each cycle:
 /// 1. Builds a ``ChoiceGraph`` from the current tree.
 /// 2. Runs ``GraphBranchPivotEncoder`` (structural simplification).
-/// 3. Runs ``GraphDeletionEncoder`` (structural removal).
-/// 4. Runs ``GraphValueSearchEncoder`` (value minimisation).
-/// 5. Runs ``GraphRedistributionEncoder`` (speculative, on stall only).
-/// 6. If improved, rebuilds the graph and repeats. If stalled, decrements the stall counter.
+/// 3. Runs ``GraphSubstitutionEncoder`` (self-similarity edge splicing).
+/// 4. Runs ``GraphDeletionEncoder`` (structural removal).
+/// 5. Runs ``GraphValueSearchEncoder`` (value minimisation).
+/// 6. Runs ``GraphKleisliFibreEncoder`` (joint upstream/downstream exploration).
+/// 7. Runs ``GraphRedistributionEncoder`` (speculative, on stall only).
 ///
 /// - SeeAlso: ``BonsaiScheduler``
 enum ChoiceGraphScheduler {
@@ -67,11 +68,13 @@ enum ChoiceGraphScheduler {
         collectStats: Bool,
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
+        let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
         var state = SchedulerState(
             sequence: ChoiceSequence.flatten(initialTree),
             tree: initialTree,
             output: initialOutput,
-            collectStats: collectStats
+            collectStats: collectStats,
+            isInstrumented: isInstrumented
         )
 
         var branchPivotEncoder = GraphBranchPivotEncoder()
@@ -83,52 +86,114 @@ enum ChoiceGraphScheduler {
 
         var stallBudget = config.maxStalls
 
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "graph_reducer_start",
+                metadata: [
+                    "seq_len": "\(state.sequence.count)",
+                    "max_stalls": "\(config.maxStalls)",
+                ]
+            )
+        }
+
+        var graph = ChoiceGraph.build(from: state.tree)
+        var graphDirty = false
+
         while stallBudget > 0 {
             state.cycles += 1
-            let graph = ChoiceGraph.build(from: state.tree)
-            var improved = false
+            let sequenceBeforeCycle = state.sequence
+
+            // Rebuild graph only when the previous cycle made structural changes.
+            if graphDirty {
+                graph = ChoiceGraph.build(from: state.tree)
+                graphDirty = false
+            }
+
+            if isInstrumented {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "graph_cycle_start",
+                    metadata: [
+                        "cycle": "\(state.cycles)",
+                        "seq_len": "\(state.sequence.count)",
+                        "nodes": "\(graph.nodes.count)",
+                        "stall_budget": "\(stallBudget)",
+                    ]
+                )
+            }
 
             // Phase 1: Branch pivot (structural simplification).
-            if try state.runEncoder(&branchPivotEncoder, graph: graph, gen: gen, property: property) {
-                improved = true
-            }
+            try state.runEncoder(&branchPivotEncoder, graph: graph, gen: gen, property: property)
 
             // Phase 2: Subtree substitution (self-similarity edge splicing).
-            if try state.runEncoder(&substitutionEncoder, graph: graph, gen: gen, property: property) {
-                improved = true
-            }
+            try state.runEncoder(&substitutionEncoder, graph: graph, gen: gen, property: property)
 
             // Phase 3: Deletion (structural removal).
-            if try state.runEncoder(&deletionEncoder, graph: graph, gen: gen, property: property) {
-                improved = true
+            try state.runEncoder(&deletionEncoder, graph: graph, gen: gen, property: property)
+
+            // If structural encoders changed the sequence, rebuild the graph for value passes.
+            let structurallyChanged = state.sequence != sequenceBeforeCycle
+            if structurallyChanged {
+                graph = ChoiceGraph.build(from: state.tree)
             }
 
-            // Rebuild graph after structural changes before value minimisation.
-            let valueGraph = improved ? ChoiceGraph.build(from: state.tree) : graph
-
             // Phase 4: Value search (value minimisation).
-            if try state.runEncoder(&valueSearchEncoder, graph: valueGraph, gen: gen, property: property) {
-                improved = true
+            try state.runEncoder(&valueSearchEncoder, graph: graph, gen: gen, property: property)
+
+            // Write convergence records onto leaf nodes for warm-start in subsequent cycles.
+            let convergenceRecords = valueSearchEncoder.convergenceRecords
+            if convergenceRecords.isEmpty == false {
+                graph.recordConvergence(convergenceRecords)
             }
 
             // Phase 5: Kleisli fibre search (joint upstream/downstream exploration).
-            if try state.runEncoder(&kleisliFibreEncoder, graph: valueGraph, gen: gen, property: property) {
-                improved = true
-            }
+            try state.runEncoder(&kleisliFibreEncoder, graph: graph, gen: gen, property: property)
 
             // Phase 6: Redistribution (speculative, on stall only).
+            let improved = state.sequence != sequenceBeforeCycle
             if improved == false {
-                let redistGraph = ChoiceGraph.build(from: state.tree)
-                if try state.runEncoder(&redistributionEncoder, graph: redistGraph, gen: gen, property: property) {
-                    improved = true
-                }
+                graph.invalidateDerivedEdges()
+                try state.runEncoder(&redistributionEncoder, graph: graph, gen: gen, property: property)
             }
 
-            if improved {
+            // Mark graph dirty if structure changed this cycle so it's rebuilt next cycle.
+            if state.sequence.count != sequenceBeforeCycle.count {
+                graphDirty = true
+            }
+
+            let cycleImproved = state.sequence != sequenceBeforeCycle
+
+            if isInstrumented {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "graph_cycle_end",
+                    metadata: [
+                        "cycle": "\(state.cycles)",
+                        "improved": "\(cycleImproved)",
+                        "seq_len": "\(state.sequence.count)",
+                        "total_mats": "\(state.stats.totalMaterializations)",
+                    ]
+                )
+            }
+
+            if cycleImproved {
                 stallBudget = config.maxStalls
             } else {
                 stallBudget -= 1
             }
+        }
+
+        if isInstrumented {
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "graph_reducer_complete",
+                metadata: [
+                    "cycles": "\(state.cycles)",
+                    "seq_len": "\(state.sequence.count)",
+                    "total_mats": "\(state.stats.totalMaterializations)",
+                ]
+            )
         }
 
         state.stats.cycles = state.cycles
@@ -147,6 +212,7 @@ private struct SchedulerState<Output> {
     var stats = ReductionStats()
     var cycles = 0
     let collectStats: Bool
+    let isInstrumented: Bool
 
     /// Reject cache using Zobrist hashing.
     var rejectCache = Set<UInt64>()
@@ -154,6 +220,7 @@ private struct SchedulerState<Output> {
     /// Runs a single graph encoder through its probe loop, accepting improvements.
     ///
     /// - Returns: Whether any probe was accepted during this encoder pass.
+    @discardableResult
     mutating func runEncoder<Encoder: GraphEncoder>(
         _ encoder: inout Encoder,
         graph: ChoiceGraph,
@@ -165,6 +232,8 @@ private struct SchedulerState<Output> {
         var lastAccepted = false
         var anyAccepted = false
         var probeCount = 0
+        var acceptCount = 0
+        var rejectCacheHits = 0
         let baseHash = ZobristHash.hash(of: sequence)
 
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
@@ -177,6 +246,7 @@ private struct SchedulerState<Output> {
                 probe: probe
             )
             if rejectCache.contains(probeHash) {
+                rejectCacheHits += 1
                 continue
             }
 
@@ -205,6 +275,7 @@ private struct SchedulerState<Output> {
                 output = result.output
                 lastAccepted = true
                 anyAccepted = true
+                acceptCount += 1
             } else {
                 rejectCache.insert(probeHash)
             }
@@ -216,6 +287,20 @@ private struct SchedulerState<Output> {
 
         if collectStats {
             stats.encoderProbes[encoder.name, default: 0] += probeCount
+        }
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "graph_encoder_pass",
+                metadata: [
+                    "encoder": encoder.name.rawValue,
+                    "probes": "\(probeCount)",
+                    "accepted": "\(acceptCount)",
+                    "cache_hits": "\(rejectCacheHits)",
+                    "seq_len": "\(sequence.count)",
+                ]
+            )
         }
 
         return anyAccepted

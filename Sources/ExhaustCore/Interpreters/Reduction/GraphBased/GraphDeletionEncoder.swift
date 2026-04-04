@@ -64,11 +64,31 @@ public struct GraphDeletionEncoder: GraphEncoder {
         greedyPhase = nil
         pendingProbeIndices = nil
 
-        // Get deletion antichain from the graph.
+        // Get deletion antichain from the graph (whole subtree deletions).
         let antichainNodeIDs = graph.deletionAntichain
         candidates = antichainNodeIDs.compactMap { nodeID in
             guard let range = graph.nodes[nodeID].positionRange else { return nil }
             return DeletionCandidate(nodeID: nodeID, positionRange: range)
+        }
+
+        // Add individual sequence element children as deletion candidates.
+        // Each element of a sequence node can be independently removed.
+        for node in graph.nodes {
+            guard case let .sequence(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
+            guard metadata.elementCount > 1 else { continue }
+            // Check length constraint — cannot delete below the lower bound.
+            let minLength = metadata.lengthConstraint?.lowerBound ?? 0
+            guard UInt64(metadata.elementCount) > minLength else { continue }
+            for childID in node.children {
+                let child = graph.nodes[childID]
+                guard let childRange = child.positionRange else { continue }
+                // Avoid duplicates with antichain candidates.
+                let isDuplicate = candidates.contains { $0.positionRange == childRange }
+                if isDuplicate == false {
+                    candidates.append(DeletionCandidate(nodeID: childID, positionRange: childRange))
+                }
+            }
         }
 
         // Sort by position range size descending (largest first).
