@@ -5,18 +5,15 @@
 
 // MARK: - Choice Graph Scheduler
 
-/// Drives the six graph encoders in a cycle loop until convergence or stall budget exhaustion.
+/// Drives graph encoders in a two-pass priority-ordered cycle until convergence or stall budget exhaustion.
 ///
 /// Each cycle:
-/// 1. Builds a ``ChoiceGraph`` from the current tree.
-/// 2. Runs ``GraphBranchPivotEncoder`` (structural simplification).
-/// 3. Runs ``GraphSubstitutionEncoder`` (self-similarity edge splicing).
-/// 4. Runs ``GraphDeletionEncoder`` (structural removal).
-/// 5. Runs ``GraphValueSearchEncoder`` (value minimisation).
-/// 6. Runs ``GraphKleisliFibreEncoder`` (joint upstream/downstream exploration).
-/// 7. Runs ``GraphRedistributionEncoder`` (speculative, on stall only).
+/// 1. Builds a yield-ordered queue from the ``ChoiceGraph`` via ``TransformationQueueBuilder``.
+/// 2. **Pass 1 (structural):** runs structural encoders (deletion, substitution, pivot, swap) in yield order. On any structural acceptance, rebuilds the graph and restarts pass 1.
+/// 3. **Pass 2 (value):** runs value encoders (value search, float search) in value-yield order. Records convergence on graph nodes for warm-start.
+/// 4. **Stall escape:** if neither pass made progress, runs redistribution and tandem.
 ///
-/// - SeeAlso: ``BonsaiScheduler``
+/// - SeeAlso: ``BonsaiScheduler``, ``TransformationQueueBuilder``
 enum ChoiceGraphScheduler {
 
     // MARK: - Entry Points
@@ -77,15 +74,8 @@ enum ChoiceGraphScheduler {
             isInstrumented: isInstrumented
         )
 
-        var branchPivotEncoder = GraphBranchPivotEncoder()
-        var substitutionEncoder = GraphSubstitutionEncoder()
-        var siblingSwapEncoder = GraphSiblingSwapEncoder()
-        var deletionEncoder = GraphDeletionEncoder()
-        var valueSearchEncoder = GraphValueSearchEncoder()
-        var floatSearchEncoder = GraphFloatSearchEncoder()
-        var redistributionEncoder = GraphRedistributionEncoder()
-        var tandemEncoder = GraphTandemReductionEncoder()
-        var kleisliFibreEncoder = GraphKleisliFibreEncoder(gen: gen, property: property)
+        // Encoder instances — preserved across cycles for internal state continuity.
+        var encoders = EncoderSet(gen: gen, property: property)
 
         var stallBudget = config.maxStalls
 
@@ -101,7 +91,6 @@ enum ChoiceGraphScheduler {
         }
 
         var graph = ChoiceGraph.build(from: state.tree)
-        var graphDirty = false
 
         if collectStats {
             state.stats.graphNodeCount = graph.nodes.count
@@ -130,13 +119,6 @@ enum ChoiceGraphScheduler {
             state.cycles += 1
             let sequenceBeforeCycle = state.sequence
 
-            // Rebuild graph only when the previous cycle made structural changes.
-            if graphDirty {
-                graph = ChoiceGraph.build(from: state.tree)
-                graphDirty = false
-                state.stats.graphRebuilds += 1
-            }
-
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
@@ -150,60 +132,88 @@ enum ChoiceGraphScheduler {
                 )
             }
 
-            // Phase 1: Branch pivot (structural simplification).
-            try state.runEncoder(&branchPivotEncoder, graph: graph, gen: gen, property: property)
+            // Build the yield-ordered queue for this cycle.
+            let queue = TransformationQueueBuilder.buildQueue(from: graph)
 
-            // Phase 2: Subtree substitution (self-similarity edge splicing).
-            try state.runEncoder(&substitutionEncoder, graph: graph, gen: gen, property: property)
+            // Pass 1: structural encoders, ordered by yield. Restart on acceptance.
+            let structuralSlots = queue.filter { $0.yield.tier == .structural }
+            var structuralProgress = false
 
-            // Phase 3: Sibling swap (reorder same-shaped siblings for shortlex improvement).
-            try state.runEncoder(&siblingSwapEncoder, graph: graph, gen: gen, property: property)
+            for entry in structuralSlots {
+                let accepted = try state.runSlot(
+                    entry.slot,
+                    encoders: &encoders,
+                    graph: graph,
+                    gen: gen,
+                    property: property
+                )
+                if accepted {
+                    structuralProgress = true
+                    // Structural change — rebuild graph and restart pass 1.
+                    graph = ChoiceGraph.build(from: state.tree)
+                    state.stats.graphRebuilds += 1
+                    break
+                }
+            }
 
-            // Phase 4: Deletion (structural removal).
-            try state.runEncoder(&deletionEncoder, graph: graph, gen: gen, property: property)
-
-            // If structural encoders changed the sequence, rebuild the graph for value passes.
-            let structurallyChanged = state.sequence != sequenceBeforeCycle
-            if structurallyChanged {
+            // If structural pass made progress, rebuild graph for value pass.
+            // (If it restarted and broke, the graph was already rebuilt above.)
+            if structuralProgress, state.sequence.count != sequenceBeforeCycle.count {
+                // Graph was rebuilt in the loop above. No additional rebuild needed.
+            } else if state.sequence != sequenceBeforeCycle {
+                // Value-preserving structural change (pivot, swap) — rebuild for value pass.
                 graph = ChoiceGraph.build(from: state.tree)
                 state.stats.graphRebuilds += 1
             }
 
-            // Phase 4: Value search (value minimisation).
-            try state.runEncoder(&valueSearchEncoder, graph: graph, gen: gen, property: property)
-
-            // Write convergence records onto leaf nodes for warm-start in subsequent cycles.
-            let convergenceRecords = valueSearchEncoder.convergenceRecords
-            if convergenceRecords.isEmpty == false {
-                graph.recordConvergence(convergenceRecords)
+            // Pass 2: value encoders, ordered by value yield.
+            let valueSlots = queue.filter { $0.yield.tier == .value }
+            for entry in valueSlots {
+                try state.runSlot(
+                    entry.slot,
+                    encoders: &encoders,
+                    graph: graph,
+                    gen: gen,
+                    property: property
+                )
             }
 
-            // Phase 4b: Float search (four-stage IEEE 754 pipeline).
-            try state.runEncoder(&floatSearchEncoder, graph: graph, gen: gen, property: property)
-
-            let floatConvergenceRecords = floatSearchEncoder.convergenceRecords
-            if floatConvergenceRecords.isEmpty == false {
-                graph.recordConvergence(floatConvergenceRecords)
+            // Harvest convergence records onto graph nodes.
+            let intConvergence = encoders.valueSearchEncoder.convergenceRecords
+            if intConvergence.isEmpty == false {
+                graph.recordConvergence(intConvergence)
+            }
+            let floatConvergence = encoders.floatSearchEncoder.convergenceRecords
+            if floatConvergence.isEmpty == false {
+                graph.recordConvergence(floatConvergence)
             }
 
-            // Phase 5: Kleisli fibre search (joint upstream/downstream exploration).
-            // TODO: Re-enable once downstream scoping and covering array performance are resolved.
-            // try state.runEncoder(&kleisliFibreEncoder, graph: graph, gen: gen, property: property)
-
-            // Phase 6: Redistribution and tandem (speculative, on stall only).
+            // Stall escape: redistribution and tandem when no progress.
             let improved = state.sequence != sequenceBeforeCycle
             if improved == false {
                 graph.invalidateDerivedEdges()
-                try state.runEncoder(&redistributionEncoder, graph: graph, gen: gen, property: property)
-                try state.runEncoder(&tandemEncoder, graph: graph, gen: gen, property: property)
+                try state.runSlot(
+                    .redistribution,
+                    encoders: &encoders,
+                    graph: graph,
+                    gen: gen,
+                    property: property
+                )
+                try state.runSlot(
+                    .tandem,
+                    encoders: &encoders,
+                    graph: graph,
+                    gen: gen,
+                    property: property
+                )
             }
 
-            // Mark graph dirty if structure changed this cycle so it's rebuilt next cycle.
-            if state.sequence.count != sequenceBeforeCycle.count {
-                graphDirty = true
-            }
-
+            // Rebuild graph next cycle if structure changed.
             let cycleImproved = state.sequence != sequenceBeforeCycle
+            if state.sequence.count != sequenceBeforeCycle.count {
+                graph = ChoiceGraph.build(from: state.tree)
+                state.stats.graphRebuilds += 1
+            }
 
             if isInstrumented {
                 ExhaustLog.debug(
@@ -243,6 +253,25 @@ enum ChoiceGraphScheduler {
     // swiftlint:enable function_parameter_count
 }
 
+// MARK: - Encoder Set
+
+/// Holds all encoder instances, preserved across cycles for internal state continuity.
+private struct EncoderSet<Output> {
+    var branchPivotEncoder = GraphBranchPivotEncoder()
+    var substitutionEncoder = GraphSubstitutionEncoder()
+    var siblingSwapEncoder = GraphSiblingSwapEncoder()
+    var deletionEncoder = GraphDeletionEncoder()
+    var valueSearchEncoder = GraphValueSearchEncoder()
+    var floatSearchEncoder = GraphFloatSearchEncoder()
+    var redistributionEncoder = GraphRedistributionEncoder()
+    var tandemEncoder = GraphTandemReductionEncoder()
+    var kleisliFibreEncoder: GraphKleisliFibreEncoder<Output>
+
+    init(gen: ReflectiveGenerator<Output>, property: @escaping (Output) -> Bool) {
+        kleisliFibreEncoder = GraphKleisliFibreEncoder(gen: gen, property: property)
+    }
+}
+
 // MARK: - Scheduler State
 
 /// Mutable state for the graph-based reduction cycle loop.
@@ -258,18 +287,36 @@ private struct SchedulerState<Output> {
     /// Reject cache using Zobrist hashing.
     var rejectCache = Set<UInt64>()
 
-    /// Convergence cache keyed by flat sequence index.
-    var convergenceCache: [Int: ConvergedOrigin] = [:]
-
-    mutating func recordConvergence(_ records: [Int: ConvergedOrigin]) {
-        for (index, origin) in records {
-            convergenceCache[index] = origin
+    /// Runs the encoder for a given slot through its probe loop.
+    @discardableResult
+    mutating func runSlot(
+        _ slot: EncoderSlot,
+        encoders: inout EncoderSet<Output>,
+        graph: ChoiceGraph,
+        gen: ReflectiveGenerator<Output>,
+        property: @escaping (Output) -> Bool
+    ) throws -> Bool {
+        switch slot {
+        case .branchPivot:
+            return try runEncoder(&encoders.branchPivotEncoder, graph: graph, gen: gen, property: property)
+        case .substitution:
+            return try runEncoder(&encoders.substitutionEncoder, graph: graph, gen: gen, property: property)
+        case .siblingSwap:
+            return try runEncoder(&encoders.siblingSwapEncoder, graph: graph, gen: gen, property: property)
+        case .deletion:
+            return try runEncoder(&encoders.deletionEncoder, graph: graph, gen: gen, property: property)
+        case .valueSearch:
+            return try runEncoder(&encoders.valueSearchEncoder, graph: graph, gen: gen, property: property)
+        case .floatSearch:
+            return try runEncoder(&encoders.floatSearchEncoder, graph: graph, gen: gen, property: property)
+        case .redistribution:
+            return try runEncoder(&encoders.redistributionEncoder, graph: graph, gen: gen, property: property)
+        case .tandem:
+            return try runEncoder(&encoders.tandemEncoder, graph: graph, gen: gen, property: property)
         }
     }
 
     /// Runs a single graph encoder through its probe loop, accepting improvements.
-    ///
-    /// - Returns: Whether any probe was accepted during this encoder pass.
     @discardableResult
     mutating func runEncoder<Encoder: GraphEncoder>(
         _ encoder: inout Encoder,
