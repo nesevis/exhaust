@@ -208,37 +208,55 @@ public extension ChoiceGraph {
 // MARK: - Containment Queries
 
 public extension ChoiceGraph {
-    /// Maximal antichain over deletable structural boundary nodes.
+    /// Maximum antichain over deletable structural boundary nodes via Dilworth's theorem.
     ///
     /// A node is deletable if it is a child of a sequence node (an element that can be removed when the sequence's length constraint permits). Nodes whose parent is a zip are tuple slots and cannot be deleted. The root node and individual chooseBits leaves are also excluded.
     ///
-    /// Greedy construction: sort by subtree size descending, add each node if independent of all existing members. Produces a maximal antichain (cannot be extended) but not necessarily the maximum. Phase 4 upgrades to Dilworth/Hopcroft-Karp.
+    /// Computes the optimal maximum antichain using Hopcroft-Karp bipartite matching on the reachability relation restricted to the candidate set, then extracts the antichain via Konig's theorem. For the typical deletion candidate set (5-15 nodes), this runs in microseconds.
     ///
-    /// - SeeAlso: ``ChoiceDependencyGraph/maximalAntichain()``
+    /// - SeeAlso: ``BipartiteMatching``, ``ChoiceDependencyGraph/maximalAntichain()``
     var deletionAntichain: [Int] {
-        let candidates = nodes.filter { node in
+        let candidateNodes = nodes.filter { node in
             guard node.positionRange != nil else { return false }
             guard let parentID = node.parent else { return false }
-            // Only children of sequence nodes are deletable — they are elements
-            // that can be removed. Children of zip nodes are tuple slots.
             guard case .sequence = nodes[parentID].kind else { return false }
             return true
-        }.sorted { nodeA, nodeB in
-            let sizeA = nodeA.positionRange?.count ?? 0
-            let sizeB = nodeB.positionRange?.count ?? 0
-            return sizeA > sizeB
         }
 
-        var antichain: [Int] = []
-        for candidate in candidates {
-            let isIndependent = antichain.allSatisfy { existing in
-                areIndependent(candidate.id, existing)
-            }
-            if isIndependent {
-                antichain.append(candidate.id)
+        guard candidateNodes.isEmpty == false else { return [] }
+
+        // Map candidate node IDs to dense indices for the bipartite graph.
+        let candidateIDs = candidateNodes.map(\.id)
+        let candidateCount = candidateIDs.count
+        var idToIndex = [Int: Int]()
+        for (index, nodeID) in candidateIDs.enumerated() {
+            idToIndex[nodeID] = index
+        }
+
+        // Build reachability restricted to the candidate set.
+        // Edge (u, v) means u < v in the partial order (u is reachable from v,
+        // that is, v depends on u).
+        var adjacency = [[Int]](repeating: [], count: candidateCount)
+        for (sourceIndex, sourceID) in candidateIDs.enumerated() {
+            let reachable = reachability[sourceID] ?? []
+            for targetID in reachable {
+                if let targetIndex = idToIndex[targetID] {
+                    adjacency[sourceIndex].append(targetIndex)
+                }
             }
         }
-        return antichain
+
+        let antichainIndices = BipartiteMatching.maximumAntichain(
+            nodeCount: candidateCount,
+            reachability: Dictionary(
+                uniqueKeysWithValues: (0 ..< candidateCount).map { index in
+                    (index, Set(adjacency[index]))
+                }
+            )
+        )
+
+        // Map back to node IDs.
+        return antichainIndices.map { candidateIDs[$0] }
     }
 
     /// All leaf node IDs (chooseBits nodes with non-nil position range).
