@@ -84,6 +84,22 @@ public struct ReductionStats: Sendable {
     /// Per-fingerprint filter predicate observations accumulated across all materializations.
     public var filterObservations: [UInt64: FilterObservation] = [:]
 
+    // MARK: - Graph Reducer
+
+    /// Node count at initial graph construction. Zero when using the Bonsai path.
+    public var graphNodeCount: Int = 0
+
+    /// Edge counts per layer at initial graph construction.
+    public var graphDependencyEdgeCount: Int = 0
+    public var graphContainmentEdgeCount: Int = 0
+    public var graphSelfSimilarityEdgeCount: Int = 0
+
+    /// Number of graph rebuilds during reduction (structural changes that triggered a fresh `ChoiceGraph.build`).
+    public var graphRebuilds: Int = 0
+
+    /// Deletion antichain size at first cycle.
+    public var graphDeletionAntichainSize: Int = 0
+
     // MARK: - Per-Phase Outcomes
 
     /// Per-cycle phase outcome data, collected when stats collection is enabled.

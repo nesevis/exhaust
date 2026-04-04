@@ -191,7 +191,7 @@ struct ChoiceGraphReducerIntegrationTests {
 
     @Test("Bind-dependent array length shrinks correctly via graph reducer")
     func bindDependentReduction() throws {
-        let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bound(
+        let gen = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bound(
             forward: { length in
                 Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(length))
             },

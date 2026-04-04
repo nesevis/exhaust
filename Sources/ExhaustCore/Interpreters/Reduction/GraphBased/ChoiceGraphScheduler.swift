@@ -101,6 +101,29 @@ enum ChoiceGraphScheduler {
         var graph = ChoiceGraph.build(from: state.tree)
         var graphDirty = false
 
+        if collectStats {
+            state.stats.graphNodeCount = graph.nodes.count
+            state.stats.graphDependencyEdgeCount = graph.dependencyEdges.count
+            state.stats.graphContainmentEdgeCount = graph.containmentEdges.count
+            state.stats.graphSelfSimilarityEdgeCount = graph.selfSimilarityEdges.count
+            state.stats.graphDeletionAntichainSize = graph.deletionAntichain.count
+        }
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "graph_construction",
+                metadata: [
+                    "nodes": "\(graph.nodes.count)",
+                    "dependency_edges": "\(graph.dependencyEdges.count)",
+                    "containment_edges": "\(graph.containmentEdges.count)",
+                    "self_similarity_edges": "\(graph.selfSimilarityEdges.count)",
+                    "type_compat_edges": "\(graph.typeCompatibilityEdges.count)",
+                    "deletion_antichain": "\(graph.deletionAntichain.count)",
+                ]
+            )
+        }
+
         while stallBudget > 0 {
             state.cycles += 1
             let sequenceBeforeCycle = state.sequence
@@ -109,6 +132,7 @@ enum ChoiceGraphScheduler {
             if graphDirty {
                 graph = ChoiceGraph.build(from: state.tree)
                 graphDirty = false
+                state.stats.graphRebuilds += 1
             }
 
             if isInstrumented {
@@ -140,6 +164,7 @@ enum ChoiceGraphScheduler {
             let structurallyChanged = state.sequence != sequenceBeforeCycle
             if structurallyChanged {
                 graph = ChoiceGraph.build(from: state.tree)
+                state.stats.graphRebuilds += 1
             }
 
             // Phase 4: Value search (value minimisation).
@@ -220,6 +245,15 @@ private struct SchedulerState<Output> {
 
     /// Reject cache using Zobrist hashing.
     var rejectCache = Set<UInt64>()
+
+    /// Convergence cache keyed by flat sequence index.
+    var convergenceCache: [Int: ConvergedOrigin] = [:]
+
+    mutating func recordConvergence(_ records: [Int: ConvergedOrigin]) {
+        for (index, origin) in records {
+            convergenceCache[index] = origin
+        }
+    }
 
     /// Runs a single graph encoder through its probe loop, accepting improvements.
     ///
