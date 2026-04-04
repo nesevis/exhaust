@@ -79,6 +79,7 @@ enum ChoiceGraphScheduler {
 
         var branchPivotEncoder = GraphBranchPivotEncoder()
         var substitutionEncoder = GraphSubstitutionEncoder()
+        var siblingSwapEncoder = GraphSiblingSwapEncoder()
         var deletionEncoder = GraphDeletionEncoder()
         var valueSearchEncoder = GraphValueSearchEncoder()
         var redistributionEncoder = GraphRedistributionEncoder()
@@ -129,7 +130,10 @@ enum ChoiceGraphScheduler {
             // Phase 2: Subtree substitution (self-similarity edge splicing).
             try state.runEncoder(&substitutionEncoder, graph: graph, gen: gen, property: property)
 
-            // Phase 3: Deletion (structural removal).
+            // Phase 3: Sibling swap (reorder same-shaped siblings for shortlex improvement).
+            try state.runEncoder(&siblingSwapEncoder, graph: graph, gen: gen, property: property)
+
+            // Phase 4: Deletion (structural removal).
             try state.runEncoder(&deletionEncoder, graph: graph, gen: gen, property: property)
 
             // If structural encoders changed the sequence, rebuild the graph for value passes.

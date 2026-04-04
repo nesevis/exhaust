@@ -37,5 +37,6 @@ public enum EncoderName: String, Hashable, Sendable {
     case graphRedistribution
     case graphBranchPivot
     case graphSubstitution
+    case graphSiblingSwap
     case graphKleisliFibre
 }

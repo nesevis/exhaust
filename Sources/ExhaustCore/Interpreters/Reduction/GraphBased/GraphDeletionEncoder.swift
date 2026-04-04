@@ -64,30 +64,31 @@ public struct GraphDeletionEncoder: GraphEncoder {
         greedyPhase = nil
         pendingProbeIndices = nil
 
-        // Get deletion antichain from the graph (whole subtree deletions).
+        // Deletion candidates are children of sequence nodes (from the antichain)
+        // plus any additional sequence element children not in the antichain.
+        // The antichain now correctly excludes zip children and root nodes.
+        var candidateSet = Set<Int>()
         let antichainNodeIDs = graph.deletionAntichain
         candidates = antichainNodeIDs.compactMap { nodeID in
             guard let range = graph.nodes[nodeID].positionRange else { return nil }
+            candidateSet.insert(nodeID)
             return DeletionCandidate(nodeID: nodeID, positionRange: range)
         }
 
-        // Add individual sequence element children as deletion candidates.
-        // Each element of a sequence node can be independently removed.
+        // Add sequence element children not already in the antichain.
+        // The antichain's greedy construction may miss some elements if they
+        // are dependency-related to existing members.
         for node in graph.nodes {
             guard case let .sequence(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
-            guard metadata.elementCount > 1 else { continue }
-            // Check length constraint — cannot delete below the lower bound.
             let minLength = metadata.lengthConstraint?.lowerBound ?? 0
             guard UInt64(metadata.elementCount) > minLength else { continue }
             for childID in node.children {
+                guard candidateSet.contains(childID) == false else { continue }
                 let child = graph.nodes[childID]
                 guard let childRange = child.positionRange else { continue }
-                // Avoid duplicates with antichain candidates.
-                let isDuplicate = candidates.contains { $0.positionRange == childRange }
-                if isDuplicate == false {
-                    candidates.append(DeletionCandidate(nodeID: childID, positionRange: childRange))
-                }
+                candidateSet.insert(childID)
+                candidates.append(DeletionCandidate(nodeID: childID, positionRange: childRange))
             }
         }
 

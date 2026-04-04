@@ -208,15 +208,21 @@ public extension ChoiceGraph {
 // MARK: - Containment Queries
 
 public extension ChoiceGraph {
-    /// Maximal antichain over structural boundary nodes (nodes with children, excluding individual chooseBits leaves).
+    /// Maximal antichain over deletable structural boundary nodes.
+    ///
+    /// A node is deletable if it is a child of a sequence node (an element that can be removed when the sequence's length constraint permits). Nodes whose parent is a zip are tuple slots and cannot be deleted. The root node and individual chooseBits leaves are also excluded.
     ///
     /// Greedy construction: sort by subtree size descending, add each node if independent of all existing members. Produces a maximal antichain (cannot be extended) but not necessarily the maximum. Phase 4 upgrades to Dilworth/Hopcroft-Karp.
     ///
     /// - SeeAlso: ``ChoiceDependencyGraph/maximalAntichain()``
     var deletionAntichain: [Int] {
         let candidates = nodes.filter { node in
-            node.positionRange != nil
-                && node.children.isEmpty == false
+            guard node.positionRange != nil else { return false }
+            guard let parentID = node.parent else { return false }
+            // Only children of sequence nodes are deletable — they are elements
+            // that can be removed. Children of zip nodes are tuple slots.
+            guard case .sequence = nodes[parentID].kind else { return false }
+            return true
         }.sorted { nodeA, nodeB in
             let sizeA = nodeA.positionRange?.count ?? 0
             let sizeB = nodeB.positionRange?.count ?? 0
