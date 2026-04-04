@@ -12,134 +12,95 @@ import ExhaustCore
 import Foundation
 
 func registerECOOPBenchmarks() {
-    let seedCount = 1000
+    let seedCount = 10
     let baseSeed: UInt64 = 1337
     let config = Interpreters.BonsaiReducerConfiguration.slow
 
-    registerECOOPChallenge(
-        name: "Bound5",
-        gen: bound5Gen,
-        property: bound5Property,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Bound5", gen: bound5Gen, property: bound5Property,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "BinaryHeap",
-        gen: binaryHeapGen(depth: 10).unique(),
-        property: binaryHeapProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "BinaryHeap", gen: binaryHeapGen(depth: 10).unique(), property: binaryHeapProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Calculator",
-        gen: #gen(calculatorExpressionGen(depth: 4)),
-        property: calculatorProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 4)), property: calculatorProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Coupling",
-        gen: couplingGen,
-        property: couplingProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Coupling", gen: couplingGen, property: couplingProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Deletion",
-        gen: deletionGen,
-        property: deletionProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Deletion", gen: deletionGen, property: deletionProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
+    registerECOOPPair(
         name: "Difference: Must Not Be Zero",
-        gen: differenceMustNotBeZeroGen,
-        property: differenceMustNotBeZeroProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed,
-        maxGenerationRuns: 500_000
+        gen: differenceMustNotBeZeroGen, property: differenceMustNotBeZeroProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
-    registerECOOPChallenge(
+    registerECOOPPair(
         name: "Difference: Must Not Be Small",
-        gen: differenceMustNotBeSmallGen,
-        property: differenceMustNotBeSmallProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed,
-        maxGenerationRuns: 500_000
+        gen: differenceMustNotBeSmallGen, property: differenceMustNotBeSmallProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
-    registerECOOPChallenge(
+    registerECOOPPair(
         name: "Difference: Must Not Be One",
-        gen: differenceMustNotBeOneGen,
-        property: differenceMustNotBeOneProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed,
-        maxGenerationRuns: 500_000
+        gen: differenceMustNotBeOneGen, property: differenceMustNotBeOneProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
-    registerECOOPChallenge(
-        name: "Distinct",
-        gen: distinctGen,
-        property: distinctProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Distinct", gen: distinctGen, property: distinctProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "LargeUnionList",
-        gen: largeUnionListGen,
-        property: largeUnionListProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "LargeUnionList", gen: largeUnionListGen, property: largeUnionListProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "LengthList",
-        gen: lengthListGen,
-        property: lengthListProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "LengthList", gen: lengthListGen, property: lengthListProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "NestedLists",
-        gen: nestedListsGen,
-        property: nestedListsProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "NestedLists", gen: nestedListsGen, property: nestedListsProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Reverse",
-        gen: reverseGen,
-        property: reverseProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Reverse", gen: reverseGen, property: reverseProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Replacement",
-        gen: replacementGen,
-        property: replacementProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Replacement", gen: replacementGen, property: replacementProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-//    registerECOOPChallenge(
-//        name: "Parser",
-//        gen: parserLangGen,
-//        property: parserProperty,
-//        config: .slow,
-//        seedCount: seedCount,
-//        baseSeed: baseSeed,
-//        sizeMetric: { parserSize($0) }
-//    )
+}
+
+/// Registers both Bonsai and Graph benchmarks for a single challenge, adjacent so the framework interleaves them.
+private func registerECOOPPair<Output>(
+    name: String,
+    gen: ReflectiveGenerator<Output>,
+    property: @Sendable @escaping (Output) -> Bool,
+    config: Interpreters.BonsaiReducerConfiguration,
+    seedCount: Int,
+    baseSeed: UInt64,
+    maxGenerationRuns: UInt64 = 10_000,
+    sizeMetric: ((Output) -> Int)? = nil
+) {
+    for reducerKind in ReducerKind.allCases {
+        registerECOOPChallenge(
+            name: "\(reducerKind.benchmarkTag) \(name)",
+            gen: gen,
+            property: property,
+            config: config,
+            reducerKind: reducerKind,
+            seedCount: seedCount,
+            baseSeed: baseSeed,
+            maxGenerationRuns: maxGenerationRuns,
+            sizeMetric: sizeMetric
+        )
+    }
 }
 
 // MARK: - Per-Seed Result
@@ -161,6 +122,7 @@ private func registerECOOPChallenge<Output>(
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     config: Interpreters.BonsaiReducerConfiguration,
+    reducerKind: ReducerKind,
     seedCount: Int,
     baseSeed: UInt64,
     maxGenerationRuns: UInt64 = 10_000,
@@ -197,13 +159,24 @@ private func registerECOOPChallenge<Output>(
                 return property(candidate)
             }
             let reduceStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-            let result = try? Interpreters.bonsaiReduce(
-                gen: gen,
-                tree: tree,
-                output: value,
-                config: config,
-                property: countingProperty
-            )
+            let result = switch reducerKind {
+            case .bonsai:
+                try? Interpreters.bonsaiReduce(
+                    gen: gen,
+                    tree: tree,
+                    output: value,
+                    config: config,
+                    property: countingProperty
+                )
+            case .choiceGraph:
+                try? Interpreters.choiceGraphReduce(
+                    gen: gen,
+                    tree: tree,
+                    output: value,
+                    config: config,
+                    property: countingProperty
+                )
+            }
             let reduceEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
