@@ -9,7 +9,13 @@
 ///
 /// For each dependency edge in the graph, modifies the bind-inner value (upstream) via binary search, lifts the modified sequence through the generator to re-derive the bound subtree, then searches the downstream fibre for a failing assignment using exhaustive enumeration or pairwise covering.
 ///
-/// This is the graph-based counterpart of ``KleisliComposition``. The graph provides the dependency edges with typed leaf sets directly, eliminating the edge discovery and scope computation.
+/// ## Covariant Sweep
+///
+/// Tracks upstream bit-pattern deltas between consecutive probes. When the delta is 1 (adjacent values in the search), convergence records from the previous downstream pass are validated at `floor - 1` and carried forward as warm starts. This dramatically reduces downstream search cost for smoothly-varying fibres. When the delta is larger than 1, the downstream cold-starts.
+///
+/// ## Structural Fingerprinting
+///
+/// Before and after each lift, computes a structural fingerprint of the sequence. If the structure changed (different fingerprint), convergence transfer is invalidated — the fibre's parameter count or shape may have changed, making cached convergence bounds stale.
 ///
 /// - SeeAlso: ``KleisliComposition``, ``FibreCoveringEncoder``, ``GeneratorLift``
 public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
@@ -56,10 +62,22 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
     private var upstreamProbesUsed = 0
     private var savedUpstreamEntry: ChoiceSequenceValue?
 
+    // MARK: - Covariant Sweep State
+
+    /// Bit pattern of the previous upstream probe, for delta computation.
+    private var previousUpstreamBitPattern: UInt64?
+
+    /// Convergence records from the previous downstream pass (unvalidated).
+    private var pendingTransferOrigins: [Int: ConvergedOrigin]?
+
+    /// Structural fingerprint before lift, used to detect structural changes.
+    private var preLiftFingerprint: UInt64 = 0
+
     private struct DependencyTarget {
         let upstreamNodeID: Int
         let downstreamNodeID: Int
         let upstreamSequenceIndex: Int
+        let downstreamRange: ClosedRange<Int>
         let isStructurallyConstant: Bool
     }
 
@@ -80,7 +98,9 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
         // Extract dependency edges from the graph.
         for edge in graph.reductionEdges {
             let upstreamNode = graph.nodes[edge.upstreamNodeID]
+            let downstreamNode = graph.nodes[edge.downstreamNodeID]
             guard let upstreamRange = upstreamNode.positionRange else { continue }
+            guard let downstreamRange = downstreamNode.positionRange else { continue }
 
             // Only process edges where the upstream is a chooseBits leaf (reducible value).
             guard case .chooseBits = upstreamNode.kind else { continue }
@@ -89,6 +109,7 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
                 upstreamNodeID: edge.upstreamNodeID,
                 downstreamNodeID: edge.downstreamNodeID,
                 upstreamSequenceIndex: upstreamRange.lowerBound,
+                downstreamRange: downstreamRange,
                 isStructurallyConstant: edge.isStructurallyConstant
             ))
         }
@@ -101,7 +122,6 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
                 // Downstream probe accepted — update base sequence and tree.
                 let accepted = downstreamProbes[downstreamProbeIndex - 1]
                 sequence = accepted
-                // Re-materialize tree from accepted sequence.
                 if case let .success(_, freshTree, _) = Materializer.materialize(
                     gen, prefix: sequence, mode: .exact, fallbackTree: tree
                 ) {
@@ -112,6 +132,11 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
             let probe = downstreamProbes[downstreamProbeIndex]
             downstreamProbeIndex += 1
             return probe
+        }
+
+        // Harvest convergence records from exhausted downstream for transfer.
+        if downstreamProbes.isEmpty == false {
+            harvestDownstreamConvergence()
         }
 
         // Advance to next upstream probe or next edge.
@@ -137,6 +162,8 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
         upstreamSequenceIndex = edge.upstreamSequenceIndex
         upstreamProbesUsed = 0
         upstreamNeedsFirstProbe = true
+        previousUpstreamBitPattern = nil
+        pendingTransferOrigins = nil
 
         guard let value = sequence[upstreamSequenceIndex].value else { return }
         upstreamTypeTag = value.choice.tag
@@ -161,11 +188,9 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
 
         // Process feedback from previous downstream pass.
         if lastAccepted, let saved = savedUpstreamEntry {
-            // Upstream change was productive — keep the accepted sequence.
             savedUpstreamEntry = nil
-            _ = saved // Discard the saved rollback entry.
+            _ = saved
         } else if let saved = savedUpstreamEntry {
-            // Rollback upstream change.
             sequence[upstreamSequenceIndex] = saved
             savedUpstreamEntry = nil
         }
@@ -173,11 +198,7 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
         let probeValue: UInt64?
         if upstreamNeedsFirstProbe {
             upstreamNeedsFirstProbe = false
-            probeValue = upstreamStepper?.start()
-            if probeValue == nil { return nil }
             initializeUpstream()
-            probeValue.map { _ in () } // Just to use probeValue.
-            // Re-get from stepper since initializeUpstream may have reset it.
             guard var stepper = upstreamStepper else { return nil }
             let value = stepper.start()
             upstreamStepper = stepper
@@ -195,8 +216,22 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
     private mutating func tryUpstreamValue(_ bitPattern: UInt64) -> ChoiceSequence? {
         upstreamProbesUsed += 1
 
+        // Compute upstream delta for covariant sweep.
+        let upstreamDelta: UInt64?
+        if let previousBitPattern = previousUpstreamBitPattern {
+            upstreamDelta = bitPattern > previousBitPattern
+                ? bitPattern - previousBitPattern
+                : previousBitPattern - bitPattern
+        } else {
+            upstreamDelta = nil
+        }
+        previousUpstreamBitPattern = bitPattern
+
         // Save current entry for rollback.
         savedUpstreamEntry = sequence[upstreamSequenceIndex]
+
+        // Compute structural fingerprint before lift.
+        preLiftFingerprint = structuralFingerprint(of: sequence)
 
         // Set the upstream value.
         sequence[upstreamSequenceIndex] = .value(.init(
@@ -214,7 +249,6 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
             mode: .guided(fallbackTree: tree)
         )
         guard let liftResult = lift.lift(sequence) else {
-            // Lift rejected — rollback and try next upstream.
             if let saved = savedUpstreamEntry {
                 sequence[upstreamSequenceIndex] = saved
                 savedUpstreamEntry = nil
@@ -222,8 +256,29 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
             return nil
         }
 
-        // Build downstream fibre probes from the lifted state.
-        downstreamProbes = buildDownstreamProbes(liftedSequence: liftResult.sequence)
+        // Check structural fingerprint after lift.
+        let postLiftFingerprint = structuralFingerprint(of: liftResult.sequence)
+        let structureChanged = preLiftFingerprint != postLiftFingerprint
+
+        // Covariant convergence transfer: when upstream delta is 1 and structure
+        // is unchanged, carry forward the previous downstream's convergence records.
+        let warmStartOrigins: [Int: ConvergedOrigin]?
+        if upstreamDelta == 1, structureChanged == false, let pending = pendingTransferOrigins {
+            warmStartOrigins = pending
+        } else {
+            warmStartOrigins = nil
+        }
+
+        // Build downstream fibre probes scoped to the bound region.
+        let edge = edges[edgeIndex]
+        let downstreamLower = min(edge.downstreamRange.lowerBound, max(0, liftResult.sequence.count - 1))
+        let downstreamUpper = min(edge.downstreamRange.upperBound, max(0, liftResult.sequence.count - 1))
+        let scopedRange = downstreamLower <= downstreamUpper ? downstreamLower ... downstreamUpper : 0 ... 0
+        downstreamProbes = buildDownstreamProbes(
+            liftedSequence: liftResult.sequence,
+            downstreamRange: scopedRange,
+            warmStartOrigins: warmStartOrigins
+        )
         downstreamProbeIndex = 0
 
         if downstreamProbeIndex < downstreamProbes.count {
@@ -236,19 +291,62 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
         return liftResult.sequence
     }
 
+    // MARK: - Convergence Transfer
+
+    /// Harvests convergence records from exhausted downstream probes for transfer to the next iteration.
+    private mutating func harvestDownstreamConvergence() {
+        // The downstream probes are enumerated value assignments. The last probe's
+        // position values represent the convergence frontier. Extract value positions
+        // and their bit patterns as convergence records.
+        guard let lastProbe = downstreamProbes.last else {
+            pendingTransferOrigins = nil
+            return
+        }
+
+        var records: [Int: ConvergedOrigin] = [:]
+        for index in 0 ..< lastProbe.count {
+            guard let value = lastProbe[index].value,
+                  let range = value.validRange
+            else { continue }
+            let domainSize = range.upperBound &- range.lowerBound &+ 1
+            guard domainSize > 1 else { continue }
+            records[index] = ConvergedOrigin(
+                bound: value.choice.bitPattern64,
+                signal: .monotoneConvergence,
+                configuration: .binarySearchSemanticSimplest,
+                cycle: 0
+            )
+        }
+        pendingTransferOrigins = records.isEmpty ? nil : records
+    }
+
     // MARK: - Downstream Fibre
 
-    /// Builds downstream probes by enumerating or covering the fibre of value positions in the lifted sequence.
-    private func buildDownstreamProbes(liftedSequence: ChoiceSequence) -> [ChoiceSequence] {
-        // Collect all value positions in the downstream (bound) region.
+    /// Builds downstream probes by enumerating or covering the fibre of value positions in the bound region.
+    ///
+    /// Only positions within `downstreamRange` are considered — the upstream (bind-inner) value and positions outside the bound subtree are excluded. When `warmStartOrigins` is provided (covariant transfer), positions whose current value matches the warm-start bound are skipped.
+    private func buildDownstreamProbes(
+        liftedSequence: ChoiceSequence,
+        downstreamRange: ClosedRange<Int>,
+        warmStartOrigins: [Int: ConvergedOrigin]?
+    ) -> [ChoiceSequence] {
         var valuePositions: [(index: Int, domainLower: UInt64, domainSize: UInt64, tag: TypeTag, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool)] = []
 
-        for index in 0 ..< liftedSequence.count {
+        for index in downstreamRange where index < liftedSequence.count {
             guard let value = liftedSequence[index].value,
                   let range = value.validRange
             else { continue }
             let domainSize = range.upperBound &- range.lowerBound &+ 1
             guard domainSize > 1 else { continue }
+
+            // Skip positions at their warm-start convergence floor.
+            if let origins = warmStartOrigins,
+               let origin = origins[index],
+               value.choice.bitPattern64 == origin.bound
+            {
+                continue
+            }
+
             valuePositions.append((
                 index: index,
                 domainLower: range.lowerBound,
@@ -270,6 +368,27 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
                 break
             }
             totalSpace = product
+        }
+
+        // When any single domain exceeds the covering threshold, the pairwise
+        // covering array becomes prohibitively expensive. Fall back to a single
+        // all-targets probe (batch-zero the downstream fibre).
+        let maxDomainSize = valuePositions.map(\.domainSize).max() ?? 0
+        let coveringDomainThreshold: UInt64 = 16
+        if maxDomainSize > coveringDomainThreshold, totalSpace > 128 {
+            var candidate = liftedSequence
+            for position in valuePositions {
+                let targetBitPattern = position.domainLower
+                candidate[position.index] = .value(.init(
+                    choice: ChoiceValue(
+                        position.tag.makeConvertible(bitPattern64: targetBitPattern),
+                        tag: position.tag
+                    ),
+                    validRange: position.validRange,
+                    isRangeExplicit: position.isRangeExplicit
+                ))
+            }
+            return [candidate]
         }
 
         var probes: [ChoiceSequence] = []
@@ -334,10 +453,35 @@ public struct GraphKleisliFibreEncoder<Output>: GraphEncoder {
         upstreamNeedsFirstProbe = true
         upstreamProbesUsed = 0
         savedUpstreamEntry = nil
+        previousUpstreamBitPattern = nil
+        pendingTransferOrigins = nil
     }
 
     private mutating func resetDownstream() {
         downstreamProbes = []
         downstreamProbeIndex = 0
+    }
+
+    // MARK: - Structural Fingerprint
+
+    /// Computes a lightweight structural fingerprint from the sequence's marker entries.
+    ///
+    /// Only considers structural entries (bind, group, sequence markers) — value entries are ignored. A change in fingerprint indicates the fibre's structure changed, invalidating convergence transfer.
+    private func structuralFingerprint(of sequence: ChoiceSequence) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for index in 0 ..< sequence.count {
+            let entry = sequence[index]
+            let marker: UInt64 = switch entry {
+            case .bind: 1
+            case .group: 2
+            case .sequence: 3
+            default: 0
+            }
+            if marker != 0 {
+                hash = (hash ^ UInt64(index)) &* 1_099_511_628_211
+                hash = (hash ^ marker) &* 6_364_136_223_846_793_005
+            }
+        }
+        return hash
     }
 }

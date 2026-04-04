@@ -82,7 +82,9 @@ enum ChoiceGraphScheduler {
         var siblingSwapEncoder = GraphSiblingSwapEncoder()
         var deletionEncoder = GraphDeletionEncoder()
         var valueSearchEncoder = GraphValueSearchEncoder()
+        var floatSearchEncoder = GraphFloatSearchEncoder()
         var redistributionEncoder = GraphRedistributionEncoder()
+        var tandemEncoder = GraphTandemReductionEncoder()
         var kleisliFibreEncoder = GraphKleisliFibreEncoder(gen: gen, property: property)
 
         var stallBudget = config.maxStalls
@@ -176,14 +178,24 @@ enum ChoiceGraphScheduler {
                 graph.recordConvergence(convergenceRecords)
             }
 
-            // Phase 5: Kleisli fibre search (joint upstream/downstream exploration).
-            try state.runEncoder(&kleisliFibreEncoder, graph: graph, gen: gen, property: property)
+            // Phase 4b: Float search (four-stage IEEE 754 pipeline).
+            try state.runEncoder(&floatSearchEncoder, graph: graph, gen: gen, property: property)
 
-            // Phase 6: Redistribution (speculative, on stall only).
+            let floatConvergenceRecords = floatSearchEncoder.convergenceRecords
+            if floatConvergenceRecords.isEmpty == false {
+                graph.recordConvergence(floatConvergenceRecords)
+            }
+
+            // Phase 5: Kleisli fibre search (joint upstream/downstream exploration).
+            // TODO: Re-enable once downstream scoping and covering array performance are resolved.
+            // try state.runEncoder(&kleisliFibreEncoder, graph: graph, gen: gen, property: property)
+
+            // Phase 6: Redistribution and tandem (speculative, on stall only).
             let improved = state.sequence != sequenceBeforeCycle
             if improved == false {
                 graph.invalidateDerivedEdges()
                 try state.runEncoder(&redistributionEncoder, graph: graph, gen: gen, property: property)
+                try state.runEncoder(&tandemEncoder, graph: graph, gen: gen, property: property)
             }
 
             // Mark graph dirty if structure changed this cycle so it's rebuilt next cycle.
