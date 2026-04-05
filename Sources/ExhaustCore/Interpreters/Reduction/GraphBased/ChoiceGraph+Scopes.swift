@@ -507,6 +507,46 @@ extension ChoiceGraph {
 
         return scopes
     }
+
+    /// Computes redistribution pairs for the speculative relax round.
+    ///
+    /// Unlike ``exchangeScopes()``, this emits pairs in BOTH directions for every type-compatible edge — no source-earlier-than-receiver constraint. The shortlex gate is bypassed during the speculative phase; only the final comparison against the checkpoint determines acceptance.
+    func speculativeExchangeScopes() -> [ExchangeScope] {
+        var pairs: [RedistributionPair] = []
+        for edge in typeCompatibilityEdges {
+            guard case let .chooseBits(metadataA) = nodes[edge.nodeA].kind,
+                  case let .chooseBits(metadataB) = nodes[edge.nodeB].kind else {
+                continue
+            }
+
+            let targetA = metadataA.value.reductionTarget(in: metadataA.validRange)
+            let targetB = metadataB.value.reductionTarget(in: metadataB.validRange)
+            let distanceA = metadataA.value.bitPattern64 > targetA
+                ? metadataA.value.bitPattern64 - targetA
+                : targetA - metadataA.value.bitPattern64
+            let distanceB = metadataB.value.bitPattern64 > targetB
+                ? metadataB.value.bitPattern64 - targetB
+                : targetB - metadataB.value.bitPattern64
+
+            // Emit both directions for any edge where at least one leaf is not at target.
+            if distanceA > 0 {
+                pairs.append(RedistributionPair(
+                    sourceNodeID: edge.nodeA,
+                    sinkNodeID: edge.nodeB,
+                    typeTag: edge.typeTag ?? .bits
+                ))
+            }
+            if distanceB > 0 {
+                pairs.append(RedistributionPair(
+                    sourceNodeID: edge.nodeB,
+                    sinkNodeID: edge.nodeA,
+                    typeTag: edge.typeTag ?? .bits
+                ))
+            }
+        }
+        guard pairs.isEmpty == false else { return [] }
+        return [.redistribution(RedistributionScope(pairs: pairs))]
+    }
 }
 
 // MARK: - Permutation Scope Queries

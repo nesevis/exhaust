@@ -245,6 +245,27 @@ enum ChoiceGraphScheduler {
                 }
             }
 
+            // Relax round: if all sources exhausted AND staleness found
+            // nothing, try speculative redistribution with exploitation.
+            if anyAccepted == false {
+                let relaxResult = try runRelaxRound(
+                    sequence: &sequence,
+                    tree: &tree,
+                    output: &output,
+                    graph: &graph,
+                    gen: gen,
+                    property: property,
+                    rejectCache: &rejectCache,
+                    stats: &stats,
+                    collectStats: collectStats,
+                    isInstrumented: isInstrumented
+                )
+                if relaxResult {
+                    anyAccepted = true
+                    dirtySequenceNodeIDs = nil
+                }
+            }
+
             // Cycle complete.
             let improved = sequence != sequenceBeforeCycle
             if improved {
@@ -516,6 +537,206 @@ enum ChoiceGraphScheduler {
         }
         return true
     }
+
+    // MARK: - Relax Round
+
+    // swiftlint:disable function_parameter_count
+    /// Runs the speculative relax round: checkpoint, redistribute without shortlex gate, exploit, compare, commit or rollback.
+    ///
+    /// - Returns: True if the relax round produced a net improvement (committed).
+    private static func runRelaxRound<Output>(
+        sequence: inout ChoiceSequence,
+        tree: inout ChoiceTree,
+        output: inout Output,
+        graph: inout ChoiceGraph,
+        gen: ReflectiveGenerator<Output>,
+        property: @escaping (Output) -> Bool,
+        rejectCache: inout Set<UInt64>,
+        stats: inout ReductionStats,
+        collectStats: Bool,
+        isInstrumented: Bool
+    ) throws -> Bool {
+        // Checkpoint current state.
+        let checkpointSequence = sequence
+        let checkpointTree = tree
+        let checkpointOutput = output
+        let checkpointConvergence = extractAllConvergence(from: graph)
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "relax_round_start",
+                metadata: ["seq_len": "\(sequence.count)"]
+            )
+        }
+
+        // Build speculative exchange scopes (no position constraint).
+        let speculativeScopes = graph.speculativeExchangeScopes()
+        guard speculativeScopes.isEmpty == false else { return false }
+
+        // Run exchange encoder with .exact() decoder (no shortlex gate).
+        var anyRedistributionAccepted = false
+        for exchangeScope in speculativeScopes {
+            let transformation = GraphTransformation(
+                operation: .exchange(exchangeScope),
+                yield: TransformationYield(structural: 0, value: 0, slack: .exact, estimatedProbes: 24),
+                precondition: .unconditional,
+                postcondition: TransformationPostcondition(
+                    isStructural: false,
+                    invalidatesConvergence: [],
+                    enablesRemoval: []
+                )
+            )
+            let scope = TransformationScope(
+                transformation: transformation,
+                baseSequence: sequence,
+                tree: tree,
+                graph: graph,
+                warmStartRecords: [:]
+            )
+
+            var encoder = GraphExchangeEncoder()
+            encoder.start(scope: scope)
+
+            var lastAccepted = false
+            while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
+                lastAccepted = false
+
+                // Use .exact() decoder — no shortlex check.
+                // The final comparison against the checkpoint handles acceptance.
+                let decoder: SequenceDecoder = .exact()
+                var filterObservations: [UInt64: FilterObservation] = [:]
+
+                if let result = try decoder.decode(
+                    candidate: probe,
+                    gen: gen,
+                    tree: tree,
+                    originalSequence: sequence,
+                    property: property,
+                    filterObservations: &filterObservations
+                ) {
+                    // Accept without shortlex check — speculative.
+                    sequence = result.sequence
+                    tree = result.tree
+                    output = result.output
+                    lastAccepted = true
+                    anyRedistributionAccepted = true
+                }
+
+                if collectStats {
+                    stats.totalMaterializations += 1
+                }
+            }
+        }
+
+        guard anyRedistributionAccepted else {
+            if isInstrumented {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "relax_round_no_redistribution",
+                    metadata: [:]
+                )
+            }
+            return false
+        }
+
+        // Exploitation: rebuild graph and run full source loop on relaxed state.
+        graph = ChoiceGraph.build(from: tree)
+        stats.graphRebuilds += 1
+        var exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "relax_round_exploitation_start",
+                metadata: [
+                    "seq_len": "\(sequence.count)",
+                    "sources": "\(exploitSources.count)",
+                ]
+            )
+        }
+
+        // Run the standard source-pulling loop on the relaxed state.
+        while true {
+            guard let sourceIndex = highestYieldSourceIndex(exploitSources) else {
+                break
+            }
+            guard let transformation = exploitSources[sourceIndex].next(lastAccepted: false) else {
+                exploitSources.remove(at: sourceIndex)
+                continue
+            }
+            guard transformation.precondition.isSatisfied(in: graph) else {
+                continue
+            }
+
+            let warmStarts = extractWarmStarts(from: graph)
+            let scope = TransformationScope(
+                transformation: transformation,
+                baseSequence: sequence,
+                tree: tree,
+                graph: graph,
+                warmStartRecords: warmStarts
+            )
+
+            var encoder = selectEncoder(for: transformation.operation)
+            let accepted = try runProbeLoop(
+                encoder: &encoder,
+                scope: scope,
+                sequence: &sequence,
+                tree: &tree,
+                output: &output,
+                gen: gen,
+                property: property,
+                rejectCache: &rejectCache,
+                stats: &stats,
+                collectStats: collectStats,
+                isInstrumented: isInstrumented
+            )
+
+            let convergence = encoder.convergenceRecords
+            if convergence.isEmpty == false {
+                graph.recordConvergence(convergence)
+            }
+
+            if accepted, transformation.postcondition.isStructural {
+                graph = ChoiceGraph.build(from: tree)
+                stats.graphRebuilds += 1
+                exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+            }
+        }
+
+        // Final comparison: commit if improved, rollback otherwise.
+        if sequence.shortLexPrecedes(checkpointSequence) {
+            if isInstrumented {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "relax_round_committed",
+                    metadata: [
+                        "old_seq_len": "\(checkpointSequence.count)",
+                        "new_seq_len": "\(sequence.count)",
+                    ]
+                )
+            }
+            return true
+        }
+
+        // Rollback: restore checkpoint state.
+        sequence = checkpointSequence
+        tree = checkpointTree
+        output = checkpointOutput
+        graph = ChoiceGraph.build(from: tree)
+        transferConvergence(checkpointConvergence, to: graph)
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "relax_round_rolled_back",
+                metadata: ["seq_len": "\(sequence.count)"]
+            )
+        }
+        return false
+    }
+    // swiftlint:enable function_parameter_count
 
     // MARK: - Staleness Detection
 
