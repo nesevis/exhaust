@@ -26,7 +26,7 @@ struct GraphRemovalEncoder: GraphEncoder {
         case idle
         case perParent(PerParentState)
         case subtree(SubtreeState)
-        case aligned
+        case aligned(AlignedState)
     }
 
     // MARK: - Per-Parent State
@@ -54,6 +54,19 @@ struct GraphRemovalEncoder: GraphEncoder {
         let positionRange: ClosedRange<Int>
     }
 
+    // MARK: - Aligned State
+
+    private struct AlignedState {
+        let sequence: ChoiceSequence
+        /// Position ranges for each aligned offset, grouped by sibling. alignedTuples[offset] contains one range per participating sibling at that offset.
+        var alignedTuples: [[ClosedRange<Int>]]
+        var stepper: FindIntegerStepper
+        var maxWindow: Int
+        var didEmitCandidate: Bool
+        var pendingHeadRetry: Bool
+        var currentWindowSize: Int
+    }
+
     // MARK: - Subtree State
 
     private struct SubtreeState {
@@ -70,9 +83,8 @@ struct GraphRemovalEncoder: GraphEncoder {
             startPerParent(scope: perParentScope, sequence: scope.baseSequence, graph: scope.graph)
         case let .removal(.subtree(subtreeScope)):
             startSubtree(scope: subtreeScope, sequence: scope.baseSequence, graph: scope.graph)
-        case .removal(.aligned):
-            // Phase 4 — aligned removal not yet implemented.
-            mode = .aligned
+        case let .removal(.aligned(alignedScope)):
+            startAligned(scope: alignedScope, sequence: scope.baseSequence, graph: scope.graph)
         default:
             mode = .idle
         }
@@ -80,7 +92,7 @@ struct GraphRemovalEncoder: GraphEncoder {
 
     mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
         switch mode {
-        case .idle, .aligned:
+        case .idle:
             return nil
         case var .perParent(state):
             let result = nextPerParentProbe(state: &state, lastAccepted: lastAccepted)
@@ -89,6 +101,10 @@ struct GraphRemovalEncoder: GraphEncoder {
         case var .subtree(state):
             let result = nextSubtreeProbe(state: &state)
             mode = .subtree(state)
+            return result
+        case var .aligned(state):
+            let result = nextAlignedProbe(state: &state, lastAccepted: lastAccepted)
+            mode = .aligned(state)
             return result
         }
     }
@@ -273,6 +289,171 @@ struct GraphRemovalEncoder: GraphEncoder {
             rangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
             index += 1
         }
+        var candidate = state.sequence
+        candidate.removeSubranges(rangeSet)
+        guard candidate.shortLexPrecedes(state.sequence) else { return nil }
+        return candidate
+    }
+
+    // MARK: - Aligned Mode
+
+    private mutating func startAligned(
+        scope: AlignedRemovalScope,
+        sequence: ChoiceSequence,
+        graph: ChoiceGraph
+    ) {
+        guard scope.maxAlignedWindow > 0 else {
+            mode = .idle
+            return
+        }
+
+        // Build aligned tuples: for each offset, collect the position ranges
+        // of the element at that offset across all participating siblings.
+        // Elements are taken from the tail of each sibling's deletable range
+        // (the strategy will handle head/tail alternation on the window).
+        var alignedTuples: [[ClosedRange<Int>]] = []
+        for offset in 0 ..< scope.maxAlignedWindow {
+            var tupleRanges: [ClosedRange<Int>] = []
+            for sibling in scope.siblings {
+                // Elements are ordered by offset. Take the last `deletableCount`
+                // elements as the deletable region.
+                let deletableStart = sibling.elementNodeIDs.count - sibling.deletableCount
+                let elementIndex = deletableStart + offset
+                guard elementIndex < sibling.elementNodeIDs.count else { continue }
+                let elementNodeID = sibling.elementNodeIDs[elementIndex]
+                guard let range = graph.nodes[elementNodeID].positionRange else { continue }
+                tupleRanges.append(range)
+            }
+            if tupleRanges.isEmpty == false {
+                alignedTuples.append(tupleRanges)
+            }
+        }
+
+        guard alignedTuples.isEmpty == false else {
+            mode = .idle
+            return
+        }
+
+        var stepper = FindIntegerStepper()
+        let firstWindowSize = stepper.start()
+
+        mode = .aligned(AlignedState(
+            sequence: sequence,
+            alignedTuples: alignedTuples,
+            stepper: stepper,
+            maxWindow: alignedTuples.count,
+            didEmitCandidate: false,
+            pendingHeadRetry: false,
+            currentWindowSize: firstWindowSize
+        ))
+    }
+
+    private func nextAlignedProbe(
+        state: inout AlignedState,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        // Handle pending head retry from a rejected tail probe.
+        if state.pendingHeadRetry {
+            return handleAlignedHeadRetry(state: &state, lastAccepted: lastAccepted)
+        }
+
+        // Process stepper feedback.
+        if state.didEmitCandidate {
+            let feedback = lastAccepted
+            state.didEmitCandidate = false
+            if let nextSize = state.stepper.advance(lastAccepted: feedback) {
+                state.currentWindowSize = nextSize
+                if nextSize <= state.maxWindow {
+                    return emitAlignedForWindowSize(state: &state, windowSize: nextSize)
+                }
+            }
+            return nil
+        }
+
+        // First probe: emit for the initial window size.
+        if state.currentWindowSize <= state.maxWindow {
+            return emitAlignedForWindowSize(state: &state, windowSize: state.currentWindowSize)
+        }
+
+        return nil
+    }
+
+    private func handleAlignedHeadRetry(
+        state: inout AlignedState,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        state.pendingHeadRetry = false
+        let tailFeedback = state.didEmitCandidate ? lastAccepted : false
+        state.didEmitCandidate = false
+
+        if tailFeedback {
+            // Tail accepted — advance stepper with success.
+            if let nextSize = state.stepper.advance(lastAccepted: true) {
+                state.currentWindowSize = nextSize
+                if nextSize <= state.maxWindow {
+                    return emitAlignedForWindowSize(state: &state, windowSize: nextSize)
+                }
+            }
+            return nil
+        }
+
+        // Tail rejected — try head anchor for the same window size.
+        if let candidate = buildAlignedCandidate(state: state, windowSize: state.currentWindowSize, anchor: .head) {
+            state.didEmitCandidate = true
+            return candidate
+        }
+
+        // Head also failed — advance stepper with rejection.
+        if let nextSize = state.stepper.advance(lastAccepted: false) {
+            state.currentWindowSize = nextSize
+            if nextSize <= state.maxWindow {
+                return emitAlignedForWindowSize(state: &state, windowSize: nextSize)
+            }
+        }
+        return nil
+    }
+
+    private func emitAlignedForWindowSize(
+        state: inout AlignedState,
+        windowSize: Int
+    ) -> ChoiceSequence? {
+        // Try tail-anchored first (remove from the end of the aligned range).
+        if windowSize < state.maxWindow {
+            if let candidate = buildAlignedCandidate(state: state, windowSize: windowSize, anchor: .tail) {
+                state.pendingHeadRetry = true
+                state.didEmitCandidate = true
+                return candidate
+            }
+        }
+        // Try head-anchored (remove from the beginning).
+        if let candidate = buildAlignedCandidate(state: state, windowSize: windowSize, anchor: .head) {
+            state.didEmitCandidate = true
+            return candidate
+        }
+        return nil
+    }
+
+    /// Builds an aligned removal candidate by simultaneously removing elements at `windowSize` aligned offsets across all siblings.
+    private func buildAlignedCandidate(
+        state: AlignedState,
+        windowSize: Int,
+        anchor: DeletionAnchor
+    ) -> ChoiceSequence? {
+        guard windowSize > 0, windowSize <= state.maxWindow else { return nil }
+
+        let offset = switch anchor {
+        case .head: 0
+        case .tail: state.maxWindow - windowSize
+        }
+
+        var rangeSet = RangeSet<Int>()
+        for tupleIndex in offset ..< (offset + windowSize) {
+            guard tupleIndex < state.alignedTuples.count else { continue }
+            for range in state.alignedTuples[tupleIndex] {
+                rangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
+            }
+        }
+
         var candidate = state.sequence
         candidate.removeSubranges(rangeSet)
         guard candidate.shortLexPrecedes(state.sequence) else { return nil }
