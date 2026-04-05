@@ -238,21 +238,28 @@ struct SiblingPermutationScope {
 
 // MARK: - Transformation Scope
 
-/// Bundles a graph transformation with its base sequence, tree, and warm-start convergence records into a self-contained unit of work for an encoder.
+/// Bundles a graph transformation with its base sequence, tree, graph, and warm-start convergence records into a self-contained unit of work for an encoder.
 ///
-/// The encoder receives a scope and operates on it without needing the graph — the scope is the interface between the graph (which constructs it) and the encoder (which consumes it).
+/// The encoder receives a scope and operates on it without modifying the graph — the scope is the interface between the graph (which constructs it) and the encoder (which consumes it).
 ///
 /// For simple transformations, ``baseSequence`` is the current sequence. For Kleisli composition, the downstream scope's ``baseSequence`` is the lifted result from the upstream probe — the encoder does not know or care that it is downstream.
+///
+/// - Note: The graph is carried temporarily for node metadata access (position ranges, leaf values). A future refinement will pre-resolve all needed metadata into the scope types and remove the graph dependency.
 struct TransformationScope {
     /// The transformation to execute (operation, yield, precondition, postcondition).
     let transformation: GraphTransformation
 
-    /// The sequence the encoder operates on. For active-path operations, all position ranges are pre-resolved from graph nodes at scope construction — no additional flatten needed. The encoder modifies this sequence to produce candidates.
+    /// The sequence the encoder operates on. The encoder modifies this sequence to produce candidates.
     let baseSequence: ChoiceSequence
 
-    /// The tree. Required only for path-changing operations (replacement with inactive donor) where the encoder must edit the tree and flatten. Nil for active-path operations.
-    let tree: ChoiceTree?
+    /// The generator's compositional structure. Required for path-changing operations (replacement with inactive donor) where the encoder must edit the tree and flatten. Also used by permutation for tree-based child swapping.
+    let tree: ChoiceTree
 
-    /// Warm-start convergence records for leaves in this scope, extracted from graph nodes at scope construction time. The encoder reads warm-start bounds from here — it never accesses the graph directly.
+    /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction. The encoder reads from the graph but never mutates it.
+    ///
+    /// - Note: Temporary — a future refinement will pre-resolve metadata into scope types, making the graph unnecessary.
+    let graph: ChoiceGraph
+
+    /// Warm-start convergence records for leaves in this scope, extracted from graph nodes at scope construction time. The encoder reads warm-start bounds from here — it never accesses the graph directly for convergence data.
     let warmStartRecords: [Int: ConvergedOrigin]
 }

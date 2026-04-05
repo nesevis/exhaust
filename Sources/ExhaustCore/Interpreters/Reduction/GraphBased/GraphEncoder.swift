@@ -5,33 +5,31 @@
 
 // MARK: - Graph Encoder Protocol
 
-/// A reduction encoder that receives its scope, candidates, and ordering from a ``ChoiceGraph``.
+/// The encoding half of the SJ algebra's (enc_a, dec_a) morphism pair for graph-based reduction.
 ///
-/// `GraphEncoder` is the ChoiceGraph-based counterpart of ``ComposableEncoder``. The two protocols have fundamentally different interfaces: `ComposableEncoder` receives a position range and computes its own scope from the sequence; `GraphEncoder` receives the graph directly and constructs probes from graph operations.
+/// Receives a ``TransformationScope`` (self-contained: base sequence, operation metadata, warm-start records) and produces candidate sequences via its probe loop. Each candidate is passed to the decoder (``SequenceDecoder``, the dec_a half) for materialisation and property checking.
 ///
-/// Both protocols share the materialiser (`SequenceDecoder.decode`), property invocation, and ``ReductionResult`` infrastructure. The ``ChoiceGraphScheduler`` speaks `GraphEncoder`; the ``BonsaiScheduler`` speaks `ComposableEncoder`.
+/// The scope defines the search space (graph-computable). The encoder determines how to explore it (predicate-dependent). This separation is the opacity boundary: the scope is constructed by the scheduler from graph metadata; the encoder searches within it using predicate feedback.
+///
+/// Active-path encoders (removal, minimisation, exchange, permutation) produce candidates via sequence surgery on ``TransformationScope/baseSequence`` at pre-resolved position ranges. Path-changing encoders (replacement with inactive donor) edit ``TransformationScope/tree`` and flatten.
 ///
 /// ## Lifecycle
 ///
-/// 1. The scheduler calls ``start(graph:sequence:tree:)`` with the current graph and sequence.
+/// 1. The scheduler calls ``start(scope:)`` with a self-contained scope.
 /// 2. The scheduler calls ``nextProbe(lastAccepted:)`` in a loop until it returns nil (converged).
 /// 3. The scheduler reads ``convergenceRecords`` after the loop to harvest cached bounds.
-public protocol GraphEncoder {
+protocol GraphEncoder {
     /// Descriptive name for logging and instrumentation.
     var name: EncoderName { get }
 
     /// Initialises internal state for a new encoding pass.
     ///
-    /// Called once per cycle (or once per scheduler phase) with the current graph, sequence, and tree. The encoder extracts the candidates it needs from the graph and prepares its probe state machine.
-    mutating func start(
-        graph: ChoiceGraph,
-        sequence: ChoiceSequence,
-        tree: ChoiceTree
-    )
+    /// Called once per scope dispatch. The encoder extracts candidates from the scope's operation metadata and prepares its probe state machine. The encoder reads warm-start data from ``TransformationScope/warmStartRecords`` — it never accesses the graph directly.
+    mutating func start(scope: TransformationScope)
 
     /// Produces the next candidate sequence given feedback on the previous probe.
     ///
-    /// - Parameter lastAccepted: Whether the previous probe was accepted by the property. Ignored on the first call after ``start(graph:sequence:tree:)``.
+    /// - Parameter lastAccepted: Whether the previous probe was accepted by the property. Ignored on the first call after ``start(scope:)``.
     /// - Returns: The next candidate to try, or `nil` when converged.
     mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence?
 
@@ -41,7 +39,7 @@ public protocol GraphEncoder {
     var convergenceRecords: [Int: ConvergedOrigin] { get }
 }
 
-public extension GraphEncoder {
+extension GraphEncoder {
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]

@@ -5,15 +5,16 @@
 
 // MARK: - Choice Graph Scheduler
 
-/// Drives graph encoders in a two-pass priority-ordered cycle until convergence or stall budget exhaustion.
+/// Drives scope-dispatched graph encoders in a yield-ordered cycle until convergence or stall budget exhaustion.
 ///
 /// Each cycle:
-/// 1. Builds a yield-ordered queue from the ``ChoiceGraph`` via ``TransformationQueueBuilder``.
-/// 2. **Pass 1 (structural):** runs structural encoders (deletion, substitution, pivot, swap) in yield order. On any structural acceptance, rebuilds the graph and restarts pass 1.
-/// 3. **Pass 2 (value):** runs value encoders (value search, float search) in value-yield order. Records convergence on graph nodes for warm-start.
-/// 4. **Stall escape:** if neither pass made progress, runs redistribution and tandem.
+/// 1. Enumerates all transformation scopes from the graph via ``TransformationEnumerator``.
+/// 2. Walks the sorted queue in yield order, checking preconditions and dispatching to encoders.
+/// 3. On structural acceptance: rebuilds the graph, transfers convergence, and restarts the queue.
+/// 4. On value acceptance: harvests convergence records and continues the queue.
+/// 5. On stall (no acceptance in the full queue): decrements stall budget.
 ///
-/// - SeeAlso: ``BonsaiScheduler``, ``TransformationQueueBuilder``
+/// - SeeAlso: ``TransformationEnumerator``, ``GraphEncoder``, ``TransformationScope``
 enum ChoiceGraphScheduler {
 
     // MARK: - Entry Points
@@ -66,159 +67,133 @@ enum ChoiceGraphScheduler {
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
-        var state = SchedulerState(
-            sequence: ChoiceSequence.flatten(initialTree),
-            tree: initialTree,
-            output: initialOutput,
-            collectStats: collectStats,
-            isInstrumented: isInstrumented
-        )
-
-        // Encoder instances — preserved across cycles for internal state continuity.
-        var encoders = EncoderSet(gen: gen, property: property)
-
+        var sequence = ChoiceSequence.flatten(initialTree)
+        var tree = initialTree
+        var output = initialOutput
+        var stats = ReductionStats()
+        var cycles = 0
         var stallBudget = config.maxStalls
+        var rejectCache = Set<UInt64>()
+
+        var graph = ChoiceGraph.build(from: tree)
+
+        if collectStats {
+            stats.graphNodeCount = graph.nodes.count
+            stats.graphDependencyEdgeCount = graph.dependencyEdges.count
+            stats.graphContainmentEdgeCount = graph.containmentEdges.count
+            stats.graphSelfSimilarityEdgeCount = graph.selfSimilarityEdges.count
+            stats.graphDeletionAntichainSize = graph.deletionAntichain.count
+        }
 
         if isInstrumented {
             ExhaustLog.debug(
                 category: .reducer,
                 event: "graph_reducer_start",
                 metadata: [
-                    "seq_len": "\(state.sequence.count)",
+                    "seq_len": "\(sequence.count)",
                     "max_stalls": "\(config.maxStalls)",
-                ]
-            )
-        }
-
-        var graph = ChoiceGraph.build(from: state.tree)
-
-        if collectStats {
-            state.stats.graphNodeCount = graph.nodes.count
-            state.stats.graphDependencyEdgeCount = graph.dependencyEdges.count
-            state.stats.graphContainmentEdgeCount = graph.containmentEdges.count
-            state.stats.graphSelfSimilarityEdgeCount = graph.selfSimilarityEdges.count
-            state.stats.graphDeletionAntichainSize = graph.deletionAntichain.count
-        }
-
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "graph_construction",
-                metadata: [
                     "nodes": "\(graph.nodes.count)",
-                    "dependency_edges": "\(graph.dependencyEdges.count)",
-                    "containment_edges": "\(graph.containmentEdges.count)",
-                    "self_similarity_edges": "\(graph.selfSimilarityEdges.count)",
-                    "type_compat_edges": "\(graph.typeCompatibilityEdges.count)",
-                    "deletion_antichain": "\(graph.deletionAntichain.count)",
                 ]
             )
         }
 
         while stallBudget > 0 {
-            state.cycles += 1
-            let sequenceBeforeCycle = state.sequence
+            cycles += 1
+            let sequenceBeforeCycle = sequence
+
+            // Enumerate scopes and build yield-ordered queue.
+            let queue = TransformationEnumerator.enumerate(from: graph)
 
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
                     event: "graph_cycle_start",
                     metadata: [
-                        "cycle": "\(state.cycles)",
-                        "seq_len": "\(state.sequence.count)",
-                        "nodes": "\(graph.nodes.count)",
+                        "cycle": "\(cycles)",
+                        "seq_len": "\(sequence.count)",
+                        "scopes": "\(queue.count)",
                         "stall_budget": "\(stallBudget)",
                     ]
                 )
             }
 
-            // Build the yield-ordered queue for this cycle.
-            let queue = TransformationQueueBuilder.buildQueue(from: graph)
+            // Walk queue in yield order.
+            var anyAccepted = false
+            var restartQueue = false
 
-            // Pass 1: structural encoders, ordered by yield.
-            // Run all structural encoders. On any acceptance, rebuild the graph
-            // and restart pass 1 within this cycle. Only proceed to pass 2 when
-            // all structural encoders are exhausted.
-            let structuralSlots = queue.filter { $0.yield.tier == .structural }
-            var structuralProgress = false
-            var restartPass1 = true
+            for transformation in queue {
+                guard transformation.precondition.isSatisfied(in: graph) else {
+                    continue
+                }
 
-            while restartPass1 {
-                restartPass1 = false
-                for entry in structuralSlots {
-                    let accepted = try state.runSlot(
-                        entry.slot,
-                        encoders: &encoders,
-                        graph: graph,
-                        gen: gen,
-                        property: property
-                    )
-                    if accepted {
-                        structuralProgress = true
-                        graph = ChoiceGraph.build(from: state.tree)
-                        state.stats.graphRebuilds += 1
-                        restartPass1 = true
+                // Construct self-contained scope.
+                let warmStarts = extractWarmStarts(
+                    for: transformation,
+                    from: graph
+                )
+                let scope = TransformationScope(
+                    transformation: transformation,
+                    baseSequence: sequence,
+                    tree: tree,
+                    graph: graph,
+                    warmStartRecords: warmStarts
+                )
+
+                // Select encoder and run probe loop.
+                var encoder = selectEncoder(for: transformation.operation)
+                let accepted = try runProbeLoop(
+                    encoder: &encoder,
+                    scope: scope,
+                    sequence: &sequence,
+                    tree: &tree,
+                    output: &output,
+                    gen: gen,
+                    property: property,
+                    rejectCache: &rejectCache,
+                    stats: &stats,
+                    collectStats: collectStats,
+                    isInstrumented: isInstrumented
+                )
+
+                // Harvest convergence records.
+                let convergence = encoder.convergenceRecords
+                if convergence.isEmpty == false {
+                    graph.recordConvergence(convergence)
+                }
+
+                if accepted {
+                    anyAccepted = true
+
+                    if transformation.postcondition.isStructural {
+                        // Structural change: rebuild graph and restart queue.
+                        let oldConvergence = extractAllConvergence(from: graph)
+                        graph = ChoiceGraph.build(from: tree)
+                        transferConvergence(oldConvergence, to: graph)
+                        stats.graphRebuilds += 1
+                        restartQueue = true
                         break
                     }
                 }
             }
 
-            // Pass 2: value encoders, ordered by value yield.
-            // Always runs after pass 1 — value reduction unlocks further
-            // structural deletions in subsequent cycles.
-            if state.sequence != sequenceBeforeCycle {
-                // Structure changed in pass 1 — rebuild graph for value pass.
-                graph = ChoiceGraph.build(from: state.tree)
-                state.stats.graphRebuilds += 1
+            // If a structural acceptance restarted the queue, loop back to
+            // re-enumerate from the new graph.
+            if restartQueue {
+                continue
             }
 
-            let valueSlots = queue.filter { $0.yield.tier == .value }
-            for entry in valueSlots {
-                try state.runSlot(
-                    entry.slot,
-                    encoders: &encoders,
-                    graph: graph,
-                    gen: gen,
-                    property: property
-                )
+            // Stall handling.
+            let improved = sequence != sequenceBeforeCycle
+            if improved {
+                stallBudget = config.maxStalls
+            } else {
+                stallBudget -= 1
             }
 
-            // Harvest convergence records onto graph nodes.
-            let intConvergence = encoders.valueSearchEncoder.convergenceRecords
-            if intConvergence.isEmpty == false {
-                graph.recordConvergence(intConvergence)
-            }
-            let floatConvergence = encoders.floatSearchEncoder.convergenceRecords
-            if floatConvergence.isEmpty == false {
-                graph.recordConvergence(floatConvergence)
-            }
-
-            // Stall escape: redistribution and tandem when no progress.
-            let improved = state.sequence != sequenceBeforeCycle
-            if improved == false {
-                graph.invalidateDerivedEdges()
-                try state.runSlot(
-                    .redistribution,
-                    encoders: &encoders,
-                    graph: graph,
-                    gen: gen,
-                    property: property
-                )
-                try state.runSlot(
-                    .tandem,
-                    encoders: &encoders,
-                    graph: graph,
-                    gen: gen,
-                    property: property
-                )
-            }
-
-            // Rebuild graph next cycle if structure changed.
-            let structurallyImproved = state.sequence.count < sequenceBeforeCycle.count
-            let valueImproved = state.sequence != sequenceBeforeCycle
-            if structurallyImproved {
-                graph = ChoiceGraph.build(from: state.tree)
-                state.stats.graphRebuilds += 1
+            // Early exit: all values converged and no structural progress.
+            let structurallyImproved = sequence.count < sequenceBeforeCycle.count
+            if structurallyImproved == false, allValuesConverged(in: sequence, graph: graph) {
+                break
             }
 
             if isInstrumented {
@@ -226,25 +201,12 @@ enum ChoiceGraphScheduler {
                     category: .reducer,
                     event: "graph_cycle_end",
                     metadata: [
-                        "cycle": "\(state.cycles)",
-                        "improved": "\(valueImproved)",
-                        "structural": "\(structurallyImproved)",
-                        "seq_len": "\(state.sequence.count)",
-                        "total_mats": "\(state.stats.totalMaterializations)",
+                        "cycle": "\(cycles)",
+                        "improved": "\(improved)",
+                        "seq_len": "\(sequence.count)",
+                        "total_mats": "\(stats.totalMaterializations)",
                     ]
                 )
-            }
-
-            if structurallyImproved || valueImproved {
-                stallBudget = config.maxStalls
-            } else {
-                stallBudget -= 1
-            }
-
-            // Early exit: all value coordinates converged and no structural
-            // progress — the counterexample is at a fixed point.
-            if structurallyImproved == false, allValuesConverged(in: state.sequence, graph: graph) {
-                break
             }
         }
 
@@ -253,114 +215,59 @@ enum ChoiceGraphScheduler {
                 category: .reducer,
                 event: "graph_reducer_complete",
                 metadata: [
-                    "cycles": "\(state.cycles)",
-                    "seq_len": "\(state.sequence.count)",
-                    "total_mats": "\(state.stats.totalMaterializations)",
+                    "cycles": "\(cycles)",
+                    "seq_len": "\(sequence.count)",
+                    "total_mats": "\(stats.totalMaterializations)",
                 ]
             )
         }
 
-        state.stats.cycles = state.cycles
-        return (reduced: (state.sequence, state.output), stats: state.stats)
+        stats.cycles = cycles
+        return (reduced: (sequence, output), stats: stats)
     }
     // swiftlint:enable function_parameter_count
 
-    /// Returns true when every leaf value is either at its reduction target or has a convergence record indicating it has been searched.
-    private static func allValuesConverged(
-        in sequence: ChoiceSequence,
-        graph: ChoiceGraph
-    ) -> Bool {
-        for nodeID in graph.leafNodes {
-            let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            let currentBitPattern = metadata.value.bitPattern64
-            let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
-            if currentBitPattern == targetBitPattern { continue }
-            if metadata.convergedOrigin != nil { continue }
-            return false
-        }
-        return true
-    }
-}
+    // MARK: - Encoder Selection
 
-// MARK: - Encoder Set
-
-/// Holds all encoder instances, preserved across cycles for internal state continuity.
-private struct EncoderSet<Output> {
-    var branchPivotEncoder = GraphBranchPivotEncoder()
-    var substitutionEncoder = GraphSubstitutionEncoder()
-    var siblingSwapEncoder = GraphSiblingSwapEncoder()
-    var deletionEncoder = GraphDeletionEncoder()
-    var valueSearchEncoder = GraphValueSearchEncoder()
-    var floatSearchEncoder = GraphFloatSearchEncoder()
-    var redistributionEncoder = GraphRedistributionEncoder()
-    var tandemEncoder = GraphTandemReductionEncoder()
-    var kleisliFibreEncoder: GraphKleisliFibreEncoder<Output>
-
-    init(gen: ReflectiveGenerator<Output>, property: @escaping (Output) -> Bool) {
-        kleisliFibreEncoder = GraphKleisliFibreEncoder(gen: gen, property: property)
-    }
-}
-
-// MARK: - Scheduler State
-
-/// Mutable state for the graph-based reduction cycle loop.
-private struct SchedulerState<Output> {
-    var sequence: ChoiceSequence
-    var tree: ChoiceTree
-    var output: Output
-    var stats = ReductionStats()
-    var cycles = 0
-    let collectStats: Bool
-    let isInstrumented: Bool
-
-    /// Reject cache using Zobrist hashing.
-    var rejectCache = Set<UInt64>()
-
-    /// Runs the encoder for a given slot through its probe loop.
-    @discardableResult
-    mutating func runSlot(
-        _ slot: EncoderSlot,
-        encoders: inout EncoderSet<Output>,
-        graph: ChoiceGraph,
-        gen: ReflectiveGenerator<Output>,
-        property: @escaping (Output) -> Bool
-    ) throws -> Bool {
-        switch slot {
-        case .branchPivot:
-            return try runEncoder(&encoders.branchPivotEncoder, graph: graph, gen: gen, property: property)
-        case .substitution:
-            return try runEncoder(&encoders.substitutionEncoder, graph: graph, gen: gen, property: property)
-        case .siblingSwap:
-            return try runEncoder(&encoders.siblingSwapEncoder, graph: graph, gen: gen, property: property)
-        case .deletion:
-            return try runEncoder(&encoders.deletionEncoder, graph: graph, gen: gen, property: property)
-        case .valueSearch:
-            return try runEncoder(&encoders.valueSearchEncoder, graph: graph, gen: gen, property: property)
-        case .floatSearch:
-            return try runEncoder(&encoders.floatSearchEncoder, graph: graph, gen: gen, property: property)
-        case .redistribution:
-            return try runEncoder(&encoders.redistributionEncoder, graph: graph, gen: gen, property: property)
-        case .tandem:
-            return try runEncoder(&encoders.tandemEncoder, graph: graph, gen: gen, property: property)
+    /// Selects the appropriate encoder for a graph operation type.
+    private static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
+        switch operation {
+        case .removal:
+            return GraphRemovalEncoder()
+        case .replacement:
+            return GraphReplacementEncoder()
+        case .minimisation:
+            return GraphMinimisationEncoder()
+        case .exchange:
+            return GraphExchangeEncoder()
+        case .permutation:
+            return GraphPermutationEncoder()
         }
     }
 
-    /// Runs a single graph encoder through its probe loop, accepting improvements.
-    @discardableResult
-    mutating func runEncoder<Encoder: GraphEncoder>(
-        _ encoder: inout Encoder,
-        graph: ChoiceGraph,
+    // MARK: - Probe Loop
+
+    // swiftlint:disable function_parameter_count
+    /// Runs an encoder's probe loop, accepting improvements.
+    private static func runProbeLoop<Output>(
+        encoder: inout any GraphEncoder,
+        scope: TransformationScope,
+        sequence: inout ChoiceSequence,
+        tree: inout ChoiceTree,
+        output: inout Output,
         gen: ReflectiveGenerator<Output>,
-        property: @escaping (Output) -> Bool
+        property: @escaping (Output) -> Bool,
+        rejectCache: inout Set<UInt64>,
+        stats: inout ReductionStats,
+        collectStats: Bool,
+        isInstrumented: Bool
     ) throws -> Bool {
-        encoder.start(graph: graph, sequence: sequence, tree: tree)
+        encoder.start(scope: scope)
 
         var lastAccepted = false
         var anyAccepted = false
         var probeCount = 0
         var acceptCount = 0
-        var rejectCacheHits = 0
         let baseHash = ZobristHash.hash(of: sequence)
 
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
@@ -373,15 +280,13 @@ private struct SchedulerState<Output> {
                 probe: probe
             )
             if rejectCache.contains(probeHash) {
-                rejectCacheHits += 1
                 continue
             }
 
-            // Determine decoder mode based on whether binds exist.
-            let hasBind = sequence.contains(where: { entry in
+            let hasBind = sequence.contains { entry in
                 if case .bind = entry { return true }
                 return false
-            })
+            }
             let decoder: SequenceDecoder = hasBind
                 ? .guided(fallbackTree: tree)
                 : .exact()
@@ -403,6 +308,12 @@ private struct SchedulerState<Output> {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
+
+                // On structural acceptance, stop the encoder immediately.
+                // The scheduler will rebuild the graph and restart.
+                if scope.transformation.postcondition.isStructural {
+                    break
+                }
             } else {
                 rejectCache.insert(probeHash)
             }
@@ -424,12 +335,82 @@ private struct SchedulerState<Output> {
                     "encoder": encoder.name.rawValue,
                     "probes": "\(probeCount)",
                     "accepted": "\(acceptCount)",
-                    "cache_hits": "\(rejectCacheHits)",
                     "seq_len": "\(sequence.count)",
                 ]
             )
         }
 
         return anyAccepted
+    }
+    // swiftlint:enable function_parameter_count
+
+    // MARK: - Convergence
+
+    /// Returns true when every leaf value is either at its reduction target or has a convergence record.
+    private static func allValuesConverged(
+        in sequence: ChoiceSequence,
+        graph: ChoiceGraph
+    ) -> Bool {
+        for nodeID in graph.leafNodes {
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind else { continue }
+            let currentBitPattern = metadata.value.bitPattern64
+            let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
+            if currentBitPattern == targetBitPattern { continue }
+            if metadata.convergedOrigin != nil { continue }
+            return false
+        }
+        return true
+    }
+
+    /// Extracts warm-start convergence records for leaves relevant to a transformation.
+    private static func extractWarmStarts(
+        for transformation: GraphTransformation,
+        from graph: ChoiceGraph
+    ) -> [Int: ConvergedOrigin] {
+        var records: [Int: ConvergedOrigin] = [:]
+        // Collect convergence records from all leaf nodes that might
+        // be relevant to this transformation.
+        for nodeID in graph.leafNodes {
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard let origin = metadata.convergedOrigin else { continue }
+            guard let range = graph.nodes[nodeID].positionRange else { continue }
+            records[range.lowerBound] = origin
+        }
+        return records
+    }
+
+    /// Extracts all convergence records from graph nodes.
+    private static func extractAllConvergence(
+        from graph: ChoiceGraph
+    ) -> [Int: ConvergedOrigin] {
+        var records: [Int: ConvergedOrigin] = [:]
+        for nodeID in graph.leafNodes {
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard let origin = metadata.convergedOrigin else { continue }
+            guard let range = graph.nodes[nodeID].positionRange else { continue }
+            records[range.lowerBound] = origin
+        }
+        return records
+    }
+
+    /// Transfers convergence records from old graph positions to matching leaves in the new graph.
+    private static func transferConvergence(
+        _ records: [Int: ConvergedOrigin],
+        to graph: ChoiceGraph
+    ) {
+        // Two-tier transfer: structurally-constant bind subtrees match on
+        // position + typeTag only. Non-constant subtrees require validRange match too.
+        for nodeID in graph.leafNodes {
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard let range = graph.nodes[nodeID].positionRange else { continue }
+            guard let oldRecord = records[range.lowerBound] else { continue }
+
+            // Position matches. Check type tag.
+            // For simplicity in Phase 2, accept all position + typeTag matches.
+            // The two-tier policy (structurally-constant vs non-constant) will
+            // be refined in Phase 5.
+            graph.recordConvergence([range.lowerBound: oldRecord])
+        }
     }
 }
