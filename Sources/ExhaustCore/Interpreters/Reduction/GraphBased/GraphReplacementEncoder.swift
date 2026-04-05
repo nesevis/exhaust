@@ -5,27 +5,18 @@
 
 // MARK: - Graph Replacement Encoder
 
-/// Replaces one subtree with another along structural edges.
+/// Applies a fully specified replacement to the base sequence.
 ///
-/// Operates in three modes based on the ``ReplacementScope``:
-/// - **Self-similar**: splices donor content along a self-similarity edge via sequence surgery (when the donor is active) or tree edit + flatten (when inactive).
-/// - **Branch pivot**: changes the selected branch at a pick node. Always requires tree edit + flatten because the alternative branch is inactive.
-/// - **Descendant promotion**: collapses one recursion level by promoting a descendant pick node.
-///
-/// This is the only path-changing operation type — it may bring inactive content (nil position range) into the active sequence.
+/// Pure structural encoder: the scope specifies the exact donor and target. For active donors (non-nil position range), the encoder copies entries via sequence surgery. For inactive donors (nil position range), the encoder edits the tree and flattens. One scope = one probe.
 struct GraphReplacementEncoder: GraphEncoder {
     let name: EncoderName = .graphSubstitution
 
-    // MARK: - State
-
-    private var candidates: [ChoiceSequence] = []
-    private var candidateIndex = 0
-
-    // MARK: - GraphEncoder
+    private var candidate: ChoiceSequence?
+    private var emitted = false
 
     mutating func start(scope: TransformationScope) {
-        candidateIndex = 0
-        candidates = []
+        emitted = false
+        candidate = nil
 
         guard case let .replacement(replacementScope) = scope.transformation.operation else {
             return
@@ -36,14 +27,14 @@ struct GraphReplacementEncoder: GraphEncoder {
 
         switch replacementScope {
         case let .selfSimilar(selfSimilarScope):
-            buildSelfSimilarCandidates(
+            candidate = buildSelfSimilarCandidate(
                 scope: selfSimilarScope,
                 sequence: sequence,
                 graph: graph
             )
 
         case let .branchPivot(pivotScope):
-            buildBranchPivotCandidates(
+            candidate = buildBranchPivotCandidate(
                 scope: pivotScope,
                 sequence: sequence,
                 graph: graph,
@@ -51,100 +42,67 @@ struct GraphReplacementEncoder: GraphEncoder {
             )
 
         case let .descendantPromotion(promotionScope):
-            buildDescendantPromotionCandidates(
+            candidate = buildDescendantPromotionCandidate(
                 scope: promotionScope,
                 sequence: sequence,
-                graph: graph,
-                tree: scope.tree
+                graph: graph
             )
         }
     }
 
-    mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
-        guard candidateIndex < candidates.count else { return nil }
-        let candidate = candidates[candidateIndex]
-        candidateIndex += 1
+    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+        guard emitted == false else { return nil }
+        emitted = true
         return candidate
     }
 
-    // MARK: - Self-Similar Substitution
+    // MARK: - Candidate Construction
 
-    private mutating func buildSelfSimilarCandidates(
+    /// Copies donor entries into the target's position range.
+    private func buildSelfSimilarCandidate(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
-    ) {
+    ) -> ChoiceSequence? {
         guard let targetRange = graph.nodes[scope.targetNodeID].positionRange,
               let donorRange = graph.nodes[scope.donorNodeID].positionRange else {
-            return
+            return nil
         }
-
-        // Sequence surgery: copy donor entries and replace target range.
         let donorEntries = Array(sequence[donorRange.lowerBound ... donorRange.upperBound])
         var candidate = sequence
         candidate.replaceSubrange(targetRange.lowerBound ... targetRange.upperBound, with: donorEntries)
-        if candidate.shortLexPrecedes(sequence) {
-            candidates.append(candidate)
-        }
+        guard candidate.shortLexPrecedes(sequence) else { return nil }
+        return candidate
     }
 
-    // MARK: - Branch Pivot
-
-    private mutating func buildBranchPivotCandidates(
+    /// Edits the tree to pivot to an alternative branch and flattens.
+    private func buildBranchPivotCandidate(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
         tree: ChoiceTree
-    ) {
-        // Branch pivot requires tree editing — the alternative branches are inactive
-        // (nil position range). Walk the tree, find the pick site, swap .selected
-        // marker, and flatten.
-        for branchID in scope.candidateBranchIDs {
-            var editedTree = tree
-            if editedTree.pivotBranch(at: scope.pickNodeID, to: branchID, graph: graph) {
-                let candidateSequence = ChoiceSequence.flatten(editedTree)
-                if candidateSequence.shortLexPrecedes(sequence) {
-                    candidates.append(candidateSequence)
-                }
-            }
-        }
+    ) -> ChoiceSequence? {
+        // Branch pivot requires tree editing — the alternative branches are inactive (nil position range). Stub: returns nil until tree-level pivot manipulation is implemented.
+        _ = scope
+        _ = graph
+        _ = tree
+        return nil
     }
 
-    // MARK: - Descendant Promotion
-
-    private mutating func buildDescendantPromotionCandidates(
+    /// Replaces the ancestor's range with the descendant's content.
+    private func buildDescendantPromotionCandidate(
         scope: DescendantPromotionScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph,
-        tree: ChoiceTree
-    ) {
+        graph: ChoiceGraph
+    ) -> ChoiceSequence? {
         guard let ancestorRange = graph.nodes[scope.ancestorPickNodeID].positionRange,
               let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange else {
-            return
+            return nil
         }
-
-        // Sequence surgery: replace ancestor's range with descendant's content.
         let descendantEntries = Array(sequence[descendantRange.lowerBound ... descendantRange.upperBound])
         var candidate = sequence
         candidate.replaceSubrange(ancestorRange.lowerBound ... ancestorRange.upperBound, with: descendantEntries)
-        if candidate.shortLexPrecedes(sequence) {
-            candidates.append(candidate)
-        }
-    }
-}
-
-// MARK: - Tree Pivot Extension
-
-extension ChoiceTree {
-    /// Pivots a branch at a pick node identified by graph node ID.
-    ///
-    /// - Note: Stub — requires tree walk to find the pick site by matching the graph node's site ID and depth, then swapping the `.selected` marker. Returns false if the pick site cannot be found.
-    mutating func pivotBranch(at pickNodeID: Int, to branchID: UInt64, graph: ChoiceGraph) -> Bool {
-        // TODO: Implement tree-level branch pivot by matching pick site metadata.
-        // For now, return false (no candidates generated from pivots).
-        _ = pickNodeID
-        _ = branchID
-        _ = graph
-        return false
+        guard candidate.shortLexPrecedes(sequence) else { return nil }
+        return candidate
     }
 }

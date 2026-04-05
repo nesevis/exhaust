@@ -35,12 +35,14 @@ struct GraphMinimisationEncoder: GraphEncoder {
     // MARK: - Integer State
 
     private struct IntegerState {
-        let sequence: ChoiceSequence
+        var sequence: ChoiceSequence
         let leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64)]
         var phase: IntegerPhase
         var leafIndex: Int
         var stepper: BinarySearchStepper?
         var warmStartRecords: [Int: ConvergedOrigin]
+        /// The last candidate emitted by nextProbe. When lastAccepted is true, this becomes the new baseline sequence.
+        var lastEmittedCandidate: ChoiceSequence?
     }
 
     private enum IntegerPhase {
@@ -51,11 +53,11 @@ struct GraphMinimisationEncoder: GraphEncoder {
     // MARK: - Float State
 
     private struct FloatState {
-        let sequence: ChoiceSequence
+        var sequence: ChoiceSequence
         let leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, typeTag: TypeTag)]
         var leafIndex: Int
-        // Simplified: try semantic simplest for each leaf.
         var triedSimplest: Bool
+        var lastEmittedCandidate: ChoiceSequence?
     }
 
     // MARK: - GraphEncoder
@@ -129,7 +131,8 @@ struct GraphMinimisationEncoder: GraphEncoder {
             phase: scope.batchZeroEligible ? .batchZero : .perLeaf,
             leafIndex: 0,
             stepper: nil,
-            warmStartRecords: warmStarts
+            warmStartRecords: warmStarts,
+            lastEmittedCandidate: nil
         ))
     }
 
@@ -137,6 +140,12 @@ struct GraphMinimisationEncoder: GraphEncoder {
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
+        // If the last probe was accepted, update the baseline sequence.
+        if lastAccepted, let accepted = state.lastEmittedCandidate {
+            state.sequence = accepted
+        }
+        state.lastEmittedCandidate = nil
+
         switch state.phase {
         case .batchZero:
             state.phase = .perLeaf
@@ -147,6 +156,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
                     .withBitPattern(leaf.targetBitPattern)
             }
             if candidate.shortLexPrecedes(state.sequence) {
+                state.lastEmittedCandidate = candidate
                 return candidate
             }
             // Batch zero rejected — fall through to per-leaf.
@@ -165,16 +175,25 @@ struct GraphMinimisationEncoder: GraphEncoder {
             let leaf = state.leafPositions[state.leafIndex]
 
             if state.stepper == nil {
-                // Initialize stepper for this leaf.
+                // Initialize stepper for this leaf. Use the CURRENT value from
+                // the baseline sequence (which may have been updated by prior
+                // acceptances) rather than the original value from the scope.
+                let currentEntry = state.sequence[leaf.sequenceIndex]
+                let currentBitPattern = currentEntry.value?.choice.bitPattern64 ?? leaf.currentBitPattern
                 let lo = leaf.targetBitPattern
-                let hi = leaf.currentBitPattern > leaf.targetBitPattern
-                    ? leaf.currentBitPattern
+                let hi = currentBitPattern > leaf.targetBitPattern
+                    ? currentBitPattern
                     : leaf.targetBitPattern
+
+                guard lo != hi else {
+                    // Already at target — skip.
+                    state.leafIndex += 1
+                    continue
+                }
 
                 // Check warm-start.
                 if let warmStart = state.warmStartRecords[leaf.sequenceIndex],
                    warmStart.configuration == .binarySearchSemanticSimplest {
-                    // Use warm-start bound as floor.
                     let warmLo = min(warmStart.bound, hi)
                     state.stepper = BinarySearchStepper(lo: warmLo, hi: hi)
                 } else {
@@ -191,6 +210,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
                 candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
                     .withBitPattern(firstValue)
                 if candidate.shortLexPrecedes(state.sequence) {
+                    state.lastEmittedCandidate = candidate
                     return candidate
                 }
                 // First probe not shortlex-better — advance.
@@ -201,6 +221,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
                 candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
                     .withBitPattern(nextValue)
                 if candidate.shortLexPrecedes(state.sequence) {
+                    state.lastEmittedCandidate = candidate
                     return candidate
                 }
                 continue
@@ -246,14 +267,21 @@ struct GraphMinimisationEncoder: GraphEncoder {
             sequence: sequence,
             leafPositions: leafPositions,
             leafIndex: 0,
-            triedSimplest: false
+            triedSimplest: false,
+            lastEmittedCandidate: nil
         ))
     }
 
     private mutating func nextFloatProbe(
         state: inout FloatState,
-        lastAccepted _: Bool
+        lastAccepted: Bool
     ) -> ChoiceSequence? {
+        // Update baseline on acceptance.
+        if lastAccepted, let accepted = state.lastEmittedCandidate {
+            state.sequence = accepted
+        }
+        state.lastEmittedCandidate = nil
+
         // Simplified float handling: try semantic simplest for each leaf.
         // The full four-stage IEEE 754 pipeline will be ported in a later pass.
         while state.leafIndex < state.leafPositions.count {
@@ -266,6 +294,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
                 candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
                     .withBitPattern(target)
                 if candidate.shortLexPrecedes(state.sequence) {
+                    state.lastEmittedCandidate = candidate
                     return candidate
                 }
             }

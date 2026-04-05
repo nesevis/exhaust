@@ -5,16 +5,11 @@
 
 // MARK: - Choice Graph Scheduler
 
-/// Drives scope-dispatched graph encoders in a yield-ordered cycle until convergence or stall budget exhaustion.
+/// Drives scope-source-dispatched reduction until convergence or stall budget exhaustion.
 ///
-/// Each cycle:
-/// 1. Enumerates all transformation scopes from the graph via ``TransformationEnumerator``.
-/// 2. Walks the sorted queue in yield order, checking preconditions and dispatching to encoders.
-/// 3. On structural acceptance: rebuilds the graph, transfers convergence, and restarts the queue.
-/// 4. On value acceptance: harvests convergence records and continues the queue.
-/// 5. On stall (no acceptance in the full queue): decrements stall budget.
+/// Merges lazy ``ScopeSource`` iterators by yield, pulling from whichever has the highest-yield next scope. Dispatches to pure structural encoders (one probe) or search-based value encoders (multiple probes). On structural acceptance, rebuilds all sources from the new graph. On rejection, only the dispatched source advances.
 ///
-/// - SeeAlso: ``TransformationEnumerator``, ``GraphEncoder``, ``TransformationScope``
+/// - SeeAlso: ``ScopeSource``, ``ScopeSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
 
     // MARK: - Entry Points
@@ -101,8 +96,8 @@ enum ChoiceGraphScheduler {
             cycles += 1
             let sequenceBeforeCycle = sequence
 
-            // Enumerate scopes and build yield-ordered queue.
-            let queue = TransformationEnumerator.enumerate(from: graph)
+            // Build scope sources from the graph.
+            var sources = ScopeSourceBuilder.buildSources(from: graph)
 
             if isInstrumented {
                 ExhaustLog.debug(
@@ -111,26 +106,35 @@ enum ChoiceGraphScheduler {
                     metadata: [
                         "cycle": "\(cycles)",
                         "seq_len": "\(sequence.count)",
-                        "scopes": "\(queue.count)",
+                        "sources": "\(sources.count)",
                         "stall_budget": "\(stallBudget)",
                     ]
                 )
             }
 
-            // Walk queue in yield order.
             var anyAccepted = false
-            var restartQueue = false
 
-            for transformation in queue {
+            // Pull from highest-yield source until all exhausted.
+            while true {
+                // Find the source with the highest peekYield.
+                guard let sourceIndex = highestYieldSourceIndex(sources) else {
+                    break
+                }
+
+                // Pull the next scope from that source.
+                guard let transformation = sources[sourceIndex].next(lastAccepted: false) else {
+                    // Source exhausted — remove and continue.
+                    sources.remove(at: sourceIndex)
+                    continue
+                }
+
+                // Check precondition.
                 guard transformation.precondition.isSatisfied(in: graph) else {
                     continue
                 }
 
                 // Construct self-contained scope.
-                let warmStarts = extractWarmStarts(
-                    for: transformation,
-                    from: graph
-                )
+                let warmStarts = extractWarmStarts(from: graph)
                 let scope = TransformationScope(
                     transformation: transformation,
                     baseSequence: sequence,
@@ -139,7 +143,7 @@ enum ChoiceGraphScheduler {
                     warmStartRecords: warmStarts
                 )
 
-                // Select encoder and run probe loop.
+                // Select encoder and run.
                 var encoder = selectEncoder(for: transformation.operation)
                 let accepted = try runProbeLoop(
                     encoder: &encoder,
@@ -155,7 +159,7 @@ enum ChoiceGraphScheduler {
                     isInstrumented: isInstrumented
                 )
 
-                // Harvest convergence records.
+                // Harvest convergence from value encoders.
                 let convergence = encoder.convergenceRecords
                 if convergence.isEmpty == false {
                     graph.recordConvergence(convergence)
@@ -165,24 +169,32 @@ enum ChoiceGraphScheduler {
                     anyAccepted = true
 
                     if transformation.postcondition.isStructural {
-                        // Structural change: rebuild graph and restart queue.
+                        // Structural acceptance: rebuild graph and ALL sources.
                         let oldConvergence = extractAllConvergence(from: graph)
                         graph = ChoiceGraph.build(from: tree)
                         transferConvergence(oldConvergence, to: graph)
                         stats.graphRebuilds += 1
-                        restartQueue = true
-                        break
+                        sources = ScopeSourceBuilder.buildSources(from: graph)
+
+                        if isInstrumented {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "graph_structural_rebuild",
+                                metadata: [
+                                    "seq_len": "\(sequence.count)",
+                                    "nodes": "\(graph.nodes.count)",
+                                    "sources": "\(sources.count)",
+                                ]
+                            )
+                        }
                     }
+                    // Value acceptance or structural: continue pulling from sources.
                 }
+                // Rejection: the source already advanced via next(lastAccepted:).
+                // Continue pulling from the highest-yield source.
             }
 
-            // If a structural acceptance restarted the queue, loop back to
-            // re-enumerate from the new graph.
-            if restartQueue {
-                continue
-            }
-
-            // Stall handling.
+            // Cycle complete.
             let improved = sequence != sequenceBeforeCycle
             if improved {
                 stallBudget = config.maxStalls
@@ -226,6 +238,27 @@ enum ChoiceGraphScheduler {
         return (reduced: (sequence, output), stats: stats)
     }
     // swiftlint:enable function_parameter_count
+
+    // MARK: - Source Selection
+
+    /// Returns the index of the source with the highest peekYield, or nil if all are exhausted.
+    private static func highestYieldSourceIndex(_ sources: [any ScopeSource]) -> Int? {
+        var bestIndex: Int?
+        var bestYield: TransformationYield?
+        for (index, source) in sources.enumerated() {
+            guard let yield = source.peekYield else { continue }
+            if let currentBest = bestYield {
+                if yield < currentBest {
+                    bestIndex = index
+                    bestYield = yield
+                }
+            } else {
+                bestIndex = index
+                bestYield = yield
+            }
+        }
+        return bestIndex
+    }
 
     // MARK: - Encoder Selection
 
@@ -308,12 +341,6 @@ enum ChoiceGraphScheduler {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
-
-                // On structural acceptance, stop the encoder immediately.
-                // The scheduler will rebuild the graph and restart.
-                if scope.transformation.postcondition.isStructural {
-                    break
-                }
             } else {
                 rejectCache.insert(probeHash)
             }
@@ -363,14 +390,9 @@ enum ChoiceGraphScheduler {
         return true
     }
 
-    /// Extracts warm-start convergence records for leaves relevant to a transformation.
-    private static func extractWarmStarts(
-        for transformation: GraphTransformation,
-        from graph: ChoiceGraph
-    ) -> [Int: ConvergedOrigin] {
+    /// Extracts warm-start convergence records from all leaf nodes.
+    private static func extractWarmStarts(from graph: ChoiceGraph) -> [Int: ConvergedOrigin] {
         var records: [Int: ConvergedOrigin] = [:]
-        // Collect convergence records from all leaf nodes that might
-        // be relevant to this transformation.
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let origin = metadata.convergedOrigin else { continue }
@@ -381,17 +403,8 @@ enum ChoiceGraphScheduler {
     }
 
     /// Extracts all convergence records from graph nodes.
-    private static func extractAllConvergence(
-        from graph: ChoiceGraph
-    ) -> [Int: ConvergedOrigin] {
-        var records: [Int: ConvergedOrigin] = [:]
-        for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
-            guard let origin = metadata.convergedOrigin else { continue }
-            guard let range = graph.nodes[nodeID].positionRange else { continue }
-            records[range.lowerBound] = origin
-        }
-        return records
+    private static func extractAllConvergence(from graph: ChoiceGraph) -> [Int: ConvergedOrigin] {
+        extractWarmStarts(from: graph)
     }
 
     /// Transfers convergence records from old graph positions to matching leaves in the new graph.
@@ -399,17 +412,10 @@ enum ChoiceGraphScheduler {
         _ records: [Int: ConvergedOrigin],
         to graph: ChoiceGraph
     ) {
-        // Two-tier transfer: structurally-constant bind subtrees match on
-        // position + typeTag only. Non-constant subtrees require validRange match too.
         for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard case .chooseBits = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
             guard let oldRecord = records[range.lowerBound] else { continue }
-
-            // Position matches. Check type tag.
-            // For simplicity in Phase 2, accept all position + typeTag matches.
-            // The two-tier policy (structurally-constant vs non-constant) will
-            // be refined in Phase 5.
             graph.recordConvergence([range.lowerBound: oldRecord])
         }
     }

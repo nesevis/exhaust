@@ -11,48 +11,144 @@ extension ChoiceGraph {
     ///
     /// An aligned tuple groups elements at corresponding offsets across sibling sequences. The scope provides siblings and their deletable elements in natural offset order — the encoder handles window placement (head-aligned, tail-aligned, or both) within its probe loop, analogous to head/tail alternation in per-parent removal.
     ///
-    /// - Returns: One scope per zip node with at least two sequence children that have deletable elements.
+    /// Computes aligned removal scopes for all zip nodes with multiple sequence children, including partial sibling subsets.
+    ///
+    /// Looks through transparent wrappers (groups, structurally-constant binds) beneath each zip child to find the underlying sequence node. Generates scopes for all subsets of siblings of size 2 or more. The full-sibling scope has the highest yield and runs first in the queue. Progressively smaller subsets (triples, pairs) follow in yield order.
+    ///
+    /// - Returns: One scope per sibling subset (size >= 2) per zip node.
     func alignedRemovalScopes() -> [AlignedRemovalScope] {
         var scopes: [AlignedRemovalScope] = []
         for node in nodes {
             guard case .zip = node.kind else { continue }
             guard node.positionRange != nil else { continue }
 
-            let sequenceChildren = node.children.compactMap { childID
+            let allSequenceChildren = node.children.compactMap { childID
                 -> SiblingDeletionScope? in
-                let child = nodes[childID]
-                guard case let .sequence(metadata) = child.kind else {
+                guard let sequenceNodeID = findSequenceBeneath(childID) else {
+                    return nil
+                }
+                let sequenceNode = nodes[sequenceNodeID]
+                guard case let .sequence(metadata) = sequenceNode.kind else {
                     return nil
                 }
                 let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
                 let deletable = metadata.elementCount - minLength
                 guard deletable > 0 else { return nil }
                 return SiblingDeletionScope(
-                    sequenceNodeID: childID,
-                    elementNodeIDs: child.children,
+                    sequenceNodeID: sequenceNodeID,
+                    elementNodeIDs: sequenceNode.children,
                     deletableCount: deletable
                 )
             }
-            guard sequenceChildren.count >= 2 else { continue }
+            guard allSequenceChildren.count >= 2 else { continue }
 
-            let maxWindow = sequenceChildren.map(\.deletableCount).min() ?? 0
-            guard maxWindow > 0 else { continue }
+            // Generate scopes for all subsets of size 2 through N.
+            // Largest subsets first (highest yield). The yield ordering in
+            // the queue ensures the most drastic (all-sibling) probes run
+            // before pairs.
+            let subsets = siblingSubsets(allSequenceChildren)
+            for subset in subsets {
+                let maxWindow = subset.map(\.deletableCount).min() ?? 0
+                guard maxWindow > 0 else { continue }
 
-            var totalYield = 0
-            for sibling in sequenceChildren {
-                for elementNodeID in sibling.elementNodeIDs {
-                    totalYield += nodes[elementNodeID].positionRange?.count ?? 0
+                var totalYield = 0
+                for sibling in subset {
+                    for elementNodeID in sibling.elementNodeIDs {
+                        totalYield += nodes[elementNodeID].positionRange?.count ?? 0
+                    }
                 }
-            }
 
-            scopes.append(AlignedRemovalScope(
-                zipNodeID: node.id,
-                siblings: sequenceChildren,
-                maxAlignedWindow: maxWindow,
-                maxYield: totalYield
-            ))
+                scopes.append(AlignedRemovalScope(
+                    zipNodeID: node.id,
+                    siblings: subset,
+                    maxAlignedWindow: maxWindow,
+                    maxYield: totalYield
+                ))
+            }
         }
         return scopes
+    }
+
+    /// Generates all subsets of size 2 or more from the given siblings, ordered by descending size (largest subsets first).
+    private func siblingSubsets(_ siblings: [SiblingDeletionScope]) -> [[SiblingDeletionScope]] {
+        let count = siblings.count
+        guard count >= 2 else { return [] }
+
+        var subsets: [[SiblingDeletionScope]] = []
+
+        // Generate subsets from largest (all) to smallest (pairs).
+        // For N siblings, iterate subset sizes from N down to 2.
+        for size in stride(from: count, through: 2, by: -1) {
+            generateCombinations(siblings, choose: size, into: &subsets)
+        }
+
+        return subsets
+    }
+
+    /// Appends all combinations of `choose` elements from `source` into `result`.
+    private func generateCombinations(
+        _ source: [SiblingDeletionScope],
+        choose: Int,
+        into result: inout [[SiblingDeletionScope]]
+    ) {
+        let count = source.count
+        guard choose >= 1, choose <= count else { return }
+
+        // Iterative combination generation using indices.
+        var indices = Array(0 ..< choose)
+        while true {
+            result.append(indices.map { source[$0] })
+
+            // Find the rightmost index that can be incremented.
+            var position = choose - 1
+            while position >= 0, indices[position] == count - choose + position {
+                position -= 1
+            }
+            if position < 0 { break }
+
+            indices[position] += 1
+            for subsequent in (position + 1) ..< choose {
+                indices[subsequent] = indices[subsequent - 1] + 1
+            }
+        }
+    }
+
+    /// Walks through transparent wrappers (groups, structurally-constant binds) beneath a node to find the first sequence node.
+    ///
+    /// Returns the sequence node's ID, or nil if no sequence is found beneath the transparent chain.
+    private func findSequenceBeneath(_ nodeID: Int) -> Int? {
+        let node = nodes[nodeID]
+        // Direct sequence — return immediately.
+        if case .sequence = node.kind {
+            return nodeID
+        }
+        // Transparent wrapper: zip (inner group from filter/contramap) or
+        // structurally-constant bind — walk into the single meaningful child.
+        switch node.kind {
+        case .zip:
+            // A zip beneath a zip is a transparent group wrapper (for example,
+            // from filter). Walk into each child looking for a sequence.
+            for childID in node.children {
+                if let found = findSequenceBeneath(childID) {
+                    return found
+                }
+            }
+            return nil
+        case let .bind(metadata):
+            // Structurally-constant binds are transparent — the bound subtree's
+            // shape doesn't depend on the inner value.
+            if metadata.isStructurallyConstant, node.children.count >= 2 {
+                let boundChildID = node.children[metadata.boundChildIndex]
+                return findSequenceBeneath(boundChildID)
+            }
+            // Non-constant binds are not transparent — the sequence inside
+            // depends on the bind-inner value and may change shape.
+            return nil
+        case .chooseBits, .pick:
+            return nil
+        case .sequence:
+            return nodeID
+        }
     }
 
     /// Computes per-parent removal scopes for all sequence nodes with deletable elements.
