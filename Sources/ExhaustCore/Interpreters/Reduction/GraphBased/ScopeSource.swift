@@ -223,9 +223,12 @@ struct PerElementRemovalSource: ScopeSource {
     private var elements: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: ChoiceGraph, limitToSequenceNodeIDs: Set<Int>? = nil) {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
         for scope in graph.perParentRemovalScopes() {
+            if let limit = limitToSequenceNodeIDs, limit.contains(scope.sequenceNodeID) == false {
+                continue
+            }
             for elementNodeID in scope.elementNodeIDs {
                 guard let range = graph.nodes[elementNodeID].positionRange else { continue }
                 let isZero: Bool
@@ -666,7 +669,9 @@ struct ExchangeSource: ScopeSource {
 /// Creates one source per search space. The scheduler merges them by ``ScopeSource/peekYield``.
 enum ScopeSourceBuilder {
     /// Builds all scope sources from the current graph.
-    static func buildSources(from graph: ChoiceGraph) -> [any ScopeSource] {
+    ///
+    /// - Parameter dirtySequenceNodeIDs: Sequence nodes whose children had value changes since the last structural rebuild. Nil means all sequences are dirty (first cycle or after rebuild). Deletion sources for clean sequences are skipped.
+    static func buildSources(from graph: ChoiceGraph, dirtySequenceNodeIDs: Set<Int>? = nil) -> [any ScopeSource] {
         var sources: [any ScopeSource] = []
 
         // Sequence emptying — most drastic structural reduction.
@@ -675,8 +680,12 @@ enum ScopeSourceBuilder {
             sources.append(emptyingSource)
         }
 
-        // Batch removal — one source per sequence with deletable elements.
+        // Batch removal — one source per dirty sequence with deletable elements.
+        // Clean sequences (no value changes since last rejection) are skipped.
         for scope in graph.perParentRemovalScopes() {
+            let isDirty = dirtySequenceNodeIDs == nil
+                || dirtySequenceNodeIDs?.contains(scope.sequenceNodeID) == true
+            guard isDirty else { continue }
             let source = BatchRemovalSource(
                 sequenceNodeID: scope.sequenceNodeID,
                 graph: graph
@@ -686,13 +695,23 @@ enum ScopeSourceBuilder {
             }
         }
 
-        // Per-element removal — individual elements, zero-valued first.
-        let perElementSource = PerElementRemovalSource(graph: graph)
-        if perElementSource.peekYield != nil {
-            sources.append(perElementSource)
+        // Per-element removal — only elements in dirty sequences.
+        if dirtySequenceNodeIDs == nil {
+            let perElementSource = PerElementRemovalSource(graph: graph)
+            if perElementSource.peekYield != nil {
+                sources.append(perElementSource)
+            }
+        } else if let dirty = dirtySequenceNodeIDs, dirty.isEmpty == false {
+            let perElementSource = PerElementRemovalSource(
+                graph: graph,
+                limitToSequenceNodeIDs: dirty
+            )
+            if perElementSource.peekYield != nil {
+                sources.append(perElementSource)
+            }
         }
 
-        // Aligned removal.
+        // Aligned removal — only if at least one participating sibling is dirty.
         let alignedSource = AlignedRemovalSource(graph: graph)
         if alignedSource.peekYield != nil {
             sources.append(alignedSource)

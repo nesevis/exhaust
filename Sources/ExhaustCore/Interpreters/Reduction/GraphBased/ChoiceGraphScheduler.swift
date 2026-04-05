@@ -92,12 +92,21 @@ enum ChoiceGraphScheduler {
             )
         }
 
+        // Track which sequence nodes have had value changes since the
+        // last structural rebuild. Deletion sources skip "clean" sequences
+        // whose children haven't changed — re-probing them is wasted work.
+        // All sequences start dirty (first cycle should try everything).
+        var dirtySequenceNodeIDs: Set<Int>? = nil // nil = all dirty
+
         while stallBudget > 0 {
             cycles += 1
             let sequenceBeforeCycle = sequence
 
             // Build scope sources from the graph.
-            var sources = ScopeSourceBuilder.buildSources(from: graph)
+            var sources = ScopeSourceBuilder.buildSources(
+                from: graph,
+                dirtySequenceNodeIDs: dirtySequenceNodeIDs
+            )
 
             if isInstrumented {
                 ExhaustLog.debug(
@@ -170,11 +179,16 @@ enum ChoiceGraphScheduler {
 
                     if transformation.postcondition.isStructural {
                         // Structural acceptance: rebuild graph and ALL sources.
+                        // All sequences are dirty after rebuild.
                         let oldConvergence = extractAllConvergence(from: graph)
                         graph = ChoiceGraph.build(from: tree)
                         transferConvergence(oldConvergence, to: graph)
                         stats.graphRebuilds += 1
-                        sources = ScopeSourceBuilder.buildSources(from: graph)
+                        dirtySequenceNodeIDs = nil // nil = all dirty
+                        sources = ScopeSourceBuilder.buildSources(
+                            from: graph,
+                            dirtySequenceNodeIDs: dirtySequenceNodeIDs
+                        )
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -187,8 +201,18 @@ enum ChoiceGraphScheduler {
                                 ]
                             )
                         }
+                    } else {
+                        // Value acceptance: mark the affected sequences as dirty.
+                        // Find which sequence nodes contain the changed leaves.
+                        if dirtySequenceNodeIDs == nil {
+                            dirtySequenceNodeIDs = Set<Int>()
+                        }
+                        markDirtySequences(
+                            for: transformation,
+                            in: graph,
+                            dirtySet: &dirtySequenceNodeIDs
+                        )
                     }
-                    // Value acceptance or structural: continue pulling from sources.
                 }
                 // Rejection: the source already advanced via next(lastAccepted:).
                 // Continue pulling from the highest-yield source.
@@ -419,6 +443,51 @@ enum ChoiceGraphScheduler {
             guard let range = graph.nodes[nodeID].positionRange else { continue }
             guard let oldRecord = records[range.lowerBound] else { continue }
             graph.recordConvergence([range.lowerBound: oldRecord])
+        }
+    }
+
+    // MARK: - Dirty Sequence Tracking
+
+    /// Marks sequence nodes whose children were affected by a value transformation as dirty.
+    private static func markDirtySequences(
+        for transformation: GraphTransformation,
+        in graph: ChoiceGraph,
+        dirtySet: inout Set<Int>?
+    ) {
+        // Find leaf node IDs involved in the transformation.
+        let leafNodeIDs: [Int]
+        switch transformation.operation {
+        case let .minimize(scope):
+            switch scope {
+            case let .integerLeaves(integerScope):
+                leafNodeIDs = integerScope.leafNodeIDs
+            case let .floatLeaves(floatScope):
+                leafNodeIDs = floatScope.leafNodeIDs
+            case let .kleisliFibre(fibreScope):
+                leafNodeIDs = [fibreScope.upstreamLeafNodeID] + fibreScope.downstreamNodeIDs
+            }
+        case let .exchange(scope):
+            switch scope {
+            case let .redistribution(redistScope):
+                leafNodeIDs = redistScope.pairs.flatMap { [$0.sourceNodeID, $0.sinkNodeID] }
+            case let .tandem(tandemScope):
+                leafNodeIDs = tandemScope.groups.flatMap(\.leafNodeIDs)
+            }
+        default:
+            return // Structural operations don't mark dirty — they rebuild.
+        }
+
+        // Walk up from each leaf to find its containing sequence node.
+        for leafNodeID in leafNodeIDs {
+            var current = leafNodeID
+            while let parentID = graph.nodes[current].parent {
+                if case .sequence = graph.nodes[parentID].kind {
+                    if dirtySet == nil { dirtySet = Set() }
+                    dirtySet?.insert(parentID)
+                    break
+                }
+                current = parentID
+            }
         }
     }
 }

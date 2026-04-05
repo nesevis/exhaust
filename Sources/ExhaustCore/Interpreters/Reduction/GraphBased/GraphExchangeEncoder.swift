@@ -31,6 +31,8 @@ struct GraphExchangeEncoder: GraphEncoder {
         var stepper: MaxBinarySearchStepper?
         var didEmitCandidate: Bool
         var lastEmittedCandidate: ChoiceSequence?
+        /// Whether the full-delta probe has been tried for the current pair.
+        var triedFullDelta: Bool
     }
 
     // MARK: - GraphEncoder
@@ -110,7 +112,8 @@ struct GraphExchangeEncoder: GraphEncoder {
             pairIndex: 0,
             stepper: nil,
             didEmitCandidate: false,
-            lastEmittedCandidate: nil
+            lastEmittedCandidate: nil,
+            triedFullDelta: false
         ))
     }
 
@@ -132,6 +135,29 @@ struct GraphExchangeEncoder: GraphEncoder {
                     state.pairIndex += 1
                     continue
                 }
+
+                // Try full delta first (zero the source completely).
+                // If accepted, skip binary search entirely — the source is
+                // zeroed and the encoder moves to the next pair. This enables
+                // cascading: each zeroed source changes the landscape for
+                // subsequent pairs.
+                if state.triedFullDelta == false {
+                    state.triedFullDelta = true
+                    if let candidate = buildRedistributionCandidate(
+                        sourceIndex: pair.sourceIndex,
+                        sinkIndex: pair.sinkIndex,
+                        sourceTag: pair.sourceTag,
+                        delta: currentMaxDelta
+                    ) {
+                        state.didEmitCandidate = true
+                        state.lastEmittedCandidate = candidate
+                        return candidate
+                    }
+                    // Full delta rejected — fall through to binary search.
+                }
+
+                // Full delta was rejected (or already tried and rejected).
+                // Fall back to binary search on delta magnitude.
                 state.stepper = MaxBinarySearchStepper(
                     lo: 0,
                     hi: currentMaxDelta
@@ -154,11 +180,19 @@ struct GraphExchangeEncoder: GraphEncoder {
                     state.lastEmittedCandidate = candidate
                     return candidate
                 }
-                // First probe not viable — advance stepper.
+                // First stepper probe not viable — advance stepper.
             }
 
             let feedback = state.didEmitCandidate ? lastAccepted : false
             state.didEmitCandidate = false
+
+            // If full-delta was just accepted, the source is zeroed.
+            // Skip binary search, move to next pair immediately.
+            if feedback, state.stepper == nil {
+                state.pairIndex += 1
+                state.triedFullDelta = false
+                continue
+            }
 
             if let nextDelta = state.stepper?.advance(lastAccepted: feedback) {
                 if let candidate = buildRedistributionCandidate(
@@ -177,6 +211,7 @@ struct GraphExchangeEncoder: GraphEncoder {
             // Stepper converged for this pair — move to next.
             state.stepper = nil
             state.pairIndex += 1
+            state.triedFullDelta = false
         }
 
         return nil
