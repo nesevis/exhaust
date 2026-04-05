@@ -217,49 +217,75 @@ struct GraphExchangeEncoder: GraphEncoder {
         return nil
     }
 
-    /// Computes the current distance from the source's value to its reduction target, reading from the live sequence.
+    /// Computes the current semantic distance from the source's value to its reduction target.
     private func currentDelta(sourceIndex: Int, sourceTag: TypeTag) -> UInt64 {
         guard let sourceValue = sequence[sourceIndex].value else { return 0 }
-        let target = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
-        let bitPattern = sourceValue.choice.bitPattern64
-        return bitPattern > target ? bitPattern - target : target - bitPattern
+        let sourceSemantic = Self.semanticValue(sourceValue.choice)
+        let targetSemantic = Self.semanticValue(
+            ChoiceValue(
+                sourceTag.makeConvertible(
+                    bitPattern64: sourceValue.choice.reductionTarget(in: sourceValue.validRange)
+                ),
+                tag: sourceTag
+            )
+        )
+        let distance = abs(sourceSemantic - targetSemantic)
+        return UInt64(clamping: distance)
     }
 
-    /// Builds a redistribution candidate by moving `delta` bit-pattern units from source to sink.
+    /// Builds a redistribution candidate by transferring `delta` units of semantic magnitude from source to sink.
     ///
-    /// The source's bit pattern decreases by delta (toward its reduction target). The sink's bit pattern increases by delta (absorbing the magnitude). Both use the Bonsai bit-pattern arithmetic convention.
+    /// Operates in semantic (Int64) value space: the source moves toward its reduction target by `delta`, and the sink absorbs the same magnitude in the opposite direction. Both results are converted back to bit patterns and validated against the type's representable range.
     private func buildRedistributionCandidate(
         sourceIndex: Int,
         sinkIndex: Int,
         sourceTag: TypeTag,
         delta: UInt64
     ) -> ChoiceSequence? {
-        guard delta > 0 else { return nil }
+        guard delta > 0, delta <= UInt64(Int64.max) else { return nil }
 
         let sourceEntry = sequence[sourceIndex]
         let sinkEntry = sequence[sinkIndex]
         guard let sourceValue = sourceEntry.value else { return nil }
         guard let sinkValue = sinkEntry.value else { return nil }
 
-        let sourceBitPattern = sourceValue.choice.bitPattern64
-        let sinkBitPattern = sinkValue.choice.bitPattern64
-        let sourceTarget = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
+        // Extract semantic values as Int64 for signed arithmetic.
+        let sourceSemanticValue = Self.semanticValue(sourceValue.choice)
+        let sinkSemanticValue = Self.semanticValue(sinkValue.choice)
+        let targetSemanticValue = Self.semanticValue(
+            ChoiceValue(
+                sourceTag.makeConvertible(
+                    bitPattern64: sourceValue.choice.reductionTarget(in: sourceValue.validRange)
+                ),
+                tag: sourceTag
+            )
+        )
 
         // Determine direction: source moves toward target.
-        let newSourceBP: UInt64
-        let newSinkBP: UInt64
-        if sourceBitPattern > sourceTarget {
-            // Source decreases, sink increases.
-            guard sourceBitPattern >= delta else { return nil }
-            guard UInt64.max - delta >= sinkBitPattern else { return nil }
-            newSourceBP = sourceBitPattern - delta
-            newSinkBP = sinkBitPattern + delta
+        let signedDelta = Int64(delta)
+        let newSourceSemantic: Int64
+        let newSinkSemantic: Int64
+
+        if sourceSemanticValue > targetSemanticValue {
+            // Source decreases toward target, sink increases.
+            let (candidateSource, sourceOverflow) = sourceSemanticValue.subtractingReportingOverflow(signedDelta)
+            let (candidateSink, sinkOverflow) = sinkSemanticValue.addingReportingOverflow(signedDelta)
+            guard sourceOverflow == false, sinkOverflow == false else { return nil }
+            newSourceSemantic = candidateSource
+            newSinkSemantic = candidateSink
         } else {
             // Source increases toward target, sink decreases.
-            guard UInt64.max - delta >= sourceBitPattern else { return nil }
-            guard sinkBitPattern >= delta else { return nil }
-            newSourceBP = sourceBitPattern + delta
-            newSinkBP = sinkBitPattern - delta
+            let (candidateSource, sourceOverflow) = sourceSemanticValue.addingReportingOverflow(signedDelta)
+            let (candidateSink, sinkOverflow) = sinkSemanticValue.subtractingReportingOverflow(signedDelta)
+            guard sourceOverflow == false, sinkOverflow == false else { return nil }
+            newSourceSemantic = candidateSource
+            newSinkSemantic = candidateSink
+        }
+
+        // Convert back to bit patterns and validate range.
+        guard let newSourceBP = Self.bitPattern(fromSemantic: newSourceSemantic, tag: sourceTag),
+              let newSinkBP = Self.bitPattern(fromSemantic: newSinkSemantic, tag: sinkValue.choice.tag) else {
+            return nil
         }
 
         var candidate = sequence
@@ -267,5 +293,53 @@ struct GraphExchangeEncoder: GraphEncoder {
         candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBP)
 
         return candidate
+    }
+
+    /// Extracts the semantic value as Int64 from a ChoiceValue.
+    private static func semanticValue(_ choice: ChoiceValue) -> Int64 {
+        switch choice {
+        case let .unsigned(value, _):
+            return Int64(clamping: value)
+        case let .signed(value, _, _):
+            return value
+        case let .floating(value, _, _):
+            return Int64(value)
+        }
+    }
+
+    /// Converts a semantic Int64 value to the type's ``BitPatternConvertible/bitPattern64`` encoding. Returns nil if out of range.
+    private static func bitPattern(fromSemantic value: Int64, tag: TypeTag) -> UInt64? {
+        switch tag {
+        case .uint8:
+            guard value >= 0, value <= Int64(UInt8.max) else { return nil }
+            return UInt8(value).bitPattern64
+        case .int8:
+            guard value >= Int64(Int8.min), value <= Int64(Int8.max) else { return nil }
+            return Int8(value).bitPattern64
+        case .uint16:
+            guard value >= 0, value <= Int64(UInt16.max) else { return nil }
+            return UInt16(value).bitPattern64
+        case .int16:
+            guard value >= Int64(Int16.min), value <= Int64(Int16.max) else { return nil }
+            return Int16(value).bitPattern64
+        case .uint32:
+            guard value >= 0, value <= Int64(UInt32.max) else { return nil }
+            return UInt32(value).bitPattern64
+        case .int32:
+            guard value >= Int64(Int32.min), value <= Int64(Int32.max) else { return nil }
+            return Int32(value).bitPattern64
+        case .uint, .uint64:
+            guard value >= 0 else { return nil }
+            return UInt64(value).bitPattern64
+        case .int:
+            return Int(value).bitPattern64
+        case .int64:
+            return value.bitPattern64
+        case .bits:
+            guard value >= 0 else { return nil }
+            return UInt64(value).bitPattern64
+        case .double, .float, .float16, .date:
+            return nil
+        }
     }
 }

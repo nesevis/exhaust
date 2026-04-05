@@ -179,51 +179,51 @@ struct GraphMinimizationEncoder: GraphEncoder {
             let leaf = state.leafPositions[state.leafIndex]
 
             if state.stepper == nil {
-                // Initialize stepper for this leaf. Use the CURRENT value from
-                // the baseline sequence (which may have been updated by prior
-                // acceptances) rather than the original value from the scope.
+                // Initialize stepper for this leaf in SHORTLEX KEY space.
+                // Zigzag encoding maps signed values so that values closer
+                // to zero have smaller keys: 0→0, -1→1, 1→2, -2→3, ...
+                // Binary search in key space naturally finds the simplest
+                // predicate-preserving value across the zero boundary.
                 let currentEntry = state.sequence[leaf.sequenceIndex]
-                let currentBitPattern = currentEntry.value?.choice.bitPattern64 ?? leaf.currentBitPattern
-                let lo = leaf.targetBitPattern
-                let hi = currentBitPattern > leaf.targetBitPattern
-                    ? currentBitPattern
-                    : leaf.targetBitPattern
+                guard let currentChoice = currentEntry.value?.choice else {
+                    state.leafIndex += 1
+                    continue
+                }
+                let currentKey = currentChoice.shortlexKey
+                let targetKey: UInt64 = 0 // shortlex key 0 = semantic simplest
 
-                guard lo != hi else {
-                    // Already at target — skip.
+                guard currentKey != targetKey else {
                     state.leafIndex += 1
                     continue
                 }
 
-                // Check warm-start.
-                if let warmStart = state.warmStartRecords[leaf.sequenceIndex],
-                   warmStart.configuration == .binarySearchSemanticSimplest {
-                    let warmLo = min(warmStart.bound, hi)
-                    state.stepper = BinarySearchStepper(lo: warmLo, hi: hi)
-                } else {
-                    state.stepper = BinarySearchStepper(lo: lo, hi: hi)
-                }
+                // Stepper searches from targetKey (0) up to currentKey.
+                state.stepper = BinarySearchStepper(lo: targetKey, hi: currentKey)
 
-                guard let firstValue = state.stepper?.start() else {
+                guard let firstKey = state.stepper?.start() else {
                     state.leafIndex += 1
                     state.stepper = nil
                     continue
                 }
 
+                let probeChoice = ChoiceValue.fromShortlexKey(firstKey, tag: currentChoice.tag)
                 var candidate = state.sequence
                 candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                    .withBitPattern(firstValue)
+                    .withBitPattern(probeChoice.bitPattern64)
                 if candidate.shortLexPrecedes(state.sequence) {
                     state.lastEmittedCandidate = candidate
                     return candidate
                 }
-                // First probe not shortlex-better — advance.
             }
 
-            if let nextValue = state.stepper?.advance(lastAccepted: lastAccepted) {
+            if let nextKey = state.stepper?.advance(lastAccepted: lastAccepted) {
+                guard let currentChoice = state.sequence[leaf.sequenceIndex].value?.choice else {
+                    continue
+                }
+                let probeChoice = ChoiceValue.fromShortlexKey(nextKey, tag: currentChoice.tag)
                 var candidate = state.sequence
                 candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                    .withBitPattern(nextValue)
+                    .withBitPattern(probeChoice.bitPattern64)
                 if candidate.shortLexPrecedes(state.sequence) {
                     state.lastEmittedCandidate = candidate
                     return candidate
@@ -231,17 +231,23 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 continue
             }
 
-            // Stepper converged — record convergence and move to next leaf.
-            if let bestAccepted = state.stepper?.bestAccepted {
-                // If batch zeroing was rejected but this leaf individually
-                // converged at its target, it has zeroing dependencies —
-                // it can only reach target when other coordinates change.
+            // Stepper converged (in shortlex key space) — record convergence.
+            if let bestAcceptedKey = state.stepper?.bestAccepted {
+                // Convert shortlex key back to bit pattern for convergence record.
+                guard let currentChoice = state.sequence[leaf.sequenceIndex].value?.choice else {
+                    state.stepper = nil
+                    state.leafIndex += 1
+                    continue
+                }
+                let convergedChoice = ChoiceValue.fromShortlexKey(bestAcceptedKey, tag: currentChoice.tag)
+                let convergedBitPattern = convergedChoice.bitPattern64
+
                 let signal: ConvergenceSignal =
-                    state.batchRejected && bestAccepted == leaf.targetBitPattern
+                    state.batchRejected && bestAcceptedKey == 0
                         ? .zeroingDependency
                         : .monotoneConvergence
                 convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
-                    bound: bestAccepted,
+                    bound: convergedBitPattern,
                     signal: signal,
                     configuration: .binarySearchSemanticSimplest,
                     cycle: 0
