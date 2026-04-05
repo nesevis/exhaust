@@ -1,19 +1,19 @@
 //
-//  GraphMinimisationEncoder.swift
+//  GraphMinimizationEncoder.swift
 //  Exhaust
 //
 
-// MARK: - Graph Minimisation Encoder
+// MARK: - Graph Minimization Encoder
 
 /// Drives leaf values toward their semantic simplest without changing graph structure.
 ///
-/// Operates in three modes based on the ``MinimisationScope``:
+/// Operates in three modes based on the ``MinimizationScope``:
 /// - **Integer leaves**: batch zeroing attempt followed by per-leaf binary search via ``BinarySearchStepper``, with cross-zero phase for signed integers.
 /// - **Float leaves**: four-stage IEEE 754 pipeline (special values, truncation, integral binary search, ratio binary search).
-/// - **Kleisli fibre**: joint upstream/downstream minimisation along a dependency edge. Internally a Kleisli composition — each upstream probe spawns a downstream search.
+/// - **Kleisli fibre**: joint upstream/downstream minimization along a dependency edge. Internally a Kleisli composition — each upstream probe spawns a downstream search.
 ///
 /// This is an active-path operation: all leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions.
-struct GraphMinimisationEncoder: GraphEncoder {
+struct GraphMinimizationEncoder: GraphEncoder {
     let name: EncoderName = .graphValueSearch
 
     // MARK: - State
@@ -65,7 +65,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
     mutating func start(scope: TransformationScope) {
         convergenceStore = [:]
 
-        guard case let .minimisation(minimisationScope) = scope.transformation.operation else {
+        guard case let .minimize(minimizationScope) = scope.transformation.operation else {
             mode = .idle
             return
         }
@@ -73,7 +73,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
         let sequence = scope.baseSequence
         let graph = scope.graph
 
-        switch minimisationScope {
+        switch minimizationScope {
         case let .integerLeaves(integerScope):
             startInteger(scope: integerScope, sequence: sequence, graph: graph, warmStarts: scope.warmStartRecords)
         case let .floatLeaves(floatScope):
@@ -102,7 +102,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
     // MARK: - Integer Mode
 
     private mutating func startInteger(
-        scope: IntegerMinimisationScope,
+        scope: IntegerMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
         warmStarts: [Int: ConvergedOrigin]
@@ -246,7 +246,7 @@ struct GraphMinimisationEncoder: GraphEncoder {
     // MARK: - Float Mode
 
     private mutating func startFloat(
-        scope: FloatMinimisationScope,
+        scope: FloatMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) {

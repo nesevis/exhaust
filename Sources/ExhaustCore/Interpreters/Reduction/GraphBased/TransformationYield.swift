@@ -50,7 +50,7 @@ struct AffineSlack: Comparable, Equatable {
 ///
 /// The scheduler orders scopes by grade: structural yield descending, then value yield descending, then slack ascending (exact preferred over approximate), then estimated probes ascending (cheaper preferred at equal yield). The ``Comparable`` conformance encodes "less than" as "higher priority" so that sorting produces a highest-priority-first queue.
 struct TransformationYield: Comparable, Equatable {
-    /// Sequence positions removed. Zero for minimisation, exchange, and permutation.
+    /// Sequence positions removed. Zero for minimization, exchange, and permutation.
     let structural: Int
 
     /// Bound subtree size that reducing this value would structurally unlock. Zero for removal, replacement, exchange, and permutation.

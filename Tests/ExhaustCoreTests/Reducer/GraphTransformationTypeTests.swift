@@ -274,7 +274,7 @@ struct CompoundTransformationTests {
         )
         let stepB = CompoundStep(
             transformation: GraphTransformation(
-                operation: .removal(.subtree(SubtreeRemovalScope(nodeID: 0, yield: 20))),
+                operation: .remove(.subtree(SubtreeRemovalScope(nodeID: 0, yield: 20))),
                 yield: TransformationYield(
                     structural: 20,
                     value: 0,

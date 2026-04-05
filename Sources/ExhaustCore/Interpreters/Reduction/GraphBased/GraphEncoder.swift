@@ -11,7 +11,7 @@
 ///
 /// The scope defines the search space (graph-computable). The encoder determines how to explore it (predicate-dependent). This separation is the opacity boundary: the scope is constructed by the scheduler from graph metadata; the encoder searches within it using predicate feedback.
 ///
-/// Active-path encoders (removal, minimisation, exchange, permutation) produce candidates via sequence surgery on ``TransformationScope/baseSequence`` at pre-resolved position ranges. Path-changing encoders (replacement with inactive donor) edit ``TransformationScope/tree`` and flatten.
+/// Active-path encoders (removal, minimization, exchange, permutation) produce candidates via sequence surgery on ``TransformationScope/baseSequence`` at pre-resolved position ranges. Path-changing encoders (replacement with inactive donor) edit ``TransformationScope/tree`` and flatten.
 ///
 /// ## Lifecycle
 ///

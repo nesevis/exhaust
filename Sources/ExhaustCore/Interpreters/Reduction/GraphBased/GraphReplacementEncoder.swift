@@ -18,7 +18,7 @@ struct GraphReplacementEncoder: GraphEncoder {
         emitted = false
         candidate = nil
 
-        guard case let .replacement(replacementScope) = scope.transformation.operation else {
+        guard case let .replace(replacementScope) = scope.transformation.operation else {
             return
         }
 

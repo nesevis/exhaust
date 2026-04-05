@@ -22,21 +22,21 @@ struct GraphRemovalEncoder: GraphEncoder {
         let graph = scope.graph
 
         switch scope.transformation.operation {
-        case let .removal(.perParent(perParentScope)):
+        case let .remove(.perParent(perParentScope)):
             candidate = buildPerParentCandidate(
                 scope: perParentScope,
                 sequence: sequence,
                 graph: graph
             )
 
-        case let .removal(.aligned(alignedScope)):
+        case let .remove(.aligned(alignedScope)):
             candidate = buildAlignedCandidate(
                 scope: alignedScope,
                 sequence: sequence,
                 graph: graph
             )
 
-        case let .removal(.subtree(subtreeScope)):
+        case let .remove(.subtree(subtreeScope)):
             candidate = buildSubtreeCandidate(
                 scope: subtreeScope,
                 sequence: sequence,

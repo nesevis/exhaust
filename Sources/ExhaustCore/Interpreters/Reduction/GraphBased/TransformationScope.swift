@@ -123,26 +123,26 @@ struct DescendantPromotionScope {
     let sizeDelta: Int
 }
 
-// MARK: - Minimisation Scopes
+// MARK: - Minimization Scopes
 
-/// Defines the scope of a value minimisation operation.
+/// Defines the scope of a value minimization operation.
 ///
-/// Minimisation drives leaf values toward their semantic simplest without changing graph structure. It is a Kleisli arrow (nondeterministic multi-probe search) in the categorical framework.
-enum MinimisationScope {
+/// Minimization drives leaf values toward their semantic simplest without changing graph structure. It is a Kleisli arrow (nondeterministic multi-probe search) in the categorical framework.
+enum MinimizationScope {
     /// Search integer leaf values toward their reduction targets.
-    case integerLeaves(IntegerMinimisationScope)
+    case integerLeaves(IntegerMinimizationScope)
 
     /// Search float leaf values via the four-stage IEEE 754 pipeline.
-    case floatLeaves(FloatMinimisationScope)
+    case floatLeaves(FloatMinimizationScope)
 
-    /// Joint upstream/downstream minimisation along a dependency edge.
+    /// Joint upstream/downstream minimization along a dependency edge.
     ///
     /// Categorically a Kleisli composition of two Kleisli arrows (Section 7.5 of the categorical framework). Modelled as a single scope rather than a ``CompoundTransformation`` because the upstream and downstream are tightly interleaved at the probe level: each upstream probe spawns a downstream search, and convergence transfers between adjacent upstream probes via the delta-1 structural fingerprint check.
     case kleisliFibre(KleisliFibreScope)
 }
 
-/// Scope for integer leaf value minimisation.
-struct IntegerMinimisationScope {
+/// Scope for integer leaf value minimization.
+struct IntegerMinimizationScope {
     /// Leaf node IDs to minimise, ordered by value yield descending (bind-inner leaves with large bound subtrees first).
     let leafNodeIDs: [Int]
 
@@ -150,8 +150,8 @@ struct IntegerMinimisationScope {
     let batchZeroEligible: Bool
 }
 
-/// Scope for float leaf value minimisation.
-struct FloatMinimisationScope {
+/// Scope for float leaf value minimization.
+struct FloatMinimizationScope {
     /// Float leaf node IDs to minimise.
     let leafNodeIDs: [Int]
 }
@@ -234,6 +234,30 @@ struct SiblingPermutationScope {
 
     /// Groups of same-shaped children that can be swapped. Each inner array contains node IDs of children with the same structural shape.
     let swappableGroups: [[Int]]
+}
+
+// MARK: - Migration Scopes
+
+/// Defines the scope of an element migration between antichain-independent sequences.
+///
+/// Migration moves elements from an earlier sequence to a later sequence to improve shortlex ordering. The source sequence becomes shorter (improving shortlex at earlier positions). The receiver sequence absorbs the elements.
+///
+/// This is a pure structural operation: the graph specifies exactly which elements to move and where. One scope = one probe.
+struct MigrationScope {
+    /// The source sequence node (earlier in position, becomes shorter).
+    let sourceSequenceNodeID: Int
+
+    /// The receiver sequence node (later in position, becomes longer).
+    let receiverSequenceNodeID: Int
+
+    /// Element node IDs to move from source to receiver, ordered by position.
+    let elementNodeIDs: [Int]
+
+    /// Position ranges of the elements being moved.
+    let elementPositionRanges: [ClosedRange<Int>]
+
+    /// Position range of the receiver sequence (elements are appended after its current content).
+    let receiverPositionRange: ClosedRange<Int>
 }
 
 // MARK: - Transformation Scope

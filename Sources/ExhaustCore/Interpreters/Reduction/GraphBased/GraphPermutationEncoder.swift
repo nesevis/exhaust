@@ -18,7 +18,7 @@ struct GraphPermutationEncoder: GraphEncoder {
         emitted = false
         candidate = nil
 
-        guard case let .permutation(.siblingPermutation(permutationScope)) = scope.transformation.operation else {
+        guard case let .permute(.siblingPermutation(permutationScope)) = scope.transformation.operation else {
             return
         }
 

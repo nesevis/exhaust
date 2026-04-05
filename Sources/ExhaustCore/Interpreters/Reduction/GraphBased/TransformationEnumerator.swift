@@ -22,7 +22,7 @@ enum TransformationEnumerator {
 
         transformations.append(contentsOf: removalTransformations(from: graph))
         transformations.append(contentsOf: replacementTransformations(from: graph))
-        transformations.append(contentsOf: minimisationTransformations(
+        transformations.append(contentsOf: minimizationTransformations(
             from: graph,
             innerChildToBind: innerChildToBind
         ))
@@ -46,7 +46,7 @@ enum TransformationEnumerator {
         for scope in graph.alignedRemovalScopes() {
             let estimatedProbes = 2 * ceilLog2(scope.maxAlignedWindow)
             result.append(GraphTransformation(
-                operation: .removal(.aligned(scope)),
+                operation: .remove(.aligned(scope)),
                 yield: TransformationYield(
                     structural: scope.maxYield,
                     value: 0,
@@ -67,7 +67,7 @@ enum TransformationEnumerator {
         for scope in graph.perParentRemovalScopes() {
             let estimatedProbes = 2 * ceilLog2(scope.maxBatch)
             result.append(GraphTransformation(
-                operation: .removal(.perParent(scope)),
+                operation: .remove(.perParent(scope)),
                 yield: TransformationYield(
                     structural: scope.elementNodeIDs.reduce(0) { total, nodeID in
                         total + (graph.nodes[nodeID].positionRange?.count ?? 0)
@@ -89,7 +89,7 @@ enum TransformationEnumerator {
 
         for scope in graph.subtreeRemovalScopes() {
             result.append(GraphTransformation(
-                operation: .removal(.subtree(scope)),
+                operation: .remove(.subtree(scope)),
                 yield: TransformationYield(
                     structural: scope.yield,
                     value: 0,
@@ -119,7 +119,7 @@ enum TransformationEnumerator {
             switch scope {
             case let .selfSimilar(selfSimilarScope):
                 result.append(GraphTransformation(
-                    operation: .replacement(scope),
+                    operation: .replace(scope),
                     yield: TransformationYield(
                         structural: max(0, selfSimilarScope.sizeDelta),
                         value: 0,
@@ -140,7 +140,7 @@ enum TransformationEnumerator {
             case let .branchPivot(pivotScope):
                 let activeSize = graph.nodes[pivotScope.pickNodeID].positionRange?.count ?? 0
                 result.append(GraphTransformation(
-                    operation: .replacement(scope),
+                    operation: .replace(scope),
                     yield: TransformationYield(
                         structural: activeSize,
                         value: 0,
@@ -157,7 +157,7 @@ enum TransformationEnumerator {
 
             case let .descendantPromotion(promotionScope):
                 result.append(GraphTransformation(
-                    operation: .replacement(scope),
+                    operation: .replace(scope),
                     yield: TransformationYield(
                         structural: promotionScope.sizeDelta,
                         value: 0,
@@ -180,15 +180,15 @@ enum TransformationEnumerator {
         return result
     }
 
-    // MARK: - Minimisation
+    // MARK: - Minimization
 
-    private static func minimisationTransformations(
+    private static func minimizationTransformations(
         from graph: ChoiceGraph,
         innerChildToBind: [Int: Int]
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in graph.minimisationScopes() {
+        for scope in graph.minimizationScopes() {
             switch scope {
             case let .integerLeaves(integerScope):
                 let maxValueYield = integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
@@ -209,7 +209,7 @@ enum TransformationEnumerator {
                 let leafCount = integerScope.leafNodeIDs.count
                 let estimatedProbes = 1 + leafCount * ceilLog2(Int(min(maxRange, UInt64(Int.max))))
                 result.append(GraphTransformation(
-                    operation: .minimisation(scope),
+                    operation: .minimize(scope),
                     yield: TransformationYield(
                         structural: 0,
                         value: maxValueYield,
@@ -233,7 +233,7 @@ enum TransformationEnumerator {
                     ))
                 }
                 result.append(GraphTransformation(
-                    operation: .minimisation(scope),
+                    operation: .minimize(scope),
                     yield: TransformationYield(
                         structural: 0,
                         value: maxValueYield,
@@ -251,7 +251,7 @@ enum TransformationEnumerator {
             case let .kleisliFibre(fibreScope):
                 let estimatedProbes = 15 + min(128, fibreScope.boundSubtreeSize)
                 result.append(GraphTransformation(
-                    operation: .minimisation(scope),
+                    operation: .minimize(scope),
                     yield: TransformationYield(
                         structural: 0,
                         value: fibreScope.boundSubtreeSize,
@@ -371,7 +371,7 @@ enum TransformationEnumerator {
             guard case let .siblingPermutation(permScope) = scope else {
                 // PermutationScope currently has only one case.
                 return GraphTransformation(
-                    operation: .permutation(scope),
+                    operation: .permute(scope),
                     yield: TransformationYield(
                         structural: 0,
                         value: 0,
@@ -390,7 +390,7 @@ enum TransformationEnumerator {
                 total + (group.count * (group.count - 1)) / 2
             }
             return GraphTransformation(
-                operation: .permutation(scope),
+                operation: .permute(scope),
                 yield: TransformationYield(
                     structural: 0,
                     value: 0,

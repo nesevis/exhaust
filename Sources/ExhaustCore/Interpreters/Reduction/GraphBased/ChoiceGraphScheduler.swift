@@ -265,16 +265,18 @@ enum ChoiceGraphScheduler {
     /// Selects the appropriate encoder for a graph operation type.
     private static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
-        case .removal:
+        case .remove:
             return GraphRemovalEncoder()
-        case .replacement:
+        case .replace:
             return GraphReplacementEncoder()
-        case .minimisation:
-            return GraphMinimisationEncoder()
+        case .minimize:
+            return GraphMinimizationEncoder()
         case .exchange:
             return GraphExchangeEncoder()
-        case .permutation:
+        case .permute:
             return GraphPermutationEncoder()
+        case .migrate:
+            return GraphMigrationEncoder()
         }
     }
 

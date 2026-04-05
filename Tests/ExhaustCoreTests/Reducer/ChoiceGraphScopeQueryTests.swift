@@ -93,16 +93,16 @@ struct ChoiceGraphScopeQueryTests {
         #expect(scopes[0].maxBatch == 1)
     }
 
-    // MARK: - Minimisation
+    // MARK: - Minimization
 
-    @Test("Integer minimisation scope collects non-zero leaves")
-    func integerMinimisationScope() {
+    @Test("Integer minimization scope collects non-zero leaves")
+    func integerMinimizationScope() {
         let tree = ChoiceTree.group([
             .choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             .choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.minimisationScopes()
+        let scopes = graph.minimizationScopes()
 
         let integerScopes = scopes.filter {
             if case .integerLeaves = $0 { return true }
@@ -115,16 +115,16 @@ struct ChoiceGraphScopeQueryTests {
         }
     }
 
-    @Test("Minimisation scope excludes already-converged leaves")
-    func minimisationSkipsConverged() {
+    @Test("Minimization scope excludes already-converged leaves")
+    func minimizationSkipsConverged() {
         let tree = ChoiceTree.group([
             .choice(.unsigned(0, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             .choice(.unsigned(0, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.minimisationScopes()
+        let scopes = graph.minimizationScopes()
 
-        // Both leaves are at their reduction target (0) — no minimisation scope.
+        // Both leaves are at their reduction target (0) — no minimization scope.
         let integerScopes = scopes.filter {
             if case .integerLeaves = $0 { return true }
             return false
@@ -195,7 +195,7 @@ struct ChoiceGraphScopeQueryTests {
         }
 
         let transformation = GraphTransformation(
-            operation: .removal(.aligned(alignedScope)),
+            operation: .remove(.aligned(alignedScope)),
             yield: TransformationYield(
                 structural: alignedScope.maxYield,
                 value: 0,
@@ -296,7 +296,7 @@ struct ChoiceGraphScopeQueryTests {
         let transformations = TransformationEnumerator.enumerate(from: graph)
 
         let hasAligned = transformations.contains { transformation in
-            if case .removal(.aligned) = transformation.operation { return true }
+            if case .remove(.aligned) = transformation.operation { return true }
             return false
         }
         #expect(hasAligned)

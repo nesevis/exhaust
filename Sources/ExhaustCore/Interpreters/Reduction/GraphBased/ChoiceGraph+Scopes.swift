@@ -302,16 +302,16 @@ extension ChoiceGraph {
     }
 }
 
-// MARK: - Minimisation Scope Queries
+// MARK: - Minimization Scope Queries
 
 extension ChoiceGraph {
 
-    /// Computes minimisation scopes: one integer scope, one float scope, and one Kleisli fibre scope per non-constant reduction edge.
+    /// Computes minimization scopes: one integer scope, one float scope, and one Kleisli fibre scope per non-constant reduction edge.
     ///
-    /// - Returns: All minimisation scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
-    func minimisationScopes() -> [MinimisationScope] {
+    /// - Returns: All minimization scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
+    func minimizationScopes() -> [MinimizationScope] {
         let innerChildToBind = buildInnerChildToBind()
-        var scopes: [MinimisationScope] = []
+        var scopes: [MinimizationScope] = []
 
         // Integer leaves.
         var integerLeafNodeIDs: [Int] = []
@@ -347,14 +347,14 @@ extension ChoiceGraph {
         }
 
         if integerLeafNodeIDs.isEmpty == false {
-            scopes.append(.integerLeaves(IntegerMinimisationScope(
+            scopes.append(.integerLeaves(IntegerMinimizationScope(
                 leafNodeIDs: integerLeafNodeIDs,
                 batchZeroEligible: integerLeafNodeIDs.count > 1
             )))
         }
 
         if floatLeafNodeIDs.isEmpty == false {
-            scopes.append(.floatLeaves(FloatMinimisationScope(
+            scopes.append(.floatLeaves(FloatMinimizationScope(
                 leafNodeIDs: floatLeafNodeIDs
             )))
         }
@@ -376,7 +376,7 @@ extension ChoiceGraph {
         return scopes
     }
 
-    // MARK: - Minimisation Helpers
+    // MARK: - Minimization Helpers
 
     /// Builds an index from inner-child node ID to its controlling bind node ID.
     private func buildInnerChildToBind() -> [Int: Int] {

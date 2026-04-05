@@ -74,7 +74,7 @@ struct SequenceEmptyingSource: ScopeSource {
         )
 
         return GraphTransformation(
-            operation: .removal(.perParent(scope)),
+            operation: .remove(.perParent(scope)),
             yield: TransformationYield(
                 structural: candidate.yield,
                 value: 0,
@@ -171,7 +171,7 @@ struct BatchRemovalSource: ScopeSource {
         )
 
         let transformation = GraphTransformation(
-            operation: .removal(.perParent(scope)),
+            operation: .remove(.perParent(scope)),
             yield: TransformationYield(
                 structural: batchYield,
                 value: 0,
@@ -276,7 +276,7 @@ struct PerElementRemovalSource: ScopeSource {
         )
 
         return GraphTransformation(
-            operation: .removal(.perParent(scope)),
+            operation: .remove(.perParent(scope)),
             yield: TransformationYield(
                 structural: element.positionRange.count,
                 value: 0,
@@ -327,7 +327,7 @@ struct AlignedRemovalSource: ScopeSource {
         // Build the removal scope specifying ALL deletable elements across all siblings.
         // The encoder removes them all in one probe.
         return GraphTransformation(
-            operation: .removal(.aligned(scope)),
+            operation: .remove(.aligned(scope)),
             yield: TransformationYield(
                 structural: scope.maxYield,
                 value: 0,
@@ -412,7 +412,7 @@ struct ReplacementSource: ScopeSource {
         }
 
         return GraphTransformation(
-            operation: .replacement(entry.scope),
+            operation: .replace(entry.scope),
             yield: entry.yield,
             precondition: precondition,
             postcondition: TransformationPostcondition(
@@ -479,7 +479,7 @@ struct PermutationSource: ScopeSource {
         )
 
         return GraphTransformation(
-            operation: .permutation(.siblingPermutation(scope)),
+            operation: .permute(.siblingPermutation(scope)),
             yield: TransformationYield(
                 structural: 0,
                 value: 0,
@@ -496,20 +496,20 @@ struct PermutationSource: ScopeSource {
     }
 }
 
-// MARK: - Minimisation Source
+// MARK: - Minimization Source
 
-/// Emits minimisation scopes for value search. These are search-based — the encoder handles multi-probe internally.
+/// Emits minimization scopes for value search. These are search-based — the encoder handles multi-probe internally.
 ///
 /// Produces one scope per leaf type (integer, float) and one per Kleisli fibre edge, ordered by value yield descending.
-struct MinimisationSource: ScopeSource {
-    private var scopes: [(scope: MinimisationScope, yield: TransformationYield)]
+struct MinimizationSource: ScopeSource {
+    private var scopes: [(scope: MinimizationScope, yield: TransformationYield)]
     private var index = 0
 
     init(graph: ChoiceGraph) {
         let innerChildToBind = Self.buildInnerChildToBind(from: graph)
-        var entries: [(scope: MinimisationScope, yield: TransformationYield)] = []
+        var entries: [(scope: MinimizationScope, yield: TransformationYield)] = []
 
-        for scope in graph.minimisationScopes() {
+        for scope in graph.minimizationScopes() {
             let valueYield: Int
             switch scope {
             case let .integerLeaves(integerScope):
@@ -558,7 +558,7 @@ struct MinimisationSource: ScopeSource {
         index += 1
 
         return GraphTransformation(
-            operation: .minimisation(entry.scope),
+            operation: .minimize(entry.scope),
             yield: entry.yield,
             precondition: .unconditional,
             postcondition: TransformationPostcondition(
@@ -710,10 +710,16 @@ enum ScopeSourceBuilder {
             sources.append(permutationSource)
         }
 
-        // Minimisation (search-based).
-        let minimisationSource = MinimisationSource(graph: graph)
-        if minimisationSource.peekYield != nil {
-            sources.append(minimisationSource)
+        // Minimization (search-based).
+        let minimizationSource = MinimizationSource(graph: graph)
+        if minimizationSource.peekYield != nil {
+            sources.append(minimizationSource)
+        }
+
+        // Migration — move elements between antichain-independent sequences.
+        let migrationSource = MigrationSource(graph: graph)
+        if migrationSource.peekYield != nil {
+            sources.append(migrationSource)
         }
 
         // Exchange (search-based).
@@ -723,5 +729,119 @@ enum ScopeSourceBuilder {
         }
 
         return sources
+    }
+}
+
+// MARK: - Migration Source
+
+/// Emits element migration scopes from earlier sequences to later sequences.
+///
+/// For each pair of antichain-independent sequences where the source is at an earlier position, emits scopes at geometrically decreasing element counts. Moving elements rightward improves shortlex at earlier positions.
+struct MigrationSource: ScopeSource {
+    private var candidates: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int)]
+    private var index = 0
+
+    init(graph: ChoiceGraph) {
+        var entries: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int)] = []
+
+        // Find all sequence node pairs where source is earlier than receiver.
+        var sequenceNodes: [(nodeID: Int, positionRange: ClosedRange<Int>, elementCount: Int, maxLength: Int)] = []
+        for node in graph.nodes {
+            guard case let .sequence(metadata) = node.kind else { continue }
+            guard let range = node.positionRange else { continue }
+            let maxLength = metadata.lengthConstraint.map { Int($0.upperBound) } ?? Int.max
+            sequenceNodes.append((
+                nodeID: node.id,
+                positionRange: range,
+                elementCount: metadata.elementCount,
+                maxLength: maxLength
+            ))
+        }
+        sequenceNodes.sort { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
+
+        // For each pair (source earlier, receiver later), check independence and capacity.
+        for sourceIndex in 0 ..< sequenceNodes.count {
+            let source = sequenceNodes[sourceIndex]
+            guard source.elementCount > 0 else { continue }
+
+            for receiverIndex in (sourceIndex + 1) ..< sequenceNodes.count {
+                let receiver = sequenceNodes[receiverIndex]
+                guard receiver.elementCount < receiver.maxLength else { continue }
+                guard graph.areIndependent(source.nodeID, receiver.nodeID) else { continue }
+
+                // Collect source's element node IDs and ranges.
+                let sourceNode = graph.nodes[source.nodeID]
+                var elementNodeIDs: [Int] = []
+                var elementRanges: [ClosedRange<Int>] = []
+                for childID in sourceNode.children {
+                    guard let childRange = graph.nodes[childID].positionRange else { continue }
+                    elementNodeIDs.append(childID)
+                    elementRanges.append(childRange)
+                }
+
+                guard elementNodeIDs.isEmpty == false else { continue }
+
+                // Yield: the position count of the elements being moved.
+                // Moving them shortens the source (improves shortlex at earlier positions).
+                let totalYield = elementRanges.reduce(0) { $0 + $1.count }
+
+                // Start with moving ALL elements (most drastic).
+                entries.append((
+                    sourceSeqID: source.nodeID,
+                    receiverSeqID: receiver.nodeID,
+                    elementNodeIDs: elementNodeIDs,
+                    elementRanges: elementRanges,
+                    receiverRange: receiver.positionRange,
+                    yield: totalYield
+                ))
+            }
+        }
+
+        // Sort by yield descending.
+        entries.sort { $0.yield > $1.yield }
+        candidates = entries
+    }
+
+    var peekYield: TransformationYield? {
+        guard index < candidates.count else { return nil }
+        return TransformationYield(
+            structural: candidates[index].yield,
+            value: 0,
+            slack: .exact,
+            estimatedProbes: 1
+        )
+    }
+
+    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+        guard index < candidates.count else { return nil }
+        let entry = candidates[index]
+        index += 1
+
+        let scope = MigrationScope(
+            sourceSequenceNodeID: entry.sourceSeqID,
+            receiverSequenceNodeID: entry.receiverSeqID,
+            elementNodeIDs: entry.elementNodeIDs,
+            elementPositionRanges: entry.elementRanges,
+            receiverPositionRange: entry.receiverRange
+        )
+
+        return GraphTransformation(
+            operation: .migrate(scope),
+            yield: TransformationYield(
+                structural: entry.yield,
+                value: 0,
+                slack: .exact,
+                estimatedProbes: 1
+            ),
+            precondition: .all([
+                .sequenceLengthAboveMinimum(sequenceNodeID: entry.sourceSeqID),
+                .nodeActive(entry.receiverSeqID),
+            ]),
+            postcondition: TransformationPostcondition(
+                isStructural: true,
+                invalidatesConvergence: [],
+                enablesRemoval: []
+            )
+        )
     }
 }

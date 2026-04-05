@@ -5,31 +5,33 @@
 
 // MARK: - Graph Operation
 
-/// The five fundamental operations on a ``ChoiceGraph``.
+/// The six fundamental operations on a ``ChoiceGraph``.
 ///
-/// Each case corresponds to a morphism type in OptRed (Sepulveda-Jimenez): removal, replacement, and permutation are exact reductions; minimisation is a Kleisli arrow; exchange is an approximate reduction with affine slack.
+/// Each case corresponds to a morphism type in OptRed (Sepulveda-Jimenez): remove, replace, permute, and migrate are exact reductions; minimize is a Kleisli arrow; exchange is an approximate reduction with affine slack.
 ///
-/// Four of the five operations work within the generator's active execution path (nodes with non-nil position ranges). Only replacement changes the active path — it may bring inactive content into the sequence, requiring tree editing and flattening.
+/// Five of six operations work within the generator's active execution path (nodes with non-nil position ranges). Only replace changes the active path — it may bring inactive content into the sequence, requiring tree editing and flattening.
 enum GraphOperation {
     /// Remove containment-subtrees, reducing sequence length.
-    case removal(RemovalScope)
+    case remove(RemovalScope)
 
     /// Replace one subtree with another along a structural edge. The only path-changing operation — may require tree edit and flatten when the donor is inactive.
-    case replacement(ReplacementScope)
+    case replace(ReplacementScope)
 
     /// Drive leaf values toward semantic simplest.
-    case minimisation(MinimisationScope)
+    case minimize(MinimizationScope)
 
     /// Move magnitude between leaves to enable future operations.
     case exchange(ExchangeScope)
 
     /// Reorder children at a node for shortlex improvement.
-    case permutation(PermutationScope)
+    case permute(PermutationScope)
 
-    /// Whether this operation changes the generator's active execution path.
-    /// Only replacement is path-changing.
+    /// Move elements between antichain-independent sequences to improve shortlex ordering.
+    case migrate(MigrationScope)
+
+    /// Whether this operation changes the generator's active execution path. Only replace is path-changing.
     var isPathChanging: Bool {
-        if case .replacement = self { return true }
+        if case .replace = self { return true }
         return false
     }
 }

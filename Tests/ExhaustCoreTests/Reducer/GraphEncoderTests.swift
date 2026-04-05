@@ -22,7 +22,7 @@ struct GraphEncoderTests {
         let scopes = graph.perParentRemovalScopes()
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
-            operation: .removal(.perParent(firstScope)),
+            operation: .remove(.perParent(firstScope)),
             yield: TransformationYield(
                 structural: firstScope.maxBatch,
                 value: 0,
@@ -45,16 +45,16 @@ struct GraphEncoderTests {
         )
     }
 
-    /// Builds a scope for integer minimisation from a tree.
-    private static func minimisationScope(
+    /// Builds a scope for integer minimization from a tree.
+    private static func minimizationScope(
         tree: ChoiceTree,
         graph: ChoiceGraph
     ) -> TransformationScope? {
         let sequence = ChoiceSequence.flatten(tree)
-        let scopes = graph.minimisationScopes()
+        let scopes = graph.minimizationScopes()
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
-            operation: .minimisation(firstScope),
+            operation: .minimize(firstScope),
             yield: TransformationYield(
                 structural: 0,
                 value: 0,
@@ -128,22 +128,22 @@ struct GraphEncoderTests {
         }
     }
 
-    // MARK: - GraphMinimisationEncoder
+    // MARK: - GraphMinimizationEncoder
 
-    @Test("Minimisation encoder drives non-zero leaves toward zero")
-    func minimisationDrivesLeafTowardZero() {
+    @Test("Minimization encoder drives non-zero leaves toward zero")
+    func minimizationDrivesLeafTowardZero() {
         let tree = ChoiceTree.group([
             .choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             .choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
 
-        guard let scope = Self.minimisationScope(tree: tree, graph: graph) else {
-            Issue.record("No minimisation scope found")
+        guard let scope = Self.minimizationScope(tree: tree, graph: graph) else {
+            Issue.record("No minimization scope found")
             return
         }
 
-        var encoder = GraphMinimisationEncoder()
+        var encoder = GraphMinimizationEncoder()
         encoder.start(scope: scope)
 
         let firstProbe = encoder.nextProbe(lastAccepted: false)
@@ -155,19 +155,19 @@ struct GraphEncoderTests {
         }
     }
 
-    @Test("Minimisation encoder emits convergence records")
-    func minimisationEmitsConvergenceRecords() {
+    @Test("Minimization encoder emits convergence records")
+    func minimizationEmitsConvergenceRecords() {
         let tree = ChoiceTree.group([
             .choice(.unsigned(50, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
 
-        guard let scope = Self.minimisationScope(tree: tree, graph: graph) else {
-            Issue.record("No minimisation scope found")
+        guard let scope = Self.minimizationScope(tree: tree, graph: graph) else {
+            Issue.record("No minimization scope found")
             return
         }
 
-        var encoder = GraphMinimisationEncoder()
+        var encoder = GraphMinimizationEncoder()
         encoder.start(scope: scope)
 
         while let _ = encoder.nextProbe(lastAccepted: false) {}
