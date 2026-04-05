@@ -176,6 +176,77 @@ struct TransformationYieldTests {
     }
 }
 
+// MARK: - withBitPattern Tests
+
+@Suite("ChoiceSequenceValue.withBitPattern")
+struct WithBitPatternTests {
+
+    @Test("Replaces unsigned value preserving tag and range")
+    func unsignedReplacement() {
+        let original = ChoiceSequenceValue.value(.init(
+            choice: ChoiceValue(UInt64(42), tag: .uint64),
+            validRange: 0 ... 100,
+            isRangeExplicit: true
+        ))
+        let result = original.withBitPattern(7)
+        guard case let .value(resultValue) = result else {
+            Issue.record("Expected .value, got \(result)")
+            return
+        }
+        #expect(resultValue.choice.bitPattern64 == 7)
+        #expect(resultValue.choice.tag == .uint64)
+        #expect(resultValue.validRange == 0 ... 100)
+        #expect(resultValue.isRangeExplicit)
+    }
+
+    @Test("Replaces signed value preserving tag")
+    func signedReplacement() {
+        let int16Value = Int16(-100)
+        let original = ChoiceSequenceValue.value(.init(
+            choice: ChoiceValue(int16Value, tag: .int16),
+            validRange: nil,
+            isRangeExplicit: false
+        ))
+        let targetBitPattern = Int16(0).bitPattern64
+        let result = original.withBitPattern(targetBitPattern)
+        guard case let .value(resultValue) = result else {
+            Issue.record("Expected .value, got \(result)")
+            return
+        }
+        #expect(resultValue.choice.tag == .int16)
+        #expect(resultValue.choice.bitPattern64 == targetBitPattern)
+    }
+
+    @Test("Converts .reduced to .value on replacement")
+    func reducedBecomesValue() {
+        let original = ChoiceSequenceValue.reduced(.init(
+            choice: ChoiceValue(UInt64(50), tag: .uint64),
+            validRange: 0 ... 100,
+            isRangeExplicit: true
+        ))
+        let result = original.withBitPattern(0)
+        guard case .value = result else {
+            Issue.record("Expected .value after replacing .reduced, got \(result)")
+            return
+        }
+    }
+
+    @Test("Preserves valid range through replacement")
+    func preservesValidRange() {
+        let original = ChoiceSequenceValue.value(.init(
+            choice: ChoiceValue(UInt64(99), tag: .uint16),
+            validRange: 10 ... 200,
+            isRangeExplicit: true
+        ))
+        let result = original.withBitPattern(15)
+        guard case let .value(resultValue) = result else {
+            Issue.record("Expected .value")
+            return
+        }
+        #expect(resultValue.validRange == 10 ... 200)
+    }
+}
+
 // MARK: - Compound Transformation Tests
 
 @Suite("CompoundTransformation")

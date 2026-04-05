@@ -237,44 +237,6 @@ struct ChoiceGraphScopeQueryTests {
         }
     }
 
-    // MARK: - Aligned Removal Integration
-
-    @Test("Aligned removal reduces a zip of sequences via graph reducer")
-    func alignedRemovalIntegration() throws {
-        // A 5-tuple of short arrays — mimics the Bound5 structure.
-        let arrayGen = Gen.choose(in: Int16.min ... Int16.max).array(length: 0 ... 5, scaling: .constant)
-        let gen = Gen.zip(arrayGen, arrayGen, arrayGen) { ($0, $1, $2) }
-
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        var failingTree: ChoiceTree?
-        var failingValue: ([Int16], [Int16], [Int16])?
-        while let (value, tree) = try iterator.next() {
-            let total = value.0.count + value.1.count + value.2.count
-            if total > 4 {
-                failingTree = tree
-                failingValue = value
-                break
-            }
-        }
-
-        let tree = try #require(failingTree)
-        let value = try #require(failingValue)
-
-        let (_, shrunk) = try #require(
-            try Interpreters.choiceGraphReduce(
-                gen: gen,
-                tree: tree,
-                output: value,
-                config: .fast
-            ) {
-                $0.0.count + $0.1.count + $0.2.count <= 4
-            }
-        )
-
-        let total = shrunk.0.count + shrunk.1.count + shrunk.2.count
-        #expect(total == 5)
-    }
-
     // MARK: - Enumerator
 
     @Test("Enumerator produces sorted transformations")

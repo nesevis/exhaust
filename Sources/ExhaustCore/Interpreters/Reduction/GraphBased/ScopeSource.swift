@@ -214,6 +214,85 @@ struct BatchRemovalSource: ScopeSource {
     }
 }
 
+// MARK: - Per-Element Removal Source
+
+/// Emits individual element removal scopes, one per deletable element.
+///
+/// Orders zero-valued elements first — removing a zero-valued element does not change sums, making it the cheapest deletion for sum-constrained generators. Remaining elements ordered by position.
+struct PerElementRemovalSource: ScopeSource {
+    private var elements: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)]
+    private var index = 0
+
+    init(graph: ChoiceGraph) {
+        var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
+        for scope in graph.perParentRemovalScopes() {
+            for elementNodeID in scope.elementNodeIDs {
+                guard let range = graph.nodes[elementNodeID].positionRange else { continue }
+                let isZero: Bool
+                if case let .chooseBits(metadata) = graph.nodes[elementNodeID].kind {
+                    let target = metadata.value.reductionTarget(in: metadata.validRange)
+                    isZero = metadata.value.bitPattern64 == target
+                } else {
+                    isZero = false
+                }
+                entries.append((
+                    sequenceNodeID: scope.sequenceNodeID,
+                    nodeID: elementNodeID,
+                    positionRange: range,
+                    isZero: isZero
+                ))
+            }
+        }
+        // Zero-valued elements first, then by position.
+        entries.sort { entryA, entryB in
+            if entryA.isZero != entryB.isZero {
+                return entryA.isZero
+            }
+            return entryA.positionRange.lowerBound < entryB.positionRange.lowerBound
+        }
+        elements = entries
+    }
+
+    var peekYield: TransformationYield? {
+        guard index < elements.count else { return nil }
+        return TransformationYield(
+            structural: elements[index].positionRange.count,
+            value: 0,
+            slack: .exact,
+            estimatedProbes: 1
+        )
+    }
+
+    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+        guard index < elements.count else { return nil }
+        let element = elements[index]
+        index += 1
+
+        let scope = PerParentRemovalScope(
+            sequenceNodeID: element.sequenceNodeID,
+            elementNodeIDs: [element.nodeID],
+            maxBatch: 1,
+            maxElementYield: element.positionRange.count
+        )
+
+        return GraphTransformation(
+            operation: .removal(.perParent(scope)),
+            yield: TransformationYield(
+                structural: element.positionRange.count,
+                value: 0,
+                slack: .exact,
+                estimatedProbes: 1
+            ),
+            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: element.sequenceNodeID),
+            postcondition: TransformationPostcondition(
+                isStructural: true,
+                invalidatesConvergence: [],
+                enablesRemoval: []
+            )
+        )
+    }
+}
+
 // MARK: - Aligned Removal Source
 
 /// Emits aligned removal scopes across sibling subsets in yield-descending order.
@@ -605,6 +684,12 @@ enum ScopeSourceBuilder {
             if source.peekYield != nil {
                 sources.append(source)
             }
+        }
+
+        // Per-element removal — individual elements, zero-valued first.
+        let perElementSource = PerElementRemovalSource(graph: graph)
+        if perElementSource.peekYield != nil {
+            sources.append(perElementSource)
         }
 
         // Aligned removal.
