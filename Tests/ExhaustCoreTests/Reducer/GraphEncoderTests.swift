@@ -219,6 +219,7 @@ struct ChoiceGraphReducerIntegrationTests {
                 $0.count <= 2
             }
         )
+        print()
 
         // Minimum counterexample: a 3-element array with all zeros.
         #expect(shrunk.count == 3)

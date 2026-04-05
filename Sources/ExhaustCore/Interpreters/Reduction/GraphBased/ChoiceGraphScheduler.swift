@@ -135,38 +135,43 @@ enum ChoiceGraphScheduler {
             // Build the yield-ordered queue for this cycle.
             let queue = TransformationQueueBuilder.buildQueue(from: graph)
 
-            // Pass 1: structural encoders, ordered by yield. Restart on acceptance.
+            // Pass 1: structural encoders, ordered by yield.
+            // Run all structural encoders. On any acceptance, rebuild the graph
+            // and restart pass 1 within this cycle. Only proceed to pass 2 when
+            // all structural encoders are exhausted.
             let structuralSlots = queue.filter { $0.yield.tier == .structural }
             var structuralProgress = false
+            var restartPass1 = true
 
-            for entry in structuralSlots {
-                let accepted = try state.runSlot(
-                    entry.slot,
-                    encoders: &encoders,
-                    graph: graph,
-                    gen: gen,
-                    property: property
-                )
-                if accepted {
-                    structuralProgress = true
-                    // Structural change — rebuild graph and restart pass 1.
-                    graph = ChoiceGraph.build(from: state.tree)
-                    state.stats.graphRebuilds += 1
-                    break
+            while restartPass1 {
+                restartPass1 = false
+                for entry in structuralSlots {
+                    let accepted = try state.runSlot(
+                        entry.slot,
+                        encoders: &encoders,
+                        graph: graph,
+                        gen: gen,
+                        property: property
+                    )
+                    if accepted {
+                        structuralProgress = true
+                        graph = ChoiceGraph.build(from: state.tree)
+                        state.stats.graphRebuilds += 1
+                        restartPass1 = true
+                        break
+                    }
                 }
             }
 
-            // If structural pass made progress, rebuild graph for value pass.
-            // (If it restarted and broke, the graph was already rebuilt above.)
-            if structuralProgress, state.sequence.count != sequenceBeforeCycle.count {
-                // Graph was rebuilt in the loop above. No additional rebuild needed.
-            } else if state.sequence != sequenceBeforeCycle {
-                // Value-preserving structural change (pivot, swap) — rebuild for value pass.
+            // Pass 2: value encoders, ordered by value yield.
+            // Always runs after pass 1 — value reduction unlocks further
+            // structural deletions in subsequent cycles.
+            if state.sequence != sequenceBeforeCycle {
+                // Structure changed in pass 1 — rebuild graph for value pass.
                 graph = ChoiceGraph.build(from: state.tree)
                 state.stats.graphRebuilds += 1
             }
 
-            // Pass 2: value encoders, ordered by value yield.
             let valueSlots = queue.filter { $0.yield.tier == .value }
             for entry in valueSlots {
                 try state.runSlot(
@@ -209,8 +214,9 @@ enum ChoiceGraphScheduler {
             }
 
             // Rebuild graph next cycle if structure changed.
-            let cycleImproved = state.sequence != sequenceBeforeCycle
-            if state.sequence.count != sequenceBeforeCycle.count {
+            let structurallyImproved = state.sequence.count < sequenceBeforeCycle.count
+            let valueImproved = state.sequence != sequenceBeforeCycle
+            if structurallyImproved {
                 graph = ChoiceGraph.build(from: state.tree)
                 state.stats.graphRebuilds += 1
             }
@@ -221,17 +227,24 @@ enum ChoiceGraphScheduler {
                     event: "graph_cycle_end",
                     metadata: [
                         "cycle": "\(state.cycles)",
-                        "improved": "\(cycleImproved)",
+                        "improved": "\(valueImproved)",
+                        "structural": "\(structurallyImproved)",
                         "seq_len": "\(state.sequence.count)",
                         "total_mats": "\(state.stats.totalMaterializations)",
                     ]
                 )
             }
 
-            if cycleImproved {
+            if structurallyImproved || valueImproved {
                 stallBudget = config.maxStalls
             } else {
                 stallBudget -= 1
+            }
+
+            // Early exit: all value coordinates converged and no structural
+            // progress — the counterexample is at a fixed point.
+            if structurallyImproved == false, allValuesConverged(in: state.sequence, graph: graph) {
+                break
             }
         }
 
@@ -251,6 +264,23 @@ enum ChoiceGraphScheduler {
         return (reduced: (state.sequence, state.output), stats: state.stats)
     }
     // swiftlint:enable function_parameter_count
+
+    /// Returns true when every leaf value is either at its reduction target or has a convergence record indicating it has been searched.
+    private static func allValuesConverged(
+        in sequence: ChoiceSequence,
+        graph: ChoiceGraph
+    ) -> Bool {
+        for nodeID in graph.leafNodes {
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind else { continue }
+            let currentBitPattern = metadata.value.bitPattern64
+            let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
+            if currentBitPattern == targetBitPattern { continue }
+            if metadata.convergedOrigin != nil { continue }
+            return false
+        }
+        return true
+    }
 }
 
 // MARK: - Encoder Set
