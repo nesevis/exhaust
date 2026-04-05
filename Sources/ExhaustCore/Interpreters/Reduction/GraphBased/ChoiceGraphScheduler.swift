@@ -102,7 +102,16 @@ enum ChoiceGraphScheduler {
             cycles += 1
             let sequenceBeforeCycle = sequence
 
-            // Build scope sources from the graph.
+            // Rebuild the graph each cycle to ensure leaf metadata (values,
+            // convergence) reflects the current sequence. Value changes from
+            // the prior cycle (minimization, redistribution) make the graph's
+            // ChooseBitsMetadata stale — exchange sources read distances from
+            // graph metadata, so stale values produce wrong pairs.
+            let oldConvergenceForRebuild = extractAllConvergence(from: graph)
+            graph = ChoiceGraph.build(from: tree)
+            transferConvergence(oldConvergenceForRebuild, to: graph)
+
+            // Build scope sources from the fresh graph.
             var sources = ScopeSourceBuilder.buildSources(
                 from: graph,
                 dirtySequenceNodeIDs: dirtySequenceNodeIDs
@@ -202,8 +211,8 @@ enum ChoiceGraphScheduler {
                             )
                         }
                     } else {
-                        // Value acceptance: mark the affected sequences as dirty.
-                        // Find which sequence nodes contain the changed leaves.
+                        // Value acceptance: mark the affected sequences as dirty
+                        // and clear convergence records on changed leaves.
                         if dirtySequenceNodeIDs == nil {
                             dirtySequenceNodeIDs = Set<Int>()
                         }
@@ -211,6 +220,10 @@ enum ChoiceGraphScheduler {
                             for: transformation,
                             in: graph,
                             dirtySet: &dirtySequenceNodeIDs
+                        )
+                        clearConvergenceOnChangedLeaves(
+                            for: transformation,
+                            in: graph
                         )
                     }
                 }
@@ -838,6 +851,46 @@ enum ChoiceGraphScheduler {
         return anyStale
     }
     // swiftlint:enable function_parameter_count
+
+    // MARK: - Convergence Invalidation
+
+    /// Clears convergence records on leaves whose values were changed by a value transformation.
+    ///
+    /// Exchange (redistribution) changes leaf values but doesn't invalidate convergence records. Without clearing, the minimization source sees "converged" leaves and emits zero probes, even though the values are now different from when convergence was recorded.
+    private static func clearConvergenceOnChangedLeaves(
+        for transformation: GraphTransformation,
+        in graph: ChoiceGraph
+    ) {
+        let leafNodeIDs: [Int]
+        switch transformation.operation {
+        case let .exchange(scope):
+            switch scope {
+            case let .redistribution(redistScope):
+                leafNodeIDs = redistScope.pairs.flatMap { [$0.sourceNodeID, $0.sinkNodeID] }
+            case let .tandem(tandemScope):
+                leafNodeIDs = tandemScope.groups.flatMap(\.leafNodeIDs)
+            }
+        default:
+            return
+        }
+
+        // Clear convergence on each affected leaf by recording a nil-equivalent.
+        // The graph stores convergence on ChooseBitsMetadata — we need to clear it
+        // by removing the convergedOrigin.
+        for leafNodeID in leafNodeIDs {
+            guard case var .chooseBits(metadata) = graph.nodes[leafNodeID].kind else { continue }
+            guard metadata.convergedOrigin != nil else { continue }
+            guard let range = graph.nodes[leafNodeID].positionRange else { continue }
+            metadata.convergedOrigin = nil
+            graph.nodes[leafNodeID] = ChoiceGraphNode(
+                id: graph.nodes[leafNodeID].id,
+                kind: .chooseBits(metadata),
+                positionRange: graph.nodes[leafNodeID].positionRange,
+                children: graph.nodes[leafNodeID].children,
+                parent: graph.nodes[leafNodeID].parent
+            )
+        }
+    }
 
     // MARK: - Dirty Sequence Tracking
 
