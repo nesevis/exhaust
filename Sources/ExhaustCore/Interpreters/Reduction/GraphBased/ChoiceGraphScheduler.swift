@@ -778,11 +778,13 @@ enum ChoiceGraphScheduler {
             guard let origin = metadata.convergedOrigin else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
 
-            // Only check if the floor is above the minimum possible value.
+            // Probe floor - 1 in bit-pattern space. The minimization
+            // encoder searches in bit-pattern space (directional), so
+            // convergence bounds are bit patterns and floor - 1 is the
+            // next adjacent value in the same search direction.
             let minBound: UInt64 = metadata.validRange?.lowerBound ?? 0
             guard origin.bound > minBound else { continue }
 
-            // Construct candidate with floor - 1.
             let probeValue = origin.bound - 1
             var candidate = sequence
             candidate[range.lowerBound] = candidate[range.lowerBound]

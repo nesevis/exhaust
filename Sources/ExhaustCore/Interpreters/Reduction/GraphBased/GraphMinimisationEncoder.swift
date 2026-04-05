@@ -36,10 +36,11 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
     private struct IntegerState {
         var sequence: ChoiceSequence
-        let leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64)]
+        let leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag)]
         var phase: IntegerPhase
         var leafIndex: Int
-        var stepper: BinarySearchStepper?
+        var stepper: DirectionalStepper?
+        var leafPhase: LeafPhase
         var warmStartRecords: [Int: ConvergedOrigin]
         /// The last candidate emitted by nextProbe. When lastAccepted is true, this becomes the new baseline sequence.
         var lastEmittedCandidate: ChoiceSequence?
@@ -50,6 +51,55 @@ struct GraphMinimizationEncoder: GraphEncoder {
     private enum IntegerPhase {
         case batchZero
         case perLeaf
+    }
+
+    /// Directional binary search stepper for bit-pattern-space search.
+    ///
+    /// Downward (currentBP > targetBP): finds the smallest accepted bit pattern. Upward (currentBP < targetBP): finds the largest accepted bit pattern. Matches the directional strategy in Bonsai's ``BinarySearchEncoder``.
+    private enum DirectionalStepper {
+        case downward(BinarySearchStepper)
+        case upward(MaxBinarySearchStepper)
+
+        var bestAccepted: UInt64 {
+            switch self {
+            case let .downward(stepper): stepper.bestAccepted
+            case let .upward(stepper): stepper.bestAccepted
+            }
+        }
+
+        mutating func start() -> UInt64? {
+            switch self {
+            case var .downward(stepper):
+                let value = stepper.start()
+                self = .downward(stepper)
+                return value
+            case var .upward(stepper):
+                let value = stepper.start()
+                self = .upward(stepper)
+                return value
+            }
+        }
+
+        mutating func advance(lastAccepted: Bool) -> UInt64? {
+            switch self {
+            case var .downward(stepper):
+                let value = stepper.advance(lastAccepted: lastAccepted)
+                self = .downward(stepper)
+                return value
+            case var .upward(stepper):
+                let value = stepper.advance(lastAccepted: lastAccepted)
+                self = .upward(stepper)
+                return value
+            }
+        }
+    }
+
+    /// Per-leaf search phase within the binary-search-then-cross-zero pipeline.
+    private enum LeafPhase {
+        /// Binary search in bit-pattern space (directional).
+        case binarySearch
+        /// Cross-zero phase for signed types: walks shortlex keys downward from the converged value to find simpler values across the zero boundary.
+        case crossZero(currentKey: UInt64, lowerBound: UInt64)
     }
 
     // MARK: - Float State
@@ -109,7 +159,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
         graph: ChoiceGraph,
         warmStarts: [Int: ConvergedOrigin]
     ) {
-        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64)] = []
+        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag)] = []
 
         for nodeID in scope.leafNodeIDs {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
@@ -122,7 +172,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
                     sequenceIndex: range.lowerBound,
                     validRange: metadata.validRange,
                     currentBitPattern: current,
-                    targetBitPattern: target
+                    targetBitPattern: target,
+                    typeTag: metadata.typeTag
                 ))
             }
         }
@@ -133,6 +184,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
             phase: scope.batchZeroEligible ? .batchZero : .perLeaf,
             leafIndex: 0,
             stepper: nil,
+            leafPhase: .binarySearch,
             warmStartRecords: warmStarts,
             lastEmittedCandidate: nil,
             batchRejected: false
@@ -176,88 +228,189 @@ struct GraphMinimizationEncoder: GraphEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.leafIndex < state.leafPositions.count {
-            let leaf = state.leafPositions[state.leafIndex]
-
-            if state.stepper == nil {
-                // Initialize stepper for this leaf in SHORTLEX KEY space.
-                // Zigzag encoding maps signed values so that values closer
-                // to zero have smaller keys: 0→0, -1→1, 1→2, -2→3, ...
-                // Binary search in key space naturally finds the simplest
-                // predicate-preserving value across the zero boundary.
-                let currentEntry = state.sequence[leaf.sequenceIndex]
-                guard let currentChoice = currentEntry.value?.choice else {
-                    state.leafIndex += 1
-                    continue
-                }
-                let currentKey = currentChoice.shortlexKey
-                let targetKey: UInt64 = 0 // shortlex key 0 = semantic simplest
-
-                guard currentKey != targetKey else {
-                    state.leafIndex += 1
-                    continue
-                }
-
-                // Stepper searches from targetKey (0) up to currentKey.
-                state.stepper = BinarySearchStepper(lo: targetKey, hi: currentKey)
-
-                guard let firstKey = state.stepper?.start() else {
-                    state.leafIndex += 1
-                    state.stepper = nil
-                    continue
-                }
-
-                let probeChoice = ChoiceValue.fromShortlexKey(firstKey, tag: currentChoice.tag)
-                var candidate = state.sequence
-                candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                    .withBitPattern(probeChoice.bitPattern64)
-                if candidate.shortLexPrecedes(state.sequence) {
-                    state.lastEmittedCandidate = candidate
+            switch state.leafPhase {
+            case .binarySearch:
+                if let candidate = nextBitPatternSearchProbe(
+                    state: &state,
+                    lastAccepted: lastAccepted
+                ) {
                     return candidate
                 }
-            }
-
-            if let nextKey = state.stepper?.advance(lastAccepted: lastAccepted) {
-                guard let currentChoice = state.sequence[leaf.sequenceIndex].value?.choice else {
+                // Binary search converged or was skipped. If leafPhase
+                // was set to crossZero, re-enter the loop for that phase.
+                if case .crossZero = state.leafPhase {
                     continue
                 }
-                let probeChoice = ChoiceValue.fromShortlexKey(nextKey, tag: currentChoice.tag)
-                var candidate = state.sequence
-                candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                    .withBitPattern(probeChoice.bitPattern64)
-                if candidate.shortLexPrecedes(state.sequence) {
-                    state.lastEmittedCandidate = candidate
+                state.leafIndex += 1
+                state.leafPhase = .binarySearch
+
+            case .crossZero(var currentKey, let lowerBound):
+                if let candidate = nextCrossZeroProbe(
+                    state: &state,
+                    currentKey: &currentKey,
+                    lowerBound: lowerBound,
+                    lastAccepted: lastAccepted
+                ) {
+                    state.leafPhase = .crossZero(
+                        currentKey: currentKey,
+                        lowerBound: lowerBound
+                    )
                     return candidate
                 }
-                continue
+                state.leafIndex += 1
+                state.leafPhase = .binarySearch
             }
-
-            // Stepper converged (in shortlex key space) — record convergence.
-            if let bestAcceptedKey = state.stepper?.bestAccepted {
-                // Convert shortlex key back to bit pattern for convergence record.
-                guard let currentChoice = state.sequence[leaf.sequenceIndex].value?.choice else {
-                    state.stepper = nil
-                    state.leafIndex += 1
-                    continue
-                }
-                let convergedChoice = ChoiceValue.fromShortlexKey(bestAcceptedKey, tag: currentChoice.tag)
-                let convergedBitPattern = convergedChoice.bitPattern64
-
-                let signal: ConvergenceSignal =
-                    state.batchRejected && bestAcceptedKey == 0
-                        ? .zeroingDependency
-                        : .monotoneConvergence
-                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
-                    bound: convergedBitPattern,
-                    signal: signal,
-                    configuration: .binarySearchSemanticSimplest,
-                    cycle: 0
-                )
-            }
-            state.stepper = nil
-            state.leafIndex += 1
         }
 
         return nil
+    }
+
+    // MARK: - Bit-Pattern Binary Search
+
+    /// Drives the per-leaf binary search in bit-pattern space.
+    ///
+    /// Returns the next candidate, or nil when the stepper converges. On convergence, records the convergence signal and enters the cross-zero phase for signed types.
+    private mutating func nextBitPatternSearchProbe(
+        state: inout IntegerState,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        let leaf = state.leafPositions[state.leafIndex]
+
+        if state.stepper == nil {
+            // Initialize directional stepper in bit-pattern space.
+            let currentEntry = state.sequence[leaf.sequenceIndex]
+            guard let currentChoice = currentEntry.value?.choice else {
+                return nil
+            }
+            let currentBP = currentChoice.bitPattern64
+            let targetBP = leaf.targetBitPattern
+
+            guard currentBP != targetBP else {
+                return nil
+            }
+
+            if currentBP > targetBP {
+                state.stepper = .downward(
+                    BinarySearchStepper(lo: targetBP, hi: currentBP)
+                )
+            } else {
+                state.stepper = .upward(
+                    MaxBinarySearchStepper(lo: currentBP, hi: targetBP)
+                )
+            }
+
+            guard let firstBP = state.stepper?.start() else {
+                state.stepper = nil
+                return nil
+            }
+
+            var candidate = state.sequence
+            candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
+                .withBitPattern(firstBP)
+            if candidate.shortLexPrecedes(state.sequence) {
+                state.lastEmittedCandidate = candidate
+                return candidate
+            }
+        }
+
+        if let nextBP = state.stepper?.advance(lastAccepted: lastAccepted) {
+            var candidate = state.sequence
+            candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
+                .withBitPattern(nextBP)
+            if candidate.shortLexPrecedes(state.sequence) {
+                state.lastEmittedCandidate = candidate
+                return candidate
+            }
+            // Probe not shortlex-smaller — re-enter to advance again.
+            return nextBitPatternSearchProbe(
+                state: &state,
+                lastAccepted: false
+            )
+        }
+
+        // Stepper converged — record convergence.
+        if let bestAccepted = state.stepper?.bestAccepted {
+            let signal: ConvergenceSignal =
+                state.batchRejected && bestAccepted == leaf.targetBitPattern
+                    ? .zeroingDependency
+                    : .monotoneConvergence
+            convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                bound: bestAccepted,
+                signal: signal,
+                configuration: .binarySearchSemanticSimplest,
+                cycle: 0
+            )
+        }
+        state.stepper = nil
+
+        // Enter cross-zero phase for signed types.
+        if leaf.typeTag.isSigned {
+            guard let currentChoice = state.sequence[leaf.sequenceIndex].value?.choice else {
+                return nil
+            }
+            let currentKey = currentChoice.shortlexKey
+            if currentKey > 0 {
+                let maxCrossZeroProbes: UInt64 = 16
+                let lowerBound = currentKey > maxCrossZeroProbes
+                    ? currentKey - maxCrossZeroProbes
+                    : 0
+                state.leafPhase = .crossZero(
+                    currentKey: currentKey,
+                    lowerBound: lowerBound
+                )
+            }
+        }
+
+        return nil
+    }
+
+    // MARK: - Cross-Zero Phase
+
+    /// Walks shortlex keys downward from the binary search convergence point to find simpler values across the zero boundary.
+    ///
+    /// For signed types, the bit-pattern binary search converges on one side of zero. The cross-zero phase tries values with smaller shortlex keys (closer to zero in magnitude) that may be on the opposite side. Capped at 16 probes per leaf.
+    private mutating func nextCrossZeroProbe(
+        state: inout IntegerState,
+        currentKey: inout UInt64,
+        lowerBound: UInt64,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        let leaf = state.leafPositions[state.leafIndex]
+
+        guard currentKey > lowerBound else { return nil }
+
+        let nextKey = currentKey - 1
+        currentKey = nextKey
+
+        let probeChoice = ChoiceValue.fromShortlexKey(nextKey, tag: leaf.typeTag)
+        let probeBP = probeChoice.bitPattern64
+
+        // Skip if out of valid range.
+        if let validRange = leaf.validRange {
+            guard validRange.contains(probeBP) else {
+                return nextCrossZeroProbe(
+                    state: &state,
+                    currentKey: &currentKey,
+                    lowerBound: lowerBound,
+                    lastAccepted: false
+                )
+            }
+        }
+
+        var candidate = state.sequence
+        candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
+            .withBitPattern(probeBP)
+        guard candidate.shortLexPrecedes(state.sequence) else {
+            return nextCrossZeroProbe(
+                state: &state,
+                currentKey: &currentKey,
+                lowerBound: lowerBound,
+                lastAccepted: false
+            )
+        }
+
+        state.lastEmittedCandidate = candidate
+        return candidate
     }
 
     // MARK: - Float Mode
