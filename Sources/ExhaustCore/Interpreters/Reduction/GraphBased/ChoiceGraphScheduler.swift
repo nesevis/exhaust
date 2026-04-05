@@ -218,6 +218,33 @@ enum ChoiceGraphScheduler {
                 // Continue pulling from the highest-yield source.
             }
 
+            // Staleness detection: after all sources exhausted, probe
+            // converged leaves at floor - 1 to detect stale convergence.
+            if anyAccepted == false, allValuesConverged(in: sequence, graph: graph) {
+                let stalenessResult = try detectStaleness(
+                    sequence: &sequence,
+                    tree: &tree,
+                    output: &output,
+                    graph: graph,
+                    gen: gen,
+                    property: property,
+                    rejectCache: &rejectCache,
+                    stats: &stats,
+                    collectStats: collectStats,
+                    isInstrumented: isInstrumented
+                )
+                if stalenessResult {
+                    anyAccepted = true
+                    // Stale floors cleared — rebuild minimization sources
+                    // and continue without decrementing stall budget.
+                    dirtySequenceNodeIDs = nil
+                    sources = ScopeSourceBuilder.buildSources(
+                        from: graph,
+                        dirtySequenceNodeIDs: dirtySequenceNodeIDs
+                    )
+                }
+            }
+
             // Cycle complete.
             let improved = sequence != sequenceBeforeCycle
             if improved {
@@ -228,7 +255,9 @@ enum ChoiceGraphScheduler {
 
             // Early exit: all values converged and no structural progress.
             let structurallyImproved = sequence.count < sequenceBeforeCycle.count
-            if structurallyImproved == false, allValuesConverged(in: sequence, graph: graph) {
+            if structurallyImproved == false,
+               anyAccepted == false,
+               allValuesConverged(in: sequence, graph: graph) {
                 break
             }
 
@@ -428,23 +457,166 @@ enum ChoiceGraphScheduler {
         return records
     }
 
-    /// Extracts all convergence records from graph nodes.
-    private static func extractAllConvergence(from graph: ChoiceGraph) -> [Int: ConvergedOrigin] {
-        extractWarmStarts(from: graph)
+    /// Extracts all convergence records with leaf metadata for transfer matching.
+    private static func extractAllConvergence(from graph: ChoiceGraph) -> [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)] {
+        var records: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)] = [:]
+        for nodeID in graph.leafNodes {
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard let origin = metadata.convergedOrigin else { continue }
+            guard let range = graph.nodes[nodeID].positionRange else { continue }
+            let isConstant = isInStructurallyConstantContext(nodeID: nodeID, graph: graph)
+            records[range.lowerBound] = (origin: origin, typeTag: metadata.typeTag, validRange: metadata.validRange, isStructurallyConstant: isConstant)
+        }
+        return records
     }
 
     /// Transfers convergence records from old graph positions to matching leaves in the new graph.
+    ///
+    /// Two-tier policy:
+    /// - Leaves in structurally-constant bind subtrees (or outside any bind): match on position + typeTag only. The validRange may have changed but the materialiser handles clamping.
+    /// - Leaves in non-constant bind subtrees: match on position + typeTag + validRange. The subtree was rebuilt — ranges may be different.
     private static func transferConvergence(
-        _ records: [Int: ConvergedOrigin],
+        _ records: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)],
         to graph: ChoiceGraph
     ) {
         for nodeID in graph.leafNodes {
-            guard case .chooseBits = graph.nodes[nodeID].kind else { continue }
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
             guard let oldRecord = records[range.lowerBound] else { continue }
-            graph.recordConvergence([range.lowerBound: oldRecord])
+
+            // Type tag must always match.
+            guard oldRecord.typeTag == metadata.typeTag else { continue }
+
+            // Two-tier: constant context requires only position + typeTag.
+            // Non-constant requires validRange match too.
+            if oldRecord.isStructurallyConstant == false {
+                guard oldRecord.validRange == metadata.validRange else { continue }
+            }
+
+            graph.recordConvergence([range.lowerBound: oldRecord.origin])
         }
     }
+
+    /// Checks whether a leaf node is in a structurally-constant context (all ancestor binds are structurally constant, or not in any bind).
+    private static func isInStructurallyConstantContext(nodeID: Int, graph: ChoiceGraph) -> Bool {
+        var current = nodeID
+        while let parentID = graph.nodes[current].parent {
+            if case let .bind(metadata) = graph.nodes[parentID].kind {
+                if metadata.isStructurallyConstant == false {
+                    // Check if this leaf is in the bound subtree (not the inner).
+                    let boundChildID = graph.nodes[parentID].children[metadata.boundChildIndex]
+                    if let boundRange = graph.nodes[boundChildID].positionRange,
+                       let leafRange = graph.nodes[nodeID].positionRange,
+                       boundRange.contains(leafRange.lowerBound) {
+                        return false
+                    }
+                }
+            }
+            current = parentID
+        }
+        return true
+    }
+
+    // MARK: - Staleness Detection
+
+    // swiftlint:disable function_parameter_count
+    /// Probes each converged leaf at `floor - 1` to detect stale convergence bounds.
+    ///
+    /// If the property still fails at floor - 1, the convergence record was stale — the previous search stopped too early. Clears the stale record so minimization can re-enter for that leaf.
+    ///
+    /// - Returns: True if any stale floors were found and cleared.
+    private static func detectStaleness<Output>(
+        sequence: inout ChoiceSequence,
+        tree: inout ChoiceTree,
+        output: inout Output,
+        graph: ChoiceGraph,
+        gen: ReflectiveGenerator<Output>,
+        property: @escaping (Output) -> Bool,
+        rejectCache: inout Set<UInt64>,
+        stats: inout ReductionStats,
+        collectStats: Bool,
+        isInstrumented: Bool
+    ) throws -> Bool {
+        var anyStale = false
+
+        for nodeID in graph.leafNodes {
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard let origin = metadata.convergedOrigin else { continue }
+            guard let range = graph.nodes[nodeID].positionRange else { continue }
+
+            // Only check if the floor is above the minimum possible value.
+            let minBound: UInt64 = metadata.validRange?.lowerBound ?? 0
+            guard origin.bound > minBound else { continue }
+
+            // Construct candidate with floor - 1.
+            let probeValue = origin.bound - 1
+            var candidate = sequence
+            candidate[range.lowerBound] = candidate[range.lowerBound]
+                .withBitPattern(probeValue)
+            guard candidate.shortLexPrecedes(sequence) else { continue }
+
+            let probeHash = ZobristHash.incrementalHash(
+                baseHash: ZobristHash.hash(of: sequence),
+                baseSequence: sequence,
+                probe: candidate
+            )
+            if rejectCache.contains(probeHash) { continue }
+
+            let hasBind = sequence.contains { entry in
+                if case .bind = entry { return true }
+                return false
+            }
+            let decoder: SequenceDecoder = hasBind
+                ? .guided(fallbackTree: tree)
+                : .exact()
+
+            var filterObservations: [UInt64: FilterObservation] = [:]
+
+            if let result = try decoder.decode(
+                candidate: candidate,
+                gen: gen,
+                tree: tree,
+                originalSequence: sequence,
+                property: property,
+                filterObservations: &filterObservations,
+                precomputedHash: probeHash
+            ) {
+                sequence = result.sequence
+                tree = result.tree
+                output = result.output
+                anyStale = true
+
+                // Clear the stale convergence record.
+                graph.recordConvergence([range.lowerBound: ConvergedOrigin(
+                    bound: probeValue,
+                    signal: .monotoneConvergence,
+                    configuration: origin.configuration,
+                    cycle: origin.cycle
+                )])
+
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .reducer,
+                        event: "staleness_detected",
+                        metadata: [
+                            "position": "\(range.lowerBound)",
+                            "old_floor": "\(origin.bound)",
+                            "new_floor": "\(probeValue)",
+                        ]
+                    )
+                }
+            } else {
+                rejectCache.insert(probeHash)
+            }
+
+            if collectStats {
+                stats.totalMaterializations += 1
+            }
+        }
+
+        return anyStale
+    }
+    // swiftlint:enable function_parameter_count
 
     // MARK: - Dirty Sequence Tracking
 

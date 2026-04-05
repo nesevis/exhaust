@@ -43,6 +43,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
         var warmStartRecords: [Int: ConvergedOrigin]
         /// The last candidate emitted by nextProbe. When lastAccepted is true, this becomes the new baseline sequence.
         var lastEmittedCandidate: ChoiceSequence?
+        /// Whether the batch-zero probe was rejected. When true and a leaf individually converges at its target, the convergence signal is `zeroingDependency` instead of `monotoneConvergence`.
+        var batchRejected: Bool
     }
 
     private enum IntegerPhase {
@@ -132,7 +134,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
             leafIndex: 0,
             stepper: nil,
             warmStartRecords: warmStarts,
-            lastEmittedCandidate: nil
+            lastEmittedCandidate: nil,
+            batchRejected: false
         ))
     }
 
@@ -159,7 +162,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
-            // Batch zero rejected — fall through to per-leaf.
+            // Batch zero rejected — per-leaf convergence at target indicates dependency.
+            state.batchRejected = true
             return nextIntegerProbe(state: &state, lastAccepted: false)
 
         case .perLeaf:
@@ -229,9 +233,16 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
             // Stepper converged — record convergence and move to next leaf.
             if let bestAccepted = state.stepper?.bestAccepted {
+                // If batch zeroing was rejected but this leaf individually
+                // converged at its target, it has zeroing dependencies —
+                // it can only reach target when other coordinates change.
+                let signal: ConvergenceSignal =
+                    state.batchRejected && bestAccepted == leaf.targetBitPattern
+                        ? .zeroingDependency
+                        : .monotoneConvergence
                 convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
                     bound: bestAccepted,
-                    signal: .monotoneConvergence,
+                    signal: signal,
                     configuration: .binarySearchSemanticSimplest,
                     cycle: 0
                 )
