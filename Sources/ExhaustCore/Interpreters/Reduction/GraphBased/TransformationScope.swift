@@ -103,12 +103,20 @@ struct SelfSimilarReplacementScope {
 }
 
 /// Scope for branch pivot at a pick node.
+///
+/// Each scope targets a single alternative branch. The scope query emits one scope per alternative, ordered by estimated complexity (simplest alternative first). The encoder locates the pick site in the tree by ``siteID``, moves the `.selected` marker to the target branch, and flattens.
 struct BranchPivotScope {
     /// The pick node.
     let pickNodeID: Int
 
-    /// Alternative branch IDs to try, ordered by estimated yield.
-    let candidateBranchIDs: [UInt64]
+    /// Site identifier for locating the pick site in the tree.
+    let siteID: UInt64
+
+    /// The currently selected branch identifier.
+    let selectedID: UInt64
+
+    /// The alternative branch to pivot to.
+    let targetBranchID: UInt64
 }
 
 /// Scope for direct descendant promotion.

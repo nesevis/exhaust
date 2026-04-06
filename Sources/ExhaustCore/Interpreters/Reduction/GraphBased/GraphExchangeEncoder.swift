@@ -33,7 +33,14 @@ struct GraphExchangeEncoder: GraphEncoder {
         var lastEmittedCandidate: ChoiceSequence?
         /// Whether the full-delta probe has been tried for the current pair.
         var triedFullDelta: Bool
+        /// Whether any probe was accepted during the current pass.
+        var anyAcceptedThisPass: Bool
+        /// Number of completed passes (capped at ``maxPasses`` to bound work).
+        var passCount: Int
     }
+
+    /// Maximum number of redistribution passes before the encoder stops re-evaluating pairs.
+    private static let maxPasses = 3
 
     // MARK: - GraphEncoder
 
@@ -63,6 +70,7 @@ struct GraphExchangeEncoder: GraphEncoder {
             // Update baseline on acceptance.
             if lastAccepted, let accepted = state.lastEmittedCandidate {
                 sequence = accepted
+                state.anyAcceptedThisPass = true
             }
             state.lastEmittedCandidate = nil
             let result = nextRedistributionProbe(state: &state, lastAccepted: lastAccepted)
@@ -113,7 +121,9 @@ struct GraphExchangeEncoder: GraphEncoder {
             stepper: nil,
             didEmitCandidate: false,
             lastEmittedCandidate: nil,
-            triedFullDelta: false
+            triedFullDelta: false,
+            anyAcceptedThisPass: false,
+            passCount: 0
         ))
     }
 
@@ -212,6 +222,18 @@ struct GraphExchangeEncoder: GraphEncoder {
             state.stepper = nil
             state.pairIndex += 1
             state.triedFullDelta = false
+        }
+
+        // All pairs exhausted. If any were accepted this pass and we
+        // haven't hit the pass cap, reset for another pass — prior
+        // acceptances may have created new headroom for earlier pairs.
+        state.passCount += 1
+        if state.anyAcceptedThisPass, state.passCount < Self.maxPasses {
+            state.pairIndex = 0
+            state.triedFullDelta = false
+            state.stepper = nil
+            state.anyAcceptedThisPass = false
+            return nextRedistributionProbe(state: &state, lastAccepted: false)
         }
 
         return nil

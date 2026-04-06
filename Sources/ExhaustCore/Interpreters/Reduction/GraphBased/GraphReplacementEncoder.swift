@@ -75,17 +75,77 @@ struct GraphReplacementEncoder: GraphEncoder {
         return candidate
     }
 
-    /// Edits the tree to pivot to an alternative branch and flattens.
+    /// Locates the pick site in the tree by siteID, moves `.selected` to the target branch, and flattens.
     private func buildBranchPivotCandidate(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
         tree: ChoiceTree
     ) -> ChoiceSequence? {
-        // Branch pivot requires tree editing — the alternative branches are inactive (nil position range). Stub: returns nil until tree-level pivot manipulation is implemented.
-        _ = scope
-        _ = graph
-        _ = tree
+        // Walk the tree to find the pick site group matching scope.siteID.
+        guard let fingerprint = findPickSiteFingerprint(
+            in: tree,
+            siteID: scope.siteID,
+            selectedID: scope.selectedID
+        ) else {
+            return nil
+        }
+
+        guard case let .group(elements, isOpaque) = tree[fingerprint] else {
+            return nil
+        }
+        guard let selectedIndex = elements.firstIndex(where: \.isSelected) else {
+            return nil
+        }
+
+        // Find the alternative branch matching the target ID.
+        guard let targetIndex = elements.firstIndex(where: { element in
+            switch element {
+            case let .branch(_, _, branchID, _, _):
+                branchID == scope.targetBranchID
+            default:
+                false
+            }
+        }) else {
+            return nil
+        }
+
+        // Move .selected: unwrap from current, wrap target.
+        var candidateElements = elements
+        candidateElements[selectedIndex] = elements[selectedIndex].unwrapped
+        candidateElements[targetIndex] = .selected(elements[targetIndex])
+
+        var candidateTree = tree
+        candidateTree[fingerprint] = .group(candidateElements, isOpaque: isOpaque)
+        let candidateSequence = ChoiceSequence(candidateTree)
+
+        // Accept candidates that are shortlex-equal or better. With
+        // branch-transparent shortlex, pivoting between same-arity
+        // branches may produce equal sequences — the property check
+        // determines whether the alternative is useful.
+        guard sequence.shortLexPrecedes(candidateSequence) == false else {
+            return nil
+        }
+        return candidateSequence
+    }
+
+    /// Walks the tree depth-first to find the `.group(...)` whose selected branch matches the given siteID and selectedID.
+    private func findPickSiteFingerprint(
+        in tree: ChoiceTree,
+        siteID: UInt64,
+        selectedID: UInt64
+    ) -> Fingerprint? {
+        for element in tree.walk() {
+            guard case let .group(array, _) = element.node else { continue }
+            for child in array {
+                if case let .selected(.branch(childSiteID, _, childID, _, _)) = child,
+                   childSiteID == siteID,
+                   childID == selectedID
+                {
+                    return element.fingerprint
+                }
+            }
+        }
         return nil
     }
 

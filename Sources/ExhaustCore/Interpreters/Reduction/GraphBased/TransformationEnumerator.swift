@@ -145,7 +145,7 @@ enum TransformationEnumerator {
                         structural: activeSize,
                         value: 0,
                         slack: .exact,
-                        estimatedProbes: pivotScope.candidateBranchIDs.count
+                        estimatedProbes: 1
                     ),
                     precondition: .nodeActive(pivotScope.pickNodeID),
                     postcondition: TransformationPostcondition(

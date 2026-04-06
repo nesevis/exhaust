@@ -40,13 +40,20 @@ struct GraphMinimizationEncoder: GraphEncoder {
         var phase: IntegerPhase
         var leafIndex: Int
         var stepper: DirectionalStepper?
-        var leafPhase: LeafPhase
         var warmStartRecords: [Int: ConvergedOrigin]
         /// The last candidate emitted by nextProbe. When lastAccepted is true, this becomes the new baseline sequence.
         var lastEmittedCandidate: ChoiceSequence?
         /// Whether the batch-zero probe was rejected. When true and a leaf individually converges at its target, the convergence signal is `zeroingDependency` instead of `monotoneConvergence`.
         var batchRejected: Bool
+        /// Linear scan values for non-monotone gap recovery, or nil when inactive.
+        var scanValues: [UInt64]?
+        var scanIndex: Int
+        /// Best accepted value during the linear scan phase.
+        var scanBestAccepted: UInt64?
     }
+
+    /// Maximum remaining range size for which inline linear scan is emitted after binary search convergence.
+    private static let linearScanThreshold: UInt64 = 64
 
     private enum IntegerPhase {
         case batchZero
@@ -94,13 +101,6 @@ struct GraphMinimizationEncoder: GraphEncoder {
         }
     }
 
-    /// Per-leaf search phase within the binary-search-then-cross-zero pipeline.
-    private enum LeafPhase {
-        /// Binary search in bit-pattern space (directional).
-        case binarySearch
-        /// Cross-zero phase for signed types: walks shortlex keys downward from the converged value to find simpler values across the zero boundary.
-        case crossZero(currentKey: UInt64, lowerBound: UInt64)
-    }
 
     // MARK: - Float State
 
@@ -184,10 +184,12 @@ struct GraphMinimizationEncoder: GraphEncoder {
             phase: scope.batchZeroEligible ? .batchZero : .perLeaf,
             leafIndex: 0,
             stepper: nil,
-            leafPhase: .binarySearch,
             warmStartRecords: warmStarts,
             lastEmittedCandidate: nil,
-            batchRejected: false
+            batchRejected: false,
+            scanValues: nil,
+            scanIndex: 0,
+            scanBestAccepted: nil
         ))
     }
 
@@ -228,38 +230,34 @@ struct GraphMinimizationEncoder: GraphEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.leafIndex < state.leafPositions.count {
-            switch state.leafPhase {
-            case .binarySearch:
-                if let candidate = nextBitPatternSearchProbe(
+            // Linear scan phase (set up by binary search on non-monotone gap).
+            if state.scanValues != nil {
+                if let candidate = nextLinearScanProbe(
                     state: &state,
                     lastAccepted: lastAccepted
                 ) {
                     return candidate
                 }
-                // Binary search converged or was skipped. If leafPhase
-                // was set to crossZero, re-enter the loop for that phase.
-                if case .crossZero = state.leafPhase {
-                    continue
-                }
+                // Scan exhausted — record convergence and move to next leaf.
+                finishLinearScan(state: &state)
                 state.leafIndex += 1
-                state.leafPhase = .binarySearch
-
-            case .crossZero(var currentKey, let lowerBound):
-                if let candidate = nextCrossZeroProbe(
-                    state: &state,
-                    currentKey: &currentKey,
-                    lowerBound: lowerBound,
-                    lastAccepted: lastAccepted
-                ) {
-                    state.leafPhase = .crossZero(
-                        currentKey: currentKey,
-                        lowerBound: lowerBound
-                    )
-                    return candidate
-                }
-                state.leafIndex += 1
-                state.leafPhase = .binarySearch
+                continue
             }
+
+            // Binary search phase.
+            if let candidate = nextBitPatternSearchProbe(
+                state: &state,
+                lastAccepted: lastAccepted
+            ) {
+                return candidate
+            }
+
+            // Binary search converged. If scan was set up, loop back
+            // to drain it. Otherwise move to next leaf.
+            if state.scanValues != nil {
+                continue
+            }
+            state.leafIndex += 1
         }
 
         return nil
@@ -289,13 +287,22 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 return nil
             }
 
+            // Warm-start: if a prior cycle converged this leaf with the
+            // same encoder configuration, narrow the search bounds to
+            // skip the already-explored region.
+            let warmStart = state.warmStartRecords[leaf.sequenceIndex]
+            let validWarmStart = warmStart?.configuration == .binarySearchSemanticSimplest
+                ? warmStart : nil
+
             if currentBP > targetBP {
+                let effectiveLo = validWarmStart?.bound ?? targetBP
                 state.stepper = .downward(
-                    BinarySearchStepper(lo: targetBP, hi: currentBP)
+                    BinarySearchStepper(lo: effectiveLo, hi: currentBP)
                 )
             } else {
+                let effectiveHi = validWarmStart?.bound ?? targetBP
                 state.stepper = .upward(
-                    MaxBinarySearchStepper(lo: currentBP, hi: targetBP)
+                    MaxBinarySearchStepper(lo: currentBP, hi: effectiveHi)
                 )
             }
 
@@ -328,89 +335,107 @@ struct GraphMinimizationEncoder: GraphEncoder {
             )
         }
 
-        // Stepper converged — record convergence.
+        // Stepper converged — check for non-monotone gap.
         if let bestAccepted = state.stepper?.bestAccepted {
-            let signal: ConvergenceSignal =
-                state.batchRejected && bestAccepted == leaf.targetBitPattern
-                    ? .zeroingDependency
-                    : .monotoneConvergence
-            convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
-                bound: bestAccepted,
-                signal: signal,
-                configuration: .binarySearchSemanticSimplest,
-                cycle: 0
-            )
-        }
-        state.stepper = nil
+            let remaining: UInt64 = bestAccepted > leaf.targetBitPattern
+                ? bestAccepted - leaf.targetBitPattern
+                : leaf.targetBitPattern - bestAccepted
 
-        // Enter cross-zero phase for signed types.
-        if leaf.typeTag.isSigned {
-            guard let currentChoice = state.sequence[leaf.sequenceIndex].value?.choice else {
-                return nil
-            }
-            let currentKey = currentChoice.shortlexKey
-            if currentKey > 0 {
-                let maxCrossZeroProbes: UInt64 = 16
-                let lowerBound = currentKey > maxCrossZeroProbes
-                    ? currentKey - maxCrossZeroProbes
-                    : 0
-                state.leafPhase = .crossZero(
-                    currentKey: currentKey,
-                    lowerBound: lowerBound
+            if state.batchRejected && bestAccepted == leaf.targetBitPattern {
+                // Leaf converged at target but batch-zero failed — zeroing dependency.
+                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                    bound: bestAccepted,
+                    signal: .zeroingDependency,
+                    configuration: .binarySearchSemanticSimplest,
+                    cycle: 0
+                )
+            } else if remaining > 0, remaining <= Self.linearScanThreshold {
+                // Non-monotone gap: binary search couldn't reach the target
+                // but the gap is small enough to scan exhaustively.
+                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                    bound: bestAccepted,
+                    signal: .nonMonotoneGap(remainingRange: Int(remaining)),
+                    configuration: .binarySearchSemanticSimplest,
+                    cycle: 0
+                )
+                // Set up inline linear scan of [targetBP, bestAccepted).
+                let scanLo = min(leaf.targetBitPattern, bestAccepted)
+                let scanHi = max(leaf.targetBitPattern, bestAccepted)
+                var values: [UInt64] = []
+                values.reserveCapacity(Int(remaining))
+                var current = scanLo
+                while current < scanHi {
+                    values.append(current)
+                    current += 1
+                }
+                state.scanValues = values
+                state.scanIndex = 0
+                state.scanBestAccepted = nil
+            } else {
+                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                    bound: bestAccepted,
+                    signal: .monotoneConvergence,
+                    configuration: .binarySearchSemanticSimplest,
+                    cycle: 0
                 )
             }
         }
-
+        state.stepper = nil
         return nil
     }
 
-    // MARK: - Cross-Zero Phase
+    // MARK: - Linear Scan Recovery
 
-    /// Walks shortlex keys downward from the binary search convergence point to find simpler values across the zero boundary.
-    ///
-    /// For signed types, the bit-pattern binary search converges on one side of zero. The cross-zero phase tries values with smaller shortlex keys (closer to zero in magnitude) that may be on the opposite side. Capped at 16 probes per leaf.
-    private mutating func nextCrossZeroProbe(
+    /// Scans values in the non-monotone gap to find a lower floor than binary search achieved.
+    private mutating func nextLinearScanProbe(
         state: inout IntegerState,
-        currentKey: inout UInt64,
-        lowerBound: UInt64,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         let leaf = state.leafPositions[state.leafIndex]
 
-        guard currentKey > lowerBound else { return nil }
-
-        let nextKey = currentKey - 1
-        currentKey = nextKey
-
-        let probeChoice = ChoiceValue.fromShortlexKey(nextKey, tag: leaf.typeTag)
-        let probeBP = probeChoice.bitPattern64
-
-        // Skip if out of valid range.
-        if let validRange = leaf.validRange {
-            guard validRange.contains(probeBP) else {
-                return nextCrossZeroProbe(
-                    state: &state,
-                    currentKey: &currentKey,
-                    lowerBound: lowerBound,
-                    lastAccepted: false
-                )
+        // Track acceptance of previous scan probe.
+        if lastAccepted, state.scanIndex > 0 {
+            let acceptedValue = state.scanValues![state.scanIndex - 1]
+            if state.scanBestAccepted == nil || acceptedValue < state.scanBestAccepted! {
+                state.scanBestAccepted = acceptedValue
             }
         }
 
+        guard let scanValues = state.scanValues else { return nil }
+        guard state.scanIndex < scanValues.count else { return nil }
+
+        let probeValue = scanValues[state.scanIndex]
+        state.scanIndex += 1
+
         var candidate = state.sequence
         candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-            .withBitPattern(probeBP)
+            .withBitPattern(probeValue)
+
         guard candidate.shortLexPrecedes(state.sequence) else {
-            return nextCrossZeroProbe(
-                state: &state,
-                currentKey: &currentKey,
-                lowerBound: lowerBound,
-                lastAccepted: false
-            )
+            // Value doesn't improve shortlex — skip to next.
+            return nextLinearScanProbe(state: &state, lastAccepted: false)
         }
 
         state.lastEmittedCandidate = candidate
         return candidate
+    }
+
+    /// Records the final convergence from a completed linear scan.
+    private mutating func finishLinearScan(state: inout IntegerState) {
+        let leaf = state.leafPositions[state.leafIndex]
+        let foundLowerFloor = state.scanBestAccepted != nil
+        let bound = state.scanBestAccepted
+            ?? convergenceStore[leaf.sequenceIndex]?.bound
+            ?? leaf.targetBitPattern
+        convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+            bound: bound,
+            signal: .scanComplete(foundLowerFloor: foundLowerFloor),
+            configuration: .linearScan,
+            cycle: 0
+        )
+        state.scanValues = nil
+        state.scanIndex = 0
+        state.scanBestAccepted = nil
     }
 
     // MARK: - Float Mode

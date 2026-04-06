@@ -247,17 +247,35 @@ extension ChoiceGraph {
             }
         }
 
-        // Branch pivot: pick nodes with multiple branches.
+        // Branch pivot: one scope per alternative branch at each pick node,
+        // ordered by estimated subtree size ascending (simplest first).
         for node in nodes {
             guard case let .pick(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
             guard metadata.branchIDs.count >= 2 else { continue }
-            let alternatives = metadata.branchIDs.filter { $0 != metadata.selectedID }
-            guard alternatives.isEmpty == false else { continue }
-            scopes.append(.branchPivot(BranchPivotScope(
-                pickNodeID: node.id,
-                candidateBranchIDs: alternatives
-            )))
+            guard node.children.count == metadata.branchIDs.count else { continue }
+
+            // Build (branchID, subtreeSize) pairs for non-selected branches.
+            var alternatives: [(branchID: UInt64, subtreeSize: Int)] = []
+            for index in 0 ..< metadata.branchIDs.count {
+                let branchID = metadata.branchIDs[index]
+                guard branchID != metadata.selectedID else { continue }
+                let childNodeID = node.children[index]
+                alternatives.append((
+                    branchID: branchID,
+                    subtreeSize: subtreeNodeCount(rootID: childNodeID)
+                ))
+            }
+            alternatives.sort { $0.subtreeSize < $1.subtreeSize }
+
+            for alternative in alternatives {
+                scopes.append(.branchPivot(BranchPivotScope(
+                    pickNodeID: node.id,
+                    siteID: metadata.siteID,
+                    selectedID: metadata.selectedID,
+                    targetBranchID: alternative.branchID
+                )))
+            }
         }
 
         // Descendant promotion: pairs (ancestor pick, descendant pick) with
@@ -289,6 +307,17 @@ extension ChoiceGraph {
         }
 
         return scopes
+    }
+
+    /// Counts the total number of graph nodes in the subtree rooted at the given node.
+    private func subtreeNodeCount(rootID: Int) -> Int {
+        var count = 0
+        var stack = [rootID]
+        while let current = stack.popLast() {
+            count += 1
+            stack.append(contentsOf: nodes[current].children)
+        }
+        return count
     }
 
     /// Checks whether `descendant` is reachable from `ancestor` via containment edges (parent-child chain).
