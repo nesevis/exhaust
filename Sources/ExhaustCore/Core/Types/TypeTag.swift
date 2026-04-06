@@ -93,6 +93,13 @@ public extension TypeTag {
         }
     }
 
+    /// The full bit-pattern range reachable by the underlying type.
+    ///
+    /// Equivalent to `Underlying.bitPatternRange` — bridges the static protocol requirement through this tag's type identity. Used by encoders to detect when a value's declared domain equals the natural type width, enabling modular bit-pattern arithmetic without encoder-level range validation.
+    var bitPatternRange: ClosedRange<UInt64> {
+        type(of: makeConvertible(bitPattern64: 0)).bitPatternRange
+    }
+
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {

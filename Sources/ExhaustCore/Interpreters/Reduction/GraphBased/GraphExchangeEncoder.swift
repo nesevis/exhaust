@@ -432,7 +432,15 @@ struct GraphExchangeEncoder: GraphEncoder {
 
         // Same-tag integer path.
         //
-        // When both sides' declared domain equals the natural type width, we
+        // The gate is on the sink, not the source. The source moves toward
+        // its own reduction target — a contraction inside `[min(currentBP,
+        // targetBP), max(currentBP, targetBP)]` — so its new bp never leaves
+        // the source's own valid range regardless of whether that range is
+        // narrow or full-width. The sink is the side that can escape its
+        // valid range as it absorbs the opposing delta, so the sink is the
+        // side that needs modular wraparound to remain representable.
+        //
+        // When the sink's declared domain equals the natural type width, we
         // use bit-pattern modular arithmetic with a width-aware mask. This
         // matches the wrapping arithmetic (`&+`/`&-`) the property under test
         // likely uses for the same type and lets redistribution reach
@@ -441,15 +449,12 @@ struct GraphExchangeEncoder: GraphEncoder {
         // `bound5-redistribution-wraparound-diagnosis.md` for the motivating
         // trace.
         //
-        // When either side carries an explicit narrow range, we retain
-        // semantic Int64 arithmetic with `bitPattern(fromSemantic:tag:)`
-        // rejecting out-of-range results — the encoder must honor the user's
-        // declared domain, not the type's natural width.
-        let canWrapModulo = sourceValue.allowsModularArithmetic
-            && sinkValue.allowsModularArithmetic
-
-        if canWrapModulo {
-            let mask = sourceTag.bitPatternRange.upperBound
+        // When the sink carries an explicit narrow range, we retain semantic
+        // Int64 arithmetic with `bitPattern(fromSemantic:tag:)` rejecting
+        // out-of-range results — the encoder must honor the user's declared
+        // domain for the sink, not the type's natural width.
+        if sinkValue.allowsModularArithmetic {
+            let mask = sinkValue.choice.tag.bitPatternRange.upperBound
             let sourceBP = sourceValue.choice.bitPattern64
             let sinkBP = sinkValue.choice.bitPattern64
             let targetBP = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
@@ -470,7 +475,7 @@ struct GraphExchangeEncoder: GraphEncoder {
             return candidate
         }
 
-        // Narrow-range fallback: semantic Int64 arithmetic.
+        // Narrow-sink fallback: semantic Int64 arithmetic.
         guard delta <= UInt64(Int64.max) else { return nil }
 
         let sourceSemanticValue = Self.semanticValue(sourceValue.choice)

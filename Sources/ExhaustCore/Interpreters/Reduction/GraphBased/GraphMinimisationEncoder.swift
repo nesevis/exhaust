@@ -548,6 +548,37 @@ struct GraphMinimizationEncoder: GraphEncoder {
         let currentKey = currentEntry.choice.shortlexKey
         guard currentKey > 0 else { return false }
 
+        // Micro-opt 1: skip cross-zero when `value(0)` is outside an explicit
+        // valid range. Every cross-zero probe walks shortlex keys near zero,
+        // and if zero itself is out of range the walk's near neighbors are
+        // almost certainly out too — the materializer will reject every probe
+        // we emit. For generators like `int(in: 1...1000)` this saves the full
+        // budget of wasted probes per leaf.
+        //
+        // The zero bit pattern is computed via `semanticSimplest.bitPattern64`
+        // rather than `makeConvertible(bitPattern64: 0)`: for signed types the
+        // XOR sign-magnitude encoding maps bit pattern 0 to the most negative
+        // value, so `makeConvertible(bitPattern64: 0)` would return `Int.min`,
+        // not semantic zero.
+        if currentEntry.isRangeExplicit, let range = currentEntry.validRange {
+            let zeroBitPattern = currentEntry.choice.semanticSimplest.bitPattern64
+            if range.contains(zeroBitPattern) == false {
+                return false
+            }
+            // Micro-opt 2: skip cross-zero when the leaf's current value pins
+            // the valid range's boundary. Binary search has already exhausted
+            // everything between the boundary and the reduction target; the
+            // remaining "simpler" candidates cross-zero would try are all in
+            // that already-rejected region. The property has demonstrated
+            // that this exact boundary value is required. Saves the full
+            // budget of wasted probes per pinned leaf (e.g. Bound5's leaves
+            // at `Int16.min`).
+            let currentBP = currentEntry.choice.bitPattern64
+            if currentBP == range.lowerBound || currentBP == range.upperBound {
+                return false
+            }
+        }
+
         // Adaptive budget: ⌈log₂(currentKey + 1)⌉ + 4, clamped to [4, 16].
         // Small keys get one probe per key below them (fully exhaustive),
         // large keys get the simplest 16 shortlex keys (0..15).
