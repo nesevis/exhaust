@@ -235,8 +235,8 @@ public extension Gen {
         type _: Output.Type = Output.self,
         isRangeExplicit: Bool
     ) -> ReflectiveGenerator<Output> {
-        let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
-        let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
+        let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRange.lowerBound
+        let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRange.upperBound
 
         let operation = ReflectiveOperation.chooseBits(
             min: minBits,
