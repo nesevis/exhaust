@@ -6,6 +6,33 @@
 // MARK: - Dynamic Region Rebuild
 
 public extension ChoiceGraph {
+    /// Updates leaf node values from the current sequence without rebuilding the graph structure.
+    ///
+    /// For value-only cycles (no structural changes), this replaces a full ``ChoiceGraphBuilder/build(from:)`` call. Only ``ChooseBitsMetadata/value`` on active leaf nodes is refreshed. Edges, topological order, reachability, and position ranges are unchanged. Type-compatibility edges and source/sink annotations are invalidated since they depend on leaf values.
+    func refreshLeafValues(from sequence: ChoiceSequence) {
+        for nodeID in leafNodes {
+            guard case let .chooseBits(metadata) = nodes[nodeID].kind else { continue }
+            guard let range = nodes[nodeID].positionRange else { continue }
+            guard range.lowerBound < sequence.count else { continue }
+            guard let entryValue = sequence[range.lowerBound].value else { continue }
+            guard entryValue.choice != metadata.value else { continue }
+            nodes[nodeID] = ChoiceGraphNode(
+                id: nodes[nodeID].id,
+                kind: .chooseBits(ChooseBitsMetadata(
+                    typeTag: metadata.typeTag,
+                    validRange: metadata.validRange,
+                    isRangeExplicit: metadata.isRangeExplicit,
+                    value: entryValue.choice,
+                    convergedOrigin: metadata.convergedOrigin
+                )),
+                positionRange: nodes[nodeID].positionRange,
+                children: nodes[nodeID].children,
+                parent: nodes[nodeID].parent
+            )
+        }
+        invalidateDerivedEdges()
+    }
+
     /// Rebuilds the bound subtree of a bind node from a new ``ChoiceTree``.
     ///
     /// Walks the new bound tree, replaces the old bound subgraph in place, and recomputes dependency edges within the region. The static part of the bind node (the node itself, its dependency edge to the inner, its containment edge from its parent) is preserved. Type-compatibility edges and source/sink annotations are invalidated and will be recomputed lazily on next access.

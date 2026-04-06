@@ -33,14 +33,16 @@ struct GraphExchangeEncoder: GraphEncoder {
         var lastEmittedCandidate: ChoiceSequence?
         /// Whether the full-delta probe has been tried for the current pair.
         var triedFullDelta: Bool
-        /// Whether any probe was accepted during the current pass.
-        var anyAcceptedThisPass: Bool
+        /// Pair indices that had at least one accepted probe this pass. Only these are re-evaluated on the next pass.
+        var acceptedPairIndices: Set<Int>
         /// Number of completed passes (capped at ``maxPasses`` to bound work).
         var passCount: Int
+        /// Which pair indices to evaluate on the current pass. Nil means all pairs.
+        var activePairIndices: Set<Int>?
     }
 
-    /// Maximum number of redistribution passes before the encoder stops re-evaluating pairs.
-    private static let maxPasses = 3
+    /// Maximum number of redistribution passes before the encoder stops re-evaluating pairs. With targeted re-evaluation (only accepted pairs), subsequent passes are cheap — O(log maxDelta) probes per accepted pair.
+    private static let maxPasses = 16
 
     // MARK: - GraphEncoder
 
@@ -70,7 +72,7 @@ struct GraphExchangeEncoder: GraphEncoder {
             // Update baseline on acceptance.
             if lastAccepted, let accepted = state.lastEmittedCandidate {
                 sequence = accepted
-                state.anyAcceptedThisPass = true
+                state.acceptedPairIndices.insert(state.pairIndex)
             }
             state.lastEmittedCandidate = nil
             let result = nextRedistributionProbe(state: &state, lastAccepted: lastAccepted)
@@ -122,8 +124,9 @@ struct GraphExchangeEncoder: GraphEncoder {
             didEmitCandidate: false,
             lastEmittedCandidate: nil,
             triedFullDelta: false,
-            anyAcceptedThisPass: false,
-            passCount: 0
+            acceptedPairIndices: [],
+            passCount: 0,
+            activePairIndices: nil
         ))
     }
 
@@ -132,6 +135,15 @@ struct GraphExchangeEncoder: GraphEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.pairIndex < state.pairs.count {
+            // Skip pairs not in the active set (on subsequent passes,
+            // only re-evaluate pairs that had accepted probes).
+            if let active = state.activePairIndices,
+               active.contains(state.pairIndex) == false
+            {
+                state.pairIndex += 1
+                continue
+            }
+
             let pair = state.pairs[state.pairIndex]
 
             if state.stepper == nil {
@@ -225,14 +237,16 @@ struct GraphExchangeEncoder: GraphEncoder {
         }
 
         // All pairs exhausted. If any were accepted this pass and we
-        // haven't hit the pass cap, reset for another pass — prior
-        // acceptances may have created new headroom for earlier pairs.
+        // haven't hit the pass cap, reset for another pass — but only
+        // re-evaluate the pairs that made progress. This avoids wasting
+        // O(pairs × log(maxDelta)) probes on pairs that can't redistribute.
         state.passCount += 1
-        if state.anyAcceptedThisPass, state.passCount < Self.maxPasses {
+        if state.acceptedPairIndices.isEmpty == false, state.passCount < Self.maxPasses {
+            state.activePairIndices = state.acceptedPairIndices
+            state.acceptedPairIndices = []
             state.pairIndex = 0
             state.triedFullDelta = false
             state.stepper = nil
-            state.anyAcceptedThisPass = false
             return nextRedistributionProbe(state: &state, lastAccepted: false)
         }
 

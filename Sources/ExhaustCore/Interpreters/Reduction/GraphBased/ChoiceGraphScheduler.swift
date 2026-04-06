@@ -101,16 +101,13 @@ enum ChoiceGraphScheduler {
             cycles += 1
             let sequenceBeforeCycle = sequence
 
-            // Rebuild the graph each cycle to ensure leaf metadata (values,
-            // convergence) reflects the current sequence. Value changes from
-            // the prior cycle (minimization, redistribution) make the graph's
-            // ChooseBitsMetadata stale — exchange sources read distances from
-            // graph metadata, so stale values produce wrong pairs.
-            let oldConvergenceForRebuild = extractAllConvergence(from: graph)
-            graph = ChoiceGraph.build(from: tree)
-            transferConvergence(oldConvergenceForRebuild, to: graph)
+            // Refresh leaf metadata to reflect value changes from the prior
+            // cycle. Only leaf values need updating — the graph structure,
+            // edges, and position ranges are unchanged. Full rebuild is
+            // reserved for structural acceptance (inside the source loop).
+            graph.refreshLeafValues(from: sequence)
 
-            // Build scope sources from the fresh graph.
+            // Build scope sources from the refreshed graph.
             var sources = ScopeSourceBuilder.buildSources(from: graph)
 
             if isInstrumented {
