@@ -62,8 +62,25 @@ enum ChoiceGraphScheduler {
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
+        // Re-materialize the initial tree with `materializePicks: true` so
+        // non-selected branches at every pick site carry full minimized
+        // subtrees. The tree we receive came from reflection, which only
+        // includes the branch that actually produced the failing value; the
+        // graph's branch-pivot / promotion / descendant-promotion encoders
+        // need the alternative branches to have structure to pivot to.
+        // Matches `BonsaiScheduler.runCore`'s branch projection bootstrap.
         var sequence = ChoiceSequence.flatten(initialTree)
         var tree = initialTree
+        if case let .success(_, fullTree, _) = Materializer.materialize(
+            gen,
+            prefix: sequence,
+            mode: .exact,
+            fallbackTree: initialTree,
+            materializePicks: true
+        ) {
+            tree = fullTree
+            sequence = ChoiceSequence(fullTree)
+        }
         var output = initialOutput
         var stats = ReductionStats()
         var cycles = 0
@@ -423,9 +440,14 @@ enum ChoiceGraphScheduler {
                 if case .bind = entry { return true }
                 return false
             }
+            // `materializePicks: true` keeps non-selected branches populated
+            // in the decoded tree so the next cycle's graph rebuild still has
+            // pivot / promotion / descendant-promotion targets. The graph is
+            // fully rebuilt every cycle (no partial rebuild), so every
+            // decoder must preserve non-selected branches.
             let decoder: SequenceDecoder = hasBind
-                ? .guided(fallbackTree: tree)
-                : .exact()
+                ? .guided(fallbackTree: tree, materializePicks: true)
+                : .exact(materializePicks: true)
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
@@ -631,7 +653,9 @@ enum ChoiceGraphScheduler {
 
                 // Use .exact() decoder — no shortlex check.
                 // The final comparison against the checkpoint handles acceptance.
-                let decoder: SequenceDecoder = .exact()
+                // `materializePicks: true` preserves non-selected branches for
+                // subsequent graph rebuilds (full rebuild every cycle).
+                let decoder: SequenceDecoder = .exact(materializePicks: true)
                 var filterObservations: [UInt64: FilterObservation] = [:]
 
                 if let result = try decoder.decode(
@@ -816,9 +840,12 @@ enum ChoiceGraphScheduler {
                 if case .bind = entry { return true }
                 return false
             }
+            // `materializePicks: true` — see the comment at the main probe
+            // loop's decoder construction. The graph is fully rebuilt every
+            // cycle, so every decoder must preserve non-selected branches.
             let decoder: SequenceDecoder = hasBind
-                ? .guided(fallbackTree: tree)
-                : .exact()
+                ? .guided(fallbackTree: tree, materializePicks: true)
+                : .exact(materializePicks: true)
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 

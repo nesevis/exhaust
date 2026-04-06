@@ -65,7 +65,8 @@ public extension Interpreters {
     ) throws -> (ChoiceSequence, Output)? {
         let prefix = ChoiceSequence.flatten(tree)
         guard case let .success(output, _, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact, fallbackTree: tree
+            gen, prefix: prefix, mode: .exact, fallbackTree: tree,
+            materializePicks: true
         ) else {
             return nil
         }
