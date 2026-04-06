@@ -769,15 +769,25 @@ struct MigrationSource: ScopeSource {
                 let receiver = sequenceNodes[receiverIndex]
                 guard receiver.elementCount < receiver.maxLength else { continue }
                 guard graph.areIndependent(source.nodeID, receiver.nodeID) else { continue }
+                // Reject containment relationships.
+                guard source.positionRange.contains(receiver.positionRange.lowerBound) == false,
+                      receiver.positionRange.contains(source.positionRange.lowerBound) == false
+                else { continue }
 
-                // Collect source's element node IDs and ranges.
+                // Collect source's element node IDs and full extents.
+                // Use the sequence's stored child extents so transparent
+                // wrapper markers (getSize-bind, transform-bind) move with
+                // their value entries — otherwise migration leaves orphan
+                // markers and the materializer rejects the candidate.
                 let sourceNode = graph.nodes[source.nodeID]
+                guard case let .sequence(sourceMetadata) = sourceNode.kind else { continue }
+                guard sourceMetadata.childPositionRanges.count == sourceNode.children.count else { continue }
                 var elementNodeIDs: [Int] = []
                 var elementRanges: [ClosedRange<Int>] = []
-                for childID in sourceNode.children {
-                    guard let childRange = graph.nodes[childID].positionRange else { continue }
+                for (childIndex, childID) in sourceNode.children.enumerated() {
+                    guard graph.nodes[childID].positionRange != nil else { continue }
                     elementNodeIDs.append(childID)
-                    elementRanges.append(childRange)
+                    elementRanges.append(sourceMetadata.childPositionRanges[childIndex])
                 }
 
                 guard elementNodeIDs.isEmpty == false else { continue }

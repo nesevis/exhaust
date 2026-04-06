@@ -155,6 +155,106 @@ struct GraphEncoderTests {
         }
     }
 
+    // MARK: - GraphMigrationEncoder
+
+    @Test("Migration encoder merges sibling sequences and removes the empty source")
+    func migrationMergesSiblingSequencesAndShortens() {
+        // Two sibling sequences under an outer sequence node — the sequence-of-sequences shape used by NestedLists and LargeUnionList.
+        let inner1 = ChoiceTree.sequence(
+            length: 2,
+            elements: [
+                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            ],
+            .init(validRange: nil, isRangeExplicit: false)
+        )
+        let inner2 = ChoiceTree.sequence(
+            length: 1,
+            elements: [
+                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            ],
+            .init(validRange: nil, isRangeExplicit: false)
+        )
+        let outer = ChoiceTree.sequence(
+            length: 2,
+            elements: [inner1, inner2],
+            .init(validRange: nil, isRangeExplicit: false)
+        )
+        let graph = ChoiceGraph.build(from: outer)
+        let sequence = ChoiceSequence.flatten(outer)
+
+        // Find inner1 and inner2 node IDs (the two sibling sequences).
+        let sequenceNodes = graph.nodes.compactMap { node -> Int? in
+            guard case .sequence = node.kind else { return nil }
+            guard node.positionRange != nil else { return nil }
+            return node.id
+        }
+        // Three sequences: outer, inner1, inner2.
+        #expect(sequenceNodes.count == 3)
+
+        // Sort by position to identify outer (first) → inner1 → inner2.
+        let sortedSequenceNodes = sequenceNodes.sorted { lhs, rhs in
+            let lhsRange = graph.nodes[lhs].positionRange?.lowerBound ?? 0
+            let rhsRange = graph.nodes[rhs].positionRange?.lowerBound ?? 0
+            return lhsRange < rhsRange
+        }
+        // outer is the smallest position; inner1 and inner2 follow.
+        let inner1NodeID = sortedSequenceNodes[1]
+        let inner2NodeID = sortedSequenceNodes[2]
+
+        // Build a migration scope: move inner1 → inner2.
+        guard case let .sequence(inner1Meta) = graph.nodes[inner1NodeID].kind else {
+            Issue.record("inner1 should be a sequence")
+            return
+        }
+        guard let inner2Range = graph.nodes[inner2NodeID].positionRange else {
+            Issue.record("inner2 should have a position range")
+            return
+        }
+        let migrationScope = MigrationScope(
+            sourceSequenceNodeID: inner1NodeID,
+            receiverSequenceNodeID: inner2NodeID,
+            elementNodeIDs: graph.nodes[inner1NodeID].children,
+            elementPositionRanges: inner1Meta.childPositionRanges,
+            receiverPositionRange: inner2Range
+        )
+        let transformation = GraphTransformation(
+            operation: .migrate(migrationScope),
+            yield: TransformationYield(
+                structural: 1,
+                value: 0,
+                slack: .exact,
+                estimatedProbes: 1
+            ),
+            precondition: .unconditional,
+            postcondition: TransformationPostcondition(
+                isStructural: true,
+                invalidatesConvergence: [],
+                enablesRemoval: []
+            )
+        )
+        let scope = TransformationScope(
+            transformation: transformation,
+            baseSequence: sequence,
+            tree: outer,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+
+        var encoder = GraphMigrationEncoder()
+        encoder.start(scope: scope)
+        let candidate = encoder.nextProbe(lastAccepted: false)
+
+        let resolvedCandidate = try? #require(candidate)
+        guard let resolvedCandidate else { return }
+
+        // Migration must produce a strictly shorter sequence (the source's
+        // wrappers are removed entirely, not just emptied).
+        #expect(resolvedCandidate.count < sequence.count)
+        // And it must shortlex-precede the original.
+        #expect(resolvedCandidate.shortLexPrecedes(sequence))
+    }
+
     @Test("Minimization encoder emits convergence records")
     func minimizationEmitsConvergenceRecords() {
         let tree = ChoiceTree.group([

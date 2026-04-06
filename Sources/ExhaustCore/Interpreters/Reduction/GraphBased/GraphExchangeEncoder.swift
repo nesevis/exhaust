@@ -419,7 +419,47 @@ struct GraphExchangeEncoder: GraphEncoder {
             return candidate
         }
 
-        // Same-tag integer path: semantic Int64 arithmetic.
+        // Same-tag integer path.
+        //
+        // When both sides' declared domain equals the natural type width, we
+        // use bit-pattern modular arithmetic with a width-aware mask. This
+        // matches the wrapping arithmetic (`&+`/`&-`) the property under test
+        // likely uses for the same type and lets redistribution reach
+        // boundary counterexamples like `(Int16.min, -1)` that semantic-space
+        // arithmetic would reject as overflow. See
+        // `bound5-redistribution-wraparound-diagnosis.md` for the motivating
+        // trace.
+        //
+        // When either side carries an explicit narrow range, we retain
+        // semantic Int64 arithmetic with `bitPattern(fromSemantic:tag:)`
+        // rejecting out-of-range results — the encoder must honor the user's
+        // declared domain, not the type's natural width.
+        let canWrapModulo = sourceValue.allowsModularArithmetic
+            && sinkValue.allowsModularArithmetic
+
+        if canWrapModulo {
+            let mask = sourceTag.bitPatternRange.upperBound
+            let sourceBP = sourceValue.choice.bitPattern64
+            let sinkBP = sinkValue.choice.bitPattern64
+            let targetBP = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
+
+            let newSourceBP: UInt64
+            let newSinkBP: UInt64
+            if sourceBP > targetBP {
+                newSourceBP = (sourceBP &- delta) & mask
+                newSinkBP = (sinkBP &+ delta) & mask
+            } else {
+                newSourceBP = (sourceBP &+ delta) & mask
+                newSinkBP = (sinkBP &- delta) & mask
+            }
+
+            var candidate = sequence
+            candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBP)
+            candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBP)
+            return candidate
+        }
+
+        // Narrow-range fallback: semantic Int64 arithmetic.
         guard delta <= UInt64(Int64.max) else { return nil }
 
         let sourceSemanticValue = Self.semanticValue(sourceValue.choice)

@@ -338,12 +338,9 @@ public enum Interpreters {
             )
         }
 
-        let reflectedRange: ClosedRange<UInt64> = if isRangeExplicit {
-            min ... max
-        } else {
-            type(of: convertibleValue).bitPatternRanges
-                .first(where: { $0.contains(bitPattern) }) ?? (UInt64.min ... UInt64.max)
-        }
+        let reflectedRange = isRangeExplicit
+            ? min ... max
+            : type(of: convertibleValue).bitPatternRange
 
         let metadata = ChoiceMetadata(
             validRange: reflectedRange,
@@ -395,7 +392,7 @@ public enum Interpreters {
             )
             validRange = lengthReflection
                 .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
-                ?? UInt64.bitPatternRanges[0]
+                ?? UInt64.bitPatternRange
         }
 
         for elementTarget in targetArray {

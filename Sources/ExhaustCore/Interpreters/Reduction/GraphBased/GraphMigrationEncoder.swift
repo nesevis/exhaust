@@ -37,46 +37,41 @@ struct GraphMigrationEncoder: GraphEncoder {
 
     // MARK: - Candidate Construction
 
-    /// Moves elements from the source sequence to the end of the receiver sequence.
+    /// Moves all elements from the source sequence into the receiver sequence and removes the now-empty source sequence's full extent.
     ///
-    /// Removes the specified elements from their current positions and inserts them just before the receiver sequence's closing marker.
+    /// The source's children migrate with their wrapper markers, and the source's full extent (including its own structural markers) is removed entirely. Without removing the source wrappers, the candidate would not shortlex-precede the original — empty wrapper markers compare larger than the wrapped content they replace.
     private func buildMigrationCandidate(
         scope: MigrationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard scope.elementNodeIDs.isEmpty == false else { return nil }
+        guard let sourceFullRange = graph.nodes[scope.sourceSequenceNodeID].positionRange else {
+            return nil
+        }
 
         // Collect the entries being moved.
         var movedEntries: [ChoiceSequenceValue] = []
-        var removalRangeSet = RangeSet<Int>()
         for range in scope.elementPositionRanges {
             for position in range.lowerBound ... range.upperBound {
                 movedEntries.append(sequence[position])
             }
-            removalRangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
         }
-
         guard movedEntries.isEmpty == false else { return nil }
 
-        // Find the insertion point: just before the receiver sequence's
-        // closing marker (the position after the last element).
+        // Remove the source sequence's FULL extent (including its wrappers),
+        // since after moving all children out the source is just empty markers.
+        var removalRangeSet = RangeSet<Int>()
+        removalRangeSet.insert(contentsOf: sourceFullRange.lowerBound ..< sourceFullRange.upperBound + 1)
+
+        // Adjust insertion point for the removal of the source's full extent.
         let insertionPoint = scope.receiverPositionRange.upperBound
+        let removedBeforeInsertion = sourceFullRange.upperBound < insertionPoint
+            ? sourceFullRange.count
+            : 0
+        let adjustedInsertionPoint = insertionPoint - removedBeforeInsertion
 
-        // Build the candidate: remove from source, insert at receiver.
         var candidate = sequence
-
-        // Insert first (at higher index), then remove (at lower indices),
-        // so removal indices aren't shifted by the insertion.
-        // But this only works if source positions are all before the insertion point.
-        // For safety, do removal first, adjust insertion point, then insert.
-        let sourcePositionsBefore = scope.elementPositionRanges.filter {
-            $0.lowerBound < insertionPoint
-        }
-        let adjustedInsertionPoint = insertionPoint - sourcePositionsBefore.reduce(0) {
-            $0 + $1.count
-        }
-
         candidate.removeSubranges(removalRangeSet)
         candidate.insert(contentsOf: movedEntries, at: adjustedInsertionPoint)
 
