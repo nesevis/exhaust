@@ -39,8 +39,9 @@ public struct HumanReadableOrderingPass: ReductionPass {
         let bindIndex = BindSpanIndex(from: sequence)
         let bindInnerRanges = bindIndex.regions.map(\.innerRange)
 
-        // Filter to type-homogeneous groups that do not contain bind-inner positions.
-        let homogeneousGroups = groups.filter { group in
+        // Filter to tag-compatible sibling groups outside bind-inner regions.
+        // Variable-length siblings from the same generator (for example a tuple of arrays with the same length range) are reorderable as long as their value entries share a tag — the materializer rejects any candidate whose new arrangement violates a per-position length constraint.
+        let compatibleGroups = groups.filter { group in
             guard group.ranges.count >= 2 else { return false }
 
             for siblingRange in group.ranges {
@@ -52,25 +53,25 @@ public struct HumanReadableOrderingPass: ReductionPass {
             let keys = group.ranges.map {
                 ChoiceSequence.siblingComparisonKey(from: sequence, range: $0)
             }
-            let firstLength = keys[0].count
-            guard firstLength > 0 else { return false }
+            // All value entries across all keys must share a single tag. Empty keys trivially pass and pure-empty groups have nothing to reorder.
+            var seenTag: TypeTag?
             for key in keys {
-                guard key.count == firstLength else { return false }
-            }
-            for position in 0 ..< firstLength {
-                let firstTag = keys[0][position].tag
-                for key in keys.dropFirst() {
-                    guard key[position].tag == firstTag else { return false }
+                for value in key {
+                    if let existing = seenTag {
+                        guard value.tag == existing else { return false }
+                    } else {
+                        seenTag = value.tag
+                    }
                 }
             }
-            return true
+            return seenTag != nil
         }
 
-        guard homogeneousGroups.isEmpty == false else { return nil }
+        guard compatibleGroups.isEmpty == false else { return nil }
 
         // Sort deepest-first so inner groups settle before outer groups compare them.
         // Within the same depth, rightmost-first to avoid index invalidation.
-        let sortedGroups = homogeneousGroups.sorted { lhs, rhs in
+        let sortedGroups = compatibleGroups.sorted { lhs, rhs in
             if lhs.depth != rhs.depth {
                 return lhs.depth > rhs.depth
             }

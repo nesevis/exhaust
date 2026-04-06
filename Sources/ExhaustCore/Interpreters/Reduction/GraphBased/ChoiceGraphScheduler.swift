@@ -315,6 +315,26 @@ enum ChoiceGraphScheduler {
             )
         }
 
+        // Human-readable ordering pass: reorders type-homogeneous sibling groups into natural numeric order so seeds with the same multiset of values converge to the same canonical counterexample.
+        let humanOrderingPass = HumanReadableOrderingPass()
+        if let humanResult = humanOrderingPass.encode(
+            gen: gen,
+            sequence: sequence,
+            tree: tree,
+            property: property
+        ) {
+            sequence = humanResult.result.sequence
+            tree = humanResult.result.tree
+            output = humanResult.result.output
+            if collectStats {
+                stats.totalMaterializations += humanResult.materializations
+                stats.encoderProbes[.humanOrderReorder, default: 0] += humanResult.materializations
+            }
+            if isInstrumented {
+                ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
+            }
+        }
+
         stats.cycles = cycles
         return (reduced: (sequence, output), stats: stats)
     }
