@@ -50,6 +50,26 @@ struct GraphMinimizationEncoder: GraphEncoder {
         var scanIndex: Int
         /// Best accepted value during the linear scan phase.
         var scanBestAccepted: UInt64?
+        /// Cross-zero phase state for the current leaf, or nil when inactive. Set after binary search (and any linear scan recovery) converges on a signed-type leaf whose current shortlex key permits crossing zero.
+        var crossZero: CrossZeroState?
+    }
+
+    /// State for the cross-zero phase of per-leaf minimization.
+    ///
+    /// After bit-pattern binary search converges on one side of zero for a signed type, this phase enumerates shortlex keys from the simplest (key 0 ↔ value 0) upward. Each key decodes via ``ChoiceValue/fromShortlexKey(_:tag:)`` to a signed value on the opposite side of zero from the current convergence, closing the gap that bp-space binary search cannot bridge (e.g. reducing value `1` to value `0` or `-1`).
+    ///
+    /// The first accepted probe is the simplest possible value for this leaf — walking upward from key 0 guarantees that any later acceptance would be strictly less simple, so the phase exits on first acceptance.
+    private struct CrossZeroState {
+        let seqIdx: Int
+        let tag: TypeTag
+        let validRange: ClosedRange<UInt64>?
+        let isRangeExplicit: Bool
+        /// The next shortlex key to probe.
+        var nextKey: UInt64
+        /// Exclusive upper bound on the key walk. Equals `min(initialCurrentKey, adaptiveBudget)`.
+        let endKey: UInt64
+        /// The shortlex key of the last emitted probe, or `nil` when no probe has been emitted yet (or after feedback has been consumed).
+        var lastEmittedKey: UInt64?
     }
 
     /// Maximum remaining range size for which inline linear scan is emitted after binary search convergence.
@@ -229,7 +249,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
             batchRejected: false,
             scanValues: nil,
             scanIndex: 0,
-            scanBestAccepted: nil
+            scanBestAccepted: nil,
+            crossZero: nil
         ))
     }
 
@@ -270,6 +291,23 @@ struct GraphMinimizationEncoder: GraphEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.leafIndex < state.leafPositions.count {
+            // Cross-zero phase takes priority when active — it was armed by a
+            // prior iteration of this loop after binary search converged, and
+            // the current `lastAccepted` is feedback for the last cross-zero
+            // probe (if any).
+            if state.crossZero != nil {
+                if let candidate = nextCrossZeroProbe(
+                    state: &state,
+                    lastAccepted: lastAccepted
+                ) {
+                    return candidate
+                }
+                // Cross-zero exhausted or accepted — move to the next leaf.
+                state.crossZero = nil
+                state.leafIndex += 1
+                continue
+            }
+
             // Linear scan phase (set up by binary search on non-monotone gap).
             if state.scanValues != nil {
                 if let candidate = nextLinearScanProbe(
@@ -278,8 +316,16 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 ) {
                     return candidate
                 }
-                // Scan exhausted — record convergence and move to next leaf.
+                // Scan exhausted — record convergence, then try cross-zero
+                // before advancing to the next leaf. Linear scan probes only
+                // `[targetBP, bestAccepted)` which for signed types is one
+                // side of zero; cross-zero walks shortlex keys from 0 upward
+                // and reaches values on the opposite side that linear scan
+                // cannot. They are complementary.
                 finishLinearScan(state: &state)
+                if tryEnterCrossZero(state: &state) {
+                    continue
+                }
                 state.leafIndex += 1
                 continue
             }
@@ -293,10 +339,18 @@ struct GraphMinimizationEncoder: GraphEncoder {
             }
 
             // Binary search converged. If scan was set up, loop back
-            // to drain it. Otherwise move to next leaf.
+            // to drain it.
             if state.scanValues != nil {
                 continue
             }
+
+            // Try to enter the cross-zero phase for signed types. If
+            // successful, the next iteration of this loop will emit the
+            // first cross-zero probe with fresh state (no stale feedback).
+            if tryEnterCrossZero(state: &state) {
+                continue
+            }
+
             state.leafIndex += 1
         }
 
@@ -476,6 +530,111 @@ struct GraphMinimizationEncoder: GraphEncoder {
         state.scanValues = nil
         state.scanIndex = 0
         state.scanBestAccepted = nil
+    }
+
+    // MARK: - Cross-Zero Phase
+
+    /// Attempts to arm the cross-zero phase for the current leaf.
+    ///
+    /// Returns `true` when the leaf is a signed type with a current shortlex key > 0 (there is at least one strictly simpler value to try). On success, ``IntegerState/crossZero`` is set and the per-leaf dispatch loop will emit the first probe on its next iteration.
+    ///
+    /// The probe budget adapts to the current shortlex key: roughly `log₂(key) + 4`, clamped to `[4, 16]`. Rationale: bit-pattern binary search has already covered the large-magnitude neighborhood by the time cross-zero runs, so cross-zero's contribution is bounded to the last few shortlex keys near zero. Small-magnitude leaves get full coverage of every key below their current one; large-magnitude leaves get the simplest 16 keys. Bonsai's fixed 16-probe cap is a special case of this at the upper end of the range.
+    private mutating func tryEnterCrossZero(state: inout IntegerState) -> Bool {
+        let leaf = state.leafPositions[state.leafIndex]
+        guard leaf.typeTag.isSigned else { return false }
+        guard let currentEntry = state.sequence[leaf.sequenceIndex].value else {
+            return false
+        }
+        let currentKey = currentEntry.choice.shortlexKey
+        guard currentKey > 0 else { return false }
+
+        // Adaptive budget: ⌈log₂(currentKey + 1)⌉ + 4, clamped to [4, 16].
+        // Small keys get one probe per key below them (fully exhaustive),
+        // large keys get the simplest 16 shortlex keys (0..15).
+        let bitLength = UInt64(64 - currentKey.leadingZeroBitCount)
+        let budget = min(bitLength + 4, 16)
+        let endKey = min(currentKey, budget)
+
+        state.crossZero = CrossZeroState(
+            seqIdx: leaf.sequenceIndex,
+            tag: leaf.typeTag,
+            validRange: currentEntry.validRange,
+            isRangeExplicit: currentEntry.isRangeExplicit,
+            nextKey: 0,
+            endKey: endKey,
+            lastEmittedKey: nil
+        )
+        return true
+    }
+
+    /// Drives the cross-zero phase for the current leaf.
+    ///
+    /// Walks shortlex keys from 0 upward, emitting one candidate per call and exiting on the first acceptance — walking upward guarantees that the first accepted probe is the simplest possible value for this leaf, so there is no benefit to continuing once one is found.
+    ///
+    /// Returns `nil` when the walk is exhausted (all probes rejected or budget reached) or when the caller should advance to the next leaf (acceptance happened on the prior call). The caller clears ``IntegerState/crossZero`` and advances `leafIndex` when `nil` is returned.
+    private mutating func nextCrossZeroProbe(
+        state: inout IntegerState,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        guard var crossZero = state.crossZero else { return nil }
+
+        // Consume feedback for the previous probe, if any.
+        if let acceptedKey = crossZero.lastEmittedKey {
+            crossZero.lastEmittedKey = nil
+            if lastAccepted {
+                // Acceptance — nextIntegerProbe has already advanced
+                // state.sequence to the accepted candidate. Record the
+                // convergence at the new bit pattern so the next cycle's
+                // binary search can warm-start from here, then exit.
+                let leaf = state.leafPositions[state.leafIndex]
+                let acceptedChoice = ChoiceValue.fromShortlexKey(
+                    acceptedKey,
+                    tag: crossZero.tag
+                )
+                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                    bound: acceptedChoice.bitPattern64,
+                    signal: .monotoneConvergence,
+                    configuration: .binarySearchSemanticSimplest,
+                    cycle: 0
+                )
+                state.crossZero = crossZero
+                return nil
+            }
+            // Rejection — fall through and emit the next probe.
+        }
+
+        // Walk upward from `nextKey` looking for a probe that is in range.
+        while crossZero.nextKey < crossZero.endKey {
+            let probeKey = crossZero.nextKey
+            crossZero.nextKey += 1
+
+            let probeChoice = ChoiceValue.fromShortlexKey(probeKey, tag: crossZero.tag)
+
+            // Range validation: when the range is explicitly user-declared,
+            // a probe outside it would be rejected by the materializer.
+            // Skip rather than waste a property call.
+            if crossZero.isRangeExplicit,
+               probeChoice.fits(in: crossZero.validRange) == false
+            {
+                continue
+            }
+
+            crossZero.lastEmittedKey = probeKey
+            state.crossZero = crossZero
+
+            var candidate = state.sequence
+            candidate[crossZero.seqIdx] = .reduced(.init(
+                choice: probeChoice,
+                validRange: crossZero.validRange,
+                isRangeExplicit: crossZero.isRangeExplicit
+            ))
+            state.lastEmittedCandidate = candidate
+            return candidate
+        }
+
+        // Exhausted — no further probes to try.
+        state.crossZero = crossZero
+        return nil
     }
 
     // MARK: - Float Mode

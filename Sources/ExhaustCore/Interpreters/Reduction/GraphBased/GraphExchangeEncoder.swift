@@ -147,6 +147,17 @@ struct GraphExchangeEncoder: GraphEncoder {
                   case let .chooseBits(sinkMetadata) = graph.nodes[pair.sinkNodeID].kind else {
                 continue
             }
+            // Skip pairs whose graph positions no longer land on value entries
+            // in the current sequence. After structural changes, the graph's
+            // `positionRange` metadata can be momentarily stale — mirror the
+            // guard used in ``GraphMinimizationEncoder/startInteger`` and the
+            // lockstep path to avoid out-of-bounds or wrong-entry subscripts.
+            guard sourceRange.lowerBound < sequence.count,
+                  sinkRange.lowerBound < sequence.count,
+                  sequence[sourceRange.lowerBound].value != nil,
+                  sequence[sinkRange.lowerBound].value != nil else {
+                continue
+            }
 
             let needsMixedMath = sourceMetadata.typeTag != sinkMetadata.typeTag
                 || sourceMetadata.typeTag.isFloatingPoint
@@ -561,9 +572,18 @@ struct GraphExchangeEncoder: GraphEncoder {
 
         for group in scope.groups {
             // Resolve leaf node IDs to sorted sequence indices.
+            //
+            // Skip positions that don't land on a value entry in the current
+            // sequence. After structural changes within a cycle, the graph's
+            // `positionRange` metadata can point at positions that have
+            // become structural markers — or past the sequence end — before
+            // the next graph rebuild. Matches the guard in
+            // ``GraphMinimizationEncoder/startInteger``.
             var indices: [Int] = []
             for nodeID in group.leafNodeIDs {
                 guard let range = graph.nodes[nodeID].positionRange else { continue }
+                guard range.lowerBound < sequence.count,
+                      sequence[range.lowerBound].value != nil else { continue }
                 indices.append(range.lowerBound)
             }
             indices.sort()
@@ -593,8 +613,11 @@ struct GraphExchangeEncoder: GraphEncoder {
     }
 
     /// Constructs a window plan from indices, computing direction and distance from the leader.
+    ///
+    /// Returns `nil` when any window index has become stale relative to the current sequence — a defensive guard against structural refreshes that happened between scope construction and plan building.
     private func makeLockstepWindowPlan(windowIndices: [Int]) -> LockstepWindowPlan? {
         guard let firstIndex = windowIndices.first,
+              firstIndex < sequence.count,
               let firstValue = sequence[firstIndex].value else { return nil }
 
         let tag = firstValue.choice.tag
@@ -602,7 +625,9 @@ struct GraphExchangeEncoder: GraphEncoder {
         // All entries must share the same tag.
         var idx = 1
         while idx < windowIndices.count {
-            guard let value = sequence[windowIndices[idx]].value,
+            let windowIndex = windowIndices[idx]
+            guard windowIndex < sequence.count,
+                  let value = sequence[windowIndex].value,
                   value.choice.tag == tag else { return nil }
             idx += 1
         }
