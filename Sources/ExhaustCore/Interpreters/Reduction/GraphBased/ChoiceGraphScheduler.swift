@@ -101,11 +101,13 @@ enum ChoiceGraphScheduler {
             cycles += 1
             let sequenceBeforeCycle = sequence
 
-            // Refresh leaf metadata to reflect value changes from the prior
-            // cycle. Only leaf values need updating — the graph structure,
-            // edges, and position ranges are unchanged. Full rebuild is
-            // reserved for structural acceptance (inside the source loop).
-            graph.refreshLeafValues(from: sequence)
+            // TODO: incremental refresh causes stale position mappings on
+            // generators with structural changes mid-cycle (BinaryHeap).
+            // Full rebuild until position tracking is fixed.
+            let oldConvergenceForRebuild = extractAllConvergence(from: graph)
+            graph = ChoiceGraph.build(from: tree)
+            transferConvergence(oldConvergenceForRebuild, to: graph)
+            // graph.refreshLeafValues(from: sequence)
 
             // Build scope sources from the refreshed graph.
             var sources = ScopeSourceBuilder.buildSources(from: graph)
