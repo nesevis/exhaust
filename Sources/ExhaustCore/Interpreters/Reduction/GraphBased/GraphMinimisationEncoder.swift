@@ -164,6 +164,12 @@ struct GraphMinimizationEncoder: GraphEncoder {
         for nodeID in scope.leafNodeIDs {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
+            // Verify the sequence position is a value entry. After
+            // structural changes within a cycle, position mappings from
+            // an incrementally-refreshed graph may point at structural
+            // markers instead of values.
+            guard range.lowerBound < sequence.count,
+                  sequence[range.lowerBound].value != nil else { continue }
             let current = metadata.value.bitPattern64
             let target = metadata.value.reductionTarget(in: metadata.validRange)
             if current != target {
