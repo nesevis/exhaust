@@ -92,11 +92,10 @@ enum ChoiceGraphScheduler {
             )
         }
 
-        // Track which sequence nodes have had value changes since the
-        // last structural rebuild. Deletion sources skip "clean" sequences
-        // whose children haven't changed — re-probing them is wasted work.
-        // All sequences start dirty (first cycle should try everything).
-        var dirtySequenceNodeIDs: Set<Int>? = nil // nil = all dirty
+        // Scope rejection cache: tracks rejected structural operations
+        // by position-scoped Zobrist hash. Naturally invalidates when
+        // targeted values change. Cleared on structural acceptance.
+        var scopeRejectionCache = ScopeRejectionCache()
 
         while stallBudget > 0 {
             cycles += 1
@@ -112,10 +111,7 @@ enum ChoiceGraphScheduler {
             transferConvergence(oldConvergenceForRebuild, to: graph)
 
             // Build scope sources from the fresh graph.
-            var sources = ScopeSourceBuilder.buildSources(
-                from: graph,
-                dirtySequenceNodeIDs: dirtySequenceNodeIDs
-            )
+            var sources = ScopeSourceBuilder.buildSources(from: graph)
 
             if isInstrumented {
                 ExhaustLog.debug(
@@ -148,6 +144,16 @@ enum ChoiceGraphScheduler {
 
                 // Check precondition.
                 guard transformation.precondition.isSatisfied(in: graph) else {
+                    continue
+                }
+
+                // Skip structural scopes that were previously rejected
+                // with identical values at the targeted positions.
+                if scopeRejectionCache.isRejected(
+                    operation: transformation.operation,
+                    sequence: sequence,
+                    graph: graph
+                ) {
                     continue
                 }
 
@@ -187,17 +193,13 @@ enum ChoiceGraphScheduler {
                     anyAccepted = true
 
                     if transformation.postcondition.isStructural {
-                        // Structural acceptance: rebuild graph and ALL sources.
-                        // All sequences are dirty after rebuild.
+                        // Structural acceptance: rebuild graph, clear scope cache, rebuild sources.
                         let oldConvergence = extractAllConvergence(from: graph)
                         graph = ChoiceGraph.build(from: tree)
                         transferConvergence(oldConvergence, to: graph)
                         stats.graphRebuilds += 1
-                        dirtySequenceNodeIDs = nil // nil = all dirty
-                        sources = ScopeSourceBuilder.buildSources(
-                            from: graph,
-                            dirtySequenceNodeIDs: dirtySequenceNodeIDs
-                        )
+                        scopeRejectionCache.clear()
+                        sources = ScopeSourceBuilder.buildSources(from: graph)
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -211,24 +213,21 @@ enum ChoiceGraphScheduler {
                             )
                         }
                     } else {
-                        // Value acceptance: mark the affected sequences as dirty
-                        // and clear convergence records on changed leaves.
-                        if dirtySequenceNodeIDs == nil {
-                            dirtySequenceNodeIDs = Set<Int>()
-                        }
-                        markDirtySequences(
-                            for: transformation,
-                            in: graph,
-                            dirtySet: &dirtySequenceNodeIDs
-                        )
+                        // Value acceptance: clear convergence on changed leaves.
+                        // Scope rejection cache self-invalidates via hash change.
                         clearConvergenceOnChangedLeaves(
                             for: transformation,
                             in: graph
                         )
                     }
+                } else {
+                    // Rejection: record in scope cache for structural operations.
+                    scopeRejectionCache.recordRejection(
+                        operation: transformation.operation,
+                        sequence: sequence,
+                        graph: graph
+                    )
                 }
-                // Rejection: the source already advanced via next(lastAccepted:).
-                // Continue pulling from the highest-yield source.
             }
 
             // Staleness detection: after all sources exhausted, probe
@@ -248,13 +247,9 @@ enum ChoiceGraphScheduler {
                 )
                 if stalenessResult {
                     anyAccepted = true
-                    // Stale floors cleared — rebuild minimization sources
-                    // and continue without decrementing stall budget.
-                    dirtySequenceNodeIDs = nil
-                    sources = ScopeSourceBuilder.buildSources(
-                        from: graph,
-                        dirtySequenceNodeIDs: dirtySequenceNodeIDs
-                    )
+                    // Stale floors cleared — rebuild sources. Scope rejection
+                    // cache self-invalidates via hash change at affected positions.
+                    sources = ScopeSourceBuilder.buildSources(from: graph)
                 }
             }
 
@@ -275,7 +270,7 @@ enum ChoiceGraphScheduler {
                 )
                 if relaxResult {
                     anyAccepted = true
-                    dirtySequenceNodeIDs = nil
+                    scopeRejectionCache.clear()
                 }
             }
 
@@ -894,48 +889,80 @@ enum ChoiceGraphScheduler {
         }
     }
 
-    // MARK: - Dirty Sequence Tracking
+}
 
-    /// Marks sequence nodes whose children were affected by a value transformation as dirty.
-    private static func markDirtySequences(
-        for transformation: GraphTransformation,
-        in graph: ChoiceGraph,
-        dirtySet: inout Set<Int>?
+// MARK: - Scope Rejection Cache
+
+/// Deterministic duplicate detection for structural graph operations using position-scoped Zobrist hashes.
+///
+/// For each rejected structural operation, computes a hash from the operation discriminator and the ``ZobristHash`` contributions at the targeted positions. The hash naturally invalidates when any targeted value changes — no explicit dirty tracking needed.
+///
+/// Cleared on structural acceptance (graph rebuild changes positions). Persists across cycles for value-only changes.
+struct ScopeRejectionCache {
+    private var rejectedHashes = Set<UInt64>()
+
+    /// Records a rejected structural transformation.
+    mutating func recordRejection(
+        operation: GraphOperation,
+        sequence: ChoiceSequence,
+        graph: ChoiceGraph
     ) {
-        // Find leaf node IDs involved in the transformation.
-        let leafNodeIDs: [Int]
-        switch transformation.operation {
-        case let .minimize(scope):
-            switch scope {
-            case let .integerLeaves(integerScope):
-                leafNodeIDs = integerScope.leafNodeIDs
-            case let .floatLeaves(floatScope):
-                leafNodeIDs = floatScope.leafNodeIDs
-            case let .kleisliFibre(fibreScope):
-                leafNodeIDs = [fibreScope.upstreamLeafNodeID] + fibreScope.downstreamNodeIDs
-            }
-        case let .exchange(scope):
-            switch scope {
-            case let .redistribution(redistScope):
-                leafNodeIDs = redistScope.pairs.flatMap { [$0.sourceNodeID, $0.sinkNodeID] }
-            case let .tandem(tandemScope):
-                leafNodeIDs = tandemScope.groups.flatMap(\.leafNodeIDs)
-            }
-        default:
-            return // Structural operations don't mark dirty — they rebuild.
+        if let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) {
+            rejectedHashes.insert(hash)
+        }
+    }
+
+    /// Returns true if this transformation was previously rejected and the targeted values have not changed.
+    func isRejected(
+        operation: GraphOperation,
+        sequence: ChoiceSequence,
+        graph: ChoiceGraph
+    ) -> Bool {
+        guard let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) else {
+            return false
+        }
+        return rejectedHashes.contains(hash)
+    }
+
+    /// Clears all cached rejections. Called on structural acceptance (graph rebuild).
+    mutating func clear() {
+        rejectedHashes.removeAll(keepingCapacity: true)
+    }
+
+    /// Computes a deterministic Zobrist-based hash from the operation discriminator and the values at targeted positions.
+    ///
+    /// Returns nil for search-based operations (minimize, exchange) whose outcomes are nondeterministic.
+    private func scopeHash(
+        operation: GraphOperation,
+        sequence: ChoiceSequence,
+        graph: ChoiceGraph
+    ) -> UInt64? {
+        guard let nodeIDs = operation.affectedNodeIDs(in: graph) else {
+            return nil
         }
 
-        // Walk up from each leaf to find its containing sequence node.
-        for leafNodeID in leafNodeIDs {
-            var current = leafNodeID
-            while let parentID = graph.nodes[current].parent {
-                if case .sequence = graph.nodes[parentID].kind {
-                    if dirtySet == nil { dirtySet = Set() }
-                    dirtySet?.insert(parentID)
-                    break
-                }
-                current = parentID
+        // Operation-type discriminator to avoid collisions between
+        // different operations targeting the same positions.
+        var hash: UInt64 = switch operation {
+        case .remove: 0xA1B2_C3D4_E5F6_0718
+        case .replace: 0x1827_3645_5463_7281
+        case .permute: 0x9182_7364_5546_3728
+        case .migrate: 0x6372_8190_A0B0_C0D0
+        case .minimize, .exchange: 0
+        }
+
+        // Mix in Zobrist contributions at each targeted position.
+        for nodeID in nodeIDs {
+            guard nodeID < graph.nodes.count,
+                  let range = graph.nodes[nodeID].positionRange else {
+                continue
+            }
+            for position in range {
+                guard position < sequence.count else { break }
+                hash ^= ZobristHash.contribution(at: position, sequence[position])
             }
         }
+
+        return hash
     }
 }

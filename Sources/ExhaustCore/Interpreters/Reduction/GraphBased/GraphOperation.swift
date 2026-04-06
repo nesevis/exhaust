@@ -34,6 +34,41 @@ enum GraphOperation {
         if case .replace = self { return true }
         return false
     }
+
+    /// Collects node IDs whose position ranges are affected by this operation. Used by ``ScopeRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
+    ///
+    /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
+    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
+        switch self {
+        case let .remove(scope):
+            switch scope {
+            case let .aligned(alignedScope):
+                return alignedScope.siblings.flatMap(\.elementNodeIDs)
+            case let .perParent(perParentScope):
+                return perParentScope.elementNodeIDs
+            case let .subtree(subtreeScope):
+                return [subtreeScope.nodeID]
+            }
+        case let .replace(scope):
+            switch scope {
+            case let .selfSimilar(selfSimilarScope):
+                return [selfSimilarScope.targetNodeID, selfSimilarScope.donorNodeID]
+            case let .branchPivot(pivotScope):
+                return [pivotScope.pickNodeID]
+            case let .descendantPromotion(promotionScope):
+                return [promotionScope.ancestorPickNodeID, promotionScope.descendantPickNodeID]
+            }
+        case let .permute(scope):
+            switch scope {
+            case let .siblingPermutation(permScope):
+                return permScope.swappableGroups.flatMap { $0 }
+            }
+        case let .migrate(scope):
+            return scope.elementNodeIDs + [scope.receiverSequenceNodeID]
+        case .minimize, .exchange:
+            return nil
+        }
+    }
 }
 
 // MARK: - Preconditions
