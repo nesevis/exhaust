@@ -57,6 +57,8 @@ struct GraphRemovalEncoder: GraphEncoder {
     // MARK: - Candidate Construction
 
     /// Removes the specified elements from the sequence.
+    ///
+    /// Uses the parent sequence's ``SequenceMetadata/childPositionRanges`` to compute the full extent of each element, including any transparent wrapper markers (getSize-bind, transform-bind). Removing only the inner chooseBits position would leave orphan markers that the materializer cannot decode.
     private func buildPerParentCandidate(
         scope: PerParentRemovalScope,
         sequence: ChoiceSequence,
@@ -64,8 +66,12 @@ struct GraphRemovalEncoder: GraphEncoder {
     ) -> ChoiceSequence? {
         var rangeSet = RangeSet<Int>()
         for nodeID in scope.elementNodeIDs {
-            guard let range = graph.nodes[nodeID].positionRange else { continue }
-            rangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
+            guard let extent = elementExtent(
+                for: nodeID,
+                inSequence: scope.sequenceNodeID,
+                graph: graph
+            ) else { continue }
+            rangeSet.insert(contentsOf: extent.lowerBound ..< extent.upperBound + 1)
         }
         guard rangeSet.isEmpty == false else { return nil }
         var candidate = sequence
@@ -83,8 +89,12 @@ struct GraphRemovalEncoder: GraphEncoder {
         var rangeSet = RangeSet<Int>()
         for sibling in scope.siblings {
             for elementNodeID in sibling.elementNodeIDs {
-                guard let range = graph.nodes[elementNodeID].positionRange else { continue }
-                rangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
+                guard let extent = elementExtent(
+                    for: elementNodeID,
+                    inSequence: sibling.sequenceNodeID,
+                    graph: graph
+                ) else { continue }
+                rangeSet.insert(contentsOf: extent.lowerBound ..< extent.upperBound + 1)
             }
         }
         guard rangeSet.isEmpty == false else { return nil }
@@ -92,6 +102,23 @@ struct GraphRemovalEncoder: GraphEncoder {
         candidate.removeSubranges(rangeSet)
         guard candidate.shortLexPrecedes(sequence) else { return nil }
         return candidate
+    }
+
+    /// Returns the full ``ChoiceSequence`` extent for an element child of a sequence node, including any transparent wrapper markers.
+    private func elementExtent(
+        for elementNodeID: Int,
+        inSequence sequenceNodeID: Int,
+        graph: ChoiceGraph
+    ) -> ClosedRange<Int>? {
+        guard sequenceNodeID < graph.nodes.count else { return nil }
+        guard case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind else { return nil }
+        guard let childIndex = graph.nodes[sequenceNodeID].children.firstIndex(of: elementNodeID),
+              childIndex < metadata.childPositionRanges.count else {
+            // Fall back to the chooseBits single position if the parent isn't a
+            // sequence with stored extents (defensive — shouldn't normally happen).
+            return graph.nodes[elementNodeID].positionRange
+        }
+        return metadata.childPositionRanges[childIndex]
     }
 
     /// Removes a structural subtree.

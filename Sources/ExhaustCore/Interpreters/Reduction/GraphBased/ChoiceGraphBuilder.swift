@@ -112,9 +112,10 @@ struct ChoiceGraphBuilder {
         let nodeID = emitNode(
             kind: .sequence(SequenceMetadata(
                 lengthConstraint: metadata.validRange,
-                elementCount: elements.count
+                elementCount: elements.count,
+                childPositionRanges: [] // Patched after children are walked.
             )),
-            positionRange: nil, // Set after children are walked
+            positionRange: nil,
             children: [],
             parent: parent
         )
@@ -125,30 +126,38 @@ struct ChoiceGraphBuilder {
         var consumed = 1 // open marker
         var childIDs: [Int] = []
         childIDs.reserveCapacity(elements.count)
+        var childExtents: [ClosedRange<Int>] = []
+        childExtents.reserveCapacity(elements.count)
 
         var elementIndex = 0
         while elementIndex < elements.count {
             let childStartID = nextNodeID
+            let elementStart = offset + consumed
             let elementConsumed = walk(
                 elements[elementIndex],
-                offset: offset + consumed,
+                offset: elementStart,
                 parent: nodeID,
                 bindDepth: bindDepth
             )
             consumed += elementConsumed
             // The walk may have emitted one or more nodes; the first is the direct child.
-            if childStartID < nextNodeID {
+            if childStartID < nextNodeID, elementConsumed > 0 {
                 childIDs.append(childStartID)
+                childExtents.append(elementStart ... (elementStart + elementConsumed - 1))
             }
             elementIndex += 1
         }
 
         consumed += 1 // close marker
 
-        // Patch the node with children and position range.
+        // Patch the node with children, position range, and child extents.
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
-            kind: nodes[nodeID].kind,
+            kind: .sequence(SequenceMetadata(
+                lengthConstraint: metadata.validRange,
+                elementCount: elements.count,
+                childPositionRanges: childExtents
+            )),
             positionRange: offset ... (offset + consumed - 1),
             children: childIDs,
             parent: parent
@@ -331,7 +340,8 @@ struct ChoiceGraphBuilder {
             let nodeID = emitNode(
                 kind: .sequence(SequenceMetadata(
                     lengthConstraint: metadata.validRange,
-                    elementCount: elements.count
+                    elementCount: elements.count,
+                    childPositionRanges: []
                 )),
                 positionRange: nil,
                 children: [],
