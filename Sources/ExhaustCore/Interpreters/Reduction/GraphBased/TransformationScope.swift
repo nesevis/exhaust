@@ -206,8 +206,11 @@ struct RedistributionPair {
     /// The sink leaf (zero or near-target, can absorb magnitude).
     let sinkNodeID: Int
 
-    /// The shared type tag for type-compatibility.
-    let typeTag: TypeTag
+    /// The source leaf's type tag.
+    let sourceTag: TypeTag
+
+    /// The sink leaf's type tag. Equal to ``sourceTag`` for same-type pairs, different for cross-type (for example float ↔ int) pairs.
+    let sinkTag: TypeTag
 }
 
 /// Scope for tandem lockstep reduction.

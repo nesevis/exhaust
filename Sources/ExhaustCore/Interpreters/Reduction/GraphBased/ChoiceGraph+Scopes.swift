@@ -504,7 +504,8 @@ extension ChoiceGraph {
                 pairs.append(RedistributionPair(
                     sourceNodeID: edge.nodeA,
                     sinkNodeID: edge.nodeB,
-                    typeTag: edge.typeTag ?? .bits
+                    sourceTag: metadataA.typeTag,
+                    sinkTag: metadataB.typeTag
                 ))
             }
             // B is earlier — B can be the source (zeroed), A receives.
@@ -512,7 +513,8 @@ extension ChoiceGraph {
                 pairs.append(RedistributionPair(
                     sourceNodeID: edge.nodeB,
                     sinkNodeID: edge.nodeA,
-                    typeTag: edge.typeTag ?? .bits
+                    sourceTag: metadataB.typeTag,
+                    sinkTag: metadataA.typeTag
                 ))
             }
         }
@@ -562,14 +564,16 @@ extension ChoiceGraph {
                 pairs.append(RedistributionPair(
                     sourceNodeID: edge.nodeA,
                     sinkNodeID: edge.nodeB,
-                    typeTag: edge.typeTag ?? .bits
+                    sourceTag: metadataA.typeTag,
+                    sinkTag: metadataB.typeTag
                 ))
             }
             if distanceB > 0 {
                 pairs.append(RedistributionPair(
                     sourceNodeID: edge.nodeB,
                     sinkNodeID: edge.nodeA,
-                    typeTag: edge.typeTag ?? .bits
+                    sourceTag: metadataB.typeTag,
+                    sinkTag: metadataA.typeTag
                 ))
             }
         }

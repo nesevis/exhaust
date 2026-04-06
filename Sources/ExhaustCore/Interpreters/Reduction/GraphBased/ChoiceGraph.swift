@@ -384,39 +384,39 @@ public extension ChoiceGraph {
 extension ChoiceGraph {
     /// Computes type-compatibility edges from the current node state.
     ///
-    /// Groups active `chooseBits` leaves by ``TypeTag`` and creates edges between all antichain-independent pairs within each group.
+    /// Creates an edge between any two antichain-independent active `chooseBits` leaves whose values are numeric (integer or floating-point). Same-tag pairs carry their shared ``TypeTag``; cross-type numeric pairs (for example float ↔ int) carry nil. The encoder differentiates same-tag from cross-type using the leaf metadata at dispatch time.
     private func computeTypeCompatibilityEdges() -> [TypeCompatibilityEdge] {
-        let activeLeaves = nodes.filter { node in
-            if case .chooseBits = node.kind, node.positionRange != nil {
-                return true
-            }
-            return false
+        var numericLeafIDs: [Int] = []
+        var leafTags: [Int: TypeTag] = [:]
+        for node in nodes {
+            guard case let .chooseBits(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
+            // All chooseBits leaves are numeric in this framework (integer or float).
+            numericLeafIDs.append(node.id)
+            leafTags[node.id] = metadata.typeTag
         }
-
-        var leafNodesByTag: [TypeTag: [Int]] = [:]
-        for leaf in activeLeaves {
-            if case let .chooseBits(metadata) = leaf.kind {
-                leafNodesByTag[metadata.typeTag, default: []].append(leaf.id)
-            }
-        }
+        guard numericLeafIDs.count >= 2 else { return [] }
 
         var edges: [TypeCompatibilityEdge] = []
-        for (tag, leafIDs) in leafNodesByTag where leafIDs.count >= 2 {
-            var indexA = 0
-            while indexA < leafIDs.count {
-                var indexB = indexA + 1
-                while indexB < leafIDs.count {
-                    if areIndependent(leafIDs[indexA], leafIDs[indexB]) {
-                        edges.append(TypeCompatibilityEdge(
-                            nodeA: leafIDs[indexA],
-                            nodeB: leafIDs[indexB],
-                            typeTag: tag
-                        ))
-                    }
-                    indexB += 1
+        var indexA = 0
+        while indexA < numericLeafIDs.count {
+            var indexB = indexA + 1
+            while indexB < numericLeafIDs.count {
+                let nodeA = numericLeafIDs[indexA]
+                let nodeB = numericLeafIDs[indexB]
+                if areIndependent(nodeA, nodeB) {
+                    let tagA = leafTags[nodeA]
+                    let tagB = leafTags[nodeB]
+                    let sharedTag: TypeTag? = (tagA == tagB) ? tagA : nil
+                    edges.append(TypeCompatibilityEdge(
+                        nodeA: nodeA,
+                        nodeB: nodeB,
+                        typeTag: sharedTag
+                    ))
                 }
-                indexA += 1
+                indexB += 1
             }
+            indexA += 1
         }
         return edges
     }

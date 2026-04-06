@@ -745,15 +745,16 @@ struct MigrationSource: ScopeSource {
         var entries: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int)] = []
 
         // Find all sequence node pairs where source is earlier than receiver.
-        var sequenceNodes: [(nodeID: Int, positionRange: ClosedRange<Int>, elementCount: Int, maxLength: Int)] = []
+        // Lengths use UInt64 throughout to match the framework's length-generator type.
+        var sequenceNodes: [(nodeID: Int, positionRange: ClosedRange<Int>, elementCount: UInt64, maxLength: UInt64)] = []
         for node in graph.nodes {
             guard case let .sequence(metadata) = node.kind else { continue }
             guard let range = node.positionRange else { continue }
-            let maxLength = metadata.lengthConstraint.map { Int($0.upperBound) } ?? Int.max
+            let maxLength = metadata.lengthConstraint?.upperBound ?? UInt64.max
             sequenceNodes.append((
                 nodeID: node.id,
                 positionRange: range,
-                elementCount: metadata.elementCount,
+                elementCount: UInt64(metadata.elementCount),
                 maxLength: maxLength
             ))
         }
