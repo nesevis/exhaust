@@ -12,11 +12,13 @@ struct GraphRemovalEncoder: GraphEncoder {
     let name: EncoderName = .graphDeletion
 
     private var candidate: ChoiceSequence?
+    private var mutation: ProjectedMutation?
     private var emitted = false
 
     mutating func start(scope: TransformationScope) {
         emitted = false
         candidate = nil
+        mutation = nil
 
         let sequence = scope.baseSequence
         let graph = scope.graph
@@ -28,6 +30,12 @@ struct GraphRemovalEncoder: GraphEncoder {
                 sequence: sequence,
                 graph: graph
             )
+            if candidate != nil {
+                mutation = .sequenceElementsRemoved(
+                    seqNodeID: perParentScope.sequenceNodeID,
+                    removedNodeIDs: perParentScope.elementNodeIDs
+                )
+            }
 
         case let .remove(.aligned(alignedScope)):
             candidate = buildAlignedCandidate(
@@ -35,6 +43,17 @@ struct GraphRemovalEncoder: GraphEncoder {
                 sequence: sequence,
                 graph: graph
             )
+            if candidate != nil {
+                // Aligned removal touches multiple sequences. Layer 7 will
+                // model this with a richer mutation case; for Layer 3 we
+                // attribute the mutation to the first participating sibling
+                // and rely on the requiresFullRebuild fallback.
+                let firstSibling = alignedScope.siblings.first
+                mutation = .sequenceElementsRemoved(
+                    seqNodeID: firstSibling?.sequenceNodeID ?? -1,
+                    removedNodeIDs: alignedScope.siblings.flatMap(\.elementNodeIDs)
+                )
+            }
 
         case let .remove(.subtree(subtreeScope)):
             candidate = buildSubtreeCandidate(
@@ -42,16 +61,24 @@ struct GraphRemovalEncoder: GraphEncoder {
                 sequence: sequence,
                 graph: graph
             )
+            if candidate != nil {
+                mutation = .sequenceElementsRemoved(
+                    seqNodeID: graph.nodes[subtreeScope.nodeID].parent ?? -1,
+                    removedNodeIDs: [subtreeScope.nodeID]
+                )
+            }
 
         default:
             candidate = nil
+            mutation = nil
         }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         guard emitted == false else { return nil }
         emitted = true
-        return candidate
+        guard let candidate, let mutation else { return nil }
+        return EncoderProbe(candidate: candidate, mutation: mutation)
     }
 
     // MARK: - Candidate Construction

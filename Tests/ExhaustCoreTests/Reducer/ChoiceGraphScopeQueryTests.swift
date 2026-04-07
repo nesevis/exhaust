@@ -223,7 +223,7 @@ struct ChoiceGraphScopeQueryTests {
         var candidates: [ChoiceSequence] = []
         var lastAccepted = false
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
-            candidates.append(probe)
+            candidates.append(probe.candidate)
             lastAccepted = false
         }
 

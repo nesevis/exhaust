@@ -36,7 +36,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
     private struct IntegerState {
         var sequence: ChoiceSequence
-        let leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag)]
+        let leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)]
         var phase: IntegerPhase
         var leafIndex: Int
         var stepper: DirectionalStepper?
@@ -125,12 +125,14 @@ struct GraphMinimizationEncoder: GraphEncoder {
     // MARK: - Float State
 
     private struct FloatTarget {
+        let nodeID: Int
         let sequenceIndex: Int
         let typeTag: TypeTag
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
         var currentValue: Double
         var currentBitPattern: UInt64
+        let mayReshape: Bool
     }
 
     private enum FloatStage: Int, Comparable {
@@ -190,19 +192,73 @@ struct GraphMinimizationEncoder: GraphEncoder {
         }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
         case .idle, .kleisliFibre:
             return nil
         case var .integerLeaves(state):
-            let result = nextIntegerProbe(state: &state, lastAccepted: lastAccepted)
+            guard let candidate = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {
+                mode = .integerLeaves(state)
+                return nil
+            }
+            let mutation = buildIntegerLeafValuesMutation(candidate: candidate, state: state)
             mode = .integerLeaves(state)
-            return result
+            return EncoderProbe(candidate: candidate, mutation: mutation)
         case var .floatLeaves(state):
-            let result = nextFloatProbe(state: &state, lastAccepted: lastAccepted)
+            guard let candidate = nextFloatProbe(state: &state, lastAccepted: lastAccepted) else {
+                mode = .floatLeaves(state)
+                return nil
+            }
+            let mutation = buildFloatLeafValuesMutation(candidate: candidate, state: state)
             mode = .floatLeaves(state)
-            return result
+            return EncoderProbe(candidate: candidate, mutation: mutation)
         }
+    }
+
+    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline. Each leaf in ``IntegerState/leafPositions`` is checked at its sequence index; differing values become ``LeafChange`` entries that carry the leaf's bind-inner reshape marker through to ``ChoiceGraph/apply(_:freshTree:)``.
+    private func buildIntegerLeafValuesMutation(
+        candidate: ChoiceSequence,
+        state: IntegerState
+    ) -> ProjectedMutation {
+        var changes: [LeafChange] = []
+        for leaf in state.leafPositions {
+            guard leaf.sequenceIndex < candidate.count,
+                  leaf.sequenceIndex < state.sequence.count
+            else { continue }
+            guard let candidateChoice = candidate[leaf.sequenceIndex].value?.choice,
+                  let baselineChoice = state.sequence[leaf.sequenceIndex].value?.choice
+            else { continue }
+            guard candidateChoice != baselineChoice else { continue }
+            changes.append(LeafChange(
+                leafNodeID: leaf.nodeID,
+                newValue: candidateChoice,
+                mayReshape: leaf.mayReshape
+            ))
+        }
+        return .leafValues(changes)
+    }
+
+    /// Builds a `.leafValues` mutation report by comparing the candidate against the float state's current baseline.
+    private func buildFloatLeafValuesMutation(
+        candidate: ChoiceSequence,
+        state: FloatState
+    ) -> ProjectedMutation {
+        var changes: [LeafChange] = []
+        for target in state.targets {
+            guard target.sequenceIndex < candidate.count,
+                  target.sequenceIndex < state.sequence.count
+            else { continue }
+            guard let candidateChoice = candidate[target.sequenceIndex].value?.choice,
+                  let baselineChoice = state.sequence[target.sequenceIndex].value?.choice
+            else { continue }
+            guard candidateChoice != baselineChoice else { continue }
+            changes.append(LeafChange(
+                leafNodeID: target.nodeID,
+                newValue: candidateChoice,
+                mayReshape: target.mayReshape
+            ))
+        }
+        return .leafValues(changes)
     }
 
     // MARK: - Integer Mode
@@ -213,9 +269,10 @@ struct GraphMinimizationEncoder: GraphEncoder {
         graph: ChoiceGraph,
         warmStarts: [Int: ConvergedOrigin]
     ) {
-        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag)] = []
+        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)] = []
 
-        for nodeID in scope.leafNodeIDs {
+        for entry in scope.leaves {
+            let nodeID = entry.nodeID
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
             // Verify the sequence position is a value entry. After
@@ -233,7 +290,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
                     validRange: metadata.validRange,
                     currentBitPattern: current,
                     targetBitPattern: target,
-                    typeTag: metadata.typeTag
+                    typeTag: metadata.typeTag,
+                    mayReshape: entry.mayReshapeOnAcceptance
                 ))
             }
         }
@@ -677,19 +735,22 @@ struct GraphMinimizationEncoder: GraphEncoder {
     ) {
         var targets: [FloatTarget] = []
 
-        for nodeID in scope.leafNodeIDs {
+        for entry in scope.leaves {
+            let nodeID = entry.nodeID
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
             guard range.lowerBound < sequence.count,
-                  let entry = sequence[range.lowerBound].value else { continue }
-            guard case let .floating(currentValue, currentBP, _) = entry.choice else { continue }
+                  let sequenceEntry = sequence[range.lowerBound].value else { continue }
+            guard case let .floating(currentValue, currentBP, _) = sequenceEntry.choice else { continue }
             targets.append(FloatTarget(
+                nodeID: nodeID,
                 sequenceIndex: range.lowerBound,
                 typeTag: metadata.typeTag,
                 validRange: metadata.validRange,
-                isRangeExplicit: entry.isRangeExplicit,
+                isRangeExplicit: sequenceEntry.isRangeExplicit,
                 currentValue: currentValue,
-                currentBitPattern: currentBP
+                currentBitPattern: currentBP,
+                mayReshape: entry.mayReshapeOnAcceptance
             ))
         }
 

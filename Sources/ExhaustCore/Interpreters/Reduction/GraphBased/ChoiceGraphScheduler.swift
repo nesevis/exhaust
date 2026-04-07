@@ -188,6 +188,7 @@ enum ChoiceGraphScheduler {
                 let accepted = try runProbeLoop(
                     encoder: &encoder,
                     scope: scope,
+                    graph: graph,
                     sequence: &sequence,
                     tree: &tree,
                     output: &output,
@@ -405,6 +406,7 @@ enum ChoiceGraphScheduler {
     private static func runProbeLoop<Output>(
         encoder: inout any GraphEncoder,
         scope: TransformationScope,
+        graph: ChoiceGraph,
         sequence: inout ChoiceSequence,
         tree: inout ChoiceTree,
         output: inout Output,
@@ -430,7 +432,7 @@ enum ChoiceGraphScheduler {
             let probeHash = ZobristHash.incrementalHash(
                 baseHash: baseHash,
                 baseSequence: sequence,
-                probe: probe
+                probe: probe.candidate
             )
             if rejectCache.contains(probeHash) {
                 continue
@@ -452,7 +454,7 @@ enum ChoiceGraphScheduler {
             var filterObservations: [UInt64: FilterObservation] = [:]
 
             if let result = try decoder.decode(
-                candidate: probe,
+                candidate: probe.candidate,
                 gen: gen,
                 tree: tree,
                 originalSequence: sequence,
@@ -466,6 +468,30 @@ enum ChoiceGraphScheduler {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
+
+                // Layer 3 shadow mode: route the encoder's mutation report
+                // through ``ChoiceGraph/apply(_:freshTree:)`` so the partial
+                // rebuild path runs alongside the authoritative full rebuild.
+                // The full rebuild (driven by the cycle loop after this
+                // function returns) remains the source of truth for the
+                // graph state; this call exercises the apply pathway and,
+                // under instrumentation, validates that it produced a graph
+                // with a matching structural fingerprint.
+                let application = graph.apply(probe.mutation, freshTree: tree)
+                if isInstrumented, application.requiresFullRebuild == false {
+                    let fresh = ChoiceGraph.build(from: tree)
+                    if graph.structuralFingerprint != fresh.structuralFingerprint {
+                        ExhaustLog.warning(
+                            category: .reducer,
+                            event: "graph_apply_shadow_mismatch",
+                            metadata: [
+                                "encoder": encoder.name.rawValue,
+                                "live_fp": "\(graph.structuralFingerprint)",
+                                "fresh_fp": "\(fresh.structuralFingerprint)",
+                            ]
+                        )
+                    }
+                }
             } else {
                 rejectCache.insert(probeHash)
             }
@@ -659,7 +685,7 @@ enum ChoiceGraphScheduler {
                 var filterObservations: [UInt64: FilterObservation] = [:]
 
                 if let result = try decoder.decode(
-                    candidate: probe,
+                    candidate: probe.candidate,
                     gen: gen,
                     tree: tree,
                     originalSequence: sequence,
@@ -733,6 +759,7 @@ enum ChoiceGraphScheduler {
             let accepted = try runProbeLoop(
                 encoder: &encoder,
                 scope: scope,
+                graph: graph,
                 sequence: &sequence,
                 tree: &tree,
                 output: &output,

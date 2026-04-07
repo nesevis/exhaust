@@ -12,11 +12,13 @@ struct GraphPermutationEncoder: GraphEncoder {
     let name: EncoderName = .graphSiblingSwap
 
     private var candidate: ChoiceSequence?
+    private var mutation: ProjectedMutation?
     private var emitted = false
 
     mutating func start(scope: TransformationScope) {
         emitted = false
         candidate = nil
+        mutation = nil
 
         guard case let .permute(.siblingPermutation(permutationScope)) = scope.transformation.operation else {
             return
@@ -52,11 +54,17 @@ struct GraphPermutationEncoder: GraphEncoder {
 
         guard result.shortLexPrecedes(sequence) else { return }
         candidate = result
+        // Permutation reorders subtrees but does not change the structural
+        // skeleton: positions stay the same, only the values inside the
+        // swapped ranges move. Layer 7 will implement the in-place sibling
+        // swap; until then this falls through to requiresFullRebuild = true.
+        mutation = .siblingsSwapped(zipNodeID: permutationScope.zipNodeID, idA: nodeA, idB: nodeB)
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         guard emitted == false else { return nil }
         emitted = true
-        return candidate
+        guard let candidate, let mutation else { return nil }
+        return EncoderProbe(candidate: candidate, mutation: mutation)
     }
 }

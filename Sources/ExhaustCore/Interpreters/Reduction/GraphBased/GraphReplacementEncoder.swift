@@ -21,7 +21,7 @@ struct GraphReplacementEncoder: GraphEncoder {
 
     private enum Mode {
         case idle
-        case singleShot(candidate: ChoiceSequence?)
+        case singleShot(probe: EncoderProbe?)
         case branchPivotIterator(BranchPivotIteratorState)
     }
 
@@ -29,6 +29,7 @@ struct GraphReplacementEncoder: GraphEncoder {
     ///
     /// Captures the pick-site context once at ``start(scope:)`` time so the encoder does not re-walk the tree on every probe. The iterator stays valid until the first acceptance; after that the cached `tree` and `elements` no longer match the live sequence and the iterator exits.
     private struct BranchPivotIteratorState {
+        let pickNodeID: Int
         let tree: ChoiceTree
         let baseSequence: ChoiceSequence
         let fingerprint: Fingerprint
@@ -53,11 +54,21 @@ struct GraphReplacementEncoder: GraphEncoder {
 
         switch replacementScope {
         case let .selfSimilar(selfSimilarScope):
-            mode = .singleShot(candidate: buildSelfSimilarCandidate(
+            let candidate = buildSelfSimilarCandidate(
                 scope: selfSimilarScope,
                 sequence: sequence,
                 graph: graph
-            ))
+            )
+            let probe = candidate.map {
+                EncoderProbe(
+                    candidate: $0,
+                    mutation: .selfSimilarReplaced(
+                        targetNodeID: selfSimilarScope.targetNodeID,
+                        donorNodeID: selfSimilarScope.donorNodeID
+                    )
+                )
+            }
+            mode = .singleShot(probe: probe)
 
         case let .branchPivot(pivotScope):
             if let iteratorState = startBranchPivotIterator(
@@ -69,22 +80,32 @@ struct GraphReplacementEncoder: GraphEncoder {
             }
 
         case let .descendantPromotion(promotionScope):
-            mode = .singleShot(candidate: buildDescendantPromotionCandidate(
+            let candidate = buildDescendantPromotionCandidate(
                 scope: promotionScope,
                 sequence: sequence,
                 graph: graph
-            ))
+            )
+            let probe = candidate.map {
+                EncoderProbe(
+                    candidate: $0,
+                    mutation: .descendantPromoted(
+                        ancestorPickNodeID: promotionScope.ancestorPickNodeID,
+                        descendantPickNodeID: promotionScope.descendantPickNodeID
+                    )
+                )
+            }
+            mode = .singleShot(probe: probe)
         }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
         case .idle:
             return nil
 
-        case let .singleShot(candidate):
+        case let .singleShot(probe):
             mode = .idle
-            return candidate
+            return probe
 
         case var .branchPivotIterator(state):
             // Any acceptance invalidates the cached tree and elements; the
@@ -162,6 +183,7 @@ struct GraphReplacementEncoder: GraphEncoder {
         let currentLeafCount = Self.leafCount(in: elements[selectedIndex])
 
         return BranchPivotIteratorState(
+            pickNodeID: scope.pickNodeID,
             tree: tree,
             baseSequence: sequence,
             fingerprint: fingerprint,
@@ -179,7 +201,7 @@ struct GraphReplacementEncoder: GraphEncoder {
     /// For each remaining target the helper applies the leaf-count gate (skip when the candidate has more leaves than the current selection), the speculative one-shot leaf minimization (rewrite every `.choice` in the candidate subtree to its reduction target), and a shortlex-equal-or-better check against the cached base sequence. Targets that fail any gate are skipped without leaving the call — gates are decided locally, not by the scheduler.
     private func nextBranchPivotProbe(
         state: inout BranchPivotIteratorState
-    ) -> ChoiceSequence? {
+    ) -> EncoderProbe? {
         while state.nextTargetCursor < state.targets.count {
             let target = state.targets[state.nextTargetCursor]
             state.nextTargetCursor += 1
@@ -204,7 +226,13 @@ struct GraphReplacementEncoder: GraphEncoder {
             guard state.baseSequence.shortLexPrecedes(candidateSequence) == false else {
                 continue
             }
-            return candidateSequence
+            return EncoderProbe(
+                candidate: candidateSequence,
+                mutation: .branchSelected(
+                    pickNodeID: state.pickNodeID,
+                    newSelectedID: target.branchID
+                )
+            )
         }
         return nil
     }

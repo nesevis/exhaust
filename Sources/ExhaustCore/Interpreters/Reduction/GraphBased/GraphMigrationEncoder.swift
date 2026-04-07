@@ -12,11 +12,13 @@ struct GraphMigrationEncoder: GraphEncoder {
     let name: EncoderName = .graphDeletion // Reuse deletion name for now
 
     private var candidate: ChoiceSequence?
+    private var mutation: ProjectedMutation?
     private var emitted = false
 
     mutating func start(scope: TransformationScope) {
         emitted = false
         candidate = nil
+        mutation = nil
 
         guard case let .migrate(migrationScope) = scope.transformation.operation else {
             return
@@ -27,12 +29,21 @@ struct GraphMigrationEncoder: GraphEncoder {
             sequence: scope.baseSequence,
             graph: scope.graph
         )
+        if candidate != nil {
+            mutation = .sequenceElementsMigrated(
+                sourceSeqID: migrationScope.sourceSequenceNodeID,
+                receiverSeqID: migrationScope.receiverSequenceNodeID,
+                movedNodeIDs: migrationScope.elementNodeIDs,
+                insertionOffset: migrationScope.receiverPositionRange.upperBound
+            )
+        }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         guard emitted == false else { return nil }
         emitted = true
-        return candidate
+        guard let candidate, let mutation else { return nil }
+        return EncoderProbe(candidate: candidate, mutation: mutation)
     }
 
     // MARK: - Candidate Construction

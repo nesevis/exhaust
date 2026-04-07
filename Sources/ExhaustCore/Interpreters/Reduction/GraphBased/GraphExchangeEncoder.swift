@@ -19,6 +19,8 @@ struct GraphExchangeEncoder: GraphEncoder {
 
     private var mode: Mode = .idle
     private var sequence: ChoiceSequence = ChoiceSequence()
+    /// Maps the sequence index of every leaf the current scope can touch to its graph node ID and bind-inner reshape marker. Built once at ``start(scope:)`` time and read by ``nextProbe(lastAccepted:)`` to construct ``ProjectedMutation/leafValues(_:)`` reports without diffing the entire sequence.
+    private var leafLookup: [Int: (nodeID: Int, mayReshape: Bool)] = [:]
 
     private enum Mode {
         case idle
@@ -90,12 +92,14 @@ struct GraphExchangeEncoder: GraphEncoder {
     mutating func start(scope: TransformationScope) {
         sequence = scope.baseSequence
         mode = .idle
+        leafLookup = [:]
 
         guard case let .exchange(exchangeScope) = scope.transformation.operation else {
             return
         }
 
         let graph = scope.graph
+        populateLeafLookup(from: exchangeScope, graph: graph)
 
         switch exchangeScope {
         case let .redistribution(redistScope):
@@ -105,7 +109,30 @@ struct GraphExchangeEncoder: GraphEncoder {
         }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    /// Builds the (sequence index → nodeID, mayReshape) lookup once for both redistribution and lockstep modes. The wrapping ``nextProbe(lastAccepted:)`` reads it to construct ``ProjectedMutation/leafValues(_:)`` reports.
+    private mutating func populateLeafLookup(from exchangeScope: ExchangeScope, graph: ChoiceGraph) {
+        switch exchangeScope {
+        case let .redistribution(redistScope):
+            for pair in redistScope.pairs {
+                if let range = graph.nodes[pair.source.nodeID].positionRange {
+                    leafLookup[range.lowerBound] = (pair.source.nodeID, pair.source.mayReshapeOnAcceptance)
+                }
+                if let range = graph.nodes[pair.sink.nodeID].positionRange {
+                    leafLookup[range.lowerBound] = (pair.sink.nodeID, pair.sink.mayReshapeOnAcceptance)
+                }
+            }
+        case let .tandem(tandemScope):
+            for group in tandemScope.groups {
+                for entry in group.leaves {
+                    if let range = graph.nodes[entry.nodeID].positionRange {
+                        leafLookup[range.lowerBound] = (entry.nodeID, entry.mayReshapeOnAcceptance)
+                    }
+                }
+            }
+        }
+    }
+
+    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
         case .idle:
             return nil
@@ -116,18 +143,48 @@ struct GraphExchangeEncoder: GraphEncoder {
                 state.acceptedPairIndices.insert(state.pairIndex)
             }
             state.lastEmittedCandidate = nil
-            let result = nextRedistributionProbe(state: &state, lastAccepted: lastAccepted)
+            guard let candidate = nextRedistributionProbe(state: &state, lastAccepted: lastAccepted) else {
+                mode = .redistribution(state)
+                return nil
+            }
             mode = .redistribution(state)
-            return result
+            return EncoderProbe(
+                candidate: candidate,
+                mutation: buildLeafValuesMutation(candidate: candidate)
+            )
         case var .lockstep(state):
             if lastAccepted, let accepted = state.lastEmittedCandidate {
                 sequence = accepted
             }
             state.lastEmittedCandidate = nil
-            let result = nextLockstepProbe(state: &state, lastAccepted: lastAccepted)
+            guard let candidate = nextLockstepProbe(state: &state, lastAccepted: lastAccepted) else {
+                mode = .lockstep(state)
+                return nil
+            }
             mode = .lockstep(state)
-            return result
+            return EncoderProbe(
+                candidate: candidate,
+                mutation: buildLeafValuesMutation(candidate: candidate)
+            )
         }
+    }
+
+    /// Constructs a `.leafValues` mutation report by walking ``leafLookup`` and recording each entry whose value differs between the candidate and the current baseline.
+    private func buildLeafValuesMutation(candidate: ChoiceSequence) -> ProjectedMutation {
+        var changes: [LeafChange] = []
+        for (sequenceIndex, info) in leafLookup {
+            guard sequenceIndex < candidate.count, sequenceIndex < sequence.count else { continue }
+            guard let candidateChoice = candidate[sequenceIndex].value?.choice,
+                  let baselineChoice = sequence[sequenceIndex].value?.choice
+            else { continue }
+            guard candidateChoice != baselineChoice else { continue }
+            changes.append(LeafChange(
+                leafNodeID: info.nodeID,
+                newValue: candidateChoice,
+                mayReshape: info.mayReshape
+            ))
+        }
+        return .leafValues(changes)
     }
 
     // MARK: - Redistribution

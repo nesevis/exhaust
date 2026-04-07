@@ -118,7 +118,7 @@ struct GraphEncoderTests {
         var candidates: [ChoiceSequence] = []
         var lastAccepted = false
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
-            candidates.append(probe)
+            candidates.append(probe.candidate)
             lastAccepted = false
         }
 
@@ -150,7 +150,7 @@ struct GraphEncoderTests {
         #expect(firstProbe != nil)
 
         if let probe = firstProbe {
-            let probeValues = probe.compactMap { $0.value?.choice.bitPattern64 }
+            let probeValues = probe.candidate.compactMap { $0.value?.choice.bitPattern64 }
             #expect(probeValues.contains(0))
         }
     }
@@ -243,10 +243,11 @@ struct GraphEncoderTests {
 
         var encoder = GraphMigrationEncoder()
         encoder.start(scope: scope)
-        let candidate = encoder.nextProbe(lastAccepted: false)
+        let probe = encoder.nextProbe(lastAccepted: false)
 
-        let resolvedCandidate = try? #require(candidate)
-        guard let resolvedCandidate else { return }
+        let resolvedProbe = try? #require(probe)
+        guard let resolvedProbe else { return }
+        let resolvedCandidate = resolvedProbe.candidate
 
         // Migration must produce a strictly shorter sequence (the source's
         // wrappers are removed entirely, not just emptied).
