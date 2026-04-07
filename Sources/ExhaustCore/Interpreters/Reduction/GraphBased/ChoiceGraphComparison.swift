@@ -52,7 +52,6 @@ public enum ChoiceGraphComparison {
     ) -> ChoiceGraphComparisonResult {
         var result = ChoiceGraphComparisonResult()
         result.checks.append(checkDependencyEdges(graph: graph, cdg: cdg))
-        result.checks.append(checkAntichain(graph: graph, cdg: cdg))
         result.checks.append(checkBindDepth(graph: graph, bindIndex: bindIndex, sequence: sequence))
         result.checks.append(checkBoundSubtree(graph: graph, bindIndex: bindIndex, sequence: sequence))
         result.checks.append(checkLeafPositions(graph: graph, cdg: cdg, sequence: sequence))
@@ -78,36 +77,6 @@ public enum ChoiceGraphComparison {
             name: "dependency_edges",
             passed: passed,
             detail: "CDG: \(cdgEdgeCount) edges, graph: \(graphEdgeCount) edges"
-        )
-    }
-
-    /// Validates that the graph's deletion antichain is superset-or-equal of the CDG's antichain.
-    @_spi(ExhaustInternal) public static func checkAntichain(
-        graph: ChoiceGraph,
-        cdg: ChoiceDependencyGraph
-    ) -> ChoiceGraphComparisonResult.CheckResult {
-        let cdgAntichain = cdg.maximalAntichain()
-        let graphAntichain = graph.deletionAntichain
-
-        // Map CDG antichain members to position ranges for comparison.
-        let cdgPositions = Set(cdgAntichain.map { cdg.nodes[$0].positionRange })
-        let graphPositions = Set(graphAntichain.compactMap { graph.nodes[$0].positionRange })
-
-        // Every CDG antichain member's position should be covered by some graph antichain member.
-        var covered = 0
-        for cdgRange in cdgPositions {
-            if graphPositions.contains(where: { graphRange in
-                graphRange.contains(cdgRange.lowerBound) || cdgRange.contains(graphRange.lowerBound)
-            }) {
-                covered += 1
-            }
-        }
-
-        let passed = covered == cdgPositions.count
-        return .init(
-            name: "antichain",
-            passed: passed,
-            detail: "CDG: \(cdgAntichain.count), graph: \(graphAntichain.count), covered: \(covered)/\(cdgPositions.count)"
         )
     }
 

@@ -18,11 +18,11 @@
 ///
 /// ## Lifecycle
 ///
-/// The static skeleton (zip/pick topology, containment and self-similarity edges) is built once. Dynamic regions (bind subtrees, sequence elements) are rebuilt on structural acceptance. Type-compatibility edges and source/sink annotations are computed lazily on first access and invalidated by structural mutations.
+/// The static skeleton (zip/pick topology, containment and self-similarity edges) is built once. Dynamic regions (bind subtrees, sequence elements) are rebuilt on structural acceptance. Type-compatibility edges, source/sink annotations, topological order, and reachability are computed lazily on first access and invalidated by structural mutations. Removed nodes are tracked via ``removedNodeIDs`` (tombstones) so that node IDs remain stable across partial rebuilds — every iteration site filters tombstoned IDs out.
 ///
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``SelfSimilarityEdge``, ``TypeCompatibilityEdge``
 public final class ChoiceGraph {
-    /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``.
+    /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``. Tombstoned IDs (members of ``removedNodeIDs``) remain in the array so that surviving IDs stay stable; iteration sites must filter them via ``isTombstoned(_:)``.
     public var nodes: [ChoiceGraphNode]
 
     /// Containment edges forming the tree structure (parent → child).
@@ -34,11 +34,13 @@ public final class ChoiceGraph {
     /// Self-similarity edges between active pick nodes with matching `depthMaskedSiteID`.
     public var selfSimilarityEdges: [SelfSimilarityEdge]
 
-    /// Node IDs in dependency order (roots first). Computed via Kahn's algorithm on dependency edges.
-    public let topologicalOrder: [Int]
+    /// Node IDs that have been removed from the graph by an in-place mutation but whose array slots are retained for ID stability. Iteration sites must skip these via ``isTombstoned(_:)``. Always empty until Layer 4 of the partial-rebuild rollout introduces in-place mutation; Layer 1 adds the field, the helper, and the filtering as a no-op precondition.
+    var removedNodeIDs: Set<Int> = []
 
-    /// Transitive closure of dependency edges. `reachability[i]` contains all node IDs reachable from node `i`.
-    public let reachability: [Int: Set<Int>]
+    /// Returns true when `nodeID` has been removed from the graph but its array slot is retained. Used by every iteration site on ``ChoiceGraph`` to skip removed nodes.
+    func isTombstoned(_ nodeID: Int) -> Bool {
+        removedNodeIDs.contains(nodeID)
+    }
 
     // MARK: - Lazy Edge State
 
@@ -47,6 +49,12 @@ public final class ChoiceGraph {
 
     /// Cached source/sink annotations. Computed on first access via ``computeSourceSinkAnnotations()``, invalidated by ``invalidateDerivedEdges()``.
     private var _sourceSinkStatus: [Int: SourceSinkStatus]?
+
+    /// Cached topological order over dependency edges. Computed on first access via ``computeTopologicalOrder()``, invalidated by ``invalidateTopologicalCaches()``. Layer 1 introduces the cache; Layer 4 wires up the invalidation when bind subtrees are rebuilt in place.
+    private var _topologicalOrder: [Int]?
+
+    /// Cached transitive closure of dependency edges. Computed on first access via ``computeReachability()``, invalidated by ``invalidateTopologicalCaches()``.
+    private var _reachability: [Int: Set<Int>]?
 
     /// Type-compatibility edges between antichain members with matching types. Computed lazily on first access and cached until invalidated by a structural mutation.
     public var typeCompatibilityEdges: [TypeCompatibilityEdge] {
@@ -64,11 +72,33 @@ public final class ChoiceGraph {
         return computed
     }
 
+    /// Node IDs in dependency order (roots first). Computed via Kahn's algorithm on dependency edges. Cached until ``invalidateTopologicalCaches()`` clears it.
+    public var topologicalOrder: [Int] {
+        if let cached = _topologicalOrder { return cached }
+        let computed = computeTopologicalOrder()
+        _topologicalOrder = computed
+        return computed
+    }
+
+    /// Transitive closure of dependency edges. `reachability[i]` contains all node IDs reachable from node `i`. Cached until ``invalidateTopologicalCaches()`` clears it.
+    public var reachability: [Int: Set<Int>] {
+        if let cached = _reachability { return cached }
+        let computed = computeReachability()
+        _reachability = computed
+        return computed
+    }
+
     /// Drops cached type-compatibility edges, source/sink annotations, and convergence data on leaf nodes, forcing recomputation on next access.
     func invalidateDerivedEdges() {
         _typeCompatibilityEdges = nil
         _sourceSinkStatus = nil
         clearConvergenceData()
+    }
+
+    /// Drops cached topological order and reachability, forcing recomputation on next access. Called by in-place mutations that add or remove dependency edges (bind subtree rebuilds, branch pivots). Layer 1 introduces this hook; no Layer 1 call site invokes it because Layer 1 does not mutate the graph.
+    func invalidateTopologicalCaches() {
+        _topologicalOrder = nil
+        _reachability = nil
     }
 
     /// Writes convergence records from an encoder pass onto the corresponding leaf nodes.
@@ -77,6 +107,7 @@ public final class ChoiceGraph {
     func recordConvergence(_ records: [Int: ConvergedOrigin]) {
         for (sequenceIndex, origin) in records {
             guard let nodeIndex = nodes.firstIndex(where: { node in
+                guard isTombstoned(node.id) == false else { return false }
                 guard case .chooseBits = node.kind else { return false }
                 return node.positionRange?.lowerBound == sequenceIndex
             }) else { continue }
@@ -95,6 +126,7 @@ public final class ChoiceGraph {
     /// Clears convergence data from all leaf nodes.
     private func clearConvergenceData() {
         for index in nodes.indices {
+            guard isTombstoned(index) == false else { continue }
             guard case var .chooseBits(metadata) = nodes[index].kind else { continue }
             guard metadata.convergedOrigin != nil else { continue }
             metadata.convergedOrigin = nil
@@ -114,16 +146,12 @@ public final class ChoiceGraph {
         nodes: [ChoiceGraphNode],
         containmentEdges: [ContainmentEdge],
         dependencyEdges: [DependencyEdge],
-        selfSimilarityEdges: [SelfSimilarityEdge],
-        topologicalOrder: [Int],
-        reachability: [Int: Set<Int>]
+        selfSimilarityEdges: [SelfSimilarityEdge]
     ) {
         self.nodes = nodes
         self.containmentEdges = containmentEdges
         self.dependencyEdges = dependencyEdges
         self.selfSimilarityEdges = selfSimilarityEdges
-        self.topologicalOrder = topologicalOrder
-        self.reachability = reachability
     }
 }
 
@@ -214,7 +242,7 @@ public extension ChoiceGraph {
     ///
     /// Computes the optimal maximum antichain using Hopcroft-Karp bipartite matching on the reachability relation restricted to the candidate set, then extracts the antichain via Konig's theorem. For the typical deletion candidate set (5-15 nodes), this runs in microseconds.
     ///
-    /// - SeeAlso: ``BipartiteMatching``, ``ChoiceDependencyGraph/maximalAntichain()``
+    /// - SeeAlso: ``BipartiteMatching``
     var deletionAntichain: [Int] {
         let candidateNodes = nodes.filter { node in
             guard node.positionRange != nil else { return false }
@@ -425,11 +453,84 @@ extension ChoiceGraph {
     private func computeSourceSinkAnnotations() -> [Int: SourceSinkStatus] {
         var status: [Int: SourceSinkStatus] = [:]
         for node in nodes {
+            guard isTombstoned(node.id) == false else { continue }
             guard case let .chooseBits(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
             let isZero = metadata.value.bitPattern64 == 0
             status[node.id] = isZero ? .sink : .source
         }
         return status
+    }
+
+    /// Computes topological order over dependency edges via Kahn's algorithm.
+    ///
+    /// Returns node IDs in dependency order (roots first). Only nodes that appear in dependency edges are included. Mirrors the prior implementation in ``ChoiceGraphBuilder`` so that the lazy computed property produces the same result the eager constructor used to.
+    ///
+    /// - Complexity: O(*V* + *E*) where *V* is the node count and *E* is the dependency edge count.
+    private func computeTopologicalOrder() -> [Int] {
+        let nodeCount = nodes.count
+        var inDegree = [Int](repeating: 0, count: nodeCount)
+        var adjacency = [[Int]](repeating: [], count: nodeCount)
+        for edge in dependencyEdges {
+            adjacency[edge.source].append(edge.target)
+            inDegree[edge.target] += 1
+        }
+
+        // Only include nodes that participate in dependency relationships.
+        var participatingNodes = Set<Int>()
+        for edge in dependencyEdges {
+            participatingNodes.insert(edge.source)
+            participatingNodes.insert(edge.target)
+        }
+
+        var queue: [Int] = []
+        for nodeID in participatingNodes where inDegree[nodeID] == 0 {
+            queue.append(nodeID)
+        }
+
+        var order: [Int] = []
+        order.reserveCapacity(participatingNodes.count)
+        var front = 0
+
+        while front < queue.count {
+            let current = queue[front]
+            front += 1
+            order.append(current)
+            for dependent in adjacency[current] {
+                inDegree[dependent] -= 1
+                if inDegree[dependent] == 0 {
+                    queue.append(dependent)
+                }
+            }
+        }
+        return order
+    }
+
+    /// Computes the transitive closure of dependency edges via reverse topological propagation.
+    ///
+    /// `result[i]` contains all node IDs reachable from node `i` via one or more dependency edges. Mirrors the prior implementation in ``ChoiceGraphBuilder``.
+    ///
+    /// - Complexity: O(*V* · *E*) time, O(*V*²) space in the worst case.
+    fileprivate func computeReachability() -> [Int: Set<Int>] {
+        let nodeCount = nodes.count
+        var adjacency = [[Int]](repeating: [], count: nodeCount)
+        for edge in dependencyEdges {
+            adjacency[edge.source].append(edge.target)
+        }
+
+        var result = [Int: Set<Int>]()
+        for nodeID in topologicalOrder.reversed() {
+            var reachable = Set<Int>()
+            for dependent in adjacency[nodeID] {
+                reachable.insert(dependent)
+                if let transitive = result[dependent] {
+                    reachable.formUnion(transitive)
+                }
+            }
+            if reachable.isEmpty == false {
+                result[nodeID] = reachable
+            }
+        }
+        return result
     }
 }

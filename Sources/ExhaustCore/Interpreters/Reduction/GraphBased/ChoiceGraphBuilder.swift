@@ -745,26 +745,16 @@ struct ChoiceGraphBuilder {
             }
         }
 
-        // Topological order via Kahn's algorithm on dependency edges.
-        let topologicalOrder = computeTopologicalOrder(
-            nodeCount: nodes.count,
-            dependencyEdges: allDependencyEdges
-        )
-
-        // Reachability via reverse topological propagation.
-        let reachability = computeReachability(
-            nodeCount: nodes.count,
-            dependencyEdges: allDependencyEdges,
-            topologicalOrder: topologicalOrder
-        )
-
+        // Topological order and reachability are computed lazily on first
+        // access via ``ChoiceGraph.topologicalOrder`` / ``ChoiceGraph.reachability``.
+        // The builder no longer eagerly computes them — keeping the computation
+        // close to the cache slot lets Layer 4's partial-rebuild path invalidate
+        // and recompute through the same code path.
         return ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,
             dependencyEdges: allDependencyEdges,
-            selfSimilarityEdges: selfSimilarityEdges,
-            topologicalOrder: topologicalOrder,
-            reachability: reachability
+            selfSimilarityEdges: selfSimilarityEdges
         )
     }
 
@@ -772,86 +762,5 @@ struct ChoiceGraphBuilder {
     private func subtreeSequenceLength(_ node: ChoiceGraphNode) -> Int {
         guard let range = node.positionRange else { return 0 }
         return range.count
-    }
-
-    // MARK: - Topological Sort
-
-    /// Computes topological order of nodes via Kahn's algorithm on dependency edges.
-    ///
-    /// Returns node IDs in dependency order (roots first). Only nodes that appear in dependency edges are included.
-    ///
-    /// - Complexity: O(*V* + *E*) where *V* is the node count and *E* is the dependency edge count.
-    private func computeTopologicalOrder(
-        nodeCount: Int,
-        dependencyEdges: [DependencyEdge]
-    ) -> [Int] {
-        var inDegree = [Int](repeating: 0, count: nodeCount)
-        var adjacency = [[Int]](repeating: [], count: nodeCount)
-        for edge in dependencyEdges {
-            adjacency[edge.source].append(edge.target)
-            inDegree[edge.target] += 1
-        }
-
-        // Only include nodes that participate in dependency relationships.
-        var participatingNodes = Set<Int>()
-        for edge in dependencyEdges {
-            participatingNodes.insert(edge.source)
-            participatingNodes.insert(edge.target)
-        }
-
-        var queue: [Int] = []
-        for nodeID in participatingNodes where inDegree[nodeID] == 0 {
-            queue.append(nodeID)
-        }
-
-        var order: [Int] = []
-        order.reserveCapacity(participatingNodes.count)
-        var front = 0
-
-        while front < queue.count {
-            let current = queue[front]
-            front += 1
-            order.append(current)
-            for dependent in adjacency[current] {
-                inDegree[dependent] -= 1
-                if inDegree[dependent] == 0 {
-                    queue.append(dependent)
-                }
-            }
-        }
-        return order
-    }
-
-    // MARK: - Reachability
-
-    /// Computes transitive closure of dependency edges via reverse topological propagation.
-    ///
-    /// `reachability[i]` contains all node IDs reachable from node `i` via one or more dependency edges.
-    ///
-    /// - Complexity: O(*V* * *E*) time, O(*V*^2) space.
-    private func computeReachability(
-        nodeCount: Int,
-        dependencyEdges: [DependencyEdge],
-        topologicalOrder: [Int]
-    ) -> [Int: Set<Int>] {
-        var adjacency = [[Int]](repeating: [], count: nodeCount)
-        for edge in dependencyEdges {
-            adjacency[edge.source].append(edge.target)
-        }
-
-        var result = [Int: Set<Int>]()
-        for nodeID in topologicalOrder.reversed() {
-            var reachable = Set<Int>()
-            for dependent in adjacency[nodeID] {
-                reachable.insert(dependent)
-                if let transitive = result[dependent] {
-                    reachable.formUnion(transitive)
-                }
-            }
-            if reachable.isEmpty == false {
-                result[nodeID] = reachable
-            }
-        }
-        return result
     }
 }
