@@ -258,7 +258,7 @@ extension Int: BitPatternConvertible {
 
     /// Maps the full Int range to the full UInt64 range.
     public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64.min ... UInt64.min
+        UInt64.min ... UInt64.max
     }
 
     /// Maps Int to UInt64 using bit pattern conversion
