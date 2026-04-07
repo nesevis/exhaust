@@ -149,19 +149,43 @@ enum MinimizationScope {
     case kleisliFibre(KleisliFibreScope)
 }
 
+/// Per-leaf annotation in a value-only scope.
+///
+/// Carries the leaf's node ID plus a marker that tells the graph (on acceptance) whether mutating this leaf might trigger a downstream bind subtree rebuild. The encoder ignores ``mayReshapeOnAcceptance`` and minimizes the leaf value identically for both kinds. The marker rides along into the encoder's ``ProjectedMutation`` report so that ``ChoiceGraph/apply(_:freshTree:)`` can route between the value-only fast path and the bind-inner reshape path on a per-leaf basis.
+///
+/// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. Layer 4's extended ``ChoiceGraph/rebuildBoundSubtree(bindNodeID:newBoundTree:)`` is what makes the marker actionable; until then, any leaf change with the marker set causes ``ChoiceGraph/apply(_:freshTree:)`` to set ``ChangeApplication/requiresFullRebuild``.
+struct LeafEntry {
+    /// Identifier of the leaf node.
+    let nodeID: Int
+
+    /// True when this leaf is the inner child of a non-structurally-constant bind. Encoders ignore this; the graph reads it on acceptance.
+    let mayReshapeOnAcceptance: Bool
+
+    init(nodeID: Int, mayReshapeOnAcceptance: Bool = false) {
+        self.nodeID = nodeID
+        self.mayReshapeOnAcceptance = mayReshapeOnAcceptance
+    }
+}
+
 /// Scope for integer leaf value minimization.
 struct IntegerMinimizationScope {
-    /// Leaf node IDs to minimise, ordered by value yield descending (bind-inner leaves with large bound subtrees first).
-    let leafNodeIDs: [Int]
+    /// Leaves to minimise, ordered by value yield descending (bind-inner leaves with large bound subtrees first). Each entry carries the bind-inner reshape marker so the graph can route value updates per leaf without the encoder having to know.
+    let leaves: [LeafEntry]
 
     /// Whether batch zeroing should be attempted first.
     let batchZeroEligible: Bool
+
+    /// Backward-compat shorthand for the encoder's existing read pattern. Layer 3 will update encoders to read ``leaves`` directly and remove this property.
+    var leafNodeIDs: [Int] { leaves.map(\.nodeID) }
 }
 
 /// Scope for float leaf value minimization.
 struct FloatMinimizationScope {
-    /// Float leaf node IDs to minimise.
-    let leafNodeIDs: [Int]
+    /// Float leaves to minimise. Each entry carries the bind-inner reshape marker.
+    let leaves: [LeafEntry]
+
+    /// Backward-compat shorthand. Layer 3 will update encoders to read ``leaves`` directly.
+    var leafNodeIDs: [Int] { leaves.map(\.nodeID) }
 }
 
 /// Scope for Kleisli fibre search along a dependency edge.
@@ -201,16 +225,22 @@ struct RedistributionScope {
 /// A single source-sink pair for redistribution.
 struct RedistributionPair {
     /// The source leaf (non-zero, can donate magnitude).
-    let sourceNodeID: Int
+    let source: LeafEntry
 
     /// The sink leaf (zero or near-target, can absorb magnitude).
-    let sinkNodeID: Int
+    let sink: LeafEntry
 
     /// The source leaf's type tag.
     let sourceTag: TypeTag
 
     /// The sink leaf's type tag. Equal to ``sourceTag`` for same-type pairs, different for cross-type (for example float ↔ int) pairs.
     let sinkTag: TypeTag
+
+    /// Backward-compat shorthand. Layer 3 will update encoders to read ``source`` directly.
+    var sourceNodeID: Int { source.nodeID }
+
+    /// Backward-compat shorthand. Layer 3 will update encoders to read ``sink`` directly.
+    var sinkNodeID: Int { sink.nodeID }
 }
 
 /// Scope for tandem lockstep reduction.
@@ -221,11 +251,14 @@ struct TandemScope {
 
 /// A group of same-typed leaves for tandem reduction.
 struct TandemGroup {
-    /// Leaf node IDs in this group.
-    let leafNodeIDs: [Int]
+    /// Leaves in this group, each carrying the bind-inner reshape marker.
+    let leaves: [LeafEntry]
 
     /// The shared type tag.
     let typeTag: TypeTag
+
+    /// Backward-compat shorthand. Layer 3 will update encoders to read ``leaves`` directly.
+    var leafNodeIDs: [Int] { leaves.map(\.nodeID) }
 }
 
 // MARK: - Permutation Scopes

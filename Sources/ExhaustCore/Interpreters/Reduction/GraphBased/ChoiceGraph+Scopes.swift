@@ -381,16 +381,32 @@ extension ChoiceGraph {
         }
 
         if integerLeafNodeIDs.isEmpty == false {
+            let entries = integerLeafNodeIDs.map { nodeID in
+                LeafEntry(
+                    nodeID: nodeID,
+                    mayReshapeOnAcceptance: isBindInnerOfNonConstantBind(
+                        nodeID,
+                        innerChildToBind: innerChildToBind
+                    )
+                )
+            }
             scopes.append(.integerLeaves(IntegerMinimizationScope(
-                leafNodeIDs: integerLeafNodeIDs,
-                batchZeroEligible: integerLeafNodeIDs.count > 1
+                leaves: entries,
+                batchZeroEligible: entries.count > 1
             )))
         }
 
         if floatLeafNodeIDs.isEmpty == false {
-            scopes.append(.floatLeaves(FloatMinimizationScope(
-                leafNodeIDs: floatLeafNodeIDs
-            )))
+            let entries = floatLeafNodeIDs.map { nodeID in
+                LeafEntry(
+                    nodeID: nodeID,
+                    mayReshapeOnAcceptance: isBindInnerOfNonConstantBind(
+                        nodeID,
+                        innerChildToBind: innerChildToBind
+                    )
+                )
+            }
+            scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
 
         // Kleisli fibre: one scope per non-constant reduction edge.
@@ -437,6 +453,30 @@ extension ChoiceGraph {
         return nodes[boundChildID].positionRange?.count ?? 0
     }
 
+    /// Returns true when a leaf is the inner child of a non-structurally-constant bind. Mutating its value may trigger a downstream bound subtree rebuild, which the partial-rebuild path routes through ``ChoiceGraph/apply(_:freshTree:)`` separately from pure value-only changes.
+    func isBindInnerOfNonConstantBind(
+        _ leafNodeID: Int,
+        innerChildToBind: [Int: Int]
+    ) -> Bool {
+        guard let bindNodeID = innerChildToBind[leafNodeID] else { return false }
+        guard case let .bind(metadata) = nodes[bindNodeID].kind else { return false }
+        return metadata.isStructurallyConstant == false
+    }
+
+    /// Wraps a leaf node ID in a ``LeafEntry`` with the bind-inner reshape marker populated from the supplied index.
+    func makeLeafEntry(
+        _ nodeID: Int,
+        innerChildToBind: [Int: Int]
+    ) -> LeafEntry {
+        LeafEntry(
+            nodeID: nodeID,
+            mayReshapeOnAcceptance: isBindInnerOfNonConstantBind(
+                nodeID,
+                innerChildToBind: innerChildToBind
+            )
+        )
+    }
+
     /// Collects all leaf node IDs (chooseBits with non-nil position range) within the subtree rooted at the given node.
     private func collectDescendantLeaves(from rootNodeID: Int) -> [Int] {
         var result: [Int] = []
@@ -474,6 +514,7 @@ extension ChoiceGraph {
     ///
     /// - Returns: Redistribution scope (if pairs exist) and tandem scope (if same-typed leaf groups with at least two members exist).
     func exchangeScopes() -> [ExchangeScope] {
+        let innerChildToBind = buildInnerChildToBind()
         var scopes: [ExchangeScope] = []
 
         // Redistribution: pair any two type-compatible leaves where at least
@@ -507,8 +548,8 @@ extension ChoiceGraph {
             // A is earlier — A can be the source (zeroed), B receives.
             if positionA < positionB, distanceA > 0 {
                 pairs.append(RedistributionPair(
-                    sourceNodeID: edge.nodeA,
-                    sinkNodeID: edge.nodeB,
+                    source: makeLeafEntry(edge.nodeA, innerChildToBind: innerChildToBind),
+                    sink: makeLeafEntry(edge.nodeB, innerChildToBind: innerChildToBind),
                     sourceTag: metadataA.typeTag,
                     sinkTag: metadataB.typeTag
                 ))
@@ -516,8 +557,8 @@ extension ChoiceGraph {
             // B is earlier — B can be the source (zeroed), A receives.
             if positionB < positionA, distanceB > 0 {
                 pairs.append(RedistributionPair(
-                    sourceNodeID: edge.nodeB,
-                    sinkNodeID: edge.nodeA,
+                    source: makeLeafEntry(edge.nodeB, innerChildToBind: innerChildToBind),
+                    sink: makeLeafEntry(edge.nodeA, innerChildToBind: innerChildToBind),
                     sourceTag: metadataB.typeTag,
                     sinkTag: metadataA.typeTag
                 ))
@@ -535,7 +576,8 @@ extension ChoiceGraph {
         }
         let tandemGroups = leafGroups.compactMap { tag, leafIDs -> TandemGroup? in
             guard leafIDs.count >= 2 else { return nil }
-            return TandemGroup(leafNodeIDs: leafIDs, typeTag: tag)
+            let entries = leafIDs.map { makeLeafEntry($0, innerChildToBind: innerChildToBind) }
+            return TandemGroup(leaves: entries, typeTag: tag)
         }
         if tandemGroups.isEmpty == false {
             scopes.append(.tandem(TandemScope(groups: tandemGroups)))
@@ -548,6 +590,7 @@ extension ChoiceGraph {
     ///
     /// Unlike ``exchangeScopes()``, this emits pairs in BOTH directions for every type-compatible edge — no source-earlier-than-receiver constraint. The shortlex gate is bypassed during the speculative phase; only the final comparison against the checkpoint determines acceptance.
     func speculativeExchangeScopes() -> [ExchangeScope] {
+        let innerChildToBind = buildInnerChildToBind()
         var pairs: [RedistributionPair] = []
         for edge in typeCompatibilityEdges {
             guard case let .chooseBits(metadataA) = nodes[edge.nodeA].kind,
@@ -567,16 +610,16 @@ extension ChoiceGraph {
             // Emit both directions for any edge where at least one leaf is not at target.
             if distanceA > 0 {
                 pairs.append(RedistributionPair(
-                    sourceNodeID: edge.nodeA,
-                    sinkNodeID: edge.nodeB,
+                    source: makeLeafEntry(edge.nodeA, innerChildToBind: innerChildToBind),
+                    sink: makeLeafEntry(edge.nodeB, innerChildToBind: innerChildToBind),
                     sourceTag: metadataA.typeTag,
                     sinkTag: metadataB.typeTag
                 ))
             }
             if distanceB > 0 {
                 pairs.append(RedistributionPair(
-                    sourceNodeID: edge.nodeB,
-                    sinkNodeID: edge.nodeA,
+                    source: makeLeafEntry(edge.nodeB, innerChildToBind: innerChildToBind),
+                    sink: makeLeafEntry(edge.nodeA, innerChildToBind: innerChildToBind),
                     sourceTag: metadataB.typeTag,
                     sinkTag: metadataA.typeTag
                 ))

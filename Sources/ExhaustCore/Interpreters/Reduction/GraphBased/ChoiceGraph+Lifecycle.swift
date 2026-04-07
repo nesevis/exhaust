@@ -3,6 +3,75 @@
 //  Exhaust
 //
 
+// MARK: - Mutation Application
+
+extension ChoiceGraph {
+    /// Applies an encoder-reported mutation to the graph in place.
+    ///
+    /// Returns a ``ChangeApplication`` describing what changed. When ``ChangeApplication/requiresFullRebuild`` is true the scheduler should discard the partial result and rebuild the graph from `freshTree` via ``ChoiceGraph/build(from:)``.
+    ///
+    /// Layer 2 implements only the value-only fast path of ``ProjectedMutation/leafValues(_:)`` (entries with ``LeafChange/mayReshape`` false). Bind-inner reshape and structural mutation cases all set `requiresFullRebuild = true` until Layer 4 extends ``rebuildBoundSubtree(bindNodeID:newBoundTree:)`` and Layer 7 wires up the structural cases.
+    ///
+    /// - Parameters:
+    ///   - mutation: The mutation reported by the encoder whose probe was just accepted.
+    ///   - freshTree: The choice tree the materializer produced for the accepted candidate. Layer 2 does not consult it; later layers walk it to splice rebuilt subtrees into the graph.
+    /// - Returns: A ``ChangeApplication`` describing the in-place edits and any fallback signal.
+    func apply(_ mutation: ProjectedMutation, freshTree: ChoiceTree) -> ChangeApplication {
+        var application = ChangeApplication()
+        switch mutation {
+        case let .leafValues(changes):
+            applyLeafValues(changes, into: &application)
+        case .sequenceElementsRemoved,
+             .branchSelected,
+             .selfSimilarReplaced,
+             .descendantPromoted,
+             .sequenceElementsMigrated,
+             .siblingsSwapped:
+            // Structural mutations are not yet implemented in the partial
+            // path. Layer 7 replaces these fallbacks with proper splice logic.
+            application.requiresFullRebuild = true
+        }
+        return application
+    }
+
+    /// Value-only fast path for ``ProjectedMutation/leafValues(_:)``.
+    ///
+    /// If any change carries ``LeafChange/mayReshape`` true the application bails out with ``ChangeApplication/requiresFullRebuild`` set — Layer 4's extended ``rebuildBoundSubtree(bindNodeID:newBoundTree:)`` will handle reshape leaves in place. Otherwise each leaf's ``ChooseBitsMetadata/value`` is rewritten and the type-compatibility / source-sink caches are invalidated.
+    private func applyLeafValues(
+        _ changes: [LeafChange],
+        into application: inout ChangeApplication
+    ) {
+        if changes.contains(where: \.mayReshape) {
+            application.requiresFullRebuild = true
+            return
+        }
+        for change in changes {
+            guard change.leafNodeID < nodes.count else { continue }
+            guard isTombstoned(change.leafNodeID) == false else { continue }
+            guard case let .chooseBits(metadata) = nodes[change.leafNodeID].kind else { continue }
+            let updatedMetadata = ChooseBitsMetadata(
+                typeTag: metadata.typeTag,
+                validRange: metadata.validRange,
+                isRangeExplicit: metadata.isRangeExplicit,
+                value: change.newValue,
+                convergedOrigin: metadata.convergedOrigin
+            )
+            nodes[change.leafNodeID] = ChoiceGraphNode(
+                id: nodes[change.leafNodeID].id,
+                kind: .chooseBits(updatedMetadata),
+                positionRange: nodes[change.leafNodeID].positionRange,
+                children: nodes[change.leafNodeID].children,
+                parent: nodes[change.leafNodeID].parent
+            )
+            application.touchedNodeIDs.insert(change.leafNodeID)
+        }
+        // Leaf values changed → type-compatibility and source/sink caches
+        // depend on values and must drop. Topological order and reachability
+        // are unaffected (they depend on dependency edges, not values).
+        invalidateDerivedEdges()
+    }
+}
+
 // MARK: - Dynamic Region Rebuild
 
 public extension ChoiceGraph {
