@@ -247,8 +247,13 @@ extension ChoiceGraph {
             }
         }
 
-        // Branch pivot: one scope per alternative branch at each pick node,
-        // ordered by estimated subtree size ascending (simplest first).
+        // Branch pivot: one scope per active pick node, carrying all
+        // non-selected alternatives sorted simplest-first by subtree size.
+        // The encoder iterates `targetBranchIDs` across probes within a
+        // single scope dispatch — bundling at the pick-site level keeps
+        // alternatives off the scheduler's priority queue, where lower-yield
+        // pivots would otherwise be starved by higher-yield ones from other
+        // pick sites.
         for node in nodes {
             guard case let .pick(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
@@ -268,14 +273,14 @@ extension ChoiceGraph {
             }
             alternatives.sort { $0.subtreeSize < $1.subtreeSize }
 
-            for alternative in alternatives {
-                scopes.append(.branchPivot(BranchPivotScope(
-                    pickNodeID: node.id,
-                    siteID: metadata.siteID,
-                    selectedID: metadata.selectedID,
-                    targetBranchID: alternative.branchID
-                )))
-            }
+            guard alternatives.isEmpty == false else { continue }
+
+            scopes.append(.branchPivot(BranchPivotScope(
+                pickNodeID: node.id,
+                siteID: metadata.siteID,
+                selectedID: metadata.selectedID,
+                targetBranchIDs: alternatives.map(\.branchID)
+            )))
         }
 
         // Descendant promotion: pairs (ancestor pick, descendant pick) with
