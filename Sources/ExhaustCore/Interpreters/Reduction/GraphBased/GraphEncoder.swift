@@ -37,6 +37,11 @@ protocol GraphEncoder {
     /// Descriptive name for logging and instrumentation.
     var name: EncoderName { get }
 
+    /// True when the encoder's probe candidates are post-lift sequences whose fibre differs from ``TransformationScope/tree``.
+    ///
+    /// The scheduler routes such probes through ``SequenceDecoder/exact(materializePicks:)`` instead of the bind-aware guided decoder, because guided decoding would substitute stale bound-subtree content from the parent tree's fallback path. Default `false` for all intra-skeleton encoders. Composed encoders that drive a generator lift internally (such as ``GraphComposedEncoder``) override this to `true`.
+    var requiresExactDecoder: Bool { get }
+
     /// Initialises internal state for a new encoding pass.
     ///
     /// Called once per scope dispatch. The encoder extracts candidates from the scope's operation metadata and prepares its probe state machine. The encoder reads warm-start data from ``TransformationScope/warmStartRecords`` — it never accesses the graph directly.
@@ -57,6 +62,9 @@ protocol GraphEncoder {
 }
 
 extension GraphEncoder {
+    /// Default: encoders use the scheduler's hasBind-aware decoder selection.
+    var requiresExactDecoder: Bool { false }
+
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]

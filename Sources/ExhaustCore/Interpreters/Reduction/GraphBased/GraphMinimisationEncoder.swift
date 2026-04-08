@@ -25,7 +25,6 @@ struct GraphMinimizationEncoder: GraphEncoder {
         case idle
         case integerLeaves(IntegerState)
         case floatLeaves(FloatState)
-        case kleisliFibre
     }
 
     var convergenceRecords: [Int: ConvergedOrigin] {
@@ -187,14 +186,17 @@ struct GraphMinimizationEncoder: GraphEncoder {
         case let .floatLeaves(floatScope):
             startFloat(scope: floatScope, sequence: sequence, graph: graph)
         case .kleisliFibre:
-            // Kleisli fibre: complex interleaved search — stub for now.
-            mode = .kleisliFibre
+            // Kleisli fibre scopes are dispatched via ``GraphComposedEncoder``
+            // constructed at the scheduler call site, never through this encoder.
+            // Reaching this branch indicates a routing bug.
+            assertionFailure("kleisliFibre scopes must route through GraphComposedEncoder, not GraphMinimizationEncoder")
+            mode = .idle
         }
     }
 
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
-        case .idle, .kleisliFibre:
+        case .idle:
             return nil
         case var .integerLeaves(state):
             guard let candidate = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {

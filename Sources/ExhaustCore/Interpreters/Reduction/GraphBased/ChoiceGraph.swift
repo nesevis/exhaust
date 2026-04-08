@@ -153,6 +153,28 @@ public final class ChoiceGraph {
         self.dependencyEdges = dependencyEdges
         self.selfSimilarityEdges = selfSimilarityEdges
     }
+
+    // MARK: - Copy
+
+    /// Returns a structurally independent clone with all field state shared via Swift's COW semantics.
+    ///
+    /// All stored properties are value types (arrays, sets, dictionaries, optionals of those), so the copy is `O(1)` until any subsequent mutation triggers COW on the touched buffer. Used by composed encoders that need to preview a speculative mutation against a throwaway graph — for example, the kleisli composition lift closure that applies a bind reshape on a copy via ``apply(_:freshTree:)`` instead of paying the cost of a full ``ChoiceGraph/build(from:)`` rebuild.
+    ///
+    /// The cached lazy fields (``_typeCompatibilityEdges``, ``_sourceSinkStatus``, ``_topologicalOrder``, ``_reachability``) are also carried over. Any subsequent mutation that calls ``invalidateDerivedEdges()`` or ``invalidateTopologicalCaches()`` on the copy drops them on the copy alone, leaving the parent's caches intact via COW.
+    func copy() -> ChoiceGraph {
+        let result = ChoiceGraph(
+            nodes: nodes,
+            containmentEdges: containmentEdges,
+            dependencyEdges: dependencyEdges,
+            selfSimilarityEdges: selfSimilarityEdges
+        )
+        result.removedNodeIDs = removedNodeIDs
+        result._typeCompatibilityEdges = _typeCompatibilityEdges
+        result._sourceSinkStatus = _sourceSinkStatus
+        result._topologicalOrder = _topologicalOrder
+        result._reachability = _reachability
+        return result
+    }
 }
 
 // MARK: - Construction

@@ -409,9 +409,15 @@ extension ChoiceGraph {
             scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
 
-        // Kleisli fibre: one scope per non-constant reduction edge.
+        // Kleisli fibre: one scope per reduction edge. Matches the CDG's
+        // ``ChoiceDependencyGraph/reductionEdges()`` behaviour, which deliberately does
+        // NOT filter on ``isStructurallyConstant``: a structurally constant bind (no
+        // nested binds/picks) can still carry domain-dependent values whose ranges
+        // shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ...
+        // max(2, n+1))` is the canonical example — the bound subtree contains only
+        // plain choices, but their ranges depend on `n`). The composition's downstream
+        // encoder finds these via the lift's fibre coverage.
         for edge in reductionEdges {
-            guard edge.isStructurallyConstant == false else { continue }
             guard nodes[edge.upstreamNodeID].positionRange != nil else { continue }
             let downstreamNodeIDs = collectDescendantLeaves(from: edge.downstreamNodeID)
             let boundSubtreeSize = nodes[edge.downstreamNodeID].positionRange?.count ?? 0
