@@ -191,7 +191,7 @@ public enum ReducerPhaseIdentifier: Hashable, Sendable {
 
 /// Attributes property invocations and acceptances to the outermost active reduction phase.
 ///
-/// Stack-based: each phase method pushes on entry and pops on exit. When relax-round (Phase 4) calls `runBaseDescent` and `runFibreDescent` internally, the stack is `[.relaxRound, .baseDescent]` — attributions go to `.relaxRound` (the outermost phase that initiated the work). Invocations from rolled-back phases are kept (they consumed real budget); acceptances from rolled-back phases are reverted (the improvements were undone).
+/// Stack-based: each phase method pushes on entry and pops on exit. Invocations from rolled-back phases are kept (they consumed real budget); acceptances from rolled-back phases are reverted (the improvements were undone).
 struct PhaseTracker {
     typealias Phase = ReducerPhaseIdentifier
 
