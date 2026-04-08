@@ -12,7 +12,7 @@ extension ReductionState {
     ///
     /// Targets the case where Phase 1c's guided lift does not preserve the failure at a reduced bind-inner value, but a specific downstream reduction in the new fibre recovers it. The composition searches both levels jointly — the upstream encoder proposes bind-inner values, the generator lift materializes without property check, and the downstream encoder searches the lifted fibre.
     ///
-    /// Follows the ``runRelaxRound(remaining:)`` checkpoint/rollback pattern: snapshot before exploration, accept only if the net result is shortlex-better than the checkpoint.
+    /// Uses a checkpoint/rollback pattern: snapshot before exploration, accept only if the net result is shortlex-better than the checkpoint.
     ///
     /// Returns `true` if the exploration found a net improvement.
     func runKleisliExploration(
@@ -93,7 +93,7 @@ extension ReductionState {
                 continue
             }
 
-            // Run via manual loop (same pattern as runRelaxRound).
+            // Run via manual loop.
             let edgeSubBudget: Int = {
                 switch edgeBudgetPolicy {
                 case let .fixed(cap):

@@ -25,7 +25,6 @@ public enum EncoderName: String, Hashable, Sendable {
     case redistributeArbitraryValuePairsAcrossContainers
     case linearScan
     /// Exploration
-    case relaxRound
     case kleisliComposition
     // Reduction passes
     case branchProjection
@@ -41,4 +40,7 @@ public enum EncoderName: String, Hashable, Sendable {
     case graphKleisliFibre
     case graphFloatSearch
     case graphTandem
+    /// Staleness detection probe loop in the graph reducer.
+    /// Re-runs the materializer for each converged leaf at `floor - 1` to detect whether the convergence floor is stale.
+    case graphStaleness
 }

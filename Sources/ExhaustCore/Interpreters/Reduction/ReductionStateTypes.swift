@@ -187,7 +187,6 @@ public enum ReducerPhaseIdentifier: Hashable, Sendable {
     case baseDescent
     case fibreDescent
     case exploration
-    case relaxRound
 }
 
 /// Attributes property invocations and acceptances to the outermost active reduction phase.
@@ -271,7 +270,6 @@ public struct CycleOutcome: Sendable {
     public var baseDescent: PhaseDisposition
     public var fibreDescent: PhaseDisposition
     public var exploration: PhaseDisposition
-    public var relaxRound: PhaseDisposition
 
     public var zeroingDependencyCount: Int
     public var monotoneConvergenceCount: Int

@@ -50,6 +50,15 @@ final class ReductionState<Output> {
     /// Per-encoder probe counts accumulated across all cycles.
     var encoderProbes: [EncoderName: Int] = [:]
 
+    /// Per-encoder probe counts that were accepted by the decoder.
+    var encoderProbesAccepted: [EncoderName: Int] = [:]
+
+    /// Per-encoder probe counts that hit the reject cache before decoding.
+    var encoderProbesRejectedByCache: [EncoderName: Int] = [:]
+
+    /// Per-encoder probe counts that were materialized but rejected by the decoder.
+    var encoderProbesRejectedByDecoder: [EncoderName: Int] = [:]
+
     /// Sequence hash at which each encoder last exhausted with zero acceptances. When the current sequence hashes to the same value, `runComposable` skips the encoder entirely — no new reduction opportunities exist on an unchanged sequence.
     private var exhaustionFingerprints: [EncoderName: UInt64] = [:]
 
@@ -58,7 +67,7 @@ final class ReductionState<Output> {
 
     /// Total materialization attempts (decoder invocations) during reduction.
     ///
-    /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta for antichain and mutation pool direct decodes), `runKleisliExploration` (manual accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()` call outside `runComposable` must manually accumulate into this field.
+    /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta for antichain and mutation pool direct decodes), and `runKleisliExploration` (manual accumulation). Any new direct `decoder.decode()` call outside `runComposable` must manually accumulate into this field.
     var totalMaterializations: Int = 0
 
     // Decision tree profiling counters
@@ -86,6 +95,9 @@ final class ReductionState<Output> {
     func extractStats() -> ReductionStats {
         var stats = ReductionStats()
         stats.encoderProbes = encoderProbes.filter { $0.value > 0 }
+        stats.encoderProbesAccepted = encoderProbesAccepted.filter { $0.value > 0 }
+        stats.encoderProbesRejectedByCache = encoderProbesRejectedByCache.filter { $0.value > 0 }
+        stats.encoderProbesRejectedByDecoder = encoderProbesRejectedByDecoder.filter { $0.value > 0 }
         stats.totalMaterializations = totalMaterializations
         stats.cycles = statsCycles
         stats.convergedCoordinatesAtPhaseTwoStart = convergedCoordinatesAtPhaseTwoStart
@@ -353,11 +365,17 @@ extension ReductionState {
         var anyAccepted = false
         var probes = 0
         var accepted = 0
+        // Per-encoder rejection breakdown for the wasted-mats investigation.
+        var cacheHitCount = 0
+        var decoderRejectCount = 0
         let budgetBefore = budget.used
         var localFilterObservations: [UInt64: FilterObservation] = [:]
         defer {
             if collectStats {
                 encoderProbes[encoder.name, default: 0] += probes
+                encoderProbesAccepted[encoder.name, default: 0] += accepted
+                encoderProbesRejectedByCache[encoder.name, default: 0] += cacheHitCount
+                encoderProbesRejectedByDecoder[encoder.name, default: 0] += decoderRejectCount
                 totalMaterializations += (budget.used - budgetBefore)
             }
             for (fingerprint, observation) in localFilterObservations {
@@ -380,6 +398,7 @@ extension ReductionState {
             let cacheKey = probeHash &+ cacheSalt
             if rejectCache.contains(cacheKey) {
                 lastAccepted = false
+                cacheHitCount += 1
                 continue
             }
             if let result = try decoder.decode(
@@ -415,6 +434,7 @@ extension ReductionState {
                 phaseTracker.recordInvocation()
                 lastAccepted = false
                 rejectCache.insert(cacheKey)
+                decoderRejectCount += 1
             }
         }
         let harvested = encoder.convergenceRecords
@@ -608,128 +628,3 @@ extension ReductionState {
     }
 }
 
-// MARK: - Relax-Round
-
-extension ReductionState {
-    /// Relax-round: redistributes value magnitude speculatively, then exploits the relaxed state with base descent and fibre descent.
-    ///
-    /// Categorically, this is a non-monotone endomorphism of the total space — neither cartesian nor vertical, and not a descent step. It breaks the fibred factorisation at the step level and recovers it at the pipeline level: the ``RelaxRoundEncoder`` zeros one value by inflating another (potentially crossing fibres if bind-inner values are redistributed), then standard base descent and fibre descent passes exploit the relaxed state. In Bonsai terms, it sacrifices one leaf to nourish another, then re-prunes and re-shapes the tree, keeping the result only if the whole tree is simpler than before. In plain language, it moves magnitude from one value to another (making the sequence temporarily worse), runs the normal reduction passes on the result, and accepts the outcome only if the round-trip produces a net improvement.
-    ///
-    /// Pipeline acceptance: final state must shortlex-precede the pre-relaxation checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
-    func runRelaxRound(remaining: inout Int) throws -> Bool {
-        phaseTracker.push(.relaxRound)
-        defer { phaseTracker.pop() }
-        // Checkpoint all mutable state so rollback restores everything atomically,
-        // including convergenceCache, spanCache, dominance, and branchTreeDirty.
-        let checkpoint = makeSnapshot()
-        let acceptancesAtCheckpoint = phaseTracker.counts[.relaxRound]?.acceptances ?? 0
-        let structuralAtCheckpoint = phaseTracker.counts[.relaxRound]?.structuralAcceptances ?? 0
-
-        // Run RelaxRoundEncoder with exact decoder — no fallback, no shortlex check.
-        // Exact mode validates values against their explicit ranges, rejecting
-        // structurally invalid relocations fast.
-        let speculativeDecoder: SequenceDecoder = .exact()
-        var explorationBudget = ReductionScheduler.LegBudget(hardCap: remaining)
-        var relaxEncoder = RelaxRoundEncoder()
-        let relaxRange = 0 ... max(0, sequence.count - 1)
-        relaxEncoder.start(
-            sequence: sequence,
-            tree: tree,
-            positionRange: relaxRange,
-            context: ReductionContext(
-                bindIndex: bindIndex,
-                convergedOrigins: convergenceCache.allEntries
-            )
-        )
-        var lastAccepted = false
-        var redistributionAccepted = false
-        var explorationProbes = 0
-        var explorationAccepted = 0
-        while let probe = relaxEncoder.nextProbe(lastAccepted: lastAccepted) {
-            guard explorationBudget.isExhausted == false else { break }
-            explorationProbes += 1
-            // Do not consult the shared reject cache — it contains probes rejected
-            // by the normal decoder (with shortlex check). The speculative decoder
-            // (without shortlex check) may accept those same probes.
-            if let result = try speculativeDecoder.decode(
-                candidate: probe, gen: gen, tree: tree,
-                originalSequence: sequence, property: property
-            ) {
-                explorationBudget.recordMaterialization()
-                phaseTracker.recordInvocation()
-                // Reject results that grow the sequence — the redistribution should
-                // only change values, not add structure. Growth happens when the
-                // redistributed values violate a filter, causing PRNG fallback.
-                if result.sequence.count > sequence.count {
-                    lastAccepted = false
-                    continue
-                }
-                accept(result, structureChanged: hasBind)
-                lastAccepted = true
-                redistributionAccepted = true
-                explorationAccepted += 1
-            } else {
-                explorationBudget.recordMaterialization()
-                phaseTracker.recordInvocation()
-                lastAccepted = false
-            }
-        }
-
-        if collectStats {
-            encoderProbes[.relaxRound, default: 0] += explorationProbes
-            totalMaterializations += explorationBudget.used
-        }
-
-        if isInstrumented {
-            ExhaustLog.debug(category: .reducer, event: "exploration_redistribute", metadata: [
-                "probes": "\(explorationProbes)",
-                "accepted": "\(explorationAccepted)",
-                "budget_used": "\(explorationBudget.used)",
-            ])
-        }
-
-        guard redistributionAccepted else {
-            // No speculative move found — restore all state atomically.
-            // Revert acceptances but keep invocations (they consumed real budget).
-            phaseTracker.restoreAcceptances(
-                for: .relaxRound,
-                acceptances: acceptancesAtCheckpoint,
-                structuralAcceptances: structuralAtCheckpoint
-            )
-            restoreSnapshot(checkpoint)
-            remaining -= explorationBudget.used
-            return false
-        }
-
-        // Exploitation: run the standard two-phase pipeline on the relaxed state.
-        var exploitRemaining = remaining - explorationBudget.used
-        computeEncoderOrdering()
-        let (dependencyGraph, baseProgress) = try runBaseDescent(budget: &exploitRemaining)
-        let fibreProgress = try runFibreDescent(budget: &exploitRemaining, dependencyGraph: dependencyGraph)
-
-        // Pipeline acceptance: final state must shortlex-precede checkpoint.
-        if sequence.shortLexPrecedes(checkpoint.sequence) {
-            bestSequence = sequence
-            bestOutput = output
-            remaining = exploitRemaining
-            if isInstrumented {
-                ExhaustLog.debug(category: .reducer, event: "exploration_accepted", metadata: [
-                    "seq_len": "\(checkpoint.sequence.count)→\(sequence.count)",
-                    "base_descent": "\(baseProgress)",
-                    "fibre_descent": "\(fibreProgress)",
-                ])
-            }
-            return true
-        }
-
-        // Rollback all state atomically. Revert acceptances but keep invocations.
-        phaseTracker.restoreAcceptances(
-            for: .relaxRound,
-            acceptances: acceptancesAtCheckpoint,
-            structuralAcceptances: structuralAtCheckpoint
-        )
-        restoreSnapshot(checkpoint)
-        remaining -= explorationBudget.used
-        return false
-    }
-}

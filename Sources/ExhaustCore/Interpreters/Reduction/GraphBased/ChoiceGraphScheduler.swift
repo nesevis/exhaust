@@ -395,28 +395,6 @@ enum ChoiceGraphScheduler {
                 }
             }
 
-            // Relax round: if all sources exhausted AND staleness found
-            // nothing, try speculative redistribution with exploitation.
-            if anyAccepted == false {
-                let relaxResult = try runRelaxRound(
-                    sequence: &sequence,
-                    tree: &tree,
-                    output: &output,
-                    graph: &graph,
-                    graphIsStripped: &graphIsStripped,
-                    gen: gen,
-                    property: property,
-                    rejectCache: &rejectCache,
-                    stats: &stats,
-                    collectStats: collectStats,
-                    isInstrumented: isInstrumented
-                )
-                if relaxResult {
-                    anyAccepted = true
-                    scopeRejectionCache.clear()
-                }
-            }
-
             // Cycle complete.
             let improved = sequence != sequenceBeforeCycle
             if improved {
@@ -574,6 +552,12 @@ enum ChoiceGraphScheduler {
         var latestAcceptedTreeIsStripped = false
         var probeCount = 0
         var acceptCount = 0
+        // Per-encoder rejection breakdown for the wasted-mats investigation
+        // (Bonsai vs Graph mat-count gap). Cache hits cost zero materializations;
+        // decoder rejections cost one materialization each. Aggregated into
+        // `stats.encoderProbesAccepted` etc. at the end of the loop.
+        var cacheHitCount = 0
+        var decoderRejectCount = 0
         let baseHash = ZobristHash.hash(of: sequence)
 
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
@@ -586,6 +570,7 @@ enum ChoiceGraphScheduler {
                 probe: probe.candidate
             )
             if rejectCache.contains(probeHash) {
+                cacheHitCount += 1
                 continue
             }
 
@@ -701,6 +686,7 @@ enum ChoiceGraphScheduler {
                 }
             } else {
                 rejectCache.insert(probeHash)
+                decoderRejectCount += 1
             }
 
             if collectStats {
@@ -710,6 +696,9 @@ enum ChoiceGraphScheduler {
 
         if collectStats {
             stats.encoderProbes[encoder.name, default: 0] += probeCount
+            stats.encoderProbesAccepted[encoder.name, default: 0] += acceptCount
+            stats.encoderProbesRejectedByCache[encoder.name, default: 0] += cacheHitCount
+            stats.encoderProbesRejectedByDecoder[encoder.name, default: 0] += decoderRejectCount
         }
 
         if isInstrumented {
@@ -825,263 +814,6 @@ enum ChoiceGraphScheduler {
         return true
     }
 
-    // MARK: - Relax Round
-
-    // swiftlint:disable function_parameter_count
-    /// Runs the speculative relax round: checkpoint, redistribute without shortlex gate, exploit, compare, commit or rollback.
-    ///
-    /// - Returns: True if the relax round produced a net improvement (committed).
-    private static func runRelaxRound<Output>(
-        sequence: inout ChoiceSequence,
-        tree: inout ChoiceTree,
-        output: inout Output,
-        graph: inout ChoiceGraph,
-        graphIsStripped: inout Bool,
-        gen: ReflectiveGenerator<Output>,
-        property: @escaping (Output) -> Bool,
-        rejectCache: inout Set<UInt64>,
-        stats: inout ReductionStats,
-        collectStats: Bool,
-        isInstrumented: Bool
-    ) throws -> Bool {
-        // Checkpoint current state.
-        let checkpointSequence = sequence
-        let checkpointTree = tree
-        let checkpointOutput = output
-        let checkpointConvergence = extractAllConvergence(from: graph)
-        // Layer 7a: capture the graph stripping state at relax round
-        // entry so the rollback path can restore it.
-        let entryGraphIsStripped = graphIsStripped
-
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "relax_round_start",
-                metadata: ["seq_len": "\(sequence.count)"]
-            )
-        }
-
-        // Build speculative exchange scopes (no position constraint).
-        let speculativeScopes = graph.speculativeExchangeScopes()
-        guard speculativeScopes.isEmpty == false else { return false }
-
-        // Run exchange encoder with .exact() decoder (no shortlex gate).
-        var anyRedistributionAccepted = false
-        for exchangeScope in speculativeScopes {
-            let transformation = GraphTransformation(
-                operation: .exchange(exchangeScope),
-                yield: TransformationYield(structural: 0, value: 0, slack: .exact, estimatedProbes: 24),
-                precondition: .unconditional,
-                postcondition: TransformationPostcondition(
-                    isStructural: false,
-                    invalidatesConvergence: [],
-                    enablesRemoval: []
-                )
-            )
-            let scope = TransformationScope(
-                transformation: transformation,
-                baseSequence: sequence,
-                tree: tree,
-                graph: graph,
-                warmStartRecords: [:]
-            )
-
-            var encoder = GraphExchangeEncoder()
-            encoder.start(scope: scope)
-
-            var lastAccepted = false
-            while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
-                lastAccepted = false
-
-                // Use .exact() decoder — no shortlex check; the final
-                // comparison against the checkpoint handles acceptance.
-                // Layer 6: relax-round redistribution probes are always
-                // value-only (the exchange encoder produces leafValues
-                // mutations), so `materializePicks: false` is safe and
-                // saves the per-probe cost of re-materializing
-                // non-selected branches. The lazy rematerialize check
-                // before dispatch in the cycle loop and the relax-round
-                // exploitation loop handles the resulting stripped graph
-                // state when a path-changing operation needs full branch
-                // metadata.
-                let decoder: SequenceDecoder = .exact(materializePicks: false)
-                var filterObservations: [UInt64: FilterObservation] = [:]
-
-                if let result = try decoder.decode(
-                    candidate: probe.candidate,
-                    gen: gen,
-                    tree: tree,
-                    originalSequence: sequence,
-                    property: property,
-                    filterObservations: &filterObservations
-                ) {
-                    // Accept without shortlex check — speculative.
-                    sequence = result.sequence
-                    tree = result.tree
-                    output = result.output
-                    lastAccepted = true
-                    anyRedistributionAccepted = true
-                }
-
-                if collectStats {
-                    stats.totalMaterializations += 1
-                }
-            }
-        }
-
-        guard anyRedistributionAccepted else {
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "relax_round_no_redistribution",
-                    metadata: [:]
-                )
-            }
-            return false
-        }
-
-        // Exploitation: rebuild graph and run full source loop on relaxed state.
-        //
-        // Layer 7a: the redistribution loop above always uses
-        // `materializePicks: false`, so the tree is unconditionally
-        // stripped at this point. Set ``graphIsStripped`` so the
-        // exploitation source-pulling loop's lazy rematerialize check
-        // catches any path-changing operation that needs full branch
-        // metadata.
-        graph = ChoiceGraph.build(from: tree)
-        graphIsStripped = true
-        stats.graphRebuilds += 1
-        var exploitSources = ScopeSourceBuilder.buildSources(from: graph)
-
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "relax_round_exploitation_start",
-                metadata: [
-                    "seq_len": "\(sequence.count)",
-                    "sources": "\(exploitSources.count)",
-                ]
-            )
-        }
-
-        // Run the standard source-pulling loop on the relaxed state.
-        while true {
-            guard let sourceIndex = highestYieldSourceIndex(exploitSources) else {
-                break
-            }
-            guard let transformation = exploitSources[sourceIndex].next(lastAccepted: false) else {
-                exploitSources.remove(at: sourceIndex)
-                continue
-            }
-            guard transformation.precondition.isSatisfied(in: graph) else {
-                continue
-            }
-
-            // Layer 7a lazy rematerialize: same pattern as the cycle loop.
-            // Only fires for path-changing operations against a stripped
-            // graph. The exploitation phase enters with ``graphIsStripped``
-            // unconditionally true (the redistribution loop always strips
-            // the tree).
-            if graphIsStripped, transformation.operation.isPathChanging {
-                if case let .success(_, fullTree, _) = Materializer.materialize(
-                    gen,
-                    prefix: sequence,
-                    mode: .exact,
-                    fallbackTree: tree,
-                    materializePicks: true
-                ) {
-                    tree = fullTree
-                }
-                let oldConvergence = extractAllConvergence(from: graph)
-                graph = ChoiceGraph.build(from: tree)
-                transferConvergence(oldConvergence, to: graph)
-                stats.graphRebuilds += 1
-                exploitSources = ScopeSourceBuilder.buildSources(from: graph)
-                graphIsStripped = false
-                continue
-            }
-
-            let warmStarts = extractWarmStarts(from: graph)
-            let scope = TransformationScope(
-                transformation: transformation,
-                baseSequence: sequence,
-                tree: tree,
-                graph: graph,
-                warmStartRecords: warmStarts
-            )
-
-            var encoder = selectEncoder(for: transformation.operation)
-            let outcome = try runProbeLoop(
-                encoder: &encoder,
-                scope: scope,
-                graph: graph,
-                sequence: &sequence,
-                tree: &tree,
-                output: &output,
-                gen: gen,
-                property: property,
-                rejectCache: &rejectCache,
-                stats: &stats,
-                collectStats: collectStats,
-                isInstrumented: isInstrumented
-            )
-
-            let convergence = encoder.convergenceRecords
-            if convergence.isEmpty == false {
-                graph.recordConvergence(convergence)
-            }
-
-            if outcome.accepted {
-                if outcome.requiresRebuild {
-                    graph = ChoiceGraph.build(from: tree)
-                    graphIsStripped = outcome.treeIsStripped
-                    stats.graphRebuilds += 1
-                    exploitSources = ScopeSourceBuilder.buildSources(from: graph)
-                } else if outcome.requiresSourceRebuild {
-                    // Layer 4 in-place reshape during the exploitation
-                    // phase: keep the graph (it is in sync via apply) but
-                    // refresh exploit sources so they pick up new leaves.
-                    exploitSources = ScopeSourceBuilder.buildSources(from: graph)
-                }
-            }
-        }
-
-        // Final comparison: commit if improved, rollback otherwise.
-        if sequence.shortLexPrecedes(checkpointSequence) {
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "relax_round_committed",
-                    metadata: [
-                        "old_seq_len": "\(checkpointSequence.count)",
-                        "new_seq_len": "\(sequence.count)",
-                    ]
-                )
-            }
-            return true
-        }
-
-        // Rollback: restore checkpoint state.
-        sequence = checkpointSequence
-        tree = checkpointTree
-        output = checkpointOutput
-        graph = ChoiceGraph.build(from: tree)
-        // Layer 7a: restore the entry stripping state. The checkpoint
-        // tree was captured before the relax round mutated anything,
-        // so its strip status matches the cycle loop's pre-relax state.
-        graphIsStripped = entryGraphIsStripped
-        transferConvergence(checkpointConvergence, to: graph)
-
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "relax_round_rolled_back",
-                metadata: ["seq_len": "\(sequence.count)"]
-            )
-        }
-        return false
-    }
-    // swiftlint:enable function_parameter_count
 
     // MARK: - Staleness Detection
 
@@ -1104,6 +836,21 @@ enum ChoiceGraphScheduler {
         isInstrumented: Bool
     ) throws -> Bool {
         var anyStale = false
+        // Per-encoder breakdown for the wasted-mats investigation.
+        // The probe count here is bounded by the number of converged
+        // leaves. Cache hits and decoder rejections both apply.
+        var stalenessProbeCount = 0
+        var stalenessAcceptCount = 0
+        var stalenessCacheHitCount = 0
+        var stalenessDecoderRejectCount = 0
+        defer {
+            if collectStats {
+                stats.encoderProbes[.graphStaleness, default: 0] += stalenessProbeCount
+                stats.encoderProbesAccepted[.graphStaleness, default: 0] += stalenessAcceptCount
+                stats.encoderProbesRejectedByCache[.graphStaleness, default: 0] += stalenessCacheHitCount
+                stats.encoderProbesRejectedByDecoder[.graphStaleness, default: 0] += stalenessDecoderRejectCount
+            }
+        }
 
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
@@ -1123,12 +870,17 @@ enum ChoiceGraphScheduler {
                 .withBitPattern(probeValue)
             guard candidate.shortLexPrecedes(sequence) else { continue }
 
+            stalenessProbeCount += 1
+
             let probeHash = ZobristHash.incrementalHash(
                 baseHash: ZobristHash.hash(of: sequence),
                 baseSequence: sequence,
                 probe: candidate
             )
-            if rejectCache.contains(probeHash) { continue }
+            if rejectCache.contains(probeHash) {
+                stalenessCacheHitCount += 1
+                continue
+            }
 
             let hasBind = sequence.contains { entry in
                 if case .bind = entry { return true }
@@ -1161,6 +913,7 @@ enum ChoiceGraphScheduler {
                 tree = result.tree
                 output = result.output
                 anyStale = true
+                stalenessAcceptCount += 1
 
                 // Clear the stale convergence record.
                 graph.recordConvergence([range.lowerBound: ConvergedOrigin(
@@ -1183,6 +936,7 @@ enum ChoiceGraphScheduler {
                 }
             } else {
                 rejectCache.insert(probeHash)
+                stalenessDecoderRejectCount += 1
             }
 
             if collectStats {

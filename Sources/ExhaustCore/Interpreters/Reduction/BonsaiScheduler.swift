@@ -406,14 +406,6 @@ enum BonsaiScheduler {
             )
             return (exploreOutcome, nil)
 
-        case .relaxRound:
-            var budget = planned.budget
-            _ = try state.runRelaxRound(remaining: &budget)
-            let relaxOutcome = state.phaseTracker.outcome(
-                for: .relaxRound, budgetAllocated: planned.budget
-            )
-            return (relaxOutcome, nil)
-
         }
     }
 
@@ -481,7 +473,7 @@ enum BonsaiScheduler {
 
         // Mark phases that were not in either stage as gated.
         let allPhases: [PlannedPhase.Phase] = [
-            .baseDescent, .fibreDescent, .exploration, .relaxRound,
+            .baseDescent, .fibreDescent, .exploration,
         ]
         for phase in allPhases where phaseDispositions[phase] == nil {
             let reason: GateReason =
@@ -495,7 +487,6 @@ enum BonsaiScheduler {
             baseDescent: phaseDispositions[.baseDescent] ?? .gated(reason: .noProgress),
             fibreDescent: phaseDispositions[.fibreDescent] ?? .gated(reason: .noProgress),
             exploration: phaseDispositions[.exploration] ?? .gated(reason: .noProgress),
-            relaxRound: phaseDispositions[.relaxRound] ?? .gated(reason: .noProgress),
             zeroingDependencyCount: state.zeroingDependencyCount,
             monotoneConvergenceCount: 0,
             exhaustedCleanEdges: state.fibreExhaustedCleanCount,

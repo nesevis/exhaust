@@ -19,7 +19,7 @@
 ///
 /// ## Conformance
 ///
-/// Conforms to ``ComposableEncoder`` so the scheduler can run it via ``ReductionState/runComposable(_:decoder:positionRange:context:structureChanged:budget:fingerprintGuard:)`` or a manual loop (following the `runRelaxRound` pattern).
+/// Conforms to ``ComposableEncoder`` so the scheduler can run it via ``ReductionState/runComposable(_:decoder:positionRange:context:structureChanged:budget:fingerprintGuard:)`` or a manual loop.
 public struct KleisliComposition<Output>: ComposableEncoder {
     // MARK: - Configuration
 
