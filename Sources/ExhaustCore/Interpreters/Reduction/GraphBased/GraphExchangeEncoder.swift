@@ -462,7 +462,7 @@ struct GraphExchangeEncoder: GraphEncoder {
 
     /// Builds a redistribution candidate by transferring `delta` units from source to sink.
     ///
-    /// For pairs with a ``MixedRedistributionContext`` (cross-type or floating-point), uses rational arithmetic with a common denominator. For same-tag integer pairs, operates in semantic Int64 value space.
+    /// For pairs with a ``MixedRedistributionContext`` (cross-type or floating-point), uses rational arithmetic with a common denominator. For same-tag integer pairs, operates in UInt64 bit-pattern space — modular wraparound when the sink's declared domain equals its natural type width, validation-with-rejection when the sink has an explicit narrow range. See `graph-exchange-semantic-cast-removal.md` for the rationale behind the same-tag arithmetic choices.
     private func buildRedistributionCandidate(
         sourceIndex: Int,
         sinkIndex: Int,
@@ -515,7 +515,7 @@ struct GraphExchangeEncoder: GraphEncoder {
         // the source's own valid range regardless of whether that range is
         // narrow or full-width. The sink is the side that can escape its
         // valid range as it absorbs the opposing delta, so the sink is the
-        // side that needs modular wraparound to remain representable.
+        // side that determines which sub-path we take.
         //
         // When the sink's declared domain equals the natural type width, we
         // use bit-pattern modular arithmetic with a width-aware mask. This
@@ -526,16 +526,22 @@ struct GraphExchangeEncoder: GraphEncoder {
         // `bound5-redistribution-wraparound-diagnosis.md` for the motivating
         // trace.
         //
-        // When the sink carries an explicit narrow range, we retain semantic
-        // Int64 arithmetic with `bitPattern(fromSemantic:tag:)` rejecting
-        // out-of-range results — the encoder must honor the user's declared
-        // domain for the sink, not the type's natural width.
+        // When the sink carries an explicit narrow range, we still operate
+        // in UInt64 bit-pattern space (signed types are biased via the
+        // `signBitMask` XOR in their `BitPatternConvertible` conformance, so
+        // additive arithmetic in biased space matches semantic arithmetic),
+        // but we use overflow-checked operations and reject — rather than
+        // wrap — any candidate that lands outside the sink's `validRange` or
+        // the type's natural bounds. See
+        // `graph-exchange-semantic-cast-removal.md` for the rationale and
+        // for the discussion of the latent bugs in the previous
+        // semantic-Int64 implementation that this rewrite addresses.
+        let sourceBP = sourceValue.choice.bitPattern64
+        let sinkBP = sinkValue.choice.bitPattern64
+        let targetBP = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
+
         if sinkValue.allowsModularArithmetic {
             let mask = sinkValue.choice.tag.bitPatternRange.upperBound
-            let sourceBP = sourceValue.choice.bitPattern64
-            let sinkBP = sinkValue.choice.bitPattern64
-            let targetBP = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
-
             let newSourceBP: UInt64
             let newSinkBP: UInt64
             if sourceBP > targetBP {
@@ -552,96 +558,57 @@ struct GraphExchangeEncoder: GraphEncoder {
             return candidate
         }
 
-        // Narrow-sink fallback: semantic Int64 arithmetic.
-        guard delta <= UInt64(Int64.max) else { return nil }
-
-        let sourceSemanticValue = Self.semanticValue(sourceValue.choice)
-        let sinkSemanticValue = Self.semanticValue(sinkValue.choice)
-        let targetSemanticValue = Self.semanticValue(
-            ChoiceValue(
-                sourceTag.makeConvertible(
-                    bitPattern64: sourceValue.choice.reductionTarget(in: sourceValue.validRange)
-                ),
-                tag: sourceTag
-            )
-        )
-
-        let signedDelta = Int64(delta)
-        let newSourceSemantic: Int64
-        let newSinkSemantic: Int64
-
-        if sourceSemanticValue > targetSemanticValue {
-            let (candidateSource, sourceOverflow) = sourceSemanticValue.subtractingReportingOverflow(signedDelta)
-            let (candidateSink, sinkOverflow) = sinkSemanticValue.addingReportingOverflow(signedDelta)
-            guard sourceOverflow == false, sinkOverflow == false else { return nil }
-            newSourceSemantic = candidateSource
-            newSinkSemantic = candidateSink
+        // Narrow-sink fallback: UInt64 bit-pattern arithmetic with explicit
+        // bounds enforcement.
+        let newSourceBP: UInt64
+        let newSinkBP: UInt64
+        if sourceBP > targetBP {
+            // Source moves down (toward target), sink moves up.
+            // The encoder bounds delta to `currentMaxDelta`'s `distance =
+            // sourceBP - targetBP`, and `targetBP >= 0`, so this subtraction
+            // cannot underflow. Defensive guard against stale state.
+            guard sourceBP >= delta else { return nil }
+            newSourceBP = sourceBP - delta
+            let (sinkSum, sinkOverflow) = sinkBP.addingReportingOverflow(delta)
+            guard sinkOverflow == false else { return nil }
+            newSinkBP = sinkSum
         } else {
-            let (candidateSource, sourceOverflow) = sourceSemanticValue.addingReportingOverflow(signedDelta)
-            let (candidateSink, sinkOverflow) = sinkSemanticValue.subtractingReportingOverflow(signedDelta)
-            guard sourceOverflow == false, sinkOverflow == false else { return nil }
-            newSourceSemantic = candidateSource
-            newSinkSemantic = candidateSink
+            // Source moves up (toward target), sink moves down.
+            let (sourceSum, sourceOverflow) = sourceBP.addingReportingOverflow(delta)
+            guard sourceOverflow == false else { return nil }
+            newSourceBP = sourceSum
+            guard sinkBP >= delta else { return nil }
+            newSinkBP = sinkBP - delta
         }
 
-        guard let newSourceBP = Self.bitPattern(fromSemantic: newSourceSemantic, tag: sourceTag),
-              let newSinkBP = Self.bitPattern(fromSemantic: newSinkSemantic, tag: sinkValue.choice.tag) else {
+        // Enforce natural type bounds. Replaces the per-tag range checks
+        // that the deleted `bitPattern(fromSemantic:tag:)` helper used to
+        // do — `tag.bitPatternRange` is the same set, so this is a
+        // structural simplification, not a behavior change.
+        guard sourceTag.bitPatternRange.contains(newSourceBP),
+              sinkValue.choice.tag.bitPatternRange.contains(newSinkBP) else {
+            return nil
+        }
+
+        // Enforce explicit `validRange`. The mixed/rational path already
+        // does this for cross-type and float pairs; the previous
+        // semantic-Int64 narrow-sink path was missing this check, which
+        // let candidates escape the user's declared domain.
+        if sourceValue.isRangeExplicit,
+           let range = sourceValue.validRange,
+           range.contains(newSourceBP) == false {
+            return nil
+        }
+        if sinkValue.isRangeExplicit,
+           let range = sinkValue.validRange,
+           range.contains(newSinkBP) == false {
             return nil
         }
 
         var candidate = sequence
         candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBP)
         candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBP)
-
         return candidate
-    }
-
-    /// Extracts the semantic value as Int64 from a ChoiceValue.
-    private static func semanticValue(_ choice: ChoiceValue) -> Int64 {
-        switch choice {
-        case let .unsigned(value, _):
-            return Int64(clamping: value)
-        case let .signed(value, _, _):
-            return value
-        case let .floating(value, _, _):
-            return Int64(value)
-        }
-    }
-
-    /// Converts a semantic Int64 value to the type's ``BitPatternConvertible/bitPattern64`` encoding. Returns nil if out of range.
-    private static func bitPattern(fromSemantic value: Int64, tag: TypeTag) -> UInt64? {
-        switch tag {
-        case .uint8:
-            guard value >= 0, value <= Int64(UInt8.max) else { return nil }
-            return UInt8(value).bitPattern64
-        case .int8:
-            guard value >= Int64(Int8.min), value <= Int64(Int8.max) else { return nil }
-            return Int8(value).bitPattern64
-        case .uint16:
-            guard value >= 0, value <= Int64(UInt16.max) else { return nil }
-            return UInt16(value).bitPattern64
-        case .int16:
-            guard value >= Int64(Int16.min), value <= Int64(Int16.max) else { return nil }
-            return Int16(value).bitPattern64
-        case .uint32:
-            guard value >= 0, value <= Int64(UInt32.max) else { return nil }
-            return UInt32(value).bitPattern64
-        case .int32:
-            guard value >= Int64(Int32.min), value <= Int64(Int32.max) else { return nil }
-            return Int32(value).bitPattern64
-        case .uint, .uint64:
-            guard value >= 0 else { return nil }
-            return UInt64(value).bitPattern64
-        case .int:
-            return Int(value).bitPattern64
-        case .int64:
-            return value.bitPattern64
-        case .bits:
-            guard value >= 0 else { return nil }
-            return UInt64(value).bitPattern64
-        case .double, .float, .float16, .date:
-            return nil
-        }
     }
 
     // MARK: - Lockstep Reduction
