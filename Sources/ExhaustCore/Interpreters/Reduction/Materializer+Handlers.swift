@@ -138,6 +138,7 @@ extension Materializer {
 
     // MARK: pick (with materialized alternatives)
 
+    @inline(__always)
     static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
@@ -308,6 +309,7 @@ extension Materializer {
 
     // MARK: sequence
 
+    @inline(__always)
     static func handleSequence<Output>(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
