@@ -84,8 +84,11 @@ struct GraphExchangeEncoder: GraphEncoder {
         var activePairIndices: Set<Int>?
     }
 
-    /// Maximum number of redistribution passes before the encoder stops re-evaluating pairs. With targeted re-evaluation (only accepted pairs), subsequent passes are cheap — O(log maxDelta) probes per accepted pair.
+    /// Maximum number of redistribution passes before the encoder stops re-evaluating pairs. With targeted re-evaluation (only accepted pairs), subsequent passes are cheap — O(log maxDelta) probes per accepted pair. The investigation doc proposed cutting this to 1 as Fix C, but bisection (16 → 8 → 1) showed that 16 is the optimum: at maxPasses=8 Bound5 already regresses (+8% mats, +6% reduce time, −7% accepts) because some pair binary searches need 9–16 passes to converge, and at maxPasses=1 the regression is catastrophic (+143% mats, +129% reduce time). All other workloads complete pair convergence in ≤1 pass, so the multi-pass replay is inert there — it adds zero cost where it isn't needed and is load-bearing where it is.
     private static let maxPasses = 16
+
+    /// Cap on the number of redistribution pairs probed per scope. Bisection (240 → 120 → 60 → 30 → 16) located the inflection between 30 and 16. At cap=30 ComplexGrammar reached 27,716 ms (vs Bonsai's ~33,000 ms and the cap=240 baseline of ~30,000 ms); at cap=16 it crept back up to 27,830 ms with no compensating benefit. Bound5 acc loss at cap=30 was functionally invisible (no CE quality change, no reduce time change, same canonical CE) — the lost accepts were trailing-edge progress that did not change the eventual outcome. Bonsai's ``RedistributeAcrossValueContainersEncoder`` uses 240 in its `estimatedCost`, but Graph's per-probe cost profile and outer reducer scheduling make 30 the right value here.
+    private static let maxPairsPerScope = 30
 
     // MARK: - GraphEncoder
 
@@ -263,6 +266,23 @@ struct GraphExchangeEncoder: GraphEncoder {
         }
 
         guard pairs.isEmpty == false else { return }
+
+        // Largest-delta pairs first: high-impact consolidation pairs get probed
+        // before trivial distance=1 pairs. Mirrors the orientation sort in
+        // ``RedistributeAcrossValueContainersEncoder``, which uses the same
+        // source-distance ordering. Without this, the encoder would walk pairs
+        // in `typeCompatibilityEdges` insertion order — node-traversal order,
+        // not value-distance order — and burn its budget on low-yield tail
+        // pairs before reaching the easy wins.
+        pairs.sort { $0.maxDelta > $1.maxDelta }
+
+        // Cap the working set to mirror Bonsai's `estimatedCost` ceiling of
+        // 240 pairs. After sorting, the prefix is the highest-yield slice; the
+        // tail is the long stretch of low-distance pairs whose acceptance rate
+        // is near zero on workloads with many type-compatible leaves.
+        if pairs.count > Self.maxPairsPerScope {
+            pairs.removeLast(pairs.count - Self.maxPairsPerScope)
+        }
 
         mode = .redistribution(RedistributionState(
             pairs: pairs,
