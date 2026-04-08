@@ -233,7 +233,7 @@ extension Int64: BitPatternConvertible {
     }
 
     public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64.min ... UInt64.min
+        UInt64.min ... UInt64.max
     }
 
     public var bitPattern64: UInt64 {
