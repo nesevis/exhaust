@@ -89,6 +89,18 @@ enum ChoiceGraphScheduler {
 
         var graph = ChoiceGraph.build(from: tree)
 
+        // Layer 7a lazy rematerialize: tracks whether the current graph
+        // was rebuilt from a stripped tree (one produced by a decoder
+        // call with `materializePicks: false`). When true, every pick
+        // node's ``PickMetadata/branchElements`` contains only the
+        // selected branch. The cycle loop's source-pulling iterations
+        // check this flag before dispatching a path-changing operation
+        // (one that reads inactive branches via
+        // ``GraphReplacementEncoder``) and rematerialize on demand.
+        // False at scheduler entry because the initial tree was just
+        // re-materialized with `materializePicks: true` above.
+        var graphIsStripped = false
+
         if collectStats {
             stats.graphNodeCount = graph.nodes.count
             stats.graphDependencyEdgeCount = graph.dependencyEdges.count
@@ -180,6 +192,44 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
+                // Layer 7a lazy rematerialize: a path-changing operation
+                // (only ``GraphOperation/replace``) reads inactive branches
+                // via ``PickMetadata/branchElements``. If the current graph
+                // was rebuilt from a stripped tree (``graphIsStripped``
+                // true), branchElements is incomplete and the encoder will
+                // silently fail. Re-materialize the sequence with
+                // `materializePicks: true`, rebuild the graph, refresh
+                // sources, and restart the iteration. The current
+                // transformation references node IDs from the stale graph
+                // and is discarded — the next iteration pulls a fresh
+                // transformation from the rebuilt sources.
+                //
+                // Non-path-changing operations (minimize, exchange, remove,
+                // permute, migrate) do not read branchElements and run
+                // safely against a stripped graph, so they bypass this
+                // check entirely. The result is that we only pay the
+                // rematerialize cost on cycles that actually exercise
+                // branch pivot / descendant promotion / self-similar
+                // replacement, instead of defensively on every rebuild.
+                if graphIsStripped, transformation.operation.isPathChanging {
+                    if case let .success(_, fullTree, _) = Materializer.materialize(
+                        gen,
+                        prefix: sequence,
+                        mode: .exact,
+                        fallbackTree: tree,
+                        materializePicks: true
+                    ) {
+                        tree = fullTree
+                    }
+                    let oldConvergence = extractAllConvergence(from: graph)
+                    graph = ChoiceGraph.build(from: tree)
+                    transferConvergence(oldConvergence, to: graph)
+                    stats.graphRebuilds += 1
+                    sources = ScopeSourceBuilder.buildSources(from: graph)
+                    graphIsStripped = false
+                    continue
+                }
+
                 // Construct self-contained scope.
                 let warmStarts = extractWarmStarts(from: graph)
                 let scope = TransformationScope(
@@ -221,8 +271,19 @@ enum ChoiceGraphScheduler {
                         // (multi-bind reshape, structural mutation, etc.).
                         // Rebuild the graph from the live tree, refresh
                         // sources, and clear the scope rejection cache.
+                        //
+                        // Layer 7a: do NOT defensively rematerialize here.
+                        // If the latest accepted probe stripped the tree,
+                        // the rebuilt graph has incomplete branchElements
+                        // — that is recorded via ``graphIsStripped`` and
+                        // handled lazily by the rematerialize check at
+                        // the top of the source-pulling iteration, only
+                        // when a path-changing operation is about to
+                        // dispatch. This avoids paying the materialize
+                        // cost on cycles where branch pivot never fires.
                         let oldConvergence = extractAllConvergence(from: graph)
                         graph = ChoiceGraph.build(from: tree)
+                        graphIsStripped = outcome.treeIsStripped
                         transferConvergence(oldConvergence, to: graph)
                         stats.graphRebuilds += 1
                         scopeRejectionCache.clear()
@@ -319,8 +380,15 @@ enum ChoiceGraphScheduler {
                     // gone the carried-over graph would otherwise be out of
                     // sync, so rebuild here to restore the invariant before
                     // the next cycle.
+                    //
+                    // Layer 7a: ``detectStaleness`` always uses
+                    // `materializePicks: false`, so the rebuilt graph is
+                    // unconditionally stripped. Set the flag and let the
+                    // lazy rematerialize check in the next cycle's
+                    // source-pulling iteration handle it on demand.
                     let oldConvergence = extractAllConvergence(from: graph)
                     graph = ChoiceGraph.build(from: tree)
+                    graphIsStripped = true
                     transferConvergence(oldConvergence, to: graph)
                     stats.graphRebuilds += 1
                     sources = ScopeSourceBuilder.buildSources(from: graph)
@@ -335,6 +403,7 @@ enum ChoiceGraphScheduler {
                     tree: &tree,
                     output: &output,
                     graph: &graph,
+                    graphIsStripped: &graphIsStripped,
                     gen: gen,
                     property: property,
                     rejectCache: &rejectCache,
@@ -465,10 +534,13 @@ enum ChoiceGraphScheduler {
     /// - ``requiresRebuild`` true: at least one accepted probe set ``ChangeApplication/requiresFullRebuild``. The graph is stale; the cycle loop must do a full rebuild + source rebuild before the next dispatch.
     /// - ``requiresSourceRebuild`` true (and ``requiresRebuild`` false): at least one accepted probe was a successful in-place reshape that added or removed graph nodes (Layer 4). The graph is in sync via ``ChoiceGraph/apply(_:freshTree:)``, but the existing scope sources captured node IDs at construction time and do not know about the new nodes. The cycle loop must rebuild sources from the (already up-to-date) graph; the graph itself does not need a full rebuild.
     /// - both false: every accepted probe was a pure value-only fast-path application that touched no node-set membership. The graph and the existing sources are both still valid.
+    ///
+    /// ``treeIsStripped`` reports whether the *latest* accepted probe used `materializePicks: false`. The cycle loop reads it before any rebuild path: when true, the carried `tree` is missing inactive pick branches and must be re-materialized with `materializePicks: true` before ``ChoiceGraph/build(from:)``, otherwise the rebuilt graph's ``PickMetadata/branchElements`` would contain only the selected branch and silently break ``GraphReplacementEncoder``'s branch enumeration on the next cycle. False when no probe accepted, when only `materializePicks: true` probes accepted, or when the latest acceptance happened to be a non-stripped one.
     struct ProbeLoopOutcome {
         let accepted: Bool
         let requiresRebuild: Bool
         let requiresSourceRebuild: Bool
+        let treeIsStripped: Bool
     }
 
     // swiftlint:disable function_parameter_count
@@ -493,6 +565,13 @@ enum ChoiceGraphScheduler {
         var anyAccepted = false
         var anyRequiresRebuild = false
         var anyRequiresSourceRebuild = false
+        // Layer 7a: tracks whether the *latest* accepted probe used
+        // `materializePicks: false`. The cycle loop reads it from the
+        // outcome to decide whether the carried `tree` needs re-materializing
+        // before any subsequent ``ChoiceGraph/build(from:)`` call. Only the
+        // latest acceptance matters because each accepted probe overwrites
+        // the tree state.
+        var latestAcceptedTreeIsStripped = false
         var probeCount = 0
         var acceptCount = 0
         let baseHash = ZobristHash.hash(of: sequence)
@@ -514,24 +593,48 @@ enum ChoiceGraphScheduler {
                 if case .bind = entry { return true }
                 return false
             }
-            // Layer 6: pure value-only probes (the encoder's mutation is
-            // ``ProjectedMutation/leafValues(_:)`` with every leaf change
-            // having ``LeafChange/mayReshape`` false) skip
-            // `materializePicks: true`. The graph's structural skeleton
-            // — including non-selected pick branches — persists across
+            // Layer 6 + Layer 7a: probes whose mutation does not change
+            // which branch is selected at any pick site can skip
+            // `materializePicks: true`. The graph's structural skeleton —
+            // including non-selected pick branches — persists across
             // cycles via the in-place reshape path, so the decoder no
             // longer needs to re-materialize inactive branches on every
-            // probe. Reshape probes (mayReshape true) and any structural
-            // mutation keep `materializePicks: true` because the resulting
-            // tree is consumed by the splice path or by future branch
-            // pivots that need the inactive subtree content.
-            let isPureValueOnly: Bool
-            if case let .leafValues(changes) = probe.mutation {
-                isPureValueOnly = changes.contains(where: \.mayReshape) == false
-            } else {
-                isPureValueOnly = false
+            // probe.
+            //
+            // Layer 6 covers value-only ``ProjectedMutation/leafValues(_:)``
+            // with no reshape leaves. Layer 7a extends the same check to
+            // ``ProjectedMutation/sequenceElementsRemoved(seqNodeID:removedNodeIDs:)``,
+            // ``ProjectedMutation/sequenceElementsMigrated(sourceSeqID:receiverSeqID:movedNodeIDs:insertionOffset:)``,
+            // and ``ProjectedMutation/siblingsSwapped(zipNodeID:idA:idB:)``
+            // — none of these change branch selections, so any branch
+            // pivot encoder dispatched on the next cycle still finds its
+            // alternative branches in ``PickMetadata/branchElements``,
+            // which is captured at graph construction time.
+            //
+            // Pivoting mutations (``ProjectedMutation/branchSelected(pickNodeID:newSelectedID:)``,
+            // ``ProjectedMutation/selfSimilarReplaced(targetNodeID:donorNodeID:)``,
+            // ``ProjectedMutation/descendantPromoted(ancestorPickNodeID:descendantPickNodeID:)``)
+            // and reshape leafValues keep `materializePicks: true`
+            // because the resulting tree feeds the splice path or future
+            // branch pivots that need the inactive subtree content.
+            //
+            // Safety: when an accepted probe sets ``ChangeApplication/requiresFullRebuild``
+            // true (which every Layer 7a structural case does until Layer 7
+            // implements them in ``ChoiceGraph/apply(_:freshTree:)``), the
+            // cycle loop's rebuild path at the call site re-materializes
+            // the sequence with `materializePicks: true` before calling
+            // ``ChoiceGraph/build(from:)``, so the rebuilt graph never
+            // sees a stripped tree.
+            let picksUnchanged: Bool
+            switch probe.mutation {
+            case let .leafValues(changes):
+                picksUnchanged = changes.contains(where: \.mayReshape) == false
+            case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped:
+                picksUnchanged = true
+            case .branchSelected, .selfSimilarReplaced, .descendantPromoted:
+                picksUnchanged = false
             }
-            let materializePicks = isPureValueOnly == false
+            let materializePicks = picksUnchanged == false
             let decoder: SequenceDecoder = hasBind
                 ? .guided(fallbackTree: tree, materializePicks: materializePicks)
                 : .exact(materializePicks: materializePicks)
@@ -553,6 +656,10 @@ enum ChoiceGraphScheduler {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
+                // Track whether the latest accepted probe stripped the
+                // tree. The cycle loop reads this via ``ProbeLoopOutcome/treeIsStripped``
+                // to decide whether to re-materialize before any rebuild.
+                latestAcceptedTreeIsStripped = picksUnchanged
 
                 // Partial Layer 5: route the encoder's mutation report
                 // through ``ChoiceGraph/apply(_:freshTree:)``. When the
@@ -621,7 +728,8 @@ enum ChoiceGraphScheduler {
         return ProbeLoopOutcome(
             accepted: anyAccepted,
             requiresRebuild: anyRequiresRebuild,
-            requiresSourceRebuild: anyRequiresSourceRebuild
+            requiresSourceRebuild: anyRequiresSourceRebuild,
+            treeIsStripped: latestAcceptedTreeIsStripped
         )
     }
     // swiftlint:enable function_parameter_count
@@ -728,6 +836,7 @@ enum ChoiceGraphScheduler {
         tree: inout ChoiceTree,
         output: inout Output,
         graph: inout ChoiceGraph,
+        graphIsStripped: inout Bool,
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
         rejectCache: inout Set<UInt64>,
@@ -740,6 +849,9 @@ enum ChoiceGraphScheduler {
         let checkpointTree = tree
         let checkpointOutput = output
         let checkpointConvergence = extractAllConvergence(from: graph)
+        // Layer 7a: capture the graph stripping state at relax round
+        // entry so the rollback path can restore it.
+        let entryGraphIsStripped = graphIsStripped
 
         if isInstrumented {
             ExhaustLog.debug(
@@ -787,7 +899,11 @@ enum ChoiceGraphScheduler {
                 // value-only (the exchange encoder produces leafValues
                 // mutations), so `materializePicks: false` is safe and
                 // saves the per-probe cost of re-materializing
-                // non-selected branches.
+                // non-selected branches. The lazy rematerialize check
+                // before dispatch in the cycle loop and the relax-round
+                // exploitation loop handles the resulting stripped graph
+                // state when a path-changing operation needs full branch
+                // metadata.
                 let decoder: SequenceDecoder = .exact(materializePicks: false)
                 var filterObservations: [UInt64: FilterObservation] = [:]
 
@@ -825,7 +941,15 @@ enum ChoiceGraphScheduler {
         }
 
         // Exploitation: rebuild graph and run full source loop on relaxed state.
+        //
+        // Layer 7a: the redistribution loop above always uses
+        // `materializePicks: false`, so the tree is unconditionally
+        // stripped at this point. Set ``graphIsStripped`` so the
+        // exploitation source-pulling loop's lazy rematerialize check
+        // catches any path-changing operation that needs full branch
+        // metadata.
         graph = ChoiceGraph.build(from: tree)
+        graphIsStripped = true
         stats.graphRebuilds += 1
         var exploitSources = ScopeSourceBuilder.buildSources(from: graph)
 
@@ -850,6 +974,30 @@ enum ChoiceGraphScheduler {
                 continue
             }
             guard transformation.precondition.isSatisfied(in: graph) else {
+                continue
+            }
+
+            // Layer 7a lazy rematerialize: same pattern as the cycle loop.
+            // Only fires for path-changing operations against a stripped
+            // graph. The exploitation phase enters with ``graphIsStripped``
+            // unconditionally true (the redistribution loop always strips
+            // the tree).
+            if graphIsStripped, transformation.operation.isPathChanging {
+                if case let .success(_, fullTree, _) = Materializer.materialize(
+                    gen,
+                    prefix: sequence,
+                    mode: .exact,
+                    fallbackTree: tree,
+                    materializePicks: true
+                ) {
+                    tree = fullTree
+                }
+                let oldConvergence = extractAllConvergence(from: graph)
+                graph = ChoiceGraph.build(from: tree)
+                transferConvergence(oldConvergence, to: graph)
+                stats.graphRebuilds += 1
+                exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+                graphIsStripped = false
                 continue
             }
 
@@ -886,6 +1034,7 @@ enum ChoiceGraphScheduler {
             if outcome.accepted {
                 if outcome.requiresRebuild {
                     graph = ChoiceGraph.build(from: tree)
+                    graphIsStripped = outcome.treeIsStripped
                     stats.graphRebuilds += 1
                     exploitSources = ScopeSourceBuilder.buildSources(from: graph)
                 } else if outcome.requiresSourceRebuild {
@@ -917,6 +1066,10 @@ enum ChoiceGraphScheduler {
         tree = checkpointTree
         output = checkpointOutput
         graph = ChoiceGraph.build(from: tree)
+        // Layer 7a: restore the entry stripping state. The checkpoint
+        // tree was captured before the relax round mutated anything,
+        // so its strip status matches the cycle loop's pre-relax state.
+        graphIsStripped = entryGraphIsStripped
         transferConvergence(checkpointConvergence, to: graph)
 
         if isInstrumented {
@@ -986,7 +1139,9 @@ enum ChoiceGraphScheduler {
             // By construction this is a pure value-only probe — no bind
             // reshape, no structural pivot — so `materializePicks: false`
             // is safe and avoids the per-probe cost of re-materializing
-            // non-selected pick branches.
+            // non-selected pick branches. The lazy rematerialize check
+            // in the cycle loop covers any path-changing operation that
+            // needs full branch metadata after a stale acceptance.
             let decoder: SequenceDecoder = hasBind
                 ? .guided(fallbackTree: tree, materializePicks: false)
                 : .exact(materializePicks: false)
