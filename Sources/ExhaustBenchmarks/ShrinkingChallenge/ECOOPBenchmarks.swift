@@ -12,7 +12,7 @@ import ExhaustCore
 import Foundation
 
 func registerECOOPBenchmarks() {
-    let seedCount = 10
+    let seedCount = 1000
     let baseSeed: UInt64 = 1337
     let config = Interpreters.BonsaiReducerConfiguration.slow
 
@@ -78,7 +78,7 @@ func registerECOOPBenchmarks() {
 }
 
 /// Registers both Bonsai and Graph benchmarks for a single challenge, adjacent so the framework interleaves them.
-private func registerECOOPPair<Output>(
+func registerECOOPPair<Output>(
     name: String,
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
@@ -109,10 +109,15 @@ private struct SeedResult {
     let seed: UInt64
     let generationIterations: Int
     let invocations: Int
+    let materializations: Int
     let generationMilliseconds: Double
     let reductionMilliseconds: Double
     let size: Int?
     let counterexampleDescription: String
+    let encoderProbes: [EncoderName: Int]
+    let encoderProbesAccepted: [EncoderName: Int]
+    let encoderProbesRejectedByCache: [EncoderName: Int]
+    let encoderProbesRejectedByDecoder: [EncoderName: Int]
 }
 
 // MARK: - Runner
@@ -159,9 +164,12 @@ private func registerECOOPChallenge<Output>(
                 return property(candidate)
             }
             let reduceStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-            let result = switch reducerKind {
+            // Use the *CollectingStats variants so we can pull
+            // `stats.totalMaterializations` for the report. The reduced
+            // tuple has the same shape as the plain `*Reduce` return.
+            let reduceResult: (reduced: (ChoiceSequence, Output)?, stats: ReductionStats)? = switch reducerKind {
             case .bonsai:
-                try? Interpreters.bonsaiReduce(
+                try? Interpreters.bonsaiReduceCollectingStats(
                     gen: gen,
                     tree: tree,
                     output: value,
@@ -169,7 +177,7 @@ private func registerECOOPChallenge<Output>(
                     property: countingProperty
                 )
             case .choiceGraph:
-                try? Interpreters.choiceGraphReduce(
+                try? Interpreters.choiceGraphReduceCollectingStats(
                     gen: gen,
                     tree: tree,
                     output: value,
@@ -180,15 +188,21 @@ private func registerECOOPChallenge<Output>(
             let reduceEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
-            let output = result?.1 ?? value
+            let output = reduceResult?.reduced?.1 ?? value
+            let materializationCount = reduceResult?.stats.totalMaterializations ?? 0
             results.append(SeedResult(
                 seed: seed,
                 generationIterations: generationIterations,
                 invocations: invocationCount,
+                materializations: materializationCount,
                 generationMilliseconds: generationMs,
                 reductionMilliseconds: reductionMs,
                 size: sizeMetric?(output),
-                counterexampleDescription: String(describing: output)
+                counterexampleDescription: String(describing: output),
+                encoderProbes: reduceResult?.stats.encoderProbes ?? [:],
+                encoderProbesAccepted: reduceResult?.stats.encoderProbesAccepted ?? [:],
+                encoderProbesRejectedByCache: reduceResult?.stats.encoderProbesRejectedByCache ?? [:],
+                encoderProbesRejectedByDecoder: reduceResult?.stats.encoderProbesRejectedByDecoder ?? [:]
             ))
         }
 
@@ -211,12 +225,14 @@ private func printECOOPReport(
 
     let genIterations = results.map { Double($0.generationIterations) }
     let invocations = results.map { Double($0.invocations) }
+    let materializations = results.map { Double($0.materializations) }
     let genTimes = results.map { $0.generationMilliseconds }
     let reduceTimes = results.map { $0.reductionMilliseconds }
     let uniqueCEs = Set(results.map(\.counterexampleDescription))
 
     let genIterStats = summaryStats(genIterations)
     let invocStats = summaryStats(invocations)
+    let matStats = summaryStats(materializations)
     let genStats = summaryStats(genTimes)
     let reduceStats = summaryStats(reduceTimes)
 
@@ -227,7 +243,47 @@ private func printECOOPReport(
         sizeReport = " mean_size=\(f2(sizeStats.mean)) (\(f2(sizeStats.ciLow))–\(f2(sizeStats.ciHigh)))"
     }
 
-    print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | gen(ms): mean=\(f1(genStats.mean)) median=\(f1(genStats.median)) | reduce(ms): mean=\(f1(reduceStats.mean)) (\(f1(reduceStats.ciLow))–\(f1(reduceStats.ciHigh))) median=\(f1(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
+    print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | mats: mean=\(f1(matStats.mean)) (\(f1(matStats.ciLow))–\(f1(matStats.ciHigh))) median=\(f1(matStats.median)) | gen(ms): mean=\(f2(genStats.mean)) median=\(f2(genStats.median)) | reduce(ms): mean=\(f2(reduceStats.mean)) (\(f2(reduceStats.ciLow))–\(f2(reduceStats.ciHigh))) median=\(f2(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
+
+    // Per-encoder probe breakdown (summed across all seeds).
+    // Shows where the wasted-mats gap between Bonsai and Graph lives:
+    // each `rejDec` is one materialization that didn't reach the property.
+    var totalEmitted: [EncoderName: Int] = [:]
+    var totalAccepted: [EncoderName: Int] = [:]
+    var totalCacheRej: [EncoderName: Int] = [:]
+    var totalDecRej: [EncoderName: Int] = [:]
+    for result in results {
+        for (encoder, count) in result.encoderProbes {
+            totalEmitted[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.encoderProbesAccepted {
+            totalAccepted[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.encoderProbesRejectedByCache {
+            totalCacheRej[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.encoderProbesRejectedByDecoder {
+            totalDecRej[encoder, default: 0] += count
+        }
+    }
+    let allEncoders = Set(totalEmitted.keys)
+        .union(totalAccepted.keys)
+        .union(totalCacheRej.keys)
+        .union(totalDecRej.keys)
+    if allEncoders.isEmpty == false {
+        let sortedEncoders = allEncoders.sorted { lhs, rhs in
+            (totalDecRej[lhs] ?? 0) > (totalDecRej[rhs] ?? 0)
+        }
+        print("[\(name) ECOOP] encoder breakdown (summed across \(foundCount) seeds, sorted by rejDec descending):")
+        for encoder in sortedEncoders {
+            let emit = totalEmitted[encoder] ?? 0
+            let acc = totalAccepted[encoder] ?? 0
+            let cacheRej = totalCacheRej[encoder] ?? 0
+            let decRej = totalDecRej[encoder] ?? 0
+            print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej)")
+        }
+    }
+
     if enableCounterExamples {
         // Group seeds by counterexample for reproducibility.
         var seedsByCE: [String: [UInt64]] = [:]

@@ -1,5 +1,6 @@
 import Benchmark
 
 //registerShrinkingChallengeBenchmarks()
-registerECOOPBenchmarks()
+//registerECOOPBenchmarks()
+registerComplexGrammarBenchmarks()
 Benchmark.main()
