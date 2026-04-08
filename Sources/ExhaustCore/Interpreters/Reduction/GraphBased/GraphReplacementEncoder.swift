@@ -74,7 +74,8 @@ struct GraphReplacementEncoder: GraphEncoder {
             if let iteratorState = startBranchPivotIterator(
                 scope: pivotScope,
                 sequence: sequence,
-                tree: scope.tree
+                tree: scope.tree,
+                graph: scope.graph
             ) {
                 mode = .branchPivotIterator(iteratorState)
             }
@@ -141,30 +142,27 @@ struct GraphReplacementEncoder: GraphEncoder {
 
     /// Resolves the pick-site context for a branch-pivot scope and returns an iterator state ready to walk the scope's `targetBranchIDs` across probes.
     ///
-    /// Returns `nil` when the pick site cannot be located in the tree, when the located group has no `.selected` element, or when none of the scope's `targetBranchIDs` match an element in the group.
+    /// The graph is the source of truth for branch enumeration. ``PickMetadata/branchElements`` carries every branch's tree subtree (active and inactive) as captured at graph construction time, so the encoder is immune to the live tree being stripped by ``Materializer`` calls with `materializePicks: false`. The live tree is still consulted for the splice fingerprint, which works on stripped trees because the `.group` at the pick site exists regardless of how many child elements it has.
+    ///
+    /// Returns `nil` when the pick node cannot be found in the graph, when the graph metadata is malformed, when the pick site cannot be located in the tree, or when none of the scope's `targetBranchIDs` match an element in `branchElements`.
     private func startBranchPivotIterator(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
-        tree: ChoiceTree
+        tree: ChoiceTree,
+        graph: ChoiceGraph
     ) -> BranchPivotIteratorState? {
-        guard let fingerprint = findPickSiteFingerprint(
-            in: tree,
-            siteID: scope.siteID,
-            selectedID: scope.selectedID
-        ) else {
+        guard scope.pickNodeID < graph.nodes.count else { return nil }
+        guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else {
             return nil
         }
+        let elements = pickMetadata.branchElements
+        let selectedIndex = pickMetadata.selectedChildIndex
+        guard selectedIndex < elements.count else { return nil }
 
-        guard case let .group(elements, isOpaque) = tree[fingerprint] else {
-            return nil
-        }
-        guard let selectedIndex = elements.firstIndex(where: \.isSelected) else {
-            return nil
-        }
-
-        // Resolve each branchID in the scope to its index in `elements`. Skip
-        // branchIDs that no longer have a matching element (defensive — the
-        // graph and tree should agree, but this keeps the iterator robust).
+        // Resolve each branchID in the scope to its index in the graph's
+        // captured branchElements. The graph has the full set of branches
+        // even if the live tree has been stripped to just the selected one
+        // by `materializePicks: false` probes.
         var targets: [(elementIndex: Int, branchID: UInt64)] = []
         for branchID in scope.targetBranchIDs {
             guard let elementIndex = elements.firstIndex(where: { element in
@@ -179,6 +177,22 @@ struct GraphReplacementEncoder: GraphEncoder {
         }
 
         guard targets.isEmpty == false else { return nil }
+
+        // The fingerprint is needed only for the splice point. The live
+        // tree's `.group` at the pick site still exists even when stripped
+        // (it just has fewer child elements), so the fingerprint walk
+        // succeeds and we overwrite the group's content with a fresh one
+        // built from the graph's `branchElements`.
+        guard let fingerprint = findPickSiteFingerprint(
+            in: tree,
+            siteID: scope.siteID,
+            selectedID: scope.selectedID
+        ) else {
+            return nil
+        }
+        guard case let .group(_, isOpaque) = tree[fingerprint] else {
+            return nil
+        }
 
         let currentLeafCount = Self.leafCount(in: elements[selectedIndex])
 

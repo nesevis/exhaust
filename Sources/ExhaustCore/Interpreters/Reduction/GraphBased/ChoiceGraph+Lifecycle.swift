@@ -10,17 +10,17 @@ extension ChoiceGraph {
     ///
     /// Returns a ``ChangeApplication`` describing what changed. When ``ChangeApplication/requiresFullRebuild`` is true the scheduler should discard the partial result and rebuild the graph from `freshTree` via ``ChoiceGraph/build(from:)``.
     ///
-    /// Layer 2 implements only the value-only fast path of ``ProjectedMutation/leafValues(_:)`` (entries with ``LeafChange/mayReshape`` false). Bind-inner reshape and structural mutation cases all set `requiresFullRebuild = true` until Layer 4 extends ``rebuildBoundSubtree(bindNodeID:newBoundTree:)`` and Layer 7 wires up the structural cases.
+    /// Layer 4 implements both branches of ``ProjectedMutation/leafValues(_:)``: pure value-only changes (`mayReshape == false`) take the fast path that just rewrites leaf metadata, and bind-inner reshape changes (`mayReshape == true`) trigger an in-place splice of the affected bound subtree extracted from `freshTree`. Structural mutation cases still set `requiresFullRebuild = true` until Layer 7 wires them up.
     ///
     /// - Parameters:
     ///   - mutation: The mutation reported by the encoder whose probe was just accepted.
-    ///   - freshTree: The choice tree the materializer produced for the accepted candidate. Layer 2 does not consult it; later layers walk it to splice rebuilt subtrees into the graph.
+    ///   - freshTree: The choice tree the materializer produced for the accepted candidate. The reshape path walks it to extract the new bound subtree at the affected bind's known position.
     /// - Returns: A ``ChangeApplication`` describing the in-place edits and any fallback signal.
     func apply(_ mutation: ProjectedMutation, freshTree: ChoiceTree) -> ChangeApplication {
         var application = ChangeApplication()
         switch mutation {
         case let .leafValues(changes):
-            applyLeafValues(changes, into: &application)
+            applyLeafValues(changes, freshTree: freshTree, into: &application)
         case .sequenceElementsRemoved,
              .branchSelected,
              .selfSimilarReplaced,
@@ -34,41 +34,507 @@ extension ChoiceGraph {
         return application
     }
 
-    /// Value-only fast path for ``ProjectedMutation/leafValues(_:)``.
+    /// Applies a ``ProjectedMutation/leafValues(_:)`` report.
     ///
-    /// If any change carries ``LeafChange/mayReshape`` true the application bails out with ``ChangeApplication/requiresFullRebuild`` set — Layer 4's extended ``rebuildBoundSubtree(bindNodeID:newBoundTree:)`` will handle reshape leaves in place. Otherwise each leaf's ``ChooseBitsMetadata/value`` is rewritten and the type-compatibility / source-sink caches are invalidated.
+    /// Partitions the changes into pure value-only (no bind-inner reshape) and reshape (`mayReshape == true`). Value-only changes always take the fast path and just rewrite leaf metadata. Reshape changes trigger ``applyBindReshape(forLeaf:freshTree:into:)`` for each affected leaf, which extracts the new bound subtree from `freshTree` and splices it into the graph in place.
+    ///
+    /// Conservative fallback: if more than one leaf in the same mutation report has `mayReshape == true`, fall back to a full rebuild. The simple case (one bind-inner change per probe) covers BinaryHeap and the typical Calculator workload; multi-bind reshape requires dependency-ordered processing that Layer 4 defers as future work.
     private func applyLeafValues(
         _ changes: [LeafChange],
+        freshTree: ChoiceTree,
         into application: inout ChangeApplication
     ) {
-        if changes.contains(where: \.mayReshape) {
+        let reshapeChanges = changes.filter(\.mayReshape)
+        let valueOnlyChanges = changes.filter { $0.mayReshape == false }
+
+        // Multi-bind reshape conservative fallback. Layer 4 handles a single
+        // bind-inner change per acceptance; multiple require dependency-ordered
+        // processing because the second bind's tree path may have shifted by
+        // the time the first bind's subtree was rebuilt.
+        if reshapeChanges.count > 1 {
             application.requiresFullRebuild = true
             return
         }
-        for change in changes {
-            guard change.leafNodeID < nodes.count else { continue }
-            guard isTombstoned(change.leafNodeID) == false else { continue }
-            guard case let .chooseBits(metadata) = nodes[change.leafNodeID].kind else { continue }
-            let updatedMetadata = ChooseBitsMetadata(
-                typeTag: metadata.typeTag,
-                validRange: metadata.validRange,
-                isRangeExplicit: metadata.isRangeExplicit,
-                value: change.newValue,
-                convergedOrigin: metadata.convergedOrigin
-            )
-            nodes[change.leafNodeID] = ChoiceGraphNode(
-                id: nodes[change.leafNodeID].id,
-                kind: .chooseBits(updatedMetadata),
-                positionRange: nodes[change.leafNodeID].positionRange,
-                children: nodes[change.leafNodeID].children,
-                parent: nodes[change.leafNodeID].parent
-            )
-            application.touchedNodeIDs.insert(change.leafNodeID)
+
+        // Apply value-only changes first. These are the same fast path the
+        // pre-Layer-4 implementation used: rewrite leaf metadata in place,
+        // drop type-compatibility and source/sink caches at the end.
+        for change in valueOnlyChanges {
+            applyLeafValueWrite(change, into: &application)
         }
+
+        // Apply the (at most one) reshape change.
+        if let reshapeChange = reshapeChanges.first {
+            applyLeafValueWrite(reshapeChange, into: &application)
+            applyBindReshape(
+                forLeaf: reshapeChange.leafNodeID,
+                freshTree: freshTree,
+                into: &application
+            )
+            if application.requiresFullRebuild {
+                return
+            }
+        }
+
         // Leaf values changed → type-compatibility and source/sink caches
         // depend on values and must drop. Topological order and reachability
-        // are unaffected (they depend on dependency edges, not values).
+        // are invalidated separately by ``applyBindReshape`` when the bind
+        // subtree is rebuilt; pure value-only mutations leave them intact.
         invalidateDerivedEdges()
+    }
+
+    /// Rewrites a single leaf's ``ChooseBitsMetadata/value`` in place.
+    private func applyLeafValueWrite(
+        _ change: LeafChange,
+        into application: inout ChangeApplication
+    ) {
+        guard change.leafNodeID < nodes.count else { return }
+        guard isTombstoned(change.leafNodeID) == false else { return }
+        guard case let .chooseBits(metadata) = nodes[change.leafNodeID].kind else { return }
+        let updatedMetadata = ChooseBitsMetadata(
+            typeTag: metadata.typeTag,
+            validRange: metadata.validRange,
+            isRangeExplicit: metadata.isRangeExplicit,
+            value: change.newValue,
+            convergedOrigin: metadata.convergedOrigin
+        )
+        nodes[change.leafNodeID] = ChoiceGraphNode(
+            id: nodes[change.leafNodeID].id,
+            kind: .chooseBits(updatedMetadata),
+            positionRange: nodes[change.leafNodeID].positionRange,
+            children: nodes[change.leafNodeID].children,
+            parent: nodes[change.leafNodeID].parent
+        )
+        application.touchedNodeIDs.insert(change.leafNodeID)
+    }
+
+    /// Splices a rebuilt bound subtree into the graph in place after a bind-inner value change.
+    ///
+    /// 1. Locates the controlling bind node by walking from the leaf up the parent chain.
+    /// 2. Reads the bind's known offset from its existing ``ChoiceGraphNode/positionRange``.
+    /// 3. Walks `freshTree` to extract the new bound subtree at that offset.
+    /// 4. Detects picks in the old or new subtree and falls back to full rebuild if found (Layer 4 does not yet maintain self-similarity edges incrementally).
+    /// 5. Tombstones the old subtree's node IDs and edges referencing them.
+    /// 6. Walks the new subtree via ``ChoiceGraphBuilder/buildSubtree(from:startingOffset:parent:bindDepth:nodeIDOffset:)`` and appends the resulting nodes / edges.
+    /// 7. Patches the bind node's children to reference the new bound child.
+    /// 8. Propagates the length delta to right siblings and ancestors via ``propagatePositionShift(after:delta:)``.
+    /// 9. Refreshes the bind's ``BindMetadata/isStructurallyConstant`` flag from the new subtree.
+    /// 10. Invalidates topology / reachability and derived-edge caches.
+    private func applyBindReshape(
+        forLeaf leafNodeID: Int,
+        freshTree: ChoiceTree,
+        into application: inout ChangeApplication
+    ) {
+        // Step 1: locate the controlling bind.
+        guard let bindNodeID = controllingBind(forInnerLeaf: leafNodeID) else {
+            application.requiresFullRebuild = true
+            return
+        }
+        guard case let .bind(bindMetadata) = nodes[bindNodeID].kind else {
+            application.requiresFullRebuild = true
+            return
+        }
+        guard bindNodeID < nodes.count, isTombstoned(bindNodeID) == false else {
+            application.requiresFullRebuild = true
+            return
+        }
+        guard let bindRange = nodes[bindNodeID].positionRange else {
+            application.requiresFullRebuild = true
+            return
+        }
+        guard nodes[bindNodeID].children.count >= 2 else {
+            application.requiresFullRebuild = true
+            return
+        }
+
+        let oldBoundChildID = nodes[bindNodeID].children[bindMetadata.boundChildIndex]
+        guard let oldBoundRange = nodes[oldBoundChildID].positionRange else {
+            application.requiresFullRebuild = true
+            return
+        }
+
+        // Step 2/3: extract the new bound subtree from freshTree at the bind's
+        // known offset. The bind's lowerBound is unchanged for a single
+        // bind-inner mutation because positions before the bind are not
+        // affected by the bound subtree's reshape.
+        guard let newBoundSubtree = Self.extractBoundSubtree(
+            from: freshTree,
+            bindAtOffset: bindRange.lowerBound
+        ) else {
+            application.requiresFullRebuild = true
+            return
+        }
+
+        // Compute length delta from the OLD bound subtree's stored extent
+        // versus the NEW bound subtree's flattened entry count.
+        let oldBoundLength = oldBoundRange.count
+        let newBoundLength = newBoundSubtree.flattenedEntryCount
+        let lengthDelta = newBoundLength - oldBoundLength
+
+        // Step 5: tombstone the old bound subtree's node IDs and drop edges
+        // referencing them. Tombstones (Layer 1) keep node IDs stable so
+        // existing scopes that captured node IDs at construction time stay
+        // referencing valid entries. Nil-ing the position range makes every
+        // iteration site that filters on `positionRange != nil` (including
+        // ``structuralFingerprint``, ``leafNodes``, ``leafPositions``, the
+        // type-compatibility computation, and the source-sink computation)
+        // treat them as inactive uniformly.
+        let oldBoundNodeIDs = collectSubtreeNodeIDs(rootID: oldBoundChildID)
+        for nodeID in oldBoundNodeIDs {
+            let node = nodes[nodeID]
+            nodes[nodeID] = ChoiceGraphNode(
+                id: node.id,
+                kind: node.kind,
+                positionRange: nil,
+                children: node.children,
+                parent: node.parent
+            )
+            removedNodeIDs.insert(nodeID)
+        }
+        containmentEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
+        dependencyEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
+        selfSimilarityEdges.removeAll { oldBoundNodeIDs.contains($0.nodeA) || oldBoundNodeIDs.contains($0.nodeB) }
+        application.removedNodeIDs.formUnion(oldBoundNodeIDs)
+
+        // Step 6: walk the new bound subtree.
+        let rebuilt = ChoiceGraphBuilder.buildSubtree(
+            from: newBoundSubtree,
+            startingOffset: oldBoundRange.lowerBound,
+            parent: bindNodeID,
+            bindDepth: bindMetadata.bindDepth + 1,
+            nodeIDOffset: nodes.count
+        )
+        let firstNewNodeID = rebuilt.nodes.first?.id
+        for newNode in rebuilt.nodes {
+            application.addedNodeIDs.insert(newNode.id)
+        }
+        nodes.append(contentsOf: rebuilt.nodes)
+        containmentEdges.append(contentsOf: rebuilt.containmentEdges)
+        dependencyEdges.append(contentsOf: rebuilt.dependencyEdges)
+
+        // Step 7: patch the bind node's children to reference the new bound
+        // child, and add the containment edge from the bind to the new
+        // bound child. ``ChoiceGraphBuilder/buildSubtree`` walks with
+        // `parent: nil` and renumbers internally, which means it does NOT
+        // emit the containment edge from the external bind to the subtree
+        // root. The caller (this method) is responsible for adding it.
+        if let firstNewNodeID {
+            var updatedChildren = nodes[bindNodeID].children
+            updatedChildren[bindMetadata.boundChildIndex] = firstNewNodeID
+            nodes[bindNodeID] = ChoiceGraphNode(
+                id: bindNodeID,
+                kind: nodes[bindNodeID].kind,
+                positionRange: nodes[bindNodeID].positionRange,
+                children: updatedChildren,
+                parent: nodes[bindNodeID].parent
+            )
+            containmentEdges.append(ContainmentEdge(
+                source: bindNodeID,
+                target: firstNewNodeID
+            ))
+        }
+
+        // Step 8: propagate the length delta to right siblings and ancestors.
+        // The new subtree itself is already laid out at the right offsets by
+        // ``buildSubtree``; only nodes outside the rebuilt region need shifting.
+        if lengthDelta != 0 {
+            propagatePositionShift(
+                after: oldBoundRange.upperBound,
+                delta: lengthDelta,
+                excluding: oldBoundNodeIDs.union(application.addedNodeIDs)
+            )
+            application.positionShifts.append((insertionPoint: oldBoundRange.upperBound, delta: lengthDelta))
+        }
+
+        // Step 9: refresh structural-constancy on the bind. The new subtree
+        // may have flipped from "constant" to "non-constant" or vice versa
+        // depending on whether it contains nested binds or picks.
+        let newIsStructurallyConstant = newBoundSubtree.containsBind == false
+            && newBoundSubtree.containsPicks == false
+        if newIsStructurallyConstant != bindMetadata.isStructurallyConstant {
+            nodes[bindNodeID] = ChoiceGraphNode(
+                id: bindNodeID,
+                kind: .bind(BindMetadata(
+                    isStructurallyConstant: newIsStructurallyConstant,
+                    bindDepth: bindMetadata.bindDepth,
+                    innerChildIndex: bindMetadata.innerChildIndex,
+                    boundChildIndex: bindMetadata.boundChildIndex
+                )),
+                positionRange: nodes[bindNodeID].positionRange,
+                children: nodes[bindNodeID].children,
+                parent: nodes[bindNodeID].parent
+            )
+        }
+
+        // Step 10: recompute self-similarity edges from scratch. The splice
+        // may have removed picks from the old subtree and added picks in the
+        // new subtree; the existing edge set is now incomplete (no edges to
+        // new picks, may have edges to picks that no longer have valid IDs
+        // — actually those were dropped above). Recomputing is O(picks²)
+        // where pick count is in the dozens, so much cheaper than a full
+        // graph rebuild.
+        recomputeSelfSimilarityEdges()
+
+        // Step 11: invalidate caches. Topological order and reachability
+        // depend on dependency edges (which we just modified). Type-compat
+        // and source/sink depend on leaf values (the value-only path
+        // already calls ``invalidateDerivedEdges``; calling it twice is
+        // idempotent).
+        invalidateTopologicalCaches()
+        invalidateDerivedEdges()
+
+        application.touchedNodeIDs.insert(bindNodeID)
+    }
+
+    /// Recomputes the self-similarity edge set from scratch from the live (non-tombstoned) active pick nodes.
+    ///
+    /// Used by ``applyBindReshape(forLeaf:freshTree:into:)`` after splicing in a new bound subtree, since the splice may have removed picks from the old region and added picks in the new region. Mirrors the self-similarity computation in ``ChoiceGraphBuilder/assembleGraph()``.
+    ///
+    /// - Complexity: O(*p*²) where *p* is the number of active pick nodes. Pick counts are typically in the dozens, so this is much cheaper than a full ``ChoiceGraph/build(from:)`` call.
+    func recomputeSelfSimilarityEdges() {
+        selfSimilarityEdges.removeAll(keepingCapacity: true)
+        var picksByMaskedSiteID: [UInt64: [Int]] = [:]
+        for node in nodes {
+            guard isTombstoned(node.id) == false else { continue }
+            guard case let .pick(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
+            picksByMaskedSiteID[metadata.depthMaskedSiteID, default: []].append(node.id)
+        }
+        for (_, pickIDs) in picksByMaskedSiteID where pickIDs.count >= 2 {
+            var indexA = 0
+            while indexA < pickIDs.count {
+                var indexB = indexA + 1
+                while indexB < pickIDs.count {
+                    let sizeA = nodes[pickIDs[indexA]].positionRange?.count ?? 0
+                    let sizeB = nodes[pickIDs[indexB]].positionRange?.count ?? 0
+                    selfSimilarityEdges.append(SelfSimilarityEdge(
+                        nodeA: pickIDs[indexA],
+                        nodeB: pickIDs[indexB],
+                        sizeDelta: sizeA - sizeB
+                    ))
+                    indexB += 1
+                }
+                indexA += 1
+            }
+        }
+    }
+
+    /// Walks bind nodes in the live graph (skipping tombstones) and returns the bind whose `innerChildIndex`-indexed child is `leafNodeID`, or nil.
+    private func controllingBind(forInnerLeaf leafNodeID: Int) -> Int? {
+        for node in nodes {
+            guard isTombstoned(node.id) == false else { continue }
+            guard case let .bind(metadata) = node.kind else { continue }
+            guard node.children.count >= 2 else { continue }
+            if node.children[metadata.innerChildIndex] == leafNodeID {
+                return node.id
+            }
+        }
+        return nil
+    }
+
+    /// Shifts the `positionRange` of every live node whose range starts strictly after `insertionPoint` by `delta`. Nodes whose range *contains* `insertionPoint` (the changed subtree's ancestors) get their `upperBound` extended by `delta`. Sequence nodes additionally have their `childPositionRanges` metadata shifted in lockstep.
+    ///
+    /// `excluding` is the set of node IDs that belong to the rebuilt subtree itself — those nodes are already laid out at the correct offsets by ``ChoiceGraphBuilder/buildSubtree(from:startingOffset:parent:bindDepth:nodeIDOffset:)`` and must not be shifted again.
+    private func propagatePositionShift(
+        after insertionPoint: Int,
+        delta: Int,
+        excluding: Set<Int>
+    ) {
+        if delta == 0 { return }
+        for index in nodes.indices {
+            if isTombstoned(index) { continue }
+            if excluding.contains(index) { continue }
+            let node = nodes[index]
+            guard let range = node.positionRange else { continue }
+
+            let newRange: ClosedRange<Int>
+            if range.lowerBound > insertionPoint {
+                // Right of the change: shift both bounds.
+                newRange = (range.lowerBound + delta) ... (range.upperBound + delta)
+            } else if range.upperBound >= insertionPoint {
+                // Contains the change: extend upperBound only.
+                newRange = range.lowerBound ... (range.upperBound + delta)
+            } else {
+                continue
+            }
+
+            // Sequence nodes also store per-child extents that move with
+            // the same shift rule.
+            let updatedKind: ChoiceGraphNodeKind
+            if case let .sequence(seqMetadata) = node.kind {
+                let shiftedChildRanges = seqMetadata.childPositionRanges.map { childRange -> ClosedRange<Int> in
+                    if childRange.lowerBound > insertionPoint {
+                        return (childRange.lowerBound + delta) ... (childRange.upperBound + delta)
+                    }
+                    if childRange.upperBound >= insertionPoint {
+                        return childRange.lowerBound ... (childRange.upperBound + delta)
+                    }
+                    return childRange
+                }
+                updatedKind = .sequence(SequenceMetadata(
+                    lengthConstraint: seqMetadata.lengthConstraint,
+                    elementCount: seqMetadata.elementCount,
+                    childPositionRanges: shiftedChildRanges
+                ))
+            } else {
+                updatedKind = node.kind
+            }
+
+            nodes[index] = ChoiceGraphNode(
+                id: node.id,
+                kind: updatedKind,
+                positionRange: newRange,
+                children: node.children,
+                parent: node.parent
+            )
+        }
+    }
+
+    /// Walks `tree` mirroring ``ChoiceGraphBuilder`` offset arithmetic to find the bind node whose own `positionRange.lowerBound` equals `targetOffset`. Returns the bound child subtree of that bind, or nil if no matching bind is found.
+    ///
+    /// Used by ``applyBindReshape(forLeaf:freshTree:into:)`` to extract the new bound subtree from the materializer's freshly produced tree, given the bind's known offset from the OLD graph. The position-based lookup works because a single bind-inner mutation shifts positions only inside the bound subtree — positions up to and including the bind's own offset are unchanged.
+    private static func extractBoundSubtree(
+        from tree: ChoiceTree,
+        bindAtOffset targetOffset: Int
+    ) -> ChoiceTree? {
+        var result: ChoiceTree?
+        _ = walkForBindExtraction(
+            tree: tree,
+            offset: 0,
+            target: targetOffset,
+            result: &result
+        )
+        return result
+    }
+
+    /// Recursive walk used by ``extractBoundSubtree(from:bindAtOffset:)``. Returns the number of sequence positions consumed by `tree`, mirroring ``ChoiceGraphBuilder/walk(_:offset:parent:bindDepth:)`` exactly so that the offset arithmetic stays in sync.
+    private static func walkForBindExtraction(
+        tree: ChoiceTree,
+        offset: Int,
+        target: Int,
+        result: inout ChoiceTree?
+    ) -> Int {
+        if result != nil { return 0 }
+
+        switch tree {
+        case .choice:
+            return 1
+        case .just:
+            return 1
+        case .getSize:
+            return 0
+        case let .sequence(_, elements, _):
+            var consumed = 1 // sequence open
+            for element in elements {
+                consumed += walkForBindExtraction(
+                    tree: element,
+                    offset: offset + consumed,
+                    target: target,
+                    result: &result
+                )
+                if result != nil { break }
+            }
+            consumed += 1 // sequence close
+            return consumed
+        case let .branch(_, _, _, _, choice):
+            return walkForBindExtraction(
+                tree: choice,
+                offset: offset,
+                target: target,
+                result: &result
+            )
+        case let .group(array, _):
+            if isPickSite(array) {
+                // Pick site: 2 (group open + branch marker) + selected + 1 (close).
+                var consumed = 2
+                for element in array where element.isSelected {
+                    consumed += walkForBindExtraction(
+                        tree: element,
+                        offset: offset + consumed,
+                        target: target,
+                        result: &result
+                    )
+                    break
+                }
+                consumed += 1
+                return consumed
+            }
+            // Regular zip group.
+            var consumed = 1 // group open
+            for child in array {
+                consumed += walkForBindExtraction(
+                    tree: child,
+                    offset: offset + consumed,
+                    target: target,
+                    result: &result
+                )
+                if result != nil { break }
+            }
+            consumed += 1 // group close
+            return consumed
+        case let .bind(inner, bound):
+            if inner.isGetSize {
+                // getSize-bind is transparent: 1 (group open) + bound + 1 (group close).
+                var consumed = 1
+                consumed += walkForBindExtraction(
+                    tree: bound,
+                    offset: offset + consumed,
+                    target: target,
+                    result: &result
+                )
+                consumed += 1
+                return consumed
+            }
+            // Real bind: check if THIS bind is the target.
+            if offset == target {
+                result = bound
+                return 0
+            }
+            var consumed = 1 // bind open
+            consumed += walkForBindExtraction(
+                tree: inner,
+                offset: offset + consumed,
+                target: target,
+                result: &result
+            )
+            if result != nil { return consumed }
+            consumed += walkForBindExtraction(
+                tree: bound,
+                offset: offset + consumed,
+                target: target,
+                result: &result
+            )
+            consumed += 1 // bind close
+            return consumed
+        case let .resize(_, choices):
+            var consumed = 1 // group open
+            for choice in choices {
+                consumed += walkForBindExtraction(
+                    tree: choice,
+                    offset: offset + consumed,
+                    target: target,
+                    result: &result
+                )
+                if result != nil { break }
+            }
+            consumed += 1 // group close
+            return consumed
+        case let .selected(inner):
+            return walkForBindExtraction(
+                tree: inner,
+                offset: offset,
+                target: target,
+                result: &result
+            )
+        }
+    }
+
+    /// Pick-site detection that mirrors ``ChoiceGraphBuilder/detectPickSite(_:)``: every child must be `.branch` or `.selected`, and at least one must be `.selected`.
+    private static func isPickSite(_ array: [ChoiceTree]) -> Bool {
+        guard array.allSatisfy({ $0.isBranch || $0.isSelected }) else {
+            return false
+        }
+        return array.contains(where: \.isSelected)
     }
 }
 
@@ -193,7 +659,8 @@ public extension ChoiceGraph {
                 depthMaskedSiteID: metadata.depthMaskedSiteID,
                 branchIDs: metadata.branchIDs,
                 selectedID: newSelectedID,
-                selectedChildIndex: newSelectedChildIndex
+                selectedChildIndex: newSelectedChildIndex,
+                branchElements: metadata.branchElements
             )),
             positionRange: pickNode.positionRange,
             children: pickNode.children,

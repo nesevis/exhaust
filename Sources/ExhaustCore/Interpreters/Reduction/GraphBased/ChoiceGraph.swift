@@ -382,11 +382,14 @@ public extension ChoiceGraph {
 // MARK: - Structural Fingerprint
 
 public extension ChoiceGraph {
-    /// Computes a structural fingerprint over the dynamic region topology.
+    /// Computes a structural fingerprint over the active region topology.
     ///
-    /// Uses an FNV-1a-style rolling hash over node kinds and their position ranges in the dynamic regions (bind subtrees, sequence elements). A change in fingerprint indicates a structural change. The binary changed/unchanged signal is sufficient for the fibre descent guard.
+    /// The fingerprint hashes the multiset of `(kind, positionRange.lowerBound, positionRange.upperBound)` tuples for every active node (skipping tombstones and inactive branches). Per-node hashes are collected, sorted, then chained through an FNV-1a-style aggregator so the final value is independent of `nodes` array order. Crucially, the fingerprint does **not** include `node.id` — node identity is unstable across in-place mutations (the splice path keeps existing IDs and appends new ones, while a fresh ``ChoiceGraph/build(from:)`` walks the tree and assigns IDs in walk order), so including identity would make a structurally-correct splice compare unequal to its fresh-rebuild equivalent.
+    ///
+    /// Used by the partial-rebuild scheduler (``ChoiceGraphScheduler/runProbeLoop(...)``) under instrumentation to validate that ``ChoiceGraph/apply(_:freshTree:)`` produces a graph structurally equivalent to ``ChoiceGraph/build(from:)`` on the same tree.
     var structuralFingerprint: UInt64 {
-        var hash: UInt64 = 14_695_981_039_346_656_037 // FNV offset basis
+        var nodeHashes: [UInt64] = []
+        nodeHashes.reserveCapacity(nodes.count)
         for node in nodes {
             guard node.positionRange != nil else { continue }
             let kindByte: UInt64 = switch node.kind {
@@ -396,14 +399,20 @@ public extension ChoiceGraph {
             case .zip: 3
             case .sequence: 4
             }
-            hash = (hash ^ UInt64(node.id)) &* 1_099_511_628_211
-            hash = (hash ^ kindByte) &* 6_364_136_223_846_793_005
+            var nodeHash: UInt64 = 14_695_981_039_346_656_037 // FNV offset basis
+            nodeHash = (nodeHash ^ kindByte) &* 1_099_511_628_211
             if let range = node.positionRange {
-                hash = (hash ^ UInt64(range.lowerBound)) &* 1_099_511_628_211
-                hash = (hash ^ UInt64(range.upperBound)) &* 6_364_136_223_846_793_005
+                nodeHash = (nodeHash ^ UInt64(range.lowerBound)) &* 1_099_511_628_211
+                nodeHash = (nodeHash ^ UInt64(range.upperBound)) &* 6_364_136_223_846_793_005
             }
+            nodeHashes.append(nodeHash)
         }
-        return hash
+        nodeHashes.sort()
+        var combined: UInt64 = 14_695_981_039_346_656_037
+        for nodeHash in nodeHashes {
+            combined = (combined ^ nodeHash) &* 1_099_511_628_211
+        }
+        return combined
     }
 }
 

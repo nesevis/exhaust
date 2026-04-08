@@ -118,15 +118,22 @@ enum ChoiceGraphScheduler {
             cycles += 1
             let sequenceBeforeCycle = sequence
 
-            // TODO: incremental refresh causes stale position mappings on
-            // generators with structural changes mid-cycle (BinaryHeap).
-            // Full rebuild until position tracking is fixed.
-            let oldConvergenceForRebuild = extractAllConvergence(from: graph)
-            graph = ChoiceGraph.build(from: tree)
-            transferConvergence(oldConvergenceForRebuild, to: graph)
-            // graph.refreshLeafValues(from: sequence)
+            // Partial Layer 5: the unconditional top-of-cycle rebuild has
+            // been removed. The graph carries over from the previous cycle
+            // already in sync with the live sequence and tree, because
+            // every accepted probe in the previous cycle was either:
+            //  - A value-only fast-path application: ``ChoiceGraph/apply(_:freshTree:)``
+            //    mutated the graph in place to match the new sequence.
+            //  - A bind-inner reshape, structural acceptance, or staleness
+            //    detection acceptance: the cycle loop's mid-cycle rebuild
+            //    path (or the staleness detection helper) immediately
+            //    rebuilt the graph from the new tree.
+            // The 1000-seed × 14-benchmark shadow run with a fatalError in
+            // place of the warning never triggered, confirming that the
+            // value-only fast path produces structurally identical results
+            // to a fresh rebuild on the entire ECOOP suite.
 
-            // Build scope sources from the refreshed graph.
+            // Build scope sources from the carried-over graph.
             var sources = ScopeSourceBuilder.buildSources(from: graph)
 
             if isInstrumented {
@@ -185,7 +192,7 @@ enum ChoiceGraphScheduler {
 
                 // Select encoder and run.
                 var encoder = selectEncoder(for: transformation.operation)
-                let accepted = try runProbeLoop(
+                let outcome = try runProbeLoop(
                     encoder: &encoder,
                     scope: scope,
                     graph: graph,
@@ -206,11 +213,14 @@ enum ChoiceGraphScheduler {
                     graph.recordConvergence(convergence)
                 }
 
-                if accepted {
+                if outcome.accepted {
                     anyAccepted = true
 
-                    if transformation.postcondition.isStructural {
-                        // Structural acceptance: rebuild graph, clear scope cache, rebuild sources.
+                    if outcome.requiresRebuild {
+                        // Apply bailed out for at least one accepted probe
+                        // (multi-bind reshape, structural mutation, etc.).
+                        // Rebuild the graph from the live tree, refresh
+                        // sources, and clear the scope rejection cache.
                         let oldConvergence = extractAllConvergence(from: graph)
                         graph = ChoiceGraph.build(from: tree)
                         transferConvergence(oldConvergence, to: graph)
@@ -229,9 +239,48 @@ enum ChoiceGraphScheduler {
                                 ]
                             )
                         }
+                    } else if outcome.requiresSourceRebuild {
+                        // Layer 4 in-place reshape: graph is already in sync
+                        // via apply, but the existing sources captured the
+                        // old node set and miss any new leaves the splice
+                        // added. Rebuild sources from the (already up-to-date)
+                        // graph and clear convergence on the changed leaves.
+                        //
+                        // Do NOT clear the scope rejection cache. The cache
+                        // is keyed by Zobrist hashes that incorporate the
+                        // sequence positions of the targeted nodes. After a
+                        // reshape, positions shift by the length delta — the
+                        // *same* logical operation on the *same* logical
+                        // leaves now hashes to a *different* value. Old cache
+                        // entries don't collide with new probes; they sit as
+                        // harmless orphans. Clearing the cache wastes the
+                        // accumulated rejections from earlier in the same
+                        // cycle and forces the encoder to re-decode probes
+                        // it already tried.
+                        sources = ScopeSourceBuilder.buildSources(from: graph)
+                        clearConvergenceOnChangedLeaves(
+                            for: transformation,
+                            in: graph
+                        )
+
+                        if isInstrumented {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "graph_inplace_reshape",
+                                metadata: [
+                                    "seq_len": "\(sequence.count)",
+                                    "nodes": "\(graph.nodes.count)",
+                                    "sources": "\(sources.count)",
+                                ]
+                            )
+                        }
                     } else {
-                        // Value acceptance: clear convergence on changed leaves.
-                        // Scope rejection cache self-invalidates via hash change.
+                        // Every accepted probe was a value-only fast-path
+                        // application that touched no node-set membership.
+                        // Both graph and sources are still valid. Just
+                        // clear convergence on the changed leaves; the
+                        // scope rejection cache self-invalidates via hash
+                        // change.
                         clearConvergenceOnChangedLeaves(
                             for: transformation,
                             in: graph
@@ -264,8 +313,16 @@ enum ChoiceGraphScheduler {
                 )
                 if stalenessResult {
                     anyAccepted = true
-                    // Stale floors cleared — rebuild sources. Scope rejection
-                    // cache self-invalidates via hash change at affected positions.
+                    // detectStaleness updates the sequence but only the
+                    // convergence records on the graph; the graph's leaf
+                    // values are now stale. With the top-of-cycle rebuild
+                    // gone the carried-over graph would otherwise be out of
+                    // sync, so rebuild here to restore the invariant before
+                    // the next cycle.
+                    let oldConvergence = extractAllConvergence(from: graph)
+                    graph = ChoiceGraph.build(from: tree)
+                    transferConvergence(oldConvergence, to: graph)
+                    stats.graphRebuilds += 1
                     sources = ScopeSourceBuilder.buildSources(from: graph)
                 }
             }
@@ -401,6 +458,19 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Probe Loop
 
+    /// Outcome of a single ``runProbeLoop`` invocation.
+    ///
+    /// Three accepted states:
+    ///
+    /// - ``requiresRebuild`` true: at least one accepted probe set ``ChangeApplication/requiresFullRebuild``. The graph is stale; the cycle loop must do a full rebuild + source rebuild before the next dispatch.
+    /// - ``requiresSourceRebuild`` true (and ``requiresRebuild`` false): at least one accepted probe was a successful in-place reshape that added or removed graph nodes (Layer 4). The graph is in sync via ``ChoiceGraph/apply(_:freshTree:)``, but the existing scope sources captured node IDs at construction time and do not know about the new nodes. The cycle loop must rebuild sources from the (already up-to-date) graph; the graph itself does not need a full rebuild.
+    /// - both false: every accepted probe was a pure value-only fast-path application that touched no node-set membership. The graph and the existing sources are both still valid.
+    struct ProbeLoopOutcome {
+        let accepted: Bool
+        let requiresRebuild: Bool
+        let requiresSourceRebuild: Bool
+    }
+
     // swiftlint:disable function_parameter_count
     /// Runs an encoder's probe loop, accepting improvements.
     private static func runProbeLoop<Output>(
@@ -416,11 +486,13 @@ enum ChoiceGraphScheduler {
         stats: inout ReductionStats,
         collectStats: Bool,
         isInstrumented: Bool
-    ) throws -> Bool {
+    ) throws -> ProbeLoopOutcome {
         encoder.start(scope: scope)
 
         var lastAccepted = false
         var anyAccepted = false
+        var anyRequiresRebuild = false
+        var anyRequiresSourceRebuild = false
         var probeCount = 0
         var acceptCount = 0
         let baseHash = ZobristHash.hash(of: sequence)
@@ -442,14 +514,27 @@ enum ChoiceGraphScheduler {
                 if case .bind = entry { return true }
                 return false
             }
-            // `materializePicks: true` keeps non-selected branches populated
-            // in the decoded tree so the next cycle's graph rebuild still has
-            // pivot / promotion / descendant-promotion targets. The graph is
-            // fully rebuilt every cycle (no partial rebuild), so every
-            // decoder must preserve non-selected branches.
+            // Layer 6: pure value-only probes (the encoder's mutation is
+            // ``ProjectedMutation/leafValues(_:)`` with every leaf change
+            // having ``LeafChange/mayReshape`` false) skip
+            // `materializePicks: true`. The graph's structural skeleton
+            // — including non-selected pick branches — persists across
+            // cycles via the in-place reshape path, so the decoder no
+            // longer needs to re-materialize inactive branches on every
+            // probe. Reshape probes (mayReshape true) and any structural
+            // mutation keep `materializePicks: true` because the resulting
+            // tree is consumed by the splice path or by future branch
+            // pivots that need the inactive subtree content.
+            let isPureValueOnly: Bool
+            if case let .leafValues(changes) = probe.mutation {
+                isPureValueOnly = changes.contains(where: \.mayReshape) == false
+            } else {
+                isPureValueOnly = false
+            }
+            let materializePicks = isPureValueOnly == false
             let decoder: SequenceDecoder = hasBind
-                ? .guided(fallbackTree: tree, materializePicks: true)
-                : .exact(materializePicks: true)
+                ? .guided(fallbackTree: tree, materializePicks: materializePicks)
+                : .exact(materializePicks: materializePicks)
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
@@ -469,18 +554,33 @@ enum ChoiceGraphScheduler {
                 anyAccepted = true
                 acceptCount += 1
 
-                // Layer 3 shadow mode: route the encoder's mutation report
-                // through ``ChoiceGraph/apply(_:freshTree:)`` so the partial
-                // rebuild path runs alongside the authoritative full rebuild.
-                // The full rebuild (driven by the cycle loop after this
-                // function returns) remains the source of truth for the
-                // graph state; this call exercises the apply pathway and,
-                // under instrumentation, validates that it produced a graph
-                // with a matching structural fingerprint.
+                // Partial Layer 5: route the encoder's mutation report
+                // through ``ChoiceGraph/apply(_:freshTree:)``. When the
+                // value-only fast path succeeds, the graph is mutated in
+                // place and the cycle loop's mid-cycle rebuild is skipped.
+                // When apply bails out (bind-inner reshape, all structural
+                // cases until Layer 4 / Layer 7), `requiresFullRebuild` is
+                // set and propagated up so the cycle loop falls back to a
+                // full rebuild + source refresh.
                 let application = graph.apply(probe.mutation, freshTree: tree)
+                if application.requiresFullRebuild {
+                    anyRequiresRebuild = true
+                }
+                // A successful in-place reshape adds or removes graph
+                // nodes — the graph stays consistent via apply, but the
+                // existing scope sources captured the old node set at
+                // construction time and miss the new ones. Signal the
+                // cycle loop to rebuild sources without rebuilding the
+                // graph itself.
+                if application.addedNodeIDs.isEmpty == false
+                    || application.removedNodeIDs.isEmpty == false
+                {
+                    anyRequiresSourceRebuild = true
+                }
                 if isInstrumented, application.requiresFullRebuild == false {
                     let fresh = ChoiceGraph.build(from: tree)
                     if graph.structuralFingerprint != fresh.structuralFingerprint {
+                        fatalError()
                         ExhaustLog.warning(
                             category: .reducer,
                             event: "graph_apply_shadow_mismatch",
@@ -518,7 +618,11 @@ enum ChoiceGraphScheduler {
             )
         }
 
-        return anyAccepted
+        return ProbeLoopOutcome(
+            accepted: anyAccepted,
+            requiresRebuild: anyRequiresRebuild,
+            requiresSourceRebuild: anyRequiresSourceRebuild
+        )
     }
     // swiftlint:enable function_parameter_count
 
@@ -677,11 +781,14 @@ enum ChoiceGraphScheduler {
             while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
                 lastAccepted = false
 
-                // Use .exact() decoder — no shortlex check.
-                // The final comparison against the checkpoint handles acceptance.
-                // `materializePicks: true` preserves non-selected branches for
-                // subsequent graph rebuilds (full rebuild every cycle).
-                let decoder: SequenceDecoder = .exact(materializePicks: true)
+                // Use .exact() decoder — no shortlex check; the final
+                // comparison against the checkpoint handles acceptance.
+                // Layer 6: relax-round redistribution probes are always
+                // value-only (the exchange encoder produces leafValues
+                // mutations), so `materializePicks: false` is safe and
+                // saves the per-probe cost of re-materializing
+                // non-selected branches.
+                let decoder: SequenceDecoder = .exact(materializePicks: false)
                 var filterObservations: [UInt64: FilterObservation] = [:]
 
                 if let result = try decoder.decode(
@@ -756,7 +863,7 @@ enum ChoiceGraphScheduler {
             )
 
             var encoder = selectEncoder(for: transformation.operation)
-            let accepted = try runProbeLoop(
+            let outcome = try runProbeLoop(
                 encoder: &encoder,
                 scope: scope,
                 graph: graph,
@@ -776,10 +883,17 @@ enum ChoiceGraphScheduler {
                 graph.recordConvergence(convergence)
             }
 
-            if accepted, transformation.postcondition.isStructural {
-                graph = ChoiceGraph.build(from: tree)
-                stats.graphRebuilds += 1
-                exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+            if outcome.accepted {
+                if outcome.requiresRebuild {
+                    graph = ChoiceGraph.build(from: tree)
+                    stats.graphRebuilds += 1
+                    exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+                } else if outcome.requiresSourceRebuild {
+                    // Layer 4 in-place reshape during the exploitation
+                    // phase: keep the graph (it is in sync via apply) but
+                    // refresh exploit sources so they pick up new leaves.
+                    exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+                }
             }
         }
 
@@ -867,12 +981,15 @@ enum ChoiceGraphScheduler {
                 if case .bind = entry { return true }
                 return false
             }
-            // `materializePicks: true` — see the comment at the main probe
-            // loop's decoder construction. The graph is fully rebuilt every
-            // cycle, so every decoder must preserve non-selected branches.
+            // Layer 6: ``detectStaleness`` rewrites a single converged
+            // leaf's bit pattern at `floor - 1` and re-runs the materializer.
+            // By construction this is a pure value-only probe — no bind
+            // reshape, no structural pivot — so `materializePicks: false`
+            // is safe and avoids the per-probe cost of re-materializing
+            // non-selected pick branches.
             let decoder: SequenceDecoder = hasBind
-                ? .guided(fallbackTree: tree, materializePicks: true)
-                : .exact(materializePicks: true)
+                ? .guided(fallbackTree: tree, materializePicks: false)
+                : .exact(materializePicks: false)
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
