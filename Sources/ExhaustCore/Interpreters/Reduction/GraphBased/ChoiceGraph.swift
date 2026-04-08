@@ -441,43 +441,120 @@ public extension ChoiceGraph {
 // MARK: - Lazy Edge Computation
 
 extension ChoiceGraph {
-    /// Computes type-compatibility edges from the current node state.
+    /// Computes type-compatibility edges grouped by parent decision context.
     ///
-    /// Creates an edge between any two antichain-independent active `chooseBits` leaves whose values are numeric (integer or floating-point). Same-tag pairs carry their shared ``TypeTag``; cross-type numeric pairs (for example float ↔ int) carry nil. The encoder differentiates same-tag from cross-type using the leaf metadata at dispatch time.
+    /// Redistribution moves value mass between two leaves within a single decision context. Two structural cases qualify:
+    ///
+    /// 1. **Sequence siblings** — chooseBits children of the same sequence parent. The classic intra-array case (e.g., redistributing values across the elements of a single `array(of: Int)` instance).
+    /// 2. **Zip cross-slot** — chooseBits descendants of *different* children of a common zip parent. Tuple slots are simultaneously chosen and the property frequently correlates their values; redistribution between them is the only way to shrink to a coupled extremum. Bound5's `d + e == −32769` constraint is the canonical example: the canonical counterexample `Bound5(d: [-32768], e: [-1])` is reachable from intermediate states like `Bound5(d: [-17296], e: [-15473])` only by moving magnitude between `d`'s leaf and `e`'s leaf, which are not siblings of any sequence but are cross-slot under the Bound5 tuple.
+    ///
+    /// Cross-parent pairs whose lowest common ancestor is a sequence (the elements of a `[[Int]]` workload) are *not* generated. Sequence elements are independently chosen and the property treats them as independent decision contexts; cross-element redistribution produces no shrinking-meaningful candidates and balloons the edge count quadratically for high-fanout sequences.
+    ///
+    /// ## Complexity
+    ///
+    /// Pass 1 (sequence parents) is Σ over sequence parents of O(C²) where C is each parent's chooseBits child count. Pass 2 (zip parents) is Σ over zip parents of (Σᵢ⁢ⱼ Lᵢ · Lⱼ) where Lᵢ is the chooseBits-leaf count under the i-th zip child.
+    ///
+    /// For NestedLists pathological (99 sub-arrays of ~50 leaves each, no zip in the leaf path): 99 · C(50, 2) ≈ 121K edges from pass 1, zero from pass 2. For Bound5 (5 small arrays under one zip): a handful of pass-1 edges plus the 5×5 cross-slot grid from pass 2. For Coupling (single int + bound array, no zip): a handful of pass-1 edges from the bound array, zero from pass 2.
+    ///
+    /// The previous flat-leaf implementation iterated all numeric leaves and paired every pair via `areIndependent` plus a type check. For workloads with no binds every pair was independent, so the result was the complete graph K(L) with one allocation per pair — 11.4 million edges per source rebuild for NestedLists pathological. This implementation avoids that by structuring the iteration around the actual decision contexts.
     private func computeTypeCompatibilityEdges() -> [TypeCompatibilityEdge] {
-        var numericLeafIDs: [Int] = []
-        var leafTags: [Int: TypeTag] = [:]
-        for node in nodes {
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
-            // All chooseBits leaves are numeric in this framework (integer or float).
-            numericLeafIDs.append(node.id)
-            leafTags[node.id] = metadata.typeTag
-        }
-        guard numericLeafIDs.count >= 2 else { return [] }
-
         var edges: [TypeCompatibilityEdge] = []
-        var indexA = 0
-        while indexA < numericLeafIDs.count {
-            var indexB = indexA + 1
-            while indexB < numericLeafIDs.count {
-                let nodeA = numericLeafIDs[indexA]
-                let nodeB = numericLeafIDs[indexB]
-                if areIndependent(nodeA, nodeB) {
-                    let tagA = leafTags[nodeA]
-                    let tagB = leafTags[nodeB]
+
+        // Pass 1: chooseBits siblings under each sequence parent.
+        for parentNode in nodes {
+            guard parentNode.positionRange != nil else { continue }
+            guard case .sequence = parentNode.kind else { continue }
+
+            var siblings: [(nodeID: Int, tag: TypeTag)] = []
+            siblings.reserveCapacity(parentNode.children.count)
+            for childID in parentNode.children {
+                guard childID < nodes.count else { continue }
+                let child = nodes[childID]
+                guard child.positionRange != nil else { continue }
+                guard case let .chooseBits(metadata) = child.kind else { continue }
+                siblings.append((nodeID: childID, tag: metadata.typeTag))
+            }
+            guard siblings.count >= 2 else { continue }
+
+            // Within-parent sibling pairs. Pairs may be same-tag (homogeneous
+            // arrays) or mixed-tag (sequence of `.oneOf(Int, Float)`); the
+            // encoder differentiates at dispatch time via the `typeTag` field.
+            var indexA = 0
+            while indexA < siblings.count {
+                var indexB = indexA + 1
+                while indexB < siblings.count {
+                    let tagA = siblings[indexA].tag
+                    let tagB = siblings[indexB].tag
                     let sharedTag: TypeTag? = (tagA == tagB) ? tagA : nil
                     edges.append(TypeCompatibilityEdge(
-                        nodeA: nodeA,
-                        nodeB: nodeB,
+                        nodeA: siblings[indexA].nodeID,
+                        nodeB: siblings[indexB].nodeID,
                         typeTag: sharedTag
                     ))
+                    indexB += 1
                 }
-                indexB += 1
+                indexA += 1
             }
-            indexA += 1
         }
+
+        // Pass 2: chooseBits descendants across different children of each zip parent.
+        // Tuple slots are simultaneously chosen, so cross-slot value pairs are
+        // semantically meaningful redistribution candidates (Bound5's d + e
+        // coupling). Within-slot pairs are skipped here because they were
+        // (or will be) generated by pass 1 against the appropriate sequence
+        // parent inside that slot.
+        for zipNode in nodes {
+            guard zipNode.positionRange != nil else { continue }
+            guard case .zip = zipNode.kind else { continue }
+            guard zipNode.children.count >= 2 else { continue }
+
+            // Collect leaves per zip child via a containment-tree walk.
+            var perChildLeaves: [[(nodeID: Int, tag: TypeTag)]] = []
+            perChildLeaves.reserveCapacity(zipNode.children.count)
+            for childID in zipNode.children {
+                var leaves: [(nodeID: Int, tag: TypeTag)] = []
+                collectChooseBitsDescendants(rootID: childID, into: &leaves)
+                perChildLeaves.append(leaves)
+            }
+
+            // Pair leaves across different child groups only.
+            var groupA = 0
+            while groupA < perChildLeaves.count {
+                var groupB = groupA + 1
+                while groupB < perChildLeaves.count {
+                    for leafA in perChildLeaves[groupA] {
+                        for leafB in perChildLeaves[groupB] {
+                            let sharedTag: TypeTag? = (leafA.tag == leafB.tag) ? leafA.tag : nil
+                            edges.append(TypeCompatibilityEdge(
+                                nodeA: leafA.nodeID,
+                                nodeB: leafB.nodeID,
+                                typeTag: sharedTag
+                            ))
+                        }
+                    }
+                    groupB += 1
+                }
+                groupA += 1
+            }
+        }
+
         return edges
+    }
+
+    /// Walks the containment tree under `rootID` and appends every active chooseBits descendant to `result`. Used by ``computeTypeCompatibilityEdges()`` to gather leaves per zip child for cross-slot pairing.
+    private func collectChooseBitsDescendants(
+        rootID: Int,
+        into result: inout [(nodeID: Int, tag: TypeTag)]
+    ) {
+        guard rootID < nodes.count else { return }
+        let node = nodes[rootID]
+        guard node.positionRange != nil else { return }
+        if case let .chooseBits(metadata) = node.kind {
+            result.append((nodeID: rootID, tag: metadata.typeTag))
+        }
+        for childID in node.children {
+            collectChooseBitsDescendants(rootID: childID, into: &result)
+        }
     }
 
     /// Computes source/sink annotations from current leaf values.

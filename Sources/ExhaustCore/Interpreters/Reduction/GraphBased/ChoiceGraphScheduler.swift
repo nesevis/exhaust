@@ -1192,6 +1192,19 @@ enum ChoiceGraphScheduler {
             guard let origin = metadata.convergedOrigin else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
 
+            // Defend against the graph and the live sequence being out of sync.
+            // After an in-place reshape (or any mutation that hasn't fully
+            // propagated position shifts), a graph node's stored
+            // ``positionRange`` may still report a position that is now occupied
+            // by a structural marker rather than a value entry. The standard
+            // encoder dispatch sites already guard this — see
+            // ``GraphMinimizationEncoder/startInteger`` — and the staleness check
+            // needs the same guard to avoid the ``withBitPattern`` precondition
+            // failure on the next line.
+            guard range.lowerBound < sequence.count,
+                  sequence[range.lowerBound].value != nil
+            else { continue }
+
             // Probe floor - 1 in bit-pattern space. The minimization
             // encoder searches in bit-pattern space (directional), so
             // convergence bounds are bit patterns and floor - 1 is the
