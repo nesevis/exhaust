@@ -42,28 +42,50 @@ extension ChoiceGraph {
             }
             guard allSequenceChildren.count >= 2 else { continue }
 
-            // Generate scopes for all subsets of size 2 through N.
-            // Largest subsets first (highest yield). The yield ordering in
-            // the queue ensures the most drastic (all-sibling) probes run
-            // before pairs.
             let subsets = siblingSubsets(allSequenceChildren)
             for subset in subsets {
-                let maxWindow = subset.map(\.deletableCount).min() ?? 0
-                guard maxWindow > 0 else { continue }
-
-                var totalYield = 0
-                for sibling in subset {
-                    for elementNodeID in sibling.elementNodeIDs {
-                        totalYield += nodes[elementNodeID].positionRange?.count ?? 0
+                guard subset.map(\.deletableCount).allSatisfy({ $0 > 0 }) else { continue }
+                if subset.count == 2 {
+                    // Cross-product for pairs: try (i, j) for all combinations of
+                    // positions across the two siblings. Required when the coupled
+                    // elements are at different indices in each sibling — same-index
+                    // deletion would miss the pairing.
+                    generateAlignedCrossProductScopes(
+                        subset: subset,
+                        siblingIndex: 0,
+                        currentIndices: [],
+                        zipNodeID: node.id,
+                        into: &scopes
+                    )
+                } else {
+                    // Same-index for K≥3 subsets: one scope per position i, deleting
+                    // element i from every sibling simultaneously. Cross-product for K≥3
+                    // generates n^K scopes which is prohibitive when there are many
+                    // sibling sequences.
+                    let elementCount = subset.map { $0.elementNodeIDs.count }.min() ?? 0
+                    for elementIndex in 0 ..< elementCount {
+                        var scopeSiblings: [SiblingDeletionScope] = []
+                        var totalYield = 0
+                        var valid = true
+                        for sibling in subset {
+                            guard elementIndex < sibling.elementNodeIDs.count else { valid = false; break }
+                            let nodeID = sibling.elementNodeIDs[elementIndex]
+                            scopeSiblings.append(SiblingDeletionScope(
+                                sequenceNodeID: sibling.sequenceNodeID,
+                                elementNodeIDs: [nodeID],
+                                deletableCount: 1
+                            ))
+                            totalYield += nodes[nodeID].positionRange?.count ?? 0
+                        }
+                        guard valid else { continue }
+                        scopes.append(AlignedRemovalScope(
+                            zipNodeID: node.id,
+                            siblings: scopeSiblings,
+                            maxAlignedWindow: 1,
+                            maxYield: totalYield
+                        ))
                     }
                 }
-
-                scopes.append(AlignedRemovalScope(
-                    zipNodeID: node.id,
-                    siblings: subset,
-                    maxAlignedWindow: maxWindow,
-                    maxYield: totalYield
-                ))
             }
         }
         return scopes
@@ -110,6 +132,54 @@ extension ChoiceGraph {
             for subsequent in (position + 1) ..< choose {
                 indices[subsequent] = indices[subsequent - 1] + 1
             }
+        }
+    }
+
+    /// Recursively generates all cross-product combinations of one element index per sibling and emits one ``AlignedRemovalScope`` per combination.
+    ///
+    /// - Parameters:
+    ///   - subset: The sibling sequences participating in the aligned deletion.
+    ///   - siblingIndex: The current depth in the recursion (which sibling's index is being chosen).
+    ///   - currentIndices: Indices chosen for siblings 0 through `siblingIndex - 1`.
+    ///   - zipNodeID: The zip node containing the siblings.
+    ///   - scopes: Accumulator for emitted scopes.
+    private func generateAlignedCrossProductScopes(
+        subset: [SiblingDeletionScope],
+        siblingIndex: Int,
+        currentIndices: [Int],
+        zipNodeID: Int,
+        into scopes: inout [AlignedRemovalScope]
+    ) {
+        guard siblingIndex < subset.count else {
+            // All siblings have an index — build the scope.
+            var scopeSiblings: [SiblingDeletionScope] = []
+            var totalYield = 0
+            for (sibling, index) in zip(subset, currentIndices) {
+                let nodeID = sibling.elementNodeIDs[index]
+                scopeSiblings.append(SiblingDeletionScope(
+                    sequenceNodeID: sibling.sequenceNodeID,
+                    elementNodeIDs: [nodeID],
+                    deletableCount: 1
+                ))
+                totalYield += nodes[nodeID].positionRange?.count ?? 0
+            }
+            scopes.append(AlignedRemovalScope(
+                zipNodeID: zipNodeID,
+                siblings: scopeSiblings,
+                maxAlignedWindow: 1,
+                maxYield: totalYield
+            ))
+            return
+        }
+        let sibling = subset[siblingIndex]
+        for index in 0 ..< sibling.elementNodeIDs.count {
+            generateAlignedCrossProductScopes(
+                subset: subset,
+                siblingIndex: siblingIndex + 1,
+                currentIndices: currentIndices + [index],
+                zipNodeID: zipNodeID,
+                into: &scopes
+            )
         }
     }
 

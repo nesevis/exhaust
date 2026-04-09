@@ -336,11 +336,11 @@ enum ChoiceGraphScheduler {
                     // Until the in-place reshape path is fixed for chained applications,
                     // the safe option is to rebuild the graph from the live tree after the
                     // composition exits.
-                    let isKleisliFibre: Bool
-                    if case .minimize(.kleisliFibre) = transformation.operation {
-                        isKleisliFibre = true
-                    } else {
-                        isKleisliFibre = false
+                    let isKleisliFibre = switch transformation.operation {
+                        case .minimize(.kleisliFibre):
+                            true
+                        default:
+                            false
                     }
 
                     if outcome.requiresRebuild || isKleisliFibre {
