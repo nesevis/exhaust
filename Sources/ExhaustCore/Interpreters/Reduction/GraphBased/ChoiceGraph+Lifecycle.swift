@@ -234,9 +234,45 @@ extension ChoiceGraph {
             ))
         }
 
-        // Step 8: propagate the length delta to right siblings and ancestors.
-        // The new subtree itself is already laid out at the right offsets by
-        // ``buildSubtree``; only nodes outside the rebuilt region need shifting.
+        // Step 8: propagate the length delta to right siblings and ancestors,
+        // then resync chooseBits leaf values from the live tree for any leaf
+        // propagation moved.
+        //
+        // ``propagatePositionShift`` only moves ``positionRange``; it leaves
+        // each propagated leaf's ``ChooseBitsMetadata/value`` untouched. The
+        // value was set when the leaf was created (either by an original
+        // ``ChoiceGraphBuilder/build(from:)`` walk or by an earlier
+        // ``buildSubtree`` splice) from the freshTree of *that* moment. After
+        // the current reshape, the live tree's content at the leaf's *new*
+        // position can be different from what the leaf's value field still
+        // holds — the materializer in guided decode mode walks the new tree
+        // with the candidate as a prefix, and the values it produces at
+        // shifted positions don't necessarily match what the candidate's same
+        // numerical position contained. Without this resync, every active
+        // leaf right of ``insertionPoint`` (and not in the rebuilt region) is
+        // a position drift candidate: its stored value diverges from the
+        // sequence content at its new ``positionRange.lowerBound``. The
+        // ``graph_sequence_drift`` probe in ``ChoiceGraphScheduler/runProbeLoop``
+        // catches this exact divergence; this pass eliminates the cause.
+        //
+        // The resync is gated on ``lengthDelta != 0``: when delta is zero, no
+        // positions shifted, no leaf can have a stale value relative to its
+        // (unchanged) position, and the entire flatten + walk is skipped.
+        // Most bind-inner mutations leave the bound subtree's flattened
+        // length unchanged (changing a leaf's value within its type does not
+        // add or remove sequence entries), so this gate is the common case.
+        //
+        // When the resync does run, only leaves whose new position lies
+        // strictly past ``newBoundUpper`` need to be checked: those are
+        // exactly the propagated leaves. Leaves in the new bound region are
+        // already in ``application.addedNodeIDs`` and skipped; leaves in the
+        // unchanged prefix sit at positions ≤ the bind's lowerBound and were
+        // never touched by propagation, so their values and positions both
+        // still match ``freshTree``.
+        //
+        // - Complexity: zero when delta is zero. Otherwise O(*L*) leaves +
+        //   one ``ChoiceSequence(freshTree)`` flatten, where the per-leaf
+        //   inner work is gated on ``range.lowerBound > newBoundUpper``.
         if lengthDelta != 0 {
             propagatePositionShift(
                 after: oldBoundRange.upperBound,
@@ -244,6 +280,36 @@ extension ChoiceGraph {
                 excluding: oldBoundNodeIDs.union(application.addedNodeIDs)
             )
             application.positionShifts.append((insertionPoint: oldBoundRange.upperBound, delta: lengthDelta))
+
+            let newBoundUpper = oldBoundRange.upperBound + lengthDelta
+            let freshSequence = ChoiceSequence(freshTree)
+            for index in nodes.indices {
+                if isTombstoned(index) { continue }
+                if application.addedNodeIDs.contains(index) { continue }
+                guard case let .chooseBits(metadata) = nodes[index].kind else { continue }
+                guard let range = nodes[index].positionRange else { continue }
+                // Only propagated leaves (now strictly past the new bound's
+                // last position) can hold a stale value relative to the
+                // post-mutation tree.
+                guard range.lowerBound > newBoundUpper else { continue }
+                guard range.lowerBound < freshSequence.count else { continue }
+                guard let entry = freshSequence[range.lowerBound].value else { continue }
+                if entry.choice.bitPattern64 == metadata.value.bitPattern64 { continue }
+                let updated = ChooseBitsMetadata(
+                    typeTag: metadata.typeTag,
+                    validRange: metadata.validRange,
+                    isRangeExplicit: metadata.isRangeExplicit,
+                    value: entry.choice,
+                    convergedOrigin: metadata.convergedOrigin
+                )
+                nodes[index] = ChoiceGraphNode(
+                    id: nodes[index].id,
+                    kind: .chooseBits(updated),
+                    positionRange: nodes[index].positionRange,
+                    children: nodes[index].children,
+                    parent: nodes[index].parent
+                )
+            }
         }
 
         // Step 9: refresh structural-constancy on the bind. The new subtree

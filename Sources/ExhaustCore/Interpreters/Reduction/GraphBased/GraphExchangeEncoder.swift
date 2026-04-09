@@ -21,6 +21,15 @@ struct GraphExchangeEncoder: GraphEncoder {
     private var sequence: ChoiceSequence = ChoiceSequence()
     /// Maps the sequence index of every leaf the current scope can touch to its graph node ID and bind-inner reshape marker. Built once at ``start(scope:)`` time and read by ``nextProbe(lastAccepted:)`` to construct ``ProjectedMutation/leafValues(_:)`` reports without diffing the entire sequence.
     private var leafLookup: [Int: (nodeID: Int, mayReshape: Bool)] = [:]
+    /// The original scope kind seen at ``start(scope:)`` time. Stored so ``refreshScope(graph:sequence:)`` can re-derive a fresh exchange scope from the live graph against the same kind (redistribution vs tandem) when an in-pass structural mutation invalidates the cached pair / lockstep state. The current redistribution and lockstep states are not preserved across a refresh because their pair indices reference pre-mutation positions; the refresh re-builds them from scratch via ``ChoiceGraph/exchangeScopes()``.
+    private var originalExchangeKind: ExchangeScopeKind = .none
+
+    /// Discriminator for which exchange scope shape the encoder was started against. Used by ``refreshScope(graph:sequence:)`` to find the corresponding scope in the live graph's ``ChoiceGraph/exchangeScopes()`` result.
+    private enum ExchangeScopeKind {
+        case none
+        case redistribution
+        case lockstep
+    }
 
     private enum Mode {
         case idle
@@ -96,6 +105,7 @@ struct GraphExchangeEncoder: GraphEncoder {
         sequence = scope.baseSequence
         mode = .idle
         leafLookup = [:]
+        originalExchangeKind = .none
 
         guard case let .exchange(exchangeScope) = scope.transformation.operation else {
             return
@@ -106,9 +116,52 @@ struct GraphExchangeEncoder: GraphEncoder {
 
         switch exchangeScope {
         case let .redistribution(redistScope):
+            originalExchangeKind = .redistribution
             startRedistribution(scope: redistScope, graph: graph)
         case let .tandem(tandemScope):
+            originalExchangeKind = .lockstep
             startLockstep(scope: tandemScope, graph: graph)
+        }
+    }
+
+    mutating func refreshScope(graph: ChoiceGraph, sequence newSequence: ChoiceSequence) {
+        // Re-derive the encoder's working set from the live graph after a
+        // structural mutation. The pair list (RedistributionState) and the
+        // lockstep plans (LockstepState) reference pre-mutation graph node
+        // IDs and sequence positions; without a refresh the next probe
+        // would address tombstoned nodes or shifted-out positions. The
+        // refresh discards in-flight pair / plan state, replays the live
+        // graph through ``ChoiceGraph/exchangeScopes()``, and re-runs the
+        // appropriate ``startRedistribution`` / ``startLockstep`` against
+        // the live state. New leaves the splice created enter the new
+        // pair list naturally because ``exchangeScopes()`` walks the
+        // current ``typeCompatibilityEdges`` set.
+        sequence = newSequence
+        mode = .idle
+        leafLookup = [:]
+
+        guard originalExchangeKind != .none else { return }
+
+        let scopes = graph.exchangeScopes()
+        switch originalExchangeKind {
+        case .none:
+            return
+        case .redistribution:
+            let redistribution = scopes.firstNonNil { scope -> RedistributionScope? in
+                if case let .redistribution(inner) = scope { return inner }
+                return nil
+            }
+            guard let redistribution else { return }
+            populateLeafLookup(from: .redistribution(redistribution), graph: graph)
+            startRedistribution(scope: redistribution, graph: graph)
+        case .lockstep:
+            let tandem = scopes.firstNonNil { scope -> TandemScope? in
+                if case let .tandem(inner) = scope { return inner }
+                return nil
+            }
+            guard let tandem else { return }
+            populateLeafLookup(from: .tandem(tandem), graph: graph)
+            startLockstep(scope: tandem, graph: graph)
         }
     }
 
@@ -205,17 +258,6 @@ struct GraphExchangeEncoder: GraphEncoder {
             }
             guard case let .chooseBits(sourceMetadata) = graph.nodes[pair.sourceNodeID].kind,
                   case let .chooseBits(sinkMetadata) = graph.nodes[pair.sinkNodeID].kind else {
-                continue
-            }
-            // Skip pairs whose graph positions no longer land on value entries
-            // in the current sequence. After structural changes, the graph's
-            // `positionRange` metadata can be momentarily stale — mirror the
-            // guard used in ``GraphMinimizationEncoder/startInteger`` and the
-            // lockstep path to avoid out-of-bounds or wrong-entry subscripts.
-            guard sourceRange.lowerBound < sequence.count,
-                  sinkRange.lowerBound < sequence.count,
-                  sequence[sourceRange.lowerBound].value != nil,
-                  sequence[sinkRange.lowerBound].value != nil else {
                 continue
             }
 
@@ -440,7 +482,9 @@ struct GraphExchangeEncoder: GraphEncoder {
         sinkTag: TypeTag,
         usesMixed: Bool
     ) -> (maxDelta: UInt64, mixedContext: MixedRedistributionContext?) {
-        guard let sourceValue = sequence[sourceIndex].value else { return (0, nil) }
+        guard let sourceValue = sequence[sourceIndex].value else {
+            return (0, nil)
+        }
 
         if usesMixed {
             guard let sinkValue = sequence[sinkIndex].value else { return (0, nil) }
@@ -620,19 +664,9 @@ struct GraphExchangeEncoder: GraphEncoder {
         var plans: [LockstepWindowPlan] = []
 
         for group in scope.groups {
-            // Resolve leaf node IDs to sorted sequence indices.
-            //
-            // Skip positions that don't land on a value entry in the current
-            // sequence. After structural changes within a cycle, the graph's
-            // `positionRange` metadata can point at positions that have
-            // become structural markers — or past the sequence end — before
-            // the next graph rebuild. Matches the guard in
-            // ``GraphMinimizationEncoder/startInteger``.
             var indices: [Int] = []
             for nodeID in group.leafNodeIDs {
                 guard let range = graph.nodes[nodeID].positionRange else { continue }
-                guard range.lowerBound < sequence.count,
-                      sequence[range.lowerBound].value != nil else { continue }
                 indices.append(range.lowerBound)
             }
             indices.sort()

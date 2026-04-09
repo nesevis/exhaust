@@ -314,10 +314,15 @@ enum ChoiceGraphScheduler {
                     isInstrumented: isInstrumented
                 )
 
-                // Harvest convergence from value encoders.
+                // Harvest convergence from value encoders. The encoder's
+                // ``convergenceRecords`` is keyed by graph nodeID (so it
+                // survives in-pass position shifts triggered by
+                // ``GraphEncoder/refreshScope(graph:sequence:)``); the
+                // graph writes them through the matching nodeID-keyed
+                // overload to skip the O(N) per-record positional walk.
                 let convergence = encoder.convergenceRecords
                 if convergence.isEmpty == false {
-                    graph.recordConvergence(convergence)
+                    graph.recordConvergence(byNodeID: convergence)
                 }
 
                 if outcome.accepted {
@@ -879,6 +884,17 @@ enum ChoiceGraphScheduler {
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             probeCount += 1
             lastAccepted = false
+            // True when this probe's acceptance structurally mutated the graph
+            // (in-place reshape that added/removed nodes, or any change that
+            // forced ``ChangeApplication/requiresFullRebuild``). The encoder's
+            // ``IntegerState/leafPositions`` (and equivalent caches in float
+            // and exchange encoders) are built once at ``start(scope:)`` and
+            // are no longer valid against the live graph after such a
+            // mutation. The scheduler calls ``encoder.refreshScope`` at the
+            // bottom of the iteration when this is true so the encoder can
+            // re-derive its scope state in place against the post-mutation
+            // graph. See ExhaustDocs/graph-reducer-position-drift-bug.md.
+            var mutatedStructurally = false
 
             let probeHash = ZobristHash.incrementalHash(
                 baseHash: baseHash,
@@ -990,6 +1006,7 @@ enum ChoiceGraphScheduler {
                     application = graph.apply(probe.mutation, freshTree: tree)
                     if application.requiresFullRebuild {
                         anyRequiresRebuild = true
+                        mutatedStructurally = true
                     }
                 }
                 // A successful in-place reshape adds or removes graph
@@ -1002,6 +1019,7 @@ enum ChoiceGraphScheduler {
                     || application.removedNodeIDs.isEmpty == false
                 {
                     anyRequiresSourceRebuild = true
+                    mutatedStructurally = true
                 }
                 if isInstrumented, application.requiresFullRebuild == false {
                     let fresh = ChoiceGraph.build(from: tree)
@@ -1024,6 +1042,26 @@ enum ChoiceGraphScheduler {
 
             if collectStats {
                 stats.totalMaterializations += 1
+            }
+
+            // Refresh the encoder's scope on structural mutation. The
+            // encoder's cached state (e.g. ``IntegerState/leafPositions``)
+            // was built at ``start(scope:)`` against the pre-mutation
+            // graph and cannot be safely re-used after a reshape
+            // tombstones leaves and splices in new nodes. Continuing to
+            // iterate without a refresh would let the encoder address
+            // ``state.sequence`` at stale indices and silently corrupt
+            // either the live sequence or the new spliced leaves' values,
+            // producing the position drift bug documented in
+            // ExhaustDocs/graph-reducer-position-drift-bug.md. Calling
+            // ``refreshScope`` lets the encoder re-derive its scope state
+            // from the live graph in place — preserving in-pass
+            // convergence records keyed by nodeID, picking up new leaves
+            // the splice created, and dropping tombstoned ones — without
+            // paying the full source-rebuild + dispatch overhead the
+            // earlier `break`-out fix imposed.
+            if mutatedStructurally {
+                encoder.refreshScope(graph: graph, sequence: sequence)
             }
         }
 
@@ -1077,14 +1115,15 @@ enum ChoiceGraphScheduler {
         return true
     }
 
-    /// Extracts warm-start convergence records from all leaf nodes.
+    /// Extracts warm-start convergence records from all leaf nodes, keyed by graph nodeID.
+    ///
+    /// NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survives any in-pass refresh that shifts the leaf's sequence position. The previous positional keying broke as soon as a refresh re-derived `leaf.sequenceIndex`.
     private static func extractWarmStarts(from graph: ChoiceGraph) -> [Int: ConvergedOrigin] {
         var records: [Int: ConvergedOrigin] = [:]
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let origin = metadata.convergedOrigin else { continue }
-            guard let range = graph.nodes[nodeID].positionRange else { continue }
-            records[range.lowerBound] = origin
+            records[nodeID] = origin
         }
         return records
     }
@@ -1192,19 +1231,6 @@ enum ChoiceGraphScheduler {
             guard let origin = metadata.convergedOrigin else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
 
-            // Defend against the graph and the live sequence being out of sync.
-            // After an in-place reshape (or any mutation that hasn't fully
-            // propagated position shifts), a graph node's stored
-            // ``positionRange`` may still report a position that is now occupied
-            // by a structural marker rather than a value entry. The standard
-            // encoder dispatch sites already guard this — see
-            // ``GraphMinimizationEncoder/startInteger`` — and the staleness check
-            // needs the same guard to avoid the ``withBitPattern`` precondition
-            // failure on the next line.
-            guard range.lowerBound < sequence.count,
-                  sequence[range.lowerBound].value != nil
-            else { continue }
-
             // Probe floor - 1 in bit-pattern space. The minimization
             // encoder searches in bit-pattern space (directional), so
             // convergence bounds are bit patterns and floor - 1 is the
@@ -1264,7 +1290,7 @@ enum ChoiceGraphScheduler {
                 stalenessAcceptCount += 1
 
                 // Clear the stale convergence record.
-                graph.recordConvergence([range.lowerBound: ConvergedOrigin(
+                graph.recordConvergence(byNodeID: [nodeID: ConvergedOrigin(
                     bound: probeValue,
                     signal: .monotoneConvergence,
                     configuration: origin.configuration,

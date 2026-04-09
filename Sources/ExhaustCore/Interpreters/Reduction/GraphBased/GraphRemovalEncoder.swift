@@ -86,8 +86,6 @@ struct GraphRemovalEncoder: GraphEncoder {
     /// Removes the specified elements from the sequence.
     ///
     /// Uses the parent sequence's ``SequenceMetadata/childPositionRanges`` to compute the full extent of each element, including any transparent wrapper markers (getSize-bind, transform-bind). Removing only the inner chooseBits position would leave orphan markers that the materializer cannot decode.
-    ///
-    /// Skips the scope entirely if any element extent overflows the live sequence — `SequenceMetadata.childPositionRanges` is captured at graph construction time and is not updated by ``ChoiceGraph/propagatePositionShift(after:delta:excluding:)``, so a parent sequence whose children have shifted carries stale extents that will crash ``Array/removeSubranges(_:)``.
     private func buildPerParentCandidate(
         scope: PerParentRemovalScope,
         sequence: ChoiceSequence,
@@ -95,17 +93,20 @@ struct GraphRemovalEncoder: GraphEncoder {
     ) -> ChoiceSequence? {
         var rangeSet = RangeSet<Int>()
         for nodeID in scope.elementNodeIDs {
-            guard let extent = elementExtent(
-                for: nodeID,
-                inSequence: scope.sequenceNodeID,
-                graph: graph
-            ) else { continue }
-            // Defend against stale childPositionRanges. If any extent overflows
-            // the live sequence, the parent's metadata is out of date — bail.
-            guard extent.upperBound < sequence.count else { return nil }
+            guard
+                let extent = elementExtent(
+                    for: nodeID,
+                    inSequence: scope.sequenceNodeID,
+                    graph: graph
+                )
+            else {
+                continue
+            }
             rangeSet.insert(contentsOf: extent.lowerBound ..< extent.upperBound + 1)
         }
-        guard rangeSet.isEmpty == false else { return nil }
+        guard
+            rangeSet.isEmpty == false
+        else { return nil }
         var candidate = sequence
         candidate.removeSubranges(rangeSet)
         guard candidate.shortLexPrecedes(sequence) else { return nil }
@@ -113,8 +114,6 @@ struct GraphRemovalEncoder: GraphEncoder {
     }
 
     /// Removes aligned elements across all participating siblings.
-    ///
-    /// Skips the scope entirely if any element extent overflows the live sequence (see ``buildPerParentCandidate(scope:sequence:graph:)`` for the same drift defence).
     private func buildAlignedCandidate(
         scope: AlignedRemovalScope,
         sequence: ChoiceSequence,
@@ -128,7 +127,6 @@ struct GraphRemovalEncoder: GraphEncoder {
                     inSequence: sibling.sequenceNodeID,
                     graph: graph
                 ) else { continue }
-                guard extent.upperBound < sequence.count else { return nil }
                 rangeSet.insert(contentsOf: extent.lowerBound ..< extent.upperBound + 1)
             }
         }
@@ -157,15 +155,12 @@ struct GraphRemovalEncoder: GraphEncoder {
     }
 
     /// Removes a structural subtree.
-    ///
-    /// Skips the scope if the stored extent overflows the live sequence (drift defence; see ``buildPerParentCandidate(scope:sequence:graph:)``).
     private func buildSubtreeCandidate(
         scope: SubtreeRemovalScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let range = graph.nodes[scope.nodeID].positionRange else { return nil }
-        guard range.upperBound < sequence.count else { return nil }
         var rangeSet = RangeSet<Int>()
         rangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
         var candidate = sequence

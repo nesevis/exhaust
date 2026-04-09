@@ -328,6 +328,8 @@ struct TransformationScope {
     /// - Note: Temporary — a future refinement will pre-resolve metadata into scope types, making the graph unnecessary.
     let graph: ChoiceGraph
 
-    /// Warm-start convergence records for leaves in this scope, extracted from graph nodes at scope construction time. The encoder reads warm-start bounds from here — it never accesses the graph directly for convergence data.
+    /// Warm-start convergence records for leaves in this scope, keyed by graph **nodeID**.
+    ///
+    /// Extracted from graph nodes at scope construction time via ``ChoiceGraphScheduler/extractWarmStarts(from:)``. NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survive any in-pass position shift triggered by ``GraphEncoder/refreshScope(graph:sequence:)``. The encoder never accesses the graph directly for convergence data.
     let warmStartRecords: [Int: ConvergedOrigin]
 }

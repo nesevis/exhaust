@@ -384,7 +384,7 @@ extension ChoiceGraph {
             let entries = integerLeafNodeIDs.map { nodeID in
                 LeafEntry(
                     nodeID: nodeID,
-                    mayReshapeOnAcceptance: isBindInnerOfNonConstantBind(
+                    mayReshapeOnAcceptance: isBindInner(
                         nodeID,
                         innerChildToBind: innerChildToBind
                     )
@@ -400,7 +400,7 @@ extension ChoiceGraph {
             let entries = floatLeafNodeIDs.map { nodeID in
                 LeafEntry(
                     nodeID: nodeID,
-                    mayReshapeOnAcceptance: isBindInnerOfNonConstantBind(
+                    mayReshapeOnAcceptance: isBindInner(
                         nodeID,
                         innerChildToBind: innerChildToBind
                     )
@@ -446,27 +446,30 @@ extension ChoiceGraph {
         return index
     }
 
-    /// Computes value yield for a leaf: the bound subtree size if this leaf is a bind-inner for a non-structurally-constant bind, otherwise zero.
+    /// Computes value yield for a leaf: the bound subtree size if this leaf is a bind-inner, otherwise zero.
+    ///
+    /// Bind-inner leaves are sorted first in the integer scope because their mutations have the largest downstream effect — changing the inner value rebuilds the entire bound subtree. Independent of ``BindMetadata/isStructurallyConstant``: a "structurally constant" bind in the no-nested-binds-or-picks sense (e.g. Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`) can still carry domain-dependent values whose ranges and lengths shift with the inner, so changing the inner is still a high-yield mutation.
     private func computeValueYield(
         leafNodeID: Int,
         innerChildToBind: [Int: Int]
     ) -> Int {
         guard let bindNodeID = innerChildToBind[leafNodeID] else { return 0 }
         guard case let .bind(metadata) = nodes[bindNodeID].kind else { return 0 }
-        guard metadata.isStructurallyConstant == false else { return 0 }
         guard nodes[bindNodeID].children.count >= 2 else { return 0 }
         let boundChildID = nodes[bindNodeID].children[metadata.boundChildIndex]
         return nodes[boundChildID].positionRange?.count ?? 0
     }
 
-    /// Returns true when a leaf is the inner child of a non-structurally-constant bind. Mutating its value may trigger a downstream bound subtree rebuild, which the partial-rebuild path routes through ``ChoiceGraph/apply(_:freshTree:)`` separately from pure value-only changes.
-    func isBindInnerOfNonConstantBind(
+    /// Returns true when a leaf is the inner child of a bind. Any bind-inner mutation must route through ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` (not the value-only fast path) because the materialiser may produce a tree with a different bound-subtree shape — different array length, different value ranges, different content — even when the bind has no *nested* binds or picks.
+    ///
+    /// The previous predicate filtered on ``BindMetadata/isStructurallyConstant`` and missed Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`: the bound contains only plain choices (so `isStructurallyConstant == true`), but its length and element validRanges depend on `n`, so changing `n` changes the live tree's shape. The value-only fast path then left the graph holding the old bound subtree's nodes at positions that no longer corresponded to value entries in the live sequence, producing the position drift documented in `ExhaustDocs/graph-reducer-position-drift-bug.md`.
+    ///
+    /// Always treating bind-inner leaves as `mayReshape: true` is correct and simple. The cost is that the rare workloads where the bound subtree is genuinely shape-and-content-stable pay extra splice work; in exchange the splice path is the only place that handles bind-inner mutations and the contract is uniform.
+    func isBindInner(
         _ leafNodeID: Int,
         innerChildToBind: [Int: Int]
     ) -> Bool {
-        guard let bindNodeID = innerChildToBind[leafNodeID] else { return false }
-        guard case let .bind(metadata) = nodes[bindNodeID].kind else { return false }
-        return metadata.isStructurallyConstant == false
+        innerChildToBind[leafNodeID] != nil
     }
 
     /// Wraps a leaf node ID in a ``LeafEntry`` with the bind-inner reshape marker populated from the supplied index.
@@ -476,7 +479,7 @@ extension ChoiceGraph {
     ) -> LeafEntry {
         LeafEntry(
             nodeID: nodeID,
-            mayReshapeOnAcceptance: isBindInnerOfNonConstantBind(
+            mayReshapeOnAcceptance: isBindInner(
                 nodeID,
                 innerChildToBind: innerChildToBind
             )

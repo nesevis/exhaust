@@ -101,7 +101,9 @@ public final class ChoiceGraph {
         _reachability = nil
     }
 
-    /// Writes convergence records from an encoder pass onto the corresponding leaf nodes.
+    /// Writes convergence records from an encoder pass onto the corresponding leaf nodes by sequence position.
+    ///
+    /// Used by ``ChoiceGraphScheduler/transferConvergence(_:to:)`` after a full ``ChoiceGraph/build(from:)`` rebuild, where node IDs are not stable across the rebuild and positional matching is the only option. Within a single graph instance, encoders use the cheaper ``recordConvergence(byNodeID:)`` overload instead.
     ///
     /// - Parameter records: Map from flat sequence index to the convergence floor at that position.
     func recordConvergence(_ records: [Int: ConvergedOrigin]) {
@@ -119,6 +121,27 @@ public final class ChoiceGraph {
                 positionRange: nodes[nodeIndex].positionRange,
                 children: nodes[nodeIndex].children,
                 parent: nodes[nodeIndex].parent
+            )
+        }
+    }
+
+    /// Writes convergence records from an encoder pass onto leaf nodes by node ID.
+    ///
+    /// Preferred over ``recordConvergence(_:)`` for harvesting from encoders within a single graph instance: node IDs are stable and the lookup is O(1) per record instead of O(N) per record (the positional version walks every node looking for a position match). Encoders' internal `convergenceStore` is keyed by node ID so that records survive in-pass position shifts triggered by ``GraphEncoder/refreshScope(graph:sequence:)``.
+    ///
+    /// - Parameter records: Map from graph node ID to the convergence floor at that node's leaf.
+    func recordConvergence(byNodeID records: [Int: ConvergedOrigin]) {
+        for (nodeID, origin) in records {
+            guard nodeID < nodes.count else { continue }
+            guard isTombstoned(nodeID) == false else { continue }
+            guard case var .chooseBits(metadata) = nodes[nodeID].kind else { continue }
+            metadata.convergedOrigin = origin
+            nodes[nodeID] = ChoiceGraphNode(
+                id: nodes[nodeID].id,
+                kind: .chooseBits(metadata),
+                positionRange: nodes[nodeID].positionRange,
+                children: nodes[nodeID].children,
+                parent: nodes[nodeID].parent
             )
         }
     }

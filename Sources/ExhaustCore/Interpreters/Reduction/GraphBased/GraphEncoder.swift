@@ -55,9 +55,27 @@ protocol GraphEncoder {
     /// - Returns: The next probe to try, or `nil` when converged.
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe?
 
+    /// Re-derives the encoder's scope state from the live graph after a structural mutation.
+    ///
+    /// The scheduler calls this between ``nextProbe(lastAccepted:)`` invocations whenever the most recent probe acceptance added or removed graph nodes (any in-place reshape that adds/removes nodes, or any mutation flagged ``ChangeApplication/requiresFullRebuild``). At that point the encoder's per-pass cached state — leaf positions, in-flight binary-search steppers, pair indices — is no longer valid against the live graph: tombstoned nodes are still referenced, surviving nodes have shifted positions, and any new nodes the splice created are invisible.
+    ///
+    /// Implementations must:
+    ///
+    /// 1. Re-walk the live graph and rebuild every nodeID-keyed cache (leaf positions, pair plans, lookup tables) from the current state.
+    /// 2. Drop in-flight per-leaf iteration state (steppers, scan windows, cross-zero phases) — those refer to the old leaf set and are not meaningful after re-scoping.
+    /// 3. Preserve convergence records by nodeID. Records whose nodeID is now tombstoned (`positionRange == nil`) should be dropped; surviving nodeIDs keep their records.
+    /// 4. Update the encoder's internal sequence reference (``IntegerState/sequence`` etc.) to match the live `sequence` parameter.
+    ///
+    /// The default implementation is a no-op, suitable for single-shot encoders that emit one probe per scope (e.g. ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that already self-reset on every accepted probe (e.g. ``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within a pass (``GraphMinimizationEncoder``, ``GraphExchangeEncoder``) must override this method.
+    ///
+    /// - Parameters:
+    ///   - graph: The live graph after the structural mutation.
+    ///   - sequence: The live sequence after the structural mutation. Encoders that cache a baseline sequence in their state must replace it with this value, since their cached copy is from before the mutation.
+    mutating func refreshScope(graph: ChoiceGraph, sequence: ChoiceSequence)
+
     /// Convergence records accumulated during the probe loop.
     ///
-    /// Each entry maps a flat sequence index to the ``ConvergedOrigin`` at which the search converged. The scheduler harvests these after the probe loop to warm-start future passes.
+    /// Each entry maps a graph **nodeID** to the ``ConvergedOrigin`` at which the search converged for that leaf. The scheduler harvests these after the probe loop and writes them to the graph via ``ChoiceGraph/recordConvergence(byNodeID:)``. NodeID keying (rather than sequence index) is required so the records survive in-pass position shifts triggered by ``refreshScope(graph:sequence:)``.
     var convergenceRecords: [Int: ConvergedOrigin] { get }
 }
 
@@ -69,4 +87,9 @@ extension GraphEncoder {
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
     }
+
+    /// Default no-op refresh for single-shot and self-resetting encoders.
+    ///
+    /// Correct for encoders whose ``nextProbe(lastAccepted:)`` returns nil after one probe (single-shot pattern: ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that transition to ``Mode/idle`` on every accepted probe (``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within one pass must override.
+    mutating func refreshScope(graph _: ChoiceGraph, sequence _: ChoiceSequence) {}
 }

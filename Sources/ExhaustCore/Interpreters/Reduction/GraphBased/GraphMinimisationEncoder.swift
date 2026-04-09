@@ -35,7 +35,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
     private struct IntegerState {
         var sequence: ChoiceSequence
-        let leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)]
+        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)]
         var phase: IntegerPhase
         var leafIndex: Int
         var stepper: DirectionalStepper?
@@ -194,6 +194,84 @@ struct GraphMinimizationEncoder: GraphEncoder {
         }
     }
 
+    mutating func refreshScope(graph: ChoiceGraph, sequence: ChoiceSequence) {
+        // Re-derive the encoder's working set from the live graph after a
+        // structural mutation. The scheduler calls this between probe loop
+        // iterations whenever the most recent acceptance added or removed
+        // graph nodes (i.e. an in-place reshape via ``applyBindReshape``).
+        // The cached ``IntegerState/leafPositions`` /
+        // ``FloatState/targets`` reference pre-mutation node IDs and
+        // sequence positions; without a refresh the next probe would write
+        // to a stale slot or invoke ``applyLeafValueWrite`` on a tombstoned
+        // node, producing the position drift bug documented in
+        // ExhaustDocs/graph-reducer-position-drift-bug.md.
+        //
+        // Strategy: pull the canonical integer/float scope from
+        // ``graph.minimizationScopes()`` against the live graph (which
+        // automatically picks up new leaves the splice created and drops
+        // tombstoned ones), filter out leaves we have already converged in
+        // this pass via ``convergenceStore``, and replace the per-mode
+        // state in place. Convergence records keyed by nodeID survive any
+        // number of refreshes; records for tombstoned IDs are dropped so
+        // they cannot leak across the boundary.
+        //
+        // The leafIndex, in-flight stepper, scan window, and cross-zero
+        // phase are all per-leaf state from the pre-refresh leaf set and
+        // are reset. The phase is re-armed to ``IntegerPhase/batchZero``
+        // (when more than one leaf is in the new set) so the new leaves
+        // get a chance at the joint-zero probe; the cost is one extra
+        // probe per refresh.
+        // Drop convergence records whose nodeID has been tombstoned by the
+        // splice — those nodes no longer exist and recording their
+        // convergence onto the live graph at end-of-pass would be a no-op.
+        // Done before reading the new scope so the predicate sees a clean
+        // store.
+        for nodeID in convergenceStore.keys
+            where nodeID >= graph.nodes.count || graph.nodes[nodeID].positionRange == nil
+        {
+            convergenceStore.removeValue(forKey: nodeID)
+        }
+
+        switch mode {
+        case .idle:
+            return
+        case let .integerLeaves(state):
+            let scopes = graph.minimizationScopes()
+            let integerScope = scopes.firstNonNil { scope -> IntegerMinimizationScope? in
+                if case let .integerLeaves(inner) = scope { return inner }
+                return nil
+            }
+            guard let integerScope else {
+                mode = .idle
+                return
+            }
+            startInteger(
+                scope: integerScope,
+                sequence: sequence,
+                graph: graph,
+                warmStarts: state.warmStartRecords,
+                preservingConvergence: convergenceStore,
+                armBatchZero: false
+            )
+        case .floatLeaves:
+            let scopes = graph.minimizationScopes()
+            let floatScope = scopes.firstNonNil { scope -> FloatMinimizationScope? in
+                if case let .floatLeaves(inner) = scope { return inner }
+                return nil
+            }
+            guard let floatScope else {
+                mode = .idle
+                return
+            }
+            startFloat(
+                scope: floatScope,
+                sequence: sequence,
+                graph: graph,
+                preservingConvergence: convergenceStore
+            )
+        }
+    }
+
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
         case .idle:
@@ -269,20 +347,21 @@ struct GraphMinimizationEncoder: GraphEncoder {
         scope: IntegerMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
-        warmStarts: [Int: ConvergedOrigin]
+        warmStarts: [Int: ConvergedOrigin],
+        preservingConvergence: [Int: ConvergedOrigin] = [:],
+        armBatchZero: Bool = true
     ) {
         var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)] = []
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
+            // Skip leaves the encoder has already converged in the current
+            // pass. Used by ``refreshScope(graph:sequence:)`` to avoid
+            // re-driving leaves whose binary search has already finished
+            // when the live graph yields a new full scope.
+            if preservingConvergence[nodeID] != nil { continue }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
-            // Verify the sequence position is a value entry. After
-            // structural changes within a cycle, position mappings from
-            // an incrementally-refreshed graph may point at structural
-            // markers instead of values.
-            guard range.lowerBound < sequence.count,
-                  sequence[range.lowerBound].value != nil else { continue }
             let current = metadata.value.bitPattern64
             let target = metadata.value.reductionTarget(in: metadata.validRange)
             if current != target {
@@ -298,10 +377,24 @@ struct GraphMinimizationEncoder: GraphEncoder {
             }
         }
 
+        // Phase selection. ``armBatchZero`` is `true` for the initial
+        // ``start(scope:)`` call (the trivial all-targets shortcut is
+        // worth one probe at pass start) and `false` for refresh calls
+        // from ``refreshScope(graph:sequence:)``. Re-arming batch-zero on
+        // every refresh wastes one full materialisation per accepted
+        // reshape: at refresh time we already know batch-zero was
+        // infeasible at pass start (otherwise the per-leaf search wouldn't
+        // be running), and the new leaves the splice added rarely flip
+        // that. The waste was the dominant cost on BinaryHeap (~30k
+        // refresh-induced batchZero probes per 1000-seed run, each
+        // rejected because all-zero is a valid heap and the failing
+        // predicate requires non-heap shape).
+        let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible) ? .batchZero : .perLeaf
+
         mode = .integerLeaves(IntegerState(
             sequence: sequence,
             leafPositions: leafPositions,
-            phase: scope.batchZeroEligible ? .batchZero : .perLeaf,
+            phase: initialPhase,
             leafIndex: 0,
             stepper: nil,
             warmStartRecords: warmStarts,
@@ -444,7 +537,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
             // Warm-start: if a prior cycle converged this leaf with the
             // same encoder configuration, narrow the search bounds to
             // skip the already-explored region.
-            let warmStart = state.warmStartRecords[leaf.sequenceIndex]
+            let warmStart = state.warmStartRecords[leaf.nodeID]
             let validWarmStart = warmStart?.configuration == .binarySearchSemanticSimplest
                 ? warmStart : nil
 
@@ -497,7 +590,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
             if state.batchRejected && bestAccepted == leaf.targetBitPattern {
                 // Leaf converged at target but batch-zero failed — zeroing dependency.
-                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .zeroingDependency,
                     configuration: .binarySearchSemanticSimplest,
@@ -506,7 +599,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
             } else if remaining > 0, remaining <= Self.linearScanThreshold {
                 // Non-monotone gap: binary search couldn't reach the target
                 // but the gap is small enough to scan exhaustively.
-                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .nonMonotoneGap(remainingRange: Int(remaining)),
                     configuration: .binarySearchSemanticSimplest,
@@ -526,7 +619,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 state.scanIndex = 0
                 state.scanBestAccepted = nil
             } else {
-                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .monotoneConvergence,
                     configuration: .binarySearchSemanticSimplest,
@@ -579,9 +672,9 @@ struct GraphMinimizationEncoder: GraphEncoder {
         let leaf = state.leafPositions[state.leafIndex]
         let foundLowerFloor = state.scanBestAccepted != nil
         let bound = state.scanBestAccepted
-            ?? convergenceStore[leaf.sequenceIndex]?.bound
+            ?? convergenceStore[leaf.nodeID]?.bound
             ?? leaf.targetBitPattern
-        convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+        convergenceStore[leaf.nodeID] = ConvergedOrigin(
             bound: bound,
             signal: .scanComplete(foundLowerFloor: foundLowerFloor),
             configuration: .linearScan,
@@ -682,7 +775,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
                     acceptedKey,
                     tag: crossZero.tag
                 )
-                convergenceStore[leaf.sequenceIndex] = ConvergedOrigin(
+                convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: acceptedChoice.bitPattern64,
                     signal: .monotoneConvergence,
                     configuration: .binarySearchSemanticSimplest,
@@ -733,23 +826,23 @@ struct GraphMinimizationEncoder: GraphEncoder {
     private mutating func startFloat(
         scope: FloatMinimizationScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: ChoiceGraph,
+        preservingConvergence: [Int: ConvergedOrigin] = [:]
     ) {
         var targets: [FloatTarget] = []
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
+            if preservingConvergence[nodeID] != nil { continue }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
-            guard range.lowerBound < sequence.count,
-                  let sequenceEntry = sequence[range.lowerBound].value else { continue }
-            guard case let .floating(currentValue, currentBP, _) = sequenceEntry.choice else { continue }
+            guard case let .floating(currentValue, currentBP, _) = metadata.value else { continue }
             targets.append(FloatTarget(
                 nodeID: nodeID,
                 sequenceIndex: range.lowerBound,
                 typeTag: metadata.typeTag,
                 validRange: metadata.validRange,
-                isRangeExplicit: sequenceEntry.isRangeExplicit,
+                isRangeExplicit: metadata.isRangeExplicit,
                 currentValue: currentValue,
                 currentBitPattern: currentBP,
                 mayReshape: entry.mayReshapeOnAcceptance
@@ -1014,7 +1107,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
             if state.stepper.bestAccepted > 0 {
                 applyFloatIntegralBinarySearchBest(state: &state)
             }
-            convergenceStore[target.sequenceIndex] = ConvergedOrigin(
+            convergenceStore[target.nodeID] = ConvergedOrigin(
                 bound: state.targets[state.currentTargetIndex].currentBitPattern,
                 signal: .monotoneConvergence,
                 configuration: .binarySearchSemanticSimplest,
@@ -1103,7 +1196,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
             if state.stepper.bestAccepted > 0 {
                 applyFloatRatioBinarySearchBest(state: &state)
             }
-            convergenceStore[target.sequenceIndex] = ConvergedOrigin(
+            convergenceStore[target.nodeID] = ConvergedOrigin(
                 bound: state.targets[state.currentTargetIndex].currentBitPattern,
                 signal: .monotoneConvergence,
                 configuration: .binarySearchSemanticSimplest,
