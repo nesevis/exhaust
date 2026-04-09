@@ -358,10 +358,45 @@ enum ChoiceGraphScheduler {
                         // when a path-changing operation is about to
                         // dispatch. This avoids paying the materialize
                         // cost on cycles where branch pivot never fires.
+                        // For Kleisli rebuilds, the upstream bind-inner changed value,
+                        // so any convergence floors recorded for downstream leaves under
+                        // the old upstream value are now stale — the failure threshold
+                        // in n-space may have shifted. Save the bound subtree's position
+                        // range before the rebuild so we can clear those floors after
+                        // transferConvergence has run.
+                        var kleisliBoundPositionRange: ClosedRange<Int>? = nil
+                        if isKleisliFibre,
+                           case let .minimize(.kleisliFibre(fs)) = transformation.operation,
+                           fs.bindNodeID < graph.nodes.count,
+                           case let .bind(bm) = graph.nodes[fs.bindNodeID].kind,
+                           graph.nodes[fs.bindNodeID].children.count > bm.boundChildIndex
+                        {
+                            let boundChildID = graph.nodes[fs.bindNodeID].children[bm.boundChildIndex]
+                            kleisliBoundPositionRange = graph.nodes[boundChildID].positionRange
+                        }
+
                         let oldConvergence = extractAllConvergence(from: graph)
                         graph = ChoiceGraph.build(from: tree)
                         graphIsStripped = outcome.treeIsStripped
                         transferConvergence(oldConvergence, to: graph)
+
+                        // Clear stale downstream convergence after Kleisli rebuild.
+                        if let boundRange = kleisliBoundPositionRange {
+                            for nodeID in graph.leafNodes {
+                                guard let nodeRange = graph.nodes[nodeID].positionRange else { continue }
+                                guard boundRange.contains(nodeRange.lowerBound) else { continue }
+                                guard case var .chooseBits(md) = graph.nodes[nodeID].kind else { continue }
+                                guard md.convergedOrigin != nil else { continue }
+                                md.convergedOrigin = nil
+                                graph.nodes[nodeID] = ChoiceGraphNode(
+                                    id: graph.nodes[nodeID].id,
+                                    kind: .chooseBits(md),
+                                    positionRange: graph.nodes[nodeID].positionRange,
+                                    children: graph.nodes[nodeID].children,
+                                    parent: graph.nodes[nodeID].parent
+                                )
+                            }
+                        }
                         stats.graphRebuilds += 1
                         scopeRejectionCache.clear()
                         sources = ScopeSourceBuilder.buildSources(from: graph)
@@ -635,11 +670,15 @@ enum ChoiceGraphScheduler {
             inner: GraphBinarySearchEncoder(),
             scope: upstreamScope
         )
-        // Downstream: enumerate the lifted fibre via FibreCoveringEncoder rather
-        // than per-coordinate binary search. The lifted state often passes the
-        // property — we need to discover failures in the new fibre, which requires
-        // covering the value space, not minimising toward the target.
-        let downstreamEncoder = GraphFibreCoveringEncoder()
+        // Downstream: choose encoder based on fibre dimensionality.
+        // Single-leaf fibres use binary search — the covering encoder requires ≥ 2 parameters
+        // for pairwise covering and falls through with zero probes for large single-parameter
+        // domains. Binary search converges in O(log domain) steps and correctly handles the
+        // cross-zero phase for signed types, finding the minimum failing value directly.
+        // Multi-leaf fibres use FibreCoveringEncoder to discover failures across combinations.
+        let downstreamEncoder: any GraphEncoder = fibreScope.downstreamNodeIDs.count == 1
+            ? GraphBinarySearchEncoder()
+            : GraphFibreCoveringEncoder()
 
         let lift: (EncoderProbe, TransformationScope) -> TransformationScope? = { upstreamProbe, parent in
             Self.kleisliFibreLift(
