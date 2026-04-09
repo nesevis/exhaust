@@ -19,7 +19,7 @@ struct HypothesisShrinkQualityParityTests {
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: config, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
         )
         return output
     }
@@ -269,7 +269,7 @@ struct HypothesisShrinkQualityParityTests {
         ) throws -> Output {
             let tree = try #require(try Interpreters.reflect(gen, with: value))
             let (_, output) = try #require(
-                try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: config, property: property)
+                try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
             )
             return output
         }

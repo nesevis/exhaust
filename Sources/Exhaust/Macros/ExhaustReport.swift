@@ -132,7 +132,6 @@ public struct ExhaustReport: Sendable {
                 (ReducerPhaseIdentifier.baseDescent, outcome.baseDescent),
                 (.fibreDescent, outcome.fibreDescent),
                 (.exploration, outcome.exploration),
-                (.relaxRound, outcome.relaxRound),
             ] {
                 if case let .ran(phaseOutcome) = disposition {
                     phaseInvocations[phase, default: 0] += phaseOutcome.propertyInvocations
@@ -152,7 +151,6 @@ public struct ExhaustReport: Sendable {
             label(.baseDescent, "B"),
             label(.fibreDescent, "F"),
             label(.exploration, "E"),
-            label(.relaxRound, "R"),
         ]
         let joined = parts.joined()
         return joined.isEmpty ? "" : "phases=\(joined.dropFirst())"
