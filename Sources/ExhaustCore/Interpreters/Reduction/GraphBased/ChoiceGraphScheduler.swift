@@ -1002,6 +1002,12 @@ enum ChoiceGraphScheduler {
                 if encoder.requiresExactDecoder {
                     application = ChangeApplication()
                     anyRequiresRebuild = true
+                    // Signal structural mutation so refreshScope is called below.
+                    // Encoders with requiresExactDecoder (kleisli compositions) skip
+                    // graph.apply, so requiresFullRebuild is never set on the
+                    // ChangeApplication — but their cached state is equally stale after
+                    // an acceptance and needs the same reset treatment.
+                    mutatedStructurally = true
                 } else {
                     application = graph.apply(probe.mutation, freshTree: tree)
                     if application.requiresFullRebuild {
