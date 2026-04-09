@@ -35,7 +35,7 @@ func registerShrinkingChallengeBenchmarks() {
     registerNestedLists()
     registerReverse()
     registerReplacement()
-//    registerParser()
+    registerParser()
 }
 
 // MARK: - Bound5
@@ -375,14 +375,14 @@ private func registerParser() {
                 invocationCount += 1
                 return property(candidate)
             }
-            let result = try? Interpreters.bonsaiReduce(
+            let result = try? Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
                 config: adaptive,
                 property: countingProperty
             )
-            print("\(seed), \(invocationCount)")
+//            print("\(seed), \(invocationCount)")
             let output = result?.1 ?? value
             let outputSize = parserSize(output)
             sizes.append(outputSize)
@@ -484,7 +484,7 @@ private func runReflectableBenchmark<Output>(
         }
         var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        let result = try? Interpreters.bonsaiReduce(
+        let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
@@ -498,6 +498,11 @@ private func runReflectableBenchmark<Output>(
         if enableCounterExamples, seenCEs.insert(description).inserted {
             print("  (\(String(describing: value)) -> \(description))")
         }
+//        } else {
+//            let ceTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+//            let ms = Double(ceTime - startTime) / 1_000_000.0
+//            print("  \(ms)(\(String(describing: value)) -> \(description))")
+//        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
@@ -523,7 +528,7 @@ private func runNonReflectableBenchmark<Output>(
         }
         var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        let result = try? Interpreters.bonsaiReduce(
+        let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
