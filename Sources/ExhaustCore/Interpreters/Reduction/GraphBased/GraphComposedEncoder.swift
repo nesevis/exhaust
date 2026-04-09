@@ -263,6 +263,16 @@ struct GraphComposedEncoder: GraphEncoder {
         return nil
     }
 
+    /// Resets the composition to idle when a mid-pass structural acceptance has updated the live sequence.
+    ///
+    /// The composition caches the pre-dispatch scope, the in-flight upstream probe, and the downstream iterator. After any accepted probe triggers a reshape or full rebuild, all three are stale — the upstream binary search was calibrated to the old sequence, the lifted downstream scope was built from the old tree, and continuing would emit probes that may not shortlex-precede the new live sequence. Resetting to idle aborts the current pass; the scheduler re-dispatches a fresh composition next cycle.
+    mutating func refreshScope(graph _: ChoiceGraph, sequence _: ChoiceSequence) {
+        originalScope = nil
+        currentUpstreamProbe = nil
+        downstreamActive = false
+        upstreamProbesUsed = 0
+    }
+
     /// Replaces a downstream probe's mutation with the upstream's mutation, lifted to set ``LeafChange/mayReshape`` to `true`.
     ///
     /// The candidate sequence is the downstream's lifted candidate; the mutation is what the live graph applies on accept (one upstream leaf change that triggers the partial-rebuild splice path via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``).
