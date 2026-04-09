@@ -46,7 +46,10 @@ struct ChoiceGraphBuilder {
             return walkChoice(value: value, metadata: metadata, offset: offset, parent: parent)
 
         case .just:
-            // Invisible — no choices, no graph node.
+            let nodeID = emitNode(kind: .just, positionRange: offset ... offset, children: [], parent: parent)
+            if let parent {
+                containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
+            }
             return 1
 
         case .getSize:
@@ -335,7 +338,13 @@ struct ChoiceGraphBuilder {
                 containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
             }
 
-        case .just, .getSize:
+        case .just:
+            let nodeID = emitNode(kind: .just, positionRange: nil, children: [], parent: parent)
+            if let parent {
+                containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
+            }
+
+        case .getSize:
             break
 
         case let .sequence(_, elements, metadata):
@@ -671,7 +680,7 @@ struct ChoiceGraphBuilder {
                 switch target.kind {
                 case .bind, .pick:
                     subtreeDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
-                case .chooseBits, .zip, .sequence:
+                case .chooseBits, .zip, .sequence, .just:
                     break
                 }
                 for child in target.children {
@@ -749,7 +758,7 @@ struct ChoiceGraphBuilder {
                     if current != boundChildID {
                         allDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
                     }
-                case .chooseBits, .zip, .sequence:
+                case .chooseBits, .zip, .sequence, .just:
                     break
                 }
                 for child in target.children {

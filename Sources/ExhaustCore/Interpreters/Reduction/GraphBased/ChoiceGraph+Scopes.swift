@@ -144,7 +144,7 @@ extension ChoiceGraph {
             // Non-constant binds are not transparent — the sequence inside
             // depends on the bind-inner value and may change shape.
             return nil
-        case .chooseBits, .pick:
+        case .chooseBits, .pick, .just:
             return nil
         case .sequence:
             return nodeID
@@ -652,6 +652,7 @@ extension ChoiceGraph {
         case zip(childCount: Int)
         case bind
         case pick(branchCount: Int)
+        case just
     }
 
     /// Computes the shape key for a graph node.
@@ -668,6 +669,8 @@ extension ChoiceGraph {
             return .bind
         case let .pick(metadata):
             return .pick(branchCount: metadata.branchIDs.count)
+        case .just:
+            return .just
         }
     }
 }

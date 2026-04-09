@@ -7,7 +7,7 @@
 
 /// Classifies a node in the ``ChoiceGraph`` by the value-structural operation it represents.
 ///
-/// Five kinds correspond to the five ``ReflectiveOperation`` cases that produce or compose values. Operational cases (`contramap`, `prune`, `getSize`, `resize`, `filter`, `classify`, `unique`) and forward-only transforms (`.map`, `.metamorphic`) are not represented — they are interpreter concerns. `just` is invisible (no choices).
+/// Six kinds correspond to the structural cases that produce or compose values. Operational cases (`contramap`, `prune`, `getSize`, `resize`, `filter`, `classify`, `unique`) and forward-only transforms (`.map`, `.metamorphic`) are not represented — they are interpreter concerns. `just` is a visible constant leaf so that constant elements inside sequences are reachable by the removal encoder.
 ///
 /// ## chooseBits
 /// Leaf node producing a single value. Carries ``TypeTag``, valid range, and the current ``ChoiceValue`` from the ``ChoiceSequence``. Addressable unit for value redistribution.
@@ -23,6 +23,9 @@
 ///
 /// ## sequence
 /// Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materialiser derives actual length from element count, not from the length generator's output.
+///
+/// ## just
+/// Constant leaf with no value choices — corresponds to `.pure` in the Freer Monad. Position range covers its single sequence entry. No metadata needed. Treated like `chooseBits` for dependency-edge purposes (no edges) but excluded from leaf-position and value-minimisation passes.
 public enum ChoiceGraphNodeKind {
     /// Leaf value with type, range, and current value.
     case chooseBits(ChooseBitsMetadata)
@@ -38,6 +41,9 @@ public enum ChoiceGraphNodeKind {
 
     /// Variable-length sequence with dynamic element children.
     case sequence(SequenceMetadata)
+
+    /// Constant leaf with no value choices — corresponds to `.pure` in the Freer Monad. Emitted so that constant elements inside sequences appear in the containment tree and are reachable by the removal encoder.
+    case just
 }
 
 // MARK: - Per-Kind Metadata

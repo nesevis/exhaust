@@ -236,8 +236,14 @@ struct GraphReplacementEncoder: GraphEncoder {
             candidateTree[state.fingerprint] = .group(candidateElements, isOpaque: state.isOpaque)
             let candidateSequence = ChoiceSequence(candidateTree)
 
-            // Accept candidates that are shortlex-equal or better. With branch-transparent shortlex, pivoting between same-arity branches whose leaves are both at their reduction target may produce equal sequences — the property check determines whether the alternative is useful.
-            guard state.baseSequence.shortLexPrecedes(candidateSequence) == false else {
+            // Require the candidate to be strictly shorter in shortlex order.
+            // Equal-shortlex replacements (both branches at their reduction target)
+            // produce a no-op acceptance that triggers a full structural rebuild,
+            // clears the scope rejection cache, and re-proposes the same replacement
+            // next cycle — an infinite loop. Strictly-better candidates cannot cycle:
+            // once accepted the new sequence is shorter, so the same pivot cannot
+            // accept again for the same shortlex reason.
+            guard candidateSequence.shortLexPrecedes(state.baseSequence) else {
                 continue
             }
             return EncoderProbe(

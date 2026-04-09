@@ -53,6 +53,20 @@ public struct HumanReadableOrderingPass: ReductionPass {
             let keys = group.ranges.map {
                 ChoiceSequence.siblingComparisonKey(from: sequence, range: $0)
             }
+
+            // For different-size siblings, only attempt permutation when every
+            // sibling's key has at most one value. Keys with more than one value
+            // encode picks or nested zip structure — swapping different-size chunks
+            // of those causes the guided decoder to overread into the wrong region
+            // and fill the remainder from the fallback tree, producing semantically
+            // larger output. Single-scalar keys (for example an array of integers)
+            // are safe because the sequence-open/close delimiters make each sibling
+            // self-delimiting regardless of element count.
+            let firstSize = group.ranges[0].count
+            if group.ranges.allSatisfy({ $0.count == firstSize }) == false {
+                guard keys.allSatisfy({ $0.count <= 1 }) else { return false }
+            }
+
             // All value entries across all keys must share a single tag. Empty keys trivially pass and pure-empty groups have nothing to reorder.
             var seenTag: TypeTag?
             for key in keys {

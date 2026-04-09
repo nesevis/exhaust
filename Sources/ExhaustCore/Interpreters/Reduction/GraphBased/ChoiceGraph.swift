@@ -443,6 +443,7 @@ public extension ChoiceGraph {
             case .bind: 2
             case .zip: 3
             case .sequence: 4
+            case .just: 5
             }
             var nodeHash: UInt64 = 14_695_981_039_346_656_037 // FNV offset basis
             nodeHash = (nodeHash ^ kindByte) &* 1_099_511_628_211
