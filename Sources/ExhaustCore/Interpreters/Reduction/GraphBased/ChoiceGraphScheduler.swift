@@ -981,14 +981,13 @@ enum ChoiceGraphScheduler {
             // the sequence with `materializePicks: true` before calling
             // ``ChoiceGraph/build(from:)``, so the rebuilt graph never
             // sees a stripped tree.
-            let picksUnchanged: Bool
-            switch probe.mutation {
+            let picksUnchanged = switch probe.mutation {
             case let .leafValues(changes):
-                picksUnchanged = changes.contains(where: \.mayReshape) == false
+                changes.contains(where: \.mayReshape) == false
             case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped:
-                picksUnchanged = true
+                true
             case .branchSelected, .selfSimilarReplaced, .descendantPromoted:
-                picksUnchanged = false
+                false
             }
             let materializePicks = picksUnchanged == false
             // Composed encoders (kleisli fibre) emit post-lift candidates whose

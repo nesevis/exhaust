@@ -107,10 +107,8 @@ enum BipartiteMatching {
 
         // Main loop: repeat BFS + DFS until no more augmenting paths exist.
         while bfs() {
-            for left in 0 ..< leftCount {
-                if matchLeft[left] == nil {
-                    _ = dfs(left)
-                }
+            for left in 0 ..< leftCount where matchLeft[left] == nil {
+                _ = dfs(left)
             }
         }
 
@@ -164,11 +162,9 @@ enum BipartiteMatching {
         var stack: [Int] = []
 
         // Start from all free (unmatched) left nodes.
-        for left in 0 ..< leftCount {
-            if matching[left] == nil {
-                stack.append(left)
-                visitedLeft.insert(left)
-            }
+        for left in 0 ..< leftCount where matching[left] == nil {
+            stack.append(left)
+            visitedLeft.insert(left)
         }
 
         while stack.isEmpty == false {
@@ -188,10 +184,8 @@ enum BipartiteMatching {
         //   left nodes NOT in the alternating-reachable set (matched left nodes not reachable)
         //   + right nodes IN the alternating-reachable set
         var leftCover = Set<Int>()
-        for left in 0 ..< leftCount {
-            if visitedLeft.contains(left) == false {
-                leftCover.insert(left)
-            }
+        for left in 0 ..< leftCount where visitedLeft.contains(left) == false {
+            leftCover.insert(left)
         }
         let rightCover = visitedRight
 
