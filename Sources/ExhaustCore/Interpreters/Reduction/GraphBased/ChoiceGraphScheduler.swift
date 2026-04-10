@@ -919,6 +919,13 @@ enum ChoiceGraphScheduler {
         var cacheHitCount = 0
         var decoderRejectCount = 0
         let baseHash = ZobristHash.hash(of: sequence)
+        // Bind status is structural — value-only mutations within the probe
+        // loop cannot add or remove bind markers. Hoisted to avoid an O(N)
+        // scan on every probe iteration.
+        let hasBind = sequence.contains { entry in
+            if case .bind = entry { return true }
+            return false
+        }
 
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             probeCount += 1
@@ -945,10 +952,6 @@ enum ChoiceGraphScheduler {
                 continue
             }
 
-            let hasBind = sequence.contains { entry in
-                if case .bind = entry { return true }
-                return false
-            }
             // Layer 6 + Layer 7a: probes whose mutation does not change
             // which branch is selected at any pick site can skip
             // `materializePicks: true`. The graph's structural skeleton —
@@ -1270,6 +1273,14 @@ enum ChoiceGraphScheduler {
             }
         }
 
+        // Bind status is structural — staleness probes are value-only and
+        // cannot add or remove bind markers. Hoisted to avoid an O(N) scan
+        // on every converged leaf.
+        let hasBind = sequence.contains { entry in
+            if case .bind = entry { return true }
+            return false
+        }
+
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let origin = metadata.convergedOrigin else { continue }
@@ -1300,10 +1311,6 @@ enum ChoiceGraphScheduler {
                 continue
             }
 
-            let hasBind = sequence.contains { entry in
-                if case .bind = entry { return true }
-                return false
-            }
             // Layer 6: ``detectStaleness`` rewrites a single converged
             // leaf's bit pattern at `floor - 1` and re-runs the materializer.
             // By construction this is a pure value-only probe — no bind
