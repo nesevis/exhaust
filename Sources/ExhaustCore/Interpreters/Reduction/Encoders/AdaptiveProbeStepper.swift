@@ -165,7 +165,7 @@ struct BinarySearchStepper {
 
 /// Searches for the **smallest** accepted value using interpolation search with binary search fallback.
 ///
-/// Probes aggressively near `lo` (the reduction target) during the interpolation phase, under the prior that most values can be reduced to or near the target. The divisor `K` starts at 4 (probing at 25% of the range from `lo`) and halves on each rejection, degrading gracefully to binary search at K=2. On acceptance, `K` resets to 4 for the narrowed interval.
+/// Probes near `lo` (the reduction target) during the interpolation phase, under the prior that most values can be reduced to or near the target. The divisor `K` starts at 4 (probing at 25% of the range from `lo`) and halves on rejection to K=2 (binary search). On acceptance, `K` resets to 4 for the narrowed interval.
 ///
 /// Transitions to pure binary search when the interval shrinks below 1024 values, where the interpolation estimate provides negligible advantage over midpoint bisection.
 ///
@@ -264,7 +264,7 @@ struct InterpolationSearchStepper {
 
 /// Searches for the **largest** accepted value using interpolation search with binary search fallback.
 ///
-/// Probes aggressively near `hi` (the reduction target) during the interpolation phase, under the prior that most values can be reduced to or near the target. The divisor `K` starts at 4 (probing at 75% of the range from `lo`) and halves on each rejection, degrading gracefully to binary search at K=2. On acceptance, `K` resets to 4 for the narrowed interval.
+/// Probes near `hi` (the reduction target) during the interpolation phase, under the prior that most values can be reduced to or near the target. The divisor `K` starts at 4 (probing at 75% of the range from `lo`) and halves on rejection to K=2 (binary search). On acceptance, `K` resets to 4 for the narrowed interval.
 ///
 /// Transitions to pure binary search when the interval shrinks below 1024 values.
 struct MaxInterpolationSearchStepper {

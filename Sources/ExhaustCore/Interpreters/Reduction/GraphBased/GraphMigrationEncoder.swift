@@ -9,7 +9,7 @@
 ///
 /// Pure structural encoder: the scope specifies exactly which elements to move from which source sequence to which receiver sequence. The encoder removes the elements from the source's position range and inserts them after the receiver's last element in the flat sequence. One scope = one probe.
 struct GraphMigrationEncoder: GraphEncoder {
-    let name: EncoderName = .graphDeletion // Reuse deletion name for now
+    let name: EncoderName = .graphMigration
 
     private var candidate: ChoiceSequence?
     private var mutation: ProjectedMutation?

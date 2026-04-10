@@ -844,6 +844,16 @@ enum ScopeSourceBuilder {
             }
         }
 
+        // Migration — move elements between antichain-independent sequences.
+        // Runs before per-element deletion: migrating all elements out of a
+        // source sequence and removing it is more powerful than deleting
+        // individual elements, and its low per-element yield would otherwise
+        // be starved by the stall budget.
+        let migrationSource = MigrationSource(graph: graph)
+        if migrationSource.peekYield != nil {
+            sources.append(migrationSource)
+        }
+
         // Per-element removal.
         let perElementSource = PerElementRemovalSource(graph: graph)
         if perElementSource.peekYield != nil {
@@ -874,12 +884,6 @@ enum ScopeSourceBuilder {
             sources.append(minimizationSource)
         }
 
-        // Migration — move elements between antichain-independent sequences.
-        let migrationSource = MigrationSource(graph: graph)
-        if migrationSource.peekYield != nil {
-            sources.append(migrationSource)
-        }
-
         // Exchange (search-based).
         let exchangeSource = ExchangeSource(graph: graph)
         if exchangeSource.peekYield != nil {
@@ -896,11 +900,11 @@ enum ScopeSourceBuilder {
 ///
 /// For each pair of antichain-independent sequences where the source is at an earlier position, emits scopes at geometrically decreasing element counts. Moving elements rightward improves shortlex at earlier positions.
 struct MigrationSource: ScopeSource {
-    private var candidates: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int)]
+    private var candidates: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)]
     private var index = 0
 
     init(graph: ChoiceGraph) {
-        var entries: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int)] = []
+        var entries: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)] = []
 
         // Find all sequence node pairs where source is earlier than receiver.
         // Lengths use UInt64 throughout to match the framework's length-generator type.
@@ -950,9 +954,26 @@ struct MigrationSource: ScopeSource {
 
                 guard elementNodeIDs.isEmpty == false else { continue }
 
-                // Yield: the position count of the elements being moved.
-                // Moving them shortens the source (improves shortlex at earlier positions).
-                let totalYield = elementRanges.reduce(0) { $0 + $1.count }
+                // Yield: when all elements are migrated, the entire source
+                // sequence (including markers) is removed, so the effective
+                // yield is the source's full position extent. Otherwise,
+                // yield is just the moved elements' position count.
+                let movedPositions = elementRanges.reduce(0) { $0 + $1.count }
+                let totalYield = (elementNodeIDs.count == sourceNode.children.count)
+                    ? source.positionRange.count
+                    : movedPositions
+
+                // Determine whether this is a full migration (all source elements moved).
+                let isFullMigration = elementNodeIDs.count == sourceNode.children.count
+                let sourceParentSeqID: Int?
+                if isFullMigration,
+                   let parentID = sourceNode.parent,
+                   case .sequence = graph.nodes[parentID].kind
+                {
+                    sourceParentSeqID = parentID
+                } else {
+                    sourceParentSeqID = nil
+                }
 
                 // Start with moving ALL elements (most drastic).
                 entries.append((
@@ -961,7 +982,9 @@ struct MigrationSource: ScopeSource {
                     elementNodeIDs: elementNodeIDs,
                     elementRanges: elementRanges,
                     receiverRange: receiver.positionRange,
-                    yield: totalYield
+                    yield: totalYield,
+                    isFullMigration: isFullMigration,
+                    sourceParentSeqID: sourceParentSeqID
                 ))
             }
         }
@@ -1002,10 +1025,21 @@ struct MigrationSource: ScopeSource {
                 slack: .exact,
                 estimatedProbes: 1
             ),
-            precondition: .all([
-                .sequenceLengthAboveMinimum(sequenceNodeID: entry.sourceSeqID),
-                .nodeActive(entry.receiverSeqID),
-            ]),
+            precondition: {
+                // When migration empties the source entirely and the source's
+                // parent is a sequence, the constraint is on the parent's
+                // ability to lose a child, not the source's own element count.
+                if let parentSeqID = entry.sourceParentSeqID {
+                    return .all([
+                        .sequenceLengthAboveMinimum(sequenceNodeID: parentSeqID),
+                        .nodeActive(entry.receiverSeqID),
+                    ])
+                }
+                return .all([
+                    .sequenceLengthAboveMinimum(sequenceNodeID: entry.sourceSeqID),
+                    .nodeActive(entry.receiverSeqID),
+                ])
+            }(),
             postcondition: TransformationPostcondition(
                 isStructural: true,
                 invalidatesConvergence: [],

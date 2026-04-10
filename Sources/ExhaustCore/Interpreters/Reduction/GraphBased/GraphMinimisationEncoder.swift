@@ -51,6 +51,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
         var scanBestAccepted: UInt64?
         /// Cross-zero phase state for the current leaf, or nil when inactive. Set after binary search (and any linear scan recovery) converges on a signed-type leaf whose current shortlex key permits crossing zero.
         var crossZero: CrossZeroState?
+        /// Batch bisection state, active during the ``IntegerPhase/batchBisect`` phase.
+        var bisection: BisectionState?
     }
 
     /// State for the cross-zero phase of per-leaf minimization.
@@ -76,7 +78,20 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
     private enum IntegerPhase {
         case batchZero
+        case batchBisect
         case perLeaf
+    }
+
+    /// State for the batch bisection phase.
+    ///
+    /// After batchZero rejects, bisects the leaf set to identify which subsets can reach their targets in a single materialization. Each pending range represents a contiguous slice of ``IntegerState/leafPositions`` to try at their targets simultaneously. On rejection, the range is split in two. On acceptance, the leaves in that range are converged and removed from the per-leaf phase.
+    private struct BisectionState {
+        /// Stack of leaf index ranges to try. Each range is a half-open interval into ``IntegerState/leafPositions``.
+        var pendingRanges: [(start: Int, end: Int)]
+        /// The range most recently emitted as a probe, awaiting feedback.
+        var lastEmittedRange: (start: Int, end: Int)?
+        /// Leaf indices that were accepted during bisection and should be skipped in per-leaf phase.
+        var convergedIndices: Set<Int>
     }
 
     /// Directional search stepper for bit-pattern-space search.
@@ -423,7 +438,8 @@ struct GraphMinimizationEncoder: GraphEncoder {
             scanValues: nil,
             scanIndex: 0,
             scanBestAccepted: nil,
-            crossZero: nil
+            crossZero: nil,
+            bisection: nil
         ))
     }
 
@@ -439,7 +455,6 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
         switch state.phase {
         case .batchZero:
-            state.phase = .perLeaf
             // Try setting all leaves to their targets simultaneously.
             var candidate = state.sequence
             for leaf in state.leafPositions {
@@ -447,16 +462,121 @@ struct GraphMinimizationEncoder: GraphEncoder {
                     .withBitPattern(leaf.targetBitPattern)
             }
             if candidate.shortLexPrecedes(state.sequence) {
+                // Emit the batch-zero probe. If accepted, batchBisect will
+                // see lastAccepted=true and transition to perLeaf. If rejected,
+                // batchBisect will begin bisection.
+                if state.leafPositions.count >= 4 {
+                    state.phase = .batchBisect
+                    state.bisection = BisectionState(
+                        pendingRanges: [],
+                        lastEmittedRange: (start: 0, end: state.leafPositions.count),
+                        convergedIndices: []
+                    )
+                } else {
+                    state.phase = .perLeaf
+                }
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
-            // Batch zero rejected — per-leaf convergence at target indicates dependency.
+            // Batch zero not shortlex-smaller — skip bisection, go to per-leaf.
             state.batchRejected = true
+            state.phase = .perLeaf
             return nextIntegerProbe(state: &state, lastAccepted: false)
+
+        case .batchBisect:
+            if lastAccepted == false {
+                state.batchRejected = true
+            }
+            return nextBatchBisectProbe(state: &state, lastAccepted: lastAccepted)
 
         case .perLeaf:
             return nextPerLeafProbe(state: &state, lastAccepted: lastAccepted)
         }
+    }
+
+    // MARK: - Batch Bisection
+
+    /// Drives the batch bisection phase: probes subsets of leaves at their targets, bisecting on rejection.
+    ///
+    /// On acceptance, the leaves in the accepted range are recorded as converged (their convergence records are written and they are skipped in the per-leaf phase). On rejection, ranges of size two or more are split in half. Single-leaf ranges that reject are dropped (per-leaf phase handles them with interpolation search).
+    private mutating func nextBatchBisectProbe(
+        state: inout IntegerState,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        guard var bisection = state.bisection else {
+            state.phase = .perLeaf
+            return nextPerLeafProbe(state: &state, lastAccepted: false)
+        }
+
+        // Handle feedback from the previous probe.
+        if let emitted = bisection.lastEmittedRange {
+            bisection.lastEmittedRange = nil
+            let rangeSize = emitted.end - emitted.start
+            if lastAccepted {
+                // All leaves in this range reached their targets — record convergence.
+                for index in emitted.start ..< emitted.end {
+                    let leaf = state.leafPositions[index]
+                    bisection.convergedIndices.insert(index)
+                    convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                        bound: leaf.targetBitPattern,
+                        signal: .monotoneConvergence,
+                        configuration: .binarySearchSemanticSimplest,
+                        cycle: 0
+                    )
+                }
+                // Update leaf current bit patterns to match targets.
+                for index in emitted.start ..< emitted.end {
+                    state.leafPositions[index].currentBitPattern = state.leafPositions[index].targetBitPattern
+                }
+            } else {
+                // Bisect the rejected range.
+                if rangeSize >= 2 {
+                    let mid = emitted.start + rangeSize / 2
+                    bisection.pendingRanges.append((start: mid, end: emitted.end))
+                    bisection.pendingRanges.append((start: emitted.start, end: mid))
+                } else {
+                }
+            }
+        }
+
+        // Emit next probe from the pending ranges.
+        while let range = bisection.pendingRanges.popLast() {
+            // Skip ranges where all leaves are already converged.
+            let unconvergedInRange = (range.start ..< range.end).contains { index in
+                bisection.convergedIndices.contains(index) == false
+            }
+            guard unconvergedInRange else { continue }
+
+            // Build candidate: set all unconverged leaves in this range to their targets.
+            var candidate = state.sequence
+            var anyChanged = false
+            for index in range.start ..< range.end {
+                guard bisection.convergedIndices.contains(index) == false else { continue }
+                let leaf = state.leafPositions[index]
+                guard leaf.currentBitPattern != leaf.targetBitPattern else { continue }
+                candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
+                    .withBitPattern(leaf.targetBitPattern)
+                anyChanged = true
+            }
+
+            guard anyChanged, candidate.shortLexPrecedes(state.sequence) else { continue }
+
+            bisection.lastEmittedRange = range
+            state.bisection = bisection
+            state.lastEmittedCandidate = candidate
+            return candidate
+        }
+
+        // Bisection exhausted — transition to per-leaf phase, skipping converged leaves.
+        state.bisection = bisection
+        state.phase = .perLeaf
+        // Skip past leaves that bisection already converged.
+        while state.leafIndex < state.leafPositions.count,
+              bisection.convergedIndices.contains(state.leafIndex)
+        {
+            state.leafIndex += 1
+        }
+        return nextPerLeafProbe(state: &state, lastAccepted: false)
     }
 
     private mutating func nextPerLeafProbe(
@@ -464,6 +584,14 @@ struct GraphMinimizationEncoder: GraphEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.leafIndex < state.leafPositions.count {
+            // Skip leaves already converged by the batch bisection phase.
+            if let bisection = state.bisection,
+               bisection.convergedIndices.contains(state.leafIndex)
+            {
+                state.leafIndex += 1
+                continue
+            }
+
             // Cross-zero phase takes priority when active — it was armed by a
             // prior iteration of this loop after binary search converged, and
             // the current `lastAccepted` is feedback for the last cross-zero

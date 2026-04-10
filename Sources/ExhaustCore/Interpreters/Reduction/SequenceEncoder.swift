@@ -32,6 +32,7 @@ public enum EncoderName: String, Hashable, Sendable {
     case humanOrderReorder
     // Graph-based encoders
     case graphDeletion
+    case graphMigration
     case graphValueSearch
     case graphRedistribution
     case graphBranchPivot
