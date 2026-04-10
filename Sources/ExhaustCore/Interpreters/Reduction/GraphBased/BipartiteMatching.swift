@@ -212,12 +212,12 @@ enum BipartiteMatching {
         reachability: [Int: Set<Int>]
     ) -> [Int] {
         // Build the bipartite adjacency: left node u has edge to right node v if u < v.
+        // Sort each adjacency list to ensure deterministic matching across runs
+        // (Set iteration order is non-deterministic in Swift).
         var adjacency = [[Int]](repeating: [], count: nodeCount)
         for source in 0 ..< nodeCount {
             guard let reachable = reachability[source] else { continue }
-            for target in reachable {
-                adjacency[source].append(target)
-            }
+            adjacency[source] = reachable.sorted()
         }
 
         let matching = hopcroftKarp(

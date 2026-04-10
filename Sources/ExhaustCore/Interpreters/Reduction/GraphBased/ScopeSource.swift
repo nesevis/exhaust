@@ -50,7 +50,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
         // are independent, but within each sequence we want to remove as many
         // elements as the length constraint permits).
         var entries: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)] = []
-        for (parentID, _) in parentToElements {
+        for (parentID, _) in parentToElements.sorted(by: { $0.key < $1.key }) {
             guard case let .sequence(metadata) = graph.nodes[parentID].kind else { continue }
             let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
             let deletable = metadata.elementCount - minLength

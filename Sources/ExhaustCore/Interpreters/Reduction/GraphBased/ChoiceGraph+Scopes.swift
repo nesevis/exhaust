@@ -41,7 +41,7 @@ extension ChoiceGraph {
             parentGroups[parentID, default: []].append(node.id)
         }
 
-        return parentGroups.map { parentID, elementNodeIDs in
+        return parentGroups.sorted(by: { $0.key < $1.key }).map { parentID, elementNodeIDs in
             let sortedElements = elementNodeIDs.sorted { nodeA, nodeB in
                 let rangeA = nodes[nodeA].positionRange?.lowerBound ?? 0
                 let rangeB = nodes[nodeB].positionRange?.lowerBound ?? 0
