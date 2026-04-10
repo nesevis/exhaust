@@ -11,9 +11,9 @@ import Testing
 @Suite("ChoiceGraph Scope Queries")
 struct ChoiceGraphScopeQueryTests {
 
-    // MARK: - Aligned Removal
+    // MARK: - Element Removal (Aligned)
 
-    @Test("Aligned removal scope for zip of two sequences")
+    @Test("Aligned element removal scope for zip of two sequences")
     func alignedRemovalTwoSequences() {
         let seq1 = ChoiceTree.sequence(
             length: 3,
@@ -34,12 +34,12 @@ struct ChoiceGraphScopeQueryTests {
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.alignedRemovalScopes()
+        let alignedScopes = graph.elementRemovalScopes().filter { $0.targets.count >= 2 }
 
-        #expect(scopes.count == 1)
-        #expect(scopes[0].siblings.count == 2)
-        #expect(scopes[0].maxAlignedWindow == 2)
-        #expect(scopes[0].maxYield > 0)
+        #expect(alignedScopes.count == 6)
+        #expect(alignedScopes[0].targets.count == 2)
+        #expect(alignedScopes[0].maxBatch == 1)
+        #expect(alignedScopes[0].maxElementYield > 0)
     }
 
     @Test("No aligned removal for zip of non-sequence children")
@@ -49,12 +49,12 @@ struct ChoiceGraphScopeQueryTests {
             .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.alignedRemovalScopes()
+        let alignedScopes = graph.elementRemovalScopes().filter { $0.targets.count >= 2 }
 
-        #expect(scopes.isEmpty)
+        #expect(alignedScopes.isEmpty)
     }
 
-    // MARK: - Per-Parent Removal
+    // MARK: - Element Removal (Per-Parent)
 
     @Test("Per-parent removal for simple sequence")
     func perParentRemovalSimple() {
@@ -68,11 +68,11 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.perParentRemovalScopes()
+        let singleTargetScopes = graph.elementRemovalScopes().filter { $0.targets.count == 1 }
 
-        #expect(scopes.count == 1)
-        #expect(scopes[0].elementNodeIDs.count == 3)
-        #expect(scopes[0].maxBatch == 3)
+        #expect(singleTargetScopes.count == 1)
+        #expect(singleTargetScopes[0].targets[0].elementNodeIDs.count == 3)
+        #expect(singleTargetScopes[0].maxBatch == 3)
     }
 
     @Test("Per-parent removal respects length constraint")
@@ -87,10 +87,10 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: 2 ... 5, isRangeExplicit: true)
         )
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.perParentRemovalScopes()
+        let singleTargetScopes = graph.elementRemovalScopes().filter { $0.targets.count == 1 }
 
-        #expect(scopes.count == 1)
-        #expect(scopes[0].maxBatch == 1)
+        #expect(singleTargetScopes.count == 1)
+        #expect(singleTargetScopes[0].maxBatch == 1)
     }
 
     // MARK: - Minimization
@@ -165,8 +165,8 @@ struct ChoiceGraphScopeQueryTests {
 
     // MARK: - Aligned Removal Encoder
 
-    @Test("Aligned removal encoder produces candidates removing from all siblings")
-    func alignedRemovalProducesCandidates() {
+    @Test("Multi-target removal encoder produces candidates removing from all sequences")
+    func multiTargetRemovalProducesCandidates() {
         let seq1 = ChoiceTree.sequence(
             length: 3,
             elements: [
@@ -188,16 +188,22 @@ struct ChoiceGraphScopeQueryTests {
         let sequence = ChoiceSequence.flatten(tree)
         let graph = ChoiceGraph.build(from: tree)
 
-        let alignedScopes = graph.alignedRemovalScopes()
-        guard let alignedScope = alignedScopes.first else {
-            Issue.record("No aligned removal scope found")
+        let alignedScopes = graph.elementRemovalScopes().filter { $0.targets.count >= 2 }
+        guard let elementScope = alignedScopes.first else {
+            Issue.record("No multi-target removal scope found")
             return
         }
 
+        let totalYield = elementScope.targets.reduce(0) { total, target in
+            total + target.elementNodeIDs.reduce(0) { subtotal, nodeID in
+                subtotal + (graph.nodes[nodeID].positionRange?.count ?? 0)
+            }
+        }
+
         let transformation = GraphTransformation(
-            operation: .remove(.aligned(alignedScope)),
+            operation: .remove(.elements(elementScope)),
             yield: TransformationYield(
-                structural: alignedScope.maxYield,
+                structural: totalYield,
                 value: 0,
                 slack: .exact,
                 estimatedProbes: 4
@@ -228,11 +234,10 @@ struct ChoiceGraphScopeQueryTests {
         }
 
         #expect(candidates.isEmpty == false)
-        // Aligned removal removes from BOTH sequences simultaneously,
-        // so candidates should be shorter by at least 2 (one element per sibling).
+        // Multi-target removal removes from BOTH sequences simultaneously,
+        // so candidates should be shorter by at least 2 (one element per target).
         for candidate in candidates {
             #expect(candidate.count < sequence.count)
-            // At least 2 positions removed (one from each sibling).
             #expect(sequence.count - candidate.count >= 2)
         }
     }
@@ -273,8 +278,8 @@ struct ChoiceGraphScopeQueryTests {
         }
     }
 
-    @Test("Enumerator includes aligned removal for zip of sequences")
-    func enumeratorIncludesAligned() {
+    @Test("Enumerator includes multi-target removal for zip of sequences")
+    func enumeratorIncludesMultiTarget() {
         let seq1 = ChoiceTree.sequence(
             length: 2,
             elements: [
@@ -295,10 +300,12 @@ struct ChoiceGraphScopeQueryTests {
         let graph = ChoiceGraph.build(from: tree)
         let transformations = TransformationEnumerator.enumerate(from: graph)
 
-        let hasAligned = transformations.contains { transformation in
-            if case .remove(.aligned) = transformation.operation { return true }
+        let hasMultiTarget = transformations.contains { transformation in
+            if case let .remove(.elements(scope)) = transformation.operation {
+                return scope.targets.count >= 2
+            }
             return false
         }
-        #expect(hasAligned)
+        #expect(hasMultiTarget)
     }
 }

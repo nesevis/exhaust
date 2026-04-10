@@ -19,10 +19,10 @@ struct GraphEncoderTests {
         graph: ChoiceGraph
     ) -> TransformationScope? {
         let sequence = ChoiceSequence.flatten(tree)
-        let scopes = graph.perParentRemovalScopes()
+        let scopes = graph.elementRemovalScopes()
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
-            operation: .remove(.perParent(firstScope)),
+            operation: .remove(.elements(firstScope)),
             yield: TransformationYield(
                 structural: firstScope.maxBatch,
                 value: 0,

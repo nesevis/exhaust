@@ -42,10 +42,8 @@ enum GraphOperation {
         switch self {
         case let .remove(scope):
             switch scope {
-            case let .aligned(alignedScope):
-                return alignedScope.siblings.flatMap(\.elementNodeIDs)
-            case let .perParent(perParentScope):
-                return perParentScope.elementNodeIDs
+            case let .elements(elementScope):
+                return elementScope.targets.flatMap(\.elementNodeIDs)
             case let .subtree(subtreeScope):
                 return [subtreeScope.nodeID]
             }
@@ -232,7 +230,7 @@ struct CompoundStep {
 
 /// Execution model for compound transformations.
 ///
-/// Aligned deletion is NOT a compound transformation — it is a single ``GraphTransformation`` with ``GraphOperation/removal(.aligned(...))`` whose encoder constructs candidates that modify multiple sequence regions in a single probe. ``CompoundTransformation`` is reserved for multi-probe, multi-step compositions where intermediate results are separately probed.
+/// Multi-sequence deletion is NOT a compound transformation — it is a single ``GraphTransformation`` with ``GraphOperation/remove(.elements(...))`` whose encoder constructs candidates that modify multiple sequence regions in a single probe. ``CompoundTransformation`` is reserved for multi-probe, multi-step compositions where intermediate results are separately probed.
 enum CompoundExecutionModel {
     /// Steps applied in order, each probed independently. Intermediate acceptances stand on their own — no rollback of earlier steps if a later step fails. Sequential compounds can be interleaved in the priority queue alongside simple transformations, ordered by composed yield.
     case sequential

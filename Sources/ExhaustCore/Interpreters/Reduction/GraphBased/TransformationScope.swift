@@ -7,60 +7,36 @@
 
 /// Defines the scope of a subgraph removal operation.
 ///
-/// Three scope granularities, all the same graph operation at different scales: aligned removal across sibling sequences, per-parent removal within a single sequence, and structural subtree removal.
+/// Two scope granularities: element removal across one or more sequences, and structural subtree removal.
 enum RemovalScope {
-    /// Remove elements at aligned offsets across sibling sequences under a common zip node. Container emptying is the degenerate case where the window covers all elements of one sequence.
-    case aligned(AlignedRemovalScope)
-
-    /// Remove elements from a single parent sequence.
-    case perParent(PerParentRemovalScope)
+    /// Remove elements from one or more sequences. Subsumes both single-parent removal and aligned removal across sibling sequences.
+    case elements(ElementRemovalScope)
 
     /// Remove a structural subtree (bind subtree, zip child, or other compound element in the deletion antichain).
     case subtree(SubtreeRemovalScope)
 }
 
-/// Scope for aligned removal across sibling sequences.
+/// Scope for element removal across one or more sequences.
 ///
-/// Groups elements at corresponding offsets across sibling sequences under a common zip node. The encoder handles window placement (head-aligned, tail-aligned, or both) within its probe loop.
-struct AlignedRemovalScope {
-    /// The zip node whose children are sibling sequences.
-    let zipNodeID: Int
+/// Each ``SequenceRemovalTarget`` identifies a parent sequence and the element node IDs to remove from it. A single-target scope is the common case (removal within one sequence). Multi-target scopes enable cross-sequence batched removal for antichain-independent sequences.
+struct ElementRemovalScope {
+    /// Per-sequence removal targets.
+    let targets: [SequenceRemovalTarget]
 
-    /// Participating sibling sequences and their deletable elements.
-    let siblings: [SiblingDeletionScope]
+    /// Maximum batch size (for geometric halving in scope sources).
+    let maxBatch: Int
 
-    /// Maximum number of aligned offsets removable (minimum deletable count across siblings).
-    let maxAlignedWindow: Int
-
-    /// Total yield if the full aligned window is removed.
-    let maxYield: Int
+    /// Yield of the largest single element across all targets.
+    let maxElementYield: Int
 }
 
-/// One sibling's contribution to an aligned removal scope.
-struct SiblingDeletionScope {
-    /// The sequence node ID.
-    let sequenceNodeID: Int
-
-    /// Element node IDs ordered by offset within the sequence.
-    let elementNodeIDs: [Int]
-
-    /// How many elements can be removed (elementCount - lowerBound).
-    let deletableCount: Int
-}
-
-/// Scope for per-parent removal within a single sequence.
-struct PerParentRemovalScope {
+/// One sequence's contribution to an ``ElementRemovalScope``.
+struct SequenceRemovalTarget {
     /// The parent sequence node.
     let sequenceNodeID: Int
 
-    /// Deletable element node IDs, ordered by position.
+    /// Deletable element node IDs, ordered by position within the sequence.
     let elementNodeIDs: [Int]
-
-    /// Maximum batch size.
-    let maxBatch: Int
-
-    /// Yield of the largest single element.
-    let maxElementYield: Int
 }
 
 /// Scope for structural subtree removal.

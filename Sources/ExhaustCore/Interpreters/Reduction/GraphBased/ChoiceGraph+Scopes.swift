@@ -7,226 +7,29 @@
 
 extension ChoiceGraph {
 
-    /// Computes aligned removal scopes for all zip nodes with multiple sequence children.
+    /// Computes element removal scopes for all sequence nodes with deletable elements and all aligned sibling groupings.
     ///
-    /// An aligned tuple groups elements at corresponding offsets across sibling sequences. The scope provides siblings and their deletable elements in natural offset order — the encoder handles window placement (head-aligned, tail-aligned, or both) within its probe loop, analogous to head/tail alternation in per-parent removal.
+    /// Returns both per-parent scopes (single target) and aligned scopes (multiple targets under a common zip). The ``TransformationEnumerator`` feeds these into the priority queue; scope sources handle geometric halving and window placement.
     ///
-    /// Computes aligned removal scopes for all zip nodes with multiple sequence children, including partial sibling subsets.
-    ///
-    /// Looks through transparent wrappers (groups, structurally-constant binds) beneath each zip child to find the underlying sequence node. Generates scopes for all subsets of siblings of size 2 or more. The full-sibling scope has the highest yield and runs first in the queue. Progressively smaller subsets (triples, pairs) follow in yield order.
-    ///
-    /// - Returns: One scope per sibling subset (size >= 2) per zip node.
-    func alignedRemovalScopes() -> [AlignedRemovalScope] {
-        var scopes: [AlignedRemovalScope] = []
-        for node in nodes {
-            guard case .zip = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
+    /// - Returns: One scope per sequence node with deletable elements, plus one per aligned sibling subset (size >= 2) per zip node.
+    func elementRemovalScopes() -> [ElementRemovalScope] {
+        var scopes: [ElementRemovalScope] = []
 
-            let allSequenceChildren = node.children.compactMap { childID
-                -> SiblingDeletionScope? in
-                guard let sequenceNodeID = findSequenceBeneath(childID) else {
-                    return nil
-                }
-                let sequenceNode = nodes[sequenceNodeID]
-                guard case let .sequence(metadata) = sequenceNode.kind else {
-                    return nil
-                }
-                let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
-                let deletable = metadata.elementCount - minLength
-                guard deletable > 0 else { return nil }
-                return SiblingDeletionScope(
-                    sequenceNodeID: sequenceNodeID,
-                    elementNodeIDs: sequenceNode.children,
-                    deletableCount: deletable
-                )
-            }
-            guard allSequenceChildren.count >= 2 else { continue }
+        // Per-parent scopes: one target per sequence.
+        scopes.append(contentsOf: perParentElementScopes())
 
-            let subsets = siblingSubsets(allSequenceChildren)
-            for subset in subsets {
-                guard subset.map(\.deletableCount).allSatisfy({ $0 > 0 }) else { continue }
-                if subset.count == 2 {
-                    // Cross-product for pairs: try (i, j) for all combinations of
-                    // positions across the two siblings. Required when the coupled
-                    // elements are at different indices in each sibling — same-index
-                    // deletion would miss the pairing.
-                    generateAlignedCrossProductScopes(
-                        subset: subset,
-                        siblingIndex: 0,
-                        currentIndices: [],
-                        zipNodeID: node.id,
-                        into: &scopes
-                    )
-                } else {
-                    // Same-index for K≥3 subsets: one scope per position i, deleting
-                    // element i from every sibling simultaneously. Cross-product for K≥3
-                    // generates n^K scopes which is prohibitive when there are many
-                    // sibling sequences.
-                    let elementCount = subset.map { $0.elementNodeIDs.count }.min() ?? 0
-                    for elementIndex in 0 ..< elementCount {
-                        var scopeSiblings: [SiblingDeletionScope] = []
-                        var totalYield = 0
-                        var valid = true
-                        for sibling in subset {
-                            guard elementIndex < sibling.elementNodeIDs.count else { valid = false; break }
-                            let nodeID = sibling.elementNodeIDs[elementIndex]
-                            scopeSiblings.append(SiblingDeletionScope(
-                                sequenceNodeID: sibling.sequenceNodeID,
-                                elementNodeIDs: [nodeID],
-                                deletableCount: 1
-                            ))
-                            totalYield += nodes[nodeID].positionRange?.count ?? 0
-                        }
-                        guard valid else { continue }
-                        scopes.append(AlignedRemovalScope(
-                            zipNodeID: node.id,
-                            siblings: scopeSiblings,
-                            maxAlignedWindow: 1,
-                            maxYield: totalYield
-                        ))
-                    }
-                }
-            }
-        }
+        // Aligned scopes: multiple targets across sibling sequences under zip nodes.
+        scopes.append(contentsOf: alignedElementScopes())
+
         return scopes
     }
 
-    /// Generates all subsets of size 2 or more from the given siblings, ordered by descending size (largest subsets first).
-    private func siblingSubsets(_ siblings: [SiblingDeletionScope]) -> [[SiblingDeletionScope]] {
-        let count = siblings.count
-        guard count >= 2 else { return [] }
-
-        var subsets: [[SiblingDeletionScope]] = []
-
-        // Generate subsets from largest (all) to smallest (pairs).
-        // For N siblings, iterate subset sizes from N down to 2.
-        for size in stride(from: count, through: 2, by: -1) {
-            generateCombinations(siblings, choose: size, into: &subsets)
-        }
-
-        return subsets
-    }
-
-    /// Appends all combinations of `choose` elements from `source` into `result`.
-    private func generateCombinations(
-        _ source: [SiblingDeletionScope],
-        choose: Int,
-        into result: inout [[SiblingDeletionScope]]
-    ) {
-        let count = source.count
-        guard choose >= 1, choose <= count else { return }
-
-        // Iterative combination generation using indices.
-        var indices = Array(0 ..< choose)
-        while true {
-            result.append(indices.map { source[$0] })
-
-            // Find the rightmost index that can be incremented.
-            var position = choose - 1
-            while position >= 0, indices[position] == count - choose + position {
-                position -= 1
-            }
-            if position < 0 { break }
-
-            indices[position] += 1
-            for subsequent in (position + 1) ..< choose {
-                indices[subsequent] = indices[subsequent - 1] + 1
-            }
-        }
-    }
-
-    /// Recursively generates all cross-product combinations of one element index per sibling and emits one ``AlignedRemovalScope`` per combination.
-    ///
-    /// - Parameters:
-    ///   - subset: The sibling sequences participating in the aligned deletion.
-    ///   - siblingIndex: The current depth in the recursion (which sibling's index is being chosen).
-    ///   - currentIndices: Indices chosen for siblings 0 through `siblingIndex - 1`.
-    ///   - zipNodeID: The zip node containing the siblings.
-    ///   - scopes: Accumulator for emitted scopes.
-    private func generateAlignedCrossProductScopes(
-        subset: [SiblingDeletionScope],
-        siblingIndex: Int,
-        currentIndices: [Int],
-        zipNodeID: Int,
-        into scopes: inout [AlignedRemovalScope]
-    ) {
-        guard siblingIndex < subset.count else {
-            // All siblings have an index — build the scope.
-            var scopeSiblings: [SiblingDeletionScope] = []
-            var totalYield = 0
-            for (sibling, index) in zip(subset, currentIndices) {
-                let nodeID = sibling.elementNodeIDs[index]
-                scopeSiblings.append(SiblingDeletionScope(
-                    sequenceNodeID: sibling.sequenceNodeID,
-                    elementNodeIDs: [nodeID],
-                    deletableCount: 1
-                ))
-                totalYield += nodes[nodeID].positionRange?.count ?? 0
-            }
-            scopes.append(AlignedRemovalScope(
-                zipNodeID: zipNodeID,
-                siblings: scopeSiblings,
-                maxAlignedWindow: 1,
-                maxYield: totalYield
-            ))
-            return
-        }
-        let sibling = subset[siblingIndex]
-        for index in 0 ..< sibling.elementNodeIDs.count {
-            generateAlignedCrossProductScopes(
-                subset: subset,
-                siblingIndex: siblingIndex + 1,
-                currentIndices: currentIndices + [index],
-                zipNodeID: zipNodeID,
-                into: &scopes
-            )
-        }
-    }
-
-    /// Walks through transparent wrappers (groups, structurally-constant binds) beneath a node to find the first sequence node.
-    ///
-    /// Returns the sequence node's ID, or nil if no sequence is found beneath the transparent chain.
-    private func findSequenceBeneath(_ nodeID: Int) -> Int? {
-        let node = nodes[nodeID]
-        // Direct sequence — return immediately.
-        if case .sequence = node.kind {
-            return nodeID
-        }
-        // Transparent wrapper: zip (inner group from filter/contramap) or
-        // structurally-constant bind — walk into the single meaningful child.
-        switch node.kind {
-        case .zip:
-            // A zip beneath a zip is a transparent group wrapper (for example,
-            // from filter). Walk into each child looking for a sequence.
-            for childID in node.children {
-                if let found = findSequenceBeneath(childID) {
-                    return found
-                }
-            }
-            return nil
-        case let .bind(metadata):
-            // Structurally-constant binds are transparent — the bound subtree's
-            // shape doesn't depend on the inner value.
-            if metadata.isStructurallyConstant, node.children.count >= 2 {
-                let boundChildID = node.children[metadata.boundChildIndex]
-                return findSequenceBeneath(boundChildID)
-            }
-            // Non-constant binds are not transparent — the sequence inside
-            // depends on the bind-inner value and may change shape.
-            return nil
-        case .chooseBits, .pick, .just:
-            return nil
-        case .sequence:
-            return nodeID
-        }
-    }
+    // MARK: - Per-Parent Element Scopes
 
     /// Computes per-parent removal scopes for all sequence nodes with deletable elements.
     ///
-    /// Groups deletable elements by their parent sequence node. Each scope contains the elements in position order, the maximum batch size, and the yield of the largest single element.
-    ///
-    /// - Returns: One scope per sequence node with at least one deletable element.
-    func perParentRemovalScopes() -> [PerParentRemovalScope] {
+    /// Groups deletable elements by their parent sequence node. Each scope contains a single ``SequenceRemovalTarget`` with elements in position order.
+    private func perParentElementScopes() -> [ElementRemovalScope] {
         var parentGroups: [Int: [Int]] = [:]
 
         for node in nodes {
@@ -247,23 +50,191 @@ extension ChoiceGraph {
             let maxElementYield = sortedElements.reduce(0) { maxSoFar, nodeID in
                 max(maxSoFar, nodes[nodeID].positionRange?.count ?? 0)
             }
-            guard case let .sequence(metadata) = nodes[parentID].kind else {
-                // Should not happen — we only collected elements with sequence parents.
-                return PerParentRemovalScope(
-                    sequenceNodeID: parentID,
-                    elementNodeIDs: sortedElements,
-                    maxBatch: sortedElements.count,
-                    maxElementYield: maxElementYield
-                )
+            let deletable: Int
+            if case let .sequence(metadata) = nodes[parentID].kind {
+                let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+                deletable = metadata.elementCount - minLength
+            } else {
+                deletable = sortedElements.count
             }
-            let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
-            let deletable = metadata.elementCount - minLength
-            return PerParentRemovalScope(
-                sequenceNodeID: parentID,
-                elementNodeIDs: sortedElements,
+            return ElementRemovalScope(
+                targets: [SequenceRemovalTarget(
+                    sequenceNodeID: parentID,
+                    elementNodeIDs: sortedElements
+                )],
                 maxBatch: deletable,
                 maxElementYield: maxElementYield
             )
+        }
+    }
+
+    // MARK: - Aligned Element Scopes
+
+    /// Intermediate type used during aligned scope computation.
+    private struct SiblingInfo {
+        let sequenceNodeID: Int
+        let elementNodeIDs: [Int]
+        let deletableCount: Int
+    }
+
+    /// Computes aligned removal scopes for all zip nodes with multiple sequence children, including partial sibling subsets.
+    ///
+    /// Looks through transparent wrappers (groups, structurally-constant binds) beneath each zip child to find the underlying sequence node. Generates scopes for all subsets of siblings of size two or more.
+    private func alignedElementScopes() -> [ElementRemovalScope] {
+        var scopes: [ElementRemovalScope] = []
+        for node in nodes {
+            guard case .zip = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
+
+            let allSequenceChildren = node.children.compactMap { childID -> SiblingInfo? in
+                guard let sequenceNodeID = findSequenceBeneath(childID) else { return nil }
+                let sequenceNode = nodes[sequenceNodeID]
+                guard case let .sequence(metadata) = sequenceNode.kind else { return nil }
+                let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+                let deletable = metadata.elementCount - minLength
+                guard deletable > 0 else { return nil }
+                return SiblingInfo(
+                    sequenceNodeID: sequenceNodeID,
+                    elementNodeIDs: sequenceNode.children,
+                    deletableCount: deletable
+                )
+            }
+            guard allSequenceChildren.count >= 2 else { continue }
+
+            let subsets = siblingSubsets(allSequenceChildren)
+            for subset in subsets {
+                guard subset.map(\.deletableCount).allSatisfy({ $0 > 0 }) else { continue }
+                if subset.count == 2 {
+                    generateAlignedCrossProductScopes(
+                        subset: subset,
+                        siblingIndex: 0,
+                        currentIndices: [],
+                        into: &scopes
+                    )
+                } else {
+                    let elementCount = subset.map { $0.elementNodeIDs.count }.min() ?? 0
+                    for elementIndex in 0 ..< elementCount {
+                        var targets: [SequenceRemovalTarget] = []
+                        var totalYield = 0
+                        var valid = true
+                        for sibling in subset {
+                            guard elementIndex < sibling.elementNodeIDs.count else { valid = false; break }
+                            let nodeID = sibling.elementNodeIDs[elementIndex]
+                            targets.append(SequenceRemovalTarget(
+                                sequenceNodeID: sibling.sequenceNodeID,
+                                elementNodeIDs: [nodeID]
+                            ))
+                            totalYield += nodes[nodeID].positionRange?.count ?? 0
+                        }
+                        guard valid else { continue }
+                        scopes.append(ElementRemovalScope(
+                            targets: targets,
+                            maxBatch: 1,
+                            maxElementYield: totalYield
+                        ))
+                    }
+                }
+            }
+        }
+        return scopes
+    }
+
+    private func siblingSubsets(_ siblings: [SiblingInfo]) -> [[SiblingInfo]] {
+        let count = siblings.count
+        guard count >= 2 else { return [] }
+        var subsets: [[SiblingInfo]] = []
+        for size in stride(from: count, through: 2, by: -1) {
+            generateCombinations(siblings, choose: size, into: &subsets)
+        }
+        return subsets
+    }
+
+    private func generateCombinations(
+        _ source: [SiblingInfo],
+        choose: Int,
+        into result: inout [[SiblingInfo]]
+    ) {
+        let count = source.count
+        guard choose >= 1, choose <= count else { return }
+        var indices = Array(0 ..< choose)
+        while true {
+            result.append(indices.map { source[$0] })
+            var position = choose - 1
+            while position >= 0, indices[position] == count - choose + position {
+                position -= 1
+            }
+            if position < 0 { break }
+            indices[position] += 1
+            for subsequent in (position + 1) ..< choose {
+                indices[subsequent] = indices[subsequent - 1] + 1
+            }
+        }
+    }
+
+    /// Recursively generates all cross-product combinations of one element index per sibling and emits one ``ElementRemovalScope`` per combination.
+    private func generateAlignedCrossProductScopes(
+        subset: [SiblingInfo],
+        siblingIndex: Int,
+        currentIndices: [Int],
+        into scopes: inout [ElementRemovalScope]
+    ) {
+        guard siblingIndex < subset.count else {
+            var targets: [SequenceRemovalTarget] = []
+            var totalYield = 0
+            for (sibling, index) in zip(subset, currentIndices) {
+                let nodeID = sibling.elementNodeIDs[index]
+                targets.append(SequenceRemovalTarget(
+                    sequenceNodeID: sibling.sequenceNodeID,
+                    elementNodeIDs: [nodeID]
+                ))
+                totalYield += nodes[nodeID].positionRange?.count ?? 0
+            }
+            scopes.append(ElementRemovalScope(
+                targets: targets,
+                maxBatch: 1,
+                maxElementYield: totalYield
+            ))
+            return
+        }
+        let sibling = subset[siblingIndex]
+        for index in 0 ..< sibling.elementNodeIDs.count {
+            generateAlignedCrossProductScopes(
+                subset: subset,
+                siblingIndex: siblingIndex + 1,
+                currentIndices: currentIndices + [index],
+                into: &scopes
+            )
+        }
+    }
+
+    // MARK: - Transparent Wrapper Traversal
+
+    /// Walks through transparent wrappers (groups, structurally-constant binds) beneath a node to find the first sequence node.
+    ///
+    /// Returns the sequence node's ID, or nil if no sequence is found beneath the transparent chain.
+    private func findSequenceBeneath(_ nodeID: Int) -> Int? {
+        let node = nodes[nodeID]
+        if case .sequence = node.kind {
+            return nodeID
+        }
+        switch node.kind {
+        case .zip:
+            for childID in node.children {
+                if let found = findSequenceBeneath(childID) {
+                    return found
+                }
+            }
+            return nil
+        case let .bind(metadata):
+            if metadata.isStructurallyConstant, node.children.count >= 2 {
+                let boundChildID = node.children[metadata.boundChildIndex]
+                return findSequenceBeneath(boundChildID)
+            }
+            return nil
+        case .chooseBits, .pick, .just:
+            return nil
+        case .sequence:
+            return nodeID
         }
     }
 

@@ -16,8 +16,8 @@ enum ProjectedMutation {
     /// One or more leaf values changed. Each ``LeafChange``'s ``LeafChange/mayReshape`` flag tells the graph whether the change might trigger a downstream bind subtree rebuild.
     case leafValues([LeafChange])
 
-    /// Sequence elements removed. Layer 7.
-    case sequenceElementsRemoved(seqNodeID: Int, removedNodeIDs: [Int])
+    /// Sequence elements removed from one or more parent sequences. Each tuple identifies the parent sequence and the node IDs of the removed elements.
+    case sequenceElementsRemoved([(seqNodeID: Int, removedNodeIDs: [Int])])
 
     /// Branch selection changed at a pick node. Layer 7.
     case branchSelected(pickNodeID: Int, newSelectedID: UInt64)

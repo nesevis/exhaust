@@ -43,42 +43,24 @@ enum TransformationEnumerator {
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in graph.alignedRemovalScopes() {
-            let estimatedProbes = 2 * ceilLog2(scope.maxAlignedWindow)
+        for scope in graph.elementRemovalScopes() {
+            let estimatedProbes = 2 * ceilLog2(scope.maxBatch)
+            let totalYield = scope.targets.reduce(0) { total, target in
+                total + target.elementNodeIDs.reduce(0) { subtotal, nodeID in
+                    subtotal + (graph.nodes[nodeID].positionRange?.count ?? 0)
+                }
+            }
             result.append(GraphTransformation(
-                operation: .remove(.aligned(scope)),
+                operation: .remove(.elements(scope)),
                 yield: TransformationYield(
-                    structural: scope.maxYield,
+                    structural: totalYield,
                     value: 0,
                     slack: .exact,
                     estimatedProbes: max(1, estimatedProbes)
                 ),
-                precondition: .all(scope.siblings.map {
+                precondition: .all(scope.targets.map {
                     .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
                 }),
-                postcondition: TransformationPostcondition(
-                    isStructural: true,
-                    invalidatesConvergence: [],
-                    enablesRemoval: []
-                )
-            ))
-        }
-
-        for scope in graph.perParentRemovalScopes() {
-            let estimatedProbes = 2 * ceilLog2(scope.maxBatch)
-            result.append(GraphTransformation(
-                operation: .remove(.perParent(scope)),
-                yield: TransformationYield(
-                    structural: scope.elementNodeIDs.reduce(0) { total, nodeID in
-                        total + (graph.nodes[nodeID].positionRange?.count ?? 0)
-                    },
-                    value: 0,
-                    slack: .exact,
-                    estimatedProbes: max(1, estimatedProbes)
-                ),
-                precondition: .sequenceLengthAboveMinimum(
-                    sequenceNodeID: scope.sequenceNodeID
-                ),
                 postcondition: TransformationPostcondition(
                     isStructural: true,
                     invalidatesConvergence: [],

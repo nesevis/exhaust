@@ -24,34 +24,17 @@ struct GraphRemovalEncoder: GraphEncoder {
         let graph = scope.graph
 
         switch scope.transformation.operation {
-        case let .remove(.perParent(perParentScope)):
-            candidate = buildPerParentCandidate(
-                scope: perParentScope,
+        case let .remove(.elements(elementScope)):
+            candidate = buildElementCandidate(
+                scope: elementScope,
                 sequence: sequence,
                 graph: graph
             )
             if candidate != nil {
                 mutation = .sequenceElementsRemoved(
-                    seqNodeID: perParentScope.sequenceNodeID,
-                    removedNodeIDs: perParentScope.elementNodeIDs
-                )
-            }
-
-        case let .remove(.aligned(alignedScope)):
-            candidate = buildAlignedCandidate(
-                scope: alignedScope,
-                sequence: sequence,
-                graph: graph
-            )
-            if candidate != nil {
-                // Aligned removal touches multiple sequences. Layer 7 will
-                // model this with a richer mutation case; for Layer 3 we
-                // attribute the mutation to the first participating sibling
-                // and rely on the requiresFullRebuild fallback.
-                let firstSibling = alignedScope.siblings.first
-                mutation = .sequenceElementsRemoved(
-                    seqNodeID: firstSibling?.sequenceNodeID ?? -1,
-                    removedNodeIDs: alignedScope.siblings.flatMap(\.elementNodeIDs)
+                    elementScope.targets.map { target in
+                        (seqNodeID: target.sequenceNodeID, removedNodeIDs: target.elementNodeIDs)
+                    }
                 )
             }
 
@@ -63,8 +46,7 @@ struct GraphRemovalEncoder: GraphEncoder {
             )
             if candidate != nil {
                 mutation = .sequenceElementsRemoved(
-                    seqNodeID: graph.nodes[subtreeScope.nodeID].parent ?? -1,
-                    removedNodeIDs: [subtreeScope.nodeID]
+                    [(seqNodeID: graph.nodes[subtreeScope.nodeID].parent ?? -1, removedNodeIDs: [subtreeScope.nodeID])]
                 )
             }
 
@@ -83,50 +65,26 @@ struct GraphRemovalEncoder: GraphEncoder {
 
     // MARK: - Candidate Construction
 
-    /// Removes the specified elements from the sequence.
+    /// Removes the specified elements across one or more parent sequences.
     ///
-    /// Uses the parent sequence's ``SequenceMetadata/childPositionRanges`` to compute the full extent of each element, including any transparent wrapper markers (getSize-bind, transform-bind). Removing only the inner chooseBits position would leave orphan markers that the materializer cannot decode.
-    private func buildPerParentCandidate(
-        scope: PerParentRemovalScope,
+    /// Iterates each ``SequenceRemovalTarget``, resolving element extents via the parent sequence's ``SequenceMetadata/childPositionRanges``. All extents are collected into a single ``RangeSet`` and removed atomically.
+    private func buildElementCandidate(
+        scope: ElementRemovalScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
         var rangeSet = RangeSet<Int>()
-        for nodeID in scope.elementNodeIDs {
-            guard
-                let extent = elementExtent(
-                    for: nodeID,
-                    inSequence: scope.sequenceNodeID,
-                    graph: graph
-                )
-            else {
-                continue
-            }
-            rangeSet.insert(contentsOf: extent.lowerBound ..< extent.upperBound + 1)
-        }
-        guard
-            rangeSet.isEmpty == false
-        else { return nil }
-        var candidate = sequence
-        candidate.removeSubranges(rangeSet)
-        guard candidate.shortLexPrecedes(sequence) else { return nil }
-        return candidate
-    }
-
-    /// Removes aligned elements across all participating siblings.
-    private func buildAlignedCandidate(
-        scope: AlignedRemovalScope,
-        sequence: ChoiceSequence,
-        graph: ChoiceGraph
-    ) -> ChoiceSequence? {
-        var rangeSet = RangeSet<Int>()
-        for sibling in scope.siblings {
-            for elementNodeID in sibling.elementNodeIDs {
-                guard let extent = elementExtent(
-                    for: elementNodeID,
-                    inSequence: sibling.sequenceNodeID,
-                    graph: graph
-                ) else { continue }
+        for target in scope.targets {
+            for nodeID in target.elementNodeIDs {
+                guard
+                    let extent = elementExtent(
+                        for: nodeID,
+                        inSequence: target.sequenceNodeID,
+                        graph: graph
+                    )
+                else {
+                    continue
+                }
                 rangeSet.insert(contentsOf: extent.lowerBound ..< extent.upperBound + 1)
             }
         }
@@ -137,7 +95,7 @@ struct GraphRemovalEncoder: GraphEncoder {
         return candidate
     }
 
-    /// Returns the full ``ChoiceSequence`` extent for an element child of a sequence node, including any transparent wrapper markers.
+    /// Returns the full ``ChoiceSequence`` extent for an element child of a sequence node, including any transparent wrapper markers (getSize-bind, transform-bind). Removing only the inner chooseBits position would leave orphan markers that the materializer cannot decode.
     private func elementExtent(
         for elementNodeID: Int,
         inSequence sequenceNodeID: Int,

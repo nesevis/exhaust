@@ -20,6 +20,153 @@ protocol ScopeSource {
     mutating func next(lastAccepted: Bool) -> GraphTransformation?
 }
 
+// MARK: - Batched Cross-Sequence Removal Source
+
+/// Emits a single scope that removes deletable elements from all antichain-independent sequences simultaneously, then bisects on rejection.
+///
+/// The deletion antichain identifies element nodes that are pairwise independent (no containment or dependency path). Grouping these by parent sequence yields a set of independent sequences. The first probe attempts to remove all deletable elements from every independent sequence at once. On rejection, the target list is bisected and each half is tried independently.
+///
+/// Runs before ``SequenceEmptyingSource`` — a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
+struct BatchedCrossSequenceRemovalSource: ScopeSource {
+    /// Each entry represents one independent sequence with its deletable elements and yield.
+    private let sequences: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)]
+    /// Queue of index ranges to try. Bisection appends two halves on rejection.
+    private var pendingRanges: [(start: Int, end: Int)]
+    /// The range most recently emitted as a probe, awaiting feedback.
+    private var lastEmittedRange: (start: Int, end: Int)?
+    private var exhausted: Bool
+
+    init(graph: ChoiceGraph) {
+        // Group antichain members by parent sequence.
+        var parentToElements: [Int: [Int]] = [:]
+        for nodeID in graph.deletionAntichain {
+            guard let parentID = graph.nodes[nodeID].parent else { continue }
+            guard case .sequence = graph.nodes[parentID].kind else { continue }
+            parentToElements[parentID, default: []].append(nodeID)
+        }
+
+        // For each independent sequence parent, gather ALL deletable elements
+        // (not just antichain members — the antichain tells us which sequences
+        // are independent, but within each sequence we want to remove as many
+        // elements as the length constraint permits).
+        var entries: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)] = []
+        for (parentID, _) in parentToElements {
+            guard case let .sequence(metadata) = graph.nodes[parentID].kind else { continue }
+            let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+            let deletable = metadata.elementCount - minLength
+            guard deletable > 0 else { continue }
+
+            // Collect children ordered by position, take the last `deletable` elements
+            // (tail-anchored removal is the default for batch deletion).
+            let allChildren = graph.nodes[parentID].children
+            var childrenWithPosition: [(nodeID: Int, lowerBound: Int)] = []
+            for childID in allChildren {
+                guard let range = graph.nodes[childID].positionRange else { continue }
+                childrenWithPosition.append((nodeID: childID, lowerBound: range.lowerBound))
+            }
+            childrenWithPosition.sort { $0.lowerBound < $1.lowerBound }
+            let deletableChildren = Array(childrenWithPosition.suffix(deletable))
+
+            let yield = deletableChildren.reduce(0) { total, child in
+                total + (graph.nodes[child.nodeID].positionRange?.count ?? 0)
+            }
+
+            entries.append((
+                target: SequenceRemovalTarget(
+                    sequenceNodeID: parentID,
+                    elementNodeIDs: deletableChildren.map(\.nodeID)
+                ),
+                deletableCount: deletable,
+                yield: yield
+            ))
+        }
+
+        // Sort by yield descending so the bisection halves are balanced by impact.
+        entries.sort { $0.yield > $1.yield }
+
+        self.sequences = entries
+        // Only useful when there are at least two independent sequences to batch.
+        if entries.count >= 2 {
+            self.pendingRanges = [(start: 0, end: entries.count)]
+            self.lastEmittedRange = nil
+            self.exhausted = false
+        } else {
+            self.pendingRanges = []
+            self.lastEmittedRange = nil
+            self.exhausted = true
+        }
+    }
+
+    var peekYield: TransformationYield? {
+        guard exhausted == false, let range = pendingRanges.last else { return nil }
+        let totalYield = sequences[range.start ..< range.end].reduce(0) { $0 + $1.yield }
+        return TransformationYield(
+            structural: totalYield,
+            value: 0,
+            slack: .exact,
+            estimatedProbes: 1
+        )
+    }
+
+    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+        guard exhausted == false else { return nil }
+
+        // Handle feedback from the previous probe.
+        if let emitted = lastEmittedRange {
+            lastEmittedRange = nil
+            if lastAccepted == false {
+                // Bisect the rejected range.
+                let count = emitted.end - emitted.start
+                if count >= 2 {
+                    let mid = emitted.start + count / 2
+                    // Append both halves (larger half first so it's tried first).
+                    pendingRanges.append((start: mid, end: emitted.end))
+                    pendingRanges.append((start: emitted.start, end: mid))
+                }
+                // count == 1: single sequence rejected, drop it (existing sources handle it).
+            }
+            // If accepted, the structural mutation triggers a full source rebuild
+            // from the scheduler, so no further action needed here.
+        }
+
+        guard let range = pendingRanges.popLast() else {
+            exhausted = true
+            return nil
+        }
+        lastEmittedRange = range
+
+        let selectedSequences = sequences[range.start ..< range.end]
+        let targets = selectedSequences.map(\.target)
+        let totalYield = selectedSequences.reduce(0) { $0 + $1.yield }
+        let maxElementYield = selectedSequences.map(\.yield).max() ?? 0
+        let maxBatch = selectedSequences.reduce(0) { $0 + $1.deletableCount }
+
+        let scope = ElementRemovalScope(
+            targets: targets,
+            maxBatch: maxBatch,
+            maxElementYield: maxElementYield
+        )
+
+        return GraphTransformation(
+            operation: .remove(.elements(scope)),
+            yield: TransformationYield(
+                structural: totalYield,
+                value: 0,
+                slack: .exact,
+                estimatedProbes: 1
+            ),
+            precondition: .all(targets.map {
+                .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
+            }),
+            postcondition: TransformationPostcondition(
+                isStructural: true,
+                invalidatesConvergence: [],
+                enablesRemoval: []
+            )
+        )
+    }
+}
+
 // MARK: - Sequence Emptying Source
 
 /// Emits "empty this sequence entirely" scopes in yield-descending order.
@@ -31,20 +178,21 @@ struct SequenceEmptyingSource: ScopeSource {
 
     init(graph: ChoiceGraph) {
         var entries: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)] = []
-        for scope in graph.perParentRemovalScopes() {
-            guard case let .sequence(metadata) = graph.nodes[scope.sequenceNodeID].kind else {
+        for scope in graph.elementRemovalScopes() {
+            // Only consider single-target (per-parent) scopes for emptying.
+            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
+            guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else {
                 continue
             }
             let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
             guard metadata.elementCount > minLength else { continue }
-            // Only include if the sequence can be fully emptied.
             guard minLength == 0 else { continue }
-            let totalYield = scope.elementNodeIDs.reduce(0) { total, nodeID in
+            let totalYield = target.elementNodeIDs.reduce(0) { total, nodeID in
                 total + (graph.nodes[nodeID].positionRange?.count ?? 0)
             }
             entries.append((
-                sequenceNodeID: scope.sequenceNodeID,
-                elementNodeIDs: scope.elementNodeIDs,
+                sequenceNodeID: target.sequenceNodeID,
+                elementNodeIDs: target.elementNodeIDs,
                 yield: totalYield
             ))
         }
@@ -66,15 +214,17 @@ struct SequenceEmptyingSource: ScopeSource {
         let candidate = candidates[index]
         index += 1
 
-        let scope = PerParentRemovalScope(
-            sequenceNodeID: candidate.sequenceNodeID,
-            elementNodeIDs: candidate.elementNodeIDs,
+        let scope = ElementRemovalScope(
+            targets: [SequenceRemovalTarget(
+                sequenceNodeID: candidate.sequenceNodeID,
+                elementNodeIDs: candidate.elementNodeIDs
+            )],
             maxBatch: candidate.elementNodeIDs.count,
             maxElementYield: candidate.yield
         )
 
         return GraphTransformation(
-            operation: .remove(.perParent(scope)),
+            operation: .remove(.elements(scope)),
             yield: TransformationYield(
                 structural: candidate.yield,
                 value: 0,
@@ -163,15 +313,17 @@ struct BatchRemovalSource: ScopeSource {
         let selectedElements = Array(elements[offset ..< offset + currentBatch])
         let batchYield = selectedElements.reduce(0) { $0 + $1.positionRange.count }
 
-        let scope = PerParentRemovalScope(
-            sequenceNodeID: sequenceNodeID,
-            elementNodeIDs: selectedElements.map(\.nodeID),
+        let scope = ElementRemovalScope(
+            targets: [SequenceRemovalTarget(
+                sequenceNodeID: sequenceNodeID,
+                elementNodeIDs: selectedElements.map(\.nodeID)
+            )],
             maxBatch: currentBatch,
             maxElementYield: batchYield
         )
 
         let transformation = GraphTransformation(
-            operation: .remove(.perParent(scope)),
+            operation: .remove(.elements(scope)),
             yield: TransformationYield(
                 structural: batchYield,
                 value: 0,
@@ -225,18 +377,20 @@ struct PerElementRemovalSource: ScopeSource {
 
     init(graph: ChoiceGraph) {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
-        for scope in graph.perParentRemovalScopes() {
-            for elementNodeID in scope.elementNodeIDs {
+        for scope in graph.elementRemovalScopes() {
+            // Per-element source only handles single-target scopes.
+            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
+            for elementNodeID in target.elementNodeIDs {
                 guard let range = graph.nodes[elementNodeID].positionRange else { continue }
                 let isZero: Bool
                 if case let .chooseBits(metadata) = graph.nodes[elementNodeID].kind {
-                    let target = metadata.value.reductionTarget(in: metadata.validRange)
-                    isZero = metadata.value.bitPattern64 == target
+                    let reductionTarget = metadata.value.reductionTarget(in: metadata.validRange)
+                    isZero = metadata.value.bitPattern64 == reductionTarget
                 } else {
                     isZero = false
                 }
                 entries.append((
-                    sequenceNodeID: scope.sequenceNodeID,
+                    sequenceNodeID: target.sequenceNodeID,
                     nodeID: elementNodeID,
                     positionRange: range,
                     isZero: isZero
@@ -268,15 +422,17 @@ struct PerElementRemovalSource: ScopeSource {
         let element = elements[index]
         index += 1
 
-        let scope = PerParentRemovalScope(
-            sequenceNodeID: element.sequenceNodeID,
-            elementNodeIDs: [element.nodeID],
+        let scope = ElementRemovalScope(
+            targets: [SequenceRemovalTarget(
+                sequenceNodeID: element.sequenceNodeID,
+                elementNodeIDs: [element.nodeID]
+            )],
             maxBatch: 1,
             maxElementYield: element.positionRange.count
         )
 
         return GraphTransformation(
-            operation: .remove(.perParent(scope)),
+            operation: .remove(.elements(scope)),
             yield: TransformationYield(
                 structural: element.positionRange.count,
                 value: 0,
@@ -295,24 +451,26 @@ struct PerElementRemovalSource: ScopeSource {
 
 // MARK: - Aligned Removal Source
 
-/// Emits aligned removal scopes across sibling subsets in yield-descending order.
+/// Emits multi-target element removal scopes across sibling subsets in yield-descending order.
 ///
-/// Uses the aligned removal scopes from ``ChoiceGraph/alignedRemovalScopes()`` (which includes partial sibling subsets). Each scope fully specifies which positions to remove across all participating siblings. Emits at maximum window size per subset first, then halves on rejection.
+/// Uses the aligned element scopes from ``ChoiceGraph/elementRemovalScopes()`` (multi-target scopes only). Each scope fully specifies which positions to remove across all participating sequences. One probe per scope.
 struct AlignedRemovalSource: ScopeSource {
-    private var scopes: [AlignedRemovalScope]
+    private var scopes: [ElementRemovalScope]
     private var index = 0
-    private let graph: ChoiceGraph
 
     init(graph: ChoiceGraph) {
-        self.graph = graph
-        // Sorted by maxYield descending (already done by alignedRemovalScopes for subsets by size).
-        self.scopes = graph.alignedRemovalScopes().sorted { $0.maxYield > $1.maxYield }
+        // Filter to multi-target scopes only (aligned across siblings).
+        self.scopes = graph.elementRemovalScopes()
+            .filter { $0.targets.count >= 2 }
+            .sorted { scopeA, scopeB in
+                scopeA.maxElementYield > scopeB.maxElementYield
+            }
     }
 
     var peekYield: TransformationYield? {
         guard index < scopes.count else { return nil }
         return TransformationYield(
-            structural: scopes[index].maxYield,
+            structural: scopes[index].maxElementYield,
             value: 0,
             slack: .exact,
             estimatedProbes: 1
@@ -324,17 +482,15 @@ struct AlignedRemovalSource: ScopeSource {
         let scope = scopes[index]
         index += 1
 
-        // Build the removal scope specifying ALL deletable elements across all siblings.
-        // The encoder removes them all in one probe.
         return GraphTransformation(
-            operation: .remove(.aligned(scope)),
+            operation: .remove(.elements(scope)),
             yield: TransformationYield(
-                structural: scope.maxYield,
+                structural: scope.maxElementYield,
                 value: 0,
                 slack: .exact,
                 estimatedProbes: 1
             ),
-            precondition: .all(scope.siblings.map {
+            precondition: .all(scope.targets.map {
                 .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
             }),
             postcondition: TransformationPostcondition(
@@ -669,16 +825,18 @@ enum ScopeSourceBuilder {
     static func buildSources(from graph: ChoiceGraph) -> [any ScopeSource] {
         var sources: [any ScopeSource] = []
 
-        // Sequence emptying — most drastic structural reduction.
-        let emptyingSource = SequenceEmptyingSource(graph: graph)
-        if emptyingSource.peekYield != nil {
-            sources.append(emptyingSource)
+        // Batched cross-sequence removal — most drastic structural reduction.
+        let batchedSource = BatchedCrossSequenceRemovalSource(graph: graph)
+        if batchedSource.peekYield != nil {
+            sources.append(batchedSource)
         }
 
         // Batch removal — one source per sequence with deletable elements.
-        for scope in graph.perParentRemovalScopes() {
+        // Geometric halving within each sequence (half → quarter → eighth).
+        for scope in graph.elementRemovalScopes() {
+            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             let source = BatchRemovalSource(
-                sequenceNodeID: scope.sequenceNodeID,
+                sequenceNodeID: target.sequenceNodeID,
                 graph: graph
             )
             if source.peekYield != nil {
