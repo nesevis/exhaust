@@ -8,7 +8,7 @@
 /// Drives leaf values toward their semantic simplest without changing graph structure.
 ///
 /// Operates in three modes based on the ``MinimizationScope``:
-/// - **Integer leaves**: batch zeroing attempt followed by per-leaf binary search via ``BinarySearchStepper``, with cross-zero phase for signed integers.
+/// - **Integer leaves**: batch zeroing attempt followed by per-leaf interpolation search via ``InterpolationSearchStepper`` (falling back to binary search below a threshold), with cross-zero phase for signed integers.
 /// - **Float leaves**: four-stage IEEE 754 pipeline (special values, truncation, integral binary search, ratio binary search).
 /// - **Kleisli fibre**: joint upstream/downstream minimization along a dependency edge. Internally a Kleisli composition — each upstream probe spawns a downstream search.
 ///
@@ -79,17 +79,21 @@ struct GraphMinimizationEncoder: GraphEncoder {
         case perLeaf
     }
 
-    /// Directional binary search stepper for bit-pattern-space search.
+    /// Directional search stepper for bit-pattern-space search.
     ///
-    /// Downward (currentBP > targetBP): finds the smallest accepted bit pattern. Upward (currentBP < targetBP): finds the largest accepted bit pattern. Matches the directional strategy in Bonsai's ``BinarySearchEncoder``.
+    /// Uses interpolation search for large ranges (`downward` / `upward`) and plain binary search for small ranges (`downwardBinary` / `upwardBinary`). The threshold is ``InterpolationSearchStepper/binaryThreshold``.
     private enum DirectionalStepper {
-        case downward(BinarySearchStepper)
-        case upward(MaxBinarySearchStepper)
+        case downward(InterpolationSearchStepper)
+        case downwardBinary(BinarySearchStepper)
+        case upward(MaxInterpolationSearchStepper)
+        case upwardBinary(MaxBinarySearchStepper)
 
         var bestAccepted: UInt64 {
             switch self {
             case let .downward(stepper): stepper.bestAccepted
+            case let .downwardBinary(stepper): stepper.bestAccepted
             case let .upward(stepper): stepper.bestAccepted
+            case let .upwardBinary(stepper): stepper.bestAccepted
             }
         }
 
@@ -99,9 +103,17 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 let value = stepper.start()
                 self = .downward(stepper)
                 return value
+            case var .downwardBinary(stepper):
+                let value = stepper.start()
+                self = .downwardBinary(stepper)
+                return value
             case var .upward(stepper):
                 let value = stepper.start()
                 self = .upward(stepper)
+                return value
+            case var .upwardBinary(stepper):
+                let value = stepper.start()
+                self = .upwardBinary(stepper)
                 return value
             }
         }
@@ -112,9 +124,17 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 let value = stepper.advance(lastAccepted: lastAccepted)
                 self = .downward(stepper)
                 return value
+            case var .downwardBinary(stepper):
+                let value = stepper.advance(lastAccepted: lastAccepted)
+                self = .downwardBinary(stepper)
+                return value
             case var .upward(stepper):
                 let value = stepper.advance(lastAccepted: lastAccepted)
                 self = .upward(stepper)
+                return value
+            case var .upwardBinary(stepper):
+                let value = stepper.advance(lastAccepted: lastAccepted)
+                self = .upwardBinary(stepper)
                 return value
             }
         }
@@ -543,14 +563,28 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
             if currentBP > targetBP {
                 let effectiveLo = validWarmStart?.bound ?? targetBP
-                state.stepper = .downward(
-                    BinarySearchStepper(lo: effectiveLo, hi: currentBP)
-                )
+                let range = currentBP - effectiveLo
+                if range < InterpolationSearchStepper.binaryThreshold {
+                    state.stepper = .downwardBinary(
+                        BinarySearchStepper(lo: effectiveLo, hi: currentBP)
+                    )
+                } else {
+                    state.stepper = .downward(
+                        InterpolationSearchStepper(lo: effectiveLo, hi: currentBP)
+                    )
+                }
             } else {
                 let effectiveHi = validWarmStart?.bound ?? targetBP
-                state.stepper = .upward(
-                    MaxBinarySearchStepper(lo: currentBP, hi: effectiveHi)
-                )
+                let range = effectiveHi - currentBP
+                if range < MaxInterpolationSearchStepper.binaryThreshold {
+                    state.stepper = .upwardBinary(
+                        MaxBinarySearchStepper(lo: currentBP, hi: effectiveHi)
+                    )
+                } else {
+                    state.stepper = .upward(
+                        MaxInterpolationSearchStepper(lo: currentBP, hi: effectiveHi)
+                    )
+                }
             }
 
             guard let firstBP = state.stepper?.start() else {
