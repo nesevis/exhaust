@@ -14,7 +14,7 @@ extension Materializer {
     static func handleContramap<Output>(
         _ nextGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
@@ -33,7 +33,7 @@ extension Materializer {
     static func handlePrune<Output>(
         _ nextGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
@@ -60,7 +60,7 @@ extension Materializer {
         tag: TypeTag,
         isRangeExplicit: Bool,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
@@ -142,7 +142,7 @@ extension Materializer {
     static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
@@ -314,7 +314,7 @@ extension Materializer {
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
@@ -464,7 +464,7 @@ extension Materializer {
     static func handleZip<Output>(
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
@@ -532,7 +532,7 @@ extension Materializer {
         newSize: UInt64,
         gen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
@@ -567,7 +567,7 @@ extension Materializer {
         kind: TransformKind,
         inner: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil

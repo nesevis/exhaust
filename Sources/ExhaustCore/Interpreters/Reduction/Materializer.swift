@@ -164,7 +164,7 @@ extension Materializer {
 
     static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        with inputValue: some Any,
+        with inputValue: Any,
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
@@ -342,7 +342,7 @@ extension Materializer {
         result: Any,
         calleeChoiceTree: ChoiceTree,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        inputValue: Any,
         context: inout Context,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
