@@ -113,8 +113,8 @@ struct DescendantPromotionScope {
 ///
 /// Minimization drives leaf values toward their semantic simplest without changing graph structure. It is a Kleisli arrow (nondeterministic multi-probe search) in the categorical framework.
 enum MinimizationScope {
-    /// Search integer leaf values toward their reduction targets.
-    case integerLeaves(IntegerMinimizationScope)
+    /// Search chooseBits leaf values toward their reduction targets.
+    case valueLeaves(ValueMinimizationScope)
 
     /// Search float leaf values via the four-stage IEEE 754 pipeline.
     case floatLeaves(FloatMinimizationScope)
@@ -144,7 +144,7 @@ struct LeafEntry {
 }
 
 /// Scope for integer leaf value minimization.
-struct IntegerMinimizationScope {
+struct ValueMinimizationScope {
     /// Leaves to minimise, ordered by value yield descending (bind-inner leaves with large bound subtrees first). Each entry carries the bind-inner reshape marker so the graph can route value updates per leaf without the encoder having to know.
     let leaves: [LeafEntry]
 

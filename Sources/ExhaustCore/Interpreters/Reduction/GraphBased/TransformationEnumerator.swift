@@ -172,7 +172,7 @@ enum TransformationEnumerator {
 
         for scope in graph.minimizationScopes() {
             switch scope {
-            case let .integerLeaves(integerScope):
+            case let .valueLeaves(integerScope):
                 let maxValueYield = integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
                     max(maxSoFar, computeValueYield(
                         leafNodeID: nodeID,

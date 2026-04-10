@@ -431,7 +431,7 @@ extension ChoiceGraph {
                     )
                 )
             }
-            scopes.append(.integerLeaves(IntegerMinimizationScope(
+            scopes.append(.valueLeaves(ValueMinimizationScope(
                 leaves: entries,
                 batchZeroEligible: entries.count > 1
             )))

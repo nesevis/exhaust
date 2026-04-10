@@ -668,7 +668,7 @@ struct MinimizationSource: ScopeSource {
         for scope in graph.minimizationScopes() {
             let valueYield: Int
             switch scope {
-            case let .integerLeaves(integerScope):
+            case let .valueLeaves(integerScope):
                 valueYield = integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
                     max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerChildToBind: innerChildToBind))
                 }
@@ -682,7 +682,7 @@ struct MinimizationSource: ScopeSource {
 
             let estimatedProbes: Int
             switch scope {
-            case let .integerLeaves(integerScope):
+            case let .valueLeaves(integerScope):
                 estimatedProbes = 1 + integerScope.leafNodeIDs.count * 16
             case let .floatLeaves(floatScope):
                 estimatedProbes = floatScope.leafNodeIDs.count * 15
@@ -831,6 +831,12 @@ enum ScopeSourceBuilder {
             sources.append(batchedSource)
         }
 
+        // Sequence emptying — per-sequence emptying.
+        let emptyingSource = SequenceEmptyingSource(graph: graph)
+        if emptyingSource.peekYield != nil {
+            sources.append(emptyingSource)
+        }
+
         // Batch removal — one source per sequence with deletable elements.
         // Geometric halving within each sequence (half → quarter → eighth).
         for scope in graph.elementRemovalScopes() {
@@ -954,14 +960,9 @@ struct MigrationSource: ScopeSource {
 
                 guard elementNodeIDs.isEmpty == false else { continue }
 
-                // Yield: when all elements are migrated, the entire source
-                // sequence (including markers) is removed, so the effective
-                // yield is the source's full position extent. Otherwise,
-                // yield is just the moved elements' position count.
-                let movedPositions = elementRanges.reduce(0) { $0 + $1.count }
-                let totalYield = (elementNodeIDs.count == sourceNode.children.count)
-                    ? source.positionRange.count
-                    : movedPositions
+                // Yield: the position count of the elements being moved.
+                // Moving them shortens the source (improves shortlex at earlier positions).
+                let totalYield = elementRanges.reduce(0) { $0 + $1.count }
 
                 // Determine whether this is a full migration (all source elements moved).
                 let isFullMigration = elementNodeIDs.count == sourceNode.children.count

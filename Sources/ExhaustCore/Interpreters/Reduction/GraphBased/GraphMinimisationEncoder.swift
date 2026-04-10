@@ -23,7 +23,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
     private enum Mode {
         case idle
-        case integerLeaves(IntegerState)
+        case valueLeaves(IntegerState)
         case floatLeaves(FloatState)
     }
 
@@ -84,14 +84,21 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
     /// State for the batch bisection phase.
     ///
-    /// After batchZero rejects, bisects the leaf set to identify which subsets can reach their targets in a single materialization. Each pending range represents a contiguous slice of ``IntegerState/leafPositions`` to try at their targets simultaneously. On rejection, the range is split in two. On acceptance, the leaves in that range are converged and removed from the per-leaf phase.
+    /// Performs joint interpolation search across groups of leaves. Each group probe moves all leaves in the group one interpolation step toward their targets simultaneously. On acceptance, the group's values update and the next step is tried. On rejection, the group is bisected into two halves that are searched independently. When a group shrinks to a single leaf, it is deferred to the per-leaf phase.
     private struct BisectionState {
-        /// Stack of leaf index ranges to try. Each range is a half-open interval into ``IntegerState/leafPositions``.
-        var pendingRanges: [(start: Int, end: Int)]
-        /// The range most recently emitted as a probe, awaiting feedback.
-        var lastEmittedRange: (start: Int, end: Int)?
+        /// Stack of leaf groups to search. Each group is a half-open interval into ``IntegerState/leafPositions``.
+        var pendingGroups: [(start: Int, end: Int)]
+        /// The group currently being searched. `nil` when no group is active (need to pop next from pending).
+        var activeGroup: (start: Int, end: Int)?
+        /// Current interpolation divisor for the active group. Halves on rejection, resets on acceptance.
+        var divisor: UInt64
+        /// Whether we have emitted a probe for the active group and are awaiting feedback.
+        var awaitingFeedback: Bool
         /// Leaf indices that were accepted during bisection and should be skipped in per-leaf phase.
         var convergedIndices: Set<Int>
+
+        static let initialDivisor: UInt64 = 16
+        static let binaryThreshold: UInt64 = 4
     }
 
     /// Directional search stepper for bit-pattern-space search.
@@ -216,7 +223,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
         let graph = scope.graph
 
         switch minimizationScope {
-        case let .integerLeaves(integerScope):
+        case let .valueLeaves(integerScope):
             startInteger(scope: integerScope, sequence: sequence, graph: graph, warmStarts: scope.warmStartRecords)
         case let .floatLeaves(floatScope):
             startFloat(scope: floatScope, sequence: sequence, graph: graph)
@@ -270,10 +277,10 @@ struct GraphMinimizationEncoder: GraphEncoder {
         switch mode {
         case .idle:
             return
-        case let .integerLeaves(state):
+        case let .valueLeaves(state):
             let scopes = graph.minimizationScopes()
-            let integerScope = scopes.firstNonNil { scope -> IntegerMinimizationScope? in
-                if case let .integerLeaves(inner) = scope { return inner }
+            let integerScope = scopes.firstNonNil { scope -> ValueMinimizationScope? in
+                if case let .valueLeaves(inner) = scope { return inner }
                 return nil
             }
             guard let integerScope else {
@@ -311,13 +318,13 @@ struct GraphMinimizationEncoder: GraphEncoder {
         switch mode {
         case .idle:
             return nil
-        case var .integerLeaves(state):
+        case var .valueLeaves(state):
             guard let candidate = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {
-                mode = .integerLeaves(state)
+                mode = .valueLeaves(state)
                 return nil
             }
             let mutation = buildIntegerLeafValuesMutation(candidate: candidate, state: state)
-            mode = .integerLeaves(state)
+            mode = .valueLeaves(state)
             return EncoderProbe(candidate: candidate, mutation: mutation)
         case var .floatLeaves(state):
             guard let candidate = nextFloatProbe(state: &state, lastAccepted: lastAccepted) else {
@@ -379,7 +386,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
     // MARK: - Integer Mode
 
     private mutating func startInteger(
-        scope: IntegerMinimizationScope,
+        scope: ValueMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
         warmStarts: [Int: ConvergedOrigin],
@@ -426,7 +433,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
         // predicate requires non-heap shape).
         let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible) ? .batchZero : .perLeaf
 
-        mode = .integerLeaves(IntegerState(
+        mode = .valueLeaves(IntegerState(
             sequence: sequence,
             leafPositions: leafPositions,
             phase: initialPhase,
@@ -463,13 +470,15 @@ struct GraphMinimizationEncoder: GraphEncoder {
             }
             if candidate.shortLexPrecedes(state.sequence) {
                 // Emit the batch-zero probe. If accepted, batchBisect will
-                // see lastAccepted=true and transition to perLeaf. If rejected,
-                // batchBisect will begin bisection.
+                // see lastAccepted=true and converge all leaves. If rejected,
+                // batchBisect will begin joint interpolation search.
                 if state.leafPositions.count >= 4 {
                     state.phase = .batchBisect
                     state.bisection = BisectionState(
-                        pendingRanges: [],
-                        lastEmittedRange: (start: 0, end: state.leafPositions.count),
+                        pendingGroups: [],
+                        activeGroup: (start: 0, end: state.leafPositions.count),
+                        divisor: BisectionState.initialDivisor,
+                        awaitingFeedback: true,
                         convergedIndices: []
                     )
                 } else {
@@ -496,9 +505,9 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
     // MARK: - Batch Bisection
 
-    /// Drives the batch bisection phase: probes subsets of leaves at their targets, bisecting on rejection.
+    /// Drives the batch bisection phase: joint interpolation search across leaf groups with bisection on rejection.
     ///
-    /// On acceptance, the leaves in the accepted range are recorded as converged (their convergence records are written and they are skipped in the per-leaf phase). On rejection, ranges of size two or more are split in half. Single-leaf ranges that reject are dropped (per-leaf phase handles them with interpolation search).
+    /// Each group of leaves is searched in tandem — all leaves in the group move one interpolation step toward their targets simultaneously. On acceptance, the group continues stepping (divisor resets). On rejection, the divisor halves; when the divisor reaches the binary threshold and the group has two or more leaves, the group is bisected and each half is searched independently. Single-leaf groups that stall are deferred to the per-leaf phase.
     private mutating func nextBatchBisectProbe(
         state: inout IntegerState,
         lastAccepted: Bool
@@ -509,68 +518,116 @@ struct GraphMinimizationEncoder: GraphEncoder {
         }
 
         // Handle feedback from the previous probe.
-        if let emitted = bisection.lastEmittedRange {
-            bisection.lastEmittedRange = nil
-            let rangeSize = emitted.end - emitted.start
+        if bisection.awaitingFeedback, let group = bisection.activeGroup {
+            bisection.awaitingFeedback = false
             if lastAccepted {
-                // All leaves in this range reached their targets — record convergence.
-                for index in emitted.start ..< emitted.end {
+                // Group made progress — update current bit patterns from the accepted candidate.
+                for index in group.start ..< group.end {
+                    guard bisection.convergedIndices.contains(index) == false else { continue }
                     let leaf = state.leafPositions[index]
-                    bisection.convergedIndices.insert(index)
-                    convergenceStore[leaf.nodeID] = ConvergedOrigin(
-                        bound: leaf.targetBitPattern,
-                        signal: .monotoneConvergence,
-                        configuration: .binarySearchSemanticSimplest,
-                        cycle: 0
-                    )
+                    // Read the accepted value from the baseline sequence (which was updated by the caller).
+                    let acceptedBP = state.sequence[leaf.sequenceIndex].value?.choice.bitPattern64 ?? leaf.currentBitPattern
+                    state.leafPositions[index].currentBitPattern = acceptedBP
+                    // If the leaf reached its target, mark converged.
+                    if acceptedBP == leaf.targetBitPattern {
+                        bisection.convergedIndices.insert(index)
+                        convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                            bound: leaf.targetBitPattern,
+                            signal: .monotoneConvergence,
+                            configuration: .binarySearchSemanticSimplest,
+                            cycle: 0
+                        )
+                    }
                 }
-                // Update leaf current bit patterns to match targets.
-                for index in emitted.start ..< emitted.end {
-                    state.leafPositions[index].currentBitPattern = state.leafPositions[index].targetBitPattern
-                }
+                // Reset divisor for the next step — acceptance confirms the group can move.
+                bisection.divisor = BisectionState.initialDivisor
             } else {
-                // Bisect the rejected range.
-                if rangeSize >= 2 {
-                    let mid = emitted.start + rangeSize / 2
-                    bisection.pendingRanges.append((start: mid, end: emitted.end))
-                    bisection.pendingRanges.append((start: emitted.start, end: mid))
+                // Group stalled — halve divisor.
+                if bisection.divisor > BisectionState.binaryThreshold {
+                    bisection.divisor /= 2
                 } else {
+                    // Divisor exhausted — bisect the group.
+                    let groupSize = group.end - group.start
+                    if groupSize >= 2 {
+                        let mid = group.start + groupSize / 2
+                        bisection.pendingGroups.append((start: mid, end: group.end))
+                        bisection.pendingGroups.append((start: group.start, end: mid))
+                    }
+                    // Single leaf: deferred to per-leaf.
+                    bisection.activeGroup = nil
+                    bisection.divisor = BisectionState.initialDivisor
                 }
             }
         }
 
-        // Emit next probe from the pending ranges.
-        while let range = bisection.pendingRanges.popLast() {
-            // Skip ranges where all leaves are already converged.
-            let unconvergedInRange = (range.start ..< range.end).contains { index in
-                bisection.convergedIndices.contains(index) == false
+        // Try to emit a probe for the active group, or pop the next group.
+        while true {
+            // If no active group, pop the next pending one.
+            if bisection.activeGroup == nil {
+                guard let nextGroup = bisection.pendingGroups.popLast() else {
+                    break
+                }
+                // Skip single-leaf groups — defer to per-leaf.
+                if nextGroup.end - nextGroup.start < 2 {
+                    continue
+                }
+                bisection.activeGroup = nextGroup
+                bisection.divisor = BisectionState.initialDivisor
             }
-            guard unconvergedInRange else { continue }
 
-            // Build candidate: set all unconverged leaves in this range to their targets.
+            guard let group = bisection.activeGroup else { break }
+
+            // Check if there are unconverged leaves with room to move.
+            let hasWork = (group.start ..< group.end).contains { index in
+                bisection.convergedIndices.contains(index) == false
+                    && state.leafPositions[index].currentBitPattern != state.leafPositions[index].targetBitPattern
+            }
+            if hasWork == false {
+                bisection.activeGroup = nil
+                continue
+            }
+
+            // Build candidate: move each unconverged leaf one interpolation step toward its target.
             var candidate = state.sequence
             var anyChanged = false
-            for index in range.start ..< range.end {
+            for index in group.start ..< group.end {
                 guard bisection.convergedIndices.contains(index) == false else { continue }
                 let leaf = state.leafPositions[index]
                 guard leaf.currentBitPattern != leaf.targetBitPattern else { continue }
-                candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                    .withBitPattern(leaf.targetBitPattern)
-                anyChanged = true
+
+                let probeBP: UInt64
+                if leaf.currentBitPattern > leaf.targetBitPattern {
+                    let range = leaf.currentBitPattern - leaf.targetBitPattern
+                    let step = range / bisection.divisor
+                    probeBP = step > 0 ? leaf.targetBitPattern + step : leaf.targetBitPattern
+                } else {
+                    let range = leaf.targetBitPattern - leaf.currentBitPattern
+                    let step = range / bisection.divisor
+                    probeBP = step > 0 ? leaf.targetBitPattern - step : leaf.targetBitPattern
+                }
+
+                if probeBP != leaf.currentBitPattern {
+                    candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
+                        .withBitPattern(probeBP)
+                    anyChanged = true
+                }
             }
 
-            guard anyChanged, candidate.shortLexPrecedes(state.sequence) else { continue }
+            guard anyChanged, candidate.shortLexPrecedes(state.sequence) else {
+                // Can't make progress with this group — treat as stall.
+                bisection.activeGroup = nil
+                continue
+            }
 
-            bisection.lastEmittedRange = range
+            bisection.awaitingFeedback = true
             state.bisection = bisection
             state.lastEmittedCandidate = candidate
             return candidate
         }
 
-        // Bisection exhausted — transition to per-leaf phase, skipping converged leaves.
+        // All groups exhausted — transition to per-leaf phase, skipping converged leaves.
         state.bisection = bisection
         state.phase = .perLeaf
-        // Skip past leaves that bisection already converged.
         while state.leafIndex < state.leafPositions.count,
               bisection.convergedIndices.contains(state.leafIndex)
         {

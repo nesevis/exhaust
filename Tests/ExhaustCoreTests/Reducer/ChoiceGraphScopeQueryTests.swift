@@ -105,11 +105,11 @@ struct ChoiceGraphScopeQueryTests {
         let scopes = graph.minimizationScopes()
 
         let integerScopes = scopes.filter {
-            if case .integerLeaves = $0 { return true }
+            if case .valueLeaves = $0 { return true }
             return false
         }
         #expect(integerScopes.count == 1)
-        if case let .integerLeaves(scope) = integerScopes.first {
+        if case let .valueLeaves(scope) = integerScopes.first {
             #expect(scope.leafNodeIDs.count == 2)
             #expect(scope.batchZeroEligible)
         }
@@ -126,7 +126,7 @@ struct ChoiceGraphScopeQueryTests {
 
         // Both leaves are at their reduction target (0) — no minimization scope.
         let integerScopes = scopes.filter {
-            if case .integerLeaves = $0 { return true }
+            if case .valueLeaves = $0 { return true }
             return false
         }
         #expect(integerScopes.isEmpty)

@@ -644,7 +644,7 @@ enum ChoiceGraphScheduler {
         )
         let upstreamScope = TransformationScope(
             transformation: GraphTransformation(
-                operation: .minimize(.integerLeaves(IntegerMinimizationScope(
+                operation: .minimize(.valueLeaves(ValueMinimizationScope(
                     leaves: [upstreamLeafEntry],
                     batchZeroEligible: false
                 ))),
@@ -812,7 +812,7 @@ enum ChoiceGraphScheduler {
         }
         return TransformationScope(
             transformation: GraphTransformation(
-                operation: .minimize(.integerLeaves(IntegerMinimizationScope(
+                operation: .minimize(.valueLeaves(ValueMinimizationScope(
                     leaves: downstreamLeaves.map {
                         LeafEntry(nodeID: $0, mayReshapeOnAcceptance: false)
                     },

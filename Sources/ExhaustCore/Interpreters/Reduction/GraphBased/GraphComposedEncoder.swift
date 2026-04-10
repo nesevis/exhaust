@@ -7,7 +7,7 @@
 
 /// Pure binary search over a single integer leaf in bit-pattern space, intended as the upstream slot of a ``GraphComposedEncoder``.
 ///
-/// Operates on a one-leaf ``IntegerMinimizationScope`` and emits a sequence of midpoint probes between the leaf's current bit pattern and its reduction target. On rejection, narrows the lower bound (`lo = lastProbe + 1`). On acceptance, narrows the upper bound (`hi = lastProbe`). Converges to the smallest accepted value, or to the original current value if every probe is rejected.
+/// Operates on a one-leaf ``ValueMinimizationScope`` and emits a sequence of midpoint probes between the leaf's current bit pattern and its reduction target. On rejection, narrows the lower bound (`lo = lastProbe + 1`). On acceptance, narrows the upper bound (`hi = lastProbe`). Converges to the smallest accepted value, or to the original current value if every probe is rejected.
 ///
 /// ## Why not ``GraphMinimizationEncoder``?
 ///
@@ -15,7 +15,7 @@
 ///
 /// ## Lifecycle
 ///
-/// 1. ``start(scope:)`` extracts the single leaf from the scope's ``IntegerMinimizationScope``, reads its current and target bit patterns, and initialises a ``BinarySearchStepper``. Multi-leaf scopes are not supported and produce no probes.
+/// 1. ``start(scope:)`` extracts the single leaf from the scope's ``ValueMinimizationScope``, reads its current and target bit patterns, and initialises a ``BinarySearchStepper``. Multi-leaf scopes are not supported and produce no probes.
 /// 2. ``nextProbe(lastAccepted:)`` returns midpoint candidates until convergence. Each candidate writes the next bit pattern into the leaf's sequence position; the mutation is `.leafValues([LeafChange])` with `mayReshape: false` so the enclosing ``GraphComposedEncoder/wrap(downstreamProbe:upstreamProbe:)`` can flip the flag to `true` when wrapping the downstream probe.
 ///
 /// - SeeAlso: ``GraphComposedEncoder``, ``BinarySearchStepper``
@@ -38,7 +38,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
         baseSequence = scope.baseSequence
         needsFirstProbe = true
 
-        guard case let .minimize(.integerLeaves(integerScope)) = scope.transformation.operation,
+        guard case let .minimize(.valueLeaves(integerScope)) = scope.transformation.operation,
               let entry = integerScope.leaves.first
         else { return }
         let graph = scope.graph
@@ -113,7 +113,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
         leafEntries = []
         hasInner = false
 
-        guard case let .minimize(.integerLeaves(integerScope)) = scope.transformation.operation else {
+        guard case let .minimize(.valueLeaves(integerScope)) = scope.transformation.operation else {
             return
         }
         let graph = scope.graph
