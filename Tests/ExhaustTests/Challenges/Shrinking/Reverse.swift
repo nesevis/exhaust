@@ -24,9 +24,12 @@ struct ReverseShrinkingChallenge {
             .suppressIssueReporting,
 
             .replay(33_556_013_978_236_435),
+            .logging(.debug, .keyValue),
+//            .reducer(.choiceGraph),
             .onReport { report = $0 }
         ) { arr in
-            arr.elementsEqual(arr.reversed())
+            print("Attempt: \(arr)")
+            return arr.elementsEqual(arr.reversed())
         }
         if let report { print("[PROFILE] Reverse: \(report.profilingSummary)") }
 

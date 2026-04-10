@@ -47,6 +47,9 @@ struct CouplingShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .onReport { report = $0 },
+                .logging(.debug, .keyValue),
+//                .reducer(.choiceGraph),
+                .replay(1546),
                 property: Self.property
             )
         )
@@ -63,6 +66,24 @@ struct CouplingShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .onReport { report = $0 },
+                property: Self.property
+            )
+        )
+        if let report { print("[PROFILE] CouplingPath: \(report.profilingSummary)") }
+        #expect(value.count == 2)
+        #expect(value == [1, 0])
+    }
+    
+    @Test("Coupling Pathological 2")
+    func couplingPathlogical2() throws {
+        var report: ExhaustReport?
+        let value = try #require(
+            #exhaust(
+                Self.gen,
+                .suppressIssueReporting,
+                .onReport { report = $0 },
+                .reducer(.choiceGraph),
+                .logging(.debug, .keyValue),
                 property: Self.property
             )
         )

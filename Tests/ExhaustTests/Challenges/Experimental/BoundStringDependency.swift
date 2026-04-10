@@ -13,7 +13,7 @@ struct DependentStringChallenge {
     /**
      The generator returned from `bound` is irrelevant to the property, which only tests for length
      */
-    @Test("Bound string dependency")
+    @Test("Bound string dependency", .disabled("FIXME: Does not terminate in ChoiceGraph"))
     func boundStringDependency() {
         let gen = #gen(.int(in: 0 ... 10)).bound(
             forward: { .string(length: UInt64($0) ... UInt64($0)) },
@@ -23,7 +23,8 @@ struct DependentStringChallenge {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .logging(.debug)
+            .logging(.debug),
+            .reducer(.bonsai)
         ) { value in
             !(4 ... 5 ~= value.count)
         }

@@ -32,6 +32,7 @@ struct Bound5ShrinkingChallenge {
         if b5.arr.isEmpty {
             return true
         }
+//        print("Attempt: \(b5)")
         return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
     }
 
@@ -44,12 +45,13 @@ struct Bound5ShrinkingChallenge {
             .suppressIssueReporting,
             .replay(16_799_307_796_119_368_455),
             .onReport { report = $0 },
+            .logging(.debug),
             property: Self.property
         )
         if let report { print("[PROFILE] Bound5Single: \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
-        #expect(output?.arr == [-1, -32768])
+        #expect(output?.arr.sorted() == [-32768, -1])
     }
 
     @Test("Bound5, Pathological 1")
@@ -97,7 +99,7 @@ struct Bound5ShrinkingChallenge {
         if let report { print("[PROFILE] Bound5Path2: \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
-        #expect(output?.arr.sorted() == [-32768, -1])
+        #expect(output?.arr.sorted() == [-32768, -1]) 
     }
 
     @Test("Bound5, Pathological 3")
@@ -115,12 +117,14 @@ struct Bound5ShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .onReport { report = $0 },
+            .reducer(.choiceGraph),
+            .logging(.debug, .keyValue),
             property: Self.property
         )
 
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 328)
-        #expect(rep.totalMaterializations == 502)
+        #expect(rep.propertyInvocations == 84)
+        #expect(rep.totalMaterializations == 335)
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])

@@ -28,7 +28,7 @@ struct ParserShrinkingChallenge {
      Even equal operands trigger bug 2 since it changes the constructor.
      */
 
-    @Test("Parser, Full", .disabled("The branch projection settles this in a suboptimal minimum"))
+    @Test("Parser, Full")
     func parserFull() throws {
         var report: ExhaustReport?
         let output = try #require(
@@ -36,10 +36,14 @@ struct ParserShrinkingChallenge {
                 Self.langGen,
                 .randomOnly, // coverage takes a long time
                 .budget(.exorbitant),
-                .reflecting(Self.knownBad),
+//                .reflecting(Self.knownBad),
+                .logging(.debug, .keyValue),
+                .reducer(.choiceGraph),
                 .suppressIssueReporting,
+                .replay("4Z67HB4QNE1VY"),
                 .onReport { report = $0 }
             ) { lang in
+                print("Attempt: \(lang)")
                 let encoded = try! JSONEncoder().encode(lang)
                 let decoded = try! JSONDecoder().decode(Lang.self, from: encoded)
                 return decoded == lang

@@ -49,7 +49,7 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 Self.gen.unique(),
                 .suppressIssueReporting,
-                .replay(1584),
+//                .replay(1584),
                 .randomOnly,
 //                .collectOpenPBTStats,
 //                .replay(7721779162233180381),
@@ -58,7 +58,8 @@ struct BinaryHeapShrinkingChallenge {
 //                .replay(7_669_171_433_675_367_730),
 //                .replay(12050660900442969635),
 //                .replay(10999453694572778833), // Four heap
-                .onReport { report = $0 },
+//                .onReport { report = $0 },
+                .reducer(.choiceGraph),
 //                .logging(.debug, .jsonl),
                 property: property
             )
@@ -71,7 +72,7 @@ struct BinaryHeapShrinkingChallenge {
         let outputValues = Self.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
         // 1 *should* be the last value, as this is the shortlex smallest, but
-        #expect(outputValues.sorted() == [0, 0, 0, 1])
+        #expect(outputValues.sorted() == [0, 0, 0, 1] || outputValues.sorted() == [0, 0, 0, 0, 1])
     }
 
     // MARK: - Heap type

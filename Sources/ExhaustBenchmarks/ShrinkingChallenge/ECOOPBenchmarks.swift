@@ -88,7 +88,7 @@ func registerECOOPPair<Output>(
     maxGenerationRuns: UInt64 = 10_000,
     sizeMetric: ((Output) -> Int)? = nil
 ) {
-    for reducerKind in ReducerKind.allCases {
+    for reducerKind in [ReducerKind.choiceGraph] {
         registerECOOPChallenge(
             name: "\(reducerKind.benchmarkTag) \(name)",
             gen: gen,

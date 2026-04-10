@@ -70,7 +70,7 @@ struct StringAnagramChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .logging(.debug),
-
+            .reducer(.choiceGraph),
             property: property
         )
         let output = try #require(result)

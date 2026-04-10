@@ -8,7 +8,7 @@ import Foundation
 // MARK: - Configuration
 
 let enableReport = true
-let enableCounterExamples = true
+let enableCounterExamples = false
 private let reductionCount = 100
 
 /// Returns strategy variants of a base config.
