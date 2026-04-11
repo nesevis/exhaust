@@ -17,8 +17,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
 
     // MARK: - State
 
-    var sequence: ChoiceSequence = .init()
-    var leafLookup: [Int: (nodeID: Int, mayReshape: Bool)] = [:]
+    var valueState = ValueEncoderState()
     var mode: Mode = .idle
 
     enum Mode {
@@ -56,30 +55,34 @@ struct GraphRedistributionEncoder: GraphEncoder {
     // MARK: - GraphEncoder
 
     mutating func start(scope: TransformationScope) {
-        sequence = scope.baseSequence
+        valueState.reset(sequence: scope.baseSequence)
         mode = .idle
-        leafLookup = [:]
 
         guard case let .exchange(.redistribution(redistScope)) = scope.transformation.operation else {
             return
         }
 
         let graph = scope.graph
-        populateLeafLookup(from: redistScope, graph: graph)
+        for pair in redistScope.pairs {
+            valueState.registerLeaf(nodeID: pair.source.nodeID, mayReshape: pair.source.mayReshapeOnAcceptance, graph: graph)
+            valueState.registerLeaf(nodeID: pair.sink.nodeID, mayReshape: pair.sink.mayReshapeOnAcceptance, graph: graph)
+        }
         startRedistribution(scope: redistScope, graph: graph)
     }
 
     mutating func refreshScope(graph: ChoiceGraph, sequence newSequence: ChoiceSequence) {
-        sequence = newSequence
+        valueState.reset(sequence: newSequence)
         mode = .idle
-        leafLookup = [:]
 
         let scopes = graph.exchangeScopes()
         guard let redistribution = scopes.firstNonNil({ scope -> RedistributionScope? in
             if case let .redistribution(inner) = scope { return inner }
             return nil
         }) else { return }
-        populateLeafLookup(from: redistribution, graph: graph)
+        for pair in redistribution.pairs {
+            valueState.registerLeaf(nodeID: pair.source.nodeID, mayReshape: pair.source.mayReshapeOnAcceptance, graph: graph)
+            valueState.registerLeaf(nodeID: pair.sink.nodeID, mayReshape: pair.sink.mayReshapeOnAcceptance, graph: graph)
+        }
         startRedistribution(scope: redistribution, graph: graph)
     }
 
@@ -87,7 +90,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
         guard case var .active(state) = mode else { return nil }
 
         if lastAccepted, let accepted = state.lastEmittedCandidate {
-            sequence = accepted
+            valueState.sequence = accepted
             state.acceptedPairIndices.insert(state.pairIndex)
         }
         state.lastEmittedCandidate = nil
@@ -98,37 +101,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
         mode = .active(state)
         return EncoderProbe(
             candidate: candidate,
-            mutation: buildLeafValuesMutation(candidate: candidate)
+            mutation: valueState.buildLeafValuesMutation(candidate: candidate)
         )
-    }
-
-    // MARK: - Leaf Lookup
-
-    mutating func populateLeafLookup(from redistScope: RedistributionScope, graph: ChoiceGraph) {
-        for pair in redistScope.pairs {
-            if let range = graph.nodes[pair.source.nodeID].positionRange {
-                leafLookup[range.lowerBound] = (pair.source.nodeID, pair.source.mayReshapeOnAcceptance)
-            }
-            if let range = graph.nodes[pair.sink.nodeID].positionRange {
-                leafLookup[range.lowerBound] = (pair.sink.nodeID, pair.sink.mayReshapeOnAcceptance)
-            }
-        }
-    }
-
-    func buildLeafValuesMutation(candidate: ChoiceSequence) -> ProjectedMutation {
-        var changes: [LeafChange] = []
-        for (sequenceIndex, info) in leafLookup {
-            guard sequenceIndex < candidate.count, sequenceIndex < sequence.count else { continue }
-            guard let candidateChoice = candidate[sequenceIndex].value?.choice,
-                  let baselineChoice = sequence[sequenceIndex].value?.choice
-            else { continue }
-            guard candidateChoice != baselineChoice else { continue }
-            changes.append(LeafChange(
-                leafNodeID: info.nodeID,
-                newValue: candidateChoice,
-                mayReshape: info.mayReshape
-            ))
-        }
-        return .leafValues(changes)
     }
 }

@@ -17,8 +17,7 @@ struct GraphLockstepEncoder: GraphEncoder {
 
     // MARK: - State
 
-    var sequence: ChoiceSequence = .init()
-    var leafLookup: [Int: (nodeID: Int, mayReshape: Bool)] = [:]
+    var valueState = ValueEncoderState()
     var mode: Mode = .idle
 
     enum Mode {
@@ -53,30 +52,36 @@ struct GraphLockstepEncoder: GraphEncoder {
     // MARK: - GraphEncoder
 
     mutating func start(scope: TransformationScope) {
-        sequence = scope.baseSequence
+        valueState.reset(sequence: scope.baseSequence)
         mode = .idle
-        leafLookup = [:]
 
         guard case let .exchange(.tandem(tandemScope)) = scope.transformation.operation else {
             return
         }
 
         let graph = scope.graph
-        populateLeafLookup(from: tandemScope, graph: graph)
+        for group in tandemScope.groups {
+            for entry in group.leaves {
+                valueState.registerLeaf(nodeID: entry.nodeID, mayReshape: entry.mayReshapeOnAcceptance, graph: graph)
+            }
+        }
         startLockstep(scope: tandemScope, graph: graph)
     }
 
     mutating func refreshScope(graph: ChoiceGraph, sequence newSequence: ChoiceSequence) {
-        sequence = newSequence
+        valueState.reset(sequence: newSequence)
         mode = .idle
-        leafLookup = [:]
 
         let scopes = graph.exchangeScopes()
         guard let tandem = scopes.firstNonNil({ scope -> TandemScope? in
             if case let .tandem(inner) = scope { return inner }
             return nil
         }) else { return }
-        populateLeafLookup(from: tandem, graph: graph)
+        for group in tandem.groups {
+            for entry in group.leaves {
+                valueState.registerLeaf(nodeID: entry.nodeID, mayReshape: entry.mayReshapeOnAcceptance, graph: graph)
+            }
+        }
         startLockstep(scope: tandem, graph: graph)
     }
 
@@ -84,7 +89,7 @@ struct GraphLockstepEncoder: GraphEncoder {
         guard case var .active(state) = mode else { return nil }
 
         if lastAccepted, let accepted = state.lastEmittedCandidate {
-            sequence = accepted
+            valueState.sequence = accepted
         }
         state.lastEmittedCandidate = nil
         guard let candidate = nextLockstepProbe(state: &state, lastAccepted: lastAccepted) else {
@@ -94,36 +99,7 @@ struct GraphLockstepEncoder: GraphEncoder {
         mode = .active(state)
         return EncoderProbe(
             candidate: candidate,
-            mutation: buildLeafValuesMutation(candidate: candidate)
+            mutation: valueState.buildLeafValuesMutation(candidate: candidate)
         )
-    }
-
-    // MARK: - Leaf Lookup
-
-    mutating func populateLeafLookup(from tandemScope: TandemScope, graph: ChoiceGraph) {
-        for group in tandemScope.groups {
-            for entry in group.leaves {
-                if let range = graph.nodes[entry.nodeID].positionRange {
-                    leafLookup[range.lowerBound] = (entry.nodeID, entry.mayReshapeOnAcceptance)
-                }
-            }
-        }
-    }
-
-    func buildLeafValuesMutation(candidate: ChoiceSequence) -> ProjectedMutation {
-        var changes: [LeafChange] = []
-        for (sequenceIndex, info) in leafLookup {
-            guard sequenceIndex < candidate.count, sequenceIndex < sequence.count else { continue }
-            guard let candidateChoice = candidate[sequenceIndex].value?.choice,
-                  let baselineChoice = sequence[sequenceIndex].value?.choice
-            else { continue }
-            guard candidateChoice != baselineChoice else { continue }
-            changes.append(LeafChange(
-                leafNodeID: info.nodeID,
-                newValue: candidateChoice,
-                mayReshape: info.mayReshape
-            ))
-        }
-        return .leafValues(changes)
     }
 }

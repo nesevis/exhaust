@@ -49,8 +49,8 @@ extension GraphLockstepEncoder {
     /// Returns `nil` when any window index has become stale relative to the current sequence — a defensive guard against structural refreshes that happened between scope construction and plan building.
     func makeLockstepWindowPlan(windowIndices: [Int]) -> LockstepWindowPlan? {
         guard let firstIndex = windowIndices.first,
-              firstIndex < sequence.count,
-              let firstValue = sequence[firstIndex].value else { return nil }
+              firstIndex < valueState.sequence.count,
+              let firstValue = valueState.sequence[firstIndex].value else { return nil }
 
         let tag = firstValue.choice.tag
 
@@ -58,8 +58,8 @@ extension GraphLockstepEncoder {
         var idx = 1
         while idx < windowIndices.count {
             let windowIndex = windowIndices[idx]
-            guard windowIndex < sequence.count,
-                  let value = sequence[windowIndex].value,
+            guard windowIndex < valueState.sequence.count,
+                  let value = valueState.sequence[windowIndex].value,
                   value.choice.tag == tag else { return nil }
             idx += 1
         }
@@ -91,7 +91,7 @@ extension GraphLockstepEncoder {
         }
 
         let originalEntries: [(index: Int, entry: ChoiceSequenceValue)] = windowIndices.map { i in
-            (i, sequence[i])
+            (i, valueState.sequence[i])
         }
 
         return LockstepWindowPlan(
@@ -169,7 +169,7 @@ extension GraphLockstepEncoder {
     func makeLockstepCandidate(plan: LockstepWindowPlan, delta: UInt64) -> ChoiceSequence? {
         guard delta > 0 else { return nil }
 
-        var candidate = sequence
+        var candidate = valueState.sequence
         var firstDifferenceOrder: ShortlexOrder = .eq
         var hasDifference = false
 

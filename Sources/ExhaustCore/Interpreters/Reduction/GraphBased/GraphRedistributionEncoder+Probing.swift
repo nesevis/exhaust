@@ -244,12 +244,12 @@ extension GraphRedistributionEncoder {
         sinkTag _: TypeTag,
         usesMixed: Bool
     ) -> (maxDelta: UInt64, mixedContext: MixedRedistributionContext?) {
-        guard let sourceValue = sequence[sourceIndex].value else {
+        guard let sourceValue = valueState.sequence[sourceIndex].value else {
             return (0, nil)
         }
 
         if usesMixed {
-            guard let sinkValue = sequence[sinkIndex].value else { return (0, nil) }
+            guard let sinkValue = valueState.sequence[sinkIndex].value else { return (0, nil) }
             guard let context = Self.makeMixedRedistributionContext(
                 sourceChoice: sourceValue.choice,
                 sinkChoice: sinkValue.choice,
@@ -279,8 +279,8 @@ extension GraphRedistributionEncoder {
     ) -> ChoiceSequence? {
         guard delta > 0 else { return nil }
 
-        let sourceEntry = sequence[sourceIndex]
-        let sinkEntry = sequence[sinkIndex]
+        let sourceEntry = valueState.sequence[sourceIndex]
+        let sinkEntry = valueState.sequence[sinkIndex]
         guard let sourceValue = sourceEntry.value else { return nil }
         guard let sinkValue = sinkEntry.value else { return nil }
 
@@ -299,7 +299,7 @@ extension GraphRedistributionEncoder {
             if sinkValue.isRangeExplicit,
                newSinkChoice.fits(in: sinkValue.validRange) == false { return nil }
 
-            var candidate = sequence
+            var candidate = valueState.sequence
             candidate[sourceIndex] = .value(.init(
                 choice: newSourceChoice,
                 validRange: sourceValue.validRange,
@@ -358,7 +358,7 @@ extension GraphRedistributionEncoder {
                 newSinkBP = (sinkBP &- delta) & mask
             }
 
-            var candidate = sequence
+            var candidate = valueState.sequence
             candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBP)
             candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBP)
             return candidate
@@ -414,7 +414,7 @@ extension GraphRedistributionEncoder {
             return nil
         }
 
-        var candidate = sequence
+        var candidate = valueState.sequence
         candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBP)
         candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBP)
         return candidate
