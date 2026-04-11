@@ -38,9 +38,9 @@ public enum EncoderName: String, Hashable, Sendable {
     case graphBranchPivot
     case graphSubstitution
     case graphSiblingSwap
-    case graphKleisliFibre
+    case graphComposed
     case graphFloatSearch
-    case graphTandem
+    case graphLockstep
     /// Staleness detection probe loop in the graph reducer.
     /// Re-runs the materializer for each converged leaf at `floor - 1` to detect whether the convergence floor is stale.
     case graphStaleness

@@ -651,8 +651,10 @@ enum ChoiceGraphScheduler {
             GraphStructuralEncoder()
         case .minimize:
             GraphMinimizationEncoder()
-        case .exchange:
-            GraphExchangeEncoder()
+        case .exchange(.redistribution):
+            GraphRedistributionEncoder()
+        case .exchange(.tandem):
+            GraphLockstepEncoder()
         }
     }
 }

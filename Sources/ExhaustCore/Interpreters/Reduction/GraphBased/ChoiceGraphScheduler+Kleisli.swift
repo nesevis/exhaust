@@ -79,7 +79,7 @@ extension ChoiceGraphScheduler {
         }
 
         return GraphComposedEncoder(
-            name: .graphKleisliFibre,
+            name: .graphComposed,
             upstream: upstreamEncoder,
             downstream: downstreamEncoder,
             upstreamBudget: upstreamBudget,

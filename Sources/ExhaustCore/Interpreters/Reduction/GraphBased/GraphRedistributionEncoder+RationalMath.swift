@@ -1,11 +1,11 @@
 //
-//  GraphExchangeEncoder+RationalMath.swift
+//  GraphRedistributionEncoder+RationalMath.swift
 //  Exhaust
 //
 
 // MARK: - Mixed Redistribution Math
 
-extension GraphExchangeEncoder {
+extension GraphRedistributionEncoder {
     /// Builds a ``MixedRedistributionContext`` from current source and sink choices.
     ///
     /// Both sides are converted to rational form with a common denominator. When at least one side is integer, ``MixedRedistributionContext/intStepSize`` equals the denominator so the integer side only takes whole-number deltas.

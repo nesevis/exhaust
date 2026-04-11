@@ -1,11 +1,11 @@
 //
-//  GraphExchangeEncoder+Redistribution.swift
+//  GraphRedistributionEncoder+Probing.swift
 //  Exhaust
 //
 
 // MARK: - Redistribution
 
-extension GraphExchangeEncoder {
+extension GraphRedistributionEncoder {
     mutating func startRedistribution(
         scope: RedistributionScope,
         graph: ChoiceGraph
@@ -88,7 +88,7 @@ extension GraphExchangeEncoder {
             pairs.removeLast(pairs.count - Self.maxPairsPerScope)
         }
 
-        mode = .redistribution(RedistributionState(
+        mode = .active(RedistributionState(
             pairs: pairs,
             pairIndex: 0,
             stepper: nil,

@@ -1,11 +1,11 @@
 //
-//  GraphExchangeEncoder+Lockstep.swift
+//  GraphLockstepEncoder+Probing.swift
 //  Exhaust
 //
 
 // MARK: - Lockstep Reduction
 
-extension GraphExchangeEncoder {
+extension GraphLockstepEncoder {
     /// Builds suffix-window plans from each tandem group and dispatches the lockstep state.
     ///
     /// For each group of same-tag leaves, generates plans that drop progressively more leading entries — this prevents a near-target leader from blocking the whole set.
@@ -34,7 +34,7 @@ extension GraphExchangeEncoder {
 
         guard plans.isEmpty == false else { return }
 
-        mode = .lockstep(LockstepState(
+        mode = .active(LockstepState(
             plans: plans,
             planIndex: 0,
             probePhase: .directShot,
