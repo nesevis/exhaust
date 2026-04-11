@@ -13,10 +13,10 @@ struct MinimizationSource: ScopeSource {
     private var index = 0
 
     init(graph: ChoiceGraph) {
-        let innerChildToBind = Self.buildInnerChildToBind(from: graph)
+        let innerChildToBind = ScopeQueryHelpers.buildInnerChildToBind(graph: graph)
         var entries: [(scope: MinimizationScope, yield: TransformationYield)] = []
 
-        for scope in graph.minimizationScopes() {
+        for scope in MinimizationScopeQuery.build(graph: graph, innerChildToBind: innerChildToBind) {
             let valueYield: Int = switch scope {
             case let .valueLeaves(integerScope):
                 integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
@@ -74,17 +74,6 @@ struct MinimizationSource: ScopeSource {
         )
     }
 
-    private static func buildInnerChildToBind(from graph: ChoiceGraph) -> [Int: Int] {
-        var index: [Int: Int] = [:]
-        for node in graph.nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            index[innerChildID] = node.id
-        }
-        return index
-    }
-
     private static func computeValueYield(leafNodeID: Int, graph: ChoiceGraph, innerChildToBind: [Int: Int]) -> Int {
         guard let bindNodeID = innerChildToBind[leafNodeID] else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
@@ -106,7 +95,7 @@ struct ExchangeSource: ScopeSource {
 
     init(graph: ChoiceGraph) {
         var entries: [(scope: ExchangeScope, yield: TransformationYield)] = []
-        for scope in graph.exchangeScopes() {
+        for scope in ExchangeScopeQuery.build(graph: graph) {
             let estimatedProbes: Int
             let slack: AffineSlack
             switch scope {

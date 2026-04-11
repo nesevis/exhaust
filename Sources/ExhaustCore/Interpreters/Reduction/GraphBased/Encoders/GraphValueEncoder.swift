@@ -279,7 +279,7 @@ struct GraphValueEncoder: GraphEncoder {
         case .idle:
             return
         case let .valueLeaves(state):
-            let scopes = graph.minimizationScopes()
+            let scopes = MinimizationScopeQuery.build(graph: graph)
             let integerScope = scopes.firstNonNil { scope -> ValueMinimizationScope? in
                 if case let .valueLeaves(inner) = scope { return inner }
                 return nil
@@ -297,7 +297,7 @@ struct GraphValueEncoder: GraphEncoder {
                 armBatchZero: false
             )
         case .floatLeaves:
-            let scopes = graph.minimizationScopes()
+            let scopes = MinimizationScopeQuery.build(graph: graph)
             let floatScope = scopes.firstNonNil { scope -> FloatMinimizationScope? in
                 if case let .floatLeaves(inner) = scope { return inner }
                 return nil

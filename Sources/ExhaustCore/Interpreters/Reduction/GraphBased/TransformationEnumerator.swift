@@ -16,7 +16,7 @@ enum TransformationEnumerator {
     /// - Parameter graph: The current choice graph.
     /// - Returns: Sorted array of graph transformations, ready for the scheduler's priority queue.
     static func enumerate(from graph: ChoiceGraph) -> [GraphTransformation] {
-        let innerChildToBind = buildInnerChildToBind(from: graph)
+        let innerChildToBind = ScopeQueryHelpers.buildInnerChildToBind(graph: graph)
         var transformations: [GraphTransformation] = []
 
         transformations.append(contentsOf: removalTransformations(from: graph))
@@ -42,7 +42,7 @@ enum TransformationEnumerator {
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in graph.elementRemovalScopes() {
+        for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
             let estimatedProbes = 2 * ceilLog2(scope.maxBatch)
             let totalYield = scope.targets.reduce(0) { total, target in
                 total + target.elementNodeIDs.reduce(0) { subtotal, nodeID in
@@ -68,7 +68,7 @@ enum TransformationEnumerator {
             ))
         }
 
-        for scope in graph.coveringAlignedRemovalScopes() {
+        for scope in RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph) {
             result.append(GraphTransformation(
                 operation: .remove(.coveringAligned(scope)),
                 yield: TransformationYield(
@@ -88,7 +88,7 @@ enum TransformationEnumerator {
             ))
         }
 
-        for scope in graph.subtreeRemovalScopes() {
+        for scope in RemovalScopeQuery.subtreeRemovalScopes(graph: graph) {
             result.append(GraphTransformation(
                 operation: .remove(.subtree(scope)),
                 yield: TransformationYield(
@@ -116,7 +116,7 @@ enum TransformationEnumerator {
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in graph.replacementScopes() {
+        for scope in ReplacementScopeQuery.build(graph: graph) {
             switch scope {
             case let .selfSimilar(selfSimilarScope):
                 result.append(GraphTransformation(
@@ -189,7 +189,7 @@ enum TransformationEnumerator {
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in graph.minimizationScopes() {
+        for scope in MinimizationScopeQuery.build(graph: graph, innerChildToBind: innerChildToBind) {
             switch scope {
             case let .valueLeaves(integerScope):
                 let maxValueYield = integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
@@ -276,11 +276,11 @@ enum TransformationEnumerator {
 
     private static func exchangeTransformations(
         from graph: ChoiceGraph,
-        innerChildToBind _: [Int: Int]
+        innerChildToBind: [Int: Int]
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in graph.exchangeScopes() {
+        for scope in ExchangeScopeQuery.build(graph: graph, innerChildToBind: innerChildToBind) {
             switch scope {
             case let .redistribution(redistScope):
                 // Slack: maximum magnitude transferred (source's distance to target).
@@ -368,7 +368,7 @@ enum TransformationEnumerator {
     private static func permutationTransformations(
         from graph: ChoiceGraph
     ) -> [GraphTransformation] {
-        graph.permutationScopes().map { scope in
+        PermutationScopeQuery.build(graph: graph).map { scope in
             guard case let .siblingPermutation(permScope) = scope else {
                 // PermutationScope currently has only one case.
                 return GraphTransformation(
@@ -409,18 +409,6 @@ enum TransformationEnumerator {
     }
 
     // MARK: - Helpers
-
-    /// Builds an index from inner-child node ID to its controlling bind node ID.
-    private static func buildInnerChildToBind(from graph: ChoiceGraph) -> [Int: Int] {
-        var index: [Int: Int] = [:]
-        for node in graph.nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            index[innerChildID] = node.id
-        }
-        return index
-    }
 
     /// Computes value yield for a leaf.
     private static func computeValueYield(

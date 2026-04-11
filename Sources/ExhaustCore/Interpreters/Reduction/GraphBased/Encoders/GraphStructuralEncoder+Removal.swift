@@ -71,9 +71,14 @@ extension GraphStructuralEncoder {
         graph: ChoiceGraph
     ) -> ClosedRange<Int>? {
         guard sequenceNodeID < graph.nodes.count else { return nil }
-        guard case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind else { return nil }
-        guard let childIndex = graph.nodes[sequenceNodeID].children.firstIndex(of: elementNodeID),
-              childIndex < metadata.childPositionRanges.count
+        guard
+            case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind
+        else {
+            return nil
+        }
+        guard
+            let childIndex = graph.nodes[sequenceNodeID].children.firstIndex(of: elementNodeID),
+            childIndex < metadata.childPositionRanges.count
         else {
             return graph.nodes[elementNodeID].positionRange
         }

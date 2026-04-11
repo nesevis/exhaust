@@ -18,7 +18,7 @@ struct GraphEncoderTests {
         graph: ChoiceGraph
     ) -> TransformationScope? {
         let sequence = ChoiceSequence.flatten(tree)
-        let scopes = graph.elementRemovalScopes()
+        let scopes = RemovalScopeQuery.elementRemovalScopes(graph: graph)
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
             operation: .remove(.elements(firstScope)),
@@ -50,7 +50,7 @@ struct GraphEncoderTests {
         graph: ChoiceGraph
     ) -> TransformationScope? {
         let sequence = ChoiceSequence.flatten(tree)
-        let scopes = graph.minimizationScopes()
+        let scopes = MinimizationScopeQuery.build(graph: graph)
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
             operation: .minimize(firstScope),

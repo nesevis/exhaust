@@ -161,7 +161,7 @@ struct SequenceEmptyingSource: ScopeSource {
 
     init(graph: ChoiceGraph) {
         var entries: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)] = []
-        for scope in graph.elementRemovalScopes() {
+        for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
             // Only consider single-target (per-parent) scopes for emptying.
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else {
@@ -360,7 +360,7 @@ struct PerElementRemovalSource: ScopeSource {
 
     init(graph: ChoiceGraph) {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
-        for scope in graph.elementRemovalScopes() {
+        for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
             // Per-element source only handles single-target scopes.
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             for elementNodeID in target.elementNodeIDs {
@@ -442,7 +442,7 @@ struct AlignedRemovalSource: ScopeSource {
     private var index = 0
 
     init(graph: ChoiceGraph) {
-        scopes = graph.coveringAlignedRemovalScopes()
+        scopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
             .sorted { scopeA, scopeB in
                 scopeA.maxElementYield > scopeB.maxElementYield
             }

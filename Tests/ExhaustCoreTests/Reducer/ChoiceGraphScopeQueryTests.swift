@@ -33,7 +33,7 @@ struct ChoiceGraphScopeQueryTests {
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
-        let coveringScopes = graph.coveringAlignedRemovalScopes()
+        let coveringScopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
 
         // One covering scope per zip node with deletable sibling sequences.
         #expect(coveringScopes.count == 1)
@@ -50,7 +50,7 @@ struct ChoiceGraphScopeQueryTests {
             .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let coveringScopes = graph.coveringAlignedRemovalScopes()
+        let coveringScopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
 
         #expect(coveringScopes.isEmpty)
     }
@@ -69,7 +69,7 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = ChoiceGraph.build(from: tree)
-        let singleTargetScopes = graph.elementRemovalScopes().filter { $0.targets.count == 1 }
+        let singleTargetScopes = RemovalScopeQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
 
         #expect(singleTargetScopes.count == 1)
         #expect(singleTargetScopes[0].targets[0].elementNodeIDs.count == 3)
@@ -88,7 +88,7 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: 2 ... 5, isRangeExplicit: true)
         )
         let graph = ChoiceGraph.build(from: tree)
-        let singleTargetScopes = graph.elementRemovalScopes().filter { $0.targets.count == 1 }
+        let singleTargetScopes = RemovalScopeQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
 
         #expect(singleTargetScopes.count == 1)
         #expect(singleTargetScopes[0].maxBatch == 1)
@@ -103,7 +103,7 @@ struct ChoiceGraphScopeQueryTests {
             .choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.minimizationScopes()
+        let scopes = MinimizationScopeQuery.build(graph: graph)
 
         let integerScopes = scopes.filter {
             if case .valueLeaves = $0 { return true }
@@ -123,7 +123,7 @@ struct ChoiceGraphScopeQueryTests {
             .choice(.unsigned(0, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.minimizationScopes()
+        let scopes = MinimizationScopeQuery.build(graph: graph)
 
         // Both leaves are at their reduction target (0) — no minimization scope.
         let integerScopes = scopes.filter {
@@ -153,7 +153,7 @@ struct ChoiceGraphScopeQueryTests {
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = graph.permutationScopes()
+        let scopes = PermutationScopeQuery.build(graph: graph)
 
         #expect(scopes.count == 1)
         if case let .siblingPermutation(scope) = scopes.first {
@@ -189,7 +189,7 @@ struct ChoiceGraphScopeQueryTests {
         let sequence = ChoiceSequence.flatten(tree)
         let graph = ChoiceGraph.build(from: tree)
 
-        let alignedScopes = graph.coveringAlignedRemovalScopes()
+        let alignedScopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
         guard let coveringScope = alignedScopes.first else {
             Issue.record("No covering aligned removal scope found")
             return

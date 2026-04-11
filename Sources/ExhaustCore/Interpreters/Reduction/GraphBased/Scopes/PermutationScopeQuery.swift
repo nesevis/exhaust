@@ -1,36 +1,39 @@
 //
-//  ChoiceGraph+PermutationScopes.swift
+//  PermutationScopeQuery.swift
 //  Exhaust
 //
 
-// MARK: - Permutation Scope Queries
+// MARK: - Permutation Scope Query
 
-extension ChoiceGraph {
+/// Static scope builder for permutation operations.
+///
+/// Replaces the former `ChoiceGraph.permutationScopes()` instance method.
+enum PermutationScopeQuery {
     /// Computes permutation scopes for zip nodes with same-shaped siblings.
     ///
     /// Groups children by structural shape derived from graph node metadata. Children with the same shape can be swapped for shortlex improvement.
     ///
     /// - Returns: One scope per zip node with at least one group of two or more same-shaped children.
-    func permutationScopes() -> [PermutationScope] {
+    static func build(graph: ChoiceGraph) -> [PermutationScope] {
         var scopes: [PermutationScope] = []
 
-        for node in nodes {
+        for node in graph.nodes {
             guard case .zip = node.kind else { continue }
             guard node.positionRange != nil else { continue }
             guard node.children.count >= 2 else { continue }
 
             var shapeGroups: [NodeShapeKey: [Int]] = [:]
             for childID in node.children {
-                guard nodes[childID].positionRange != nil else { continue }
-                let key = nodeShapeKey(nodes[childID])
+                guard graph.nodes[childID].positionRange != nil else { continue }
+                let key = nodeShapeKey(graph.nodes[childID])
                 shapeGroups[key, default: []].append(childID)
             }
 
             let swappableGroups = shapeGroups.values
                 .filter { $0.count >= 2 }
                 .sorted { groupA, groupB in
-                    let positionA = nodes[groupA[0]].positionRange?.lowerBound ?? 0
-                    let positionB = nodes[groupB[0]].positionRange?.lowerBound ?? 0
+                    let positionA = graph.nodes[groupA[0]].positionRange?.lowerBound ?? 0
+                    let positionB = graph.nodes[groupB[0]].positionRange?.lowerBound ?? 0
                     return positionA < positionB
                 }
 
@@ -61,7 +64,7 @@ extension ChoiceGraph {
     }
 
     /// Computes the shape key for a graph node.
-    private func nodeShapeKey(_ node: ChoiceGraphNode) -> NodeShapeKey {
+    private static func nodeShapeKey(_ node: ChoiceGraphNode) -> NodeShapeKey {
         switch node.kind {
         case .chooseBits:
             return .value

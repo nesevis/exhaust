@@ -50,7 +50,7 @@ enum ScopeSourceBuilder {
 
         // Batch removal — one source per sequence with deletable elements.
         // Geometric halving within each sequence (half → quarter → eighth).
-        for scope in graph.elementRemovalScopes() {
+        for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             let source = BatchRemovalSource(
                 sequenceNodeID: target.sequenceNodeID,

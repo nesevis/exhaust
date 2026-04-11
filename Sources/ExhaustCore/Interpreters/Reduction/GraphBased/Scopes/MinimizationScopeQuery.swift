@@ -1,16 +1,24 @@
 //
-//  ChoiceGraph+MinimizationScopes.swift
+//  MinimizationScopeQuery.swift
 //  Exhaust
 //
 
-// MARK: - Minimization Scope Queries
+// MARK: - Minimization Scope Query
 
-extension ChoiceGraph {
+/// Static scope builder for minimization operations.
+///
+/// Replaces the former `ChoiceGraph.minimizationScopes()` instance method. The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeScopeQuery`` can share a single ``ScopeQueryHelpers/buildInnerChildToBind(graph:)`` allocation.
+enum MinimizationScopeQuery {
     /// Computes minimization scopes: one integer scope, one float scope, and one Kleisli fibre scope per non-constant reduction edge.
     ///
+    /// - Parameters:
+    ///   - graph: The current choice graph.
+    ///   - innerChildToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerChildToBind(graph:)``. Pass a shared instance when also building exchange scopes so the same dictionary is reused across both families.
     /// - Returns: All minimization scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
-    func minimizationScopes() -> [MinimizationScope] {
-        let innerChildToBind = buildInnerChildToBind()
+    static func build(
+        graph: ChoiceGraph,
+        innerChildToBind: [Int: Int]
+    ) -> [MinimizationScope] {
         var scopes: [MinimizationScope] = []
 
         // Integer leaves.
@@ -20,9 +28,9 @@ extension ChoiceGraph {
         // Float leaves.
         var floatLeafNodeIDs: [Int] = []
 
-        for nodeID in leafNodes {
-            let node = nodes[nodeID]
+        for node in graph.nodes {
             guard case let .chooseBits(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
 
             let currentBitPattern = metadata.value.bitPattern64
             let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
@@ -36,14 +44,15 @@ extension ChoiceGraph {
             }
 
             if metadata.typeTag.isFloatingPoint {
-                floatLeafNodeIDs.append(nodeID)
+                floatLeafNodeIDs.append(node.id)
             } else {
                 let valueYield = computeValueYield(
-                    leafNodeID: nodeID,
+                    leafNodeID: node.id,
+                    graph: graph,
                     innerChildToBind: innerChildToBind
                 )
-                integerLeafNodeIDs.append(nodeID)
-                integerValueYields[nodeID] = valueYield
+                integerLeafNodeIDs.append(node.id)
+                integerValueYields[node.id] = valueYield
             }
         }
 
@@ -54,13 +63,7 @@ extension ChoiceGraph {
 
         if integerLeafNodeIDs.isEmpty == false {
             let entries = integerLeafNodeIDs.map { nodeID in
-                LeafEntry(
-                    nodeID: nodeID,
-                    mayReshapeOnAcceptance: isBindInner(
-                        nodeID,
-                        innerChildToBind: innerChildToBind
-                    )
-                )
+                ScopeQueryHelpers.makeLeafEntry(nodeID, innerChildToBind: innerChildToBind)
             }
             scopes.append(.valueLeaves(ValueMinimizationScope(
                 leaves: entries,
@@ -70,13 +73,7 @@ extension ChoiceGraph {
 
         if floatLeafNodeIDs.isEmpty == false {
             let entries = floatLeafNodeIDs.map { nodeID in
-                LeafEntry(
-                    nodeID: nodeID,
-                    mayReshapeOnAcceptance: isBindInner(
-                        nodeID,
-                        innerChildToBind: innerChildToBind
-                    )
-                )
+                ScopeQueryHelpers.makeLeafEntry(nodeID, innerChildToBind: innerChildToBind)
             }
             scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
@@ -89,13 +86,22 @@ extension ChoiceGraph {
         // max(2, n+1))` is the canonical example — the bound subtree contains only
         // plain choices, but their ranges depend on `n`). The composition's downstream
         // encoder finds these via the lift's fibre coverage.
-        for edge in reductionEdges {
-            guard nodes[edge.upstreamNodeID].positionRange != nil else { continue }
-            let downstreamNodeIDs = collectDescendantLeaves(from: edge.downstreamNodeID)
-            let boundSubtreeSize = nodes[edge.downstreamNodeID].positionRange?.count ?? 0
+        for node in graph.nodes {
+            guard case let .bind(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
+            guard node.children.count >= 2 else { continue }
+            let innerChildID = node.children[metadata.innerChildIndex]
+            let boundChildID = node.children[metadata.boundChildIndex]
+            guard graph.nodes[innerChildID].positionRange != nil else { continue }
+
+            let downstreamNodeIDs = collectDescendantLeaves(
+                from: boundChildID,
+                graph: graph
+            )
+            let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
             scopes.append(.kleisliFibre(KleisliFibreScope(
-                bindNodeID: findParentBind(of: edge.upstreamNodeID) ?? edge.upstreamNodeID,
-                upstreamLeafNodeID: edge.upstreamNodeID,
+                bindNodeID: findParentBind(of: innerChildID, graph: graph) ?? innerChildID,
+                upstreamLeafNodeID: innerChildID,
                 downstreamNodeIDs: downstreamNodeIDs,
                 boundSubtreeSize: boundSubtreeSize
             )))
@@ -104,66 +110,40 @@ extension ChoiceGraph {
         return scopes
     }
 
-    // MARK: - Minimization Helpers
-
-    /// Builds an index from inner-child node ID to its controlling bind node ID.
-    func buildInnerChildToBind() -> [Int: Int] {
-        var index: [Int: Int] = [:]
-        for node in nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            index[innerChildID] = node.id
-        }
-        return index
+    /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerChildToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building exchange scopes so the index is computed once and shared.
+    static func build(graph: ChoiceGraph) -> [MinimizationScope] {
+        build(
+            graph: graph,
+            innerChildToBind: ScopeQueryHelpers.buildInnerChildToBind(graph: graph)
+        )
     }
+
+    // MARK: - Private Helpers
 
     /// Computes value yield for a leaf: the bound subtree size if this leaf is a bind-inner, otherwise zero.
     ///
     /// Bind-inner leaves are sorted first in the integer scope because their mutations have the largest downstream effect — changing the inner value rebuilds the entire bound subtree. Independent of ``BindMetadata/isStructurallyConstant``: a "structurally constant" bind in the no-nested-binds-or-picks sense (for example, Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`) can still carry domain-dependent values whose ranges and lengths shift with the inner, so changing the inner is still a high-yield mutation.
-    private func computeValueYield(
+    private static func computeValueYield(
         leafNodeID: Int,
+        graph: ChoiceGraph,
         innerChildToBind: [Int: Int]
     ) -> Int {
         guard let bindNodeID = innerChildToBind[leafNodeID] else { return 0 }
-        guard case let .bind(metadata) = nodes[bindNodeID].kind else { return 0 }
-        guard nodes[bindNodeID].children.count >= 2 else { return 0 }
-        let boundChildID = nodes[bindNodeID].children[metadata.boundChildIndex]
-        return nodes[boundChildID].positionRange?.count ?? 0
-    }
-
-    /// Returns true when a leaf is the inner child of a bind. Any bind-inner mutation must route through ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` (not the value-only fast path) because the materialiser may produce a tree with a different bound-subtree shape — different array length, different value ranges, different content — even when the bind has no *nested* binds or picks.
-    ///
-    /// The previous predicate filtered on ``BindMetadata/isStructurallyConstant`` and missed Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`: the bound contains only plain choices (so `isStructurallyConstant == true`), but its length and element validRanges depend on `n`, so changing `n` changes the live tree's shape. The value-only fast path then left the graph holding the old bound subtree's nodes at positions that no longer corresponded to value entries in the live sequence, producing the position drift documented in `ExhaustDocs/graph-reducer-position-drift-bug.md`.
-    ///
-    /// Always treating bind-inner leaves as `mayReshape: true` is correct and simple. The cost is that the rare workloads where the bound subtree is genuinely shape-and-content-stable pay extra splice work; in exchange the splice path is the only place that handles bind-inner mutations and the contract is uniform.
-    func isBindInner(
-        _ leafNodeID: Int,
-        innerChildToBind: [Int: Int]
-    ) -> Bool {
-        innerChildToBind[leafNodeID] != nil
-    }
-
-    /// Wraps a leaf node ID in a ``LeafEntry`` with the bind-inner reshape marker populated from the supplied index.
-    func makeLeafEntry(
-        _ nodeID: Int,
-        innerChildToBind: [Int: Int]
-    ) -> LeafEntry {
-        LeafEntry(
-            nodeID: nodeID,
-            mayReshapeOnAcceptance: isBindInner(
-                nodeID,
-                innerChildToBind: innerChildToBind
-            )
-        )
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
+        guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }
+        let boundChildID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
+        return graph.nodes[boundChildID].positionRange?.count ?? 0
     }
 
     /// Collects all leaf node IDs (chooseBits with non-nil position range) within the subtree rooted at the given node.
-    private func collectDescendantLeaves(from rootNodeID: Int) -> [Int] {
+    private static func collectDescendantLeaves(
+        from rootNodeID: Int,
+        graph: ChoiceGraph
+    ) -> [Int] {
         var result: [Int] = []
         var stack = [rootNodeID]
         while let current = stack.popLast() {
-            let node = nodes[current]
+            let node = graph.nodes[current]
             if case .chooseBits = node.kind, node.positionRange != nil {
                 result.append(current)
             }
@@ -173,10 +153,10 @@ extension ChoiceGraph {
     }
 
     /// Finds the parent bind node of a given node, or nil.
-    private func findParentBind(of nodeID: Int) -> Int? {
+    private static func findParentBind(of nodeID: Int, graph: ChoiceGraph) -> Int? {
         var current = nodeID
-        while let parentID = nodes[current].parent {
-            if case .bind = nodes[parentID].kind {
+        while let parentID = graph.nodes[current].parent {
+            if case .bind = graph.nodes[parentID].kind {
                 return parentID
             }
             current = parentID

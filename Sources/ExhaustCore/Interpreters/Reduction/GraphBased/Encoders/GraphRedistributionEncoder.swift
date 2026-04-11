@@ -74,7 +74,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
         valueState.reset(sequence: newSequence)
         mode = .idle
 
-        let scopes = graph.exchangeScopes()
+        let scopes = ExchangeScopeQuery.build(graph: graph)
         guard let redistribution = scopes.firstNonNil({ scope -> RedistributionScope? in
             if case let .redistribution(inner) = scope { return inner }
             return nil

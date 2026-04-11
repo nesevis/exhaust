@@ -1,18 +1,21 @@
 //
-//  ChoiceGraph+RemovalScopes.swift
+//  RemovalScopeQuery.swift
 //  Exhaust
 //
 
-// MARK: - Removal Scope Queries
+// MARK: - Removal Scope Query
 
-extension ChoiceGraph {
+/// Static scope builder for removal operations (element removal, covering-array-backed aligned removal, and structural subtree removal).
+///
+/// Replaces the former `ChoiceGraph.elementRemovalScopes()`, `coveringAlignedRemovalScopes()`, and `subtreeRemovalScopes()` instance methods.
+enum RemovalScopeQuery {
     /// Computes element removal scopes for all sequence nodes with deletable elements.
     ///
-    /// Returns per-parent scopes (single target) only. Aligned removal across sibling sequences under zip nodes is handled separately by ``coveringAlignedRemovalScopes()``, which uses a covering array generator instead of exponential subset enumeration.
+    /// Returns per-parent scopes (single target) only. Aligned removal across sibling sequences under zip nodes is handled separately by ``coveringAlignedRemovalScopes(graph:)``, which uses a covering array generator instead of exponential subset enumeration.
     ///
     /// - Returns: One scope per sequence node with deletable elements.
-    func elementRemovalScopes() -> [ElementRemovalScope] {
-        perParentElementScopes()
+    static func elementRemovalScopes(graph: ChoiceGraph) -> [ElementRemovalScope] {
+        perParentElementScopes(graph: graph)
     }
 
     // MARK: - Per-Parent Element Scopes
@@ -20,13 +23,13 @@ extension ChoiceGraph {
     /// Computes per-parent removal scopes for all sequence nodes with deletable elements.
     ///
     /// Groups deletable elements by their parent sequence node. Each scope contains a single ``SequenceRemovalTarget`` with elements in position order.
-    private func perParentElementScopes() -> [ElementRemovalScope] {
+    private static func perParentElementScopes(graph: ChoiceGraph) -> [ElementRemovalScope] {
         var parentGroups: [Int: [Int]] = [:]
 
-        for node in nodes {
+        for node in graph.nodes {
             guard node.positionRange != nil else { continue }
             guard let parentID = node.parent else { continue }
-            guard case let .sequence(metadata) = nodes[parentID].kind else { continue }
+            guard case let .sequence(metadata) = graph.nodes[parentID].kind else { continue }
             let minLength = metadata.lengthConstraint?.lowerBound ?? 0
             guard UInt64(metadata.elementCount) > minLength else { continue }
             parentGroups[parentID, default: []].append(node.id)
@@ -34,15 +37,15 @@ extension ChoiceGraph {
 
         return parentGroups.sorted(by: { $0.key < $1.key }).map { parentID, elementNodeIDs in
             let sortedElements = elementNodeIDs.sorted { nodeA, nodeB in
-                let rangeA = nodes[nodeA].positionRange?.lowerBound ?? 0
-                let rangeB = nodes[nodeB].positionRange?.lowerBound ?? 0
+                let rangeA = graph.nodes[nodeA].positionRange?.lowerBound ?? 0
+                let rangeB = graph.nodes[nodeB].positionRange?.lowerBound ?? 0
                 return rangeA < rangeB
             }
             let maxElementYield = sortedElements.reduce(0) { maxSoFar, nodeID in
-                max(maxSoFar, nodes[nodeID].positionRange?.count ?? 0)
+                max(maxSoFar, graph.nodes[nodeID].positionRange?.count ?? 0)
             }
             let deletable: Int
-            if case let .sequence(metadata) = nodes[parentID].kind {
+            if case let .sequence(metadata) = graph.nodes[parentID].kind {
                 let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
                 deletable = metadata.elementCount - minLength
             } else {
@@ -66,15 +69,15 @@ extension ChoiceGraph {
     /// Each zip node with two or more deletable sibling sequences produces one ``CoveringAlignedRemovalScope``. The scope contains a strength-2 ``PullBasedCoveringArrayGenerator`` whose parameters are the sibling sequences and whose domains are `elementCount + 1` (the extra value encodes "skip this sibling"). The encoder pulls rows from the generator, decoding each into an element deletion combination with pairwise interaction coverage.
     ///
     /// - Complexity: O(S) per zip node to build the generator, where S is the sibling count. The generator itself produces O(max(domain)^2 * log(S)) rows on demand, replacing the previous O(2^S) subset enumeration and O(nA * nB) cross-product expansion.
-    func coveringAlignedRemovalScopes() -> [CoveringAlignedRemovalScope] {
+    static func coveringAlignedRemovalScopes(graph: ChoiceGraph) -> [CoveringAlignedRemovalScope] {
         var scopes: [CoveringAlignedRemovalScope] = []
-        for node in nodes {
+        for node in graph.nodes {
             guard case .zip = node.kind else { continue }
             guard node.positionRange != nil else { continue }
 
             let allSequenceChildren = node.children.compactMap { childID -> CoveringAlignedRemovalScope.AlignedSibling? in
-                guard let sequenceNodeID = findSequenceBeneath(childID) else { return nil }
-                let sequenceNode = nodes[sequenceNodeID]
+                guard let sequenceNodeID = ScopeQueryHelpers.findSequenceBeneath(childID, graph: graph) else { return nil }
+                let sequenceNode = graph.nodes[sequenceNodeID]
                 guard case let .sequence(metadata) = sequenceNode.kind else { return nil }
                 let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
                 let deletable = metadata.elementCount - minLength
@@ -98,7 +101,7 @@ extension ChoiceGraph {
 
             let maxElementYield = allSequenceChildren.reduce(0) { maxSoFar, sibling in
                 let siblingMax = sibling.elementNodeIDs.reduce(0) { innerMax, nodeID in
-                    max(innerMax, nodes[nodeID].positionRange?.count ?? 0)
+                    max(innerMax, graph.nodes[nodeID].positionRange?.count ?? 0)
                 }
                 return max(maxSoFar, siblingMax)
             }
@@ -113,45 +116,16 @@ extension ChoiceGraph {
         return scopes
     }
 
-    // MARK: - Transparent Wrapper Traversal
-
-    /// Walks through transparent wrappers (groups, structurally-constant binds) beneath a node to find the first sequence node.
-    ///
-    /// Returns the sequence node's ID, or nil if no sequence is found beneath the transparent chain. Used by both removal scope construction (aligned deletion) and exchange scope construction (cross-zip homogeneous redistribution).
-    func findSequenceBeneath(_ nodeID: Int) -> Int? {
-        let node = nodes[nodeID]
-        if case .sequence = node.kind {
-            return nodeID
-        }
-        switch node.kind {
-        case .zip:
-            for childID in node.children {
-                if let found = findSequenceBeneath(childID) {
-                    return found
-                }
-            }
-            return nil
-        case let .bind(metadata):
-            if metadata.isStructurallyConstant, node.children.count >= 2 {
-                let boundChildID = node.children[metadata.boundChildIndex]
-                return findSequenceBeneath(boundChildID)
-            }
-            return nil
-        case .chooseBits, .pick, .just:
-            return nil
-        case .sequence:
-            return nodeID
-        }
-    }
+    // MARK: - Subtree Removal Scopes
 
     /// Computes subtree removal scopes for compound structural nodes in the deletion antichain.
     ///
     /// Targets nodes with ``ChoiceGraphNode/positionRange`` count greater than one — bind subtrees, zip children, and other compound elements worth removing as a unit.
     ///
     /// - Returns: One scope per compound node in the deletion antichain.
-    func subtreeRemovalScopes() -> [SubtreeRemovalScope] {
-        deletionAntichain.compactMap { nodeID in
-            guard let range = nodes[nodeID].positionRange else { return nil }
+    static func subtreeRemovalScopes(graph: ChoiceGraph) -> [SubtreeRemovalScope] {
+        graph.deletionAntichain.compactMap { nodeID in
+            guard let range = graph.nodes[nodeID].positionRange else { return nil }
             guard range.count > 1 else { return nil }
             return SubtreeRemovalScope(nodeID: nodeID, yield: range.count)
         }
