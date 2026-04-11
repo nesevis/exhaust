@@ -69,6 +69,7 @@ struct ScopeRejectionCache {
         }
 
         var hash = operationDiscriminator(operation)
+        hash ^= operation.scopeSubDiscriminator
 
         // Mix in Zobrist contributions at each targeted position.
         for nodeID in nodeIDs {
@@ -97,6 +98,7 @@ struct ScopeRejectionCache {
 
         // Use a different discriminator salt to avoid collisions with the fine-grained hash.
         var hash: UInt64 = operationDiscriminator(operation) ^ 0xC0A8_5E00_DEAD_BEEF
+        hash ^= operation.scopeSubDiscriminator
 
         for nodeID in nodeIDs {
             var bits = UInt64(nodeID) &* 0x9E37_79B9_7F4A_7C15

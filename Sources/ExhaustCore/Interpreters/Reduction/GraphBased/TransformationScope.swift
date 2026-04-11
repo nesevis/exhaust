@@ -91,8 +91,8 @@ struct BranchPivotScope {
     /// The currently selected branch identifier.
     let selectedID: UInt64
 
-    /// All non-selected alternative branch identifiers, ordered simplest-first by subtree size. The encoder walks this list across probes within a single scope dispatch.
-    let targetBranchIDs: [UInt64]
+    /// The non-selected branch to try. One scope per alternative; the source iterates over branches, not the encoder.
+    let targetBranchID: UInt64
 }
 
 /// Scope for direct descendant promotion.

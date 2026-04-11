@@ -5,45 +5,14 @@
 
 // MARK: - Graph Replacement Encoder
 
-/// Applies a structural replacement to the base sequence.
-///
-/// Two operating modes:
-///
-/// - **Single-shot**: self-similar substitution and descendant promotion are atomic operations with one donor and one target. The encoder builds one candidate at ``start(scope:)`` and emits it from the next ``nextProbe(lastAccepted:)`` call.
-///
-/// - **Branch-pivot iterator**: a branch-pivot scope carries every non-selected alternative at a single pick site. The encoder caches the pick-site context at ``start(scope:)`` and walks ``BranchPivotScope/targetBranchIDs`` across probes. Each probe applies the leaf-count gate (skip when the candidate has more leaves than the current selection) and speculative one-shot leaf minimization (rewrite every `.choice` in the candidate subtree to its reduction target) before flattening. On any acceptance, the iterator stops because the cached tree no longer matches the live sequence — the next cycle's graph rebuild dispatches a fresh scope.
-///
-/// Bundling alternatives at the pick-site level instead of dispatching one scope per `(pick, alternative)` pair keeps the iteration inside one encoder lifetime, where the scheduler's priority queue cannot starve later candidates.
+/// Applies a structural replacement to the base sequence. All three modes (self-similar substitution, branch pivot, descendant promotion) are single-shot: the encoder builds one candidate at ``start(scope:)`` and emits it from the next ``nextProbe(lastAccepted:)`` call. Branch pivot scopes carry a single target branch — the source iterates over alternative branches, not the encoder.
 struct GraphReplacementEncoder: GraphEncoder {
     let name: EncoderName = .graphSubstitution
 
-    private var mode: Mode = .idle
-
-    private enum Mode {
-        case idle
-        case singleShot(probe: EncoderProbe?)
-        case branchPivotIterator(BranchPivotIteratorState)
-    }
-
-    /// Cached state for the multi-probe branch-pivot iterator.
-    ///
-    /// Captures the pick-site context once at ``start(scope:)`` time so the encoder does not re-walk the tree on every probe. The iterator stays valid until the first acceptance; after that the cached `tree` and `elements` no longer match the live sequence and the iterator exits.
-    private struct BranchPivotIteratorState {
-        let pickNodeID: Int
-        let tree: ChoiceTree
-        let baseSequence: ChoiceSequence
-        let fingerprint: Fingerprint
-        let elements: [ChoiceTree]
-        let isOpaque: Bool
-        let selectedIndex: Int
-        let currentLeafCount: Int
-        /// Each entry pairs a `targetBranchIDs` index with the matching index in `elements`. Resolved once at start.
-        let targets: [(elementIndex: Int, branchID: UInt64)]
-        var nextTargetCursor: Int
-    }
+    private var probe: EncoderProbe?
 
     mutating func start(scope: TransformationScope) {
-        mode = .idle
+        probe = nil
 
         guard case let .replace(replacementScope) = scope.transformation.operation else {
             return
@@ -59,7 +28,7 @@ struct GraphReplacementEncoder: GraphEncoder {
                 sequence: sequence,
                 graph: graph
             )
-            let probe = candidate.map {
+            probe = candidate.map {
                 EncoderProbe(
                     candidate: $0,
                     mutation: .selfSimilarReplaced(
@@ -68,17 +37,14 @@ struct GraphReplacementEncoder: GraphEncoder {
                     )
                 )
             }
-            mode = .singleShot(probe: probe)
 
         case let .branchPivot(pivotScope):
-            if let iteratorState = startBranchPivotIterator(
+            probe = buildBranchPivotCandidate(
                 scope: pivotScope,
                 sequence: sequence,
                 tree: scope.tree,
                 graph: scope.graph
-            ) {
-                mode = .branchPivotIterator(iteratorState)
-            }
+            )
 
         case let .descendantPromotion(promotionScope):
             let candidate = buildDescendantPromotionCandidate(
@@ -86,7 +52,7 @@ struct GraphReplacementEncoder: GraphEncoder {
                 sequence: sequence,
                 graph: graph
             )
-            let probe = candidate.map {
+            probe = candidate.map {
                 EncoderProbe(
                     candidate: $0,
                     mutation: .descendantPromoted(
@@ -95,30 +61,12 @@ struct GraphReplacementEncoder: GraphEncoder {
                     )
                 )
             }
-            mode = .singleShot(probe: probe)
         }
     }
 
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
-        switch mode {
-        case .idle:
-            return nil
-
-        case let .singleShot(probe):
-            mode = .idle
-            return probe
-
-        case var .branchPivotIterator(state):
-            // Any acceptance invalidates the cached tree and elements; the
-            // next cycle's graph rebuild will dispatch a fresh scope.
-            if lastAccepted {
-                mode = .idle
-                return nil
-            }
-            let result = nextBranchPivotProbe(state: &state)
-            mode = .branchPivotIterator(state)
-            return result
-        }
+        defer { probe = nil }
+        return probe
     }
 
     // MARK: - Candidate Construction
@@ -141,17 +89,15 @@ struct GraphReplacementEncoder: GraphEncoder {
         return candidate
     }
 
-    /// Resolves the pick-site context for a branch-pivot scope and returns an iterator state ready to walk the scope's `targetBranchIDs` across probes.
+    /// Builds a single branch-pivot candidate for the scope's target branch. The leaf-count gate is applied at scope construction time (in ``replacementScopes()``), so this method only applies speculative leaf minimization and the shortlex gate.
     ///
-    /// The graph is the source of truth for branch enumeration. ``PickMetadata/branchElements`` carries every branch's tree subtree (active and inactive) as captured at graph construction time, so the encoder is immune to the live tree being stripped by ``Materializer`` calls with `materializePicks: false`. The live tree is still consulted for the splice fingerprint, which works on stripped trees because the `.group` at the pick site exists regardless of how many child elements it has.
-    ///
-    /// Returns `nil` when the pick node cannot be found in the graph, when the graph metadata is malformed, when the pick site cannot be located in the tree, or when none of the scope's `targetBranchIDs` match an element in `branchElements`.
-    private func startBranchPivotIterator(
+    /// Returns `nil` when the pick node cannot be found, the metadata is malformed, the pick site cannot be located in the tree, the target branch is not in `branchElements`, or the candidate does not strictly shortlex-precede the current sequence.
+    private func buildBranchPivotCandidate(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         graph: ChoiceGraph
-    ) -> BranchPivotIteratorState? {
+    ) -> EncoderProbe? {
         guard scope.pickNodeID < graph.nodes.count else { return nil }
         guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else {
             return nil
@@ -160,30 +106,17 @@ struct GraphReplacementEncoder: GraphEncoder {
         let selectedIndex = pickMetadata.selectedChildIndex
         guard selectedIndex < elements.count else { return nil }
 
-        // Resolve each branchID in the scope to its index in the graph's
-        // captured branchElements. The graph has the full set of branches
-        // even if the live tree has been stripped to just the selected one
-        // by `materializePicks: false` probes.
-        var targets: [(elementIndex: Int, branchID: UInt64)] = []
-        for branchID in scope.targetBranchIDs {
-            guard let elementIndex = elements.firstIndex(where: { element in
-                switch element {
-                case let .branch(_, _, candidateID, _, _):
-                    candidateID == branchID
-                default:
-                    false
-                }
-            }) else { continue }
-            targets.append((elementIndex: elementIndex, branchID: branchID))
-        }
+        // Find the target branch in branchElements.
+        guard let targetElementIndex = elements.firstIndex(where: { element in
+            switch element {
+            case let .branch(_, _, candidateID, _, _):
+                candidateID == scope.targetBranchID
+            default:
+                false
+            }
+        }) else { return nil }
 
-        guard targets.isEmpty == false else { return nil }
-
-        // The fingerprint is needed only for the splice point. The live
-        // tree's `.group` at the pick site still exists even when stripped
-        // (it just has fewer child elements), so the fingerprint walk
-        // succeeds and we overwrite the group's content with a fresh one
-        // built from the graph's `branchElements`.
+        // Locate the splice point in the live tree.
         guard let fingerprint = findPickSiteFingerprint(
             in: tree,
             siteID: scope.siteID,
@@ -195,67 +128,29 @@ struct GraphReplacementEncoder: GraphEncoder {
             return nil
         }
 
-        let currentLeafCount = Self.leafCount(in: elements[selectedIndex])
+        // Speculative leaf minimization: rewrite every `.choice` to its reduction target so the shortlex comparison reflects only structural difference.
+        let minimizedTarget = Self.minimizingLeaves(in: elements[targetElementIndex])
 
-        return BranchPivotIteratorState(
-            pickNodeID: scope.pickNodeID,
-            tree: tree,
-            baseSequence: sequence,
-            fingerprint: fingerprint,
-            elements: elements,
-            isOpaque: isOpaque,
-            selectedIndex: selectedIndex,
-            currentLeafCount: currentLeafCount,
-            targets: targets,
-            nextTargetCursor: 0
-        )
-    }
+        // Splice: unwrap the current selection, wrap the minimized target.
+        var candidateElements = elements
+        candidateElements[selectedIndex] = elements[selectedIndex].unwrapped
+        candidateElements[targetElementIndex] = .selected(minimizedTarget)
 
-    /// Walks the iterator state forward until it produces a candidate that passes every gate, or returns `nil` when the targets are exhausted.
-    ///
-    /// For each remaining target the helper applies the leaf-count gate (skip when the candidate has more leaves than the current selection), the speculative one-shot leaf minimization (rewrite every `.choice` in the candidate subtree to its reduction target), and a shortlex-equal-or-better check against the cached base sequence. Targets that fail any gate are skipped without leaving the call — gates are decided locally, not by the scheduler.
-    private func nextBranchPivotProbe(
-        state: inout BranchPivotIteratorState
-    ) -> EncoderProbe? {
-        while state.nextTargetCursor < state.targets.count {
-            let target = state.targets[state.nextTargetCursor]
-            state.nextTargetCursor += 1
+        var candidateTree = tree
+        candidateTree[fingerprint] = .group(candidateElements, isOpaque: isOpaque)
+        let candidateSequence = ChoiceSequence(candidateTree)
 
-            // Leaf-count gate. Count `.choice` leaves under the currently selected branch (N1) and under the candidate branch (N2). Only proceed when the candidate does not grow the sequence; candidates where N2 > N1 are almost always rejected by the decoder's shortlex check anyway, and dropping them here saves a probe.
-            let candidateLeafCount = Self.leafCount(in: state.elements[target.elementIndex])
-            guard candidateLeafCount <= state.currentLeafCount else { continue }
-
-            // Speculative one-shot leaf minimization. Replace every `.choice` node in the candidate subtree with its reduction target before the swap. Without this, the candidate inherits whatever values the materializer produced for the non-selected branch in `.minimize` mode, which for recursive or bind-wrapped sub-generators is not always `value(0)`. Minimizing here ensures the shortlex comparison reflects only the structural difference between the current branch and the candidate, stripping out PRNG-like noise in the pre-materialized subtree.
-            let minimizedTarget = Self.minimizingLeaves(in: state.elements[target.elementIndex])
-
-            // Move .selected: unwrap from current, wrap the minimized target.
-            var candidateElements = state.elements
-            candidateElements[state.selectedIndex] = state.elements[state.selectedIndex].unwrapped
-            candidateElements[target.elementIndex] = .selected(minimizedTarget)
-
-            var candidateTree = state.tree
-            candidateTree[state.fingerprint] = .group(candidateElements, isOpaque: state.isOpaque)
-            let candidateSequence = ChoiceSequence(candidateTree)
-
-            // Require the candidate to be strictly shorter in shortlex order.
-            // Equal-shortlex replacements (both branches at their reduction target)
-            // produce a no-op acceptance that triggers a full structural rebuild,
-            // clears the scope rejection cache, and re-proposes the same replacement
-            // next cycle — an infinite loop. Strictly-better candidates cannot cycle:
-            // once accepted the new sequence is shorter, so the same pivot cannot
-            // accept again for the same shortlex reason.
-            guard candidateSequence.shortLexPrecedes(state.baseSequence) else {
-                continue
-            }
-            return EncoderProbe(
-                candidate: candidateSequence,
-                mutation: .branchSelected(
-                    pickNodeID: state.pickNodeID,
-                    newSelectedID: target.branchID
-                )
-            )
+        // Strictly-better shortlex gate. Equal-shortlex would cause infinite rebuild cycles.
+        guard candidateSequence.shortLexPrecedes(sequence) else {
+            return nil
         }
-        return nil
+        return EncoderProbe(
+            candidate: candidateSequence,
+            mutation: .branchSelected(
+                pickNodeID: scope.pickNodeID,
+                newSelectedID: scope.targetBranchID
+            )
+        )
     }
 
     /// Walks the tree depth-first to find the `.group(...)` whose selected branch matches the given siteID and selectedID.
@@ -298,47 +193,7 @@ struct GraphReplacementEncoder: GraphEncoder {
 
     // MARK: - Branch Pivot Helpers
 
-    /// Counts leaf `.choice` nodes reachable from a ``ChoiceTree`` subtree.
-    ///
-    /// Recurses into every structural node without counting it, summing one for each `.choice` leaf encountered. The `.just` and `.getSize` cases contribute nothing. Used by ``nextBranchPivotProbe(state:)`` to compare the leaf counts of the currently selected branch and a candidate branch before deciding whether to emit the pivot candidate.
-    private static func leafCount(in tree: ChoiceTree) -> Int {
-        switch tree {
-        case .choice:
-            return 1
-        case .just:
-            return 0
-        case .getSize:
-            return 0
-        case let .sequence(_, elements, _):
-            var total = 0
-            for element in elements {
-                total += leafCount(in: element)
-            }
-            return total
-        case let .branch(_, _, _, _, choice):
-            return leafCount(in: choice)
-        case let .group(children, _):
-            var total = 0
-            for child in children {
-                total += leafCount(in: child)
-            }
-            return total
-        case let .resize(_, choices):
-            var total = 0
-            for choice in choices {
-                total += leafCount(in: choice)
-            }
-            return total
-        case let .bind(inner, bound):
-            return leafCount(in: inner) + leafCount(in: bound)
-        case let .selected(inner):
-            return leafCount(in: inner)
-        }
-    }
-
-    /// Returns a copy of the subtree with every `.choice` node's value replaced by its ``ChoiceValue/reductionTarget(in:)``.
-    ///
-    /// Rewrites each `.choice` leaf to hold the bit pattern of its reduction target within the leaf's recorded valid range. Every structural node passes through unchanged, recursively rewriting its children. Used by ``nextBranchPivotProbe(state:)`` to strip PRNG-like noise from a candidate branch's pre-materialized subtree before flattening, so the subsequent shortlex comparison reflects only the structural difference between the current branch and the candidate.
+    /// Returns a copy of the subtree with every `.choice` node's value replaced by its ``ChoiceValue/reductionTarget(in:)``. Strips PRNG-like noise from a candidate branch's pre-materialized subtree before flattening, so the shortlex comparison reflects only the structural difference between the current branch and the candidate.
     private static func minimizingLeaves(in tree: ChoiceTree) -> ChoiceTree {
         switch tree {
         case let .choice(value, metadata):

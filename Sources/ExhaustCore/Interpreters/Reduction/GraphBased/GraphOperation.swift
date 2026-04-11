@@ -35,6 +35,14 @@ enum GraphOperation {
         return false
     }
 
+    /// Per-scope discriminator for the rejection cache. Branch pivot uses the target branch ID so that rejecting branch A at a pick site does not block branch B at the same site. All other operations return 0.
+    var scopeSubDiscriminator: UInt64 {
+        if case let .replace(.branchPivot(scope)) = self {
+            return scope.targetBranchID
+        }
+        return 0
+    }
+
     /// Collects node IDs whose position ranges are affected by this operation. Used by ``ScopeRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
     ///
     /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.

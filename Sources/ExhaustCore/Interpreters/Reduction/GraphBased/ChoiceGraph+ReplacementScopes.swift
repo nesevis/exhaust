@@ -38,40 +38,30 @@ extension ChoiceGraph {
             }
         }
 
-        // Branch pivot: one scope per active pick node, carrying all
-        // non-selected alternatives sorted simplest-first by subtree size.
-        // The encoder iterates `targetBranchIDs` across probes within a
-        // single scope dispatch — bundling at the pick-site level keeps
-        // alternatives off the scheduler's priority queue, where lower-yield
-        // pivots would otherwise be starved by higher-yield ones from other
-        // pick sites.
+        // Branch pivot: one scope per (pick node, alternative branch). The source iterates over branches; the encoder is single-shot per scope. The leaf-count gate is applied here — alternatives with more `.choice` leaves than the selected branch are filtered out because they almost always fail the shortlex check and dropping them avoids paying the materialization cost.
         for node in nodes {
             guard case let .pick(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
             guard metadata.branchIDs.count >= 2 else { continue }
             guard node.children.count == metadata.branchIDs.count else { continue }
 
-            // Build (branchID, subtreeSize) pairs for non-selected branches.
-            var alternatives: [(branchID: UInt64, subtreeSize: Int)] = []
+            let selectedLeafCount = leafCount(in: metadata.branchElements[metadata.selectedChildIndex])
+
             for index in 0 ..< metadata.branchIDs.count {
                 let branchID = metadata.branchIDs[index]
                 guard branchID != metadata.selectedID else { continue }
-                let childNodeID = node.children[index]
-                alternatives.append((
-                    branchID: branchID,
-                    subtreeSize: subtreeNodeCount(rootID: childNodeID)
-                ))
+
+                // Leaf-count gate: skip branches with more leaves than the current selection.
+                let candidateLeafCount = leafCount(in: metadata.branchElements[index])
+                guard candidateLeafCount <= selectedLeafCount else { continue }
+
+                scopes.append(.branchPivot(BranchPivotScope(
+                    pickNodeID: node.id,
+                    siteID: metadata.siteID,
+                    selectedID: metadata.selectedID,
+                    targetBranchID: branchID
+                )))
             }
-            alternatives.sort { $0.subtreeSize < $1.subtreeSize }
-
-            guard alternatives.isEmpty == false else { continue }
-
-            scopes.append(.branchPivot(BranchPivotScope(
-                pickNodeID: node.id,
-                siteID: metadata.siteID,
-                selectedID: metadata.selectedID,
-                targetBranchIDs: alternatives.map(\.branchID)
-            )))
         }
 
         // Descendant promotion: pairs (ancestor pick, descendant pick) with
@@ -104,6 +94,20 @@ extension ChoiceGraph {
         }
 
         return scopes
+    }
+
+    /// Counts `.choice` leaves reachable from a choice tree subtree. Used by the leaf-count gate in branch pivot scope construction.
+    private func leafCount(in tree: ChoiceTree) -> Int {
+        switch tree {
+        case .choice: return 1
+        case .just, .getSize: return 0
+        case let .sequence(_, elements, _): return elements.reduce(0) { $0 + leafCount(in: $1) }
+        case let .branch(_, _, _, _, choice): return leafCount(in: choice)
+        case let .group(children, _): return children.reduce(0) { $0 + leafCount(in: $1) }
+        case let .resize(_, choices): return choices.reduce(0) { $0 + leafCount(in: $1) }
+        case let .bind(inner, bound): return leafCount(in: inner) + leafCount(in: bound)
+        case let .selected(inner): return leafCount(in: inner)
+        }
     }
 
     /// Counts the total number of graph nodes in the subtree rooted at the given node.
