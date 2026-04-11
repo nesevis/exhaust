@@ -30,6 +30,7 @@ public extension ChoiceGraph {
 
     /// Bind-inner nodes in topological order with their dependency edges restricted to other bind-inner nodes.
     ///
+    /// - Complexity: O(D + B) where D is the dependency edge count and B is the bind-inner node count.
     /// - SeeAlso: ``ChoiceDependencyGraph/bindInnerTopology()``
     var bindInnerTopology: [(nodeID: Int, bindDepth: Int, dependsOn: [Int])] {
         var bindInnerNodeIDs = Set<Int>()
@@ -43,17 +44,22 @@ public extension ChoiceGraph {
             bindInnerInfo[innerChildID] = metadata.bindDepth
         }
 
+        // Build adjacency list once in O(D) instead of filtering all
+        // edges per node in O(topo × D).
+        var adjacency: [Int: [Int]] = [:]
+        for edge in dependencyEdges {
+            guard bindInnerNodeIDs.contains(edge.source) else { continue }
+            guard bindInnerNodeIDs.contains(edge.target) else { continue }
+            adjacency[edge.source, default: []].append(edge.target)
+        }
+
         var result: [(nodeID: Int, bindDepth: Int, dependsOn: [Int])] = []
         for nodeID in topologicalOrder {
             guard bindInnerNodeIDs.contains(nodeID) else { continue }
-            let dependsOn = dependencyEdges
-                .filter { $0.source == nodeID }
-                .map(\.target)
-                .filter { bindInnerNodeIDs.contains($0) }
             result.append((
                 nodeID: nodeID,
                 bindDepth: bindInnerInfo[nodeID] ?? 0,
-                dependsOn: dependsOn
+                dependsOn: adjacency[nodeID, default: []]
             ))
         }
         return result

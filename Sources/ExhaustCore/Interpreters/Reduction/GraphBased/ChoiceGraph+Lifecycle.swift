@@ -394,15 +394,20 @@ extension ChoiceGraph {
         }
     }
 
-    /// Walks bind nodes in the live graph (skipping tombstones) and returns the bind whose `innerChildIndex`-indexed child is `leafNodeID`, or nil.
+    /// Finds the bind node whose inner child is `leafNodeID` by walking up the parent-pointer chain.
+    ///
+    /// The inner leaf is a direct child of its controlling bind, so this is O(depth) — typically one or two hops — instead of the previous O(N) scan over all nodes.
     private func controllingBind(forInnerLeaf leafNodeID: Int) -> Int? {
-        for node in nodes {
-            guard isTombstoned(node.id) == false else { continue }
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            if node.children[metadata.innerChildIndex] == leafNodeID {
-                return node.id
+        var current = leafNodeID
+        while let parentID = nodes[current].parent {
+            guard isTombstoned(parentID) == false else { return nil }
+            if case let .bind(metadata) = nodes[parentID].kind,
+               nodes[parentID].children.count >= 2,
+               nodes[parentID].children[metadata.innerChildIndex] == current
+            {
+                return parentID
             }
+            current = parentID
         }
         return nil
     }

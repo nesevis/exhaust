@@ -109,14 +109,23 @@ public final class ChoiceGraph {
     ///
     /// Used by ``ChoiceGraphScheduler/transferConvergence(_:to:)`` after a full ``ChoiceGraph/build(from:)`` rebuild, where node IDs are not stable across the rebuild and positional matching is the only option. Within a single graph instance, encoders use the cheaper ``recordConvergence(byNodeID:)`` overload instead.
     ///
+    /// - Complexity: O(N + R) where N is the node count and R is the record count. Builds a position-to-index lookup table once in O(N), then resolves each record in O(1).
     /// - Parameter records: Map from flat sequence index to the convergence floor at that position.
     func recordConvergence(_ records: [Int: ConvergedOrigin]) {
+        guard records.isEmpty == false else { return }
+
+        // Build position → node-array-index lookup once in O(N).
+        var positionToIndex: [Int: Int] = [:]
+        positionToIndex.reserveCapacity(records.count)
+        for index in nodes.indices {
+            guard isTombstoned(index) == false else { continue }
+            guard case .chooseBits = nodes[index].kind else { continue }
+            guard let position = nodes[index].positionRange?.lowerBound else { continue }
+            positionToIndex[position] = index
+        }
+
         for (sequenceIndex, origin) in records {
-            guard let nodeIndex = nodes.firstIndex(where: { node in
-                guard isTombstoned(node.id) == false else { return false }
-                guard case .chooseBits = node.kind else { return false }
-                return node.positionRange?.lowerBound == sequenceIndex
-            }) else { continue }
+            guard let nodeIndex = positionToIndex[sequenceIndex] else { continue }
             guard case var .chooseBits(metadata) = nodes[nodeIndex].kind else { continue }
             metadata.convergedOrigin = origin
             nodes[nodeIndex] = ChoiceGraphNode(
