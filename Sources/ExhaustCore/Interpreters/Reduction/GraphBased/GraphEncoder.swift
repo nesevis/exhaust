@@ -64,9 +64,9 @@ protocol GraphEncoder {
     /// 1. Re-walk the live graph and rebuild every nodeID-keyed cache (leaf positions, pair plans, lookup tables) from the current state.
     /// 2. Drop in-flight per-leaf iteration state (steppers, scan windows, cross-zero phases) — those refer to the old leaf set and are not meaningful after re-scoping.
     /// 3. Preserve convergence records by nodeID. Records whose nodeID is now tombstoned (`positionRange == nil`) should be dropped; surviving nodeIDs keep their records.
-    /// 4. Update the encoder's internal sequence reference (``IntegerState/sequence`` etc.) to match the live `sequence` parameter.
+    /// 4. Update the encoder's internal sequence reference (``IntegerState/sequence`` and similar) to match the live `sequence` parameter.
     ///
-    /// The default implementation is a no-op, suitable for single-shot encoders that emit one probe per scope (e.g. ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that already self-reset on every accepted probe (e.g. ``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within a pass (``GraphMinimizationEncoder``, ``GraphExchangeEncoder``) must override this method.
+    /// The default implementation is a no-op, suitable for single-shot encoders that emit one probe per scope (for example, ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that already self-reset on every accepted probe (for example, ``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within a pass (``GraphMinimizationEncoder``, ``GraphExchangeEncoder``) must override this method.
     ///
     /// - Parameters:
     ///   - graph: The live graph after the structural mutation.

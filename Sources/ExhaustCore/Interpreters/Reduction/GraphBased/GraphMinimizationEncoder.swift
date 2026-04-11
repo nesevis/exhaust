@@ -241,7 +241,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
         // Re-derive the encoder's working set from the live graph after a
         // structural mutation. The scheduler calls this between probe loop
         // iterations whenever the most recent acceptance added or removed
-        // graph nodes (i.e. an in-place reshape via ``applyBindReshape``).
+        // graph nodes (an in-place reshape via ``applyBindReshape``).
         // The cached ``IntegerState/leafPositions`` /
         // ``FloatState/targets`` reference pre-mutation node IDs and
         // sequence positions; without a refresh the next probe would write

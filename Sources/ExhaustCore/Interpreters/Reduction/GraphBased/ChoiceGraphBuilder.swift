@@ -10,11 +10,13 @@
 /// A single recursive walk of the tree produces nodes and containment/dependency edges. Post-walk passes compute self-similarity edges (grouping active picks by `depthMaskedSiteID`), topological order (Kahn's algorithm), and reachability (reverse topological propagation). Type-compatibility edges are computed after antichain construction.
 ///
 /// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)`` to maintain position-to-node correspondence.
+///
+/// The active-branch walk and assembly pass live in this file. The inactive-branch walk (used to materialise non-selected branches with nil position ranges) lives in `ChoiceGraphBuilder+InactiveBranch.swift`. The subtree splice helpers used by ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` live in `ChoiceGraphBuilder+Subtree.swift`.
 struct ChoiceGraphBuilder {
-    private var nodes: [ChoiceGraphNode] = []
-    private var containmentEdges: [ContainmentEdge] = []
-    private var dependencyEdges: [DependencyEdge] = []
-    private var nextNodeID = 0
+    var nodes: [ChoiceGraphNode] = []
+    var containmentEdges: [ContainmentEdge] = []
+    var dependencyEdges: [DependencyEdge] = []
+    var nextNodeID = 0
 
     // MARK: - Entry Point
 
@@ -35,7 +37,7 @@ struct ChoiceGraphBuilder {
     ///
     /// - Returns: The number of ``ChoiceSequence`` entries consumed (mirrors flatten order).
     @discardableResult
-    private mutating func walk(
+    mutating func walk(
         _ tree: ChoiceTree,
         offset: Int,
         parent: Int?,
@@ -315,194 +317,6 @@ struct ChoiceGraphBuilder {
         return consumed
     }
 
-    /// Walks an inactive (unselected) branch subtree with nil position ranges on all nodes.
-    private mutating func walkInactiveBranch(
-        _ tree: ChoiceTree,
-        parent: Int?,
-        bindDepth: Int
-    ) {
-        switch tree {
-        case let .choice(value, metadata):
-            let nodeID = emitNode(
-                kind: .chooseBits(ChooseBitsMetadata(
-                    typeTag: value.tag,
-                    validRange: metadata.validRange,
-                    isRangeExplicit: metadata.isRangeExplicit,
-                    value: value
-                )),
-                positionRange: nil,
-                children: [],
-                parent: parent
-            )
-            if let parent {
-                containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-            }
-
-        case .just:
-            let nodeID = emitNode(kind: .just, positionRange: nil, children: [], parent: parent)
-            if let parent {
-                containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-            }
-
-        case .getSize:
-            break
-
-        case let .sequence(_, elements, metadata):
-            let nodeID = emitNode(
-                kind: .sequence(SequenceMetadata(
-                    lengthConstraint: metadata.validRange,
-                    elementCount: elements.count,
-                    childPositionRanges: []
-                )),
-                positionRange: nil,
-                children: [],
-                parent: parent
-            )
-            if let parent {
-                containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-            }
-            var childIDs: [Int] = []
-            for element in elements {
-                let childStartID = nextNodeID
-                walkInactiveBranch(element, parent: nodeID, bindDepth: bindDepth)
-                if childStartID < nextNodeID {
-                    childIDs.append(childStartID)
-                }
-            }
-            nodes[nodeID] = ChoiceGraphNode(
-                id: nodeID,
-                kind: nodes[nodeID].kind,
-                positionRange: nil,
-                children: childIDs,
-                parent: parent
-            )
-
-        case let .branch(_, _, _, _, choice):
-            walkInactiveBranch(choice, parent: parent, bindDepth: bindDepth)
-
-        case let .group(array, isOpaque):
-            if detectPickSite(array) != nil {
-                // Inactive pick site — record metadata but all children are inactive.
-                walkInactivePickSite(array, parent: parent, bindDepth: bindDepth)
-            } else {
-                let nodeID = emitNode(
-                    kind: .zip(ZipMetadata(isOpaque: isOpaque)),
-                    positionRange: nil,
-                    children: [],
-                    parent: parent
-                )
-                if let parent {
-                    containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-                }
-                var childIDs: [Int] = []
-                for child in array {
-                    let childStartID = nextNodeID
-                    walkInactiveBranch(child, parent: nodeID, bindDepth: bindDepth)
-                    if childStartID < nextNodeID {
-                        childIDs.append(childStartID)
-                    }
-                }
-                nodes[nodeID] = ChoiceGraphNode(
-                    id: nodeID,
-                    kind: nodes[nodeID].kind,
-                    positionRange: nil,
-                    children: childIDs,
-                    parent: parent
-                )
-            }
-
-        case let .bind(inner, bound):
-            if inner.isGetSize {
-                // getSize-bind is transparent — walk bound directly.
-                walkInactiveBranch(bound, parent: parent, bindDepth: bindDepth)
-            } else {
-                let nodeID = emitNode(
-                    kind: .bind(BindMetadata(
-                        isStructurallyConstant: bound.containsBind == false && bound.containsPicks == false,
-                        bindDepth: bindDepth,
-                        innerChildIndex: 0,
-                        boundChildIndex: 1
-                    )),
-                    positionRange: nil,
-                    children: [],
-                    parent: parent
-                )
-                if let parent {
-                    containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-                }
-                let innerStartID = nextNodeID
-                walkInactiveBranch(inner, parent: nodeID, bindDepth: bindDepth)
-                let boundStartID = nextNodeID
-                walkInactiveBranch(bound, parent: nodeID, bindDepth: bindDepth + 1)
-
-                var childIDs: [Int] = []
-                if innerStartID < nextNodeID {
-                    childIDs.append(innerStartID)
-                }
-                if boundStartID < nextNodeID {
-                    childIDs.append(boundStartID)
-                }
-                nodes[nodeID] = ChoiceGraphNode(
-                    id: nodeID,
-                    kind: nodes[nodeID].kind,
-                    positionRange: nil,
-                    children: childIDs,
-                    parent: parent
-                )
-            }
-
-        case let .resize(_, choices):
-            for choice in choices {
-                walkInactiveBranch(choice, parent: parent, bindDepth: bindDepth)
-            }
-
-        case let .selected(inner):
-            walkInactiveBranch(inner, parent: parent, bindDepth: bindDepth)
-        }
-    }
-
-    private mutating func walkInactivePickSite(
-        _ array: [ChoiceTree],
-        parent: Int?,
-        bindDepth: Int
-    ) {
-        guard let info = detectPickSite(array) else { return }
-
-        let nodeID = emitNode(
-            kind: .pick(PickMetadata(
-                siteID: info.siteID,
-                depthMaskedSiteID: info.siteID / 1000,
-                branchIDs: info.branchIDs,
-                selectedID: info.selectedID,
-                selectedChildIndex: 0,
-                branchElements: array
-            )),
-            positionRange: nil,
-            children: [],
-            parent: parent
-        )
-        if let parent {
-            containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-        }
-
-        var childIDs: [Int] = []
-        for child in array {
-            let childStartID = nextNodeID
-            walkInactiveBranch(child, parent: nodeID, bindDepth: bindDepth)
-            if childStartID < nextNodeID {
-                childIDs.append(childStartID)
-                containmentEdges.append(ContainmentEdge(source: nodeID, target: childStartID))
-            }
-        }
-        nodes[nodeID] = ChoiceGraphNode(
-            id: nodeID,
-            kind: nodes[nodeID].kind,
-            positionRange: nil,
-            children: childIDs,
-            parent: parent
-        )
-    }
-
     private mutating func walkBind(
         inner: ChoiceTree,
         bound: ChoiceTree,
@@ -569,7 +383,7 @@ struct ChoiceGraphBuilder {
         return consumed
     }
 
-    // MARK: - Helpers
+    // MARK: - Walk Helpers
 
     /// Walks an array of children as a group (for .resize), without emitting a zip node.
     private mutating func walkGroupChildren(
@@ -586,7 +400,7 @@ struct ChoiceGraphBuilder {
         return consumed
     }
 
-    private mutating func emitNode(
+    mutating func emitNode(
         kind: ChoiceGraphNodeKind,
         positionRange: ClosedRange<Int>?,
         children: [Int],
@@ -607,7 +421,7 @@ struct ChoiceGraphBuilder {
     // MARK: - Pick-Site Detection
 
     /// Information extracted from a pick-site group.
-    private struct PickSiteInfo {
+    struct PickSiteInfo {
         let siteID: UInt64
         let selectedID: UInt64
         let branchIDs: [UInt64]
@@ -616,7 +430,7 @@ struct ChoiceGraphBuilder {
     /// Detects whether a group's children form a pick site.
     ///
     /// A pick site is a group where all children are `.branch` or `.selected`, with exactly one `.selected(.branch(...))`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)``.
-    private func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
+    func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
         guard array.allSatisfy({ $0.isBranch || $0.isSelected }) else {
             return nil
         }
@@ -627,105 +441,6 @@ struct ChoiceGraphBuilder {
             return nil
         }
         return PickSiteInfo(siteID: siteID, selectedID: id, branchIDs: branchIDs)
-    }
-
-    // MARK: - Subtree Construction (for lifecycle rebuilds)
-
-    /// Result of building a subtree for dynamic region replacement.
-    struct SubtreeResult {
-        let nodes: [ChoiceGraphNode]
-        let containmentEdges: [ContainmentEdge]
-        let dependencyEdges: [DependencyEdge]
-    }
-
-    /// Builds a subtree from a ``ChoiceTree`` for dynamic region replacement.
-    ///
-    /// Used by ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` to walk a new bound tree and produce nodes/edges that can be spliced into an existing graph.
-    ///
-    /// The walk uses internal node IDs starting from 0 so the builder's positional indexing into ``nodes`` (`nodes[nodeID] = ...`) works correctly. After the walk completes, every node ID, parent reference, child reference, and edge endpoint is renumbered by adding `nodeIDOffset`. The subtree root's parent is set to the supplied external `parent` (which is typically a bind node ID in the host graph) — every other node's parent is renumbered as a local subtree ID.
-    ///
-    /// The caller is responsible for appending a containment edge from the external `parent` to the renumbered subtree root, and for patching the parent's `children` array to reference the renumbered root ID.
-    ///
-    /// - Parameters:
-    ///   - tree: The new subtree to walk.
-    ///   - startingOffset: The ``ChoiceSequence`` offset where this subtree starts.
-    ///   - parent: The parent node ID in the existing graph. Stored on the subtree root after renumbering.
-    ///   - bindDepth: The bind nesting depth at this position.
-    ///   - nodeIDOffset: The offset added to every internal node ID so the splice does not collide with existing graph IDs.
-    static func buildSubtree(
-        from tree: ChoiceTree,
-        startingOffset: Int,
-        parent: Int?,
-        bindDepth: Int,
-        nodeIDOffset: Int
-    ) -> SubtreeResult {
-        var builder = ChoiceGraphBuilder()
-        // Walk with parent: nil so no internal node references the external
-        // parent ID. The walk uses internal IDs starting from 0, which keeps
-        // the builder's positional indexing into `nodes[nodeID]` correct.
-        _ = builder.walk(tree, offset: startingOffset, parent: nil, bindDepth: bindDepth)
-
-        // Compute dependency edges within the subtree using internal IDs.
-        var subtreeDependencyEdges: [DependencyEdge] = []
-        for node in builder.nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            let boundChildID = node.children[metadata.boundChildIndex]
-            var stack = [boundChildID]
-            while stack.isEmpty == false {
-                let current = stack.removeLast()
-                guard current >= 0, current < builder.nodes.count else { continue }
-                let target = builder.nodes[current]
-                switch target.kind {
-                case .bind, .pick:
-                    subtreeDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
-                case .chooseBits, .zip, .sequence, .just:
-                    break
-                }
-                for child in target.children {
-                    stack.append(child)
-                }
-            }
-        }
-
-        // Renumber every internal ID by adding `nodeIDOffset`. The subtree
-        // root (the first emitted node) has its parent set to the supplied
-        // external `parent` — every other node's parent is a local subtree
-        // ID and gets shifted.
-        let renumberedNodes: [ChoiceGraphNode] = builder.nodes.enumerated().map { index, node in
-            let renumberedParent: Int? = if index == 0 {
-                parent
-            } else {
-                node.parent.map { $0 + nodeIDOffset }
-            }
-            return ChoiceGraphNode(
-                id: node.id + nodeIDOffset,
-                kind: node.kind,
-                positionRange: node.positionRange,
-                children: node.children.map { $0 + nodeIDOffset },
-                parent: renumberedParent
-            )
-        }
-
-        let renumberedContainment = builder.containmentEdges.map { edge in
-            ContainmentEdge(
-                source: edge.source + nodeIDOffset,
-                target: edge.target + nodeIDOffset
-            )
-        }
-        let renumberedDependency = subtreeDependencyEdges.map { edge in
-            DependencyEdge(
-                source: edge.source + nodeIDOffset,
-                target: edge.target + nodeIDOffset
-            )
-        }
-
-        return SubtreeResult(
-            nodes: renumberedNodes,
-            containmentEdges: renumberedContainment,
-            dependencyEdges: renumberedDependency
-        )
     }
 
     // MARK: - Assembly
