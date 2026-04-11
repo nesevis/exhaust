@@ -10,25 +10,24 @@ extension ChoiceGraph {
     ///
     /// Redistribution moves value mass between two leaves within a single decision context. Two structural cases qualify:
     ///
-    /// 1. **Sequence siblings** — chooseBits children of the same sequence parent. The classic intra-array case (for example, redistributing values across the elements of a single `array(of: Int)` instance).
-    /// 2. **Zip cross-slot** — chooseBits descendants of *different* children of a common zip parent. Tuple slots are simultaneously chosen and the property frequently correlates their values; redistribution between them is the only way to shrink to a coupled extremum. Bound5's `d + e == −32769` constraint is the canonical example: the canonical counterexample `Bound5(d: [-32768], e: [-1])` is reachable from intermediate states like `Bound5(d: [-17296], e: [-15473])` only by moving magnitude between `d`'s leaf and `e`'s leaf, which are not siblings of any sequence but are cross-slot under the Bound5 tuple.
+    /// 1. **Sequence siblings** — chooseBits children of the same sequence parent. Only emitted for heterogeneous sequences (``SequenceMetadata/elementTypeTag`` is nil). Homogeneous sequences are handled by ``homogeneousRedistributionPairs(innerChildToBind:pairBudget:)`` in O(C log C) instead of O(C^2).
+    /// 2. **Zip cross-slot** — chooseBits descendants of *different* children of a common zip parent. Tuple slots are simultaneously chosen and the property frequently correlates their values; redistribution between them is the only way to shrink to a coupled extremum. Bound5's `d + e == -32769` constraint is the canonical example. Cross-slot pairs between two homogeneous sequences of the same type are also deferred to the homogeneous pair path.
     ///
     /// Cross-parent pairs whose lowest common ancestor is a sequence (the elements of a `[[Int]]` workload) are *not* generated. Sequence elements are independently chosen and the property treats them as independent decision contexts; cross-element redistribution produces no shrinking-meaningful candidates and balloons the edge count quadratically for high-fanout sequences.
     ///
     /// ## Complexity
     ///
-    /// Pass 1 (sequence parents) is Σ over sequence parents of O(C²) where C is each parent's chooseBits child count. Pass 2 (zip parents) is Σ over zip parents of (Σᵢ⁢ⱼ Lᵢ · Lⱼ) where Lᵢ is the chooseBits-leaf count under the i-th zip child.
-    ///
-    /// For NestedLists pathological (99 sub-arrays of ~50 leaves each, no zip in the leaf path): 99 · C(50, 2) ≈ 121K edges from pass 1, zero from pass 2. For Bound5 (5 small arrays under one zip): a handful of pass-1 edges plus the 5×5 cross-slot grid from pass 2. For Coupling (single int + bound array, no zip): a handful of pass-1 edges from the bound array, zero from pass 2.
-    ///
-    /// The previous flat-leaf implementation iterated all numeric leaves and paired every pair via `areIndependent` plus a type check. For workloads with no binds every pair was independent, so the result was the complete graph K(L) with one allocation per pair — 11.4 million edges per source rebuild for NestedLists pathological. This implementation avoids that by structuring the iteration around the actual decision contexts.
+    /// Pass 1 is O(C^2) per *heterogeneous* sequence parent only. Homogeneous sequences (the common case) are skipped. Pass 2 is Sigma(L_i * L_j) for cross-zip pairs, skipping pairs between two homogeneous groups of the same type.
     func computeTypeCompatibilityEdges() -> [TypeCompatibilityEdge] {
         var edges: [TypeCompatibilityEdge] = []
 
-        // Pass 1: chooseBits siblings under each sequence parent.
+        // Pass 1: chooseBits siblings under each heterogeneous sequence parent.
+        // Homogeneous sequences (elementTypeTag != nil) are handled by
+        // homogeneousRedistributionPairs() in O(C log C) instead of O(C²).
         for parentNode in nodes {
             guard parentNode.positionRange != nil else { continue }
-            guard case .sequence = parentNode.kind else { continue }
+            guard case let .sequence(seqMetadata) = parentNode.kind else { continue }
+            guard seqMetadata.elementTypeTag == nil else { continue }
 
             var siblings: [(nodeID: Int, tag: TypeTag)] = []
             siblings.reserveCapacity(parentNode.children.count)
@@ -41,9 +40,6 @@ extension ChoiceGraph {
             }
             guard siblings.count >= 2 else { continue }
 
-            // Within-parent sibling pairs. Pairs may be same-tag (homogeneous
-            // arrays) or mixed-tag (sequence of `.oneOf(Int, Float)`); the
-            // encoder differentiates at dispatch time via the `typeTag` field.
             var indexA = 0
             while indexA < siblings.count {
                 var indexB = indexA + 1
@@ -74,19 +70,39 @@ extension ChoiceGraph {
             guard zipNode.children.count >= 2 else { continue }
 
             // Collect leaves per zip child via a containment-tree walk.
+            // Track each child's homogeneous type tag (if any) so that
+            // cross-slot pairs between two homogeneous groups of the same
+            // type can be deferred to homogeneousRedistributionPairs().
             var perChildLeaves: [[(nodeID: Int, tag: TypeTag)]] = []
+            var perChildHomogeneousTag: [TypeTag?] = []
             perChildLeaves.reserveCapacity(zipNode.children.count)
+            perChildHomogeneousTag.reserveCapacity(zipNode.children.count)
             for childID in zipNode.children {
                 var leaves: [(nodeID: Int, tag: TypeTag)] = []
                 collectChooseBitsDescendants(rootID: childID, into: &leaves)
                 perChildLeaves.append(leaves)
+                let childNode = nodes[childID]
+                if case let .sequence(seqMeta) = childNode.kind {
+                    perChildHomogeneousTag.append(seqMeta.elementTypeTag)
+                } else {
+                    perChildHomogeneousTag.append(nil)
+                }
             }
 
-            // Pair leaves across different child groups only.
+            // Pair leaves across different child groups only. Skip pairs
+            // between two homogeneous groups of the same type — those are
+            // handled by homogeneousRedistributionPairs() in O(C) instead
+            // of O(L_i * L_j).
             var groupA = 0
             while groupA < perChildLeaves.count {
                 var groupB = groupA + 1
                 while groupB < perChildLeaves.count {
+                    let tagA = perChildHomogeneousTag[groupA]
+                    let tagB = perChildHomogeneousTag[groupB]
+                    if let tagA, let tagB, tagA == tagB {
+                        groupB += 1
+                        continue
+                    }
                     for leafA in perChildLeaves[groupA] {
                         for leafB in perChildLeaves[groupB] {
                             let sharedTag: TypeTag? = (leafA.tag == leafB.tag) ? leafA.tag : nil

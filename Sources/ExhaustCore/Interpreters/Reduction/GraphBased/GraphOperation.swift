@@ -54,6 +54,8 @@ enum GraphOperation {
                 elementScope.targets.flatMap(\.elementNodeIDs)
             case let .subtree(subtreeScope):
                 [subtreeScope.nodeID]
+            case .coveringAligned:
+                nil
             }
         case let .replace(scope):
             switch scope {

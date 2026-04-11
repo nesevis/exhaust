@@ -7,13 +7,16 @@
 
 /// Defines the scope of a subgraph removal operation.
 ///
-/// Two scope granularities: element removal across one or more sequences, and structural subtree removal.
+/// Three scope granularities: element removal across one or more sequences, structural subtree removal, and covering-array-backed aligned removal across sibling sequences under a common zip.
 enum RemovalScope {
     /// Remove elements from one or more sequences. Subsumes both single-parent removal and aligned removal across sibling sequences.
     case elements(ElementRemovalScope)
 
     /// Remove a structural subtree (bind subtree, zip child, or other compound element in the deletion antichain).
     case subtree(SubtreeRemovalScope)
+
+    /// Covering-array-backed aligned removal across sibling sequences under a common zip. The encoder pulls rows from the covering array generator, decoding each into an element deletion combination with pairwise interaction coverage.
+    case coveringAligned(CoveringAlignedRemovalScope)
 }
 
 /// Scope for element removal across one or more sequences.
@@ -48,6 +51,49 @@ struct SubtreeRemovalScope {
 
     /// Yield: position range count.
     let yield: Int
+}
+
+// MARK: - Covering Aligned Removal
+
+/// ARC-managed handle for a ``PullBasedCoveringArrayGenerator`` that automatically deallocates the generator's internal bit vectors when the last reference is released.
+final class CoveringArrayHandle {
+    var generator: PullBasedCoveringArrayGenerator
+
+    init(generator: PullBasedCoveringArrayGenerator) {
+        self.generator = generator
+    }
+
+    deinit {
+        generator.deallocate()
+    }
+}
+
+/// Aligned removal scope backed by a strength-2 covering array over sibling sequence elements.
+///
+/// Each sibling sequence under a common zip becomes a parameter whose domain is `elementCount + 1` — the extra value encodes "skip this sibling" (do not delete from it). The covering array generator produces rows that guarantee pairwise coverage of all (sibling-A element, sibling-B element) interactions in O(max(domain)^2 * log(siblings)) rows, replacing the previous exponential subset enumeration and cross-product expansion.
+///
+/// The generator is wrapped in a ``CoveringArrayHandle`` for automatic deallocation via ARC. The encoder pulls rows from the generator on each ``GraphEncoder/nextProbe(lastAccepted:)`` call, decoding each row into deletion targets for candidate construction.
+struct CoveringAlignedRemovalScope {
+    /// The sibling sequences participating in aligned deletion.
+    let siblings: [AlignedSibling]
+
+    /// ARC-managed covering array generator. The encoder pulls rows from ``CoveringArrayHandle/generator`` via ``PullBasedCoveringArrayGenerator/next()``.
+    let handle: CoveringArrayHandle
+
+    /// Per-parameter domain value that encodes "skip this sibling." Equal to the sibling's element count (one past the last valid element index).
+    let skipValues: [UInt64]
+
+    /// Maximum single-element yield across all siblings. Used for the scope source's ``TransformationYield/structural`` estimate.
+    let maxElementYield: Int
+
+    /// One sibling sequence in the aligned deletion group.
+    struct AlignedSibling {
+        /// The parent sequence node ID.
+        let sequenceNodeID: Int
+
+        /// Deletable element node IDs, ordered by position within the sequence.
+        let elementNodeIDs: [Int]
+    }
 }
 
 // MARK: - Replacement Scopes

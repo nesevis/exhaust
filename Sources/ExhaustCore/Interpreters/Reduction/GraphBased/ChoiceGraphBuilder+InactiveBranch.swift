@@ -43,7 +43,8 @@ extension ChoiceGraphBuilder {
                 kind: .sequence(SequenceMetadata(
                     lengthConstraint: metadata.validRange,
                     elementCount: elements.count,
-                    childPositionRanges: []
+                    childPositionRanges: [],
+                    elementTypeTag: nil
                 )),
                 positionRange: nil,
                 children: [],

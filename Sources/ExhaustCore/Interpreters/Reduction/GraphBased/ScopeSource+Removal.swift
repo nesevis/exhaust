@@ -434,17 +434,15 @@ struct PerElementRemovalSource: ScopeSource {
 
 // MARK: - Aligned Removal Source
 
-/// Emits multi-target element removal scopes across sibling subsets in yield-descending order.
+/// Emits covering-array-backed aligned removal scopes across sibling sequences under zip nodes.
 ///
-/// Uses the aligned element scopes from ``ChoiceGraph/elementRemovalScopes()`` (multi-target scopes only). Each scope fully specifies which positions to remove across all participating sequences. One probe per scope.
+/// Each scope carries a ``PullBasedCoveringArrayGenerator`` that the encoder pulls rows from on each probe. The source emits one transformation per zip node; the encoder is multi-shot.
 struct AlignedRemovalSource: ScopeSource {
-    private var scopes: [ElementRemovalScope]
+    private var scopes: [CoveringAlignedRemovalScope]
     private var index = 0
 
     init(graph: ChoiceGraph) {
-        // Filter to multi-target scopes only (aligned across siblings).
-        scopes = graph.elementRemovalScopes()
-            .filter { $0.targets.count >= 2 }
+        scopes = graph.coveringAlignedRemovalScopes()
             .sorted { scopeA, scopeB in
                 scopeA.maxElementYield > scopeB.maxElementYield
             }
@@ -456,7 +454,7 @@ struct AlignedRemovalSource: ScopeSource {
             structural: scopes[index].maxElementYield,
             value: 0,
             slack: .exact,
-            estimatedProbes: 1
+            estimatedProbes: scopes[index].handle.generator.totalRemaining
         )
     }
 
@@ -466,14 +464,14 @@ struct AlignedRemovalSource: ScopeSource {
         index += 1
 
         return GraphTransformation(
-            operation: .remove(.elements(scope)),
+            operation: .remove(.coveringAligned(scope)),
             yield: TransformationYield(
                 structural: scope.maxElementYield,
                 value: 0,
                 slack: .exact,
-                estimatedProbes: 1
+                estimatedProbes: scope.handle.generator.totalRemaining
             ),
-            precondition: .all(scope.targets.map {
+            precondition: .all(scope.siblings.map {
                 .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
             }),
             postcondition: TransformationPostcondition(

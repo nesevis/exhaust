@@ -118,6 +118,15 @@ public struct SequenceMetadata {
 
     /// Full ``ChoiceSequence`` extent of each direct child element, including any transparent wrapper markers (group/bind from getSize-bind, transform-bind, and so on). Indexed parallel to ``ChoiceGraphNode/children``. Per-element removal must delete the full extent — removing only the inner chooseBits position leaves orphan markers that the materializer cannot decode.
     public let childPositionRanges: [ClosedRange<Int>]
+
+    /// Common ``TypeTag`` of all elements when the sequence is type-homogeneous, or nil for heterogeneous or empty sequences.
+    ///
+    /// Derived bottom-up at graph construction time from two cases:
+    /// - Direct: all children are ``ChoiceGraphNodeKind/chooseBits(_:)`` with the same tag.
+    /// - Nested: all children are ``ChoiceGraphNodeKind/sequence(_:)`` with the same non-nil ``elementTypeTag``, implying subsequence homogeneity.
+    ///
+    /// When non-nil, any two leaves within the sequence are type-compatible for redistribution without materializing pairwise edges. The exchange scope builder uses this to construct ``RedistributionGroup`` descriptors in O(1) per sequence instead of O(C^2) per sequence.
+    public let elementTypeTag: TypeTag?
 }
 
 // MARK: - Node

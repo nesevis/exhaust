@@ -68,6 +68,26 @@ enum TransformationEnumerator {
             ))
         }
 
+        for scope in graph.coveringAlignedRemovalScopes() {
+            result.append(GraphTransformation(
+                operation: .remove(.coveringAligned(scope)),
+                yield: TransformationYield(
+                    structural: scope.maxElementYield,
+                    value: 0,
+                    slack: .exact,
+                    estimatedProbes: scope.handle.generator.totalRemaining
+                ),
+                precondition: .all(scope.siblings.map {
+                    .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
+                }),
+                postcondition: TransformationPostcondition(
+                    isStructural: true,
+                    invalidatesConvergence: [],
+                    enablesRemoval: []
+                )
+            ))
+        }
+
         for scope in graph.subtreeRemovalScopes() {
             result.append(GraphTransformation(
                 operation: .remove(.subtree(scope)),

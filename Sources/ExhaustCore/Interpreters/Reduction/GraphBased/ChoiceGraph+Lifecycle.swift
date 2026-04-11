@@ -449,7 +449,8 @@ extension ChoiceGraph {
                 updatedKind = .sequence(SequenceMetadata(
                     lengthConstraint: seqMetadata.lengthConstraint,
                     elementCount: seqMetadata.elementCount,
-                    childPositionRanges: shiftedChildRanges
+                    childPositionRanges: shiftedChildRanges,
+                    elementTypeTag: seqMetadata.elementTypeTag
                 ))
             } else {
                 updatedKind = node.kind

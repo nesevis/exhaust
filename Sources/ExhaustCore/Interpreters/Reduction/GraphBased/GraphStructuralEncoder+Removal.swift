@@ -34,6 +34,11 @@ extension GraphStructuralEncoder {
                     [(seqNodeID: graph.nodes[subtreeScope.nodeID].parent ?? -1, removedNodeIDs: [subtreeScope.nodeID])]
                 )
             )
+
+        case .coveringAligned:
+            // Covering aligned removal is handled by the multi-shot path
+            // in ``GraphStructuralEncoder/nextCoveringAlignedProbe()``.
+            return nil
         }
     }
 
@@ -88,5 +93,64 @@ extension GraphStructuralEncoder {
         candidate.removeSubranges(rangeSet)
         guard candidate.shortLexPrecedes(sequence) else { return nil }
         return candidate
+    }
+
+    // MARK: - Covering Aligned Removal
+
+    /// Pulls the next row from the covering array generator and decodes it into a deletion probe.
+    ///
+    /// Each row is an array of `UInt64` values, one per sibling parameter. A value equal to the sibling's skip value (= element count) means "do not delete from this sibling." Any other value is an element index within that sibling's `elementNodeIDs`. Rows where fewer than two siblings participate are skipped — single-sequence deletion is already covered by ``PerElementRemovalSource``.
+    mutating func nextCoveringAlignedProbe() -> EncoderProbe? {
+        guard let state = coveringAlignedState else { return nil }
+
+        while let row = state.scope.handle.generator.next() {
+            // Decode the row into deletion targets.
+            var targets: [SequenceRemovalTarget] = []
+            var removedPairs: [(seqNodeID: Int, removedNodeIDs: [Int])] = []
+
+            for (siblingIndex, value) in row.values.enumerated() {
+                guard siblingIndex < state.scope.siblings.count else { continue }
+                // Skip value = don't delete from this sibling.
+                if value == state.scope.skipValues[siblingIndex] { continue }
+                let elementIndex = Int(value)
+                let sibling = state.scope.siblings[siblingIndex]
+                guard elementIndex < sibling.elementNodeIDs.count else { continue }
+                let nodeID = sibling.elementNodeIDs[elementIndex]
+                targets.append(SequenceRemovalTarget(
+                    sequenceNodeID: sibling.sequenceNodeID,
+                    elementNodeIDs: [nodeID]
+                ))
+                removedPairs.append((
+                    seqNodeID: sibling.sequenceNodeID,
+                    removedNodeIDs: [nodeID]
+                ))
+            }
+
+            // Require at least two siblings participating.
+            guard targets.count >= 2 else { continue }
+
+            let elementScope = ElementRemovalScope(
+                targets: targets,
+                maxBatch: 1,
+                maxElementYield: state.scope.maxElementYield
+            )
+
+            guard let candidate = buildElementCandidate(
+                scope: elementScope,
+                sequence: state.baseSequence,
+                graph: state.graph
+            ) else {
+                continue
+            }
+
+            return EncoderProbe(
+                candidate: candidate,
+                mutation: .sequenceElementsRemoved(removedPairs)
+            )
+        }
+
+        // Generator exhausted.
+        coveringAlignedState = nil
+        return nil
     }
 }

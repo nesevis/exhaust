@@ -118,7 +118,8 @@ struct ChoiceGraphBuilder {
             kind: .sequence(SequenceMetadata(
                 lengthConstraint: metadata.validRange,
                 elementCount: elements.count,
-                childPositionRanges: [] // Patched after children are walked.
+                childPositionRanges: [], // Patched after children are walked.
+                elementTypeTag: nil
             )),
             positionRange: nil,
             children: [],
@@ -155,13 +156,14 @@ struct ChoiceGraphBuilder {
 
         consumed += 1 // close marker
 
-        // Patch the node with children, position range, and child extents.
+        // Patch the node with children, position range, child extents, and element type homogeneity.
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
             kind: .sequence(SequenceMetadata(
                 lengthConstraint: metadata.validRange,
                 elementCount: elements.count,
-                childPositionRanges: childExtents
+                childPositionRanges: childExtents,
+                elementTypeTag: deriveElementTypeTag(childIDs: childIDs)
             )),
             positionRange: offset ... (offset + consumed - 1),
             children: childIDs,
@@ -416,6 +418,41 @@ struct ChoiceGraphBuilder {
             parent: parent
         ))
         return nodeID
+    }
+
+    // MARK: - Element Type Homogeneity
+
+    /// Derives the common ``TypeTag`` for a sequence's children when all elements share the same type.
+    ///
+    /// Checks at most two children — sequence elements come from the same generator, so if the first two agree, all do. Two structural patterns qualify:
+    /// - Direct: both children are ``ChoiceGraphNodeKind/chooseBits(_:)`` with matching tags.
+    /// - Nested: both children are ``ChoiceGraphNodeKind/sequence(_:)`` with matching non-nil ``SequenceMetadata/elementTypeTag``.
+    ///
+    /// Returns nil for empty sequences, single-element sequences where the child is neither chooseBits nor a homogeneous sequence, or when the first two children disagree.
+    func deriveElementTypeTag(childIDs: [Int]) -> TypeTag? {
+        guard let firstID = childIDs.first else { return nil }
+        let firstTag = leafTypeTag(of: firstID)
+        guard let tag = firstTag else { return nil }
+        if childIDs.count >= 2 {
+            let secondTag = leafTypeTag(of: childIDs[1])
+            guard secondTag == tag else { return nil }
+        }
+        return tag
+    }
+
+    /// Extracts the element-level ``TypeTag`` from a single child node.
+    ///
+    /// For chooseBits nodes, returns the tag directly. For sequence nodes with a non-nil ``SequenceMetadata/elementTypeTag``, returns that tag (implying nested homogeneity). Returns nil for all other node kinds.
+    private func leafTypeTag(of nodeID: Int) -> TypeTag? {
+        let node = nodes[nodeID]
+        switch node.kind {
+        case let .chooseBits(metadata):
+            return metadata.typeTag
+        case let .sequence(metadata):
+            return metadata.elementTypeTag
+        default:
+            return nil
+        }
     }
 
     // MARK: - Pick-Site Detection
