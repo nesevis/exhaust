@@ -95,8 +95,16 @@ public struct FibreCoveringEncoder: ComposableEncoder {
             exhaustiveProbes = buildExhaustiveRows(count: Int(totalSpace))
         } else if valuePositions.count >= 2 {
             // Pull-based pairwise coverage. Rows are generated lazily in nextProbe().
+            // Cap each domain to coveringBudget: we emit at most that many rows, so
+            // larger domains add no useful coverage and would produce enormous bit
+            // vector allocations (for example, Unicode scalar domains of ~1.1M values
+            // clamp to 65535 in PullBasedCoveringArrayGenerator, giving a 536 MB bit
+            // vector and O(65535²) work per row).
+            let cappedDomains = valuePositions.map {
+                min($0.domainSize, UInt64(Self.coveringBudget))
+            }
             generator = PullBasedCoveringArrayGenerator(
-                domainSizes: valuePositions.map(\.domainSize),
+                domainSizes: cappedDomains,
                 strength: 2
             )
         }
