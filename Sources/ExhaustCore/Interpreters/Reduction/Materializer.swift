@@ -168,170 +168,176 @@ extension Materializer {
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
+        // Fuse switch to avoid overhead of copying `operation`
         switch gen {
         case let .pure(value):
             return (value, .just)
 
-        case let .impure(operation, continuation):
-            switch operation {
-            case let .contramap(_, nextGen):
-                // Transparent: no callee tree node — fallback passes through.
-                return try handleContramap(
-                    nextGen, continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: fallbackTree,
-                    continuationFallback: nil
-                )
+        case let .impure(.contramap(_, nextGen), continuation):
+            // Transparent: no callee tree node — fallback passes through.
+            return try handleContramap(
+                nextGen, continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: fallbackTree,
+                continuationFallback: nil
+            )
 
-            case let .prune(nextGen):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                return try handlePrune(
-                    nextGen, continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
-                )
+        case let .impure(.prune(nextGen), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            return try handlePrune(
+                nextGen, continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: calleeFallback,
+                continuationFallback: continuationFallback
+            )
 
-            case let .pick(choices):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                return try handlePick(
-                    choices, continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
-                )
+        case let .impure(.pick(choices), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            return try handlePick(
+                choices, continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: calleeFallback,
+                continuationFallback: continuationFallback
+            )
 
-            case let .chooseBits(min, max, tag, isRangeExplicit):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                return try handleChooseBits(
-                    min: min, max: max, tag: tag, isRangeExplicit: isRangeExplicit,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
-                )
+        case let .impure(.chooseBits(min, max, tag, isRangeExplicit), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            return try handleChooseBits(
+                min: min, max: max, tag: tag, isRangeExplicit: isRangeExplicit,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: calleeFallback,
+                continuationFallback: continuationFallback
+            )
 
-            case let .sequence(lengthGen, elementGen):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                return try handleSequence(
-                    lengthGen: lengthGen, elementGen: elementGen,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
-                )
+        case let .impure(.sequence(lengthGen, elementGen), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            return try handleSequence(
+                lengthGen: lengthGen, elementGen: elementGen,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: calleeFallback,
+                continuationFallback: continuationFallback
+            )
 
-            case let .zip(generators, _):
-                // Zip: callee is a group with known child count.
-                let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
-                if let fallbackTree,
-                   case let .group(children, _) = fallbackTree, children.count == 2,
-                   case let .group(inner, _) = children[0], inner.count == generators.count
-                {
-                    (calleeFallback, continuationFallback) = (children[0], children[1])
-                } else {
-                    (calleeFallback, continuationFallback) = (fallbackTree, nil)
-                }
-                return try handleZip(
-                    generators, continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
-                )
-
-            case let .just(value):
-                let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                return try runContinuation(
-                    result: value, calleeChoiceTree: .just,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, continuationFallback: continuationFallback
-                )
-
-            case .getSize:
-                // Always use context.size (default 100 = max). At max size, all
-                // size-scaled generators produce their full range, so no valid
-                // prefix value is ever outside the derived range. Using the
-                // fallback tree's `.getSize` is unreliable — reflected trees may
-                // store a small size that produces tiny ranges, destroying values
-                // via clamping.
-                let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                let size = context.sizeOverride ?? context.size
-                context.sizeOverride = nil
-                return try runContinuation(
-                    result: size, calleeChoiceTree: .getSize(size),
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, continuationFallback: continuationFallback
-                )
-
-            case let .resize(newSize, gen):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                return try handleResize(
-                    newSize: newSize, gen: gen,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
-                )
-
-            case let .filter(gen, fingerprint, _, predicate):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                guard let (result, tree) = try generateRecursive(
-                    gen, with: inputValue, context: &context, fallbackTree: calleeFallback
-                ) else { return nil }
-                let passed = predicate(result)
-                context.filterObservations[fingerprint, default: FilterObservation()]
-                    .recordAttempt(passed: passed)
-                guard passed else { return nil }
-                return try runContinuation(
-                    result: result, calleeChoiceTree: tree,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, continuationFallback: continuationFallback
-                )
-
-            case let .classify(gen, _, _):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                guard let (result, tree) = try generateRecursive(
-                    gen, with: inputValue, context: &context, fallbackTree: calleeFallback
-                ) else { return nil }
-                return try runContinuation(
-                    result: result, calleeChoiceTree: tree,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, continuationFallback: continuationFallback
-                )
-
-            case let .unique(gen, _, _):
-                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                guard let (result, tree) = try generateRecursive(
-                    gen, with: inputValue, context: &context, fallbackTree: calleeFallback
-                ) else { return nil }
-                return try runContinuation(
-                    result: result, calleeChoiceTree: tree,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, continuationFallback: continuationFallback
-                )
-
-            case let .transform(kind, inner):
-                switch kind {
-                case .map:
-                    // Transparent: no callee tree node — fallback passes through.
-                    return try handleTransform(
-                        kind: kind, inner: inner,
-                        continuation: continuation, inputValue: inputValue,
-                        context: &context, calleeFallback: fallbackTree,
-                        continuationFallback: nil
-                    )
-                case .bind:
-                    let (calleeFallback, continuationFallback) =
-                        decomposeNonGroupFallback(fallbackTree)
-                    return try handleTransform(
-                        kind: kind, inner: inner,
-                        continuation: continuation, inputValue: inputValue,
-                        context: &context, calleeFallback: calleeFallback,
-                        continuationFallback: continuationFallback
-                    )
-                case .metamorphic:
-                    // Transparent: no callee tree node — fallback passes through (same as .map).
-                    return try handleTransform(
-                        kind: kind, inner: inner,
-                        continuation: continuation, inputValue: inputValue,
-                        context: &context, calleeFallback: fallbackTree,
-                        continuationFallback: nil
-                    )
-                }
+        case let .impure(.zip(generators, _), continuation):
+            // Zip: callee is a group with known child count.
+            let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
+            if let fallbackTree,
+               case let .group(children, _) = fallbackTree, children.count == 2,
+               case let .group(inner, _) = children[0], inner.count == generators.count
+            {
+                (calleeFallback, continuationFallback) = (children[0], children[1])
+            } else {
+                (calleeFallback, continuationFallback) = (fallbackTree, nil)
             }
+            return try handleZip(
+                generators, continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: calleeFallback,
+                continuationFallback: continuationFallback
+            )
+
+        case let .impure(.just(value), continuation):
+            let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            return try runContinuation(
+                result: value, calleeChoiceTree: .just,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, continuationFallback: continuationFallback
+            )
+
+        case let .impure(.getSize, continuation):
+            // Always use context.size (default 100 = max). At max size, all
+            // size-scaled generators produce their full range, so no valid
+            // prefix value is ever outside the derived range. Using the
+            // fallback tree's `.getSize` is unreliable — reflected trees may
+            // store a small size that produces tiny ranges, destroying values
+            // via clamping.
+            let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            let size = context.sizeOverride ?? context.size
+            context.sizeOverride = nil
+            return try runContinuation(
+                result: size, calleeChoiceTree: .getSize(size),
+                continuation: continuation, inputValue: inputValue,
+                context: &context, continuationFallback: continuationFallback
+            )
+
+        case let .impure(.resize(newSize, gen), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            return try handleResize(
+                newSize: newSize, gen: gen,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: calleeFallback,
+                continuationFallback: continuationFallback
+            )
+
+        case let .impure(.filter(gen, fingerprint, _, predicate), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            guard let (result, tree) = try generateRecursive(
+                gen, with: inputValue, context: &context, fallbackTree: calleeFallback
+            ) else { return nil }
+            let passed = predicate(result)
+            context.filterObservations[fingerprint, default: FilterObservation()]
+                .recordAttempt(passed: passed)
+            guard passed else { return nil }
+            return try runContinuation(
+                result: result, calleeChoiceTree: tree,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, continuationFallback: continuationFallback
+            )
+
+        case let .impure(.classify(gen, _, _), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            guard let (result, tree) = try generateRecursive(
+                gen, with: inputValue, context: &context, fallbackTree: calleeFallback
+            ) else { return nil }
+            return try runContinuation(
+                result: result, calleeChoiceTree: tree,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, continuationFallback: continuationFallback
+            )
+
+        case let .impure(.unique(gen, _, _), continuation):
+            let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            guard let (result, tree) = try generateRecursive(
+                gen, with: inputValue, context: &context, fallbackTree: calleeFallback
+            ) else { return nil }
+            return try runContinuation(
+                result: result, calleeChoiceTree: tree,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, continuationFallback: continuationFallback
+            )
+
+        case let .impure(.transform(.map(forward, inputType, outputType), inner), continuation):
+            // Transparent: no callee tree node — fallback passes through.
+            return try handleTransform(
+                kind: .map(forward: forward, inputType: inputType, outputType: outputType),
+                inner: inner,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: fallbackTree,
+                continuationFallback: nil
+            )
+
+        case let .impure(
+            .transform(.bind(forward, backward, inputType, outputType), inner),
+            continuation
+        ):
+            let (calleeFallback, continuationFallback) =
+                decomposeNonGroupFallback(fallbackTree)
+            return try handleTransform(
+                kind: .bind(
+                    forward: forward, backward: backward,
+                    inputType: inputType, outputType: outputType
+                ),
+                inner: inner,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: calleeFallback,
+                continuationFallback: continuationFallback
+            )
+
+        case let .impure(.transform(.metamorphic(transforms, inputType), inner), continuation):
+            // Transparent: no callee tree node — fallback passes through (same as .map).
+            return try handleTransform(
+                kind: .metamorphic(transforms: transforms, inputType: inputType),
+                inner: inner,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, calleeFallback: fallbackTree,
+                continuationFallback: nil
+            )
         }
     }
 
