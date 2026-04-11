@@ -11,14 +11,14 @@
 
 extension Materializer {
     @inline(__always)
-    static func handleContramap<Output>(
+    static func handleContramap(
         _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         guard let (result, tree) = try generateRecursive(
             nextGen, with: inputValue, context: &context, fallbackTree: calleeFallback
         ) else { return nil }
@@ -30,14 +30,14 @@ extension Materializer {
     }
 
     @inline(__always)
-    static func handlePrune<Output>(
+    static func handlePrune(
         _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
         }
@@ -54,17 +54,17 @@ extension Materializer {
     // MARK: chooseBits
 
     @inline(__always)
-    static func handleChooseBits<Output>(
+    static func handleChooseBits(
         min: UInt64,
         max: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let randomBits: UInt64
         var reusedChoice: ChoiceValue?
 
@@ -139,14 +139,14 @@ extension Materializer {
     // MARK: pick (with materialized alternatives)
 
     @inline(__always)
-    static func handlePick<Output>(
+    static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         // Always consume a jump seed from the PRNG stream (VACTI pattern).
         let jumpSeed = context.prng.next()
         var branchIDs = [UInt64]()
@@ -214,7 +214,7 @@ extension Materializer {
         // Execute selected branch; optionally materialize non-selected branches.
         var branches = [ChoiceTree]()
         branches.reserveCapacity(context.materializePicks ? choices.count : 1)
-        var finalValue: Output?
+        var finalValue: Any?
         let augmentedSiteID = choices[0].siteID &+ context.pickDepth
         let savedPickDepth = context.pickDepth
         context.pickDepth += 1
@@ -310,15 +310,15 @@ extension Materializer {
     // MARK: sequence
 
     @inline(__always)
-    static func handleSequence<Output>(
+    static func handleSequence(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let length: UInt64
         let lengthMeta: ChoiceMetadata
         var elementFallbacks: [ChoiceTree]?
@@ -345,10 +345,12 @@ extension Materializer {
                         isRangeExplicit: isRangeExplicit
                     )
                 } else {
+                    // Erase ``lengthGen`` so it can be passed to the non-generic ``generateRecursive``. The fast path above (chooseBits) skips this so the only callers paying the structural rebuild cost are the rare non-chooseBits length generators.
+                    let erasedLengthGen = lengthGen.erase()
                     let savedMode = context.mode
                     context.mode = .generate
                     if let (_, lengthTree) = try generateRecursive(
-                        lengthGen, with: inputValue, context: &context
+                        erasedLengthGen, with: inputValue, context: &context
                     ) {
                         lengthMeta = lengthTree.metadata
                     } else {
@@ -364,10 +366,11 @@ extension Materializer {
                 // `length: 0...10`) this preserves the prefix count. Analogous to
                 // the fallback-length clamping at the cursor-suspended path below.
                 let prefixCount = UInt64(seqInfo.elementCount)
+                let erasedLengthGen = lengthGen.erase()
                 let savedMode = context.mode
                 context.mode = .generate
                 guard let (_, lengthTree) = try generateRecursive(
-                    lengthGen, with: inputValue, context: &context
+                    erasedLengthGen, with: inputValue, context: &context
                 ) else {
                     context.mode = savedMode
                     return nil
@@ -396,10 +399,11 @@ extension Materializer {
             // See docs/Guided Decoder Redistribution Gap.md.
             let resolvedLen = context.capturedBindBoundSequenceLength.map { UInt64($0) } ?? fbLen
             context.capturedBindBoundSequenceLength = nil
+            let erasedLengthGen = lengthGen.erase()
             let savedMode = context.mode
             context.mode = .generate
             guard let (_, lengthTree) = try generateRecursive(
-                lengthGen, with: inputValue, context: &context
+                erasedLengthGen, with: inputValue, context: &context
             ) else {
                 context.mode = savedMode
                 return nil
@@ -413,10 +417,12 @@ extension Materializer {
             }
             lengthMeta = lengthTree.metadata
         } else {
+            let erasedLengthGen = lengthGen.erase()
             guard let (freshLength, lengthTree) = try generateRecursive(
-                lengthGen, with: inputValue, context: &context
+                erasedLengthGen, with: inputValue, context: &context
             ) else { return nil }
-            length = freshLength
+            // swiftlint:disable:next force_cast
+            length = freshLength as! UInt64
             lengthMeta = lengthTree.metadata
         }
 
@@ -461,14 +467,14 @@ extension Materializer {
     // MARK: zip
 
     @inline(__always)
-    static func handleZip<Output>(
+    static func handleZip(
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let fallbackChildren: [ChoiceTree]? = if let calleeFallback,
                                                  case let .group(children, _) = calleeFallback,
                                                  children.count == generators.count
@@ -528,15 +534,15 @@ extension Materializer {
     // MARK: resize
 
     @inline(__always)
-    static func handleResize<Output>(
+    static func handleResize(
         newSize: UInt64,
         gen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let innerFallback: ChoiceTree? = if let calleeFallback,
                                             case let .resize(_, choices) = calleeFallback,
                                             let inner = choices.first
@@ -563,15 +569,15 @@ extension Materializer {
     // MARK: transform (map / bind)
 
     @inline(__always)
-    static func handleTransform<Output>(
+    static func handleTransform(
         kind: TransformKind,
         inner: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         switch kind {
         case let .map(forward, _, _):
             guard let (innerValue, innerTree) = try generateRecursive(

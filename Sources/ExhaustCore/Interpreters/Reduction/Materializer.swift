@@ -56,6 +56,37 @@ public enum Materializer {
         materializePicks: Bool = false,
         precomputedSeed: UInt64? = nil
     ) -> Result<Output> {
+        // Generic public entry point — erases the input generator and casts the result back to ``Output`` at the boundary, delegating to the non-generic ``materializeAny``. Hot-path callers (schedulers, decoders) should hold an already-erased ``ReflectiveGenerator<Any>`` and call ``materializeAny`` directly to avoid the per-call erasure cost.
+        let anyResult = materializeAny(
+            gen.erase(),
+            prefix: consume prefix,
+            mode: mode,
+            fallbackTree: fallbackTree,
+            materializePicks: materializePicks,
+            precomputedSeed: precomputedSeed
+        )
+        switch anyResult {
+        case let .success(value, tree, report):
+            // swiftlint:disable:next force_cast
+            return .success(value: value as! Output, tree: tree, decodingReport: report)
+        case let .rejected(report):
+            return .rejected(decodingReport: report)
+        case let .failed(report):
+            return .failed(decodingReport: report)
+        }
+    }
+
+    /// Non-generic materialization entry point that takes an already-erased generator.
+    ///
+    /// This is the hot-path API used by the reduction pipeline. By eliminating the `<Output>` generic parameter on the recursive descent, the runtime no longer pays per-Output-type metadata cache lookups inside ``generateRecursive``. Callers that hold a typed ``ReflectiveGenerator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
+    public static func materializeAny(
+        _ gen: ReflectiveGenerator<Any>,
+        prefix: consuming ChoiceSequence,
+        mode: Mode,
+        fallbackTree: ChoiceTree? = nil,
+        materializePicks: Bool = false,
+        precomputedSeed: UInt64? = nil
+    ) -> Result<Any> {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
         let maximizeBoundRegionIndices: Set<Int>?
@@ -162,12 +193,12 @@ extension Materializer {
         return (tree, nil)
     }
 
-    static func generateRecursive<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+    static func generateRecursive(
+        _ gen: ReflectiveGenerator<Any>,
         with inputValue: Any,
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         // Fuse switch to avoid overhead of copying `operation`
         switch gen {
         case let .pure(value):
@@ -344,14 +375,14 @@ extension Materializer {
     // MARK: - Run Continuation
 
     @inline(__always)
-    static func runContinuation<Output>(
+    static func runContinuation(
         result: Any,
         calleeChoiceTree: ChoiceTree,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
         continuationFallback: ChoiceTree? = nil
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let nextGen = try continuation(result)
 
         if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {

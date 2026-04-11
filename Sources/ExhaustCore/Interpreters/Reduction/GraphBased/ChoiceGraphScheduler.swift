@@ -71,8 +71,11 @@ enum ChoiceGraphScheduler {
         // Matches `BonsaiScheduler.runCore`'s branch projection bootstrap.
         var sequence = ChoiceSequence.flatten(initialTree)
         var tree = initialTree
-        if case let .success(_, fullTree, _) = Materializer.materialize(
-            gen,
+        // Erase ``gen`` once at the runner boundary so the entire probe loop operates on a single non-generic ``ReflectiveGenerator<Any>``. The wrapped property closure casts ``Any`` back to ``Output`` exactly once per probe, where the original typed property is invoked. This collapses the per-Output-type generic specialization that was dominating runtime metadata cache traffic.
+        let erasedGen = gen.erase()
+        let wrappedProperty: (Any) -> Bool = { property($0 as! Output) }
+        if case let .success(_, fullTree, _) = Materializer.materializeAny(
+            erasedGen,
             prefix: sequence,
             mode: .exact,
             fallbackTree: initialTree,
@@ -81,7 +84,8 @@ enum ChoiceGraphScheduler {
             tree = fullTree
             sequence = ChoiceSequence(fullTree)
         }
-        var output = initialOutput
+        // Hold ``output`` as ``Any`` internally so it can be passed to the non-generic ``runProbeLoop`` and ``detectStaleness``. Cast back to ``Output`` at the very end before returning.
+        var output: Any = initialOutput
         var stats = ReductionStats()
         var cycles = 0
         var stallBudget = config.maxStalls
@@ -251,8 +255,8 @@ enum ChoiceGraphScheduler {
                 // branch pivot / descendant promotion / self-similar
                 // replacement, instead of defensively on every rebuild.
                 if graphIsStripped, transformation.operation.isPathChanging {
-                    if case let .success(_, fullTree, _) = Materializer.materialize(
-                        gen,
+                    if case let .success(_, fullTree, _) = Materializer.materializeAny(
+                        erasedGen,
                         prefix: sequence,
                         mode: .exact,
                         fallbackTree: tree,
@@ -288,7 +292,7 @@ enum ChoiceGraphScheduler {
                     encoder = Self.makeKleisliComposition(
                         fibreScope: fibreScope,
                         scope: scope,
-                        gen: gen
+                        gen: erasedGen
                     )
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
@@ -306,8 +310,8 @@ enum ChoiceGraphScheduler {
                     sequence: &sequence,
                     tree: &tree,
                     output: &output,
-                    gen: gen,
-                    property: property,
+                    gen: erasedGen,
+                    property: wrappedProperty,
                     rejectCache: &rejectCache,
                     stats: &stats,
                     collectStats: collectStats,
@@ -477,8 +481,8 @@ enum ChoiceGraphScheduler {
                     tree: &tree,
                     output: &output,
                     graph: graph,
-                    gen: gen,
-                    property: property,
+                    gen: erasedGen,
+                    property: wrappedProperty,
                     rejectCache: &rejectCache,
                     stats: &stats,
                     collectStats: collectStats,
@@ -570,7 +574,9 @@ enum ChoiceGraphScheduler {
         }
 
         stats.cycles = cycles
-        return (reduced: (sequence, output), stats: stats)
+        // swiftlint:disable:next force_cast
+        let typedOutput = output as! Output
+        return (reduced: (sequence, typedOutput), stats: stats)
     }
     // swiftlint:enable function_parameter_count
 
@@ -627,10 +633,10 @@ enum ChoiceGraphScheduler {
     ///   - fibreScope: The kleisli fibre scope from the source pipeline.
     ///   - scope: The dispatched ``TransformationScope``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
     ///   - gen: The generator. Captured by the lift closure for materialisation.
-    private static func makeKleisliComposition<Output>(
+    private static func makeKleisliComposition(
         fibreScope: KleisliFibreScope,
         scope: TransformationScope,
-        gen: ReflectiveGenerator<Output>
+        gen: ReflectiveGenerator<Any>
     ) -> any GraphEncoder {
         // Synthesise the upstream scope: a one-leaf integer minimization on the
         // bind-inner. ``mayReshapeOnAcceptance`` is false here because the
@@ -703,11 +709,11 @@ enum ChoiceGraphScheduler {
     /// 2. Copies the parent graph and applies the upstream change to the copy as a reshape (`mayReshape: true`), so ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` splices the rebuilt bound subtree from the freshTree on the throwaway copy. Falls back to a full ``ChoiceGraph/build(from:)`` if the partial path bails.
     /// 3. Locates the bind's bound child in the lifted graph and collects its descendant leaves as the downstream search range.
     /// 4. Constructs an integer-leaves minimization scope on the lifted graph; the downstream encoder operates on it without knowing it is downstream.
-    private static func kleisliFibreLift<Output>(
+    private static func kleisliFibreLift(
         upstreamProbe: EncoderProbe,
         parent: TransformationScope,
         fibreScope: KleisliFibreScope,
-        gen: ReflectiveGenerator<Output>
+        gen: ReflectiveGenerator<Any>
     ) -> TransformationScope? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
 
@@ -727,7 +733,7 @@ enum ChoiceGraphScheduler {
         //    (Coupling: dropping `n` from 2 to 1 makes the array element value `2`
         //    out-of-range for the new `int(in: 0...1)` element generator). Mirrors
         //    ``ReductionState/compositionDescriptors``'s lift configuration.
-        guard case let .success(_, freshTree, _) = Materializer.materialize(
+        guard case let .success(_, freshTree, _) = Materializer.materializeAny(
             gen,
             prefix: upstreamProbe.candidate,
             mode: .guided(seed: 0, fallbackTree: parent.tree),
@@ -883,15 +889,15 @@ enum ChoiceGraphScheduler {
 
     // swiftlint:disable function_parameter_count
     /// Runs an encoder's probe loop, accepting improvements.
-    private static func runProbeLoop<Output>(
+    private static func runProbeLoop(
         encoder: inout any GraphEncoder,
         scope: TransformationScope,
         graph: ChoiceGraph,
         sequence: inout ChoiceSequence,
         tree: inout ChoiceTree,
-        output: inout Output,
-        gen: ReflectiveGenerator<Output>,
-        property: @escaping (Output) -> Bool,
+        output: inout Any,
+        gen: ReflectiveGenerator<Any>,
+        property: @escaping (Any) -> Bool,
         rejectCache: inout Set<UInt64>,
         stats: inout ReductionStats,
         collectStats: Bool,
@@ -1004,7 +1010,7 @@ enum ChoiceGraphScheduler {
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
-            if let result = try decoder.decode(
+            if let result = try decoder.decodeAny(
                 candidate: probe.candidate,
                 gen: gen,
                 tree: tree,
@@ -1244,13 +1250,13 @@ enum ChoiceGraphScheduler {
     /// If the property still fails at floor - 1, the convergence record was stale — the previous search stopped too early. Clears the stale record so minimization can re-enter for that leaf.
     ///
     /// - Returns: True if any stale floors were found and cleared.
-    private static func detectStaleness<Output>(
+    private static func detectStaleness(
         sequence: inout ChoiceSequence,
         tree: inout ChoiceTree,
-        output: inout Output,
+        output: inout Any,
         graph: ChoiceGraph,
-        gen: ReflectiveGenerator<Output>,
-        property: @escaping (Output) -> Bool,
+        gen: ReflectiveGenerator<Any>,
+        property: @escaping (Any) -> Bool,
         rejectCache: inout Set<UInt64>,
         stats: inout ReductionStats,
         collectStats: Bool,
@@ -1325,7 +1331,7 @@ enum ChoiceGraphScheduler {
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
-            if let result = try decoder.decode(
+            if let result = try decoder.decodeAny(
                 candidate: candidate,
                 gen: gen,
                 tree: tree,
