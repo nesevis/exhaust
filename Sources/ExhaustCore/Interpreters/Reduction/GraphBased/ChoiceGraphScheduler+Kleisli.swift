@@ -8,7 +8,7 @@
 extension ChoiceGraphScheduler {
     /// Builds a ``GraphComposedEncoder`` for a kleisli fibre scope.
     ///
-    /// The upstream encoder is a ``GraphMinimizationEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``KleisliFibreScope/upstreamLeafNodeID``. The downstream encoder is another ``GraphMinimizationEncoder`` started by the lift closure on the lifted graph's bound-subtree leaves. The lift materialises each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
+    /// The upstream encoder is a ``GraphValueEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``KleisliFibreScope/upstreamLeafNodeID``. The downstream encoder is another ``GraphValueEncoder`` started by the lift closure on the lifted graph's bound-subtree leaves. The lift materialises each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
     ///
     /// - Parameters:
     ///   - fibreScope: The kleisli fibre scope from the source pipeline.
@@ -51,7 +51,7 @@ extension ChoiceGraphScheduler {
             warmStartRecords: [:]
         )
         // Upstream: pure binary search over the bind-inner leaf, no inline linear
-        // scan or cross-zero phases. ``GraphMinimizationEncoder``'s extra phases
+        // scan or cross-zero phases. ``GraphValueEncoder``'s extra phases
         // are wasted in a kleisli context — every upstream probe spawns one lift
         // and a full downstream search, so the standalone encoder's recovery
         // strategies multiply the cost without finding more failures.

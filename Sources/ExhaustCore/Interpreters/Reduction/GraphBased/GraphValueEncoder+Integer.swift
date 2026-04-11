@@ -1,11 +1,11 @@
 //
-//  GraphMinimizationEncoder+Integer.swift
+//  GraphValueEncoder+Integer.swift
 //  Exhaust
 //
 
 // MARK: - Integer Mode
 
-extension GraphMinimizationEncoder {
+extension GraphValueEncoder {
     mutating func startInteger(
         scope: ValueMinimizationScope,
         sequence: ChoiceSequence,

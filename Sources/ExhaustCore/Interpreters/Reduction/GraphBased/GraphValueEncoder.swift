@@ -1,5 +1,5 @@
 //
-//  GraphMinimizationEncoder.swift
+//  GraphValueEncoder.swift
 //  Exhaust
 //
 
@@ -14,8 +14,8 @@
 ///
 /// This is an active-path operation: all leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions.
 ///
-/// The integer- and float-mode implementations live in `GraphMinimizationEncoder+Integer.swift` and `GraphMinimizationEncoder+Float.swift` respectively. State types are nested here so both extensions can reference them, and the protocol-level dispatch (`start`, `nextProbe`, `refreshScope`) sits in this core file.
-struct GraphMinimizationEncoder: GraphEncoder {
+/// The integer- and float-mode implementations live in `GraphValueEncoder+Integer.swift` and `GraphValueEncoder+Float.swift` respectively. State types are nested here so both extensions can reference them, and the protocol-level dispatch (`start`, `nextProbe`, `refreshScope`) sits in this core file.
+struct GraphValueEncoder: GraphEncoder {
     let name: EncoderName = .graphValueSearch
 
     // MARK: - State
@@ -232,7 +232,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
             // Kleisli fibre scopes are dispatched via ``GraphComposedEncoder``
             // constructed at the scheduler call site, never through this encoder.
             // Reaching this branch indicates a routing bug.
-            assertionFailure("kleisliFibre scopes must route through GraphComposedEncoder, not GraphMinimizationEncoder")
+            assertionFailure("kleisliFibre scopes must route through GraphComposedEncoder, not GraphValueEncoder")
             mode = .idle
         }
     }

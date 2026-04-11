@@ -1,11 +1,11 @@
 //
-//  GraphMinimizationEncoder+Float.swift
+//  GraphValueEncoder+Float.swift
 //  Exhaust
 //
 
 // MARK: - Float Mode
 
-extension GraphMinimizationEncoder {
+extension GraphValueEncoder {
     mutating func startFloat(
         scope: FloatMinimizationScope,
         sequence: ChoiceSequence,

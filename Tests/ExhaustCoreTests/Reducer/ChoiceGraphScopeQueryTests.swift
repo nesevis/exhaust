@@ -222,7 +222,7 @@ struct ChoiceGraphScopeQueryTests {
             warmStartRecords: [:]
         )
 
-        var encoder = GraphRemovalEncoder()
+        var encoder = GraphStructuralEncoder()
         encoder.start(scope: scope)
 
         var candidates: [ChoiceSequence] = []

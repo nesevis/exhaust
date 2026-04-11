@@ -9,9 +9,9 @@
 ///
 /// Operates on a one-leaf ``ValueMinimizationScope`` and emits a sequence of midpoint probes between the leaf's current bit pattern and its reduction target. On rejection, narrows the lower bound (`lo = lastProbe + 1`). On acceptance, narrows the upper bound (`hi = lastProbe`). Converges to the smallest accepted value, or to the original current value if every probe is rejected.
 ///
-/// ## Why not ``GraphMinimizationEncoder``?
+/// ## Why not ``GraphValueEncoder``?
 ///
-/// ``GraphMinimizationEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphMinimizationEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a kleisli composition, every upstream probe spawns one ``GeneratorLift`` materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
+/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a kleisli composition, every upstream probe spawns one ``GeneratorLift`` materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
 ///
 /// ## Lifecycle
 ///
@@ -97,7 +97,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
 
 /// Adapts ``FibreCoveringEncoder`` (a ``ComposableEncoder``) to the ``GraphEncoder`` protocol so it can be used as the downstream of a ``GraphComposedEncoder``.
 ///
-/// The downstream slot of a kleisli composition needs to *discover* failures in the lifted fibre, not minimize toward a known target. Per-coordinate value-search encoders (``GraphMinimizationEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
+/// The downstream slot of a kleisli composition needs to *discover* failures in the lifted fibre, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
 ///
 /// ``FibreCoveringEncoder`` enumerates the entire fibre value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
 ///

@@ -76,7 +76,7 @@ struct GraphEncoderTests {
         )
     }
 
-    // MARK: - GraphRemovalEncoder
+    // MARK: - GraphStructuralEncoder (Removal)
 
     @Test("Removal encoder removes members of the deletion antichain")
     func removalEncoderRemovesAntichainMembers() {
@@ -111,7 +111,7 @@ struct GraphEncoderTests {
             return
         }
 
-        var encoder = GraphRemovalEncoder()
+        var encoder = GraphStructuralEncoder()
         encoder.start(scope: scope)
 
         var candidates: [ChoiceSequence] = []
@@ -127,7 +127,7 @@ struct GraphEncoderTests {
         }
     }
 
-    // MARK: - GraphMinimizationEncoder
+    // MARK: - GraphValueEncoder
 
     @Test("Minimization encoder drives non-zero leaves toward zero")
     func minimizationDrivesLeafTowardZero() {
@@ -142,7 +142,7 @@ struct GraphEncoderTests {
             return
         }
 
-        var encoder = GraphMinimizationEncoder()
+        var encoder = GraphValueEncoder()
         encoder.start(scope: scope)
 
         let firstProbe = encoder.nextProbe(lastAccepted: false)
@@ -154,7 +154,7 @@ struct GraphEncoderTests {
         }
     }
 
-    // MARK: - GraphMigrationEncoder
+    // MARK: - GraphStructuralEncoder (Migration)
 
     @Test("Migration encoder merges sibling sequences and removes the empty source")
     func migrationMergesSiblingSequencesAndShortens() {
@@ -240,7 +240,7 @@ struct GraphEncoderTests {
             warmStartRecords: [:]
         )
 
-        var encoder = GraphMigrationEncoder()
+        var encoder = GraphStructuralEncoder()
         encoder.start(scope: scope)
         let probe = encoder.nextProbe(lastAccepted: false)
 
@@ -267,7 +267,7 @@ struct GraphEncoderTests {
             return
         }
 
-        var encoder = GraphMinimizationEncoder()
+        var encoder = GraphValueEncoder()
         encoder.start(scope: scope)
 
         while let _ = encoder.nextProbe(lastAccepted: false) {}
