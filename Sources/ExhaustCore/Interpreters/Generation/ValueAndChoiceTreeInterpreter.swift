@@ -36,6 +36,14 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             prng: prng,
             materializePicks: materializePicks
         )
+        ExhaustLog.debug(
+            category: .generation,
+            event: "vacti",
+            metadata: [
+                "seed": "\(context.baseSeed)",
+                "requested": "\(context.maxRuns)",
+            ]
+        )
     }
 
     public var baseSeed: UInt64 {
