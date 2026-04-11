@@ -741,10 +741,21 @@ struct GraphMinimizationEncoder: GraphEncoder {
 
             // Warm-start: if a prior cycle converged this leaf with the
             // same encoder configuration, narrow the search bounds to
-            // skip the already-explored region.
+            // skip the already-explored region. The bound is validated
+            // against the current search range — if redistribution moved
+            // the leaf past its prior floor, the warm-start is stale and
+            // the full range is searched.
             let warmStart = state.warmStartRecords[leaf.nodeID]
-            let validWarmStart = warmStart?.configuration == .binarySearchSemanticSimplest
-                ? warmStart : nil
+            let validWarmStart: ConvergedOrigin? = warmStart.flatMap { ws in
+                guard ws.configuration == .binarySearchSemanticSimplest else { return nil }
+                if currentBP > targetBP {
+                    // Downward search: bound must be in [target, current].
+                    return ws.bound >= targetBP && ws.bound <= currentBP ? ws : nil
+                } else {
+                    // Upward search: bound must be in [current, target].
+                    return ws.bound >= currentBP && ws.bound <= targetBP ? ws : nil
+                }
+            }
 
             if currentBP > targetBP {
                 let effectiveLo = validWarmStart?.bound ?? targetBP

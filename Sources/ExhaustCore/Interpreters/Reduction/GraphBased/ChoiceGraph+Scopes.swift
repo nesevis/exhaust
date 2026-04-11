@@ -402,7 +402,12 @@ extension ChoiceGraph {
             let currentBitPattern = metadata.value.bitPattern64
             let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
             guard currentBitPattern != targetBitPattern else { continue }
-            guard metadata.convergedOrigin == nil else { continue }
+
+            // Skip leaves at their convergence floor — no probe can move them closer to the target under the current graph structure. The signal type is irrelevant: whether convergence was monotone, non-monotone, or from a zeroing dependency, a leaf at its floor has no further search potential. A leaf whose value moved away from its floor (for example, after redistribution) passes this guard and re-enters value search with the surviving convergence record available as a warm-start bound.
+            if let converged = metadata.convergedOrigin,
+               converged.bound == currentBitPattern {
+                continue
+            }
 
             if metadata.typeTag.isFloatingPoint {
                 floatLeafNodeIDs.append(nodeID)

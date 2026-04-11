@@ -1381,43 +1381,11 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Convergence Invalidation
 
-    /// Clears convergence records on leaves whose values were changed by a value transformation.
-    ///
-    /// Exchange (redistribution) changes leaf values but doesn't invalidate convergence records. Without clearing, the minimization source sees "converged" leaves and emits zero probes, even though the values are now different from when convergence was recorded.
+    /// No-op. Previously cleared convergence on leaves changed by redistribution to compensate for the coarse `convergedOrigin == nil` guard in ``minimizationScopes()``. The guard now checks `convergedOrigin.bound == currentBP`, so a leaf whose value moved away from its floor naturally passes the guard and re-enters value search with the surviving convergence record as a warm-start bound.
     private static func clearConvergenceOnChangedLeaves(
         for transformation: GraphTransformation,
         in graph: ChoiceGraph
-    ) {
-        let leafNodeIDs: [Int]
-        switch transformation.operation {
-        case let .exchange(scope):
-            switch scope {
-            case let .redistribution(redistScope):
-                leafNodeIDs = redistScope.pairs.flatMap { [$0.sourceNodeID, $0.sinkNodeID] }
-            case let .tandem(tandemScope):
-                leafNodeIDs = tandemScope.groups.flatMap(\.leafNodeIDs)
-            }
-        default:
-            return
-        }
-
-        // Clear convergence on each affected leaf by recording a nil-equivalent.
-        // The graph stores convergence on ChooseBitsMetadata — we need to clear it
-        // by removing the convergedOrigin.
-        for leafNodeID in leafNodeIDs {
-            guard case var .chooseBits(metadata) = graph.nodes[leafNodeID].kind else { continue }
-            guard metadata.convergedOrigin != nil else { continue }
-            guard let range = graph.nodes[leafNodeID].positionRange else { continue }
-            metadata.convergedOrigin = nil
-            graph.nodes[leafNodeID] = ChoiceGraphNode(
-                id: graph.nodes[leafNodeID].id,
-                kind: .chooseBits(metadata),
-                positionRange: graph.nodes[leafNodeID].positionRange,
-                children: graph.nodes[leafNodeID].children,
-                parent: graph.nodes[leafNodeID].parent
-            )
-        }
-    }
+    ) {}
 
 }
 
