@@ -647,18 +647,12 @@ enum ChoiceGraphScheduler {
     /// Kleisli fibre minimization scopes are not handled here because they need the typed generator at construction time. The dispatch site in ``runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` builds them via ``makeKleisliComposition(fibreScope:scope:gen:upstreamBudget:)`` instead.
     private static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
-        case .remove:
-            GraphRemovalEncoder()
-        case .replace:
-            GraphReplacementEncoder()
+        case .remove, .replace, .permute, .migrate:
+            GraphStructuralEncoder()
         case .minimize:
             GraphMinimizationEncoder()
         case .exchange:
             GraphExchangeEncoder()
-        case .permute:
-            GraphPermutationEncoder()
-        case .migrate:
-            GraphMigrationEncoder()
         }
     }
 }
