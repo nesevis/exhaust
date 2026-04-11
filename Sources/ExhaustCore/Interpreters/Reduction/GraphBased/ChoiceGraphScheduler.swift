@@ -18,6 +18,20 @@
 ///
 /// - SeeAlso: ``ScopeSource``, ``ScopeSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
+    // MARK: - Futility Cap
+    //
+    // Some encoders are structurally futile on a given counterexample — they never find an accepted probe across the entire reduction because the property's constraint structure makes the encoder's search space empty. After ``futilityEmitThreshold`` cumulative probes with zero accepts, the encoder's per-cycle budget drops to ``futilityProbeBudget``.
+    //
+    // The budget acts as a heartbeat: enough probes per cycle to detect if the landscape changed (for example, a structural acceptance made the encoder viable), but not enough to waste significant materializations on a structurally hopeless search. If the encoder finds an accept, the cumulative accept count goes above zero and the cap lifts automatically.
+    //
+    // Value search, float search, and Kleisli composition are excluded because their acceptance pattern is dispatch-dependent — early dispatches often have zero accepts before later dispatches find progress. Any cumulative threshold would prematurely cap them.
+
+    /// Cumulative probe count (with zero accepts) that triggers the futility cap.
+    private static let futilityEmitThreshold = 10
+
+    /// Per-cycle probe budget after the futility cap triggers.
+    private static let futilityProbeBudget = 2
+
     // MARK: - Entry Points
 
     /// Runs the graph-based reduction pipeline to a fixed point or budget exhaustion.
@@ -152,18 +166,28 @@ enum ChoiceGraphScheduler {
         // Per-bind-node Kleisli stall counter. Incremented when a Kleisli dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
         var kleisliStallCount: [Int: Int] = [:]
 
-        // Migration probe budget. Migration on coupled generators (for example, Bound5) has a 0% acceptance rate — the constraint prevents element transfer between sequences. After 10+ cumulative emits with zero accepts, cap migration at 3 probes per cycle to avoid burning materializations on a structurally futile operation.
-        var migrationEmits = 0
-        var migrationAccepts = 0
-        var migrationCycleBudget: Int? = nil
+        // Per-encoder cumulative probe counts for the futility cap. See ``futilityEmitThreshold`` and ``futilityProbeBudget``.
+        var encoderEmits: [EncoderName: Int] = [:]
+        var encoderAccepts: [EncoderName: Int] = [:]
+        var encoderCycleBudget: [EncoderName: Int] = [:]
 
         while stallBudget > 0 {
             cycles += 1
             kleisliDispatchedThisCycle.removeAll(keepingCapacity: true)
-            if migrationAccepts == 0, migrationEmits >= 10 {
-                migrationCycleBudget = 3
-            } else {
-                migrationCycleBudget = nil
+            encoderCycleBudget.removeAll(keepingCapacity: true)
+            for (name, emits) in encoderEmits {
+                let accepts = encoderAccepts[name, default: 0]
+                guard accepts == 0 else { continue }
+                // Search encoders are excluded — their acceptance pattern is dispatch-dependent (early dispatches have 0 accepts, later ones find accepts). Value search on Diff:One has 1024 total accepts but its first batch-zero dispatch has 0, triggering premature capping. Kleisli has its own stall-cycle gating. These encoders' convergence mechanisms handle their own waste.
+                switch name {
+                case .graphValueSearch, .graphFloatSearch, .graphComposed:
+                    continue
+                default:
+                    break
+                }
+                if emits >= Self.futilityEmitThreshold {
+                    encoderCycleBudget[name] = Self.futilityProbeBudget
+                }
             }
             let sequenceBeforeCycle = sequence
 
@@ -254,10 +278,19 @@ enum ChoiceGraphScheduler {
                     }
                 }
 
-                // Migration cycle budget: skip if the budget has been exhausted.
-                if case .migrate = transformation.operation,
-                   let budget = migrationCycleBudget, budget <= 0
-                {
+                // Per-encoder cycle budget: skip if the budget has been exhausted for this encoder.
+                let pendingEncoderName: EncoderName = switch transformation.operation {
+                    case .remove: .graphDeletion
+                    case .replace: .graphSubstitution
+                    case .minimize(.kleisliFibre): .graphComposed
+                    case .minimize(.valueLeaves): .graphValueSearch
+                    case .minimize(.floatLeaves): .graphFloatSearch
+                    case .exchange(.redistribution): .graphRedistribution
+                    case .exchange(.tandem): .graphLockstep
+                    case .permute: .graphSiblingSwap
+                    case .migrate: .graphMigration
+                }
+                if let budget = encoderCycleBudget[pendingEncoderName], budget <= 0 {
                     continue
                 }
 
@@ -358,14 +391,12 @@ enum ChoiceGraphScheduler {
                     graph.recordConvergence(byNodeID: convergence)
                 }
 
-                // Update migration history and cycle budget.
-                if case .migrate = transformation.operation {
-                    migrationEmits += outcome.probeCount
-                    migrationAccepts += outcome.acceptCount
-                    if var budget = migrationCycleBudget {
-                        budget -= outcome.probeCount
-                        migrationCycleBudget = budget
-                    }
+                // Update per-encoder history and cycle budget.
+                encoderEmits[pendingEncoderName, default: 0] += outcome.probeCount
+                encoderAccepts[pendingEncoderName, default: 0] += outcome.acceptCount
+                if var budget = encoderCycleBudget[pendingEncoderName] {
+                    budget -= outcome.probeCount
+                    encoderCycleBudget[pendingEncoderName] = budget
                 }
 
                 // Kleisli stall tracking: increment the per-bind-node counter when a dispatch produces zero accepts, reset on any acceptance. The stall count decays the upstream budget on subsequent dispatches.
