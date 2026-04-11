@@ -127,6 +127,9 @@ extension ChoiceGraphScheduler {
                         ]
                     )
                 }
+
+                // The accepted probe may have changed the sequence layout (for example, changing a recursive depth choice produces a different bind structure via guided materialization). The graph's position ranges are now stale — continuing to iterate would read positions from the old layout against the new sequence. Break and let the caller rebuild the graph.
+                break
             } else {
                 rejectCache.insert(probeHash)
                 stalenessDecoderRejectCount += 1
