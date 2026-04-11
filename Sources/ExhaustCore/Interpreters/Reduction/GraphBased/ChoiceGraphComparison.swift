@@ -64,7 +64,7 @@ public enum ChoiceGraphComparison {
     /// Validates that the graph's dependency structure covers the CDG's.
     ///
     /// The CDG and graph have different models for dependency edges. The CDG maps narrow position ranges (bind-inner values, branch selectors) to each other. The graph maps node IDs with richer semantics. Rather than requiring position-level string matching, this check validates that the graph has at least as many bind nodes and dependency edges as the CDG has structural nodes and edges.
-    @_spi(ExhaustInternal) public static func checkDependencyEdges(
+    static func checkDependencyEdges(
         graph: ChoiceGraph,
         cdg: ChoiceDependencyGraph
     ) -> ChoiceGraphComparisonResult.CheckResult {
@@ -81,7 +81,7 @@ public enum ChoiceGraphComparison {
     }
 
     /// Validates that bind depth matches at every value position.
-    @_spi(ExhaustInternal) public static func checkBindDepth(
+    static func checkBindDepth(
         graph: ChoiceGraph,
         bindIndex: BindSpanIndex,
         sequence: ChoiceSequence
@@ -113,7 +113,7 @@ public enum ChoiceGraphComparison {
     }
 
     /// Validates that isInBoundSubtree matches at every position.
-    @_spi(ExhaustInternal) public static func checkBoundSubtree(
+    fileprivate static func checkBoundSubtree(
         graph: ChoiceGraph,
         bindIndex: BindSpanIndex,
         sequence: ChoiceSequence
@@ -142,7 +142,7 @@ public enum ChoiceGraphComparison {
     /// Validates that every CDG leaf position is covered by a graph chooseBits node.
     ///
     /// The graph's leaf model is richer than the CDG's — every value has an explicit typed node. The CDG identifies leaves as value entries not inside structural node ranges. The graph identifies leaves as chooseBits nodes. Every CDG leaf position should correspond to a graph chooseBits node at that position.
-    @_spi(ExhaustInternal) public static func checkLeafPositions(
+    fileprivate static func checkLeafPositions(
         graph: ChoiceGraph,
         cdg: ChoiceDependencyGraph,
         sequence _: ChoiceSequence
@@ -175,7 +175,7 @@ public enum ChoiceGraphComparison {
     /// Validates that the graph has at least as many reduction edges as the CDG.
     ///
     /// The CDG produces one reduction edge per bind-inner node. The graph should produce the same — one per active bind node. The graph's model is richer (it includes the structurallyConstant flag and uses node IDs), so the check validates count coverage.
-    @_spi(ExhaustInternal) public static func checkReductionEdges(
+    fileprivate static func checkReductionEdges(
         graph: ChoiceGraph,
         cdg: ChoiceDependencyGraph
     ) -> ChoiceGraphComparisonResult.CheckResult {

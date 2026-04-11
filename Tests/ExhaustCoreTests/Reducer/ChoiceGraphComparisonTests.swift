@@ -3,7 +3,7 @@
 //  Exhaust
 //
 
-@_spi(ExhaustInternal) import ExhaustCore
+@testable import ExhaustCore
 import Testing
 
 // MARK: - ChoiceGraph vs CDG + BindSpanIndex Comparison Tests
