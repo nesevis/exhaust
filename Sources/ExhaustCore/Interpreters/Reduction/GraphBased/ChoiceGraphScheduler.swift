@@ -1454,7 +1454,7 @@ enum ChoiceGraphScheduler {
 struct ScopeRejectionCache {
     private var rejectedHashes = Set<UInt64>()
 
-    /// Value-independent hash for structural operations. Keyed by (operation type, targeted node IDs) without leaf values. A deletion that was rejected at one set of leaf values is almost always rejected at another — the property cares about the *absence* of the element, not what value it had. Cleared per cycle to guard against the rare case where value changes at other positions shift the property's acceptance boundary enough to make a previously-rejected deletion viable.
+    // Value-independent hash for replacement operations only. Keyed by (operation type, targeted node IDs) without leaf values. Replacement (branch pivot, self-similar substitution, descendant promotion) is genuinely value-independent — the encoder speculatively minimizes all leaves in the candidate branch, so the outcome depends on structural compatibility, not on current leaf values. Deletion and migration are excluded because their acceptance depends on leaf values: a deletion rejected when the element had value 5 may succeed after value search minimizes it to 0.
     private var coarseRejectedHashes = Set<UInt64>()
 
     /// Records a rejected structural transformation.
@@ -1466,18 +1466,18 @@ struct ScopeRejectionCache {
         if let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) {
             rejectedHashes.insert(hash)
         }
-        if operation.affectedNodeIDs(in: graph) != nil, let hash = coarseScopeHash(operation: operation, graph: graph) {
+        if case .replace = operation, let hash = coarseScopeHash(operation: operation, graph: graph) {
             coarseRejectedHashes.insert(hash)
         }
     }
 
-    /// Returns true if this transformation was previously rejected. Checks the coarse (value-independent) cache first for structural operations, then the fine-grained (value-dependent) cache.
+    /// Returns true if this transformation was previously rejected. Checks the coarse (value-independent) cache first for replacement operations, then the fine-grained (value-dependent) cache.
     func isRejected(
         operation: GraphOperation,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> Bool {
-        if let hash = coarseScopeHash(operation: operation, graph: graph) {
+        if case .replace = operation, let hash = coarseScopeHash(operation: operation, graph: graph) {
             if coarseRejectedHashes.contains(hash) { return true }
         }
         guard let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) else {
