@@ -132,7 +132,7 @@ private func stringGenerator(
 /// All assigned Unicode scalars minus control characters and illegals.
 /// First scalar is U+0020 (space) — test case reduction produces readable counterexamples.
 private let defaultScalarRangeSet: ScalarRangeSet =
-    CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters).scalarRangeSet()
+CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters).union(.whitespacesAndNewlines).scalarRangeSet()
 
 /// Printable ASCII (U+0020–U+007E).
 private let asciiScalarRangeSet: ScalarRangeSet =
