@@ -31,6 +31,11 @@ extension ChoiceGraph {
             // path. Layer 7 replaces these fallbacks with proper splice logic.
             application.requiresFullRebuild = true
         }
+        #if DEBUG
+        if application.requiresFullRebuild == false {
+            assertLeafPositionsValid(in: ChoiceSequence(freshTree), label: "apply")
+        }
+        #endif
         return application
     }
 

@@ -213,6 +213,27 @@ public extension ChoiceGraph {
     ///
     /// - Parameter tree: The generator's compositional structure.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
-        ChoiceGraphBuilder.build(from: tree)
+        let graph = ChoiceGraphBuilder.build(from: tree)
+        #if DEBUG
+        graph.assertLeafPositionsValid(in: ChoiceSequence(tree), label: "build")
+        #endif
+        return graph
     }
+
+    #if DEBUG
+    /// Validates that every `chooseBits` node's position range points to a value entry in the sequence. Fires a fatal error with diagnostic context on the first mismatch.
+    func assertLeafPositionsValid(in sequence: ChoiceSequence, label: String) {
+        for node in nodes {
+            guard case .chooseBits = node.kind else { continue }
+            guard let range = node.positionRange else { continue }
+            let position = range.lowerBound
+            guard position < sequence.count else {
+                fatalError("[\(label)] chooseBits node \(node.id) positionRange \(range) exceeds sequence length \(sequence.count)")
+            }
+            guard sequence[position].value != nil else {
+                fatalError("[\(label)] chooseBits node \(node.id) at position \(position) points to non-value entry: \(sequence[position])")
+            }
+        }
+    }
+    #endif
 }
