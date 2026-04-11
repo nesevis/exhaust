@@ -195,29 +195,44 @@ extension ChoiceGraph {
         return order
     }
 
-    /// Computes the transitive closure of dependency edges via reverse topological propagation.
-    ///
-    /// `result[i]` contains all node IDs reachable from node `i` via one or more dependency edges. Mirrors the prior implementation in ``ChoiceGraphBuilder``.
-    ///
-    /// - Complexity: O(*V* · *E*) time, O(*V*²) space in the worst case.
-    func computeReachability() -> [Int: Set<Int>] {
-        let nodeCount = nodes.count
-        var adjacency = [[Int]](repeating: [], count: nodeCount)
-        for edge in dependencyEdges {
-            adjacency[edge.source].append(edge.target)
-        }
+    // MARK: - On-Demand Reachability
 
-        var result = [Int: Set<Int>]()
-        for nodeID in topologicalOrder.reversed() {
-            var reachable = Set<Int>()
-            for dependent in adjacency[nodeID] {
-                reachable.insert(dependent)
-                if let transitive = result[dependent] {
-                    reachable.formUnion(transitive)
-                }
+    /// Returns true when `target` is reachable from `source` via one or more dependency edges.
+    ///
+    /// Uses a DFS through the cached ``dependencyAdjacency`` list, stopping as soon as `target` is found. Replaces the previous O(V^2) eager transitive closure with an O(V + E) per-query walk.
+    func isReachable(from source: Int, to target: Int) -> Bool {
+        guard source < nodes.count, target < nodes.count else { return false }
+        let adjacency = dependencyAdjacency
+        var visited = Set<Int>()
+        var stack = [source]
+        while let current = stack.popLast() {
+            guard visited.insert(current).inserted else { continue }
+            for neighbour in adjacency[current] {
+                if neighbour == target { return true }
+                stack.append(neighbour)
             }
-            if reachable.isEmpty == false {
-                result[nodeID] = reachable
+        }
+        return false
+    }
+
+    /// Returns the subset of `candidates` reachable from `source` via dependency edges.
+    ///
+    /// Runs a single DFS from `source` and collects intersections with the candidate set. Used by ``deletionAntichain`` to build the restricted reachability relation over antichain candidates without computing the full transitive closure.
+    ///
+    /// - Complexity: O(V + E) per call.
+    func reachableNodes(from source: Int, within candidates: Set<Int>) -> Set<Int> {
+        guard source < nodes.count else { return [] }
+        let adjacency = dependencyAdjacency
+        var visited = Set<Int>()
+        var result = Set<Int>()
+        var stack = [source]
+        while let current = stack.popLast() {
+            guard visited.insert(current).inserted else { continue }
+            if current != source, candidates.contains(current) {
+                result.insert(current)
+            }
+            for neighbour in adjacency[current] {
+                stack.append(neighbour)
             }
         }
         return result

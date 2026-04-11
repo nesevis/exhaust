@@ -129,7 +129,7 @@ enum ChoiceGraphScheduler {
             stats.graphNodeCount = graph.nodes.count
             stats.graphDependencyEdgeCount = graph.dependencyEdges.count
             stats.graphContainmentEdgeCount = graph.containmentEdges.count
-            stats.graphSelfSimilarityEdgeCount = graph.selfSimilarityEdges.count
+            stats.graphSelfSimilarityEdgeCount = graph.selfSimilarityGroups.values.reduce(0) { $0 + $1.count * ($1.count - 1) / 2 }
             stats.graphDeletionAntichainSize = graph.deletionAntichain.count
         }
 

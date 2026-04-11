@@ -67,10 +67,8 @@ public extension ChoiceGraph {
 
     /// Whether two nodes are independent (no dependency path between them in either direction).
     func areIndependent(_ nodeA: Int, _ nodeB: Int) -> Bool {
-        let reachableFromA = reachability[nodeA] ?? []
-        let reachableFromB = reachability[nodeB] ?? []
-        return reachableFromA.contains(nodeB) == false
-            && reachableFromB.contains(nodeA) == false
+        isReachable(from: nodeA, to: nodeB) == false
+            && isReachable(from: nodeB, to: nodeA) == false
     }
 }
 
@@ -102,13 +100,15 @@ public extension ChoiceGraph {
             idToIndex[nodeID] = index
         }
 
-        // Build reachability restricted to the candidate set.
-        // Edge (u, v) means u < v in the partial order (u is reachable from v,
-        // that is, v depends on u).
+        // Build reachability restricted to the candidate set via on-demand
+        // DFS from each candidate. O(K · (V + E)) where K is the candidate
+        // count — much cheaper than the former O(V · E) eager transitive
+        // closure when K << V.
+        let candidateIDSet = Set(candidateIDs)
         var adjacency = [[Int]](repeating: [], count: candidateCount)
         for (sourceIndex, sourceID) in candidateIDs.enumerated() {
-            let reachable = reachability[sourceID] ?? []
-            for targetID in reachable {
+            let reached = reachableNodes(from: sourceID, within: candidateIDSet)
+            for targetID in reached {
                 if let targetIndex = idToIndex[targetID] {
                     adjacency[sourceIndex].append(targetIndex)
                 }
@@ -209,17 +209,20 @@ public extension ChoiceGraph {
 // MARK: - Self-Similarity Queries
 
 public extension ChoiceGraph {
-    /// Returns self-similarity edges incident to a pick node, annotated with size delta relative to the queried node.
+    /// Returns self-similarity edges incident to a pick node, derived on demand from the group index.
     ///
     /// A positive delta means the neighbour is smaller (the queried node is the substitution target). Sorted by size delta descending (largest reduction first).
+    ///
+    /// - Complexity: O(G log G) where G is the group size. Replaces the previous O(E) filter over all edges.
     func selfSimilarityEdges(from nodeID: Int) -> [SelfSimilarityEdge] {
-        selfSimilarityEdges
-            .filter { $0.nodeA == nodeID || $0.nodeB == nodeID }
-            .sorted { edgeA, edgeB in
-                let deltaA = edgeA.nodeA == nodeID ? edgeA.sizeDelta : -edgeA.sizeDelta
-                let deltaB = edgeB.nodeA == nodeID ? edgeB.sizeDelta : -edgeB.sizeDelta
-                return deltaA > deltaB
-            }
+        guard case let .pick(metadata) = nodes[nodeID].kind else { return [] }
+        guard let group = selfSimilarityGroups[metadata.depthMaskedSiteID] else { return [] }
+        let sizeA = nodes[nodeID].positionRange?.count ?? 0
+        return group.compactMap { otherID -> SelfSimilarityEdge? in
+            guard otherID != nodeID else { return nil }
+            let sizeB = nodes[otherID].positionRange?.count ?? 0
+            return SelfSimilarityEdge(nodeA: nodeID, nodeB: otherID, sizeDelta: sizeA - sizeB)
+        }.sorted { $0.sizeDelta > $1.sizeDelta }
     }
 }
 

@@ -123,14 +123,16 @@ enum TransformationQueueBuilder {
         )
     }
 
-    /// Substitution yield: maximum size delta among self-similarity edges.
+    /// Substitution yield: maximum size delta among self-similarity group pairs.
     private static func estimateSubstitutionYield(graph: ChoiceGraph) -> EncoderYieldEstimate {
         var maxYield = 0
         var candidateCount = 0
-        for edge in graph.selfSimilarityEdges {
-            let delta = abs(edge.sizeDelta)
-            candidateCount += 1
+        for (_, group) in graph.selfSimilarityGroups where group.count >= 2 {
+            let sizes = group.map { graph.nodes[$0].positionRange?.count ?? 0 }
+            guard let maxSize = sizes.max(), let minSize = sizes.min() else { continue }
+            let delta = maxSize - minSize
             if delta > maxYield { maxYield = delta }
+            candidateCount += group.count * (group.count - 1) / 2
         }
         return EncoderYieldEstimate(
             tier: .structural,

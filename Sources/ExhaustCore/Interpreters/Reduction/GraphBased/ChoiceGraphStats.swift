@@ -47,7 +47,9 @@ public struct ChoiceGraphStats {
         stats.nodeCount = graph.nodes.count
         stats.dependencyEdgeCount = graph.dependencyEdges.count
         stats.containmentEdgeCount = graph.containmentEdges.count
-        stats.selfSimilarityEdgeCount = graph.selfSimilarityEdges.count
+        stats.selfSimilarityEdgeCount = graph.selfSimilarityGroups.values.reduce(0) { total, group in
+            total + group.count * (group.count - 1) / 2
+        }
         stats.typeCompatibilityEdgeCount = graph.typeCompatibilityEdges.count
         stats.activeNodeCount = graph.nodes.count(where: { $0.positionRange != nil })
         stats.inactiveNodeCount = graph.nodes.count(where: { $0.positionRange == nil })

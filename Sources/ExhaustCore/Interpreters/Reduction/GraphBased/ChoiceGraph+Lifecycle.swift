@@ -200,7 +200,9 @@ extension ChoiceGraph {
         }
         containmentEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
         dependencyEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
-        selfSimilarityEdges.removeAll { oldBoundNodeIDs.contains($0.nodeA) || oldBoundNodeIDs.contains($0.nodeB) }
+        // Self-similarity groups are rebuilt from scratch by
+        // recomputeSelfSimilarityGroups() below — no incremental
+        // removal needed.
         application.removedNodeIDs.formUnion(oldBoundNodeIDs)
 
         // Step 6: walk the new bound subtree.
@@ -346,7 +348,7 @@ extension ChoiceGraph {
         // — actually those were dropped above). Recomputing is O(picks²)
         // where pick count is in the dozens, so much cheaper than a full
         // graph rebuild.
-        recomputeSelfSimilarityEdges()
+        recomputeSelfSimilarityGroups()
 
         // Step 11: invalidate caches. Topological order and reachability
         // depend on dependency edges (which we just modified). Type-compat
@@ -361,36 +363,18 @@ extension ChoiceGraph {
 
     // MARK: - Bind Reshape Helpers
 
-    /// Recomputes the self-similarity edge set from scratch from the live (non-tombstoned) active pick nodes.
+    /// Rebuilds the self-similarity group index from live (non-tombstoned) active pick nodes.
     ///
-    /// Used by ``applyBindReshape(forLeaf:freshTree:into:)`` after splicing in a new bound subtree, since the splice may have removed picks from the old region and added picks in the new region. Mirrors the self-similarity computation in ``ChoiceGraphBuilder/assembleGraph()``.
+    /// Used by ``applyBindReshape(forLeaf:freshTree:into:)`` after splicing in a new bound subtree, since the splice may have removed picks from the old region and added picks in the new region.
     ///
-    /// - Complexity: O(*p*²) where *p* is the number of active pick nodes. Pick counts are typically in the dozens, so this is much cheaper than a full ``ChoiceGraph/build(from:)`` call.
-    func recomputeSelfSimilarityEdges() {
-        selfSimilarityEdges.removeAll(keepingCapacity: true)
-        var picksByMaskedSiteID: [UInt64: [Int]] = [:]
+    /// - Complexity: O(P) where P is the number of active pick nodes.
+    func recomputeSelfSimilarityGroups() {
+        selfSimilarityGroups.removeAll(keepingCapacity: true)
         for node in nodes {
             guard isTombstoned(node.id) == false else { continue }
             guard case let .pick(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
-            picksByMaskedSiteID[metadata.depthMaskedSiteID, default: []].append(node.id)
-        }
-        for (_, pickIDs) in picksByMaskedSiteID where pickIDs.count >= 2 {
-            var indexA = 0
-            while indexA < pickIDs.count {
-                var indexB = indexA + 1
-                while indexB < pickIDs.count {
-                    let sizeA = nodes[pickIDs[indexA]].positionRange?.count ?? 0
-                    let sizeB = nodes[pickIDs[indexB]].positionRange?.count ?? 0
-                    selfSimilarityEdges.append(SelfSimilarityEdge(
-                        nodeA: pickIDs[indexA],
-                        nodeB: pickIDs[indexB],
-                        sizeDelta: sizeA - sizeB
-                    ))
-                    indexB += 1
-                }
-                indexA += 1
-            }
+            selfSimilarityGroups[metadata.depthMaskedSiteID, default: []].append(node.id)
         }
     }
 
@@ -511,7 +495,10 @@ extension ChoiceGraph {
     func removeNodesAndEdges(nodeIDs: Set<Int>) {
         containmentEdges.removeAll { nodeIDs.contains($0.source) || nodeIDs.contains($0.target) }
         dependencyEdges.removeAll { nodeIDs.contains($0.source) || nodeIDs.contains($0.target) }
-        selfSimilarityEdges.removeAll { nodeIDs.contains($0.nodeA) || nodeIDs.contains($0.nodeB) }
+        for (key, group) in selfSimilarityGroups {
+            let filtered = group.filter { nodeIDs.contains($0) == false }
+            selfSimilarityGroups[key] = filtered.isEmpty ? nil : filtered
+        }
         invalidateDerivedEdges()
     }
 

@@ -35,8 +35,8 @@ public final class ChoiceGraph {
     /// Dependency edges from bind-inner nodes to structural nodes in their bound subtrees.
     public var dependencyEdges: [DependencyEdge]
 
-    /// Self-similarity edges between active pick nodes with matching `depthMaskedSiteID`.
-    public var selfSimilarityEdges: [SelfSimilarityEdge]
+    /// Active pick nodes grouped by `depthMaskedSiteID`. Picks in the same group are structurally exchangeable — any pair is a candidate for self-similar replacement. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
+    public var selfSimilarityGroups: [UInt64: [Int]]
 
     /// Node IDs that have been removed from the graph by an in-place mutation but whose array slots are retained for ID stability. Iteration sites must skip these via ``isTombstoned(_:)``. Always empty until Layer 4 of the partial-rebuild rollout introduces in-place mutation; Layer 1 adds the field, the helper, and the filtering as a no-op precondition.
     var removedNodeIDs: Set<Int> = []
@@ -49,60 +49,63 @@ public final class ChoiceGraph {
     // MARK: - Lazy Edge State
 
     /// Cached type-compatibility edges. Computed on first access via ``computeTypeCompatibilityEdges()``, invalidated by ``invalidateDerivedEdges()``.
-    private var _typeCompatibilityEdges: [TypeCompatibilityEdge]?
+    private var cachedTypeCompatibilityEdges: [TypeCompatibilityEdge]?
 
     /// Cached source/sink annotations. Computed on first access via ``computeSourceSinkAnnotations()``, invalidated by ``invalidateDerivedEdges()``.
-    private var _sourceSinkStatus: [Int: SourceSinkStatus]?
+    private var cachedSourceSinkStatus: [Int: SourceSinkStatus]?
 
     /// Cached topological order over dependency edges. Computed on first access via ``computeTopologicalOrder()``, invalidated by ``invalidateTopologicalCaches()``. Layer 1 introduces the cache; Layer 4 wires up the invalidation when bind subtrees are rebuilt in place.
-    private var _topologicalOrder: [Int]?
+    private var cachedTopologicalOrder: [Int]?
 
-    /// Cached transitive closure of dependency edges. Computed on first access via ``computeReachability()``, invalidated by ``invalidateTopologicalCaches()``.
-    private var _reachability: [Int: Set<Int>]?
+    /// Cached dependency adjacency list. Computed on first access from ``dependencyEdges``, invalidated by ``invalidateTopologicalCaches()``. Used by ``isReachable(from:to:)`` and ``reachableNodes(from:within:)`` for on-demand DFS instead of an eager O(V^2) transitive closure.
+    private var cachedDependencyAdjacency: [[Int]]?
 
     /// Type-compatibility edges between antichain members with matching types. Computed lazily on first access and cached until invalidated by a structural mutation.
     public var typeCompatibilityEdges: [TypeCompatibilityEdge] {
-        if let cached = _typeCompatibilityEdges { return cached }
+        if let cached = cachedTypeCompatibilityEdges { return cached }
         let computed = computeTypeCompatibilityEdges()
-        _typeCompatibilityEdges = computed
+        cachedTypeCompatibilityEdges = computed
         return computed
     }
 
     /// Per-node source/sink status for redistribution. Computed lazily on first access and cached until invalidated.
     public var sourceSinkStatus: [Int: SourceSinkStatus] {
-        if let cached = _sourceSinkStatus { return cached }
+        if let cached = cachedSourceSinkStatus { return cached }
         let computed = computeSourceSinkAnnotations()
-        _sourceSinkStatus = computed
+        cachedSourceSinkStatus = computed
         return computed
     }
 
     /// Node IDs in dependency order (roots first). Computed via Kahn's algorithm on dependency edges. Cached until ``invalidateTopologicalCaches()`` clears it.
     public var topologicalOrder: [Int] {
-        if let cached = _topologicalOrder { return cached }
+        if let cached = cachedTopologicalOrder { return cached }
         let computed = computeTopologicalOrder()
-        _topologicalOrder = computed
+        cachedTopologicalOrder = computed
         return computed
     }
 
-    /// Transitive closure of dependency edges. `reachability[i]` contains all node IDs reachable from node `i`. Cached until ``invalidateTopologicalCaches()`` clears it.
-    public var reachability: [Int: Set<Int>] {
-        if let cached = _reachability { return cached }
-        let computed = computeReachability()
-        _reachability = computed
-        return computed
+    /// Dependency adjacency list for on-demand reachability queries. Computed lazily from ``dependencyEdges`` and cached until ``invalidateTopologicalCaches()`` clears it.
+    var dependencyAdjacency: [[Int]] {
+        if let cached = cachedDependencyAdjacency { return cached }
+        var adjacency = [[Int]](repeating: [], count: nodes.count)
+        for edge in dependencyEdges {
+            adjacency[edge.source].append(edge.target)
+        }
+        cachedDependencyAdjacency = adjacency
+        return adjacency
     }
 
     /// Drops cached type-compatibility edges, source/sink annotations, and convergence data on leaf nodes, forcing recomputation on next access.
     func invalidateDerivedEdges() {
-        _typeCompatibilityEdges = nil
-        _sourceSinkStatus = nil
+        cachedTypeCompatibilityEdges = nil
+        cachedSourceSinkStatus = nil
         clearConvergenceData()
     }
 
-    /// Drops cached topological order and reachability, forcing recomputation on next access. Called by in-place mutations that add or remove dependency edges (bind subtree rebuilds, branch pivots). Layer 1 introduces this hook; no Layer 1 call site invokes it because Layer 1 does not mutate the graph.
+    /// Drops cached topological order and dependency adjacency list, forcing recomputation on next access. Called by in-place mutations that add or remove dependency edges (bind subtree rebuilds, branch pivots).
     func invalidateTopologicalCaches() {
-        _topologicalOrder = nil
-        _reachability = nil
+        cachedTopologicalOrder = nil
+        cachedDependencyAdjacency = nil
     }
 
     /// Writes convergence records from an encoder pass onto the corresponding leaf nodes by sequence position.
@@ -182,12 +185,12 @@ public final class ChoiceGraph {
         nodes: [ChoiceGraphNode],
         containmentEdges: [ContainmentEdge],
         dependencyEdges: [DependencyEdge],
-        selfSimilarityEdges: [SelfSimilarityEdge]
+        selfSimilarityGroups: [UInt64: [Int]]
     ) {
         self.nodes = nodes
         self.containmentEdges = containmentEdges
         self.dependencyEdges = dependencyEdges
-        self.selfSimilarityEdges = selfSimilarityEdges
+        self.selfSimilarityGroups = selfSimilarityGroups
     }
 
     // MARK: - Copy
@@ -196,19 +199,19 @@ public final class ChoiceGraph {
     ///
     /// All stored properties are value types (arrays, sets, dictionaries, optionals of those), so the copy is `O(1)` until any subsequent mutation triggers COW on the touched buffer. Used by composed encoders that need to preview a speculative mutation against a throwaway graph — for example, the kleisli composition lift closure that applies a bind reshape on a copy via ``apply(_:freshTree:)`` instead of paying the cost of a full ``ChoiceGraph/build(from:)`` rebuild.
     ///
-    /// The cached lazy fields (``_typeCompatibilityEdges``, ``_sourceSinkStatus``, ``_topologicalOrder``, ``_reachability``) are also carried over. Any subsequent mutation that calls ``invalidateDerivedEdges()`` or ``invalidateTopologicalCaches()`` on the copy drops them on the copy alone, leaving the parent's caches intact via COW.
+    /// The cached lazy fields (``cachedTypeCompatibilityEdges``, ``cachedSourceSinkStatus``, ``cachedTopologicalOrder``, ``cachedDependencyAdjacency``) are also carried over. Any subsequent mutation that calls ``invalidateDerivedEdges()`` or ``invalidateTopologicalCaches()`` on the copy drops them on the copy alone, leaving the parent's caches intact via COW.
     func copy() -> ChoiceGraph {
         let result = ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,
             dependencyEdges: dependencyEdges,
-            selfSimilarityEdges: selfSimilarityEdges
+            selfSimilarityGroups: selfSimilarityGroups
         )
         result.removedNodeIDs = removedNodeIDs
-        result._typeCompatibilityEdges = _typeCompatibilityEdges
-        result._sourceSinkStatus = _sourceSinkStatus
-        result._topologicalOrder = _topologicalOrder
-        result._reachability = _reachability
+        result.cachedTypeCompatibilityEdges = cachedTypeCompatibilityEdges
+        result.cachedSourceSinkStatus = cachedSourceSinkStatus
+        result.cachedTopologicalOrder = cachedTopologicalOrder
+        result.cachedDependencyAdjacency = cachedDependencyAdjacency
         return result
     }
 }

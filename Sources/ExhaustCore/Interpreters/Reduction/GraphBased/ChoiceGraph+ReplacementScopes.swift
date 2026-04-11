@@ -6,35 +6,49 @@
 // MARK: - Replacement Scope Queries
 
 extension ChoiceGraph {
-    /// Computes replacement scopes from self-similarity edges, pick nodes, and descendant promotion candidates.
+    /// Computes replacement scopes from self-similarity groups, pick nodes, and descendant promotion candidates.
     ///
     /// - Returns: All replacement scopes across the three sub-types.
     func replacementScopes() -> [ReplacementScope] {
         var scopes: [ReplacementScope] = []
 
-        // Self-similar substitution: each self-similarity edge with
-        // positive size delta is a candidate (nodeA is target, nodeB is donor).
-        for edge in selfSimilarityEdges {
-            if edge.sizeDelta > 0 {
-                scopes.append(.selfSimilar(SelfSimilarReplacementScope(
-                    targetNodeID: edge.nodeA,
-                    donorNodeID: edge.nodeB,
-                    sizeDelta: edge.sizeDelta
-                )))
-            } else if edge.sizeDelta < 0 {
-                scopes.append(.selfSimilar(SelfSimilarReplacementScope(
-                    targetNodeID: edge.nodeB,
-                    donorNodeID: edge.nodeA,
-                    sizeDelta: -edge.sizeDelta
-                )))
-            }
-            // Zero-delta edges: both directions for cross-group promotion.
-            if edge.sizeDelta == 0 {
-                scopes.append(.selfSimilar(SelfSimilarReplacementScope(
-                    targetNodeID: edge.nodeA,
-                    donorNodeID: edge.nodeB,
-                    sizeDelta: 0
-                )))
+        // Self-similar substitution: for each group of picks with the same
+        // depthMaskedSiteID, generate one scope per ordered pair where the
+        // target is larger than the donor (positive size delta), plus one
+        // scope per zero-delta pair.
+        for (_, group) in selfSimilarityGroups {
+            guard group.count >= 2 else { continue }
+            var indexA = 0
+            while indexA < group.count {
+                let nodeA = group[indexA]
+                let sizeA = nodes[nodeA].positionRange?.count ?? 0
+                var indexB = indexA + 1
+                while indexB < group.count {
+                    let nodeB = group[indexB]
+                    let sizeB = nodes[nodeB].positionRange?.count ?? 0
+                    let sizeDelta = sizeA - sizeB
+                    if sizeDelta > 0 {
+                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                            targetNodeID: nodeA,
+                            donorNodeID: nodeB,
+                            sizeDelta: sizeDelta
+                        )))
+                    } else if sizeDelta < 0 {
+                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                            targetNodeID: nodeB,
+                            donorNodeID: nodeA,
+                            sizeDelta: -sizeDelta
+                        )))
+                    } else {
+                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                            targetNodeID: nodeA,
+                            donorNodeID: nodeB,
+                            sizeDelta: 0
+                        )))
+                    }
+                    indexB += 1
+                }
+                indexA += 1
             }
         }
 
@@ -64,27 +78,20 @@ extension ChoiceGraph {
             }
         }
 
-        // Descendant promotion: pairs (ancestor pick, descendant pick) with
-        // matching depthMaskedSiteID where the descendant's subtree is smaller.
+        // Descendant promotion: for each pick node, check group members
+        // that are containment descendants with a smaller subtree.
         for node in nodes {
             guard case let .pick(ancestorMetadata) = node.kind else { continue }
             guard let ancestorRange = node.positionRange else { continue }
-            for edge in selfSimilarityEdges {
-                let otherID = edge.nodeA == node.id ? edge.nodeB : (edge.nodeB == node.id ? edge.nodeA : nil)
-                guard let descendantID = otherID else { continue }
+            guard let group = selfSimilarityGroups[ancestorMetadata.depthMaskedSiteID] else { continue }
+            for descendantID in group {
+                guard descendantID != node.id else { continue }
                 guard let descendantRange = nodes[descendantID].positionRange else { continue }
-                // The descendant must be reachable from the ancestor via containment.
-                let reachable = reachability[node.id]?.contains(descendantID) ?? false
-                    || isContainmentDescendant(descendantID, of: node.id)
-                guard reachable else { continue }
                 let sizeDelta = ancestorRange.count - descendantRange.count
                 guard sizeDelta > 0 else { continue }
-                // Avoid duplicate with self-similar scope.
-                guard case let .pick(descendantMetadata) = nodes[descendantID].kind,
-                      descendantMetadata.depthMaskedSiteID == ancestorMetadata.depthMaskedSiteID
-                else {
-                    continue
-                }
+                let reachable = isReachable(from: node.id, to: descendantID)
+                    || isContainmentDescendant(descendantID, of: node.id)
+                guard reachable else { continue }
                 scopes.append(.descendantPromotion(DescendantPromotionScope(
                     ancestorPickNodeID: node.id,
                     descendantPickNodeID: descendantID,

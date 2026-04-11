@@ -518,44 +518,24 @@ struct ChoiceGraphBuilder {
             }
         }
 
-        // Self-similarity edges: group active pick nodes by depthMaskedSiteID.
-        var selfSimilarityEdges: [SelfSimilarityEdge] = []
-        var picksByMaskedSiteID: [UInt64: [Int]] = [:]
+        // Self-similarity groups: active pick nodes indexed by depthMaskedSiteID.
+        // O(P) construction instead of the previous O(P²) all-pairs edge array.
+        var selfSimilarityGroups: [UInt64: [Int]] = [:]
         for node in nodes {
             guard case let .pick(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue } // Active picks only
-            picksByMaskedSiteID[metadata.depthMaskedSiteID, default: []].append(node.id)
-        }
-        for (_, pickIDs) in picksByMaskedSiteID where pickIDs.count >= 2 {
-            var indexA = 0
-            while indexA < pickIDs.count {
-                var indexB = indexA + 1
-                while indexB < pickIDs.count {
-                    let nodeA = nodes[pickIDs[indexA]]
-                    let nodeB = nodes[pickIDs[indexB]]
-                    let sizeA = subtreeSequenceLength(nodeA)
-                    let sizeB = subtreeSequenceLength(nodeB)
-                    selfSimilarityEdges.append(SelfSimilarityEdge(
-                        nodeA: pickIDs[indexA],
-                        nodeB: pickIDs[indexB],
-                        sizeDelta: sizeA - sizeB
-                    ))
-                    indexB += 1
-                }
-                indexA += 1
-            }
+            guard node.positionRange != nil else { continue }
+            selfSimilarityGroups[metadata.depthMaskedSiteID, default: []].append(node.id)
         }
 
-        // Topological order and reachability are computed lazily on first
-        // access via ``ChoiceGraph.topologicalOrder`` / ``ChoiceGraph.reachability``.
-        // The builder no longer eagerly computes them — keeping the computation
-        // close to the cache slot lets Layer 4's partial-rebuild path invalidate
-        // and recompute through the same code path.
+        // Topological order and dependency adjacency are computed lazily on
+        // first access. The builder no longer eagerly computes them — keeping
+        // the computation close to the cache slot lets Layer 4's partial-rebuild
+        // path invalidate and recompute through the same code path.
         return ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,
             dependencyEdges: allDependencyEdges,
-            selfSimilarityEdges: selfSimilarityEdges
+            selfSimilarityGroups: selfSimilarityGroups
         )
     }
 
