@@ -143,9 +143,22 @@ enum ChoiceGraphScheduler {
         // the next cycle, when the set is cleared.
         var kleisliDispatchedThisCycle = Set<Int>()
 
+        // Per-bind-node Kleisli stall counter. Incremented when a Kleisli dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
+        var kleisliStallCount: [Int: Int] = [:]
+
+        // Migration probe budget. Migration on coupled generators (for example, Bound5) has a 0% acceptance rate — the constraint prevents element transfer between sequences. After 10+ cumulative emits with zero accepts, cap migration at 3 probes per cycle to avoid burning materializations on a structurally futile operation.
+        var migrationEmits = 0
+        var migrationAccepts = 0
+        var migrationCycleBudget: Int? = nil
+
         while stallBudget > 0 {
             cycles += 1
             kleisliDispatchedThisCycle.removeAll(keepingCapacity: true)
+            if migrationAccepts == 0 && migrationEmits >= 10 {
+                migrationCycleBudget = 3
+            } else {
+                migrationCycleBudget = nil
+            }
             let sequenceBeforeCycle = sequence
 
             // Partial Layer 5: the unconditional top-of-cycle rebuild has
@@ -235,6 +248,12 @@ enum ChoiceGraphScheduler {
                     }
                 }
 
+                // Migration cycle budget: skip if the budget has been exhausted.
+                if case .migrate = transformation.operation,
+                   let budget = migrationCycleBudget, budget <= 0 {
+                    continue
+                }
+
                 // Layer 7a lazy rematerialize: a path-changing operation
                 // (only ``GraphOperation/replace``) reads inactive branches
                 // via ``PickMetadata/branchElements``. If the current graph
@@ -289,10 +308,13 @@ enum ChoiceGraphScheduler {
                 // ``selectEncoder(for:)`` switch.
                 var encoder: any GraphEncoder
                 if case let .minimize(.kleisliFibre(fibreScope)) = transformation.operation {
+                    let stalls = kleisliStallCount[fibreScope.bindNodeID, default: 0]
+                    let decayedBudget = max(1, 15 >> stalls)
                     encoder = Self.makeKleisliComposition(
                         fibreScope: fibreScope,
                         scope: scope,
-                        gen: erasedGen
+                        gen: erasedGen,
+                        upstreamBudget: decayedBudget
                     )
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
@@ -327,6 +349,25 @@ enum ChoiceGraphScheduler {
                 let convergence = encoder.convergenceRecords
                 if convergence.isEmpty == false {
                     graph.recordConvergence(byNodeID: convergence)
+                }
+
+                // Update migration history and cycle budget.
+                if case .migrate = transformation.operation {
+                    migrationEmits += outcome.probeCount
+                    migrationAccepts += outcome.acceptCount
+                    if var budget = migrationCycleBudget {
+                        budget -= outcome.probeCount
+                        migrationCycleBudget = budget
+                    }
+                }
+
+                // Kleisli stall tracking: increment the per-bind-node counter when a dispatch produces zero accepts, reset on any acceptance. The stall count decays the upstream budget on subsequent dispatches.
+                if case let .minimize(.kleisliFibre(fibreScope)) = transformation.operation {
+                    if outcome.acceptCount > 0 {
+                        kleisliStallCount[fibreScope.bindNodeID] = 0
+                    } else {
+                        kleisliStallCount[fibreScope.bindNodeID, default: 0] += 1
+                    }
                 }
 
                 if outcome.accepted {
@@ -636,7 +677,8 @@ enum ChoiceGraphScheduler {
     private static func makeKleisliComposition(
         fibreScope: KleisliFibreScope,
         scope: TransformationScope,
-        gen: ReflectiveGenerator<Any>
+        gen: ReflectiveGenerator<Any>,
+        upstreamBudget: Int = 15
     ) -> any GraphEncoder {
         // Synthesise the upstream scope: a one-leaf integer minimization on the
         // bind-inner. ``mayReshapeOnAcceptance`` is false here because the
@@ -699,6 +741,7 @@ enum ChoiceGraphScheduler {
             name: .graphKleisliFibre,
             upstream: upstreamEncoder,
             downstream: downstreamEncoder,
+            upstreamBudget: upstreamBudget,
             lift: lift
         )
     }
@@ -885,6 +928,8 @@ enum ChoiceGraphScheduler {
         let requiresRebuild: Bool
         let requiresSourceRebuild: Bool
         let treeIsStripped: Bool
+        let probeCount: Int
+        let acceptCount: Int
     }
 
     // swiftlint:disable function_parameter_count
@@ -1144,7 +1189,9 @@ enum ChoiceGraphScheduler {
             accepted: anyAccepted,
             requiresRebuild: anyRequiresRebuild,
             requiresSourceRebuild: anyRequiresSourceRebuild,
-            treeIsStripped: latestAcceptedTreeIsStripped
+            treeIsStripped: latestAcceptedTreeIsStripped,
+            probeCount: probeCount,
+            acceptCount: acceptCount
         )
     }
     // swiftlint:enable function_parameter_count
