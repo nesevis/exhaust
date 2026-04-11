@@ -224,8 +224,8 @@ struct ChoiceGraphTests {
         #expect(graph.containmentEdges.allSatisfy { $0.source == 0 })
     }
 
-    @Test("Self-similarity edges group by depthMaskedSiteID")
-    func selfSimilarityEdges() {
+    @Test("Self-similarity groups index by depthMaskedSiteID")
+    func selfSimilarityGroups() {
         // Two pick sites with the same depthMaskedSiteID (siteID / 1000 = 1) at different depths.
         let pickA = ChoiceTree.group([
             .branch(siteID: 1000, weight: 1, id: 0, branchIDs: [0, 1],
@@ -243,13 +243,14 @@ struct ChoiceGraphTests {
 
         let graph = ChoiceGraph.build(from: tree)
 
-        // Both picks have depthMaskedSiteID = 1, so there should be a self-similarity edge.
-        #expect(graph.selfSimilarityEdges.count == 1)
+        // Both picks have depthMaskedSiteID = 1, so they should be in the same group.
+        let group = graph.selfSimilarityGroups[1]
+        #expect(group?.count == 2)
     }
 
-    @Test("Self-similarity edges exclude inactive picks")
+    @Test("Self-similarity groups exclude inactive picks")
     func selfSimilarityExcludesInactivePicks() {
-        // A single pick site — only one active pick, no self-similarity possible.
+        // A single pick site — only one active pick, no group of size >= 2 possible.
         let tree = ChoiceTree.group([
             .branch(siteID: 1000, weight: 1, id: 0, branchIDs: [0, 1],
                     choice: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10))),
@@ -259,8 +260,9 @@ struct ChoiceGraphTests {
 
         let graph = ChoiceGraph.build(from: tree)
 
-        // One active pick — no self-similarity edges (need at least two active picks in the same class).
-        #expect(graph.selfSimilarityEdges.isEmpty)
+        // One active pick — its group has size 1, no self-similar pairs possible.
+        let group = graph.selfSimilarityGroups[1]
+        #expect(group == nil || group?.count == 1)
     }
 
     // MARK: - Query Tests

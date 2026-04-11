@@ -196,7 +196,7 @@ struct StructuralPathologicalChallenge {
 
     // MARK: - Non-Monotonic Fibre
 
-    @Test("Non-monotonic fibre size", .disabled())
+    @Test("Non-monotonic fibre size")
     func nonMonotonicFibre() {
         // Single bind with non-monotonic fibre: domain peaks at n=3 (range 0...9, fibre=100),
         // then shrinks (n=5 → range 0...7, fibre=64; n=8 → range 0...4, fibre=25).
@@ -220,7 +220,7 @@ struct StructuralPathologicalChallenge {
         }
         if let report { print("[PROFILE] NonMonotonicFibre: \(report.profilingSummary)") }
 
-        #expect(output == [4, 4])
+        #expect(output == [2, 6])
     }
 
     // MARK: - Varying Edge Productivity

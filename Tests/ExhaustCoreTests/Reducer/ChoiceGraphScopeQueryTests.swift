@@ -12,8 +12,8 @@ import Testing
 struct ChoiceGraphScopeQueryTests {
     // MARK: - Element Removal (Aligned)
 
-    @Test("Aligned element removal scope for zip of two sequences")
-    func alignedRemovalTwoSequences() {
+    @Test("Covering aligned removal scope for zip of two sequences")
+    func coveringAlignedRemovalTwoSequences() {
         let seq1 = ChoiceTree.sequence(
             length: 3,
             elements: [
@@ -33,24 +33,26 @@ struct ChoiceGraphScopeQueryTests {
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
-        let alignedScopes = graph.elementRemovalScopes().filter { $0.targets.count >= 2 }
+        let coveringScopes = graph.coveringAlignedRemovalScopes()
 
-        #expect(alignedScopes.count == 6)
-        #expect(alignedScopes[0].targets.count == 2)
-        #expect(alignedScopes[0].maxBatch == 1)
-        #expect(alignedScopes[0].maxElementYield > 0)
+        // One covering scope per zip node with deletable sibling sequences.
+        #expect(coveringScopes.count == 1)
+        #expect(coveringScopes[0].siblings.count == 2)
+        #expect(coveringScopes[0].maxElementYield > 0)
+        // Domain sizes: 3+1=4 for seq1, 2+1=3 for seq2.
+        #expect(coveringScopes[0].skipValues == [3, 2])
     }
 
-    @Test("No aligned removal for zip of non-sequence children")
-    func noAlignedRemovalForLeaves() {
+    @Test("No covering aligned removal for zip of non-sequence children")
+    func noCoveringAlignedRemovalForLeaves() {
         let tree = ChoiceTree.group([
             .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let alignedScopes = graph.elementRemovalScopes().filter { $0.targets.count >= 2 }
+        let coveringScopes = graph.coveringAlignedRemovalScopes()
 
-        #expect(alignedScopes.isEmpty)
+        #expect(coveringScopes.isEmpty)
     }
 
     // MARK: - Element Removal (Per-Parent)
@@ -164,8 +166,8 @@ struct ChoiceGraphScopeQueryTests {
 
     // MARK: - Aligned Removal Encoder
 
-    @Test("Multi-target removal encoder produces candidates removing from all sequences")
-    func multiTargetRemovalProducesCandidates() {
+    @Test("Covering aligned removal encoder produces candidates removing from multiple sequences")
+    func coveringAlignedRemovalProducesCandidates() {
         let seq1 = ChoiceTree.sequence(
             length: 3,
             elements: [
@@ -187,25 +189,19 @@ struct ChoiceGraphScopeQueryTests {
         let sequence = ChoiceSequence.flatten(tree)
         let graph = ChoiceGraph.build(from: tree)
 
-        let alignedScopes = graph.elementRemovalScopes().filter { $0.targets.count >= 2 }
-        guard let elementScope = alignedScopes.first else {
-            Issue.record("No multi-target removal scope found")
+        let alignedScopes = graph.coveringAlignedRemovalScopes()
+        guard let coveringScope = alignedScopes.first else {
+            Issue.record("No covering aligned removal scope found")
             return
         }
 
-        let totalYield = elementScope.targets.reduce(0) { total, target in
-            total + target.elementNodeIDs.reduce(0) { subtotal, nodeID in
-                subtotal + (graph.nodes[nodeID].positionRange?.count ?? 0)
-            }
-        }
-
         let transformation = GraphTransformation(
-            operation: .remove(.elements(elementScope)),
+            operation: .remove(.coveringAligned(coveringScope)),
             yield: TransformationYield(
-                structural: totalYield,
+                structural: coveringScope.maxElementYield,
                 value: 0,
                 slack: .exact,
-                estimatedProbes: 4
+                estimatedProbes: coveringScope.handle.generator.totalRemaining
             ),
             precondition: .unconditional,
             postcondition: TransformationPostcondition(
@@ -233,8 +229,8 @@ struct ChoiceGraphScopeQueryTests {
         }
 
         #expect(candidates.isEmpty == false)
-        // Multi-target removal removes from BOTH sequences simultaneously,
-        // so candidates should be shorter by at least 2 (one element per target).
+        // Covering aligned removal removes from at least two sequences
+        // simultaneously, so candidates should be shorter by at least 2.
         for candidate in candidates {
             #expect(candidate.count < sequence.count)
             #expect(sequence.count - candidate.count >= 2)
@@ -277,8 +273,8 @@ struct ChoiceGraphScopeQueryTests {
         }
     }
 
-    @Test("Enumerator includes multi-target removal for zip of sequences")
-    func enumeratorIncludesMultiTarget() {
+    @Test("Enumerator includes covering aligned removal for zip of sequences")
+    func enumeratorIncludesCoveringAligned() {
         let seq1 = ChoiceTree.sequence(
             length: 2,
             elements: [
@@ -299,12 +295,12 @@ struct ChoiceGraphScopeQueryTests {
         let graph = ChoiceGraph.build(from: tree)
         let transformations = TransformationEnumerator.enumerate(from: graph)
 
-        let hasMultiTarget = transformations.contains { transformation in
-            if case let .remove(.elements(scope)) = transformation.operation {
-                return scope.targets.count >= 2
+        let hasCoveringAligned = transformations.contains { transformation in
+            if case .remove(.coveringAligned) = transformation.operation {
+                return true
             }
             return false
         }
-        #expect(hasMultiTarget)
+        #expect(hasCoveringAligned)
     }
 }

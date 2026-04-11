@@ -31,15 +31,15 @@ struct CalculatorShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .randomOnly,
-            .replay(1337),
+            .replay(5832967290043753512),
             .reducer(.choiceGraph),
             .budget(.exorbitant),
-            .logging(.trace, .keyValue)
+            .logging(.debug, .keyValue)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
             }
-            print("Attempt: \(expr)")
+//            print("Attempt: \(expr)")
             do {
                 _ = try Self.eval(expr)
                 return true

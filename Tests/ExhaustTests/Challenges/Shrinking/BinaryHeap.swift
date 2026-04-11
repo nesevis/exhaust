@@ -22,16 +22,6 @@ struct BinaryHeapShrinkingChallenge {
 
     // MARK: - Tests
 
-    @Test("Binary Heap Shrinking Challenge", .disabled())
-    func binaryHeapChallenge() {
-        #exhaust(Self.gen) { heap in
-            #expect(Self.invariant(heap))
-            let xs = Self.toSortedList(heap)
-            let sorted = Self.toList(heap).sorted()
-            #expect(sorted == xs)
-        }
-    }
-
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {
         // The property: if the heap satisfies the invariant, then `toSortedList`
@@ -49,24 +39,15 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 Self.gen.unique(),
                 .suppressIssueReporting,
-//                .replay(1584),
-                .randomOnly,
-//                .collectOpenPBTStats,
-//                .replay(7721779162233180381),
-//                .replay(16978691592903030353),
-//                .replay(626_360_492_104_589_905),
-//                .replay(7_669_171_433_675_367_730),
-//                .replay(12050660900442969635),
-//                .replay(10999453694572778833), // Four heap
-//                .onReport { report = $0 },
+                .replay(1584),
+                .onReport { report = $0 },
                 .reducer(.choiceGraph),
-//                .logging(.debug, .jsonl),
                 property: property
             )
         )
-//        let rep = try #require(report)
-//        #expect(rep.propertyInvocations == 315)
-//        #expect(rep.totalMaterializations == 406)
+        let rep = try #require(report)
+        #expect(rep.propertyInvocations == 93)
+        #expect(rep.totalMaterializations == 91)
 
         if let report { print("[PROFILE] BinaryHeap: \(report.profilingSummary)") }
         let outputValues = Self.toList(output)

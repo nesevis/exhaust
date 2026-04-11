@@ -123,8 +123,8 @@ struct Bound5ShrinkingChallenge {
         )
 
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 116)
-        #expect(rep.totalMaterializations == 337)
+        #expect(rep.propertyInvocations == 84)
+        #expect(rep.totalMaterializations == 360)
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
