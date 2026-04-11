@@ -353,7 +353,7 @@ private func registerParser() {
 
         for i in 0 ..< seedCount {
             let seed = baseSeed &+ UInt64(i)
-            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 10_000)
+            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 10000)
 
             // Find first failure for this seed.
             var failingValue: ParserLang?
@@ -665,7 +665,7 @@ private func printChallengeReport(
     iterationsToFirstFailure: [Int]
 ) {
     let invocations = results.map { Double($0.propertyInvocations) }
-    let times = results.map { $0.reductionMilliseconds }
+    let times = results.map(\.reductionMilliseconds)
     let uniqueCounterexamples = Set(results.map(\.counterexampleDescription)).sorted()
 
     let medianInvocations = String(format: "%.1f", median(invocations))

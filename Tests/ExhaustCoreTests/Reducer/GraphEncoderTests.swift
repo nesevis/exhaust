@@ -3,14 +3,13 @@
 //  Exhaust
 //
 
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 // MARK: - Graph Encoder Tests
 
 @Suite("GraphEncoders")
 struct GraphEncoderTests {
-
     // MARK: - Helpers
 
     /// Builds a scope for a removal transformation from a tree.

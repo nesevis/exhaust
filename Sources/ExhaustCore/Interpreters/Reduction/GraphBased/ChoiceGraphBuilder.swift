@@ -694,11 +694,10 @@ struct ChoiceGraphBuilder {
         // external `parent` — every other node's parent is a local subtree
         // ID and gets shifted.
         let renumberedNodes: [ChoiceGraphNode] = builder.nodes.enumerated().map { index, node in
-            let renumberedParent: Int?
-            if index == 0 {
-                renumberedParent = parent
+            let renumberedParent: Int? = if index == 0 {
+                parent
             } else {
-                renumberedParent = node.parent.map { $0 + nodeIDOffset }
+                node.parent.map { $0 + nodeIDOffset }
             }
             return ChoiceGraphNode(
                 id: node.id + nodeIDOffset,

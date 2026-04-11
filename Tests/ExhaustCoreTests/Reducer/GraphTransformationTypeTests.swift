@@ -3,14 +3,13 @@
 //  Exhaust
 //
 
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 // MARK: - Affine Slack Tests
 
 @Suite("AffineSlack")
 struct AffineSlackTests {
-
     @Test("Exact is identity under composition")
     func exactIsIdentity() {
         let slack = AffineSlack(multiplicative: 1, additive: 5)
@@ -52,7 +51,6 @@ struct AffineSlackTests {
 
 @Suite("TransformationYield")
 struct TransformationYieldTests {
-
     @Test("Identity is neutral under composition")
     func identityIsNeutral() {
         let yield = TransformationYield(
@@ -180,7 +178,6 @@ struct TransformationYieldTests {
 
 @Suite("ChoiceSequenceValue.withBitPattern")
 struct WithBitPatternTests {
-
     @Test("Replaces unsigned value preserving tag and range")
     func unsignedReplacement() {
         let original = ChoiceSequenceValue.value(.init(
@@ -251,7 +248,6 @@ struct WithBitPatternTests {
 
 @Suite("CompoundTransformation")
 struct CompoundTransformationTests {
-
     @Test("Composed yield reduces steps correctly")
     func composedYield() {
         let stepA = CompoundStep(

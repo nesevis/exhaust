@@ -78,11 +78,11 @@ struct PropertyTestFailure<Output> {
     /// Renders only the replay seed — the `#expect` assertions provide per-value detail.
     private func renderKeyValueTransparent() -> String {
         if let seed {
-            return "Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")"
+            "Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")"
         } else if let replayHint {
-            return replayHint
+            replayHint
         } else {
-            return "Property failed (no replay seed available)"
+            "Property failed (no replay seed available)"
         }
     }
 
@@ -116,7 +116,8 @@ struct PropertyTestFailure<Output> {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         guard let data = try? encoder.encode(logLine),
-              let json = String(data: data, encoding: .utf8) else {
+              let json = String(data: data, encoding: .utf8)
+        else {
             return "{\"event\":\"property_failed\"}"
         }
         return json

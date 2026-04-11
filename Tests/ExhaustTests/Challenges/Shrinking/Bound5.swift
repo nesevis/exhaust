@@ -99,7 +99,7 @@ struct Bound5ShrinkingChallenge {
         if let report { print("[PROFILE] Bound5Path2: \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
-        #expect(output?.arr.sorted() == [-32768, -1]) 
+        #expect(output?.arr.sorted() == [-32768, -1])
     }
 
     @Test("Bound5, Pathological 3")
@@ -124,7 +124,7 @@ struct Bound5ShrinkingChallenge {
 
         let rep = try #require(report)
         #expect(rep.propertyInvocations == 116)
-        #expect(rep.totalMaterializations == 351)
+        #expect(rep.totalMaterializations == 337)
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -174,7 +174,7 @@ struct Bound5ShrinkingChallenge {
             .suppressIssueReporting,
             property: Self.property
         )
-        
+
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }

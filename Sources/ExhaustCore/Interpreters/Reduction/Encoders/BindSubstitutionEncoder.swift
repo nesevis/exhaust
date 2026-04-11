@@ -7,7 +7,10 @@
 /// This pulls a deeper subtree up to a shallower position, reducing structural depth.
 /// The property check determines whether the substitution preserves the failure.
 struct BindSubstitutionEncoder: ComposableEncoder {
-    var name: EncoderName { .bindSubstitution }
+    var name: EncoderName {
+        .bindSubstitution
+    }
+
     let phase = ReductionPhase.structuralDeletion
 
     private var candidates: [ChoiceSequence] = []
@@ -266,8 +269,8 @@ struct BindSubstitutionEncoder: ComposableEncoder {
         var children: [BindSpanIndex.BindRegion] = []
         for region in bindIndex.regions {
             if region.bindSpanRange == parent.bindSpanRange { continue }
-            if parent.boundRange.contains(region.bindSpanRange.lowerBound)
-                && bindIndex.bindDepth(at: region.bindSpanRange.lowerBound) == parentDepth + 1
+            if parent.boundRange.contains(region.bindSpanRange.lowerBound),
+               bindIndex.bindDepth(at: region.bindSpanRange.lowerBound) == parentDepth + 1
             {
                 children.append(region)
             }

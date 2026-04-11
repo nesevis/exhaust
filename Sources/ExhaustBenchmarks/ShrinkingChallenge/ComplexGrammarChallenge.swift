@@ -1,4 +1,5 @@
 // MARK: - Complex Grammar Benchmark
+
 //
 // A larger recursive expression grammar than CalculatorChallenge, intended as a
 // stress test for the graph reducer at the workload size where partial rebuilds
@@ -62,7 +63,7 @@ func complexGrammarGen(depth: UInt64) -> ReflectiveGenerator<ComplexExpr> {
             backward: complexBackwardLit
         )
 
-    let recursive = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+    return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
         let add = #gen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.add(lhs, rhs) },
@@ -105,8 +106,6 @@ func complexGrammarGen(depth: UInt64) -> ReflectiveGenerator<ComplexExpr> {
             (2, ifThen),
             (2, call))
     })
-
-    return recursive
 }
 
 // MARK: - Registration

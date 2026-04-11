@@ -35,15 +35,15 @@ struct StringAnagramChallenge {
      Expected smallest counterexample: ([(space), !], [!, (space)])
      Two arrays of the two smallest values in the range, in swapped order.
      */
-    
+
     @Test("String Anagram #expect", .disabled("Example"))
-    func stringAnagramExpect() throws {
+    func stringAnagramExpect() {
         let charGen = #gen(.asciiString())
             .filter { $0.count >= 2 }
         let gen = #gen(charGen, charGen)
-        
+
         let failingValueFromElsewhere = ("dcba", "abcd")
-        
+
         #exhaust(gen, .reflecting(failingValueFromElsewhere)) { a, b in
             guard a != b, a.count == b.count else { return }
             #expect(a.sorted() != b.sorted())

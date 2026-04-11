@@ -422,7 +422,8 @@ package enum ExhaustLog {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         guard let data = try? encoder.encode(logLine),
-              let json = String(data: data, encoding: .utf8) else {
+              let json = String(data: data, encoding: .utf8)
+        else {
             return "{\"kind\":\"exhaust_log\"}"
         }
         return json

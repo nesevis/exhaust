@@ -698,7 +698,7 @@ public extension ChoiceGraph {
     func updateBranchSelection(
         pickNodeID: Int,
         newSelectedID: UInt64,
-        newTree: ChoiceTree
+        newTree _: ChoiceTree
     ) {
         let pickNode = nodes[pickNodeID]
         guard case let .pick(metadata) = pickNode.kind else { return }
@@ -711,7 +711,8 @@ public extension ChoiceGraph {
         var newSelectedChildIndex = metadata.selectedChildIndex
         for (index, childID) in pickNode.children.enumerated() {
             if case let .pick(childPickMeta) = nodes[childID].kind,
-               childPickMeta.selectedID == newSelectedID {
+               childPickMeta.selectedID == newSelectedID
+            {
                 newSelectedChildIndex = index
                 break
             }

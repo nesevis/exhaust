@@ -11,7 +11,6 @@
 ///
 /// - SeeAlso: ``ScopeSource``, ``ScopeSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
-
     // MARK: - Entry Points
 
     /// Runs the graph-based reduction pipeline to a fixed point or budget exhaustion.
@@ -154,7 +153,7 @@ enum ChoiceGraphScheduler {
         while stallBudget > 0 {
             cycles += 1
             kleisliDispatchedThisCycle.removeAll(keepingCapacity: true)
-            if migrationAccepts == 0 && migrationEmits >= 10 {
+            if migrationAccepts == 0, migrationEmits >= 10 {
                 migrationCycleBudget = 3
             } else {
                 migrationCycleBudget = nil
@@ -250,7 +249,8 @@ enum ChoiceGraphScheduler {
 
                 // Migration cycle budget: skip if the budget has been exhausted.
                 if case .migrate = transformation.operation,
-                   let budget = migrationCycleBudget, budget <= 0 {
+                   let budget = migrationCycleBudget, budget <= 0
+                {
                     continue
                 }
 
@@ -382,10 +382,10 @@ enum ChoiceGraphScheduler {
                     // the safe option is to rebuild the graph from the live tree after the
                     // composition exits.
                     let isKleisliFibre = switch transformation.operation {
-                        case .minimize(.kleisliFibre):
-                            true
-                        default:
-                            false
+                    case .minimize(.kleisliFibre):
+                        true
+                    default:
+                        false
                     }
 
                     if outcome.requiresRebuild || isKleisliFibre {
@@ -564,7 +564,8 @@ enum ChoiceGraphScheduler {
             let structurallyImproved = sequence.count < sequenceBeforeCycle.count
             if structurallyImproved == false,
                anyAccepted == false,
-               allValuesConverged(in: sequence, graph: graph) {
+               allValuesConverged(in: sequence, graph: graph)
+            {
                 break
             }
 
@@ -619,6 +620,7 @@ enum ChoiceGraphScheduler {
         let typedOutput = output as! Output
         return (reduced: (sequence, typedOutput), stats: stats)
     }
+
     // swiftlint:enable function_parameter_count
 
     // MARK: - Source Selection
@@ -650,17 +652,17 @@ enum ChoiceGraphScheduler {
     private static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
         case .remove:
-            return GraphRemovalEncoder()
+            GraphRemovalEncoder()
         case .replace:
-            return GraphReplacementEncoder()
+            GraphReplacementEncoder()
         case .minimize:
-            return GraphMinimizationEncoder()
+            GraphMinimizationEncoder()
         case .exchange:
-            return GraphExchangeEncoder()
+            GraphExchangeEncoder()
         case .permute:
-            return GraphPermutationEncoder()
+            GraphPermutationEncoder()
         case .migrate:
-            return GraphMigrationEncoder()
+            GraphMigrationEncoder()
         }
     }
 
@@ -888,8 +890,13 @@ enum ChoiceGraphScheduler {
     ///
     /// Used by ``makeKleisliComposition(fibreScope:scope:gen:)`` so that the upstream encoder of a ``GraphComposedEncoder`` operates on a synthesised one-leaf integer scope rather than the kleisli fibre scope the composition was started with. The composition's ``GraphComposedEncoder/start(scope:)`` will pass the original parent scope to its upstream; the adapter swaps it for the synthesised one before forwarding to the inner encoder.
     private struct PreStartedAdapter: GraphEncoder {
-        var name: EncoderName { inner.name }
-        var requiresExactDecoder: Bool { inner.requiresExactDecoder }
+        var name: EncoderName {
+            inner.name
+        }
+
+        var requiresExactDecoder: Bool {
+            inner.requiresExactDecoder
+        }
 
         private var inner: any GraphEncoder
         private let scope: TransformationScope
@@ -1194,13 +1201,14 @@ enum ChoiceGraphScheduler {
             acceptCount: acceptCount
         )
     }
+
     // swiftlint:enable function_parameter_count
 
     // MARK: - Convergence
 
     /// Returns true when every leaf value is either at its reduction target or has a convergence record.
     private static func allValuesConverged(
-        in sequence: ChoiceSequence,
+        in _: ChoiceSequence,
         graph: ChoiceGraph
     ) -> Bool {
         for nodeID in graph.leafNodes {
@@ -1278,7 +1286,8 @@ enum ChoiceGraphScheduler {
                     let boundChildID = graph.nodes[parentID].children[metadata.boundChildIndex]
                     if let boundRange = graph.nodes[boundChildID].positionRange,
                        let leafRange = graph.nodes[nodeID].positionRange,
-                       boundRange.contains(leafRange.lowerBound) {
+                       boundRange.contains(leafRange.lowerBound)
+                    {
                         return false
                     }
                 }
@@ -1287,7 +1296,6 @@ enum ChoiceGraphScheduler {
         }
         return true
     }
-
 
     // MARK: - Staleness Detection
 
@@ -1424,16 +1432,16 @@ enum ChoiceGraphScheduler {
 
         return anyStale
     }
+
     // swiftlint:enable function_parameter_count
 
     // MARK: - Convergence Invalidation
 
     /// No-op. Previously cleared convergence on leaves changed by redistribution to compensate for the coarse `convergedOrigin == nil` guard in ``minimizationScopes()``. The guard now checks `convergedOrigin.bound == currentBP`, so a leaf whose value moved away from its floor naturally passes the guard and re-enters value search with the surviving convergence record as a warm-start bound.
     private static func clearConvergenceOnChangedLeaves(
-        for transformation: GraphTransformation,
-        in graph: ChoiceGraph
+        for _: GraphTransformation,
+        in _: ChoiceGraph
     ) {}
-
 }
 
 // MARK: - Scope Rejection Cache
@@ -1446,7 +1454,7 @@ enum ChoiceGraphScheduler {
 struct ScopeRejectionCache {
     private var rejectedHashes = Set<UInt64>()
 
-    // Value-independent hash for structural operations. Keyed by (operation type, targeted node IDs) without leaf values. A deletion that was rejected at one set of leaf values is almost always rejected at another — the property cares about the *absence* of the element, not what value it had. Cleared per cycle to guard against the rare case where value changes at other positions shift the property's acceptance boundary enough to make a previously-rejected deletion viable.
+    /// Value-independent hash for structural operations. Keyed by (operation type, targeted node IDs) without leaf values. A deletion that was rejected at one set of leaf values is almost always rejected at another — the property cares about the *absence* of the element, not what value it had. Cleared per cycle to guard against the rare case where value changes at other positions shift the property's acceptance boundary enough to make a previously-rejected deletion viable.
     private var coarseRejectedHashes = Set<UInt64>()
 
     /// Records a rejected structural transformation.
@@ -1506,7 +1514,8 @@ struct ScopeRejectionCache {
         // Mix in Zobrist contributions at each targeted position.
         for nodeID in nodeIDs {
             guard nodeID < graph.nodes.count,
-                  let range = graph.nodes[nodeID].positionRange else {
+                  let range = graph.nodes[nodeID].positionRange
+            else {
                 continue
             }
             for position in range {

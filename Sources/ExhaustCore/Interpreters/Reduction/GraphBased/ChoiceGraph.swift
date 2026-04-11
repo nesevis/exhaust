@@ -367,7 +367,8 @@ public extension ChoiceGraph {
             guard node.children.count >= 2 else { continue }
             let boundChildID = node.children[metadata.boundChildIndex]
             if let boundRange = nodes[boundChildID].positionRange,
-               boundRange.contains(position) {
+               boundRange.contains(position)
+            {
                 depth += 1
             }
         }
@@ -383,7 +384,8 @@ public extension ChoiceGraph {
             guard node.children.count >= 2 else { continue }
             let boundChildID = node.children[metadata.boundChildIndex]
             if let boundRange = nodes[boundChildID].positionRange,
-               boundRange.contains(position) {
+               boundRange.contains(position)
+            {
                 return true
             }
         }
@@ -399,7 +401,8 @@ public extension ChoiceGraph {
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
             if let innerRange = nodes[innerChildID].positionRange,
-               innerRange.contains(position) {
+               innerRange.contains(position)
+            {
                 return node
             }
         }
@@ -643,7 +646,7 @@ extension ChoiceGraph {
     /// `result[i]` contains all node IDs reachable from node `i` via one or more dependency edges. Mirrors the prior implementation in ``ChoiceGraphBuilder``.
     ///
     /// - Complexity: O(*V* · *E*) time, O(*V*²) space in the worst case.
-    fileprivate func computeReachability() -> [Int: Set<Int>] {
+    private func computeReachability() -> [Int: Set<Int>] {
         let nodeCount = nodes.count
         var adjacency = [[Int]](repeating: [], count: nodeCount)
         for edge in dependencyEdges {

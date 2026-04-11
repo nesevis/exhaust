@@ -152,7 +152,9 @@ struct ValueMinimizationScope {
     let batchZeroEligible: Bool
 
     /// Backward-compat shorthand for the encoder's existing read pattern. Layer 3 will update encoders to read ``leaves`` directly and remove this property.
-    var leafNodeIDs: [Int] { leaves.map(\.nodeID) }
+    var leafNodeIDs: [Int] {
+        leaves.map(\.nodeID)
+    }
 }
 
 /// Scope for float leaf value minimization.
@@ -161,7 +163,9 @@ struct FloatMinimizationScope {
     let leaves: [LeafEntry]
 
     /// Backward-compat shorthand. Layer 3 will update encoders to read ``leaves`` directly.
-    var leafNodeIDs: [Int] { leaves.map(\.nodeID) }
+    var leafNodeIDs: [Int] {
+        leaves.map(\.nodeID)
+    }
 }
 
 /// Scope for Kleisli fibre search along a dependency edge.
@@ -213,10 +217,14 @@ struct RedistributionPair {
     let sinkTag: TypeTag
 
     /// Backward-compat shorthand. Layer 3 will update encoders to read ``source`` directly.
-    var sourceNodeID: Int { source.nodeID }
+    var sourceNodeID: Int {
+        source.nodeID
+    }
 
     /// Backward-compat shorthand. Layer 3 will update encoders to read ``sink`` directly.
-    var sinkNodeID: Int { sink.nodeID }
+    var sinkNodeID: Int {
+        sink.nodeID
+    }
 }
 
 /// Scope for tandem lockstep reduction.
@@ -234,7 +242,9 @@ struct TandemGroup {
     let typeTag: TypeTag
 
     /// Backward-compat shorthand. Layer 3 will update encoders to read ``leaves`` directly.
-    var leafNodeIDs: [Int] { leaves.map(\.nodeID) }
+    var leafNodeIDs: [Int] {
+        leaves.map(\.nodeID)
+    }
 }
 
 // MARK: - Permutation Scopes

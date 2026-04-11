@@ -22,7 +22,7 @@ public struct GenerationContext: ~Copyable {
     public var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
     public var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
 
-    // Filter observation tracking
+    /// Filter observation tracking
     public var filterObservations: [UInt64: FilterObservation] = [:]
 
     // VaCT/CGS tracking (harmless defaults for ValueInterpreter)

@@ -56,7 +56,7 @@ struct GraphRemovalEncoder: GraphEncoder {
         }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(lastAccepted _: Bool) -> EncoderProbe? {
         guard emitted == false else { return nil }
         emitted = true
         guard let candidate, let mutation else { return nil }
@@ -76,12 +76,11 @@ struct GraphRemovalEncoder: GraphEncoder {
         var rangeSet = RangeSet<Int>()
         for target in scope.targets {
             for nodeID in target.elementNodeIDs {
-                guard
-                    let extent = elementExtent(
-                        for: nodeID,
-                        inSequence: target.sequenceNodeID,
-                        graph: graph
-                    )
+                guard let extent = elementExtent(
+                    for: nodeID,
+                    inSequence: target.sequenceNodeID,
+                    graph: graph
+                )
                 else {
                     continue
                 }
@@ -104,7 +103,8 @@ struct GraphRemovalEncoder: GraphEncoder {
         guard sequenceNodeID < graph.nodes.count else { return nil }
         guard case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind else { return nil }
         guard let childIndex = graph.nodes[sequenceNodeID].children.firstIndex(of: elementNodeID),
-              childIndex < metadata.childPositionRanges.count else {
+              childIndex < metadata.childPositionRanges.count
+        else {
             // Fall back to the chooseBits single position if the parent isn't a
             // sequence with stored extents (defensive — shouldn't normally happen).
             return graph.nodes[elementNodeID].positionRange

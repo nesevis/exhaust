@@ -11,12 +11,16 @@
 public struct BinarySearchEncoder: ComposableEncoder {
     public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
 
-    public var name: EncoderName { .binarySearchToSemanticSimplest }
+    public var name: EncoderName {
+        .binarySearchToSemanticSimplest
+    }
 
     public let phase = ReductionPhase.valueMinimization
 
     /// The encoder configuration as a convergence cache discriminant.
-    var encoderConfiguration: EncoderConfiguration { .binarySearchSemanticSimplest }
+    var encoderConfiguration: EncoderConfiguration {
+        .binarySearchSemanticSimplest
+    }
 
     public init() {}
 
@@ -73,7 +77,6 @@ public struct BinarySearchEncoder: ComposableEncoder {
                 index += 1
                 continue
             }
-
 
             let convergedOrigin = convergedOrigins?[seqIdx]
             let isConvergedOrigined: Bool
@@ -175,7 +178,9 @@ public struct BinarySearchEncoder: ComposableEncoder {
     private var savedEntry: ChoiceSequenceValue?
     private var currentCycle: Int = 0
 
-    private var costPerTarget: Int { 80 }
+    private var costPerTarget: Int {
+        80
+    }
 
     // MARK: - Probe Loop
 

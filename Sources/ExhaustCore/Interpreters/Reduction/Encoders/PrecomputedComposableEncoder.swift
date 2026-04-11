@@ -9,35 +9,35 @@
 ///
 /// The ``start(sequence:tree:positionRange:context:)`` method resets the iteration index. ``nextProbe(lastAccepted:)`` yields candidates in order. Feedback is ignored — each candidate is independent.
 struct PrecomputedComposableEncoder: ComposableEncoder {
-  let name: EncoderName
-  let phase: ReductionPhase
-  let candidates: [ChoiceSequence]
+    let name: EncoderName
+    let phase: ReductionPhase
+    let candidates: [ChoiceSequence]
 
-  private var index = 0
+    private var index = 0
 
-  init(
-    name: EncoderName,
-    phase: ReductionPhase,
-    candidates: [ChoiceSequence]
-  ) {
-    self.name = name
-    self.phase = phase
-    self.candidates = candidates
-  }
+    init(
+        name: EncoderName,
+        phase: ReductionPhase,
+        candidates: [ChoiceSequence]
+    ) {
+        self.name = name
+        self.phase = phase
+        self.candidates = candidates
+    }
 
-  mutating func start(
-    sequence _: ChoiceSequence,
-    tree _: ChoiceTree,
-    positionRange _: ClosedRange<Int>,
-    context _: ReductionContext
-  ) {
-    index = 0
-  }
+    mutating func start(
+        sequence _: ChoiceSequence,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
+    ) {
+        index = 0
+    }
 
-  mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
-    guard index < candidates.count else { return nil }
-    let candidate = candidates[index]
-    index += 1
-    return candidate
-  }
+    mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
+        guard index < candidates.count else { return nil }
+        let candidate = candidates[index]
+        index += 1
+        return candidate
+    }
 }

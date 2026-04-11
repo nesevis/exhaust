@@ -161,11 +161,10 @@ extension Materializer {
         // in a bind — unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?
         let branchChoiceTree: ChoiceTree?
-        let effectiveFallback: ChoiceTree?
-        if case let .bind(_, bound) = calleeFallback {
-            effectiveFallback = bound
+        let effectiveFallback: ChoiceTree? = if case let .bind(_, bound) = calleeFallback {
+            bound
         } else {
-            effectiveFallback = calleeFallback
+            calleeFallback
         }
         if let effectiveFallback,
            case let .group(children, _) = effectiveFallback,

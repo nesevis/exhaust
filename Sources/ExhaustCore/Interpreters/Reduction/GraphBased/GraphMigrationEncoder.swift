@@ -39,7 +39,7 @@ struct GraphMigrationEncoder: GraphEncoder {
         }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(lastAccepted _: Bool) -> EncoderProbe? {
         guard emitted == false else { return nil }
         emitted = true
         guard let candidate, let mutation else { return nil }

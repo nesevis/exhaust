@@ -38,33 +38,33 @@ enum GraphOperation {
     /// Collects node IDs whose position ranges are affected by this operation. Used by ``ScopeRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
     ///
     /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
+    func affectedNodeIDs(in _: ChoiceGraph) -> [Int]? {
         switch self {
         case let .remove(scope):
             switch scope {
             case let .elements(elementScope):
-                return elementScope.targets.flatMap(\.elementNodeIDs)
+                elementScope.targets.flatMap(\.elementNodeIDs)
             case let .subtree(subtreeScope):
-                return [subtreeScope.nodeID]
+                [subtreeScope.nodeID]
             }
         case let .replace(scope):
             switch scope {
             case let .selfSimilar(selfSimilarScope):
-                return [selfSimilarScope.targetNodeID, selfSimilarScope.donorNodeID]
+                [selfSimilarScope.targetNodeID, selfSimilarScope.donorNodeID]
             case let .branchPivot(pivotScope):
-                return [pivotScope.pickNodeID]
+                [pivotScope.pickNodeID]
             case let .descendantPromotion(promotionScope):
-                return [promotionScope.ancestorPickNodeID, promotionScope.descendantPickNodeID]
+                [promotionScope.ancestorPickNodeID, promotionScope.descendantPickNodeID]
             }
         case let .permute(scope):
             switch scope {
             case let .siblingPermutation(permScope):
-                return permScope.swappableGroups.flatMap { $0 }
+                permScope.swappableGroups.flatMap(\.self)
             }
         case let .migrate(scope):
-            return scope.elementNodeIDs + [scope.receiverSequenceNodeID]
+            scope.elementNodeIDs + [scope.receiverSequenceNodeID]
         case .minimize, .exchange:
-            return nil
+            nil
         }
     }
 }
@@ -141,17 +141,20 @@ extension TransformationPrecondition {
         while let parentID = graph.nodes[currentNodeID].parent {
             let parentNode = graph.nodes[parentID]
             if case let .bind(metadata) = parentNode.kind,
-               parentNode.children.count >= 2 {
+               parentNode.children.count >= 2
+            {
                 let innerChildID = parentNode.children[metadata.innerChildIndex]
                 // If the current node is in the bound subtree (not the inner),
                 // check that the inner child has converged.
                 let boundChildID = parentNode.children[metadata.boundChildIndex]
                 if let boundRange = graph.nodes[boundChildID].positionRange,
                    let leafRange = graph.nodes[leafNodeID].positionRange,
-                   boundRange.contains(leafRange.lowerBound) {
+                   boundRange.contains(leafRange.lowerBound)
+                {
                     // This leaf is in the bound subtree — the inner must be converged.
                     guard case let .chooseBits(innerMetadata) = graph.nodes[innerChildID].kind,
-                          innerMetadata.convergedOrigin != nil else {
+                          innerMetadata.convergedOrigin != nil
+                    else {
                         return false
                     }
                 }

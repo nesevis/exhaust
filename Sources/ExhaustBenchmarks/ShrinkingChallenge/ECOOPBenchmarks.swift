@@ -1,4 +1,5 @@
 // MARK: - ECOOP 2020 Methodology Benchmarks
+
 //
 // Independent generate-and-shrink runs matching MacIver & Donaldson (ECOOP 2020, Section 4.3)
 // and the jlink/shrinking-challenge methodology.
@@ -85,7 +86,7 @@ func registerECOOPPair<Output>(
     config: Interpreters.BonsaiReducerConfiguration,
     seedCount: Int,
     baseSeed: UInt64,
-    maxGenerationRuns: UInt64 = 10_000,
+    maxGenerationRuns: UInt64 = 10000,
     sizeMetric: ((Output) -> Int)? = nil
 ) {
     for reducerKind in [ReducerKind.choiceGraph] {
@@ -130,7 +131,7 @@ private func registerECOOPChallenge<Output>(
     reducerKind: ReducerKind,
     seedCount: Int,
     baseSeed: UInt64,
-    maxGenerationRuns: UInt64 = 10_000,
+    maxGenerationRuns: UInt64 = 10000,
     sizeMetric: ((Output) -> Int)? = nil
 ) {
     benchmark("\(name) ECOOP") {
@@ -226,8 +227,8 @@ private func printECOOPReport(
     let genIterations = results.map { Double($0.generationIterations) }
     let invocations = results.map { Double($0.invocations) }
     let materializations = results.map { Double($0.materializations) }
-    let genTimes = results.map { $0.generationMilliseconds }
-    let reduceTimes = results.map { $0.reductionMilliseconds }
+    let genTimes = results.map(\.generationMilliseconds)
+    let reduceTimes = results.map(\.reductionMilliseconds)
     let uniqueCEs = Set(results.map(\.counterexampleDescription))
 
     let genIterStats = summaryStats(genIterations)
@@ -331,6 +332,10 @@ private func summaryStats(_ values: [Double]) -> SummaryStats {
     )
 }
 
-private func f1(_ value: Double) -> String { String(format: "%.1f", value) }
-private func f2(_ value: Double) -> String { String(format: "%.2f", value) }
+private func f1(_ value: Double) -> String {
+    String(format: "%.1f", value)
+}
 
+private func f2(_ value: Double) -> String {
+    String(format: "%.2f", value)
+}

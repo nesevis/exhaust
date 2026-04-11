@@ -120,7 +120,9 @@ struct BillItem {
         self.categories = categories
     }
 
-    var effectiveCost: Int { cost * count }
+    var effectiveCost: Int {
+        cost * count
+    }
 }
 
 // MARK: - Correct implementation (backtracking with pruning)

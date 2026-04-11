@@ -77,7 +77,6 @@ struct EncoderYieldEstimate: Comparable {
 ///
 /// The scheduler sorts encoder families by yield estimate to determine pass ordering. Within each pass, encoders run to exhaustion (the internal probe loop handles candidate ordering).
 enum TransformationQueueBuilder {
-
     /// Computes yield estimates for all encoder slots given the current graph.
     ///
     /// - Returns: Encoder slots paired with their yield estimates, sorted by priority (highest yield first within each tier).

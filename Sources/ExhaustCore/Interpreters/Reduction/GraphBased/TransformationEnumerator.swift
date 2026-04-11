@@ -11,7 +11,6 @@
 ///
 /// - Complexity: O(*N* + *L* + *E*) where *N* is the node count, *L* is the leaf count, and *E* is the edge count. For a 100-node graph, this is microseconds — three orders of magnitude cheaper than a single property invocation.
 enum TransformationEnumerator {
-
     /// Enumerates all transformation scopes from the graph and returns them sorted by yield (highest priority first).
     ///
     /// - Parameter graph: The current choice graph.
@@ -257,7 +256,7 @@ enum TransformationEnumerator {
 
     private static func exchangeTransformations(
         from graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerChildToBind _: [Int: Int]
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 

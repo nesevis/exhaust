@@ -1,5 +1,5 @@
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 #if arch(arm64) || arch(arm64_32)
     @Suite("Float16 Emulation")

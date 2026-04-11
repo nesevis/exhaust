@@ -84,16 +84,16 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
         // Sort by yield descending so the bisection halves are balanced by impact.
         entries.sort { $0.yield > $1.yield }
 
-        self.sequences = entries
+        sequences = entries
         // Only useful when there are at least two independent sequences to batch.
         if entries.count >= 2 {
-            self.pendingRanges = [(start: 0, end: entries.count)]
-            self.lastEmittedRange = nil
-            self.exhausted = false
+            pendingRanges = [(start: 0, end: entries.count)]
+            lastEmittedRange = nil
+            exhausted = false
         } else {
-            self.pendingRanges = []
-            self.lastEmittedRange = nil
-            self.exhausted = true
+            pendingRanges = []
+            lastEmittedRange = nil
+            exhausted = true
         }
     }
 
@@ -209,7 +209,7 @@ struct SequenceEmptyingSource: ScopeSource {
         )
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < candidates.count else { return nil }
         let candidate = candidates[index]
         index += 1
@@ -259,11 +259,11 @@ struct BatchRemovalSource: ScopeSource {
         var elementList: [(nodeID: Int, positionRange: ClosedRange<Int>)] = []
         let node = graph.nodes[sequenceNodeID]
         guard case let .sequence(metadata) = node.kind else {
-            self.elements = []
-            self.maxBatch = 0
-            self.currentBatch = 0
-            self.triedTail = false
-            self.exhausted = true
+            elements = []
+            maxBatch = 0
+            currentBatch = 0
+            triedTail = false
+            exhausted = true
             return
         }
         let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
@@ -274,14 +274,14 @@ struct BatchRemovalSource: ScopeSource {
         }
         elementList.sort { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
 
-        self.elements = elementList
-        self.maxBatch = deletable
+        elements = elementList
+        maxBatch = deletable
         // Start below full emptying (SequenceEmptyingSource handles that).
         // Begin at half the max, or max-1 if max is small.
         let startBatch = deletable > 2 ? deletable / 2 : max(deletable - 1, 0)
-        self.currentBatch = startBatch
-        self.triedTail = false
-        self.exhausted = startBatch <= 0
+        currentBatch = startBatch
+        triedTail = false
+        exhausted = startBatch <= 0
     }
 
     var peekYield: TransformationYield? {
@@ -295,7 +295,7 @@ struct BatchRemovalSource: ScopeSource {
         )
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard exhausted == false, currentBatch > 0 else { return nil }
 
         let anchor: RemovalAnchor = triedTail ? .head : .tail
@@ -417,7 +417,7 @@ struct PerElementRemovalSource: ScopeSource {
         )
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < elements.count else { return nil }
         let element = elements[index]
         index += 1
@@ -460,7 +460,7 @@ struct AlignedRemovalSource: ScopeSource {
 
     init(graph: ChoiceGraph) {
         // Filter to multi-target scopes only (aligned across siblings).
-        self.scopes = graph.elementRemovalScopes()
+        scopes = graph.elementRemovalScopes()
             .filter { $0.targets.count >= 2 }
             .sorted { scopeA, scopeB in
                 scopeA.maxElementYield > scopeB.maxElementYield
@@ -477,7 +477,7 @@ struct AlignedRemovalSource: ScopeSource {
         )
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < scopes.count else { return nil }
         let scope = scopes[index]
         index += 1
@@ -546,22 +546,21 @@ struct ReplacementSource: ScopeSource {
         return candidates[index].yield
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < candidates.count else { return nil }
         let entry = candidates[index]
         index += 1
 
-        let precondition: TransformationPrecondition
-        switch entry.scope {
+        let precondition: TransformationPrecondition = switch entry.scope {
         case let .selfSimilar(selfSimilar):
-            precondition = .all([
+            .all([
                 .nodeActive(selfSimilar.targetNodeID),
                 .nodeActive(selfSimilar.donorNodeID),
             ])
         case let .branchPivot(pivot):
-            precondition = .nodeActive(pivot.pickNodeID)
+            .nodeActive(pivot.pickNodeID)
         case let .descendantPromotion(promotion):
-            precondition = .all([
+            .all([
                 .nodeActive(promotion.ancestorPickNodeID),
                 .nodeActive(promotion.descendantPickNodeID),
             ])
@@ -624,7 +623,7 @@ struct PermutationSource: ScopeSource {
         )
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < candidates.count else { return nil }
         let entry = candidates[index]
         index += 1
@@ -666,28 +665,26 @@ struct MinimizationSource: ScopeSource {
         var entries: [(scope: MinimizationScope, yield: TransformationYield)] = []
 
         for scope in graph.minimizationScopes() {
-            let valueYield: Int
-            switch scope {
+            let valueYield: Int = switch scope {
             case let .valueLeaves(integerScope):
-                valueYield = integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
+                integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
                     max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerChildToBind: innerChildToBind))
                 }
             case let .floatLeaves(floatScope):
-                valueYield = floatScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
+                floatScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
                     max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerChildToBind: innerChildToBind))
                 }
             case let .kleisliFibre(fibreScope):
-                valueYield = fibreScope.boundSubtreeSize
+                fibreScope.boundSubtreeSize
             }
 
-            let estimatedProbes: Int
-            switch scope {
+            let estimatedProbes: Int = switch scope {
             case let .valueLeaves(integerScope):
-                estimatedProbes = 1 + integerScope.leafNodeIDs.count * 16
+                1 + integerScope.leafNodeIDs.count * 16
             case let .floatLeaves(floatScope):
-                estimatedProbes = floatScope.leafNodeIDs.count * 15
+                floatScope.leafNodeIDs.count * 15
             case let .kleisliFibre(fibreScope):
-                estimatedProbes = 15 + min(128, fibreScope.boundSubtreeSize)
+                15 + min(128, fibreScope.boundSubtreeSize)
             }
 
             entries.append((
@@ -708,7 +705,7 @@ struct MinimizationSource: ScopeSource {
         return scopes[index].yield
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < scopes.count else { return nil }
         let entry = scopes[index]
         index += 1
@@ -797,7 +794,7 @@ struct ExchangeSource: ScopeSource {
         return scopes[index].yield
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < scopes.count else { return nil }
         let entry = scopes[index]
         index += 1
@@ -966,14 +963,13 @@ struct MigrationSource: ScopeSource {
 
                 // Determine whether this is a full migration (all source elements moved).
                 let isFullMigration = elementNodeIDs.count == sourceNode.children.count
-                let sourceParentSeqID: Int?
-                if isFullMigration,
-                   let parentID = sourceNode.parent,
-                   case .sequence = graph.nodes[parentID].kind
+                let sourceParentSeqID: Int? = if isFullMigration,
+                                                 let parentID = sourceNode.parent,
+                                                 case .sequence = graph.nodes[parentID].kind
                 {
-                    sourceParentSeqID = parentID
+                    parentID
                 } else {
-                    sourceParentSeqID = nil
+                    nil
                 }
 
                 // Start with moving ALL elements (most drastic).
@@ -1005,7 +1001,7 @@ struct MigrationSource: ScopeSource {
         )
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < candidates.count else { return nil }
         let entry = candidates[index]
         index += 1

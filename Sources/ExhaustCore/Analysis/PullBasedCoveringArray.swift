@@ -282,7 +282,9 @@ public struct PullBasedCoveringArrayGenerator {
 
         var rawDomains = ContiguousArray<UInt16>()
         rawDomains.reserveCapacity(domainSizes.count)
-        for size in domainSizes { rawDomains.append(UInt16(clamping: size)) }
+        for size in domainSizes {
+            rawDomains.append(UInt16(clamping: size))
+        }
         ordering = ParameterOrdering(domainSizes: rawDomains)
 
         var allSlices = ContiguousArray<PullCoverageSlice>()

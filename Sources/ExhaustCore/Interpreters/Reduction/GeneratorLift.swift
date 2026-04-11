@@ -63,7 +63,7 @@ public struct GeneratorLift<Output>: Sendable {
                 tree: freshTree,
                 liftReport: report
             )
-        case .rejected(_), .failed(_):
+        case .rejected(_), .failed:
             return nil
         }
     }

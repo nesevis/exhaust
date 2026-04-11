@@ -25,7 +25,8 @@ struct GraphPermutationEncoder: GraphEncoder {
         }
 
         guard let group = permutationScope.swappableGroups.first,
-              group.count == 2 else {
+              group.count == 2
+        else {
             return
         }
 
@@ -35,7 +36,8 @@ struct GraphPermutationEncoder: GraphEncoder {
         let sequence = scope.baseSequence
 
         guard let rangeA = graph.nodes[nodeA].positionRange,
-              let rangeB = graph.nodes[nodeB].positionRange else {
+              let rangeB = graph.nodes[nodeB].positionRange
+        else {
             return
         }
 
@@ -61,7 +63,7 @@ struct GraphPermutationEncoder: GraphEncoder {
         mutation = .siblingsSwapped(zipNodeID: permutationScope.zipNodeID, idA: nodeA, idB: nodeB)
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(lastAccepted _: Bool) -> EncoderProbe? {
         guard emitted == false else { return nil }
         emitted = true
         guard let candidate, let mutation else { return nil }

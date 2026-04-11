@@ -139,7 +139,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
 
         /// Branch picks are transparent to shortlex ordering. The selected alternative's index is arbitrary (determined by declaration order in the user's generator), so comparing it would make structural simplification depend on naming order rather than content. Returning `.eq` lets the comparison fall through to the subtree entries that follow the branch marker, where actual structural and value differences decide the ordering.
-        public func shortLexCompare(_ other: Branch) -> ShortlexOrder {
+        public func shortLexCompare(_: Branch) -> ShortlexOrder {
             .eq
         }
     }

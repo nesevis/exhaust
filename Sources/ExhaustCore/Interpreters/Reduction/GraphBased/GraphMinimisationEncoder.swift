@@ -1,5 +1,5 @@
 //
-//  GraphMinimizationEncoder.swift
+//  GraphMinimisationEncoder.swift
 //  Exhaust
 //
 
@@ -161,7 +161,6 @@ struct GraphMinimizationEncoder: GraphEncoder {
             }
         }
     }
-
 
     // MARK: - Float State
 
@@ -818,7 +817,7 @@ struct GraphMinimizationEncoder: GraphEncoder {
                 ? bestAccepted - leaf.targetBitPattern
                 : leaf.targetBitPattern - bestAccepted
 
-            if state.batchRejected && bestAccepted == leaf.targetBitPattern {
+            if state.batchRejected, bestAccepted == leaf.targetBitPattern {
                 // Leaf converged at target but batch-zero failed — zeroing dependency.
                 convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
@@ -1279,11 +1278,11 @@ struct GraphMinimizationEncoder: GraphEncoder {
     ) -> ChoiceSequence? {
         switch state.stage {
         case .specialValues, .truncation:
-            return nextFloatBatchCandidate(state: &state)
+            nextFloatBatchCandidate(state: &state)
         case .integralBinarySearch:
-            return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
+            nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
         case .ratioBinarySearch:
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
+            nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
         }
     }
 

@@ -81,7 +81,9 @@ protocol GraphEncoder {
 
 extension GraphEncoder {
     /// Default: encoders use the scheduler's hasBind-aware decoder selection.
-    var requiresExactDecoder: Bool { false }
+    var requiresExactDecoder: Bool {
+        false
+    }
 
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {

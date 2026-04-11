@@ -620,7 +620,7 @@ extension ReductionState {
             )
             let clampedRange = edge.downstreamRange.lowerBound ... clampedUpperBound
             return predictFibreSize(sequence: freshSequence, downstreamRange: clampedRange)
-        case .rejected(_), .failed(_):
+        case .rejected(_), .failed:
             // Discovery lift failed (target value out of range or materialisation error).
             // Fall back to the naive prediction from the current sequence.
             return predictFibreSize(sequence: sequence, downstreamRange: edge.downstreamRange)

@@ -21,7 +21,6 @@ public extension Interpreters {
         /// Sub-budget for joint bind-inner reduction within base descent.
         var bindInnerReductionBudget: Int = 600
 
-
         private init(
             maxStalls: Int,
             alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning

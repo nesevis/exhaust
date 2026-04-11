@@ -79,7 +79,7 @@ public final class OpenPBTStatsAccumulator {
 
     public init(propertyName: String) {
         self.propertyName = propertyName
-        self.runStart = Date().timeIntervalSince1970
+        runStart = Date().timeIntervalSince1970
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         encoder.keyEncodingStrategy = .convertToSnakeCase

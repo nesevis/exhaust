@@ -405,7 +405,6 @@ enum BonsaiScheduler {
                 for: .exploration, budgetAllocated: planned.budget
             )
             return (exploreOutcome, nil)
-
         }
     }
 

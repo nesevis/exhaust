@@ -82,8 +82,7 @@ public struct BranchProjectionPass: ReductionPass {
             // Only include sites where the candidate is strictly shortlex-smaller.
             // With branch-transparent shortlex, different branch selections can produce
             // identical flattened sequences — the != check alone would loop.
-            if candidateSequence.shortLexPrecedes(sequence)
-            {
+            if candidateSequence.shortLexPrecedes(sequence) {
                 siteDiffs.append((site, candidateSequence))
             }
         }

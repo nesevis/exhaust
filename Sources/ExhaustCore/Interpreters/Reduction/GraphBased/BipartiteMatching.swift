@@ -33,7 +33,6 @@
 ///
 /// - Complexity: O(*E* . sqrt(*V*)), where *E* is the edge count and *V* is the total node count.
 enum BipartiteMatching {
-
     /// Computes the maximum cardinality matching.
     ///
     /// - Parameters:

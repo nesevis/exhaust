@@ -6,7 +6,6 @@
 // MARK: - Removal Scope Queries
 
 extension ChoiceGraph {
-
     /// Computes element removal scopes for all sequence nodes with deletable elements and all aligned sibling groupings.
     ///
     /// Returns both per-parent scopes (single target) and aligned scopes (multiple targets under a common zip). The ``TransformationEnumerator`` feeds these into the priority queue; scope sources handle geometric halving and window placement.
@@ -112,7 +111,7 @@ extension ChoiceGraph {
                         into: &scopes
                     )
                 } else {
-                    let elementCount = subset.map { $0.elementNodeIDs.count }.min() ?? 0
+                    let elementCount = subset.map(\.elementNodeIDs.count).min() ?? 0
                     for elementIndex in 0 ..< elementCount {
                         var targets: [SequenceRemovalTarget] = []
                         var totalYield = 0
@@ -255,7 +254,6 @@ extension ChoiceGraph {
 // MARK: - Replacement Scope Queries
 
 extension ChoiceGraph {
-
     /// Computes replacement scopes from self-similarity edges, pick nodes, and descendant promotion candidates.
     ///
     /// - Returns: All replacement scopes across the three sub-types.
@@ -341,7 +339,8 @@ extension ChoiceGraph {
                 guard sizeDelta > 0 else { continue }
                 // Avoid duplicate with self-similar scope.
                 guard case let .pick(descendantMetadata) = nodes[descendantID].kind,
-                      descendantMetadata.depthMaskedSiteID == ancestorMetadata.depthMaskedSiteID else {
+                      descendantMetadata.depthMaskedSiteID == ancestorMetadata.depthMaskedSiteID
+                else {
                     continue
                 }
                 scopes.append(.descendantPromotion(DescendantPromotionScope(
@@ -380,7 +379,6 @@ extension ChoiceGraph {
 // MARK: - Minimization Scope Queries
 
 extension ChoiceGraph {
-
     /// Computes minimization scopes: one integer scope, one float scope, and one Kleisli fibre scope per non-constant reduction edge.
     ///
     /// - Returns: All minimization scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
@@ -405,7 +403,8 @@ extension ChoiceGraph {
 
             // Skip leaves at their convergence floor — no probe can move them closer to the target under the current graph structure. The signal type is irrelevant: whether convergence was monotone, non-monotone, or from a zeroing dependency, a leaf at its floor has no further search potential. A leaf whose value moved away from its floor (for example, after redistribution) passes this guard and re-enters value search with the surviving convergence record available as a warm-start bound.
             if let converged = metadata.convergedOrigin,
-               converged.bound == currentBitPattern {
+               converged.bound == currentBitPattern
+            {
                 continue
             }
 
@@ -562,7 +561,6 @@ extension ChoiceGraph {
 // MARK: - Exchange Scope Queries
 
 extension ChoiceGraph {
-
     /// Computes exchange scopes from type-compatibility edges and leaf groupings.
     ///
     /// Redistribution pairs any two type-compatible leaves where one is not at its reduction target. The source is zeroed and the receiver absorbs the delta. Both intra-sequence and inter-sequence pairs are included — any type-compatible pair connected by a type-compatibility edge is a candidate.
@@ -578,7 +576,8 @@ extension ChoiceGraph {
         var pairs: [RedistributionPair] = []
         for edge in typeCompatibilityEdges {
             guard case let .chooseBits(metadataA) = nodes[edge.nodeA].kind,
-                  case let .chooseBits(metadataB) = nodes[edge.nodeB].kind else {
+                  case let .chooseBits(metadataB) = nodes[edge.nodeB].kind
+            else {
                 continue
             }
 
@@ -640,13 +639,11 @@ extension ChoiceGraph {
 
         return scopes
     }
-
 }
 
 // MARK: - Permutation Scope Queries
 
 extension ChoiceGraph {
-
     /// Computes permutation scopes for zip nodes with same-shaped siblings.
     ///
     /// Groups children by structural shape derived from graph node metadata. Children with the same shape can be swapped for shortlex improvement.

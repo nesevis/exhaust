@@ -145,7 +145,7 @@ public enum ChoiceGraphComparison {
     @_spi(ExhaustInternal) public static func checkLeafPositions(
         graph: ChoiceGraph,
         cdg: ChoiceDependencyGraph,
-        sequence: ChoiceSequence
+        sequence _: ChoiceSequence
     ) -> ChoiceGraphComparisonResult.CheckResult {
         let cdgLeafPositions = cdg.leafPositions
         let graphLeafPositions = graph.leafPositions

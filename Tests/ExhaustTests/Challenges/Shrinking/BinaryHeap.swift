@@ -21,9 +21,9 @@ struct BinaryHeapShrinkingChallenge {
      */
 
     // MARK: - Tests
-    
+
     @Test("Binary Heap Shrinking Challenge", .disabled())
-    func binaryHeapChallenge() throws {
+    func binaryHeapChallenge() {
         #exhaust(Self.gen) { heap in
             #expect(Self.invariant(heap))
             let xs = Self.toSortedList(heap)

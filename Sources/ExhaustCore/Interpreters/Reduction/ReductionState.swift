@@ -627,4 +627,3 @@ extension ReductionState {
             .sorted { (deletionCosts[$0] ?? 0) < (deletionCosts[$1] ?? 0) }
     }
 }
-

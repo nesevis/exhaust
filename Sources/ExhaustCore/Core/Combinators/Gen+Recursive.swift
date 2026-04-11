@@ -36,7 +36,7 @@ public extension Gen {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         return recursive(base: Gen.just(base), depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound), extend: extend)
     }
-    
+
     /// Creates a recursive generator with a generator base case.
     ///
     /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
@@ -56,7 +56,7 @@ public extension Gen {
         // Build all layers eagerly. Layer 0 = base, layer N = extend applied N times.
         var layers: [ReflectiveGenerator<Output>] = [base]
         for layer in 0 ... depthRange.upperBound {
-            let availableLayers = layers  // capture current set
+            let availableLayers = layers // capture current set
             // recurse() draws its OWN depth independently
             let recurseGen = Gen.choose(in: 0 ... UInt64(layer), scaling: .constant)
                 ._bound(
@@ -65,7 +65,7 @@ public extension Gen {
                 )
             layers.append(extend({ recurseGen }, UInt64(layer + 1)))
         }
-        
+
         // Outer depth draw selects the root layer
         return Gen.choose(in: depthRange, scaling: .constant)
             ._bound(

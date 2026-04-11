@@ -130,7 +130,8 @@ struct GraphReplacementEncoder: GraphEncoder {
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let targetRange = graph.nodes[scope.targetNodeID].positionRange,
-              let donorRange = graph.nodes[scope.donorNodeID].positionRange else {
+              let donorRange = graph.nodes[scope.donorNodeID].positionRange
+        else {
             return nil
         }
         let donorEntries = Array(sequence[donorRange.lowerBound ... donorRange.upperBound])
@@ -284,7 +285,8 @@ struct GraphReplacementEncoder: GraphEncoder {
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let ancestorRange = graph.nodes[scope.ancestorPickNodeID].positionRange,
-              let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange else {
+              let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange
+        else {
             return nil
         }
         let descendantEntries = Array(sequence[descendantRange.lowerBound ... descendantRange.upperBound])

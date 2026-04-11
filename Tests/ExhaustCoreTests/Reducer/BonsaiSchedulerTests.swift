@@ -222,7 +222,6 @@ struct BonsaiSchedulerTests {
 
         #expect(result != nil)
     }
-
 }
 
 // MARK: - Helpers

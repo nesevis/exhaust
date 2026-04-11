@@ -1,5 +1,5 @@
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 @Suite("Crockford Base32 Replay")
 struct CrockfordBase32ReplayTests {

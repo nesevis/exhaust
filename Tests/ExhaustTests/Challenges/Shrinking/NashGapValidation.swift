@@ -4,24 +4,23 @@ import Testing
 @MainActor
 @Suite("Shrinking Challenge: Nash-Gap Validation")
 struct NashGapValidation {
-
     // MARK: - Mixed coupling: coupled pairs + independent high-value coordinates
 
-    // 8 integers: a,b coupled (sum >= 10), c,d coupled (sum >= 10),
-    // e,f,g,h independent (each must be >= 15).
-    //
-    // After fibre descent:
-    //   e,f,g,h converge to 15 independently (monotoneConvergence, high distance ~30 zigzag)
-    //   a,b converge to ~5,5 but can't be zeroed individually (zeroingDependency)
-    //   c,d same
-    //
-    // Old sort: orders by lhs distance descending. e,f,g,h (distance ~30) dominate,
-    // so the relax-round wastes probes trying to redistribute FROM e/f/g/h
-    // (which fails because zeroing them breaks the >= 15 constraint).
-    //
-    // Nash-gap tier sort: pairs (a,b) and (c,d) (both-coupled tier) come before
-    // any pair involving e/f/g/h (no dependency signal), finding productive
-    // redistributions in fewer probes.
+    /// 8 integers: a,b coupled (sum >= 10), c,d coupled (sum >= 10),
+    /// e,f,g,h independent (each must be >= 15).
+    ///
+    /// After fibre descent:
+    ///   e,f,g,h converge to 15 independently (monotoneConvergence, high distance ~30 zigzag)
+    ///   a,b converge to ~5,5 but can't be zeroed individually (zeroingDependency)
+    ///   c,d same
+    ///
+    /// Old sort: orders by lhs distance descending. e,f,g,h (distance ~30) dominate,
+    /// so the relax-round wastes probes trying to redistribute FROM e/f/g/h
+    /// (which fails because zeroing them breaks the >= 15 constraint).
+    ///
+    /// Nash-gap tier sort: pairs (a,b) and (c,d) (both-coupled tier) come before
+    /// any pair involving e/f/g/h (no dependency signal), finding productive
+    /// redistributions in fewer probes.
     @Test("Mixed coupling — coupled pairs among independent high-value coordinates")
     func mixedCoupling() {
         let gen = #gen(
@@ -63,9 +62,9 @@ struct NashGapValidation {
 
     // MARK: - Wide mixed coupling (reflected)
 
-    // 10 integers: 3 coupled pairs (sum >= 8 each) + 4 independent (each >= 20).
-    // More coordinates = more wasted probes on independent-to-independent pairs
-    // without tier-based sorting.
+    /// 10 integers: 3 coupled pairs (sum >= 8 each) + 4 independent (each >= 20).
+    /// More coordinates = more wasted probes on independent-to-independent pairs
+    /// without tier-based sorting.
     @Test("Wide mixed coupling — 3 coupled pairs + 4 independent")
     func wideMixedCoupling() {
         let gen = #gen(

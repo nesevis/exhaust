@@ -23,7 +23,9 @@ indirect enum Expr: Equatable, CustomDebugStringConvertible, CustomStringConvert
         }
     }
 
-    var description: String { debugDescription }
+    var description: String {
+        debugDescription
+    }
 }
 
 // MARK: - Evaluation (with bug)
@@ -64,7 +66,7 @@ func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
     let leaf = #gen(.int(in: -10 ... 10, scaling: .constant))
         .mapped(forward: { Expr.value($0) }, backward: { $0.intValue ?? 0 })
 
-    let calculator = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+    return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
         let add = #gen(recurse(), leaf)
             .mapped(
                 forward: { lhs, rhs in Expr.add(lhs, rhs) },
@@ -95,8 +97,6 @@ func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
             (3, add),
             (3, div))
     })
-
-    return calculator
 }
 
 // MARK: - Property

@@ -3,14 +3,13 @@
 //  Exhaust
 //
 
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 // MARK: - Scope Query Tests
 
 @Suite("ChoiceGraph Scope Queries")
 struct ChoiceGraphScopeQueryTests {
-
     // MARK: - Element Removal (Aligned)
 
     @Test("Aligned element removal scope for zip of two sequences")

@@ -15,11 +15,11 @@ struct ExploreVsExhaustTests {
         let gen = BST.arbitraryRecursive(valueRange: 0 ... 18)
             .unique()
             .filter { $0.isValidBST() }
-        
+
         let result = #exhaust(
             gen,
             .budget(.expensive),
-            .replay(577118919570660442),
+            .replay(577_118_919_570_660_442),
             .suppressIssueReporting
         ) { bst in
             !(bst.height == 5)
@@ -44,8 +44,8 @@ struct ExploreVsExhaustTests {
             .samplingBudget(200_000),
             .replay(15_190_352_305_301_843_617),
             .suppressIssueReporting,
-            scorer: { Double($0.height) })
-        { bst in
+            scorer: { Double($0.height) }
+        ) { bst in
             !(bst.height >= 5)
         }
 

@@ -3,14 +3,13 @@
 //  Exhaust
 //
 
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 // MARK: - Hopcroft-Karp Tests
 
 @Suite("BipartiteMatching: Hopcroft-Karp")
 struct HopcroftKarpTests {
-
     @Test("Empty graph produces empty matching")
     func emptyGraph() {
         let matching = BipartiteMatching.hopcroftKarp(
@@ -122,7 +121,6 @@ struct HopcroftKarpTests {
 
 @Suite("BipartiteMatching: Minimum Vertex Cover")
 struct MinimumVertexCoverTests {
-
     @Test("Cover size equals matching size (Konig's theorem)")
     func coverSizeEqualsMatchingSize() {
         // L0 — R0, R1
@@ -192,7 +190,6 @@ struct MinimumVertexCoverTests {
 
 @Suite("BipartiteMatching: Maximum Antichain")
 struct MaximumAntichainTests {
-
     @Test("Total order: antichain is size 1")
     func totalOrder() {
         // Chain: 0 → 1 → 2

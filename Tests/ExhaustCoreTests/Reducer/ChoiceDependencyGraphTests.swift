@@ -450,5 +450,4 @@ struct ChoiceDependencyGraphTests {
         let outerNode = dependencyGraph.nodes.first { $0.positionRange == 1 ... 1 }!
         #expect(outerNode.isStructurallyConstant == false)
     }
-
 }

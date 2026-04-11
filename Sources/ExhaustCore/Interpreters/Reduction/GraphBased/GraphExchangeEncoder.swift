@@ -18,7 +18,7 @@ struct GraphExchangeEncoder: GraphEncoder {
     // MARK: - State
 
     private var mode: Mode = .idle
-    private var sequence: ChoiceSequence = ChoiceSequence()
+    private var sequence: ChoiceSequence = .init()
     /// Maps the sequence index of every leaf the current scope can touch to its graph node ID and bind-inner reshape marker. Built once at ``start(scope:)`` time and read by ``nextProbe(lastAccepted:)`` to construct ``ProjectedMutation/leafValues(_:)`` reports without diffing the entire sequence.
     private var leafLookup: [Int: (nodeID: Int, mayReshape: Bool)] = [:]
     /// The original scope kind seen at ``start(scope:)`` time. Stored so ``refreshScope(graph:sequence:)`` can re-derive a fresh exchange scope from the live graph against the same kind (redistribution vs tandem) when an in-pass structural mutation invalidates the cached pair / lockstep state. The current redistribution and lockstep states are not preserved across a refresh because their pair indices reference pre-mutation positions; the refresh re-builds them from scratch via ``ChoiceGraph/exchangeScopes()``.
@@ -253,11 +253,13 @@ struct GraphExchangeEncoder: GraphEncoder {
 
         for pair in scope.pairs {
             guard let sourceRange = graph.nodes[pair.sourceNodeID].positionRange,
-                  let sinkRange = graph.nodes[pair.sinkNodeID].positionRange else {
+                  let sinkRange = graph.nodes[pair.sinkNodeID].positionRange
+            else {
                 continue
             }
             guard case let .chooseBits(sourceMetadata) = graph.nodes[pair.sourceNodeID].kind,
-                  case let .chooseBits(sinkMetadata) = graph.nodes[pair.sinkNodeID].kind else {
+                  case let .chooseBits(sinkMetadata) = graph.nodes[pair.sinkNodeID].kind
+            else {
                 continue
             }
 
@@ -289,11 +291,10 @@ struct GraphExchangeEncoder: GraphEncoder {
 
             // Same-tag integer pair: bit-pattern arithmetic.
             let sourceTarget = sourceMetadata.value.reductionTarget(in: sourceMetadata.validRange)
-            let maxDelta: UInt64
-            if sourceMetadata.value.bitPattern64 > sourceTarget {
-                maxDelta = sourceMetadata.value.bitPattern64 - sourceTarget
+            let maxDelta: UInt64 = if sourceMetadata.value.bitPattern64 > sourceTarget {
+                sourceMetadata.value.bitPattern64 - sourceTarget
             } else {
-                maxDelta = sourceTarget - sourceMetadata.value.bitPattern64
+                sourceTarget - sourceMetadata.value.bitPattern64
             }
             guard maxDelta > 0 else { continue }
 
@@ -478,8 +479,8 @@ struct GraphExchangeEncoder: GraphEncoder {
     private func currentMaxDelta(
         sourceIndex: Int,
         sinkIndex: Int,
-        sourceTag: TypeTag,
-        sinkTag: TypeTag,
+        sourceTag _: TypeTag,
+        sinkTag _: TypeTag,
         usesMixed: Bool
     ) -> (maxDelta: UInt64, mixedContext: MixedRedistributionContext?) {
         guard let sourceValue = sequence[sourceIndex].value else {
@@ -511,7 +512,7 @@ struct GraphExchangeEncoder: GraphEncoder {
         sourceIndex: Int,
         sinkIndex: Int,
         sourceTag: TypeTag,
-        sinkTag: TypeTag,
+        sinkTag _: TypeTag,
         delta: UInt64,
         mixedContext: MixedRedistributionContext?
     ) -> ChoiceSequence? {
@@ -630,7 +631,8 @@ struct GraphExchangeEncoder: GraphEncoder {
         // do — `tag.bitPatternRange` is the same set, so this is a
         // structural simplification, not a behavior change.
         guard sourceTag.bitPatternRange.contains(newSourceBP),
-              sinkValue.choice.tag.bitPatternRange.contains(newSinkBP) else {
+              sinkValue.choice.tag.bitPatternRange.contains(newSinkBP)
+        else {
             return nil
         }
 
@@ -640,12 +642,14 @@ struct GraphExchangeEncoder: GraphEncoder {
         // let candidates escape the user's declared domain.
         if sourceValue.isRangeExplicit,
            let range = sourceValue.validRange,
-           range.contains(newSourceBP) == false {
+           range.contains(newSourceBP) == false
+        {
             return nil
         }
         if sinkValue.isRangeExplicit,
            let range = sinkValue.validRange,
-           range.contains(newSinkBP) == false {
+           range.contains(newSinkBP) == false
+        {
             return nil
         }
 
@@ -920,7 +924,8 @@ struct GraphExchangeEncoder: GraphEncoder {
         sourceIsRangeExplicit: Bool
     ) -> MixedRedistributionContext? {
         guard let sourceRatio = rationalForChoice(sourceChoice),
-              let sinkRatio = rationalForChoice(sinkChoice) else {
+              let sinkRatio = rationalForChoice(sinkChoice)
+        else {
             return nil
         }
 

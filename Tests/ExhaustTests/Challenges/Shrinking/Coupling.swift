@@ -73,7 +73,7 @@ struct CouplingShrinkingChallenge {
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }
-    
+
     @Test("Coupling Pathological 2")
     func couplingPathlogical2() throws {
         var report: ExhaustReport?

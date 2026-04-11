@@ -50,7 +50,7 @@ public extension ReductionPass {
                 tree: freshTree,
                 output: output
             )
-        case .rejected(_), .failed(_):
+        case .rejected(_), .failed:
             return nil
         }
     }
