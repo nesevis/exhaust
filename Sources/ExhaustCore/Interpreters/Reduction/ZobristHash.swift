@@ -110,6 +110,7 @@ public enum ZobristHash {
         case .float16: 12
         case .date: 13
         case .bits: 14
+        case .character: 15
         }
     }
 }

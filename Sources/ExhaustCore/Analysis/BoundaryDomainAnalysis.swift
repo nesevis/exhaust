@@ -195,6 +195,8 @@ public enum BoundaryDomainAnalysis {
             0 // Step index 0 = lowerSeconds
         case .bits:
             0
+        case .character:
+            0 // Index 0 = first scalar in the ScalarRangeSet
         }
     }
 

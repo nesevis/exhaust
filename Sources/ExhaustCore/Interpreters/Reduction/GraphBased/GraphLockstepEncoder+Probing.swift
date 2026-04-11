@@ -54,6 +54,10 @@ extension GraphLockstepEncoder {
 
         let tag = firstValue.choice.tag
 
+        // Character indices have no meaningful lockstep relationship — shifting
+        // all indices by the same delta doesn't produce a semantically simpler string.
+        guard tag != .character else { return nil }
+
         // All entries must share the same tag.
         var idx = 1
         while idx < windowIndices.count {

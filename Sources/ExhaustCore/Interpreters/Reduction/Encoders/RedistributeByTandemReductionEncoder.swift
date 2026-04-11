@@ -570,6 +570,8 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
              .uint, .uint64, .uint32, .uint16, .uint8,
              .double, .float, .float16, .date, .bits:
             true
+        case .character:
+            false
         }
     }
 

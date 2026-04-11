@@ -89,17 +89,31 @@ public extension ReflectiveGenerator {
 
 /// Builds a character generator directly from a pre-computed `ScalarRangeSet`.
 private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator<Character> {
-    Gen.contramap(
-        { (char: Character) throws -> Int in
+    let operation = ReflectiveOperation.chooseBits(
+        min: 0,
+        max: UInt64(srs.scalarCount - 1),
+        tag: .character,
+        isRangeExplicit: true
+    )
+    let innerGen = ReflectiveGenerator<Character>.impure(operation: operation) { result in
+        guard let convertible = result as? any BitPatternConvertible else {
+            throw GeneratorError.typeMismatch(
+                expected: "any BitPatternConvertible",
+                actual: String(describing: Swift.type(of: result))
+            )
+        }
+        return .pure(Character(srs.scalar(at: Int(convertible.bitPattern64))))
+    }
+    return Gen.contramap(
+        { (char: Character) throws -> UInt32 in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
                     "Character has no scalars"
                 )
             }
-            return srs.index(of: scalar)
+            return UInt32(srs.index(of: scalar))
         },
-        Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) }
+        innerGen
     )
 }
 

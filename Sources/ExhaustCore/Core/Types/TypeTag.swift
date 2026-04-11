@@ -37,6 +37,8 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Boundary analysis produces only all-low / all-high values.
     case bits
+    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as `UInt32`. The bit pattern is an index, not a Unicode code point.
+    case character
 
     /// Creates a type tag by matching the metatype of the given value against known numeric types.
     public init<T>(type: T) {
@@ -122,6 +124,7 @@ public extension TypeTag {
         #endif
         case .date: Int64(bitPattern64: bitPattern64)
         case .bits: UInt64(bitPattern64: bitPattern64)
+        case .character: UInt32(bitPattern64: bitPattern64)
         }
     }
 }
@@ -144,6 +147,7 @@ extension TypeTag: CustomStringConvertible {
         case .float16: "Float16"
         case .date: "Date"
         case .bits: "Bits"
+        case .character: "Character"
         }
     }
 }

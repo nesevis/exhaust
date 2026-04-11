@@ -24,6 +24,10 @@ extension GraphRedistributionEncoder {
                 continue
             }
 
+            guard sourceMetadata.typeTag != .character,
+                  sinkMetadata.typeTag != .character
+            else { continue }
+
             let needsMixedMath = sourceMetadata.typeTag != sinkMetadata.typeTag
                 || sourceMetadata.typeTag.isFloatingPoint
                 || sinkMetadata.typeTag.isFloatingPoint
