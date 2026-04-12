@@ -19,6 +19,7 @@
 /// - SeeAlso: ``ScopeSource``, ``ScopeSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
     // MARK: - Futility Cap
+
     //
     // Some encoders are structurally futile on a given counterexample — they never find an accepted probe across the entire reduction because the property's constraint structure makes the encoder's search space empty. After ``futilityEmitThreshold`` cumulative probes with zero accepts, the encoder's per-cycle budget drops to ``futilityProbeBudget``.
     //
@@ -280,15 +281,15 @@ enum ChoiceGraphScheduler {
 
                 // Per-encoder cycle budget: skip if the budget has been exhausted for this encoder.
                 let pendingEncoderName: EncoderName = switch transformation.operation {
-                    case .remove: .graphDeletion
-                    case .replace: .graphSubstitution
-                    case .minimize(.kleisliFibre): .graphComposed
-                    case .minimize(.valueLeaves): .graphValueSearch
-                    case .minimize(.floatLeaves): .graphFloatSearch
-                    case .exchange(.redistribution): .graphRedistribution
-                    case .exchange(.tandem): .graphLockstep
-                    case .permute: .graphSiblingSwap
-                    case .migrate: .graphMigration
+                case .remove: .graphDeletion
+                case .replace: .graphSubstitution
+                case .minimize(.kleisliFibre): .graphComposed
+                case .minimize(.valueLeaves): .graphValueSearch
+                case .minimize(.floatLeaves): .graphFloatSearch
+                case .exchange(.redistribution): .graphRedistribution
+                case .exchange(.tandem): .graphLockstep
+                case .permute: .graphSiblingSwap
+                case .migrate: .graphMigration
                 }
                 if let budget = encoderCycleBudget[pendingEncoderName], budget <= 0 {
                     continue

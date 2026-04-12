@@ -543,7 +543,7 @@ func buildExhaustSettings<Output>(
     var settings: [ExhaustSettings<Output>] = [
         .budget(.custom(
             coverage: coverageBudget,
-            sampling: samplingBudget,
+            sampling: samplingBudget
         )),
     ]
     if let seed {

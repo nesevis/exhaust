@@ -28,7 +28,7 @@ struct NestedListsShrinkingChallenge {
             .suppressIssueReporting,
 //            .onReport { report = $0 },
             .logging(.debug, .keyValue),
-            .reflecting(Self.counterExample),
+            .reflecting(Self.counterExample)
 //                .replay(13580297670505979531)
         ) { arrs in
             var count = 0

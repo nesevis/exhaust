@@ -195,12 +195,12 @@ struct Bound5ShrinkingChallenge {
             #expect(output?.arr.sorted() == [-32768, -1])
         }
     }
-    
+
     // MARK: Bound25
-    
-    // This isn't exactly bound25 in that the property doesn't want all of them to be minimal, just that one is. It's here to test the BatchCrossSequenceRemovalSource
+
+    /// This isn't exactly bound25 in that the property doesn't want all of them to be minimal, just that one is. It's here to test the BatchCrossSequenceRemovalSource
     @Test("Bound25!")
-    func testBound25() throws {
+    func bound25() throws {
         let gen = #gen(Self.gen, Self.gen, Self.gen, Self.gen, Self.gen)
         let property: @Sendable (Bound5) -> Bool = { b5 in
             if b5.arr.isEmpty {
@@ -217,19 +217,19 @@ struct Bound5ShrinkingChallenge {
             .logging(.debug)
         ) { b25 in
             property(b25.0) &&
-            property(b25.1) &&
-            property(b25.2) &&
-            property(b25.3) &&
-            property(b25.4)
+                property(b25.1) &&
+                property(b25.2) &&
+                property(b25.3) &&
+                property(b25.4)
         }
-        
+
         let rep = try #require(report)
         #expect(rep.propertyInvocations == 195)
         #expect(rep.totalMaterializations == 400)
-        
+
         let b25 = try #require(output)
         let arr = b25.0.arr + b25.1.arr + b25.2.arr + b25.3.arr + b25.4.arr
-        
+
         #expect(arr.count == 2)
         #expect(arr.sorted() == [-32768, -1])
     }

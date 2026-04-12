@@ -109,14 +109,14 @@ enum ReplacementScopeQuery {
     /// Counts `.choice` leaves reachable from a choice tree subtree. Used by the leaf-count gate in branch pivot scope construction.
     private static func leafCount(in tree: ChoiceTree) -> Int {
         switch tree {
-        case .choice: return 1
-        case .just, .getSize: return 0
-        case let .sequence(_, elements, _): return elements.reduce(0) { $0 + leafCount(in: $1) }
-        case let .branch(_, _, _, _, choice): return leafCount(in: choice)
-        case let .group(children, _): return children.reduce(0) { $0 + leafCount(in: $1) }
-        case let .resize(_, choices): return choices.reduce(0) { $0 + leafCount(in: $1) }
-        case let .bind(inner, bound): return leafCount(in: inner) + leafCount(in: bound)
-        case let .selected(inner): return leafCount(in: inner)
+        case .choice: 1
+        case .just, .getSize: 0
+        case let .sequence(_, elements, _): elements.reduce(0) { $0 + leafCount(in: $1) }
+        case let .branch(_, _, _, _, choice): leafCount(in: choice)
+        case let .group(children, _): children.reduce(0) { $0 + leafCount(in: $1) }
+        case let .resize(_, choices): choices.reduce(0) { $0 + leafCount(in: $1) }
+        case let .bind(inner, bound): leafCount(in: inner) + leafCount(in: bound)
+        case let .selected(inner): leafCount(in: inner)
         }
     }
 

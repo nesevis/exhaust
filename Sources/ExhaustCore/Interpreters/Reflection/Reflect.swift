@@ -60,7 +60,7 @@ public enum Interpreters {
             let intermediateResults = try interpretOperationBackward(
                 operation,
                 onFinalOutput: finalOutput,
-                outputType: Output.self,
+                outputType: Output.self
             )
 
             // 2. For each successful intermediate result...
@@ -92,7 +92,7 @@ public enum Interpreters {
             return try reflectContramapOperation(
                 transform: transform,
                 nextGen: nextGen,
-                finalOutput: finalOutput,
+                finalOutput: finalOutput
             )
 
         case let .prune(nextGen):
@@ -127,14 +127,14 @@ public enum Interpreters {
             return try reflectResizeOperation(
                 newSize: newSize,
                 nextGen: nextGen,
-                finalOutput: finalOutput,
+                finalOutput: finalOutput
             )
 
         case let .sequence(lengthGen, elementGen):
             return try reflectSequenceOperation(
                 lengthGen: lengthGen,
                 elementGen: elementGen,
-                finalOutput: finalOutput,
+                finalOutput: finalOutput
             )
 
         case let .zip(generators, _):
@@ -376,7 +376,7 @@ public enum Interpreters {
             let targetLength = UInt64(targetArray.underestimatedCount)
             let lengthReflection = try reflectRecursive(
                 lengthGen,
-                onFinalOutput: targetLength,
+                onFinalOutput: targetLength
             )
             validRange = lengthReflection
                 .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
@@ -386,7 +386,7 @@ public enum Interpreters {
         for elementTarget in targetArray {
             let elementResults = try reflectRecursive(
                 elementGen,
-                onFinalOutput: elementTarget,
+                onFinalOutput: elementTarget
             )
             guard let (value, path) = elementResults.first else {
                 throw ReflectionError.couldNotReflectOnSequenceElement("\(elementTarget)")

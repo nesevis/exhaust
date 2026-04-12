@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 12/4/2026.
 //
 
-
 /// Searches for the **largest** accepted value via binary search.
 ///
 /// On acceptance, narrows the lower bound (`lo = probe + 1`). On rejection, narrows the upper bound (`hi = probe`). Converges to the largest value that is accepted. Used by ``RedistributeByTandemReductionEncoder`` where the goal is to find the largest shared delta that still fails the property — maximizing the reduction.

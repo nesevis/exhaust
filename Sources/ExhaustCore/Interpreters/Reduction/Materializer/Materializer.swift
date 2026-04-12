@@ -3,8 +3,6 @@
 //  Exhaust
 //
 
-// swiftlint:disable function_parameter_count
-
 /// Materializer that always produces a fresh ``ChoiceTree`` with current ``validRange`` metadata
 /// and all branch alternatives at pick sites.
 ///

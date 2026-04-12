@@ -270,7 +270,7 @@ extension GraphValueEncoder {
                bisection.convergedIndices.contains(state.leafIndex)
             {
                 state.leafIndex += 1
-            state.semanticSimplestProbed = false
+                state.semanticSimplestProbed = false
                 continue
             }
 
@@ -288,7 +288,7 @@ extension GraphValueEncoder {
                 // Cross-zero exhausted or accepted — move to the next leaf.
                 state.crossZero = nil
                 state.leafIndex += 1
-            state.semanticSimplestProbed = false
+                state.semanticSimplestProbed = false
                 continue
             }
 
@@ -311,7 +311,7 @@ extension GraphValueEncoder {
                     continue
                 }
                 state.leafIndex += 1
-            state.semanticSimplestProbed = false
+                state.semanticSimplestProbed = false
                 continue
             }
 

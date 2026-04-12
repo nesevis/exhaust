@@ -32,9 +32,9 @@ extension ChoiceGraph {
             application.requiresFullRebuild = true
         }
         #if DEBUG
-        if application.requiresFullRebuild == false {
-            assertLeafPositionsValid(in: ChoiceSequence(freshTree), label: "apply")
-        }
+            if application.requiresFullRebuild == false {
+                assertLeafPositionsValid(in: ChoiceSequence(freshTree), label: "apply")
+            }
         #endif
         return application
     }

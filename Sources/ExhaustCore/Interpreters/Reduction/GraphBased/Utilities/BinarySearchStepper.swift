@@ -5,8 +5,7 @@
 //  Created by Chris Kolbu on 12/4/2026.
 //
 
-
-// Step-by-step driver for ``AdaptiveProbe.binarySearchWithGuess``, for use in ``AdaptiveEncoder`` conformances.
+/// Step-by-step driver for ``AdaptiveProbe.binarySearchWithGuess``, for use in ``AdaptiveEncoder`` conformances.
 ///
 /// Produces probes in the same order as ``binarySearchWithGuess`` — starts at the guess, then uses ``findInteger``-style expansion/contraction based on whether the guess was on the "good" or "bad" side.
 /// Searches for the **smallest** accepted value via binary search.

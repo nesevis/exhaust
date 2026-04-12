@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 12/4/2026.
 //
 
-
 /// Searches for the **largest** accepted value using interpolation search with binary search fallback.
 ///
 /// Probes near `hi` (the reduction target) during the interpolation phase, under the prior that most values can be reduced to or near the target. The divisor `K` starts at 4 (probing at 75% of the range from `lo`) and halves on rejection to K=2 (binary search). On acceptance, `K` resets to 4 for the narrowed interval.
