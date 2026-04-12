@@ -1,4 +1,5 @@
 // MARK: - ECOOP 2020 Methodology Benchmarks
+
 //
 // Independent generate-and-shrink runs matching MacIver & Donaldson (ECOOP 2020, Section 4.3)
 // and the jlink/shrinking-challenge methodology.
@@ -14,132 +15,90 @@ import Foundation
 func registerECOOPBenchmarks() {
     let seedCount = 1000
     let baseSeed: UInt64 = 1337
-    let config = Interpreters.BonsaiReducerConfiguration.slow
+    let config = Interpreters.ReducerConfiguration.slow
 
-    registerECOOPChallenge(
-        name: "Bound5",
-        gen: bound5Gen,
-        property: bound5Property,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Bound5", gen: bound5Gen, property: bound5Property,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "BinaryHeap",
-        gen: binaryHeapGen(depth: 10).unique(),
-        property: binaryHeapProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "BinaryHeap", gen: binaryHeapGen(depth: 10).unique(), property: binaryHeapProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Calculator",
-        gen: #gen(calculatorExpressionGen(depth: 4)),
-        property: calculatorProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 4)), property: calculatorProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Coupling",
-        gen: couplingGen,
-        property: couplingProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Coupling", gen: couplingGen, property: couplingProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
-        name: "Deletion",
-        gen: deletionGen,
-        property: deletionProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
+    registerECOOPPair(
+        name: "Deletion", gen: deletionGen, property: deletionProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    registerECOOPChallenge(
+    registerECOOPPair(
         name: "Difference: Must Not Be Zero",
-        gen: differenceMustNotBeZeroGen,
-        property: differenceMustNotBeZeroProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed,
-        maxGenerationRuns: 500_000
+        gen: differenceMustNotBeZeroGen, property: differenceMustNotBeZeroProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
-    registerECOOPChallenge(
+    registerECOOPPair(
         name: "Difference: Must Not Be Small",
-        gen: differenceMustNotBeSmallGen,
-        property: differenceMustNotBeSmallProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed,
-        maxGenerationRuns: 500_000
+        gen: differenceMustNotBeSmallGen, property: differenceMustNotBeSmallProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
-    registerECOOPChallenge(
+    registerECOOPPair(
         name: "Difference: Must Not Be One",
-        gen: differenceMustNotBeOneGen,
-        property: differenceMustNotBeOneProperty,
+        gen: differenceMustNotBeOneGen, property: differenceMustNotBeOneProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
+    )
+    registerECOOPPair(
+        name: "Distinct", gen: distinctGen, property: distinctProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "LargeUnionList", gen: largeUnionListGen, property: largeUnionListProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "LengthList", gen: lengthListGen, property: lengthListProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "NestedLists", gen: nestedListsGen, property: nestedListsProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "Reverse", gen: reverseGen, property: reverseProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "Replacement", gen: replacementGen, property: replacementProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+}
+
+/// Registers a benchmark for a single challenge using the graph-based reducer.
+func registerECOOPPair<Output>(
+    name: String,
+    gen: ReflectiveGenerator<Output>,
+    property: @Sendable @escaping (Output) -> Bool,
+    config: Interpreters.ReducerConfiguration,
+    seedCount: Int,
+    baseSeed: UInt64,
+    maxGenerationRuns: UInt64 = 10000,
+    sizeMetric: ((Output) -> Int)? = nil
+) {
+    registerECOOPChallenge(
+        name: name,
+        gen: gen,
+        property: property,
         config: config,
         seedCount: seedCount,
         baseSeed: baseSeed,
-        maxGenerationRuns: 500_000
+        maxGenerationRuns: maxGenerationRuns,
+        sizeMetric: sizeMetric
     )
-    registerECOOPChallenge(
-        name: "Distinct",
-        gen: distinctGen,
-        property: distinctProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
-    )
-    registerECOOPChallenge(
-        name: "LargeUnionList",
-        gen: largeUnionListGen,
-        property: largeUnionListProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
-    )
-    registerECOOPChallenge(
-        name: "LengthList",
-        gen: lengthListGen,
-        property: lengthListProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
-    )
-    registerECOOPChallenge(
-        name: "NestedLists",
-        gen: nestedListsGen,
-        property: nestedListsProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
-    )
-    registerECOOPChallenge(
-        name: "Reverse",
-        gen: reverseGen,
-        property: reverseProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
-    )
-    registerECOOPChallenge(
-        name: "Replacement",
-        gen: replacementGen,
-        property: replacementProperty,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed
-    )
-//    registerECOOPChallenge(
-//        name: "Parser",
-//        gen: parserLangGen,
-//        property: parserProperty,
-//        config: .slow,
-//        seedCount: seedCount,
-//        baseSeed: baseSeed,
-//        sizeMetric: { parserSize($0) }
-//    )
 }
 
 // MARK: - Per-Seed Result
@@ -148,10 +107,15 @@ private struct SeedResult {
     let seed: UInt64
     let generationIterations: Int
     let invocations: Int
+    let materializations: Int
     let generationMilliseconds: Double
     let reductionMilliseconds: Double
     let size: Int?
     let counterexampleDescription: String
+    let encoderProbes: [EncoderName: Int]
+    let encoderProbesAccepted: [EncoderName: Int]
+    let encoderProbesRejectedByCache: [EncoderName: Int]
+    let encoderProbesRejectedByDecoder: [EncoderName: Int]
 }
 
 // MARK: - Runner
@@ -160,10 +124,10 @@ private func registerECOOPChallenge<Output>(
     name: String,
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
-    config: Interpreters.BonsaiReducerConfiguration,
+    config: Interpreters.ReducerConfiguration,
     seedCount: Int,
     baseSeed: UInt64,
-    maxGenerationRuns: UInt64 = 10_000,
+    maxGenerationRuns: UInt64 = 10000,
     sizeMetric: ((Output) -> Int)? = nil
 ) {
     benchmark("\(name) ECOOP") {
@@ -197,7 +161,10 @@ private func registerECOOPChallenge<Output>(
                 return property(candidate)
             }
             let reduceStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-            let result = try? Interpreters.bonsaiReduce(
+            // Use the *CollectingStats variants so we can pull
+            // `stats.totalMaterializations` for the report. The reduced
+            // tuple has the same shape as the plain `*Reduce` return.
+            let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -207,15 +174,21 @@ private func registerECOOPChallenge<Output>(
             let reduceEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
-            let output = result?.1 ?? value
+            let output = reduceResult?.reduced?.1 ?? value
+            let materializationCount = reduceResult?.stats.totalMaterializations ?? 0
             results.append(SeedResult(
                 seed: seed,
                 generationIterations: generationIterations,
                 invocations: invocationCount,
+                materializations: materializationCount,
                 generationMilliseconds: generationMs,
                 reductionMilliseconds: reductionMs,
                 size: sizeMetric?(output),
-                counterexampleDescription: String(describing: output)
+                counterexampleDescription: String(describing: output),
+                encoderProbes: reduceResult?.stats.encoderProbes ?? [:],
+                encoderProbesAccepted: reduceResult?.stats.encoderProbesAccepted ?? [:],
+                encoderProbesRejectedByCache: reduceResult?.stats.encoderProbesRejectedByCache ?? [:],
+                encoderProbesRejectedByDecoder: reduceResult?.stats.encoderProbesRejectedByDecoder ?? [:]
             ))
         }
 
@@ -238,12 +211,14 @@ private func printECOOPReport(
 
     let genIterations = results.map { Double($0.generationIterations) }
     let invocations = results.map { Double($0.invocations) }
-    let genTimes = results.map { $0.generationMilliseconds }
-    let reduceTimes = results.map { $0.reductionMilliseconds }
+    let materializations = results.map { Double($0.materializations) }
+    let genTimes = results.map(\.generationMilliseconds)
+    let reduceTimes = results.map(\.reductionMilliseconds)
     let uniqueCEs = Set(results.map(\.counterexampleDescription))
 
     let genIterStats = summaryStats(genIterations)
     let invocStats = summaryStats(invocations)
+    let matStats = summaryStats(materializations)
     let genStats = summaryStats(genTimes)
     let reduceStats = summaryStats(reduceTimes)
 
@@ -254,7 +229,47 @@ private func printECOOPReport(
         sizeReport = " mean_size=\(f2(sizeStats.mean)) (\(f2(sizeStats.ciLow))–\(f2(sizeStats.ciHigh)))"
     }
 
-    print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | gen(ms): mean=\(f1(genStats.mean)) median=\(f1(genStats.median)) | reduce(ms): mean=\(f1(reduceStats.mean)) (\(f1(reduceStats.ciLow))–\(f1(reduceStats.ciHigh))) median=\(f1(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
+    print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | mats: mean=\(f1(matStats.mean)) (\(f1(matStats.ciLow))–\(f1(matStats.ciHigh))) median=\(f1(matStats.median)) | gen(ms): mean=\(f2(genStats.mean)) median=\(f2(genStats.median)) | reduce(ms): mean=\(f2(reduceStats.mean)) (\(f2(reduceStats.ciLow))–\(f2(reduceStats.ciHigh))) median=\(f2(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
+
+    // Per-encoder probe breakdown (summed across all seeds).
+    // Per-encoder rejection breakdown:
+    // each `rejDec` is one materialization that did not reach the property.
+    var totalEmitted: [EncoderName: Int] = [:]
+    var totalAccepted: [EncoderName: Int] = [:]
+    var totalCacheRej: [EncoderName: Int] = [:]
+    var totalDecRej: [EncoderName: Int] = [:]
+    for result in results {
+        for (encoder, count) in result.encoderProbes {
+            totalEmitted[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.encoderProbesAccepted {
+            totalAccepted[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.encoderProbesRejectedByCache {
+            totalCacheRej[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.encoderProbesRejectedByDecoder {
+            totalDecRej[encoder, default: 0] += count
+        }
+    }
+    let allEncoders = Set(totalEmitted.keys)
+        .union(totalAccepted.keys)
+        .union(totalCacheRej.keys)
+        .union(totalDecRej.keys)
+    if allEncoders.isEmpty == false {
+        let sortedEncoders = allEncoders.sorted { lhs, rhs in
+            (totalDecRej[lhs] ?? 0) > (totalDecRej[rhs] ?? 0)
+        }
+        print("[\(name) ECOOP] encoder breakdown (summed across \(foundCount) seeds, sorted by rejDec descending):")
+        for encoder in sortedEncoders {
+            let emit = totalEmitted[encoder] ?? 0
+            let acc = totalAccepted[encoder] ?? 0
+            let cacheRej = totalCacheRej[encoder] ?? 0
+            let decRej = totalDecRej[encoder] ?? 0
+            print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej)")
+        }
+    }
+
     if enableCounterExamples {
         // Group seeds by counterexample for reproducibility.
         var seedsByCE: [String: [UInt64]] = [:]
@@ -302,6 +317,10 @@ private func summaryStats(_ values: [Double]) -> SummaryStats {
     )
 }
 
-private func f1(_ value: Double) -> String { String(format: "%.1f", value) }
-private func f2(_ value: Double) -> String { String(format: "%.2f", value) }
+private func f1(_ value: Double) -> String {
+    String(format: "%.1f", value)
+}
 
+private func f2(_ value: Double) -> String {
+    String(format: "%.2f", value)
+}

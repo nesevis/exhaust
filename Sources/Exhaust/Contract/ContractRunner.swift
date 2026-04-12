@@ -63,145 +63,142 @@ public func __runContract<Spec: ContractSpec>(
         }
     }
     return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
-    let samplingBudget = budget.samplingBudget
-    let coverageBudget = budget.coverageBudget
-    let reductionConfig = budget.reducerBudget
+        let samplingBudget = budget.samplingBudget
+        let coverageBudget = budget.coverageBudget
 
-    let commandGen = Spec.commandGenerator
-    let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
-        commandGen: commandGen,
-        coverageBudget: coverageBudget
-    )
-
-    // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can reduce sequences below the user's minimum — the minimum is a generation hint, not a reduction floor.
-    let seqGen = commandGen.array(
-        length: 0 ... resolvedCommandLimit,
-        scaling: .constant
-    )
-
-    // The property: execute the command sequence against a fresh spec and check for failures.
-    let property: @Sendable ([Spec.Command]) -> Bool = { commands in
-        var spec = Spec()
-        for command in commands {
-            do {
-                try spec.run(command)
-                try spec.checkInvariants()
-            } catch is ContractSkip {
-                continue
-            } catch is ContractCheckFailure {
-                return false
-            } catch {
-                return false
-            }
-        }
-        return true
-    }
-
-    // --- Phase 1: Sequence Covering Array (SCA) coverage ---
-    //
-    // If the command generator is a simple pick with parameter-free branches, build a covering array where each sequence position is a parameter and each command type is a domain value. This guarantees every t-way ordered permutation of command types is tested.
-    var scaResult: SCAResult<Spec.Command>?
-    if useRandomOnly {
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "sca_coverage_skipped",
-            "SCA coverage skipped (randomOnly mode)"
-        )
-    } else if seed != nil {
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "sca_coverage_skipped",
-            "SCA coverage skipped (deterministic replay)"
-        )
-    }
-    if !useRandomOnly, seed == nil {
-        scaResult = runSCACoverage(
-            seqGen: seqGen,
+        let commandGen = Spec.commandGenerator
+        let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
             commandGen: commandGen,
-            commandLimit: resolvedCommandLimit,
-            coverageBudget: coverageBudget,
-            reductionConfig: reductionConfig,
-            property: property
+            coverageBudget: coverageBudget
         )
-    }
 
-    // --- Phase 2: Random sampling (full budget) ---
-    let failingSequence: [Spec.Command]?
-    let failureInfo: ContractFailureInfo<Spec.Command>
-    if let scaResult {
-        failingSequence = scaResult.commands
-        failureInfo = ContractFailureInfo(
-            originalCommands: scaResult.original,
-            discoveryMethod: .coverage
+        // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can reduce sequences below the user's minimum — the minimum is a generation hint, not a reduction floor.
+        let seqGen = commandGen.array(
+            length: 0 ... resolvedCommandLimit,
+            scaling: .constant
         )
-    } else {
-        // Skip generic coverage — SCA already covered command orderings.
-        // If SCA wasn't applicable, __exhaust's generic coverage runs.
-        let skipGenericCoverage =
-            !useRandomOnly && seed == nil
-                && extractPickChoices(from: commandGen) != nil
-        failingSequence = __ExhaustRuntime.__exhaust(
-            seqGen,
-            settings: buildExhaustSettings(
-                samplingBudget: samplingBudget,
+
+        // The property: execute the command sequence against a fresh spec and check for failures.
+        let property: @Sendable ([Spec.Command]) -> Bool = { commands in
+            var spec = Spec()
+            for command in commands {
+                do {
+                    try spec.run(command)
+                    try spec.checkInvariants()
+                } catch is ContractSkip {
+                    continue
+                } catch is ContractCheckFailure {
+                    return false
+                } catch {
+                    return false
+                }
+            }
+            return true
+        }
+
+        // --- Phase 1: Sequence Covering Array (SCA) coverage ---
+        //
+        // If the command generator is a simple pick with parameter-free branches, build a covering array where each sequence position is a parameter and each command type is a domain value. This guarantees every t-way ordered permutation of command types is tested.
+        var scaResult: SCAResult<Spec.Command>?
+        if useRandomOnly {
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "sca_coverage_skipped",
+                "SCA coverage skipped (randomOnly mode)"
+            )
+        } else if seed != nil {
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "sca_coverage_skipped",
+                "SCA coverage skipped (deterministic replay)"
+            )
+        }
+        if !useRandomOnly, seed == nil {
+            scaResult = runSCACoverage(
+                seqGen: seqGen,
+                commandGen: commandGen,
+                commandLimit: resolvedCommandLimit,
                 coverageBudget: coverageBudget,
-                seed: seed,
-                reductionConfig: reductionConfig,
-                suppressIssueReporting: true,
-                useRandomOnly: useRandomOnly || skipGenericCoverage,
-                collectOpenPBTStats: collectOpenPBTStats,
-                logLevel: logLevel,
-                logFormat: logFormat
-            ),
-            sourceCode: nil,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column,
-            property: property
-        )
-        failureInfo = ContractFailureInfo(
-            originalCommands: nil,
-            discoveryMethod: seed != nil ? .replay : .randomSampling
-        )
-    }
+                property: property
+            )
+        }
 
-    guard let failingSequence else {
-        return nil
-    }
+        // --- Phase 2: Random sampling (full budget) ---
+        let failingSequence: [Spec.Command]?
+        let failureInfo: ContractFailureInfo<Spec.Command>
+        if let scaResult {
+            failingSequence = scaResult.commands
+            failureInfo = ContractFailureInfo(
+                originalCommands: scaResult.original,
+                discoveryMethod: .coverage
+            )
+        } else {
+            // Skip generic coverage — SCA already covered command orderings.
+            // If SCA wasn't applicable, __exhaust's generic coverage runs.
+            let skipGenericCoverage =
+                !useRandomOnly && seed == nil
+                    && extractPickChoices(from: commandGen) != nil
+            failingSequence = __ExhaustRuntime.__exhaust(
+                seqGen,
+                settings: buildExhaustSettings(
+                    samplingBudget: samplingBudget,
+                    coverageBudget: coverageBudget,
+                    seed: seed,
+                    suppressIssueReporting: true,
+                    useRandomOnly: useRandomOnly || skipGenericCoverage,
+                    collectOpenPBTStats: collectOpenPBTStats,
+                    logLevel: logLevel,
+                    logFormat: logFormat
+                ),
+                sourceCode: nil,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                property: property
+            )
+            failureInfo = ContractFailureInfo(
+                originalCommands: nil,
+                discoveryMethod: seed != nil ? .replay : .randomSampling
+            )
+        }
 
-    // Re-execute the reduced sequence to build the trace and capture SUT state.
-    let (trace, spec) = buildTrace(failingSequence, specType: specType)
+        guard let failingSequence else {
+            return nil
+        }
 
-    let result = ContractResult<Spec>(
-        commands: failingSequence,
-        trace: trace,
-        sut: spec.sut,
-        seed: seed,
-        discoveryMethod: failureInfo.discoveryMethod
-    )
+        // Re-execute the reduced sequence to build the trace and capture SUT state.
+        let (trace, spec) = buildTrace(failingSequence, specType: specType)
 
-    if !suppressIssueReporting {
-        let rendered = renderFailure(
-            result,
-            failureInfo: failureInfo,
-            modelDescription: spec.modelDescription
+        let result = ContractResult<Spec>(
+            commands: failingSequence,
+            trace: trace,
+            sut: spec.sut,
+            seed: seed,
+            discoveryMethod: failureInfo.discoveryMethod
         )
-        ExhaustLog.error(
-            category: .propertyTest,
-            event: "contract_failed",
-            rendered
-        )
-        reportIssue(
-            rendered,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
-    }
 
-    return result
+        if !suppressIssueReporting {
+            let rendered = renderFailure(
+                result,
+                failureInfo: failureInfo,
+                modelDescription: spec.modelDescription
+            )
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "contract_failed",
+                rendered
+            )
+            reportIssue(
+                rendered,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
+
+        return result
     } // withConfiguration
 }
 
@@ -342,8 +339,8 @@ func extractPickChoices(
 /// Estimates a default command limit from the command generator's structure and the coverage budget.
 ///
 /// Pre-analyzes pick branches to determine the per-position domain size, then computes the sequence length at which SCA rows (at t=2) would exhaust the budget. The result is the larger of this budget ceiling and an exploration floor based on the number of command types, ensuring sequences are long enough for each command to appear several times.
-func estimateCommandLimit<Command>(
-    commandGen: ReflectiveGenerator<Command>,
+func estimateCommandLimit(
+    commandGen: ReflectiveGenerator<some Any>,
     coverageBudget: UInt64
 ) -> Int {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -422,7 +419,6 @@ func runSCACoverage<Command>(
     commandGen: ReflectiveGenerator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
-    reductionConfig: ReducerBudget,
     property: @escaping @Sendable ([Command]) -> Bool
 ) -> SCAResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -506,11 +502,11 @@ func runSCACoverage<Command>(
             // since coverage-built trees lack unselected branches needed by reducer strategies.
             let reduceTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
-            if let (_, reducedValue) = try? Interpreters.bonsaiReduce(
+            if let (_, reducedValue) = try? Interpreters.choiceGraphReduce(
                 gen: seqGen,
                 tree: reduceTree,
                 output: value,
-                config: .init(from: reductionConfig),
+                config: .init(maxStalls: 2),
                 property: property
             ) {
                 return (reducedValue, value)
@@ -538,7 +534,6 @@ func buildExhaustSettings<Output>(
     samplingBudget: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
-    reductionConfig: ReducerBudget,
     suppressIssueReporting: Bool,
     useRandomOnly: Bool,
     collectOpenPBTStats: Bool = false,
@@ -548,8 +543,7 @@ func buildExhaustSettings<Output>(
     var settings: [ExhaustSettings<Output>] = [
         .budget(.custom(
             coverage: coverageBudget,
-            sampling: samplingBudget,
-            reduction: reductionConfig
+            sampling: samplingBudget
         )),
     ]
     if let seed {

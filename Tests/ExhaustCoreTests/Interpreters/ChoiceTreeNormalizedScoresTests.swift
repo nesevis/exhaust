@@ -115,7 +115,7 @@ struct ChoiceTreeNormalizedScoresTests {
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.branch(
-            siteID: 1,
+            fingerprint: 1,
             weight: 1,
             id: 0,
             branchIDs: [0, 1, 2],

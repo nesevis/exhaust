@@ -50,8 +50,9 @@ struct CoupledZigzagChallenge {
             #exhaust(
                 gen,
                 .suppressIssueReporting,
-//                .replay(12768154885595245120),
+                .replay(12_768_154_885_595_245_120),
                 .onReport { report = $0 },
+                .logging(.debug, .keyValue),
                 property: property
             )
         )
@@ -99,7 +100,7 @@ struct CoupledZigzagChallenge {
                 gen,
                 .suppressIssueReporting,
                 .budget(.exorbitant),
-                .replay(15376868453505688755),
+                .replay(15_376_868_453_505_688_755),
                 .onReport { report = $0 },
                 property: property
             )

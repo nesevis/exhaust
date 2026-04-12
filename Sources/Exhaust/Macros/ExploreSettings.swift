@@ -20,9 +20,6 @@ public enum ExploreSettings {
     /// Accepts a raw `UInt64` or a Crockford Base32 string.
     case replay(ReplaySeed)
 
-    /// The test case reduction configuration to use when a counterexample is found.
-    case reductionBudget(ReducerBudget)
-
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///
     /// Use this when the property test is *expected* to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure.

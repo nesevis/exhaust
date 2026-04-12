@@ -28,7 +28,7 @@ struct ParserShrinkingChallenge {
      Even equal operands trigger bug 2 since it changes the constructor.
      */
 
-    @Test("Parser, Full", .disabled("The branch projection settles this in a suboptimal minimum"))
+    @Test("Parser, Full")
     func parserFull() throws {
         var report: ExhaustReport?
         let output = try #require(
@@ -36,12 +36,15 @@ struct ParserShrinkingChallenge {
                 Self.langGen,
                 .randomOnly, // coverage takes a long time
                 .budget(.exorbitant),
-                .reflecting(Self.knownBad),
+//                .reflecting(Self.knownBad),
+                .logging(.debug, .keyValue),
                 .suppressIssueReporting,
+                .replay("4Z67HB4QNE1VY"),
                 .onReport { report = $0 }
             ) { lang in
-                let encoded = try! JSONEncoder().encode(lang)
-                let decoded = try! JSONDecoder().decode(Lang.self, from: encoded)
+                print("Attempt: \(lang)")
+                let encoded = try JSONEncoder().encode(lang)
+                let decoded = try JSONDecoder().decode(Lang.self, from: encoded)
                 return decoded == lang
             }
         )
@@ -57,12 +60,12 @@ struct ParserShrinkingChallenge {
         print("Size: \(outputSize)")
         #expect(outputSize <= 4)
     }
-    
+
     // MARK: - Examples
-    
+
     nonisolated(unsafe) static var knownBad = Lang(
         modules: [
-            Mod(imports: [Var(name: "u"), Var(name: "o"), Var(name: "k")], exports: [Var(name: "y")])
+            Mod(imports: [Var(name: "u"), Var(name: "o"), Var(name: "k")], exports: [Var(name: "y")]),
         ],
         funcs: [
             Func(
@@ -70,10 +73,10 @@ struct ParserShrinkingChallenge {
                 args: [
                     .div(.and(.mul(.bool(true), .int(0)), .or(.bool(true), .bool(false))), .add(.mul(.int(1), .bool(true)), .mul(.bool(true), .bool(true)))),
                     .or(.add(.add(.int(-4), .bool(true)), .add(.bool(false), .bool(true))), .or(.sub(.int(4), .int(8)), .sub(.bool(true), .bool(false)))),
-                    .int(3)
+                    .int(3),
                 ],
                 body: [
-                    .ret(.mul(.and(.mul(.bool(false), .int(-10)), .or(.int(9), .bool(true))), .or(.bool(true), .mul(.int(-4), .bool(false)))))
+                    .ret(.mul(.and(.mul(.bool(false), .int(-10)), .or(.int(9), .bool(true))), .or(.bool(true), .mul(.int(-4), .bool(false))))),
                 ]
             ),
             Func(
@@ -81,14 +84,14 @@ struct ParserShrinkingChallenge {
                 args: [
                     .add(.mul(.div(.int(8), .int(1)), .mul(.bool(false), .int(8))), .mul(.or(.int(-2), .int(7)), .or(.int(-7), .int(9)))),
                     .mul(.or(.div(.int(-3), .int(9)), .mul(.bool(true), .int(4))), .sub(.sub(.int(8), .int(7)), .div(.bool(true), .int(-6)))),
-                    .add(.and(.sub(.bool(true), .int(-10)), .div(.int(9), .bool(false))), .and(.add(.int(2), .bool(false)), .or(.int(-7), .int(4))))
+                    .add(.and(.sub(.bool(true), .int(-10)), .div(.int(9), .bool(false))), .and(.add(.int(2), .bool(false)), .or(.int(-7), .int(4)))),
                 ],
                 body: [
                     .ret(.or(.and(.mul(.bool(true), .bool(true)), .and(.int(-7), .bool(false))), .and(.mul(.int(-9), .int(4)), .div(.bool(false), .int(3))))),
                     .alloc(Var(name: "o"), .int(7)),
-                    .alloc(Var(name: "i"), .sub(.and(.div(.int(-4), .int(-6)), .div(.int(-2), .bool(false))), .mul(.or(.int(-6), .int(6)), .mul(.int(-8), .bool(true)))))
+                    .alloc(Var(name: "i"), .sub(.and(.div(.int(-4), .int(-6)), .div(.int(-2), .bool(false))), .mul(.or(.int(-6), .int(6)), .mul(.int(-8), .bool(true))))),
                 ]
-            )
+            ),
         ]
     )
 
@@ -163,7 +166,7 @@ struct ParserShrinkingChallenge {
             case let .or(lhs, rhs): "Or(\(lhs), \(rhs))"
             }
         }
-        
+
         private enum CodingKeys: CodingKey {
             case int
             case bool
@@ -175,142 +178,141 @@ struct ParserShrinkingChallenge {
             case and
             case or
         }
-        
+
         private enum IntCodingKeys: CodingKey {
             case _0
         }
-        
+
         private enum BoolCodingKeys: CodingKey {
             case _0
         }
-        
+
         private enum AddCodingKeys: CodingKey {
             case _0
             case _1
         }
-        
+
         private enum SubCodingKeys: CodingKey {
             case _0
             case _1
         }
-        
+
         private enum MulCodingKeys: CodingKey {
             case _0
             case _1
         }
-        
+
         private enum DivCodingKeys: CodingKey {
             case _0
             case _1
         }
-        
+
         private enum NotCodingKeys: CodingKey {
             case _0
         }
-        
+
         private enum AndCodingKeys: CodingKey {
             case _0
             case _1
         }
-        
+
         private enum OrCodingKeys: CodingKey {
             case _0
             case _1
         }
-        
+
         init(from decoder: any Decoder) throws {
             let container: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.CodingKeys> = try decoder.container(keyedBy: ParserShrinkingChallenge.Exp.CodingKeys.self)
-            
-            var allKeys: ArraySlice<ParserShrinkingChallenge.Exp.CodingKeys> = ArraySlice<ParserShrinkingChallenge.Exp.CodingKeys>(container.allKeys)
-            
+
+            var allKeys = ArraySlice<ParserShrinkingChallenge.Exp.CodingKeys>(container.allKeys)
+
             guard let onlyKey = allKeys.popFirst(), allKeys.isEmpty else {
                 throw DecodingError.typeMismatch(ParserShrinkingChallenge.Exp.self, DecodingError.Context(codingPath: container.codingPath, debugDescription: "Invalid number of keys found, expected one.", underlyingError: nil))
             }
             switch onlyKey {
             case .int:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.IntCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.IntCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.int)
-                
-                self = ParserShrinkingChallenge.Exp.int(try nestedContainer.decode(Int.self, forKey: ParserShrinkingChallenge.Exp.IntCodingKeys._0))
+
+                self = try ParserShrinkingChallenge.Exp.int(nestedContainer.decode(Int.self, forKey: ParserShrinkingChallenge.Exp.IntCodingKeys._0))
             case .bool:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.BoolCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.BoolCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.bool)
-                
-                self = ParserShrinkingChallenge.Exp.bool(try nestedContainer.decode(Bool.self, forKey: ParserShrinkingChallenge.Exp.BoolCodingKeys._0))
+
+                self = try ParserShrinkingChallenge.Exp.bool(nestedContainer.decode(Bool.self, forKey: ParserShrinkingChallenge.Exp.BoolCodingKeys._0))
             case .add:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.AddCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AddCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.add)
-                
-                self = ParserShrinkingChallenge.Exp.add(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._1))
+
+                self = try ParserShrinkingChallenge.Exp.add(nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._0), nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._1))
             case .sub:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.SubCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.SubCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.sub)
-                
-                self = ParserShrinkingChallenge.Exp.sub(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._1))
+
+                self = try ParserShrinkingChallenge.Exp.sub(nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._0), nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._1))
             case .mul:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.MulCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.MulCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.mul)
-                
-                self = ParserShrinkingChallenge.Exp.mul(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._1))
+
+                self = try ParserShrinkingChallenge.Exp.mul(nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._0), nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._1))
             case .div:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.DivCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.DivCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.div)
-                
-                self = ParserShrinkingChallenge.Exp.div(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._1))
+
+                self = try ParserShrinkingChallenge.Exp.div(nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._0), nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._1))
             case .not:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.NotCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.NotCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.not)
-                
-                self = ParserShrinkingChallenge.Exp.not(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.NotCodingKeys._0))
+
+                self = try ParserShrinkingChallenge.Exp.not(nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.NotCodingKeys._0))
             case .and:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.AndCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AndCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.and)
-                
-                self = ParserShrinkingChallenge.Exp.and(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._1))
+
+                self = try ParserShrinkingChallenge.Exp.and(nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._0), nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._1))
             case .or:
                 let nestedContainer: KeyedDecodingContainer<ParserShrinkingChallenge.Exp.OrCodingKeys> = try container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.OrCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.or)
-                
-                self = ParserShrinkingChallenge.Exp.or(try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.OrCodingKeys._0), try nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.OrCodingKeys._1))
+
+                self = try ParserShrinkingChallenge.Exp.or(nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.OrCodingKeys._0), nestedContainer.decode(ParserShrinkingChallenge.Exp.self, forKey: ParserShrinkingChallenge.Exp.OrCodingKeys._1))
             }
-            
         }
-        
+
         func encode(to encoder: any Encoder) throws {
             var container: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.CodingKeys> = encoder.container(keyedBy: ParserShrinkingChallenge.Exp.CodingKeys.self)
-            
+
             switch self {
-            case .int(let a0):
+            case let .int(a0):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.IntCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.IntCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.int)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.IntCodingKeys._0)
-            case .bool(let a0):
+            case let .bool(a0):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.BoolCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.BoolCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.bool)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.BoolCodingKeys._0)
-            case .add(let a0, let a1):
+            case let .add(a0, a1):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.AddCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AddCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.add)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._0)
                 try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.AddCodingKeys._1)
-            case .sub(let a0, let a1):
+            case let .sub(a0, a1):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.SubCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.SubCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.sub)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._0)
                 try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.SubCodingKeys._1)
-            case .mul(let a0, let a1):
+            case let .mul(a0, a1):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.MulCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.MulCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.mul)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._0)
                 try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.MulCodingKeys._1)
-            case .div(let a0, let a1):
+            case let .div(a0, a1):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.DivCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.DivCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.div)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._0)
                 try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.DivCodingKeys._1)
-            case .not(let a0):
+            case let .not(a0):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.NotCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.NotCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.not)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.NotCodingKeys._0)
-            case .and(let a1, let a0):
+            case let .and(a1, a0):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.AndCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AndCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.and)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._0)
                 try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._1)
-            case .or(let a1, let a0):
+            case let .or(a1, a0):
                 var nestedContainer: KeyedEncodingContainer<ParserShrinkingChallenge.Exp.AndCodingKeys> = container.nestedContainer(keyedBy: ParserShrinkingChallenge.Exp.AndCodingKeys.self, forKey: ParserShrinkingChallenge.Exp.CodingKeys.and)
-                
+
                 try nestedContainer.encode(a0, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._0)
                 try nestedContainer.encode(a1, forKey: ParserShrinkingChallenge.Exp.AndCodingKeys._1)
             }

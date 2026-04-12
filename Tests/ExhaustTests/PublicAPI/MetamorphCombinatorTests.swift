@@ -3,12 +3,11 @@ import Testing
 
 @Suite("Metamorphic Combinator")
 struct MetamorphCombinatorTests {
-
     // MARK: - Single Transform
 
     @Test("Single transform produces (original, transformed) tuple")
     func singleTransform() {
-        #exhaust(#gen(.int(in: 1 ... 100)).metamorph({ $0 * 2 })) { original, doubled in
+        #exhaust(#gen(.int(in: 1 ... 100)).metamorph { $0 * 2 }) { original, doubled in
             original >= 1 && original <= 100 && doubled == original * 2
         }
     }
@@ -57,7 +56,7 @@ struct MetamorphCombinatorTests {
 
     @Test("Same seed produces identical results")
     func determinism() {
-        let gen = #gen(.int(in: 0 ... 1000)).metamorph({ $0 * 3 })
+        let gen = #gen(.int(in: 0 ... 1000)).metamorph { $0 * 3 }
         let first = #example(gen, count: 50, seed: 99)
         let second = #example(gen, count: 50, seed: 99)
         #expect(first.count == second.count)
@@ -83,7 +82,7 @@ struct MetamorphCombinatorTests {
     @Test("metamorph composes with array")
     func composesWithArray() {
         let gen = #gen(.int(in: 1 ... 10))
-            .metamorph({ $0 * 2 })
+            .metamorph { $0 * 2 }
             .array(length: 3)
 
         #exhaust(gen) { array in
@@ -94,7 +93,7 @@ struct MetamorphCombinatorTests {
     @Test("metamorph composes with filter")
     func composesWithFilter() {
         let gen = #gen(.int(in: 1 ... 100))
-            .metamorph({ $0 % 2 == 0 })
+            .metamorph { $0 % 2 == 0 }
             .filter { $0.0 > 50 }
 
         #exhaust(gen) { original, isEven in

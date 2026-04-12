@@ -71,7 +71,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         let reducedSequence = result.0
@@ -106,7 +106,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         let reducedBoundaries = ChoiceSequence.extractSequenceBoundarySpans(from: result.0)
@@ -126,7 +126,7 @@ struct ReducerSequenceBoundaryTests {
         }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The reduced output must still fail the property
@@ -151,7 +151,7 @@ struct ReducerSequenceBoundaryTests {
         }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // Should be simpler than the original
@@ -184,7 +184,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in true }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // Sequence should be unchanged (no improvement found)
@@ -203,7 +203,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The output should be materializable from the reduced sequence
@@ -223,7 +223,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
@@ -247,7 +247,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(ChoiceSequence.validate(result.0))
@@ -277,7 +277,7 @@ struct ReducerSequenceBoundaryTests {
         }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
         print()
 

@@ -373,7 +373,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
-    // Creates a recursive generator with a generator base case and a reducible depth range.
+    /// Creates a recursive generator with a generator base case and a reducible depth range.
     ///
     /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
@@ -452,7 +452,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         _ transform: repeat @escaping (Value) -> each Transformed
     ) -> ReflectiveGenerator<(Value, repeat each Transformed)> {
         var erasedTransforms: [(Any) throws -> Any] = []
-        func add<Result>(_ function: @escaping (Value) -> Result) {
+        func add(_ function: @escaping (Value) -> some Any) {
             erasedTransforms.append { function($0 as! Value) as Any }
         }
         repeat add(each transform)

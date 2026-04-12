@@ -58,152 +58,148 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     }
 
     return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
-    let commandGen = Spec.commandGenerator
-    let samplingBudget = budget.samplingBudget
-    let coverageBudget = budget.coverageBudget
-    let reductionConfig = budget.reducerBudget
+        let commandGen = Spec.commandGenerator
+        let samplingBudget = budget.samplingBudget
+        let coverageBudget = budget.coverageBudget
 
-    let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
-        commandGen: commandGen,
-        coverageBudget: coverageBudget
-    )
+        let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
+            commandGen: commandGen,
+            coverageBudget: coverageBudget
+        )
 
-    let seqGen = commandGen.array(
-        length: 0 ... resolvedCommandLimit
-    )
+        let seqGen = commandGen.array(
+            length: 0 ... resolvedCommandLimit
+        )
 
-    // The sync property closure runs async spec methods via Task + semaphore.
-    // This closure is called from a GCD thread where semaphore.wait() is safe.
-    nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
-    let property: @Sendable ([Spec.Command]) -> Bool = { commands in
-        let box = SendableBox(specInit())
-        let resultBox = SendableBox(true)
-        let semaphore = DispatchSemaphore(value: 0)
+        // The sync property closure runs async spec methods via Task + semaphore.
+        // This closure is called from a GCD thread where semaphore.wait() is safe.
+        nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
+        let property: @Sendable ([Spec.Command]) -> Bool = { commands in
+            let box = SendableBox(specInit())
+            let resultBox = SendableBox(true)
+            let semaphore = DispatchSemaphore(value: 0)
 
-        Task { @Sendable in
-            for command in commands {
-                do {
-                    try await box.value.run(command)
-                    try await box.value.checkInvariants()
-                } catch is ContractSkip {
-                    continue
-                } catch is ContractCheckFailure {
-                    resultBox.value = false
-                    break
-                } catch {
-                    resultBox.value = false
-                    break
+            Task { @Sendable in
+                for command in commands {
+                    do {
+                        try await box.value.run(command)
+                        try await box.value.checkInvariants()
+                    } catch is ContractSkip {
+                        continue
+                    } catch is ContractCheckFailure {
+                        resultBox.value = false
+                        break
+                    } catch {
+                        resultBox.value = false
+                        break
+                    }
                 }
+                semaphore.signal()
             }
-            semaphore.signal()
+
+            semaphore.wait()
+            return resultBox.value
         }
 
-        semaphore.wait()
-        return resultBox.value
-    }
+        // Snapshot mutable settings into let bindings for Sendable capture.
+        let maxIter = samplingBudget
+        let covBudget = coverageBudget
+        let replaySeed = seed
+        let randomOnly = useRandomOnly
 
-    // Snapshot mutable settings into let bindings for Sendable capture.
-    let maxIter = samplingBudget
-    let covBudget = coverageBudget
-    let replaySeed = seed
-    nonisolated(unsafe) let reduction = reductionConfig
-    let randomOnly = useRandomOnly
-
-    // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
-    typealias SearchResult = ([Spec.Command], ContractFailureInfo<Spec.Command>)
-    let searchResult: SearchResult? = await withCheckedContinuation { continuation in
-        DispatchQueue.global().async {
-            // SCA coverage
-            var scaResult: SCAResult<Spec.Command>?
-            if !randomOnly, replaySeed == nil {
-                scaResult = runSCACoverage(
-                    seqGen: seqGen,
-                    commandGen: commandGen,
-                    commandLimit: resolvedCommandLimit,
-                    coverageBudget: covBudget,
-                    reductionConfig: reduction,
-                    property: property
-                )
-            }
-
-            if let scaResult {
-                let info = ContractFailureInfo(
-                    originalCommands: scaResult.original,
-                    discoveryMethod: .coverage
-                )
-                continuation.resume(returning: (scaResult.commands, info))
-            } else {
-                let skipGenericCoverage =
-                    !randomOnly && replaySeed == nil
-                        && extractPickChoices(from: commandGen) != nil
-                let exhaustResult = __ExhaustRuntime.__exhaust(
-                    seqGen,
-                    settings: buildExhaustSettings(
-                        samplingBudget: maxIter,
+        // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
+        typealias SearchResult = ([Spec.Command], ContractFailureInfo<Spec.Command>)
+        let searchResult: SearchResult? = await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                // SCA coverage
+                var scaResult: SCAResult<Spec.Command>?
+                if !randomOnly, replaySeed == nil {
+                    scaResult = runSCACoverage(
+                        seqGen: seqGen,
+                        commandGen: commandGen,
+                        commandLimit: resolvedCommandLimit,
                         coverageBudget: covBudget,
-                        seed: replaySeed,
-                        reductionConfig: reduction,
-                        suppressIssueReporting: true,
-                        useRandomOnly: randomOnly || skipGenericCoverage,
-                        logLevel: logLevel,
-                        logFormat: logFormat
-                    ),
-                    sourceCode: nil,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column,
-                    property: property
-                )
-                if let exhaustResult {
-                    let info: ContractFailureInfo<Spec.Command> = ContractFailureInfo(
-                        originalCommands: nil,
-                        discoveryMethod: replaySeed != nil ? .replay : .randomSampling
+                        property: property
                     )
-                    continuation.resume(returning: (exhaustResult, info))
+                }
+
+                if let scaResult {
+                    let info = ContractFailureInfo(
+                        originalCommands: scaResult.original,
+                        discoveryMethod: .coverage
+                    )
+                    continuation.resume(returning: (scaResult.commands, info))
                 } else {
-                    continuation.resume(returning: nil)
+                    let skipGenericCoverage =
+                        !randomOnly && replaySeed == nil
+                            && extractPickChoices(from: commandGen) != nil
+                    let exhaustResult = __ExhaustRuntime.__exhaust(
+                        seqGen,
+                        settings: buildExhaustSettings(
+                            samplingBudget: maxIter,
+                            coverageBudget: covBudget,
+                            seed: replaySeed,
+                            suppressIssueReporting: true,
+                            useRandomOnly: randomOnly || skipGenericCoverage,
+                            logLevel: logLevel,
+                            logFormat: logFormat
+                        ),
+                        sourceCode: nil,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                        property: property
+                    )
+                    if let exhaustResult {
+                        let info: ContractFailureInfo<Spec.Command> = ContractFailureInfo(
+                            originalCommands: nil,
+                            discoveryMethod: replaySeed != nil ? .replay : .randomSampling
+                        )
+                        continuation.resume(returning: (exhaustResult, info))
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
                 }
             }
         }
-    }
 
-    guard let (failingSequence, failureInfo) = searchResult else {
-        return nil
-    }
+        guard let (failingSequence, failureInfo) = searchResult else {
+            return nil
+        }
 
-    // Build trace asynchronously
-    let (trace, spec) = await buildTraceAsync(failingSequence, specType: specType)
+        // Build trace asynchronously
+        let (trace, spec) = await buildTraceAsync(failingSequence, specType: specType)
 
-    let result = ContractResult<Spec>(
-        commands: failingSequence,
-        trace: trace,
-        sut: spec.sut,
-        seed: seed,
-        discoveryMethod: failureInfo.discoveryMethod
-    )
-
-    if !suppressIssueReporting {
-        let rendered = renderFailure(
-            result,
-            failureInfo: failureInfo,
-            modelDescription: spec.modelDescription
+        let result = ContractResult<Spec>(
+            commands: failingSequence,
+            trace: trace,
+            sut: spec.sut,
+            seed: seed,
+            discoveryMethod: failureInfo.discoveryMethod
         )
-        ExhaustLog.error(
-            category: .propertyTest,
-            event: "contract_failed",
-            rendered
-        )
-        reportIssue(
-            rendered,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
-    }
 
-    return result
+        if !suppressIssueReporting {
+            let rendered = renderFailure(
+                result,
+                failureInfo: failureInfo,
+                modelDescription: spec.modelDescription
+            )
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "contract_failed",
+                rendered
+            )
+            reportIssue(
+                rendered,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
+
+        return result
     } // withConfiguration
 }
 

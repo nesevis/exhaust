@@ -154,7 +154,7 @@ extension GeneratorTuning {
             // will be 0 and they won't be selected during generation.
             if hasAnySuccess, successCounts[choiceIdx] == 0 {
                 tunedChoices.append(ReflectiveOperation.PickTuple(
-                    siteID: choice.siteID,
+                    fingerprint: choice.fingerprint,
                     id: choice.id,
                     weight: 0,
                     generator: choice.generator
@@ -219,7 +219,7 @@ extension GeneratorTuning {
             let weight = UInt64(Double(successCounts[choiceIdx]) * (1 + entropy))
 
             tunedChoices.append(ReflectiveOperation.PickTuple(
-                siteID: choice.siteID,
+                fingerprint: choice.fingerprint,
                 id: choice.id,
                 weight: weight,
                 generator: tunedInner
@@ -236,7 +236,7 @@ extension GeneratorTuning {
             tunedChoices = ContiguousArray(tunedChoices.map { choice in
                 guard choice.weight < floor else { return choice }
                 return ReflectiveOperation.PickTuple(
-                    siteID: choice.siteID, id: choice.id,
+                    fingerprint: choice.fingerprint, id: choice.id,
                     weight: floor, generator: choice.generator
                 )
             })
@@ -246,7 +246,7 @@ extension GeneratorTuning {
         if tunedChoices.allSatisfy({ $0.weight == 0 }) {
             tunedChoices = ContiguousArray(tunedChoices.map {
                 ReflectiveOperation.PickTuple(
-                    siteID: $0.siteID,
+                    fingerprint: $0.fingerprint,
                     id: $0.id,
                     weight: 1,
                     generator: $0.generator
@@ -292,7 +292,7 @@ extension GeneratorTuning {
                 continuation: { .pure($0) }
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
-                siteID: context.rng.next(),
+                fingerprint: context.rng.next(),
                 id: context.rng.next(),
                 weight: 1,
                 generator: subGen
@@ -360,7 +360,7 @@ extension GeneratorTuning {
                 )
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
-                    siteID: context.rng.next(),
+                    fingerprint: context.rng.next(),
                     id: context.rng.next(),
                     weight: 1,
                     generator: subSeqGen
@@ -417,7 +417,7 @@ extension GeneratorTuning {
                 )
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
-                    siteID: context.rng.next(),
+                    fingerprint: context.rng.next(),
                     id: context.rng.next(),
                     weight: 1,
                     generator: subSeqGen
@@ -484,7 +484,7 @@ extension GeneratorTuning {
                 continuation: { .pure($0) }
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
-                siteID: context.rng.next(),
+                fingerprint: context.rng.next(),
                 id: context.rng.next(),
                 weight: 1,
                 generator: subGen

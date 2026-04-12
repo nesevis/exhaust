@@ -13,7 +13,6 @@ public typealias FilterType = ExhaustCore.FilterType
 public typealias BitPatternConvertible = ExhaustCore.BitPatternConvertible
 public typealias PartialPath = ExhaustCore.PartialPath
 public typealias Interpreters = ExhaustCore.Interpreters
-public typealias ReducerBudget = Interpreters.ReductionBudget
 public typealias GeneratorError = ExhaustCore.GeneratorError
 public typealias EncoderName = ExhaustCore.EncoderName
 public typealias ReductionStats = ExhaustCore.ReductionStats

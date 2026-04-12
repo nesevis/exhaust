@@ -14,12 +14,12 @@ private enum Helpers {
     static func reduce<Output>(
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
-        config: Interpreters.BonsaiReducerConfiguration = .fast,
+        config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: config, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
         )
         return output
     }

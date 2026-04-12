@@ -8,7 +8,7 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             #expect(value < 50)
@@ -20,7 +20,7 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             try #require(value < 50)
@@ -35,7 +35,7 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 20, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 20)),
             .randomOnly
         ) { value in
             #expect(value >= 0)
@@ -48,7 +48,7 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: -10 ... 10)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             #expect(value >= 0)
@@ -62,7 +62,7 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             if value >= 50 {
@@ -78,7 +78,7 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50
@@ -93,7 +93,7 @@ import Testing
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50
@@ -106,7 +106,7 @@ import Testing
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             #expect(value < 50)
@@ -121,7 +121,7 @@ import Testing
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
             .replay(42),
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50
@@ -131,7 +131,7 @@ import Testing
             #gen(.int(in: 0 ... 100)),
             .suppressIssueReporting,
             .replay(42),
-            .budget(.custom(coverage: 0, sampling: 50, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50
@@ -181,7 +181,7 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 10)),
             .suppressIssueReporting,
-            .budget(.custom(coverage: 0, sampling: 5, reduction: .fast)),
+            .budget(.custom(coverage: 0, sampling: 5)),
             .randomOnly,
             .onReport { report in
                 capturedReport = report
@@ -220,4 +220,3 @@ import Testing
         #expect(result == nil, "All values in 0...100 should pass")
     }
 }
-    

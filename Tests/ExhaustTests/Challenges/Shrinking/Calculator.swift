@@ -14,16 +14,16 @@ struct CalculatorShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
      The challenge involves a simple calculator language representing expressions consisting of integers, their additions and divisions only, like 1 + (2 / 3).
-     
+
      The property being tested is that
-     
+
      if we have no subterms of the form x / 0,
      then we can evaluate the expression without a zero division error.
      This property is false, because we might have a term like 1 / (3 + -3), in which the divisor is not literally 0 but evaluates to 0.
-     
+
      One of the possible difficulties that might come up is the shrinking of recursive expressions.
      */
-    
+
     @Test("Calculator, Full")
     func calculatorfull() throws {
         let gen = #gen(Self.expression(depth: 4))
@@ -31,12 +31,15 @@ struct CalculatorShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .randomOnly,
+            .replay("23KHVTCX48J7V"),
+//            .replay(5832967290043753512),
             .budget(.exorbitant),
-            .logging(.trace, .keyValue)
+            .logging(.debug, .keyValue)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
             }
+//            print("Attempt: \(expr)")
             do {
                 _ = try Self.eval(expr)
                 return true
@@ -114,8 +117,8 @@ struct CalculatorShrinkingChallenge {
     static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
         let leaf = #gen(.int(in: -10 ... 10, scaling: .constant))
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
-        
-        let calculator = #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+
+        return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
             let add = #gen(recurse(), leaf)
                 .mapped(
                     forward: { lhs, rhs in Expr.add(lhs, rhs) },
@@ -145,9 +148,7 @@ struct CalculatorShrinkingChallenge {
                 (3, leaf),
                 (3, add),
                 (3, div))
-            
+
         })
-        
-        return calculator
     }
 }

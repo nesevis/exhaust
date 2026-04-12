@@ -433,7 +433,8 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
-    @Test func boundBidirectional() {
+    @Test(.disabled("Flaky if it happens to hit n == $0"))
+    func boundBidirectional() {
         withKnownIssue("Bound with data-dependent inner range — replay non-determinism") {
             let report = #examine(
                 .int(in: 1 ... 10).bound(

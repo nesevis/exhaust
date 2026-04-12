@@ -38,7 +38,6 @@ public struct ExhaustTestMacro: ExpressionMacro {
             )
         }
     }
-
 }
 
 // MARK: - Closure Analysis Helpers
@@ -79,7 +78,8 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
 
     // try #require(...)
     if let tryExpr = item.as(TryExprSyntax.self),
-       let macroExpr = tryExpr.expression.as(MacroExpansionExprSyntax.self) {
+       let macroExpr = tryExpr.expression.as(MacroExpansionExprSyntax.self)
+    {
         let name = macroExpr.macroName.text
         if name == "expect" || name == "require" {
             return true
@@ -108,7 +108,8 @@ private func containsReturnWithValue(_ statements: CodeBlockItemListSyntax) -> B
     for statement in statements {
         // Direct return statement
         if let returnStmt = statement.item.as(ReturnStmtSyntax.self),
-           returnStmt.expression != nil {
+           returnStmt.expression != nil
+        {
             return true
         }
 
@@ -124,7 +125,8 @@ private func containsReturnWithValue(_ statements: CodeBlockItemListSyntax) -> B
 private func containsReturnWithValueRecursive(_ node: Syntax) -> Bool {
     for child in node.children(viewMode: .sourceAccurate) {
         if let returnStmt = child.as(ReturnStmtSyntax.self),
-           returnStmt.expression != nil {
+           returnStmt.expression != nil
+        {
             return true
         }
         // Don't recurse into nested closures — their returns are their own
@@ -161,7 +163,7 @@ private func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExpr
 /// In a macro expansion, `#_sourceLocation` resolves to the expansion site (the `#exhaust` line),
 /// not the original assertion line. This rewriter uses `MacroExpansionContext.location(of:)` to
 /// get each assertion's original source location and injects it as an explicit argument.
-private class SourceLocationRewriter: SyntaxRewriter {
+private final class SourceLocationRewriter: SyntaxRewriter {
     let context: any MacroExpansionContext
     private var closureDepth = 0
 
@@ -215,7 +217,7 @@ private class SourceLocationRewriter: SyntaxRewriter {
 
 /// Replaces `#expect` and `#require` macro expansions with `__ExhaustRuntime.__detectRequire` calls.
 /// Skips nested closures (depth > 0) since their assertions are their own.
-private class DetectionRewriter: SyntaxRewriter {
+private final class DetectionRewriter: SyntaxRewriter {
     private var closureDepth = 0
 
     override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {

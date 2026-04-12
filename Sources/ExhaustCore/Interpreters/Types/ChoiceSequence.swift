@@ -88,7 +88,7 @@ public extension ChoiceSequence {
             var selectedBranchTree: ChoiceTree?
             while idx < array.count {
                 let candidate = array[idx]
-                if candidate.isSelected && candidate.unwrapped.isBranch {
+                if candidate.isSelected, candidate.unwrapped.isBranch {
                     selectedBranchTree = candidate
                     break
                 }

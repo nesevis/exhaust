@@ -9,6 +9,8 @@ import Foundation
 
 /// A set of `UInt32` ranges representing Unicode scalar values, backed by `RangeSet`.
 /// Provides O(log n) index-to-scalar lookup for single-pick generation.
+///
+/// When ``bottomCodepoint`` is non-nil, index 0 is reserved for that scalar and all other indices are offset by 1. The bottom codepoint does not need to be a member of the underlying range set. This makes the reducer (which shrinks toward bit pattern 0, that is, index 0) converge toward the nominated character without any pipeline changes.
 public struct ScalarRangeSet: Sendable {
     public let rangeSet: RangeSet<UInt32>
 
@@ -20,15 +22,19 @@ public struct ScalarRangeSet: Sendable {
         rangesArray.count
     }
 
-    /// Total number of scalar values across all ranges.
+    /// Total number of scalar values across all ranges, plus one for the bottom codepoint if present.
     public let scalarCount: Int
 
     /// Cumulative sizes for O(log n) index lookup. `cumulativeCounts[i]` = total scalars in ranges 0..<i.
     private let cumulativeCounts: [Int]
 
-    public init(_ rangeSet: RangeSet<UInt32>) {
+    /// When non-nil, index 0 maps to this scalar and all range-derived indices are offset by 1.
+    public let bottomCodepoint: Unicode.Scalar?
+
+    public init(_ rangeSet: RangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
         precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty RangeSet")
         self.rangeSet = rangeSet
+        self.bottomCodepoint = bottomCodepoint
         rangesArray = Array(rangeSet.ranges)
         var cumulative: [Int] = []
         cumulative.reserveCapacity(rangesArray.count)
@@ -37,7 +43,8 @@ public struct ScalarRangeSet: Sendable {
             cumulative.append(total)
             total += range.count
         }
-        scalarCount = total
+        let rangeTotal = total
+        scalarCount = bottomCodepoint != nil ? rangeTotal + 1 : rangeTotal
         cumulativeCounts = cumulative
     }
 
@@ -46,21 +53,66 @@ public struct ScalarRangeSet: Sendable {
     /// Out-of-range indices are clamped so the reducer can safely explore candidates.
     public func scalar(at index: Int) -> Unicode.Scalar {
         let clamped = min(max(index, 0), scalarCount - 1)
-        let rangeIndex = rangeIndex(forFlatIndex: clamped)
-        let offsetInRange = clamped - cumulativeCounts[rangeIndex]
-        let scalarValue = rangesArray[rangeIndex].lowerBound + UInt32(offsetInRange)
-        return Unicode.Scalar(scalarValue)!
+        if let bottom = bottomCodepoint {
+            if clamped == 0 { return bottom }
+            let rangeIndex = clamped - 1
+            return rangeScalar(at: rangeIndex)
+        }
+        return rangeScalar(at: clamped)
     }
 
     /// Maps a scalar back to its flat index in `0..<scalarCount`.
     /// Uses binary search over the cached ranges for O(log n) lookup.
     public func index(of scalar: Unicode.Scalar) -> Int {
-        let value = scalar.value
+        if let bottom = bottomCodepoint, scalar == bottom {
+            return 0
+        }
+        let rangeIndex = Self.naturalIndex(
+            of: scalar.value,
+            ranges: rangesArray,
+            cumulativeCounts: cumulativeCounts
+        )
+        return bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex
+    }
+
+    // MARK: - Internal Lookup
+
+    /// Maps a range-relative index to a Unicode scalar (no bottom-codepoint offset applied).
+    private func rangeScalar(at rangeRelativeIndex: Int) -> Unicode.Scalar {
+        let rangeTotal = cumulativeCounts.last.map { $0 + rangesArray.last!.count } ?? 0
+        let clamped = min(max(rangeRelativeIndex, 0), rangeTotal - 1)
+        let rangeIdx = rangeIndexForFlatIndex(clamped)
+        let offsetInRange = clamped - cumulativeCounts[rangeIdx]
+        let scalarValue = rangesArray[rangeIdx].lowerBound + UInt32(offsetInRange)
+        return Unicode.Scalar(scalarValue)!
+    }
+
+    /// Binary search for the range index containing the given flat index.
+    private func rangeIndexForFlatIndex(_ index: Int) -> Int {
         var lo = 0
-        var hi = rangesArray.count - 1
+        var hi = cumulativeCounts.count - 1
+        while lo < hi {
+            let mid = lo + (hi - lo + 1) / 2
+            if cumulativeCounts[mid] <= index {
+                lo = mid
+            } else {
+                hi = mid - 1
+            }
+        }
+        return lo
+    }
+
+    /// Finds the range-relative index of a scalar value. Precondition-fails if the scalar is not in the range set.
+    private static func naturalIndex(
+        of value: UInt32,
+        ranges: [Range<UInt32>],
+        cumulativeCounts: [Int]
+    ) -> Int {
+        var lo = 0
+        var hi = ranges.count - 1
         while lo <= hi {
             let mid = lo + (hi - lo) / 2
-            let range = rangesArray[mid]
+            let range = ranges[mid]
             if value < range.lowerBound {
                 hi = mid - 1
             } else if value >= range.upperBound {
@@ -74,21 +126,6 @@ public struct ScalarRangeSet: Sendable {
             "Scalar U+\(hex) not found in ScalarRangeSet"
         )
     }
-
-    /// Binary search for the range index containing the given flat index.
-    private func rangeIndex(forFlatIndex index: Int) -> Int {
-        var lo = 0
-        var hi = cumulativeCounts.count - 1
-        while lo < hi {
-            let mid = lo + (hi - lo + 1) / 2
-            if cumulativeCounts[mid] <= index {
-                lo = mid
-            } else {
-                hi = mid - 1
-            }
-        }
-        return lo
-    }
 }
 
 // MARK: - CharacterSet → ScalarRangeSet
@@ -96,9 +133,10 @@ public struct ScalarRangeSet: Sendable {
 extension CharacterSet {
     /// Parses `bitmapRepresentation` into a `ScalarRangeSet` of `UInt32` scalar values.
     ///
+    /// - Parameter bottomCodepoint: When non-nil, reserves index 0 for this scalar and offsets all range-derived indices by 1. The scalar does not need to be a member of the character set.
     /// - Plane 0 (BMP): first 8192 bytes, 1 bit per scalar U+0000…U+FFFF
     /// - Planes 1–16: each occupied plane appends 8193 bytes (1-byte plane index + 8192-byte bitmap)
-    public func scalarRangeSet() -> ScalarRangeSet {
+    public func scalarRangeSet(bottomCodepoint: Unicode.Scalar? = nil) -> ScalarRangeSet {
         let bitmap = bitmapRepresentation
         let planeSize = 8192
         var rangeSet = RangeSet<UInt32>()
@@ -125,7 +163,7 @@ extension CharacterSet {
         // Surrogates (U+D800–U+DFFF) appear in the BMP bitmap but aren't valid Unicode scalars.
         rangeSet.remove(contentsOf: 0xD800 ..< 0xE000)
 
-        return ScalarRangeSet(rangeSet)
+        return ScalarRangeSet(rangeSet, bottomCodepoint: bottomCodepoint)
     }
 
     // MARK: - Bitmap parsing into RangeSet<UInt32>

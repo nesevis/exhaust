@@ -36,6 +36,14 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             prng: prng,
             materializePicks: materializePicks
         )
+        ExhaustLog.debug(
+            category: .generation,
+            event: "vacti",
+            metadata: [
+                "seed": "\(context.baseSeed)",
+                "requested": "\(context.maxRuns)",
+            ]
+        )
     }
 
     public var baseSeed: UInt64 {
@@ -426,9 +434,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         branches.reserveCapacity(choices.count)
         var finalValue: Output?
         let branchIDs = choices.map(\.id)
-        let augmentedSiteID = choices[0].siteID &+ context.pickDepth
-        let savedPickDepth = context.pickDepth
-        context.pickDepth += 1
+        let fingerprint = choices[0].fingerprint
 
         for choice in choices {
             let isSelected = choice.id == selectedChoice.id
@@ -452,7 +458,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 {
                     value = final.0
                     branch = ChoiceTree.branch(
-                        siteID: augmentedSiteID,
+                        fingerprint: fingerprint,
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
@@ -477,7 +483,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 {
                     value = final.0
                     branch = ChoiceTree.branch(
-                        siteID: augmentedSiteID,
+                        fingerprint: fingerprint,
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
@@ -496,8 +502,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 branches.append(branch)
             }
         }
-
-        context.pickDepth = savedPickDepth
 
         guard let value = finalValue else {
             throw GeneratorError.couldNotGenerateConcomitantChoiceTree

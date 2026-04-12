@@ -288,7 +288,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                 continuation: { .pure($0) }
                             )
                             subrangeChoices.append(ReflectiveOperation.PickTuple(
-                                siteID: 0,
+                                fingerprint: 0,
                                 id: UInt64(i),
                                 weight: 1,
                                 generator: subGen
@@ -731,7 +731,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         if let accumulator = cgsState.fitnessAccumulator {
             for (i, choice) in choices.enumerated() {
                 let key = FitnessAccumulator.SiteChoiceKey(
-                    siteID: choice.siteID, choiceID: choice.id
+                    fingerprint: choice.fingerprint, choiceID: choice.id
                 )
                 if let record = accumulator.records[key],
                    record.observationCount >= minDeadObservations,
@@ -843,7 +843,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             for choiceIdx in liveChoiceIndices {
                 let choice = choices[choiceIdx]
                 accumulator.record(
-                    siteID: choice.siteID,
+                    fingerprint: choice.fingerprint,
                     choiceID: choice.id,
                     fitness: fitnesses[choiceIdx],
                     observations: completedRounds
@@ -858,7 +858,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         weightedChoices.reserveCapacity(choices.count)
         for (i, choice) in choices.enumerated() {
             weightedChoices.append(ReflectiveOperation.PickTuple(
-                siteID: choice.siteID,
+                fingerprint: choice.fingerprint,
                 id: choice.id,
                 weight: allLiveZero
                     ? (liveChoiceIndices.contains(i) ? 1 : 0)

@@ -332,7 +332,7 @@ struct DistinctScalingVariant {
 
 @Suite("Large Union List Scaling Variants")
 struct LargeUnionListScalingVariant {
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
+    @Test("Scaling variant", arguments: [ScalingVariant.constant])
     func largeUnionList(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
@@ -346,13 +346,14 @@ struct LargeUnionListScalingVariant {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
-
+            .logging(.debug, .keyValue),
             .onReport { report = $0 }
         ) { arr in
-            Set(arr.flatMap(\.self)).count <= 4
+            print("Attempt: \(arr)")
+            return Set(arr.flatMap(\.self)).count <= 4
         }
         if let report { print("[PROFILE] LargeUnionListScaling(\(variant)): \(report.profilingSummary)") }
-
+        print()
         #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 }

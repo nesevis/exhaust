@@ -5,20 +5,26 @@ import Exhaust
 struct ParserLang: Equatable, CustomDebugStringConvertible {
     let modules: [ParserMod]
     let funcs: [ParserFunc]
-    var debugDescription: String { "Lang(\(modules), \(funcs))" }
+    var debugDescription: String {
+        "Lang(\(modules), \(funcs))"
+    }
 }
 
 struct ParserMod: Equatable, CustomDebugStringConvertible {
     let imports: [ParserVar]
     let exports: [ParserVar]
-    var debugDescription: String { "Mod(\(imports), \(exports))" }
+    var debugDescription: String {
+        "Mod(\(imports), \(exports))"
+    }
 }
 
 struct ParserFunc: Equatable, CustomDebugStringConvertible {
     let name: ParserVar
     let args: [ParserExp]
     let body: [ParserStmt]
-    var debugDescription: String { "Func(\(name), \(args), \(body))" }
+    var debugDescription: String {
+        "Func(\(name), \(args), \(body))"
+    }
 }
 
 enum ParserStmt: Equatable, CustomDebugStringConvertible {
@@ -61,7 +67,9 @@ indirect enum ParserExp: Equatable, CustomDebugStringConvertible {
 
 struct ParserVar: Equatable, CustomDebugStringConvertible {
     let name: String
-    var debugDescription: String { name }
+    var debugDescription: String {
+        name
+    }
 }
 
 // MARK: - Serializer

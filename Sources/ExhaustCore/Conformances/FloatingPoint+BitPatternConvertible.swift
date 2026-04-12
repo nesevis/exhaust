@@ -18,10 +18,8 @@
         private static let signBitMask: UInt16 = 0x8000
 
         /// A `Float16` can use the entire `UInt16` space for its bit pattern.
-        public static var bitPatternRanges: [ClosedRange<UInt64>] {
-            [
-                UInt64(UInt16.min) ... UInt64(UInt16.max),
-            ]
+        public static var bitPatternRange: ClosedRange<UInt64> {
+            UInt64(UInt16.min) ... UInt64(UInt16.max)
         }
 
         /// Creates a `Float16` from a `UInt64` with ordering-preserving encoding.
@@ -69,10 +67,8 @@ extension Float: BitPatternConvertible {
     private static let signBitMask: UInt32 = 0x8000_0000
 
     /// A `Float` can use the entire `UInt32` space for its bit pattern.
-    public static var bitPatternRanges: [ClosedRange<UInt64>] {
-        [
-            UInt64(UInt32.min) ... UInt64(UInt32.max),
-        ]
+    public static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt32.min) ... UInt64(UInt32.max)
     }
 
     /// Creates a `Float` from a `UInt64` with ordering-preserving encoding.
@@ -119,10 +115,8 @@ extension Double: BitPatternConvertible {
     private static let signBitMask: UInt64 = 0x8000_0000_0000_0000
 
     /// A `Double` uses the full `UInt64` space for its bit pattern.
-    public static var bitPatternRanges: [ClosedRange<UInt64>] {
-        [
-            UInt64.min ... UInt64.max,
-        ]
+    public static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64.min ... UInt64.max
     }
 
     /// Creates a `Double` from a `UInt64` with ordering-preserving encoding.

@@ -5,16 +5,10 @@ import Exhaust
 import ExhaustCore
 import Foundation
 
-// MARK: - Configuration
-
-let enableReport = true
-let enableCounterExamples = true
-private let reductionCount = 100
-
 /// Returns strategy variants of a base config.
 private func withStrategies(
-    _ base: Interpreters.BonsaiReducerConfiguration = .fast
-) -> [(name: String, config: Interpreters.BonsaiReducerConfiguration)] {
+    _ base: Interpreters.ReducerConfiguration = .fast
+) -> [(name: String, config: Interpreters.ReducerConfiguration)] {
     [("adaptive", base)]
 }
 
@@ -35,7 +29,7 @@ func registerShrinkingChallengeBenchmarks() {
     registerNestedLists()
     registerReverse()
     registerReplacement()
-//    registerParser()
+    registerParser()
 }
 
 // MARK: - Bound5
@@ -343,7 +337,7 @@ private func registerParser() {
     // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed,
     // matching the methodology from MacIver & Donaldson Figure 13.
     benchmark("Parser ECOOP (adaptive)") {
-        let adaptive = Interpreters.BonsaiReducerConfiguration.slow
+        let adaptive = Interpreters.ReducerConfiguration.slow
 
         let seedCount = 1000
         let baseSeed: UInt64 = 1337
@@ -353,7 +347,7 @@ private func registerParser() {
 
         for i in 0 ..< seedCount {
             let seed = baseSeed &+ UInt64(i)
-            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 10_000)
+            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 10000)
 
             // Find first failure for this seed.
             var failingValue: ParserLang?
@@ -375,14 +369,14 @@ private func registerParser() {
                 invocationCount += 1
                 return property(candidate)
             }
-            let result = try? Interpreters.bonsaiReduce(
+            let result = try? Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
                 config: adaptive,
                 property: countingProperty
             )
-            print("\(seed), \(invocationCount)")
+//            print("\(seed), \(invocationCount)")
             let output = result?.1 ?? value
             let outputSize = parserSize(output)
             sizes.append(outputSize)
@@ -469,7 +463,7 @@ private func runReflectableBenchmark<Output>(
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingValues: [Output],
-    config: Interpreters.BonsaiReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     var seenCEs = Set<String>()
@@ -484,7 +478,7 @@ private func runReflectableBenchmark<Output>(
         }
         var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        let result = try? Interpreters.bonsaiReduce(
+        let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
@@ -495,9 +489,14 @@ private func runReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-        if enableCounterExamples, seenCEs.insert(description).inserted {
-            print("  (\(String(describing: value)) -> \(description))")
-        }
+//        if enableCounterExamples, seenCEs.insert(description).inserted {
+//            print("  (\(String(describing: value)) -> \(description))")
+//        }
+//        } else {
+//            let ceTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+//            let ms = Double(ceTime - startTime) / 1_000_000.0
+//            print("  \(ms)(\(String(describing: value)) -> \(description))")
+//        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
@@ -511,7 +510,7 @@ private func runNonReflectableBenchmark<Output>(
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingPairs: [(value: Output, tree: ChoiceTree)],
-    config: Interpreters.BonsaiReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     var seenCEs = Set<String>()
@@ -523,7 +522,7 @@ private func runNonReflectableBenchmark<Output>(
         }
         var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        let result = try? Interpreters.bonsaiReduce(
+        let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
@@ -534,9 +533,9 @@ private func runNonReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-        if enableCounterExamples, seenCEs.insert(description).inserted {
-            print("  (\(String(describing: value)) -> \(description))")
-        }
+//        if enableCounterExamples, seenCEs.insert(description).inserted {
+//            print("  (\(String(describing: value)) -> \(description))")
+//        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
@@ -660,7 +659,7 @@ private func printChallengeReport(
     iterationsToFirstFailure: [Int]
 ) {
     let invocations = results.map { Double($0.propertyInvocations) }
-    let times = results.map { $0.reductionMilliseconds }
+    let times = results.map(\.reductionMilliseconds)
     let uniqueCounterexamples = Set(results.map(\.counterexampleDescription)).sorted()
 
     let medianInvocations = String(format: "%.1f", median(invocations))

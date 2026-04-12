@@ -37,6 +37,8 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Boundary analysis produces only all-low / all-high values.
     case bits
+    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as `UInt32`. The bit pattern is an index, not a Unicode code point.
+    case character
 
     /// Creates a type tag by matching the metatype of the given value against known numeric types.
     public init<T>(type: T) {
@@ -93,6 +95,13 @@ public extension TypeTag {
         }
     }
 
+    /// The full bit-pattern range reachable by the underlying type.
+    ///
+    /// Equivalent to `Underlying.bitPatternRange` — bridges the static protocol requirement through this tag's type identity. Used by encoders to detect when a value's declared domain equals the natural type width, enabling modular bit-pattern arithmetic without encoder-level range validation.
+    var bitPatternRange: ClosedRange<UInt64> {
+        type(of: makeConvertible(bitPattern64: 0)).bitPatternRange
+    }
+
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {
@@ -115,6 +124,7 @@ public extension TypeTag {
         #endif
         case .date: Int64(bitPattern64: bitPattern64)
         case .bits: UInt64(bitPattern64: bitPattern64)
+        case .character: UInt32(bitPattern64: bitPattern64)
         }
     }
 }
@@ -137,6 +147,7 @@ extension TypeTag: CustomStringConvertible {
         case .float16: "Float16"
         case .date: "Date"
         case .bits: "Bits"
+        case .character: "Character"
         }
     }
 }

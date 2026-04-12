@@ -121,7 +121,7 @@ public enum CoveringArrayReplay {
             // bind — pass through unchanged as it shouldn't consume finite parameters.
             return tree
 
-        case let .branch(siteID, weight, id, branchIDs, choice):
+        case let .branch(fingerprint, weight, id, branchIDs, choice):
             guard let newChoice = substituteParameters(
                 in: choice,
                 row: row,
@@ -131,7 +131,7 @@ public enum CoveringArrayReplay {
                 return nil
             }
             return .branch(
-                siteID: siteID,
+                fingerprint: fingerprint,
                 weight: weight,
                 id: id,
                 branchIDs: branchIDs,
@@ -164,7 +164,7 @@ public enum CoveringArrayReplay {
 
             let branchIDs = choices.map(\.id)
             let branch = ChoiceTree.branch(
-                siteID: chosen.siteID,
+                fingerprint: chosen.fingerprint,
                 weight: chosen.weight,
                 id: chosen.id,
                 branchIDs: branchIDs,

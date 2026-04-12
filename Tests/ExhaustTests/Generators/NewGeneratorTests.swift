@@ -53,7 +53,6 @@ import Testing
 
             #expect(output == Float16(50))
         }
-
     }
 #endif
 

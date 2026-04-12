@@ -165,7 +165,7 @@ public enum CoverageRunner {
         case let .success(value, freshTree, _):
             let passed = property(value)
             return RowResult(value: value, tree: freshTree, passed: passed)
-        case .rejected(_), .failed(_):
+        case .rejected(_), .failed:
             return nil
         }
     }

@@ -22,7 +22,7 @@ public enum HillClimbResult<Output> {
 /// - Same score, sequence no longer → accept (lateral move to escape local optima)
 /// - Score decrease → reject
 ///
-/// ## siteID Stability and Branch Ping-Pong
+/// ## fingerprint Stability and Branch Ping-Pong
 ///
 /// The branch handler (line ~173) swaps the selected alternative at a pick site and materializes the result. The lateral-move acceptance criterion ("same score, no growth") can cause infinite ping-pong between two branch alternatives when siteIDs are stable across materializations:
 ///
@@ -36,7 +36,7 @@ public enum HillClimbResult<Output> {
 ///
 /// **Deeper issue**: even with strict branch acceptance, fingerprint-based siteIDs cause a 36x slowdown (50ms → 1800ms on `exploreWithScorerFindsDeepBSTs`). The cause is likely in the ``NoveltyTracker``'s branch-path fingerprinting: stable siteIDs collapse the tier-1 novelty signal for structurally similar seeds, reducing seed pool diversity and forcing the explorer to exhaust its budget. This is a fundamental tension — stable siteIDs help the reducer (branch promotion, sibling swap) but hurt the explorer (novelty detection).
 ///
-/// **Possible resolution**: split siteID strategies — PRNG at generation time (VACTI) for exploration diversity, fingerprint + depth augmentation at materialization time (``ReductionMaterializer``) for reducer stability. The reducer re-materializes before branch encoders run, so generation-time siteIDs don't affect reduction. This split has not been implemented.
+/// **Possible resolution**: split fingerprint strategies — PRNG at generation time (VACTI) for exploration diversity, fingerprint + depth augmentation at materialization time (``ReductionMaterializer``) for reducer stability. The reducer re-materializes before branch encoders run, so generation-time siteIDs don't affect reduction. This split has not been implemented.
 public enum HillClimber {
     public static func climb<Output>(
         seed: Seed,

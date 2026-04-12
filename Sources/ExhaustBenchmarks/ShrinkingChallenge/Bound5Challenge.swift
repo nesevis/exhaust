@@ -27,7 +27,7 @@ struct Bound5: Equatable, CustomStringConvertible {
 // MARK: - Generator
 
 let bound5Gen = {
-    let arrayGen = #gen(.int16(scaling: .constant).array(length: 0 ... 10, scaling: .constant))
+    let arrayGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10, scaling: .linear))
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
     return #gen(arrayGen, arrayGen, arrayGen, arrayGen, arrayGen) { a, b, c, d, e in
         Bound5(a: a, b: b, c: c, d: d, e: e)

@@ -62,7 +62,7 @@ public enum ExhaustBudget: Sendable {
     /// 2000 coverage rows, 2000 random samplings, slow reduction.
     case exorbitant
     /// Explicit values for all budget aspects.
-    case custom(coverage: UInt64, sampling: UInt64, reduction: ReducerBudget)
+    case custom(coverage: UInt64, sampling: UInt64)
 
     /// The iteration budget for structured coverage analysis.
     public var coverageBudget: UInt64 {
@@ -70,7 +70,7 @@ public enum ExhaustBudget: Sendable {
         case .expedient: 200
         case .expensive: 500
         case .exorbitant: 2000
-        case let .custom(coverage, _, _): coverage
+        case let .custom(coverage, _): coverage
         }
     }
 
@@ -80,16 +80,8 @@ public enum ExhaustBudget: Sendable {
         case .expedient: 200
         case .expensive: 500
         case .exorbitant: 2000
-        case let .custom(_, sampling, _): sampling
-        }
-    }
-
-    /// The test case reduction configuration.
-    public var reducerBudget: ReducerBudget {
-        switch self {
-        case .expedient, .expensive: .fast
-        case .exorbitant: .slow
-        case let .custom(_, _, reduction): reduction
+        case let .custom(_, sampling):
+            sampling
         }
     }
 }

@@ -119,43 +119,9 @@ public struct ExhaustReport: Sendable {
     /// Per-fingerprint filter predicate observations accumulated during reduction.
     public var filterObservations: [UInt64: FilterObservation] = [:]
 
-    /// Per-cycle phase outcome data.
-    public var cycleOutcomes: [CycleOutcome] = []
-
     /// One-line summary of per-phase invocations and acceptances aggregated across all cycles.
     public var phaseSummary: String {
-        var phaseInvocations: [ReducerPhaseIdentifier: Int] = [:]
-        var phaseAcceptances: [ReducerPhaseIdentifier: Int] = [:]
-        var phaseStructural: [ReducerPhaseIdentifier: Int] = [:]
-        for outcome in cycleOutcomes {
-            for (phase, disposition) in [
-                (ReducerPhaseIdentifier.baseDescent, outcome.baseDescent),
-                (.fibreDescent, outcome.fibreDescent),
-                (.exploration, outcome.exploration),
-                (.relaxRound, outcome.relaxRound),
-            ] {
-                if case let .ran(phaseOutcome) = disposition {
-                    phaseInvocations[phase, default: 0] += phaseOutcome.propertyInvocations
-                    phaseAcceptances[phase, default: 0] += phaseOutcome.acceptances
-                    phaseStructural[phase, default: 0] += phaseOutcome.structuralAcceptances
-                }
-            }
-        }
-        func label(_ phase: ReducerPhaseIdentifier, _ tag: String) -> String {
-            let invocations = phaseInvocations[phase, default: 0]
-            let structural = phaseStructural[phase, default: 0]
-            let value = phaseAcceptances[phase, default: 0] - structural
-            guard invocations > 0 else { return "" }
-            return " \(tag):\(invocations)/\(structural)s+\(value)v"
-        }
-        let parts = [
-            label(.baseDescent, "B"),
-            label(.fibreDescent, "F"),
-            label(.exploration, "E"),
-            label(.relaxRound, "R"),
-        ]
-        let joined = parts.joined()
-        return joined.isEmpty ? "" : "phases=\(joined.dropFirst())"
+        ""
     }
 
     /// One-line summary of profiling data for the reduction planning decision tree.
@@ -175,11 +141,10 @@ public struct ExhaustReport: Sendable {
             ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
             : ""
         let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
-        let projectionProbes = encoderProbes[.freeCoordinateProjection] ?? 0
-        let humanOrderProbes = encoderProbes[.humanOrderReorder] ?? 0
-        let hasPassData = projectionProbes > 0 || humanOrderProbes > 0
+        let reorderProbes = encoderProbes[.numericReorder] ?? 0
+        let hasPassData = reorderProbes > 0
         let passLabel = hasPassData
-            ? " passes=\(projectionProbes)proj/\(humanOrderProbes)human"
+            ? " passes=\(reorderProbes)reorder"
             : ""
         return "cycles=\(cycles) probes=\(coverageInvocations)cov/\(randomSamplingInvocations)rand/\(reductionInvocations)red mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(passLabel)\(phaseLabel)"
     }
@@ -208,6 +173,5 @@ public struct ExhaustReport: Sendable {
         fibreExhaustedWithFailureCount = stats.fibreExhaustedWithFailureCount
         fibreBailCount = stats.fibreBailCount
         filterObservations = stats.filterObservations
-        cycleOutcomes = stats.cycleOutcomes
     }
 }

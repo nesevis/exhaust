@@ -13,13 +13,10 @@
 ///
 /// ## Composability
 ///
-/// A ``KleisliComposition`` composes two composable encoders through a ``GeneratorLift``. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
+/// A ``GraphComposedEncoder`` composes two composable encoders through a generator lift. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
 public protocol ComposableEncoder {
     /// Typed identifier for dominance pruning and logging.
     var name: EncoderName { get }
-
-    /// Which phase this encoder belongs to.
-    var phase: ReductionPhase { get }
 
     /// Estimates the number of probes this encoder will generate for the given
     /// position range, or returns `nil` if the encoder has no applicable targets
@@ -27,18 +24,16 @@ public protocol ComposableEncoder {
     func estimatedCost(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        positionRange: ClosedRange<Int>
     ) -> Int?
 
     /// Initializes internal state for a new encoding pass.
     ///
-    /// Called once by the scheduler before the probe loop begins, or once per upstream probe in a ``KleisliComposition`` (where the downstream encoder is re-initialized on the lifted sequence after each upstream candidate).
+    /// Called once by the scheduler before the probe loop begins, or once per upstream probe in a ``GraphComposedEncoder`` (where the downstream encoder is re-initialized on the lifted sequence after each upstream candidate).
     mutating func start(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        positionRange: ClosedRange<Int>
     )
 
     /// Produces the next probe given feedback on the previous one.
@@ -57,7 +52,7 @@ public protocol ComposableEncoder {
     /// Returns `true` by default — the encoder's semantics have not changed between runs.
     /// ``DownstreamPick`` overrides this to return `false` when a different alternative was
     /// selected, invalidating convergence records from the previous alternative.
-    /// ``KleisliComposition`` checks this after ``start()`` and cold-starts the convergence
+    /// ``GraphComposedEncoder`` checks this after ``start()`` and cold-starts the convergence
     /// transfer when it returns `false`.
     var isConvergenceTransferSafe: Bool { get }
 }
@@ -77,94 +72,8 @@ public extension ComposableEncoder {
     func estimatedCost(
         sequence _: ChoiceSequence,
         tree _: ChoiceTree,
-        positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
+        positionRange _: ClosedRange<Int>
     ) -> Int? {
-        nil
-    }
-
-    /// Extracts value spans from a choice sequence, filtered to those whose lower bound falls within the given position range.
-    ///
-    /// When ``ReductionContext/depthFilter`` is non-nil, further restricts to spans at that bind depth (using ``BindSpanIndex/bindDepth(at:)``). This supports the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions.
-    static func extractFilteredSpans(
-        from sequence: ChoiceSequence,
-        in positionRange: ClosedRange<Int>,
-        context: ReductionContext = ReductionContext()
-    ) -> [ChoiceSpan] {
-        let allSpans = ChoiceSequence.extractAllValueSpans(from: sequence)
-        if let depth = context.depthFilter, let bindIndex = context.bindIndex {
-            return allSpans.filter {
-                positionRange.contains($0.range.lowerBound)
-                    && bindIndex.bindDepth(at: $0.range.lowerBound) == depth
-            }
-        }
-        return allSpans.filter { positionRange.contains($0.range.lowerBound) }
-    }
-}
-
-// MARK: - Reduction Context
-
-/// Shared state passed to composable encoders without coupling to ``ReductionState``.
-public struct ReductionContext {
-    /// The bind span index, or `nil` if the generator has no binds.
-    public let bindIndex: BindSpanIndex?
-
-    /// Cached convergence bounds from prior cycles, or `nil` if empty.
-    public let convergedOrigins: [Int: ConvergedOrigin]?
-
-    /// The choice dependency graph, or `nil` if not available.
-    public let dependencyGraph: ChoiceDependencyGraph?
-
-    /// When non-nil, restricts the encoder to value spans at this bind depth.
-    ///
-    /// Used by the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions. The encoder applies this filter during span extraction via ``ComposableEncoder/extractFilteredSpans(from:in:context:)``. When `nil`, all spans in the position range are eligible.
-    public let depthFilter: Int?
-
-    /// The current reduction cycle number. Used by encoders to timestamp convergence records.
-    public let cycle: Int
-
-    /// Per-fingerprint filter validity counts from prior materializations, or `nil` if empty.
-    public let filterValidityRates: [UInt64: FilterObservation]?
-
-    public init(
-        bindIndex: BindSpanIndex? = nil,
-        convergedOrigins: [Int: ConvergedOrigin]? = nil,
-        dependencyGraph: ChoiceDependencyGraph? = nil,
-        depthFilter: Int? = nil,
-        cycle: Int = 0,
-        filterValidityRates: [UInt64: FilterObservation]? = nil
-    ) {
-        self.bindIndex = bindIndex
-        self.convergedOrigins = convergedOrigins
-        self.dependencyGraph = dependencyGraph
-        self.depthFilter = depthFilter
-        self.cycle = cycle
-        self.filterValidityRates = filterValidityRates
-    }
-}
-
-// MARK: - Identity Composable Encoder
-
-/// A composable encoder that produces no probes — the identity element of the composition algebra.
-///
-/// Used in ``KleisliComposition`` to express standalone phases: `KleisliComposition(upstream: .identity, downstream: encoder, ...)` runs only the downstream encoder, and vice versa.
-public struct IdentityComposableEncoder: ComposableEncoder {
-    public let name: EncoderName
-    public let phase: ReductionPhase
-
-    public init(name: EncoderName = .kleisliComposition, phase: ReductionPhase = .exploration) {
-        self.name = name
-        self.phase = phase
-    }
-
-    public mutating func start(
-        sequence _: ChoiceSequence,
-        tree _: ChoiceTree,
-        positionRange _: ClosedRange<Int>,
-        context _: ReductionContext
-    ) {}
-
-    public mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         nil
     }
 }

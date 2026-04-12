@@ -2,14 +2,13 @@
 
 /// Searches a fibre for any failing point by systematically covering value combinations.
 ///
-/// Unlike per-coordinate minimizers (``ZeroValueEncoder``, ``BinarySearchToSemanticSimplestEncoder``), this encoder does not assume the current state already fails the property. It searches the fibre space for ANY assignment that fails — the right strategy for the downstream slot of a ``KleisliComposition``, where the lifted state may pass the property and a failure needs to be discovered.
+/// Unlike per-coordinate minimizers (``ZeroValueEncoder``, ``BinarySearchToSemanticSimplestEncoder``), this encoder does not assume the current state already fails the property. It searches the fibre space for ANY assignment that fails — the right strategy for the downstream slot of a ``GraphComposedEncoder``, where the lifted state may pass the property and a failure needs to be discovered.
 ///
 /// Two regimes based on the fibre's total domain size:
 /// - **Small fibres** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
 /// - **Large fibres** (2 or more parameters): pairwise covering (strength 2) via the density method (``PullBasedCoveringArrayGenerator``). Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
 public struct FibreCoveringEncoder: ComposableEncoder {
-    public let name: EncoderName = .kleisliComposition
-    public let phase: ReductionPhase = .exploration
+    public let name: EncoderName = .boundValueSearch
 
     /// Maximum number of combinations for exhaustive enumeration.
     public static let exhaustiveThreshold: UInt64 = 128
@@ -57,8 +56,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     public func estimatedCost(
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context _: ReductionContext
+        positionRange: ClosedRange<Int>
     ) -> Int? {
         let positions = collectValuePositions(in: positionRange, from: sequence)
         guard positions.isEmpty == false else { return nil }
@@ -72,8 +70,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     public mutating func start(
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context _: ReductionContext
+        positionRange: ClosedRange<Int>
     ) {
         baseSequence = sequence
         valuePositions = collectValuePositions(in: positionRange, from: sequence)
@@ -95,8 +92,16 @@ public struct FibreCoveringEncoder: ComposableEncoder {
             exhaustiveProbes = buildExhaustiveRows(count: Int(totalSpace))
         } else if valuePositions.count >= 2 {
             // Pull-based pairwise coverage. Rows are generated lazily in nextProbe().
+            // Cap each domain to coveringBudget: we emit at most that many rows, so
+            // larger domains add no useful coverage and would produce enormous bit
+            // vector allocations (for example, Unicode scalar domains of ~1.1M values
+            // clamp to 65535 in PullBasedCoveringArrayGenerator, giving a 536 MB bit
+            // vector and O(65535²) work per row).
+            let cappedDomains = valuePositions.map {
+                min($0.domainSize, UInt64(Self.coveringBudget))
+            }
             generator = PullBasedCoveringArrayGenerator(
-                domainSizes: valuePositions.map(\.domainSize),
+                domainSizes: cappedDomains,
                 strength: 2
             )
         }

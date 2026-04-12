@@ -202,7 +202,7 @@ struct BindAwareReductionTests {
 
         let tree = try #require(failingTree)
         let (_, output) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
         )
 
         #expect(output == [0, 0, 0])
@@ -234,7 +234,7 @@ struct BindAwareReductionTests {
         #expect(tree.containsBind)
 
         let (_, shrunk) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(shrunk >= 5)
@@ -252,7 +252,7 @@ struct BindAwareReductionTests {
         #expect(tree.containsBind == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(shrunk == 5)

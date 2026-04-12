@@ -119,7 +119,7 @@ struct LargeUnionListShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(list),
-    
+
                 property: Self.property
             )
 
