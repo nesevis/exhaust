@@ -10,10 +10,12 @@ Along the way I went down many rabbit holes; sometimes I even came back up with 
 
 Exhaust would not exist without the foundation laid out in his thesis: the Freer monad-based reflective generator that reifies effects as inspectable data; the notion of _interpreting_ a generator bidirectionally; Choice Gradient optimisation.
 
-- [Property-based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content) (2024)
-- [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Goldstein as co-author)
-- [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842) (2023)
-- [Tyche: Making Sense of PBT Effectiveness](https://dl.acm.org/doi/10.1145/3654777.3676407) (2024)
+Links:
+
+1. [Property-based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content) (2024)
+2. [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Goldstein as co-author)
+3. [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842) (2023)
+4. [Tyche: Making Sense of PBT Effectiveness](https://dl.acm.org/doi/10.1145/3654777.3676407) (2024)
 
 ## David MacIver, Alastair Donaldson and Hypothesis
 
@@ -24,31 +26,33 @@ Exhaust shamelessly adopts three insights from Hypothesis and this paper:
 
 …And many implementations:
 - Float shortlex ordering and reduction
-- Adaptive binary search
+- Adaptive, "findInteger"-style search
 - Unit tests to verify edge cases
 - The notion of a `Bundle` for stateful contract testing
 
+Links:
 
-- [Test Case Reduction via Test Case Generation: Insights from the Hypothesis Reducer](https://www.semanticscholar.org/paper/Test-Case-Reduction-via-Test-Case-Generation%3A-from-MacIver-Donaldson/6d72e1bd7743f12b48e20f7d234407e37b67e009) (2020)
-- [Improving Binary Search by Guessing](https://notebook.drmaciver.com/posts/2019-04-30-13:03.html)
+1. [Test Case Reduction via Test Case Generation: Insights from the Hypothesis Reducer](https://www.semanticscholar.org/paper/Test-Case-Reduction-via-Test-Case-Generation%3A-from-MacIver-Donaldson/6d72e1bd7743f12b48e20f7d234407e37b67e009) (2020)
+2. [Improving Binary Search by Guessing](https://notebook.drmaciver.com/posts/2019-04-30-13:03.html)
 
 ## Alfredo Sepúlveda-Jiménez
 
 The categorical framework for _optimisation_ laid out in this preprint provides Exhaust with an organisational algebra for test case reduction:
-- Each reduction “strategy” is a self-contained encoder-decoder pair that composes cleanly when chained
-- A Kleisli generalisation extends this composition through an effectful step (“lift”) which makes it nondeterministic, but ensures the same guarantees as deterministic composition
-- A dominance lattice to help prune redundant strategies within each phase
-- A “relax-round” pattern to escape local minima
+- Each reduction “strategy” is a self-contained encoder-decoder pair that composes cleanly
+- Composed search extends this through an effectful “lift” step that enables joint search over a controlling value and its dependents
+- The graded composition structure inspired the yield-priority dispatch model where encoders are ordered by expected structural and value yield
 
-_The phase ordering itself comes from fibration theory._
+Links:
 
-- [Categories of Optimization Reductions](https://www.researchgate.net/publication/399656065_CATEGORIES_OF_OPTIMIZATION_REDUCTIONS) (2026)
+1. [Categories of Optimization Reductions](https://www.researchgate.net/publication/399656065_CATEGORIES_OF_OPTIMIZATION_REDUCTIONS) (2026)
 
 ## Renée Bryce & Charles Colbourn
 
 Their _Density_ algorithm provides a way to do pull-based/lazy covering array generation. This is used by Exhaust to perform exhaustive generation of values for finite domains and boundary coverage of interesting values for larger domains.
 
-- [A density-based greedy algorithm for higher strength covering arrays](https://onlinelibrary.wiley.com/doi/epdf/10.1002/stvr.393) (2009) (paywall)
+Links:
+
+1. [A density-based greedy algorithm for higher strength covering arrays](https://onlinelibrary.wiley.com/doi/epdf/10.1002/stvr.393) (2009) (paywall)
 
 ## Other influences
 
@@ -78,4 +82,4 @@ I used tests from these libraries to help verify Exhaust’s reduction code
 
 ### Pointfree
 
-[Pointfree](https://www.pointfree.co)'s excellent libraries [Custom Dump](https://github.com/pointfreeco/swift-custom-dump) is used to output counterexamples and diffs in a standardised way, and [Swift Issue Reporting](https://github.com/pointfreeco/swift-issue-reporting) is used for surfacing issues in Swift Testing and XCTest.
+[Pointfree](https://www.pointfree.co)'s excellent library [Custom Dump](https://github.com/pointfreeco/swift-custom-dump) is used to output counterexamples and diffs in a standardised way, and [Swift Issue Reporting](https://github.com/pointfreeco/swift-issue-reporting) is used for surfacing issues in Swift Testing and XCTest.

@@ -32,25 +32,26 @@ Exhaust works in two modes:
 If the property fails, Exhaust finds a counterexample and automatically reduces it to its minimal form. Here's what that looks like:
 
 ```
-Property failed (iteration 3/200, seed 8DZR69)
-  array.sorted() == array.sorted().sorted()
-
 Counterexample:
-  [1, 0]
-
-Reduction diff:
   [
--   3,
--   1,
--   2,
--   5,
-+   1,
-    0,
+    [0]: 0,
+    [1]: 1
   ]
 
-Property invoked: 47 times
+Reduction diff:
+    [
+  -   [0]: 5164405737346173473,
+  +   [0]: 0,
+  -   [1]: 1003725769087814462,
+  +   [1]: 1,
+  -   [2]: 10522596906257742416,
+  -   [3]: 4995439813772349581,
+  -   [4]: 1284889415569056115
+    ]
 
-Reproduce: .replay("8DZR69")
+Property invoked: 31 times
+
+Reproduce: .replay("8SYM3KW758FWP")
 ```
 
 Exhaust found a five-element counterexample and reduced it to two elements — the minimal case that violates the property.
