@@ -47,7 +47,7 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The output should be sorted (or at least simpler than the original)
@@ -74,7 +74,7 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // Values should still be sorted after reduction
@@ -102,7 +102,7 @@ struct ReducerReorderTests {
         }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The output must still fail the property
@@ -120,7 +120,7 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(ChoiceSequence.validate(result.0))
@@ -135,7 +135,7 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {

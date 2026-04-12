@@ -48,7 +48,6 @@ struct CouplingShrinkingChallenge {
                 .suppressIssueReporting,
                 .onReport { report = $0 },
                 .logging(.debug, .keyValue),
-//                .reducer(.choiceGraph),
                 .replay(1546),
                 property: Self.property
             )
@@ -82,7 +81,6 @@ struct CouplingShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .onReport { report = $0 },
-                .reducer(.choiceGraph),
                 .logging(.debug, .keyValue),
                 property: Self.property
             )

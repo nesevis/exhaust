@@ -39,7 +39,7 @@ enum ChoiceGraphScheduler {
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
         initialOutput: Output,
-        config: Interpreters.BonsaiReducerConfiguration,
+        config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         try runCore(
@@ -57,7 +57,7 @@ enum ChoiceGraphScheduler {
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
         initialOutput: Output,
-        config: Interpreters.BonsaiReducerConfiguration,
+        config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         try runCore(
@@ -77,7 +77,7 @@ enum ChoiceGraphScheduler {
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
         initialOutput: Output,
-        config: Interpreters.BonsaiReducerConfiguration,
+        config: Interpreters.ReducerConfiguration,
         collectStats: Bool,
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
@@ -88,7 +88,7 @@ enum ChoiceGraphScheduler {
         // includes the branch that actually produced the failing value; the
         // graph's branch-pivot / promotion / descendant-promotion encoders
         // need the alternative branches to have structure to pivot to.
-        // Matches `BonsaiScheduler.runCore`'s branch projection bootstrap.
+        // Ensures alternative branches have structure for pivoting.
         var sequence = ChoiceSequence.flatten(initialTree)
         var tree = initialTree
         // Erase ``gen`` once at the runner boundary so the entire probe loop operates on a single non-generic ``ReflectiveGenerator<Any>``. The wrapped property closure casts ``Any`` back to ``Output`` exactly once per probe, where the original typed property is invoked. This collapses the per-Output-type generic specialization that was dominating runtime metadata cache traffic.

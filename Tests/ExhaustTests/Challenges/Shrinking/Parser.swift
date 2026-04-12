@@ -38,7 +38,6 @@ struct ParserShrinkingChallenge {
                 .budget(.exorbitant),
 //                .reflecting(Self.knownBad),
                 .logging(.debug, .keyValue),
-                .reducer(.choiceGraph),
                 .suppressIssueReporting,
                 .replay("4Z67HB4QNE1VY"),
                 .onReport { report = $0 }

@@ -117,7 +117,6 @@ struct Bound5ShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .onReport { report = $0 },
-            .reducer(.choiceGraph),
             .logging(.debug, .keyValue),
             property: Self.property
         )
@@ -225,8 +224,8 @@ struct Bound5ShrinkingChallenge {
         }
         
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 204)
-        #expect(rep.totalMaterializations == 409)
+        #expect(rep.propertyInvocations == 195)
+        #expect(rep.totalMaterializations == 400)
         
         let b25 = try #require(output)
         let arr = b25.0.arr + b25.1.arr + b25.2.arr + b25.3.arr + b25.4.arr

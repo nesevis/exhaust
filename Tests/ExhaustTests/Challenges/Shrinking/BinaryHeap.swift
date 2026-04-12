@@ -41,7 +41,6 @@ struct BinaryHeapShrinkingChallenge {
                 .suppressIssueReporting,
                 .replay(1584),
                 .onReport { report = $0 },
-                .reducer(.choiceGraph),
                 property: property
             )
         )

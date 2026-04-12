@@ -15,7 +15,7 @@ import Foundation
 func registerECOOPBenchmarks() {
     let seedCount = 1000
     let baseSeed: UInt64 = 1337
-    let config = Interpreters.BonsaiReducerConfiguration.slow
+    let config = Interpreters.ReducerConfiguration.slow
 
     registerECOOPPair(
         name: "Bound5", gen: bound5Gen, property: bound5Property,
@@ -78,30 +78,27 @@ func registerECOOPBenchmarks() {
     )
 }
 
-/// Registers both Bonsai and Graph benchmarks for a single challenge, adjacent so the framework interleaves them.
+/// Registers a benchmark for a single challenge using the graph-based reducer.
 func registerECOOPPair<Output>(
     name: String,
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
-    config: Interpreters.BonsaiReducerConfiguration,
+    config: Interpreters.ReducerConfiguration,
     seedCount: Int,
     baseSeed: UInt64,
     maxGenerationRuns: UInt64 = 10000,
     sizeMetric: ((Output) -> Int)? = nil
 ) {
-    for reducerKind in [ReducerKind.choiceGraph] {
-        registerECOOPChallenge(
-            name: "\(reducerKind.benchmarkTag) \(name)",
-            gen: gen,
-            property: property,
-            config: config,
-            reducerKind: reducerKind,
-            seedCount: seedCount,
-            baseSeed: baseSeed,
-            maxGenerationRuns: maxGenerationRuns,
-            sizeMetric: sizeMetric
-        )
-    }
+    registerECOOPChallenge(
+        name: name,
+        gen: gen,
+        property: property,
+        config: config,
+        seedCount: seedCount,
+        baseSeed: baseSeed,
+        maxGenerationRuns: maxGenerationRuns,
+        sizeMetric: sizeMetric
+    )
 }
 
 // MARK: - Per-Seed Result
@@ -127,8 +124,7 @@ private func registerECOOPChallenge<Output>(
     name: String,
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
-    config: Interpreters.BonsaiReducerConfiguration,
-    reducerKind: ReducerKind,
+    config: Interpreters.ReducerConfiguration,
     seedCount: Int,
     baseSeed: UInt64,
     maxGenerationRuns: UInt64 = 10000,
@@ -168,24 +164,13 @@ private func registerECOOPChallenge<Output>(
             // Use the *CollectingStats variants so we can pull
             // `stats.totalMaterializations` for the report. The reduced
             // tuple has the same shape as the plain `*Reduce` return.
-            let reduceResult: (reduced: (ChoiceSequence, Output)?, stats: ReductionStats)? = switch reducerKind {
-            case .bonsai:
-                try? Interpreters.bonsaiReduceCollectingStats(
-                    gen: gen,
-                    tree: tree,
-                    output: value,
-                    config: config,
-                    property: countingProperty
-                )
-            case .choiceGraph:
-                try? Interpreters.choiceGraphReduceCollectingStats(
-                    gen: gen,
-                    tree: tree,
-                    output: value,
-                    config: config,
-                    property: countingProperty
-                )
-            }
+            let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
+                gen: gen,
+                tree: tree,
+                output: value,
+                config: config,
+                property: countingProperty
+            )
             let reduceEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
@@ -247,8 +232,8 @@ private func printECOOPReport(
     print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | mats: mean=\(f1(matStats.mean)) (\(f1(matStats.ciLow))–\(f1(matStats.ciHigh))) median=\(f1(matStats.median)) | gen(ms): mean=\(f2(genStats.mean)) median=\(f2(genStats.median)) | reduce(ms): mean=\(f2(reduceStats.mean)) (\(f2(reduceStats.ciLow))–\(f2(reduceStats.ciHigh))) median=\(f2(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
 
     // Per-encoder probe breakdown (summed across all seeds).
-    // Shows where the wasted-mats gap between Bonsai and Graph lives:
-    // each `rejDec` is one materialization that didn't reach the property.
+    // Per-encoder rejection breakdown:
+    // each `rejDec` is one materialization that did not reach the property.
     var totalEmitted: [EncoderName: Int] = [:]
     var totalAccepted: [EncoderName: Int] = [:]
     var totalCacheRej: [EncoderName: Int] = [:]

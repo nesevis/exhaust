@@ -94,21 +94,6 @@ public enum ExhaustBudget: Sendable {
     }
 }
 
-/// Selects which reduction algorithm to use when shrinking a counterexample.
-public enum ReducerKind: Sendable, CaseIterable {
-    /// The default Bonsai reducer (Kleisli composition, fibre descent, relax-round).
-    case bonsai
-    /// The graph-based reducer (ChoiceGraph, six graph encoders in a cycle loop).
-    case choiceGraph
-
-    /// Short label for benchmark names.
-    public var benchmarkTag: String {
-        switch self {
-        case .bonsai: "Bonsai"
-        case .choiceGraph: "Graph"
-        }
-    }
-}
 
 /// Configuration options for `#exhaust` property tests, passed as variadic arguments to control test behavior.
 public enum ExhaustSettings<Output> {
@@ -166,6 +151,5 @@ public enum ExhaustSettings<Output> {
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
 
-    /// Selects the reduction algorithm. Defaults to `.bonsai`.
-    case reducer(ReducerKind)
+
 }

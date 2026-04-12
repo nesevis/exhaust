@@ -51,7 +51,6 @@ struct CoupledZigzagChallenge {
                 gen,
                 .suppressIssueReporting,
                 .replay(12_768_154_885_595_245_120),
-                .reducer(.choiceGraph),
                 .onReport { report = $0 },
                 .logging(.debug, .keyValue),
                 property: property
@@ -103,7 +102,6 @@ struct CoupledZigzagChallenge {
                 .budget(.exorbitant),
                 .replay(15_376_868_453_505_688_755),
                 .onReport { report = $0 },
-                .reducer(.choiceGraph),
                 property: property
             )
         )

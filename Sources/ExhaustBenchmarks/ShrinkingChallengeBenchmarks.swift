@@ -8,13 +8,13 @@ import Foundation
 // MARK: - Configuration
 
 let enableReport = true
-let enableCounterExamples = false
+let enableCounterExamples = true
 private let reductionCount = 100
 
 /// Returns strategy variants of a base config.
 private func withStrategies(
-    _ base: Interpreters.BonsaiReducerConfiguration = .fast
-) -> [(name: String, config: Interpreters.BonsaiReducerConfiguration)] {
+    _ base: Interpreters.ReducerConfiguration = .fast
+) -> [(name: String, config: Interpreters.ReducerConfiguration)] {
     [("adaptive", base)]
 }
 
@@ -343,7 +343,7 @@ private func registerParser() {
     // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed,
     // matching the methodology from MacIver & Donaldson Figure 13.
     benchmark("Parser ECOOP (adaptive)") {
-        let adaptive = Interpreters.BonsaiReducerConfiguration.slow
+        let adaptive = Interpreters.ReducerConfiguration.slow
 
         let seedCount = 1000
         let baseSeed: UInt64 = 1337
@@ -469,7 +469,7 @@ private func runReflectableBenchmark<Output>(
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingValues: [Output],
-    config: Interpreters.BonsaiReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     var seenCEs = Set<String>()
@@ -495,9 +495,9 @@ private func runReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-        if enableCounterExamples, seenCEs.insert(description).inserted {
-            print("  (\(String(describing: value)) -> \(description))")
-        }
+//        if enableCounterExamples, seenCEs.insert(description).inserted {
+//            print("  (\(String(describing: value)) -> \(description))")
+//        }
 //        } else {
 //            let ceTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
 //            let ms = Double(ceTime - startTime) / 1_000_000.0
@@ -516,7 +516,7 @@ private func runNonReflectableBenchmark<Output>(
     gen: ReflectiveGenerator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingPairs: [(value: Output, tree: ChoiceTree)],
-    config: Interpreters.BonsaiReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     var seenCEs = Set<String>()
@@ -539,9 +539,9 @@ private func runNonReflectableBenchmark<Output>(
         output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-        if enableCounterExamples, seenCEs.insert(description).inserted {
-            print("  (\(String(describing: value)) -> \(description))")
-        }
+//        if enableCounterExamples, seenCEs.insert(description).inserted {
+//            print("  (\(String(describing: value)) -> \(description))")
+//        }
         results.append(ReductionResult(
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,

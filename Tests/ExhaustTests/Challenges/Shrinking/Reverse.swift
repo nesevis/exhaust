@@ -25,7 +25,6 @@ struct ReverseShrinkingChallenge {
 
             .replay(33_556_013_978_236_435),
             .logging(.debug, .keyValue),
-//            .reducer(.choiceGraph),
             .onReport { report = $0 }
         ) { arr in
             print("Attempt: \(arr)")

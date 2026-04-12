@@ -21,10 +21,15 @@ public extension Interpreters {
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         output: Output,
-        config: BonsaiReducerConfiguration,
+        config: ReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
-        try withoutActuallyEscaping(property) { escapingProperty in
+        if config.visualize {
+            print("── Before reduction ──")
+            print(tree.visualization(width: 100))
+        }
+
+        let result = try withoutActuallyEscaping(property) { escapingProperty in
             try ChoiceGraphScheduler.run(
                 gen: gen,
                 initialTree: tree,
@@ -33,19 +38,39 @@ public extension Interpreters {
                 property: escapingProperty
             )
         }
+
+        if config.visualize, let (resultSequence, _) = result {
+            let resultTree = Materializer.materialize(
+                gen,
+                prefix: resultSequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
+            if case let .success(_, resultChoiceTree, _) = resultTree {
+                print("── After reduction ──")
+                print(resultChoiceTree.visualization(width: 100))
+            }
+        }
+
+        return result
     }
 
     /// Reduces a failing counterexample using the graph-based pipeline and returns accumulated statistics.
     ///
-    /// - Returns: The reduced result and a ``ReductionStats`` value summarising encoder probe counts, materialisation attempts, and cycle count.
+    /// - Returns: The reduced result and a ``ReductionStats`` value summarizing encoder probe counts, materialization attempts, and cycle count.
     static func choiceGraphReduceCollectingStats<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         output: Output,
-        config: BonsaiReducerConfiguration,
+        config: ReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
-        try withoutActuallyEscaping(property) { escapingProperty in
+        if config.visualize {
+            print("── Before reduction ──")
+            print(tree.visualization(width: 100))
+        }
+
+        let result = try withoutActuallyEscaping(property) { escapingProperty in
             try ChoiceGraphScheduler.runCollectingStats(
                 gen: gen,
                 initialTree: tree,
@@ -54,13 +79,28 @@ public extension Interpreters {
                 property: escapingProperty
             )
         }
+
+        if config.visualize, let (resultSequence, _) = result.reduced {
+            let resultTree = Materializer.materialize(
+                gen,
+                prefix: resultSequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
+            if case let .success(_, resultChoiceTree, _) = resultTree {
+                print("── After reduction ──")
+                print(resultChoiceTree.visualization(width: 100))
+            }
+        }
+
+        return result
     }
 
     /// Convenience overload that materialises the output from the tree before reducing.
     static func choiceGraphReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        config: BonsaiReducerConfiguration,
+        config: ReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         let prefix = ChoiceSequence.flatten(tree)

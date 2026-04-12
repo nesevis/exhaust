@@ -14,7 +14,7 @@ struct HypothesisShrinkQualityParityTests {
     private func reduce<Output>(
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
-        config: Interpreters.BonsaiReducerConfiguration = .fast,
+        config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
@@ -264,7 +264,7 @@ struct HypothesisShrinkQualityParityTests {
         private func reduce<Output>(
             _ gen: ReflectiveGenerator<Output>,
             startingAt value: Output,
-            config: Interpreters.BonsaiReducerConfiguration = .fast,
+            config: Interpreters.ReducerConfiguration = .fast,
             property: (Output) -> Bool
         ) throws -> Output {
             let tree = try #require(try Interpreters.reflect(gen, with: value))

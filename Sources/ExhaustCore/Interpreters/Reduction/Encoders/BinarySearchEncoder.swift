@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 23/3/2026.
 //
 
+private let linearScanThreshold = 64
+
 /// Binary-searches each target value toward its semantic simplest form.
 ///
 /// Bidirectional search (downward or upward depending on relative position to the target). After convergence, a cross-zero phase walks shortlex key space downward for signed integers to find simpler values that bit-pattern search cannot reach.

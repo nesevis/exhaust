@@ -506,7 +506,7 @@ func runSCACoverage<Command>(
             // since coverage-built trees lack unselected branches needed by reducer strategies.
             let reduceTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
-            if let (_, reducedValue) = try? Interpreters.bonsaiReduce(
+            if let (_, reducedValue) = try? Interpreters.choiceGraphReduce(
                 gen: seqGen,
                 tree: reduceTree,
                 output: value,

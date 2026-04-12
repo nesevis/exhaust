@@ -209,7 +209,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 tree
             }
 
-            if let (reducedSequence, reducedValue) = try Interpreters.bonsaiReduce(
+            if let (reducedSequence, reducedValue) = try Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: reduceTree,
                 output: value,
