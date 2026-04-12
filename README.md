@@ -208,10 +208,10 @@ Configure behavior with settings:
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.budget(.expedient)` | default | 200 coverage rows, 200 random samples, fast reduction. |
-| `.budget(.expensive)` | — | 500 coverage rows, 500 random samples, fast reduction. |
-| `.budget(.exorbitant)` | — | 2000 coverage rows, 2000 random samples, slow reduction. |
-| `.budget(.custom(...))` | — | Explicit values for coverage, sampling, and reduction budgets. |
+| `.budget(.expedient)` | default | 200 coverage rows, 200 random samples. |
+| `.budget(.expensive)` | — | 500 coverage rows, 500 random samples. |
+| `.budget(.exorbitant)` | — | 2000 coverage rows, 2000 random samples. |
+| `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
 | `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). |
