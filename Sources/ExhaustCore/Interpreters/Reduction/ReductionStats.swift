@@ -41,10 +41,10 @@ public struct ReductionStats: Sendable {
     /// Number of downstream starts using ZeroValue fallback (fibre too large for covering).
     public var fibreZeroValueStarts: Int
 
-    /// Number of times a ``KleisliComposition`` in the exploration leg produced zero accepted probes within budget (composition was futile for this edge).
+    /// Number of times a ``BoundValueScope`` produced zero accepted probes within budget (composition was futile for this edge).
     public var futileCompositions: Int
 
-    /// Total ``KleisliComposition`` edges attempted in the exploration leg.
+    /// Total ``BoundValueScope`` edges attempted.
     public var compositionEdgesAttempted: Int
 
     // MARK: - Convergence Transfer Profiling (Decision Tree: Steps 4+5)

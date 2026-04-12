@@ -121,23 +121,7 @@ public struct ExhaustReport: Sendable {
 
     /// One-line summary of per-phase invocations and acceptances aggregated across all cycles.
     public var phaseSummary: String {
-        let phaseInvocations: [ReducerPhaseIdentifier: Int] = [:]
-        let phaseAcceptances: [ReducerPhaseIdentifier: Int] = [:]
-        let phaseStructural: [ReducerPhaseIdentifier: Int] = [:]
-        func label(_ phase: ReducerPhaseIdentifier, _ tag: String) -> String {
-            let invocations = phaseInvocations[phase, default: 0]
-            let structural = phaseStructural[phase, default: 0]
-            let value = phaseAcceptances[phase, default: 0] - structural
-            guard invocations > 0 else { return "" }
-            return " \(tag):\(invocations)/\(structural)s+\(value)v"
-        }
-        let parts = [
-            label(.baseDescent, "B"),
-            label(.fibreDescent, "F"),
-            label(.exploration, "E"),
-        ]
-        let joined = parts.joined()
-        return joined.isEmpty ? "" : "phases=\(joined.dropFirst())"
+        ""
     }
 
     /// One-line summary of profiling data for the reduction planning decision tree.
