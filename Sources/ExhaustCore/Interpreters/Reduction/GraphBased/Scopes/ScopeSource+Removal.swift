@@ -81,14 +81,31 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
     }
 
     var peekYield: TransformationYield? {
-        guard exhausted == false, let range = pendingRanges.last else { return nil }
-        let totalYield = sequences[range.start ..< range.end].reduce(0) { $0 + $1.yield }
-        return TransformationYield(
-            structural: totalYield,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 1
-        )
+        guard exhausted == false else { return nil }
+        // Active pending range — the normal case where the next ``next(lastAccepted:)`` call will pop ``pendingRanges.last`` and emit a probe for that range.
+        if let range = pendingRanges.last {
+            let totalYield = sequences[range.start ..< range.end].reduce(0) { $0 + $1.yield }
+            return TransformationYield(
+                structural: totalYield,
+                value: 0,
+                slack: .exact,
+                estimatedProbes: 1
+            )
+        }
+        // Deferred bisection — the previous ``next(lastAccepted:)`` call emitted a probe whose rejection feedback has not yet been consumed. The next call will bisect ``lastEmittedRange`` into two halves and pop the higher-yield half (``[emitted.start, mid)``) first. Report that half's yield so the scheduler sees non-nil yield and dispatches ``next`` to actually perform the bisection. Without this branch, the scheduler drops the source from its merge the moment ``pendingRanges`` drains post-root, and the bisection code in ``next`` is never reached — making the halving tree functionally dead code in the current architecture.
+        if let emitted = lastEmittedRange {
+            let count = emitted.end - emitted.start
+            guard count >= 2 else { return nil }
+            let mid = emitted.start + count / 2
+            let firstHalfYield = sequences[emitted.start ..< mid].reduce(0) { $0 + $1.yield }
+            return TransformationYield(
+                structural: firstHalfYield,
+                value: 0,
+                slack: .exact,
+                estimatedProbes: 1
+            )
+        }
+        return nil
     }
 
     mutating func next(lastAccepted: Bool) -> GraphTransformation? {
@@ -129,7 +146,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             maxBatch: maxBatch,
             maxElementYield: maxElementYield
         )
-
+//        print("\(Self.self) returning \(scope)")
         return GraphTransformation(
             operation: .remove(.elements(scope)),
             yield: TransformationYield(
