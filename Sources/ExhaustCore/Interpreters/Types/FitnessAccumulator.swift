@@ -9,7 +9,7 @@
 /// Reference semantics so the accumulator is shared across recursive calls.
 public final class FitnessAccumulator {
     public struct SiteChoiceKey: Hashable {
-        public let siteID: UInt64
+        public let fingerprint: UInt64
         public let choiceID: UInt64
     }
 
@@ -22,8 +22,8 @@ public final class FitnessAccumulator {
 
     public init() {}
 
-    public func record(siteID: UInt64, choiceID: UInt64, fitness: UInt64, observations: UInt64) {
-        let key = SiteChoiceKey(siteID: siteID, choiceID: choiceID)
+    public func record(fingerprint: UInt64, choiceID: UInt64, fitness: UInt64, observations: UInt64) {
+        let key = SiteChoiceKey(fingerprint: fingerprint, choiceID: choiceID)
         records[key, default: FitnessRecord()].totalFitness += fitness
         records[key, default: FitnessRecord()].observationCount += observations
     }
@@ -37,22 +37,22 @@ public final class FitnessAccumulator {
     ///
     /// Each call captures a new snapshot, so call at regular intervals (e.g., every 20 warmup runs) rather than on every run.
     public func hasConverged(threshold: Double = 0.05) -> Bool {
-        // Group records by siteID
+        // Group records by fingerprint
         var siteFitnesses: [UInt64: ContiguousArray<(choiceID: UInt64, fitness: Double)>] = [:]
         for (key, record) in records {
-            siteFitnesses[key.siteID, default: []].append((key.choiceID, Double(record.totalFitness)))
+            siteFitnesses[key.fingerprint, default: []].append((key.choiceID, Double(record.totalFitness)))
         }
 
         // Compute current normalized shares per site
         var currentShares: [UInt64: [UInt64: Double]] = [:]
-        for (siteID, choices) in siteFitnesses {
+        for (fingerprint, choices) in siteFitnesses {
             let total = choices.reduce(0.0) { $0 + $1.fitness }
             guard total > 0 else { continue }
             var shares: [UInt64: Double] = [:]
             for (choiceID, fitness) in choices {
                 shares[choiceID] = fitness / total
             }
-            currentShares[siteID] = shares
+            currentShares[fingerprint] = shares
         }
 
         defer { previousSiteShares = currentShares }
@@ -60,9 +60,9 @@ public final class FitnessAccumulator {
         // First snapshot — can't compare yet
         guard let previous = previousSiteShares, !currentShares.isEmpty else { return false }
 
-        for (siteID, shares) in currentShares {
+        for (fingerprint, shares) in currentShares {
             // New site not in previous snapshot — not converged
-            guard let prevShares = previous[siteID] else { return false }
+            guard let prevShares = previous[fingerprint] else { return false }
             for (choiceID, share) in shares {
                 if abs(share - (prevShares[choiceID] ?? 0)) > threshold { return false }
             }

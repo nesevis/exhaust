@@ -87,11 +87,11 @@ struct ChoiceGraphTests {
     @Test("Pick site with two branches produces pick node with active and inactive children")
     func pickSite() {
         let branchA = ChoiceTree.branch(
-            siteID: 1000, weight: 1, id: 0, branchIDs: [0, 1],
+            fingerprint: 1000, weight: 1, id: 0, branchIDs: [0, 1],
             choice: .choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100))
         )
         let branchB = ChoiceTree.branch(
-            siteID: 1000, weight: 1, id: 1, branchIDs: [0, 1],
+            fingerprint: 1000, weight: 1, id: 1, branchIDs: [0, 1],
             choice: .choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100))
         )
         let tree = ChoiceTree.group([branchA, .selected(branchB)])
@@ -105,7 +105,7 @@ struct ChoiceGraphTests {
         #expect(pickNodes.count == 1)
 
         if case let .pick(metadata) = pickNodes[0].kind {
-            #expect(metadata.siteID == 1000)
+            #expect(metadata.fingerprint == 1000)
             #expect(metadata.selectedID == 1)
             #expect(metadata.branchIDs == [0, 1])
         }
@@ -224,27 +224,27 @@ struct ChoiceGraphTests {
         #expect(graph.containmentEdges.allSatisfy { $0.source == 0 })
     }
 
-    @Test("Self-similarity groups index by depthMaskedSiteID")
+    @Test("Self-similarity groups index by fingerprint")
     func selfSimilarityGroups() {
-        // Two pick sites with the same depthMaskedSiteID (siteID / 1000 = 1) at different depths.
+        // Two pick sites with the same fingerprint should be grouped together.
         let pickA = ChoiceTree.group([
-            .branch(siteID: 1000, weight: 1, id: 0, branchIDs: [0, 1],
+            .branch(fingerprint: 42, weight: 1, id: 0, branchIDs: [0, 1],
                     choice: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(siteID: 1000, weight: 1, id: 1, branchIDs: [0, 1],
+            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchIDs: [0, 1],
                               choice: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)))),
         ])
         let pickB = ChoiceTree.group([
-            .branch(siteID: 1001, weight: 1, id: 0, branchIDs: [0, 1],
+            .branch(fingerprint: 42, weight: 1, id: 0, branchIDs: [0, 1],
                     choice: .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(siteID: 1001, weight: 1, id: 1, branchIDs: [0, 1],
+            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchIDs: [0, 1],
                               choice: .choice(.unsigned(4, .uint64), .init(validRange: 0 ... 10)))),
         ])
         let tree = ChoiceTree.group([pickA, pickB])
 
         let graph = ChoiceGraph.build(from: tree)
 
-        // Both picks have depthMaskedSiteID = 1, so they should be in the same group.
-        let group = graph.selfSimilarityGroups[1]
+        // Both picks share fingerprint 42, so they should be in the same group.
+        let group = graph.selfSimilarityGroups[42]
         #expect(group?.count == 2)
     }
 
@@ -252,9 +252,9 @@ struct ChoiceGraphTests {
     func selfSimilarityExcludesInactivePicks() {
         // A single pick site — only one active pick, no group of size >= 2 possible.
         let tree = ChoiceTree.group([
-            .branch(siteID: 1000, weight: 1, id: 0, branchIDs: [0, 1],
+            .branch(fingerprint: 1000, weight: 1, id: 0, branchIDs: [0, 1],
                     choice: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(siteID: 1000, weight: 1, id: 1, branchIDs: [0, 1],
+            .selected(.branch(fingerprint: 1000, weight: 1, id: 1, branchIDs: [0, 1],
                               choice: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)))),
         ])
 

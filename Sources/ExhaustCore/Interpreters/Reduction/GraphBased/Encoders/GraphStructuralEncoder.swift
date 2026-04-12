@@ -55,7 +55,7 @@ struct GraphStructuralEncoder: GraphEncoder {
 
         case let .replace(replacementScope):
             name = .graphSubstitution
-            probe = buildReplacementProbe(scope: replacementScope, sequence: sequence, tree: scope.tree, graph: graph)
+            probe = buildReplacementProbe(scope: replacementScope, sequence: sequence, graph: graph)
 
         case let .migrate(migrationScope):
             name = .graphMigration

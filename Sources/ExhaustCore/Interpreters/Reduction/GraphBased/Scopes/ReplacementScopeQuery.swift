@@ -16,7 +16,7 @@ enum ReplacementScopeQuery {
         var scopes: [ReplacementScope] = []
 
         // Self-similar substitution: for each group of picks with the same
-        // depthMaskedSiteID, generate one scope per ordered pair where the
+        // fingerprint, generate one scope per ordered pair where the
         // target is larger than the donor (positive size delta), plus one
         // scope per zero-delta pair.
         for (_, group) in graph.selfSimilarityGroups {
@@ -74,8 +74,6 @@ enum ReplacementScopeQuery {
 
                 scopes.append(.branchPivot(BranchPivotScope(
                     pickNodeID: node.id,
-                    siteID: metadata.siteID,
-                    selectedID: metadata.selectedID,
                     targetBranchID: branchID
                 )))
             }
@@ -86,7 +84,7 @@ enum ReplacementScopeQuery {
         for node in graph.nodes {
             guard case let .pick(ancestorMetadata) = node.kind else { continue }
             guard let ancestorRange = node.positionRange else { continue }
-            guard let group = graph.selfSimilarityGroups[ancestorMetadata.depthMaskedSiteID] else { continue }
+            guard let group = graph.selfSimilarityGroups[ancestorMetadata.fingerprint] else { continue }
             for descendantID in group {
                 guard descendantID != node.id else { continue }
                 guard let descendantRange = graph.nodes[descendantID].positionRange else { continue }

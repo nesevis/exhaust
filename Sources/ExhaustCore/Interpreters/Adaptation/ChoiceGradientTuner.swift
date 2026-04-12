@@ -179,7 +179,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                         weight = precomputed[index]
                     } else {
                         let key = FitnessAccumulator.SiteChoiceKey(
-                            siteID: choice.siteID,
+                            fingerprint: choice.fingerprint,
                             choiceID: choice.id
                         )
                         if let record = accumulator.records[key] {
@@ -201,7 +201,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                         }
                     }
                     baked.append(ReflectiveOperation.PickTuple(
-                        siteID: choice.siteID,
+                        fingerprint: choice.fingerprint,
                         id: choice.id,
                         weight: Swift.max(1, weight),
                         generator: bakeWeights(
@@ -318,7 +318,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
         // Pass 1: gather raw fitnesses and site total
         var siteTotal: Double = 0
         for choice in choices {
-            let key = FitnessAccumulator.SiteChoiceKey(siteID: choice.siteID, choiceID: choice.id)
+            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
             let fitness = accumulator.records[key].map { Double($0.totalFitness) } ?? 0
             rawFitnesses.append(fitness)
             siteTotal += fitness
@@ -354,7 +354,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
         var records = ContiguousArray<FitnessAccumulator.FitnessRecord?>()
         records.reserveCapacity(count)
         for choice in choices {
-            let key = FitnessAccumulator.SiteChoiceKey(siteID: choice.siteID, choiceID: choice.id)
+            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
             let record = accumulator.records[key]
             records.append(record)
             totalSiteObservations += record?.observationCount ?? 0
@@ -442,7 +442,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                             )
 
                             subrangeChoices.append(ReflectiveOperation.PickTuple(
-                                siteID: context.makeID(),
+                                fingerprint: context.makeID(),
                                 id: context.makeID(),
                                 weight: 1,
                                 generator: subSeqGen
@@ -486,7 +486,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                         )
 
                         subrangeChoices.append(ReflectiveOperation.PickTuple(
-                            siteID: context.makeID(),
+                            fingerprint: context.makeID(),
                             id: context.makeID(),
                             weight: 1,
                             generator: subSeqGen
@@ -511,7 +511,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 subdivided.reserveCapacity(choices.count)
                 for choice in choices {
                     try subdivided.append(ReflectiveOperation.PickTuple(
-                        siteID: choice.siteID,
+                        fingerprint: choice.fingerprint,
                         id: choice.id,
                         weight: choice.weight,
                         generator: subdivideSequenceLengths(choice.generator, context: context)

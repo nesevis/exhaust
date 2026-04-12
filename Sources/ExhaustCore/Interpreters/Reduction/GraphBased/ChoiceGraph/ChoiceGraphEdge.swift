@@ -31,7 +31,7 @@ public struct ContainmentEdge: Equatable {
 
 // MARK: - Self-Similarity Edge
 
-/// Undirected edge between two active pick nodes with matching `depthMaskedSiteID`.
+/// Undirected edge between two active pick nodes with matching `fingerprint`.
 ///
 /// These picks belong to the same recursive generator at different depths and are structurally exchangeable. The size delta determines substitution direction: a positive delta means the neighbour is smaller (the source is the substitution target, the neighbour is the donor).
 public struct SelfSimilarityEdge: Equatable {

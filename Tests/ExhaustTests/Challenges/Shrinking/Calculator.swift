@@ -31,7 +31,8 @@ struct CalculatorShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .randomOnly,
-            .replay(5832967290043753512),
+            .replay("23KHVTCX48J7V"),
+//            .replay(5832967290043753512),
             .budget(.exorbitant),
             .logging(.debug, .keyValue)
         ) { expr in

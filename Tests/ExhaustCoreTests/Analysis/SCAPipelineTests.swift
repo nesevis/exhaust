@@ -132,7 +132,7 @@ private func makeParameterFreeChoices(count: Int) -> ContiguousArray<ReflectiveO
     var choices = ContiguousArray<ReflectiveOperation.PickTuple>()
     for i in 0 ..< count {
         choices.append(ReflectiveOperation.PickTuple(
-            siteID: UInt64(i),
+            fingerprint: UInt64(i),
             id: UInt64(i),
             weight: 1,
             generator: .pure(())
@@ -145,11 +145,11 @@ private func makeParameterizedChoices() -> ContiguousArray<ReflectiveOperation.P
     // Branch 0: parameter-free
     // Branch 1: has a chooseBits parameter (Gen.choose(in: 0...4))
     let paramFree = ReflectiveOperation.PickTuple(
-        siteID: 0, id: 0, weight: 1,
+        fingerprint: 0, id: 0, weight: 1,
         generator: .pure(())
     )
     let parameterized = ReflectiveOperation.PickTuple(
-        siteID: 1, id: 1, weight: 1,
+        fingerprint: 1, id: 1, weight: 1,
         generator: Gen.choose(in: 0 ... 4).erase()
     )
     return [paramFree, parameterized]

@@ -162,8 +162,7 @@ extension ChoiceGraphBuilder {
 
         let nodeID = emitNode(
             kind: .pick(PickMetadata(
-                siteID: info.siteID,
-                depthMaskedSiteID: info.siteID / 1000,
+                fingerprint: info.fingerprint,
                 branchIDs: info.branchIDs,
                 selectedID: info.selectedID,
                 selectedChildIndex: 0,

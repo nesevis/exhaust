@@ -13,7 +13,7 @@
 ///
 /// - **Dependency** (directed): bind-inner → bound content. Ordering constraint — parent before child. Topological sort and reachability operate here.
 /// - **Containment** (directed, no ordering constraint): parent → child in the tree. Defines independence structure for antichain computation.
-/// - **Self-similarity** (undirected): between active pick nodes with matching `depthMaskedSiteID`. Substitution candidates.
+/// - **Self-similarity** (undirected): between active pick nodes with matching fingerprint. Substitution candidates.
 /// - **Type-compatibility** (undirected): between antichain members with compatible types. Redistribution candidates. Computed lazily on first access.
 ///
 /// ## Lifecycle
@@ -35,7 +35,7 @@ public final class ChoiceGraph {
     /// Dependency edges from bind-inner nodes to structural nodes in their bound subtrees.
     public var dependencyEdges: [DependencyEdge]
 
-    /// Active pick nodes grouped by `depthMaskedSiteID`. Picks in the same group are structurally exchangeable — any pair is a candidate for self-similar replacement. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
+    /// Active pick nodes grouped by fingerprint. Picks in the same group are structurally exchangeable — any pair is a candidate for self-similar replacement. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
     public var selfSimilarityGroups: [UInt64: [Int]]
 
     /// Node IDs that have been removed from the graph by an in-place mutation but whose array slots are retained for ID stability. Iteration sites must skip these via ``isTombstoned(_:)``. Always empty until Layer 4 of the partial-rebuild rollout introduces in-place mutation; Layer 1 adds the field, the helper, and the filtering as a no-op precondition.

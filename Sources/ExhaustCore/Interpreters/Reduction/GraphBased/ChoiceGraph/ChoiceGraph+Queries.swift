@@ -216,7 +216,7 @@ public extension ChoiceGraph {
     /// - Complexity: O(G log G) where G is the group size. Replaces the previous O(E) filter over all edges.
     func selfSimilarityEdges(from nodeID: Int) -> [SelfSimilarityEdge] {
         guard case let .pick(metadata) = nodes[nodeID].kind else { return [] }
-        guard let group = selfSimilarityGroups[metadata.depthMaskedSiteID] else { return [] }
+        guard let group = selfSimilarityGroups[metadata.fingerprint] else { return [] }
         let sizeA = nodes[nodeID].positionRange?.count ?? 0
         return group.compactMap { otherID -> SelfSimilarityEdge? in
             guard otherID != nodeID else { return nil }

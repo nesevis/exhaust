@@ -93,7 +93,7 @@ public enum SequenceCoveringArray {
             let branchIDs = choices.map(\.id)
 
             let branch = ChoiceTree.branch(
-                siteID: chosen.siteID,
+                fingerprint: chosen.fingerprint,
                 weight: chosen.weight,
                 id: chosen.id,
                 branchIDs: branchIDs,
@@ -256,7 +256,7 @@ public enum SequenceCoveringArray {
             }
 
             let branch = ChoiceTree.branch(
-                siteID: chosen.siteID,
+                fingerprint: chosen.fingerprint,
                 weight: chosen.weight,
                 id: chosen.id,
                 branchIDs: branchIDs,

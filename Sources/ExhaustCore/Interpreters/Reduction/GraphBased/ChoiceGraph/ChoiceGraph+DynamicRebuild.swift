@@ -121,8 +121,7 @@ public extension ChoiceGraph {
         nodes[pickNodeID] = ChoiceGraphNode(
             id: pickNodeID,
             kind: .pick(PickMetadata(
-                siteID: metadata.siteID,
-                depthMaskedSiteID: metadata.depthMaskedSiteID,
+                fingerprint: metadata.fingerprint,
                 branchIDs: metadata.branchIDs,
                 selectedID: newSelectedID,
                 selectedChildIndex: newSelectedChildIndex,

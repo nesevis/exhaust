@@ -304,7 +304,7 @@ public enum ChoiceTreeAnalysis {
     //
     // Synthetic PickTuples are created with .pure(()) generators because
     // the original branch generators are not available from the ChoiceTree.
-    // The siteID, weight, id, and branchIDs metadata is preserved for
+    // The fingerprint, weight, id, and branchIDs metadata is preserved for
     // replay compatibility — CoveringArrayReplay uses these to reconstruct
     // the branch selection.
 
@@ -349,9 +349,9 @@ public enum ChoiceTreeAnalysis {
         var pickTuples = ContiguousArray<ReflectiveOperation.PickTuple>()
         for child in children {
             let unwrapped = child.unwrapped
-            guard case let .branch(siteID, weight, id, _, _) = unwrapped else { return false }
+            guard case let .branch(fingerprint, weight, id, _, _) = unwrapped else { return false }
             pickTuples.append(ReflectiveOperation.PickTuple(
-                siteID: siteID,
+                fingerprint: fingerprint,
                 id: id,
                 weight: weight,
                 generator: .pure(())

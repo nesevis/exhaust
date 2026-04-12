@@ -7,7 +7,7 @@
 
 /// Constructs a ``ChoiceGraph`` from a ``ChoiceTree`` and its flattened ``ChoiceSequence``.
 ///
-/// A single recursive walk of the tree produces nodes and containment/dependency edges. Post-walk passes compute self-similarity edges (grouping active picks by `depthMaskedSiteID`), topological order (Kahn's algorithm), and reachability (reverse topological propagation). Type-compatibility edges are computed after antichain construction.
+/// A single recursive walk of the tree produces nodes and containment/dependency edges. Post-walk passes compute self-similarity edges (grouping active picks by `fingerprint`), topological order (Kahn's algorithm), and reachability (reverse topological propagation). Type-compatibility edges are computed after antichain construction.
 ///
 /// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)`` to maintain position-to-node correspondence.
 ///
@@ -242,8 +242,7 @@ struct ChoiceGraphBuilder {
     ) -> Int {
         let nodeID = emitNode(
             kind: .pick(PickMetadata(
-                siteID: selectedBranch.siteID,
-                depthMaskedSiteID: selectedBranch.siteID / 1000,
+                fingerprint: selectedBranch.fingerprint,
                 branchIDs: selectedBranch.branchIDs,
                 selectedID: selectedBranch.selectedID,
                 selectedChildIndex: 0, // Patched below
@@ -304,8 +303,7 @@ struct ChoiceGraphBuilder {
             nodes[nodeID] = ChoiceGraphNode(
                 id: nodeID,
                 kind: .pick(PickMetadata(
-                    siteID: metadata.siteID,
-                    depthMaskedSiteID: metadata.depthMaskedSiteID,
+                    fingerprint: metadata.fingerprint,
                     branchIDs: metadata.branchIDs,
                     selectedID: metadata.selectedID,
                     selectedChildIndex: selectedChildIndex,
@@ -459,7 +457,7 @@ struct ChoiceGraphBuilder {
 
     /// Information extracted from a pick-site group.
     struct PickSiteInfo {
-        let siteID: UInt64
+        let fingerprint: UInt64
         let selectedID: UInt64
         let branchIDs: [UInt64]
     }
@@ -474,10 +472,10 @@ struct ChoiceGraphBuilder {
         guard let selected = array.first(where: \.isSelected) else {
             return nil
         }
-        guard case let .selected(.branch(siteID, _, id, branchIDs, _)) = selected else {
+        guard case let .selected(.branch(fingerprint, _, id, branchIDs, _)) = selected else {
             return nil
         }
-        return PickSiteInfo(siteID: siteID, selectedID: id, branchIDs: branchIDs)
+        return PickSiteInfo(fingerprint: fingerprint, selectedID: id, branchIDs: branchIDs)
     }
 
     // MARK: - Assembly
@@ -518,13 +516,13 @@ struct ChoiceGraphBuilder {
             }
         }
 
-        // Self-similarity groups: active pick nodes indexed by depthMaskedSiteID.
+        // Self-similarity groups: active pick nodes indexed by fingerprint.
         // O(P) construction instead of the previous O(P²) all-pairs edge array.
         var selfSimilarityGroups: [UInt64: [Int]] = [:]
         for node in nodes {
             guard case let .pick(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
-            selfSimilarityGroups[metadata.depthMaskedSiteID, default: []].append(node.id)
+            selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
         }
 
         // Topological order and dependency adjacency are computed lazily on

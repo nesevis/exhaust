@@ -427,9 +427,6 @@ extension Materializer {
         var decodingReport: DecodingReport?
         /// Per-fingerprint filter predicate observations accumulated during this materialization.
         var filterObservations: [UInt64: FilterObservation] = [:]
-        /// Tracks how many pick operations deep the interpreter has descended.
-        /// Combined with the base siteID to disambiguate recursive generator depths.
-        var pickDepth: UInt64 = 0
     }
 }
 

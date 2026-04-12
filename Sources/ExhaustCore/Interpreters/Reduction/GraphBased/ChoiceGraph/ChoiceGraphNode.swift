@@ -68,11 +68,8 @@ public struct ChooseBitsMetadata {
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.
 public struct PickMetadata {
-    /// Pick site identifier including depth encoding for recursive generators.
-    public let siteID: UInt64
-
-    /// Site identifier with depth contribution stripped (`siteID / 1000`). Two picks with matching values belong to the same recursive generator at different depths. Legacy mechanism — once the graph subsumes the current reducer, depth is structural and the masking can be removed.
-    public let depthMaskedSiteID: UInt64
+    /// Pick site fingerprint. Two picks with matching values belong to the same recursive generator (possibly at different depths).
+    public let fingerprint: UInt64
 
     /// All valid branch identifiers at this site.
     public let branchIDs: [UInt64]

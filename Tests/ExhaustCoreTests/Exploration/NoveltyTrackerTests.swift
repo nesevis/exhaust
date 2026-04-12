@@ -53,13 +53,13 @@ struct NoveltyTrackerTests {
 
         // Tree selecting branch id=1 (only the selected branch present in the tree)
         let tree1 = ChoiceTree.branch(
-            siteID: 1, weight: 1, id: 1, branchIDs: [1, 2],
+            fingerprint: 1, weight: 1, id: 1, branchIDs: [1, 2],
             choice: .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         )
 
         // Tree selecting branch id=2 (different branch chosen)
         let tree2 = ChoiceTree.branch(
-            siteID: 1, weight: 1, id: 2, branchIDs: [1, 2],
+            fingerprint: 1, weight: 1, id: 2, branchIDs: [1, 2],
             choice: .choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         )
 
@@ -77,8 +77,8 @@ struct NoveltyTrackerTests {
     @Test("Branch-path hash is deterministic")
     func branchPathHashDeterministic() {
         let tree = ChoiceTree.group([
-            .selected(.branch(siteID: 1, weight: 1, id: 1, branchIDs: [1, 2], choice: .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 100)))),
-            .branch(siteID: 1, weight: 1, id: 2, branchIDs: [1, 2], choice: .choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100))),
+            .selected(.branch(fingerprint: 1, weight: 1, id: 1, branchIDs: [1, 2], choice: .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 100)))),
+            .branch(fingerprint: 1, weight: 1, id: 2, branchIDs: [1, 2], choice: .choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100))),
         ])
 
         let hash1 = NoveltyTracker.branchPathHash(of: tree)
@@ -111,7 +111,7 @@ struct NoveltyTrackerTests {
         // A branch wrapping the same choice will flatten to the same sequence.
         let tree2 = ChoiceTree.group([
             .selected(.branch(
-                siteID: 99, weight: 1, id: 1, branchIDs: [1],
+                fingerprint: 99, weight: 1, id: 1, branchIDs: [1],
                 choice: .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
             )),
         ])

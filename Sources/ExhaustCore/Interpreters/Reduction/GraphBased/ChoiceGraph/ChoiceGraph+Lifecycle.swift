@@ -374,7 +374,7 @@ extension ChoiceGraph {
             guard isTombstoned(node.id) == false else { continue }
             guard case let .pick(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
-            selfSimilarityGroups[metadata.depthMaskedSiteID, default: []].append(node.id)
+            selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
         }
     }
 

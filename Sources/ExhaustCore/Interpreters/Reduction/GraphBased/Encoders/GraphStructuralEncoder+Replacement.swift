@@ -8,7 +8,6 @@ extension GraphStructuralEncoder {
     func buildReplacementProbe(
         scope: ReplacementScope,
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
         graph: ChoiceGraph
     ) -> EncoderProbe? {
         switch scope {
@@ -25,7 +24,7 @@ extension GraphStructuralEncoder {
             )
 
         case let .branchPivot(pivotScope):
-            return buildBranchPivotCandidate(scope: pivotScope, sequence: sequence, tree: tree, graph: graph)
+            return buildBranchPivotCandidate(scope: pivotScope, sequence: sequence, graph: graph)
 
         case let .descendantPromotion(promotionScope):
             guard let candidate = buildDescendantPromotionCandidate(scope: promotionScope, sequence: sequence, graph: graph) else {
@@ -63,16 +62,17 @@ extension GraphStructuralEncoder {
     private func buildBranchPivotCandidate(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
         graph: ChoiceGraph
     ) -> EncoderProbe? {
         guard scope.pickNodeID < graph.nodes.count else { return nil }
         guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else {
             return nil
         }
+        guard let pickRange = graph.nodes[scope.pickNodeID].positionRange else {
+            return nil
+        }
         let elements = pickMetadata.branchElements
-        let selectedIndex = pickMetadata.selectedChildIndex
-        guard selectedIndex < elements.count else { return nil }
+        guard pickMetadata.selectedChildIndex < elements.count else { return nil }
 
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
@@ -83,28 +83,25 @@ extension GraphStructuralEncoder {
             }
         }) else { return nil }
 
-        guard let fingerprint = findPickSiteFingerprint(in: tree, siteID: scope.siteID, selectedID: scope.selectedID) else {
-            return nil
-        }
-        guard case let .group(_, isOpaque) = tree[fingerprint] else {
-            return nil
-        }
-
         let minimizedTarget = Self.minimizingLeaves(in: elements[targetElementIndex])
+        let targetContent = ChoiceSequence.flatten(.selected(minimizedTarget))
 
-        var candidateElements = elements
-        candidateElements[selectedIndex] = elements[selectedIndex].unwrapped
-        candidateElements[targetElementIndex] = .selected(minimizedTarget)
+        var replacement: [ChoiceSequenceValue] = []
+        replacement.reserveCapacity(targetContent.count + 3)
+        replacement.append(.group(true))
+        replacement.append(.branch(.init(id: scope.targetBranchID, validIDs: pickMetadata.branchIDs)))
+        for index in 0 ..< targetContent.count {
+            replacement.append(targetContent[index])
+        }
+        replacement.append(.group(false))
 
-        var candidateTree = tree
-        candidateTree[fingerprint] = .group(candidateElements, isOpaque: isOpaque)
-        let candidateSequence = ChoiceSequence(candidateTree)
-
-        guard candidateSequence.shortLexPrecedes(sequence) else {
+        var candidate = sequence
+        candidate.replaceSubrange(pickRange.lowerBound ... pickRange.upperBound, with: replacement)
+        guard candidate.shortLexPrecedes(sequence) else {
             return nil
         }
         return EncoderProbe(
-            candidate: candidateSequence,
+            candidate: candidate,
             mutation: .branchSelected(
                 pickNodeID: scope.pickNodeID,
                 newSelectedID: scope.targetBranchID
@@ -130,28 +127,6 @@ extension GraphStructuralEncoder {
         return candidate
     }
 
-    // MARK: - Branch Pivot Helpers
-
-    /// Walks the tree depth-first to find the `.group(...)` whose selected branch matches the given siteID and selectedID.
-    private func findPickSiteFingerprint(
-        in tree: ChoiceTree,
-        siteID: UInt64,
-        selectedID: UInt64
-    ) -> Fingerprint? {
-        for element in tree.walk() {
-            guard case let .group(array, _) = element.node else { continue }
-            for child in array {
-                if case let .selected(.branch(childSiteID, _, childID, _, _)) = child,
-                   childSiteID == siteID,
-                   childID == selectedID
-                {
-                    return element.fingerprint
-                }
-            }
-        }
-        return nil
-    }
-
     /// Returns a copy of the subtree with every `.choice` node's value replaced by its reduction target. Strips PRNG-like noise so the shortlex comparison reflects only structural difference.
     static func minimizingLeaves(in tree: ChoiceTree) -> ChoiceTree {
         switch tree {
@@ -172,9 +147,9 @@ extension GraphStructuralEncoder {
                 elements: elements.map { minimizingLeaves(in: $0) },
                 metadata
             )
-        case let .branch(siteID, weight, id, branchIDs, choice):
+        case let .branch(fingerprint, weight, id, branchIDs, choice):
             return .branch(
-                siteID: siteID,
+                fingerprint: fingerprint,
                 weight: weight,
                 id: id,
                 branchIDs: branchIDs,
