@@ -30,7 +30,7 @@ public enum EncoderName: String, Hashable, Sendable {
     /// Wraps an upstream and downstream encoder into a single composed search. The upstream encoder proposes a value for a controlling parameter, the result is materialized to produce a fresh scope for the downstream encoder, and the downstream searches the dependent parameters. Used as the inner mechanism for bound value search.
     case composed
 
-    /// Searches pairs of values in tandem, moving them in coordinated steps. Used when two parameters are coupled and independent search on either one stalls — for example, an array and its expected length.
+    /// Searches pairs of values in tandem, moving them in coordinated steps. Used when two parameters are coupled and independent search on either stalls — for example, an array and its expected length.
     case lockstep
 
     /// Sorts sibling elements into ascending numeric order as a final pass after all other reduction is complete. The reducer works in shortlex order internally, which is consistent but not intuitive — this converts to the ordering a user would expect.
