@@ -377,7 +377,8 @@ enum ChoiceGraphScheduler {
                     rejectCache: &rejectCache,
                     stats: &stats,
                     collectStats: collectStats,
-                    isInstrumented: isInstrumented
+                    isInstrumented: isInstrumented,
+                    materializationBudget: encoderCycleBudget[pendingEncoderName]
                 )
 
                 // Harvest convergence from value encoders. The encoder's
