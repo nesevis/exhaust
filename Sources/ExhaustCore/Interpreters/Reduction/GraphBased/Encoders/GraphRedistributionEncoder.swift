@@ -13,7 +13,7 @@
 ///
 /// Candidate construction and rational-arithmetic helpers live in `GraphRedistributionEncoder+Probing.swift` and `GraphRedistributionEncoder+RationalMath.swift`.
 struct GraphRedistributionEncoder: GraphEncoder {
-    let name: EncoderName = .graphRedistribution
+    let name: EncoderName = .redistribution
 
     // MARK: - State
 

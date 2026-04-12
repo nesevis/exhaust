@@ -9,7 +9,7 @@
 ///
 /// Replaces the former `ChoiceGraph.minimizationScopes()` instance method. The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeScopeQuery`` can share a single ``ScopeQueryHelpers/buildInnerChildToBind(graph:)`` allocation.
 enum MinimizationScopeQuery {
-    /// Computes minimization scopes: one integer scope, one float scope, and one Kleisli fibre scope per non-constant reduction edge.
+    /// Computes minimization scopes: one integer scope, one float scope, and one bound value scope per non-constant reduction edge.
     ///
     /// - Parameters:
     ///   - graph: The current choice graph.
@@ -78,8 +78,8 @@ enum MinimizationScopeQuery {
             scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
 
-        // Kleisli fibre: one scope per reduction edge. Matches the CDG's
-        // ``ChoiceDependencyGraph/reductionEdges()`` behaviour, which deliberately does
+        // bound value: one scope per reduction edge. Matches the CDG's
+        // ``ChoiceDependencyGraph/reductionEdges()`` behavior, which deliberately does
         // NOT filter on ``isStructurallyConstant``: a structurally constant bind (no
         // nested binds/picks) can still carry domain-dependent values whose ranges
         // shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ...
@@ -99,7 +99,7 @@ enum MinimizationScopeQuery {
                 graph: graph
             )
             let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
-            scopes.append(.kleisliFibre(KleisliFibreScope(
+            scopes.append(.boundValue(BoundValueScope(
                 bindNodeID: findParentBind(of: innerChildID, graph: graph) ?? innerChildID,
                 upstreamLeafNodeID: innerChildID,
                 downstreamNodeIDs: downstreamNodeIDs,

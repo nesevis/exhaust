@@ -13,7 +13,7 @@
 ///
 /// ## Composability
 ///
-/// A ``KleisliComposition`` composes two composable encoders through a ``GeneratorLift``. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
+/// A ``GraphComposedEncoder`` composes two composable encoders through a generator lift. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
 public protocol ComposableEncoder {
     /// Typed identifier for dominance pruning and logging.
     var name: EncoderName { get }
@@ -29,7 +29,7 @@ public protocol ComposableEncoder {
 
     /// Initializes internal state for a new encoding pass.
     ///
-    /// Called once by the scheduler before the probe loop begins, or once per upstream probe in a ``KleisliComposition`` (where the downstream encoder is re-initialized on the lifted sequence after each upstream candidate).
+    /// Called once by the scheduler before the probe loop begins, or once per upstream probe in a ``GraphComposedEncoder`` (where the downstream encoder is re-initialized on the lifted sequence after each upstream candidate).
     mutating func start(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
@@ -52,7 +52,7 @@ public protocol ComposableEncoder {
     /// Returns `true` by default — the encoder's semantics have not changed between runs.
     /// ``DownstreamPick`` overrides this to return `false` when a different alternative was
     /// selected, invalidating convergence records from the previous alternative.
-    /// ``KleisliComposition`` checks this after ``start()`` and cold-starts the convergence
+    /// ``GraphComposedEncoder`` checks this after ``start()`` and cold-starts the convergence
     /// transfer when it returns `false`.
     var isConvergenceTransferSafe: Bool { get }
 }

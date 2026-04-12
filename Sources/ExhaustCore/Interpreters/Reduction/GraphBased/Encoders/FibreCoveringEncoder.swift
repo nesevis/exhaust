@@ -2,13 +2,13 @@
 
 /// Searches a fibre for any failing point by systematically covering value combinations.
 ///
-/// Unlike per-coordinate minimizers (``ZeroValueEncoder``, ``BinarySearchToSemanticSimplestEncoder``), this encoder does not assume the current state already fails the property. It searches the fibre space for ANY assignment that fails — the right strategy for the downstream slot of a ``KleisliComposition``, where the lifted state may pass the property and a failure needs to be discovered.
+/// Unlike per-coordinate minimizers (``ZeroValueEncoder``, ``BinarySearchToSemanticSimplestEncoder``), this encoder does not assume the current state already fails the property. It searches the fibre space for ANY assignment that fails — the right strategy for the downstream slot of a ``GraphComposedEncoder``, where the lifted state may pass the property and a failure needs to be discovered.
 ///
 /// Two regimes based on the fibre's total domain size:
 /// - **Small fibres** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
 /// - **Large fibres** (2 or more parameters): pairwise covering (strength 2) via the density method (``PullBasedCoveringArrayGenerator``). Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
 public struct FibreCoveringEncoder: ComposableEncoder {
-    public let name: EncoderName = .kleisliComposition
+    public let name: EncoderName = .boundValueSearch
 
     /// Maximum number of combinations for exhaustive enumeration.
     public static let exhaustiveThreshold: UInt64 = 128

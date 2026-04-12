@@ -11,7 +11,7 @@
 ///
 /// ## Why not ``GraphValueEncoder``?
 ///
-/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a kleisli composition, every upstream probe spawns one ``GeneratorLift`` materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
+/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one ``GeneratorLift`` materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
 ///
 /// ## Lifecycle
 ///
@@ -20,7 +20,7 @@
 ///
 /// - SeeAlso: ``GraphComposedEncoder``, ``BinarySearchStepper``
 struct GraphBinarySearchEncoder: GraphEncoder {
-    let name: EncoderName = .graphValueSearch
+    let name: EncoderName = .valueSearch
 
     private var leafNodeID: Int = -1
     private var sequenceIndex: Int = -1
@@ -97,13 +97,13 @@ struct GraphBinarySearchEncoder: GraphEncoder {
 
 /// Adapts ``FibreCoveringEncoder`` (a ``ComposableEncoder``) to the ``GraphEncoder`` protocol so it can be used as the downstream of a ``GraphComposedEncoder``.
 ///
-/// The downstream slot of a kleisli composition needs to *discover* failures in the lifted fibre, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
+/// The downstream slot of a bound value composition needs to *discover* failures in the lifted fibre, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
 ///
 /// ``FibreCoveringEncoder`` enumerates the entire fibre value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
 ///
 /// The wrapper expects the scope's operation to be ``MinimizationScope/integerLeaves(_:)``: the leaf positions are read from the scope's leaves, the contiguous position range is computed from them, and the inner encoder is started on the scope's `baseSequence` over that range.
 struct GraphFibreCoveringEncoder: GraphEncoder {
-    let name: EncoderName = .kleisliComposition
+    let name: EncoderName = .boundValueSearch
 
     private var inner = FibreCoveringEncoder()
     private var leafEntries: [LeafEntry] = []
@@ -159,7 +159,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
 
 /// Composes two ``GraphEncoder``s through a lift closure that translates an upstream probe into a downstream ``TransformationScope``.
 ///
-/// Categorically a Kleisli composition of two ``GraphEncoder`` arrows. The upstream encoder operates on the original scope and produces probes; the lift closure runs the upstream candidate through the generator (or any other transform) and constructs a fresh scope for the downstream encoder; the downstream encoder operates on that scope and produces probes which the composition wraps and re-emits with the upstream's mutation attached.
+/// Categorically a bound value composition of two ``GraphEncoder`` arrows. The upstream encoder operates on the original scope and produces probes; the lift closure runs the upstream candidate through the generator (or any other transform) and constructs a fresh scope for the downstream encoder; the downstream encoder operates on that scope and produces probes which the composition wraps and re-emits with the upstream's mutation attached.
 ///
 /// ## Iteration Semantics
 ///
@@ -180,7 +180,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
 ///
 /// Only the upstream encoder's convergence records are exposed to the scheduler. The downstream encoder cold-starts on each upstream probe via ``GraphEncoder/start(scope:)``, so any convergence it accumulates is fibre-local and not transferable to the live graph.
 ///
-/// - SeeAlso: ``GraphEncoder``, ``KleisliComposition`` (the sequence-level analogue used by the Bonsai scheduler)
+
 struct GraphComposedEncoder: GraphEncoder {
     let name: EncoderName
     let requiresExactDecoder: Bool = true
@@ -201,7 +201,7 @@ struct GraphComposedEncoder: GraphEncoder {
     ///   - name: Encoder name reported to the scheduler for stats and logging.
     ///   - upstream: Encoder driving the outer iteration. Receives the original scope passed to ``start(scope:)``.
     ///   - downstream: Encoder driving the inner iteration. Receives the lifted scope per upstream probe.
-    ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialisation) plus a downstream search, so this caps the most expensive part of the composition. Mirrors ``KleisliComposition/upstreamBudget`` (default 15). Pass a larger value when the upstream domain is small relative to the budget.
+    ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialisation) plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
     ///   - lift: Closure that materialises the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialisation fails).
     init(
         name: EncoderName,

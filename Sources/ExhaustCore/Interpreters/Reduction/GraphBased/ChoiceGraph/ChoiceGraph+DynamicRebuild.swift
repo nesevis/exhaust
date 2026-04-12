@@ -137,7 +137,7 @@ public extension ChoiceGraph {
 
     /// Invalidates sensitivity flags for all leaves within a bind node's bound subtree.
     ///
-    /// Called when a structurally-constant bind-inner value changes. The predicate's behaviour at leaves in the bound subtree may have changed even though the tree shape did not. Sensitivity flags for affected leaves are cleared, forcing re-evaluation.
+    /// Called when a structurally-constant bind-inner value changes. The predicate's behavior at leaves in the bound subtree may have changed even though the tree shape did not. Sensitivity flags for affected leaves are cleared, forcing re-evaluation.
     ///
     /// - Parameter bindNodeID: The bind node whose inner value changed.
     /// - Returns: The IDs of leaf nodes whose sensitivity flags were invalidated.

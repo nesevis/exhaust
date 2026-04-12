@@ -12,9 +12,9 @@
 /// The scheduler is split across several files for readability:
 /// - This file: entry points, the cycle loop (``runCore(gen:initialTree:initialOutput:config:collectStats:property:)``), source/encoder selection.
 /// - `ChoiceGraphScheduler+ProbeLoop.swift`: per-encoder probe loop and the ``PreStartedAdapter``.
-/// - `ChoiceGraphScheduler+Kleisli.swift`: kleisli fibre composition construction and lift.
+/// - `ChoiceGraphScheduler+BoundValueSearch.swift`: bound value composition construction and lift.
 /// - `ChoiceGraphScheduler+Convergence.swift`: warm-start extraction and convergence transfer across rebuilds.
-/// - `ChoiceGraphScheduler+Staleness.swift`: stale-floor detection at end of stalled cycles.
+/// - `ChoiceGraphScheduler+ConvergenceConfirmation.swift`: convergence confirmation at end of stalled cycles.
 ///
 /// - SeeAlso: ``ScopeSource``, ``ScopeSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
@@ -25,7 +25,7 @@ enum ChoiceGraphScheduler {
     //
     // The budget acts as a heartbeat: enough probes per cycle to detect if the landscape changed (for example, a structural acceptance made the encoder viable), but not enough to waste significant materializations on a structurally hopeless search. If the encoder finds an accept, the cumulative accept count goes above zero and the cap lifts automatically.
     //
-    // Value search, float search, and Kleisli composition are excluded because their acceptance pattern is dispatch-dependent — early dispatches often have zero accepts before later dispatches find progress. Any cumulative threshold would prematurely cap them.
+    // Value search, float search, and bound value composition are excluded because their acceptance pattern is dispatch-dependent — early dispatches often have zero accepts before later dispatches find progress. Any cumulative threshold would prematurely cap them.
 
     /// Cumulative probe count (with zero accepts) that triggers the futility cap.
     private static let futilityEmitThreshold = 10
@@ -105,7 +105,7 @@ enum ChoiceGraphScheduler {
             tree = fullTree
             sequence = ChoiceSequence(fullTree)
         }
-        // Hold ``output`` as ``Any`` internally so it can be passed to the non-generic ``runProbeLoop`` and ``detectStaleness``. Cast back to ``Output`` at the very end before returning.
+        // Hold ``output`` as ``Any`` internally so it can be passed to the non-generic ``runProbeLoop`` and ``confirmConvergence``. Cast back to ``Output`` at the very end before returning.
         var output: Any = initialOutput
         var stats = ReductionStats()
         var cycles = 0
@@ -151,21 +151,21 @@ enum ChoiceGraphScheduler {
         // targeted values change. Cleared on structural acceptance.
         var scopeRejectionCache = ScopeRejectionCache()
 
-        // Per-cycle blocklist for kleisli fibre dispatches. Each kleisli
+        // Per-cycle blocklist for bound value dispatches. Each bound value
         // composition runs a generator lift per upstream probe and a fibre
         // search per lift, all expensive operations that don't benefit from
         // the probe-level reject cache. After the first dispatch within a
         // cycle, the upstream encoder has explored its full search space
         // (up to ``GraphComposedEncoder/upstreamBudget``); re-dispatching
         // after a structural acceptance just re-runs the same upstream
-        // exploration. Bonsai's runKleisliExploration sidesteps this by
+        // exploration. The old reducer sidesteps this by
         // running once per cycle as a separate phase. We mirror that here
         // by tracking dispatched bind node IDs and skipping repeats until
         // the next cycle, when the set is cleared.
-        var kleisliDispatchedThisCycle = Set<Int>()
+        var boundValueDispatchedThisCycle = Set<Int>()
 
-        // Per-bind-node Kleisli stall counter. Incremented when a Kleisli dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
-        var kleisliStallCount: [Int: Int] = [:]
+        // Per-bind-node bound value stall counter. Incremented when a bound value dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
+        var boundValueStallCount: [Int: Int] = [:]
 
         // Per-encoder cumulative probe counts for the futility cap. See ``futilityEmitThreshold`` and ``futilityProbeBudget``.
         var encoderEmits: [EncoderName: Int] = [:]
@@ -174,14 +174,14 @@ enum ChoiceGraphScheduler {
 
         while stallBudget > 0 {
             cycles += 1
-            kleisliDispatchedThisCycle.removeAll(keepingCapacity: true)
+            boundValueDispatchedThisCycle.removeAll(keepingCapacity: true)
             encoderCycleBudget.removeAll(keepingCapacity: true)
             for (name, emits) in encoderEmits {
                 let accepts = encoderAccepts[name, default: 0]
                 guard accepts == 0 else { continue }
-                // Search encoders are excluded — their acceptance pattern is dispatch-dependent (early dispatches have 0 accepts, later ones find accepts). Value search on Diff:One has 1024 total accepts but its first batch-zero dispatch has 0, triggering premature capping. Kleisli has its own stall-cycle gating. These encoders' convergence mechanisms handle their own waste.
+                // Search encoders are excluded — their acceptance pattern is dispatch-dependent (early dispatches have 0 accepts, later ones find accepts). Value search on Diff:One has 1024 total accepts but its first batch-zero dispatch has 0, triggering premature capping. Bound value search has its own stall-cycle gating. These encoders' convergence mechanisms handle their own waste.
                 switch name {
-                case .graphValueSearch, .graphFloatSearch, .graphComposed:
+                case .valueSearch, .floatSearch, .composed:
                     continue
                 default:
                     break
@@ -254,24 +254,24 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                // Kleisli fibre scopes are deferred to stall cycles. Two skip rules
+                // bound value scopes are deferred to stall cycles. Two skip rules
                 // protect against the cost of running the composition unnecessarily:
                 //
-                // 1. Per-cycle de-duplication: each kleisli fibre composition runs an
+                // 1. Per-cycle de-duplication: each bound value composition runs an
                 //    upstream search whose internal state is recreated on every dispatch
                 //    and a generator lift per upstream probe — neither benefits from the
                 //    probe-level reject cache. After the first dispatch within a cycle
                 //    the second and third dispatches add little value at high cost.
                 //
-                // 2. Stall-cycle gating: if any non-kleisli encoder has already accepted
-                //    progress in this cycle, the kleisli composition is redundant — the
+                // 2. Stall-cycle gating: if any non-bound-value encoder has already accepted
+                //    progress in this cycle, the bound value composition is redundant — the
                 //    cheaper encoders are still finding improvements and the next cycle
-                //    will re-evaluate. Kleisli only fires in cycles where the cheap
+                //    will re-evaluate. Bound value search only fires in cycles where the cheap
                 //    encoders couldn't make progress, mirroring Bonsai's Stage-2 design
-                //    where ``runKleisliExploration`` is the explicit fallback after
+                //    where bound value search is the explicit fallback after
                 //    ``runFibreDescent`` exhausts.
-                if case let .minimize(.kleisliFibre(fibreScope)) = transformation.operation {
-                    if kleisliDispatchedThisCycle.contains(fibreScope.bindNodeID) {
+                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
+                    if boundValueDispatchedThisCycle.contains(fibreScope.bindNodeID) {
                         continue
                     }
                     if anyAccepted {
@@ -281,15 +281,15 @@ enum ChoiceGraphScheduler {
 
                 // Per-encoder cycle budget: skip if the budget has been exhausted for this encoder.
                 let pendingEncoderName: EncoderName = switch transformation.operation {
-                case .remove: .graphDeletion
-                case .replace: .graphSubstitution
-                case .minimize(.kleisliFibre): .graphComposed
-                case .minimize(.valueLeaves): .graphValueSearch
-                case .minimize(.floatLeaves): .graphFloatSearch
-                case .exchange(.redistribution): .graphRedistribution
-                case .exchange(.tandem): .graphLockstep
-                case .permute: .graphSiblingSwap
-                case .migrate: .graphMigration
+                case .remove: .deletion
+                case .replace: .substitution
+                case .minimize(.boundValue): .composed
+                case .minimize(.valueLeaves): .valueSearch
+                case .minimize(.floatLeaves): .floatSearch
+                case .exchange(.redistribution): .redistribution
+                case .exchange(.tandem): .lockstep
+                case .permute: .siblingSwap
+                case .migrate: .migration
                 }
                 if let budget = encoderCycleBudget[pendingEncoderName], budget <= 0 {
                     continue
@@ -343,15 +343,15 @@ enum ChoiceGraphScheduler {
                     warmStartRecords: warmStarts
                 )
 
-                // Select encoder and run. Kleisli fibre scopes route through the
+                // Select encoder and run. bound value scopes route through the
                 // generic ``GraphComposedEncoder`` primitive constructed at this call
                 // site (where Output and gen are in scope) rather than the non-generic
                 // ``selectEncoder(for:)`` switch.
                 var encoder: any GraphEncoder
-                if case let .minimize(.kleisliFibre(fibreScope)) = transformation.operation {
-                    let stalls = kleisliStallCount[fibreScope.bindNodeID, default: 0]
+                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
+                    let stalls = boundValueStallCount[fibreScope.bindNodeID, default: 0]
                     let decayedBudget = max(1, 15 >> stalls)
-                    encoder = Self.makeKleisliComposition(
+                    encoder = Self.makeBoundValueComposition(
                         fibreScope: fibreScope,
                         scope: scope,
                         gen: erasedGen,
@@ -360,11 +360,11 @@ enum ChoiceGraphScheduler {
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
                 }
-                // Mark the kleisli edge as dispatched for this cycle so the
+                // Mark the bound value edge as dispatched for this cycle so the
                 // per-cycle skip above blocks repeat dispatches after any
                 // structural acceptance triggers a source rebuild.
-                if case let .minimize(.kleisliFibre(fibreScope)) = transformation.operation {
-                    kleisliDispatchedThisCycle.insert(fibreScope.bindNodeID)
+                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
+                    boundValueDispatchedThisCycle.insert(fibreScope.bindNodeID)
                 }
                 let outcome = try runProbeLoop(
                     encoder: &encoder,
@@ -401,19 +401,19 @@ enum ChoiceGraphScheduler {
                     encoderCycleBudget[pendingEncoderName] = budget
                 }
 
-                // Kleisli stall tracking: increment the per-bind-node counter when a dispatch produces zero accepts, reset on any acceptance. The stall count decays the upstream budget on subsequent dispatches.
-                if case let .minimize(.kleisliFibre(fibreScope)) = transformation.operation {
+                // bound value stall tracking: increment the per-bind-node counter when a dispatch produces zero accepts, reset on any acceptance. The stall count decays the upstream budget on subsequent dispatches.
+                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     if outcome.acceptCount > 0 {
-                        kleisliStallCount[fibreScope.bindNodeID] = 0
+                        boundValueStallCount[fibreScope.bindNodeID] = 0
                     } else {
-                        kleisliStallCount[fibreScope.bindNodeID, default: 0] += 1
+                        boundValueStallCount[fibreScope.bindNodeID, default: 0] += 1
                     }
                 }
 
                 if outcome.accepted {
                     anyAccepted = true
 
-                    // Force a full graph rebuild after every accepted kleisli composition
+                    // Force a full graph rebuild after every accepted bound value composition
                     // dispatch. The composition's repeated bind reshapes accumulate
                     // partial-rebuild state on the live graph that the shadow check has
                     // observed diverging from a fresh build (`graph_apply_shadow_mismatch`),
@@ -421,14 +421,14 @@ enum ChoiceGraphScheduler {
                     // Until the in-place reshape path is fixed for chained applications,
                     // the safe option is to rebuild the graph from the live tree after the
                     // composition exits.
-                    let isKleisliFibre = switch transformation.operation {
-                    case .minimize(.kleisliFibre):
+                    let isBoundValue = switch transformation.operation {
+                    case .minimize(.boundValue):
                         true
                     default:
                         false
                     }
 
-                    if outcome.requiresRebuild || isKleisliFibre {
+                    if outcome.requiresRebuild || isBoundValue {
                         // Apply bailed out for at least one accepted probe
                         // (multi-bind reshape, structural mutation, and so on).
                         // Rebuild the graph from the live tree, refresh
@@ -443,21 +443,21 @@ enum ChoiceGraphScheduler {
                         // when a path-changing operation is about to
                         // dispatch. This avoids paying the materialize
                         // cost on cycles where branch pivot never fires.
-                        // For Kleisli rebuilds, the upstream bind-inner changed value,
+                        // For bound value rebuilds, the upstream bind-inner changed value,
                         // so any convergence floors recorded for downstream leaves under
                         // the old upstream value are now stale — the failure threshold
                         // in n-space may have shifted. Save the bound subtree's position
                         // range before the rebuild so we can clear those floors after
                         // transferConvergence has run.
-                        var kleisliBoundPositionRange: ClosedRange<Int>? = nil
-                        if isKleisliFibre,
-                           case let .minimize(.kleisliFibre(fs)) = transformation.operation,
+                        var boundPositionRange: ClosedRange<Int>? = nil
+                        if isBoundValue,
+                           case let .minimize(.boundValue(fs)) = transformation.operation,
                            fs.bindNodeID < graph.nodes.count,
                            case let .bind(bm) = graph.nodes[fs.bindNodeID].kind,
                            graph.nodes[fs.bindNodeID].children.count > bm.boundChildIndex
                         {
                             let boundChildID = graph.nodes[fs.bindNodeID].children[bm.boundChildIndex]
-                            kleisliBoundPositionRange = graph.nodes[boundChildID].positionRange
+                            boundPositionRange = graph.nodes[boundChildID].positionRange
                         }
 
                         let oldConvergence = extractAllConvergence(from: graph)
@@ -465,8 +465,8 @@ enum ChoiceGraphScheduler {
                         graphIsStripped = outcome.treeIsStripped
                         transferConvergence(oldConvergence, to: graph)
 
-                        // Clear stale downstream convergence after Kleisli rebuild.
-                        if let boundRange = kleisliBoundPositionRange {
+                        // Clear stale downstream convergence after bound value rebuild.
+                        if let boundRange = boundPositionRange {
                             for nodeID in graph.leafNodes {
                                 guard let nodeRange = graph.nodes[nodeID].positionRange else { continue }
                                 guard boundRange.contains(nodeRange.lowerBound) else { continue }
@@ -546,7 +546,7 @@ enum ChoiceGraphScheduler {
             // Staleness detection: after all sources exhausted, probe
             // converged leaves at floor - 1 to detect stale convergence.
             if anyAccepted == false, allValuesConverged(in: sequence, graph: graph) {
-                let stalenessResult = try detectStaleness(
+                let convergenceResult = try confirmConvergence(
                     sequence: &sequence,
                     tree: &tree,
                     output: &output,
@@ -558,16 +558,16 @@ enum ChoiceGraphScheduler {
                     collectStats: collectStats,
                     isInstrumented: isInstrumented
                 )
-                if stalenessResult {
+                if convergenceResult {
                     anyAccepted = true
-                    // detectStaleness updates the sequence but only the
+                    // confirmConvergence updates the sequence but only the
                     // convergence records on the graph; the graph's leaf
                     // values are now stale. With the top-of-cycle rebuild
                     // gone the carried-over graph would otherwise be out of
                     // sync, so rebuild here to restore the invariant before
                     // the next cycle.
                     //
-                    // Layer 7a: ``detectStaleness`` always uses
+                    // Layer 7a: ``confirmConvergence`` always uses
                     // `materializePicks: false`, so the rebuilt graph is
                     // unconditionally stripped. Set the flag and let the
                     // lazy rematerialize check in the next cycle's
@@ -677,7 +677,7 @@ enum ChoiceGraphScheduler {
 
     /// Selects the appropriate encoder for a graph operation type.
     ///
-    /// Kleisli fibre minimization scopes are not handled here because they need the typed generator at construction time. The dispatch site in ``runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` builds them via ``makeKleisliComposition(fibreScope:scope:gen:upstreamBudget:)`` instead.
+    /// bound value minimization scopes are not handled here because they need the typed generator at construction time. The dispatch site in ``runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` builds them via ``makeBoundValueComposition(fibreScope:scope:gen:upstreamBudget:)`` instead.
     private static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
         case .remove, .replace, .migrate:

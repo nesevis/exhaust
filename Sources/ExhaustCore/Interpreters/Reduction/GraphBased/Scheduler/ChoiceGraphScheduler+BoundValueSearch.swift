@@ -1,22 +1,22 @@
 //
-//  ChoiceGraphScheduler+Kleisli.swift
+//  ChoiceGraphScheduler+BoundValueSearch.swift
 //  Exhaust
 //
 
-// MARK: - Kleisli Composition Construction
+// MARK: - Bound Value Composition Construction
 
 extension ChoiceGraphScheduler {
-    /// Builds a ``GraphComposedEncoder`` for a kleisli fibre scope.
+    /// Builds a ``GraphComposedEncoder`` for a bound value scope.
     ///
-    /// The upstream encoder is a ``GraphValueEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``KleisliFibreScope/upstreamLeafNodeID``. The downstream encoder is another ``GraphValueEncoder`` started by the lift closure on the lifted graph's bound-subtree leaves. The lift materialises each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
+    /// The upstream encoder is a ``GraphValueEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``BoundValueScope/upstreamLeafNodeID``. The downstream encoder is another ``GraphValueEncoder`` started by the lift closure on the lifted graph's bound-subtree leaves. The lift materialises each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
     ///
     /// - Parameters:
-    ///   - fibreScope: The kleisli fibre scope from the source pipeline.
+    ///   - fibreScope: The bound value scope from the source pipeline.
     ///   - scope: The dispatched ``TransformationScope``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
     ///   - gen: The generator. Captured by the lift closure for materialisation.
     ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``ChoiceGraphScheduler/runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` based on per-bind stall counts.
-    static func makeKleisliComposition(
-        fibreScope: KleisliFibreScope,
+    static func makeBoundValueComposition(
+        fibreScope: BoundValueScope,
         scope: TransformationScope,
         gen: ReflectiveGenerator<Any>,
         upstreamBudget: Int = 15
@@ -52,7 +52,7 @@ extension ChoiceGraphScheduler {
         )
         // Upstream: pure binary search over the bind-inner leaf, no inline linear
         // scan or cross-zero phases. ``GraphValueEncoder``'s extra phases
-        // are wasted in a kleisli context — every upstream probe spawns one lift
+        // are wasted in a bound value context — every upstream probe spawns one lift
         // and a full downstream search, so the standalone encoder's recovery
         // strategies multiply the cost without finding more failures.
         let upstreamEncoder = PreStartedAdapter(
@@ -70,7 +70,7 @@ extension ChoiceGraphScheduler {
             : GraphFibreCoveringEncoder()
 
         let lift: (EncoderProbe, TransformationScope) -> TransformationScope? = { upstreamProbe, parent in
-            Self.kleisliFibreLift(
+            Self.boundValueLift(
                 upstreamProbe: upstreamProbe,
                 parent: parent,
                 fibreScope: fibreScope,
@@ -79,7 +79,7 @@ extension ChoiceGraphScheduler {
         }
 
         return GraphComposedEncoder(
-            name: .graphComposed,
+            name: .composed,
             upstream: upstreamEncoder,
             downstream: downstreamEncoder,
             upstreamBudget: upstreamBudget,
@@ -87,16 +87,16 @@ extension ChoiceGraphScheduler {
         )
     }
 
-    /// Lifts an upstream probe into a downstream ``TransformationScope`` for the kleisli fibre composition.
+    /// Lifts an upstream probe into a downstream ``TransformationScope`` for the bound value composition.
     ///
     /// 1. Materialises the upstream candidate through `gen` to obtain the new fibre's choice tree.
     /// 2. Copies the parent graph and applies the upstream change to the copy as a reshape (`mayReshape: true`), so ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` splices the rebuilt bound subtree from the freshTree on the throwaway copy. Falls back to a full ``ChoiceGraph/build(from:)`` if the partial path bails.
     /// 3. Locates the bind's bound child in the lifted graph and collects its descendant leaves as the downstream search range.
     /// 4. Constructs an integer-leaves minimization scope on the lifted graph; the downstream encoder operates on it without knowing it is downstream.
-    static func kleisliFibreLift(
+    static func boundValueLift(
         upstreamProbe: EncoderProbe,
         parent: TransformationScope,
-        fibreScope: KleisliFibreScope,
+        fibreScope: BoundValueScope,
         gen: ReflectiveGenerator<Any>
     ) -> TransformationScope? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
@@ -127,7 +127,7 @@ extension ChoiceGraphScheduler {
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
-                    event: "kleisli_lift_failed",
+                    event: "bound_value_lift_failed",
                     metadata: [
                         "upstream_bp": upstreamProposedBP.map { "\($0)" } ?? "nil",
                         "candidate_len": "\(upstreamProbe.candidate.count)",
@@ -164,7 +164,7 @@ extension ChoiceGraphScheduler {
             ? ChoiceGraph.build(from: freshTree)
             : copy
 
-        // 5. Find the bound child of the kleisli bind in the lifted graph, then
+        // 5. Find the bound child of the target bind in the lifted graph, then
         //    collect its descendant leaves as the downstream search range.
         guard fibreScope.bindNodeID < liftedGraph.nodes.count,
               case let .bind(metadata) = liftedGraph.nodes[fibreScope.bindNodeID].kind,
@@ -189,7 +189,7 @@ extension ChoiceGraphScheduler {
         if isInstrumented {
             ExhaustLog.debug(
                 category: .reducer,
-                event: "kleisli_lift_built",
+                event: "bound_value_lift_built",
                 metadata: [
                     "upstream_bp": upstreamProposedBP.map { "\($0)" } ?? "nil",
                     "parent_seq_len": "\(parent.baseSequence.count)",

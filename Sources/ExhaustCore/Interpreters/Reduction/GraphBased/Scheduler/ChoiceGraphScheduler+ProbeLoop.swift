@@ -146,7 +146,7 @@ extension ChoiceGraphScheduler {
                 false
             }
             let materializePicks = picksUnchanged == false
-            // Composed encoders (kleisli fibre) emit post-lift candidates whose
+            // Composed encoders (bound value) emit post-lift candidates whose
             // bound subtree differs from the parent ``tree``. Guided decoding
             // would substitute stale fallback content; force the exact decoder
             // when the encoder requests it.
@@ -180,8 +180,8 @@ extension ChoiceGraphScheduler {
                 // Composed encoders (``GraphComposedEncoder``) skip the
                 // in-place ``ChoiceGraph/apply(_:freshTree:)`` path entirely.
                 // The dispatch site forces a full ``ChoiceGraph/build(from:)``
-                // rebuild after every kleisli pass anyway (see the
-                // `isKleisliFibre || outcome.requiresRebuild` branch in
+                // rebuild after every bound value pass anyway (see the
+                // `isBoundValue || outcome.requiresRebuild` branch in
                 // ``runCore``), which discards any in-place mutations the
                 // probe loop would have made. Calling ``applyBindReshape``
                 // on every accepted probe is pure waste — for BinaryHeap
@@ -197,7 +197,7 @@ extension ChoiceGraphScheduler {
                     application = ChangeApplication()
                     anyRequiresRebuild = true
                     // Signal structural mutation so refreshScope is called below.
-                    // Encoders with requiresExactDecoder (kleisli compositions) skip
+                    // Encoders with requiresExactDecoder (bound value compositions) skip
                     // graph.apply, so requiresFullRebuild is never set on the
                     // ChangeApplication — but their cached state is equally stale after
                     // an acceptance and needs the same reset treatment.
@@ -304,7 +304,7 @@ extension ChoiceGraphScheduler {
 
 /// Wraps a ``GraphEncoder`` so its ``GraphEncoder/start(scope:)`` always uses a pre-supplied scope instead of the one passed by the caller.
 ///
-/// Used by ``ChoiceGraphScheduler/makeKleisliComposition(fibreScope:scope:gen:upstreamBudget:)`` so that the upstream encoder of a ``GraphComposedEncoder`` operates on a synthesised one-leaf integer scope rather than the kleisli fibre scope the composition was started with. The composition's ``GraphComposedEncoder/start(scope:)`` will pass the original parent scope to its upstream; the adapter swaps it for the synthesised one before forwarding to the inner encoder.
+/// Used by ``ChoiceGraphScheduler/makeBoundValueComposition(fibreScope:scope:gen:upstreamBudget:)`` so that the upstream encoder of a ``GraphComposedEncoder`` operates on a synthesised one-leaf integer scope rather than the bound value scope the composition was started with. The composition's ``GraphComposedEncoder/start(scope:)`` will pass the original parent scope to its upstream; the adapter swaps it for the synthesised one before forwarding to the inner encoder.
 struct PreStartedAdapter: GraphEncoder {
     var name: EncoderName {
         inner.name

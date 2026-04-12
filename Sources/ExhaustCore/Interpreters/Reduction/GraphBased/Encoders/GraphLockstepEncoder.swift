@@ -13,7 +13,7 @@
 ///
 /// Candidate construction lives in `GraphLockstepEncoder+Probing.swift`.
 struct GraphLockstepEncoder: GraphEncoder {
-    let name: EncoderName = .graphLockstep
+    let name: EncoderName = .lockstep
 
     // MARK: - State
 

@@ -1,20 +1,16 @@
 /// Materializes a candidate sequence and checks feasibility.
 ///
-/// Selected by ``DecoderContext``, shared by all encoders at a given depth. This is the `dec` map from the paper. Implemented as a concrete enum to avoid heap allocation — decoder types carry associated data that exceeds Swift's three-word inline existential buffer.b
+/// Selected by ``DecoderContext``, shared by all encoders at a given depth. Implemented as a concrete enum to avoid heap allocation — decoder types carry associated data that exceeds Swift's three-word inline existential buffer.
 public enum SequenceDecoder {
-    /// ``ReductionMaterializer`` exact mode. Produces a fresh tree with current `validRange` and
-    /// all branch alternatives. Inner values are rejected if out-of-range; bound values are clamped.
+    /// Materializes in exact mode. Produces a fresh tree with current ``validRange`` and all branch alternatives. Rejects inner values that are out of range; clamps bound values.
     case exact(materializePicks: Bool = false)
 
-    /// ``ReductionMaterializer`` guided mode. Produces a fresh tree with current `validRange` and
-    /// all branch alternatives. Tiered resolution: prefix → fallback → PRNG. Cursor suspension
-    /// at bind sites.
+    /// Materializes in guided mode. Produces a fresh tree with current ``validRange`` and all branch alternatives. Resolves values via prefix → fallback → PRNG, with cursor suspension at bind sites.
     case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil,
                 materializePicks: Bool = false, usePRNGFallback: Bool = false,
                 skipShortlexCheck: Bool = false, prngSalt: UInt64 = 0)
 
-    /// Salt mixed into the reject cache key so the same candidate with a different PRNG salt
-    /// gets an independent cache entry.
+    /// Salt mixed into the reject cache key so the same candidate with a different PRNG salt gets an independent cache entry.
     var rejectCacheSalt: UInt64 {
         switch self {
         case .exact:

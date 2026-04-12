@@ -6,7 +6,7 @@
 // MARK: - Dependency Queries
 
 public extension ChoiceGraph {
-    /// Dependency edges where Kleisli composition is meaningful.
+    /// Dependency edges where bound value composition is meaningful.
     ///
     /// Each edge connects a bind-inner node (controlling position) to its scope (controlled subtree). Ordered by topological sort (roots first).
     ///

@@ -7,7 +7,7 @@
 
 /// The six fundamental operations on a ``ChoiceGraph``.
 ///
-/// Each case corresponds to a morphism type in OptRed (Sepulveda-Jimenez): remove, replace, permute, and migrate are exact reductions; minimize is a Kleisli arrow; exchange is an approximate reduction with affine slack.
+/// Each case corresponds to a morphism type in OptRed (Sepulveda-Jimenez): remove, replace, permute, and migrate are exact reductions; minimize is a multi-probe search; exchange is an approximate reduction with affine slack.
 ///
 /// Five of six operations work within the generator's active execution path (nodes with non-nil position ranges). Only replace changes the active path — it may bring inactive content into the sequence, requiring tree editing and flattening.
 enum GraphOperation {
@@ -88,8 +88,7 @@ enum TransformationPrecondition {
     /// Always satisfiable. The transformation can be attempted immediately.
     case unconditional
 
-    /// The target node must exist in the current graph with a non-nil
-    /// position range.
+    /// Requires the target node to exist in the current graph with a non-nil position range.
     case nodeActive(Int)
 
     /// The dependency chain from this node to the root must have all bind-inner ancestors at their convergence floor.
@@ -100,8 +99,7 @@ enum TransformationPrecondition {
     /// The parent sequence must have more elements than its minimum length constraint.
     case sequenceLengthAboveMinimum(sequenceNodeID: Int)
 
-    /// Conjunction of multiple preconditions. Satisfied when all
-    /// sub-preconditions are satisfied.
+    /// Conjunction of multiple preconditions. Satisfied when all sub-preconditions are satisfied.
     case all([TransformationPrecondition])
 
     /// Evaluates this precondition against the current graph state.

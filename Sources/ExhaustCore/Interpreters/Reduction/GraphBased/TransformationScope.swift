@@ -151,7 +151,7 @@ struct DescendantPromotionScope {
 
 /// Defines the scope of a value minimization operation.
 ///
-/// Minimization drives leaf values toward their semantic simplest without changing graph structure. It is a Kleisli arrow (nondeterministic multi-probe search) in the categorical framework.
+/// Minimization drives leaf values toward their semantic simplest without changing graph structure. 
 enum MinimizationScope {
     /// Search chooseBits leaf values toward their reduction targets.
     case valueLeaves(ValueMinimizationScope)
@@ -159,10 +159,8 @@ enum MinimizationScope {
     /// Search float leaf values via the four-stage IEEE 754 pipeline.
     case floatLeaves(FloatMinimizationScope)
 
-    /// Joint upstream/downstream minimization along a dependency edge.
-    ///
-    /// Categorically a Kleisli composition of two Kleisli arrows (Section 7.5 of the categorical framework). Modelled as a single scope rather than a ``CompoundTransformation`` because the upstream and downstream are tightly interleaved at the probe level: each upstream probe spawns a downstream search, and convergence transfers between adjacent upstream probes via the delta-1 structural fingerprint check.
-    case kleisliFibre(KleisliFibreScope)
+    /// Joint upstream/downstream minimization along a bind dependency edge. Each upstream probe on the controlling value triggers a full downstream search on the dependent subtree. Modelled as a single scope because the upstream and downstream are tightly interleaved at the probe level.
+    case boundValue(BoundValueScope)
 }
 
 /// Per-leaf annotation in a value-only scope.
@@ -208,8 +206,8 @@ struct FloatMinimizationScope {
     }
 }
 
-/// Scope for Kleisli fibre search along a dependency edge.
-struct KleisliFibreScope {
+/// Scope for joint upstream/downstream value search along a bind dependency edge.
+struct BoundValueScope {
     /// The bind node whose dependency edge is being explored.
     let bindNodeID: Int
 
@@ -336,7 +334,7 @@ struct MigrationScope {
 ///
 /// The encoder receives a scope and operates on it without modifying the graph — the scope is the interface between the graph (which constructs it) and the encoder (which consumes it).
 ///
-/// For simple transformations, ``baseSequence`` is the current sequence. For Kleisli composition, the downstream scope's ``baseSequence`` is the lifted result from the upstream probe — the encoder does not know or care that it is downstream.
+/// For simple transformations, ``baseSequence`` is the current sequence. For bound value composition, the downstream scope's ``baseSequence`` is the lifted result from the upstream probe — the encoder does not know or care that it is downstream.
 ///
 /// - Note: The graph is carried temporarily for node metadata access (position ranges, leaf values). A future refinement will pre-resolve all needed metadata into the scope types and remove the graph dependency.
 struct TransformationScope {

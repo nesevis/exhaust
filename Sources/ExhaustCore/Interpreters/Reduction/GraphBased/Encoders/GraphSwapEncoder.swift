@@ -13,7 +13,7 @@
 ///
 /// Candidate construction and the adaptive extension loop live in `GraphStructuralEncoder+Swap.swift`.
 struct GraphSwapEncoder: GraphEncoder {
-    let name: EncoderName = .graphSiblingSwap
+    let name: EncoderName = .siblingSwap
 
     // MARK: - State
 

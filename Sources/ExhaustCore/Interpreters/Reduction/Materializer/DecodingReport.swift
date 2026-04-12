@@ -38,8 +38,7 @@ public struct DecodingReport: Sendable {
 
     /// Weighted fidelity score in `[0, 1]`.
     ///
-    /// Exact carry-forward scores 1.0, fallback tree scores 0.5, PRNG scores 0.0. Returns 0.0
-    /// when no coordinates have been recorded (empty lift).
+    /// Exact carry-forward scores 1.0, fallback tree scores 0.5, PRNG scores 0.0. Returns 0.0 when no coordinates have been recorded (empty lift).
     var fidelity: Double {
         let total = totalCount
         guard total > 0 else { return 0.0 }
@@ -47,8 +46,7 @@ public struct DecodingReport: Sendable {
         return score / Double(total)
     }
 
-    /// Fraction of coordinates resolved from any data source (prefix or fallback tree) rather
-    /// than blind PRNG.
+    /// Fraction of coordinates resolved from any data source (prefix or fallback tree) rather than blind PRNG.
     ///
     /// Together with ``fidelity``, forms a sufficient statistic for the full tier distribution:
     /// - Exact fraction: `2 * fidelity - coverage`.
@@ -64,10 +62,7 @@ public struct DecodingReport: Sendable {
 
     /// Minimum coverage required for a convergence point to be considered reliable enough to cache.
     ///
-    /// Below this threshold, too many coordinates were resolved via PRNG for the convergence outcome
-    /// to be reproducible — a different seed could yield a different result. Empirically, structural-phase
-    /// probes land at 0.167–0.250 while stable value-phase probes reach 1.0, so 0.9 cleanly separates
-    /// the two regimes.
+    /// Below this threshold, too many coordinates were resolved via PRNG for the convergence outcome to be reproducible — a different seed could yield a different result. Empirically, structural-phase probes land at 0.167–0.250 while stable value-phase probes reach 1.0, so 0.9 cleanly separates the two regimes.
     static let convergenceCacheCoverageThreshold: Double = 0.9
 
     /// Whether this materialization's coverage is high enough for convergence points to be cached.

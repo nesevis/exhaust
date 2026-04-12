@@ -7,7 +7,7 @@
 
 /// Emits minimization scopes for value search. These are search-based — the encoder handles multi-probe internally.
 ///
-/// Produces one scope per leaf type (integer, float) and one per Kleisli fibre edge, ordered by value yield descending.
+/// Produces one scope per leaf type (integer, float) and one per bound value edge, ordered by value yield descending.
 struct MinimizationSource: ScopeSource {
     private var scopes: [(scope: MinimizationScope, yield: TransformationYield)]
     private var index = 0
@@ -26,7 +26,7 @@ struct MinimizationSource: ScopeSource {
                 floatScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
                     max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerChildToBind: innerChildToBind))
                 }
-            case let .kleisliFibre(fibreScope):
+            case let .boundValue(fibreScope):
                 fibreScope.boundSubtreeSize
             }
 
@@ -35,7 +35,7 @@ struct MinimizationSource: ScopeSource {
                 1 + integerScope.leafNodeIDs.count * 16
             case let .floatLeaves(floatScope):
                 floatScope.leafNodeIDs.count * 15
-            case let .kleisliFibre(fibreScope):
+            case let .boundValue(fibreScope):
                 15 + min(128, fibreScope.boundSubtreeSize)
             }
 

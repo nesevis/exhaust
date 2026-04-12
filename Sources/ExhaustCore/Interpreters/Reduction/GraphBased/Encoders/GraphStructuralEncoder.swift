@@ -17,7 +17,7 @@
 /// - `GraphStructuralEncoder+Migration.swift`
 struct GraphStructuralEncoder: GraphEncoder {
     /// Set at ``start(scope:)`` from the operation type. Each structural operation reports under its own encoder name for logging and instrumentation.
-    private(set) var name: EncoderName = .graphDeletion
+    private(set) var name: EncoderName = .deletion
 
     /// Single-shot probe for non-covering-array operations.
     private var probe: EncoderProbe?
@@ -41,7 +41,7 @@ struct GraphStructuralEncoder: GraphEncoder {
 
         switch scope.transformation.operation {
         case let .remove(removalScope):
-            name = .graphDeletion
+            name = .deletion
             switch removalScope {
             case .elements, .subtree:
                 probe = buildRemovalProbe(scope: removalScope, sequence: sequence, graph: graph)
@@ -54,11 +54,11 @@ struct GraphStructuralEncoder: GraphEncoder {
             }
 
         case let .replace(replacementScope):
-            name = .graphSubstitution
+            name = .substitution
             probe = buildReplacementProbe(scope: replacementScope, sequence: sequence, graph: graph)
 
         case let .migrate(migrationScope):
-            name = .graphMigration
+            name = .migration
             probe = buildMigrationProbe(scope: migrationScope, sequence: sequence, graph: graph)
 
         case .minimize, .exchange, .permute:

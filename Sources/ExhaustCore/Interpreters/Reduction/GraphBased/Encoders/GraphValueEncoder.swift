@@ -10,13 +10,13 @@
 /// Operates in three modes based on the ``MinimizationScope``:
 /// - **Integer leaves**: batch zeroing attempt followed by per-leaf interpolation search via ``InterpolationSearchStepper`` (falling back to binary search below a threshold), with cross-zero phase for signed integers.
 /// - **Float leaves**: four-stage IEEE 754 pipeline (special values, truncation, integral binary search, ratio binary search).
-/// - **Kleisli fibre**: joint upstream/downstream minimization along a dependency edge. Internally a Kleisli composition — each upstream probe spawns a downstream search.
+/// - **bound value**: joint upstream/downstream minimization along a dependency edge. Internally a bound value composition — each upstream probe spawns a downstream search.
 ///
 /// This is an active-path operation: all leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions.
 ///
 /// The integer- and float-mode implementations live in `GraphValueEncoder+Integer.swift` and `GraphValueEncoder+Float.swift` respectively. State types are nested here so both extensions can reference them, and the protocol-level dispatch (`start`, `nextProbe`, `refreshScope`) sits in this core file.
 struct GraphValueEncoder: GraphEncoder {
-    let name: EncoderName = .graphValueSearch
+    let name: EncoderName = .valueSearch
 
     // MARK: - State
 
@@ -230,11 +230,11 @@ struct GraphValueEncoder: GraphEncoder {
             startInteger(scope: integerScope, sequence: sequence, graph: graph, warmStarts: scope.warmStartRecords)
         case let .floatLeaves(floatScope):
             startFloat(scope: floatScope, sequence: sequence, graph: graph)
-        case .kleisliFibre:
-            // Kleisli fibre scopes are dispatched via ``GraphComposedEncoder``
+        case .boundValue:
+            // bound value scopes are dispatched via ``GraphComposedEncoder``
             // constructed at the scheduler call site, never through this encoder.
             // Reaching this branch indicates a routing bug.
-            assertionFailure("kleisliFibre scopes must route through GraphComposedEncoder, not GraphValueEncoder")
+            assertionFailure("boundValue scopes must route through GraphComposedEncoder, not GraphValueEncoder")
             mode = .idle
         }
     }

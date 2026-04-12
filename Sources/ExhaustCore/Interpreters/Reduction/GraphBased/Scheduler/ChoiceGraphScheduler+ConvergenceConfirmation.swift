@@ -1,9 +1,4 @@
-//
-//  ChoiceGraphScheduler+Staleness.swift
-//  Exhaust
-//
-
-// MARK: - Staleness Detection
+// MARK: - Convergence Confirmation
 
 extension ChoiceGraphScheduler {
     // swiftlint:disable function_parameter_count
@@ -12,7 +7,7 @@ extension ChoiceGraphScheduler {
     /// If the property still fails at floor - 1, the convergence record was stale — the previous search stopped too early. Clears the stale record so minimization can re-enter for that leaf.
     ///
     /// - Returns: True if any stale floors were found and cleared.
-    static func detectStaleness(
+    static func confirmConvergence(
         sequence: inout ChoiceSequence,
         tree: inout ChoiceTree,
         output: inout Any,
@@ -25,23 +20,20 @@ extension ChoiceGraphScheduler {
         isInstrumented: Bool
     ) throws -> Bool {
         var anyStale = false
-        // Per-encoder breakdown for the wasted-mats investigation.
-        // The probe count here is bounded by the number of converged
-        // leaves. Cache hits and decoder rejections both apply.
-        var stalenessProbeCount = 0
-        var stalenessAcceptCount = 0
-        var stalenessCacheHitCount = 0
-        var stalenessDecoderRejectCount = 0
+        var probeCount = 0
+        var acceptCount = 0
+        var cacheHitCount = 0
+        var decoderRejectCount = 0
         defer {
             if collectStats {
-                stats.encoderProbes[.graphStaleness, default: 0] += stalenessProbeCount
-                stats.encoderProbesAccepted[.graphStaleness, default: 0] += stalenessAcceptCount
-                stats.encoderProbesRejectedByCache[.graphStaleness, default: 0] += stalenessCacheHitCount
-                stats.encoderProbesRejectedByDecoder[.graphStaleness, default: 0] += stalenessDecoderRejectCount
+                stats.encoderProbes[.convergenceConfirmation, default: 0] += probeCount
+                stats.encoderProbesAccepted[.convergenceConfirmation, default: 0] += acceptCount
+                stats.encoderProbesRejectedByCache[.convergenceConfirmation, default: 0] += cacheHitCount
+                stats.encoderProbesRejectedByDecoder[.convergenceConfirmation, default: 0] += decoderRejectCount
             }
         }
 
-        // Bind status is structural — staleness probes are value-only and
+        // Bind status is structural — convergence probes are value-only and
         // cannot add or remove bind markers. Hoisted to avoid an O(N) scan
         // on every converged leaf.
         let hasBind = sequence.contains { entry in
@@ -67,7 +59,7 @@ extension ChoiceGraphScheduler {
                 .withBitPattern(probeValue)
             guard candidate.shortLexPrecedes(sequence) else { continue }
 
-            stalenessProbeCount += 1
+            probeCount += 1
 
             let probeHash = ZobristHash.incrementalHash(
                 baseHash: ZobristHash.hash(of: sequence),
@@ -75,12 +67,12 @@ extension ChoiceGraphScheduler {
                 probe: candidate
             )
             if rejectCache.contains(probeHash) {
-                stalenessCacheHitCount += 1
+                cacheHitCount += 1
                 continue
             }
 
-            // Layer 6: ``detectStaleness`` rewrites a single converged
-            // leaf's bit pattern at `floor - 1` and re-runs the materializer.
+            // Convergence confirmation rewrites a single converged leaf's
+            // bit pattern at `floor - 1` and re-runs the materializer.
             // By construction this is a pure value-only probe — no bind
             // reshape, no structural pivot — so `materializePicks: false`
             // is safe and avoids the per-probe cost of re-materializing
@@ -106,7 +98,7 @@ extension ChoiceGraphScheduler {
                 tree = result.tree
                 output = result.output
                 anyStale = true
-                stalenessAcceptCount += 1
+                acceptCount += 1
 
                 // Clear the stale convergence record.
                 graph.recordConvergence(byNodeID: [nodeID: ConvergedOrigin(
@@ -119,7 +111,7 @@ extension ChoiceGraphScheduler {
                 if isInstrumented {
                     ExhaustLog.debug(
                         category: .reducer,
-                        event: "staleness_detected",
+                        event: "stale_convergence_detected",
                         metadata: [
                             "position": "\(range.lowerBound)",
                             "old_floor": "\(origin.bound)",
@@ -128,11 +120,16 @@ extension ChoiceGraphScheduler {
                     )
                 }
 
-                // The accepted probe may have changed the sequence layout (for example, changing a recursive depth choice produces a different bind structure via guided materialization). The graph's position ranges are now stale — continuing to iterate would read positions from the old layout against the new sequence. Break and let the caller rebuild the graph.
+                // The accepted probe may have changed the sequence layout
+                // (for example, changing a recursive depth choice produces a
+                // different bind structure via guided materialization). The
+                // graph's position ranges are now stale — continuing to
+                // iterate would read positions from the old layout against
+                // the new sequence. Break and let the caller rebuild.
                 break
             } else {
                 rejectCache.insert(probeHash)
-                stalenessDecoderRejectCount += 1
+                decoderRejectCount += 1
             }
 
             if collectStats {

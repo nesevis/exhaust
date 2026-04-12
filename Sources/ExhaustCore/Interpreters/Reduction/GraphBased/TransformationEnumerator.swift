@@ -249,7 +249,7 @@ enum TransformationEnumerator {
                     )
                 ))
 
-            case let .kleisliFibre(fibreScope):
+            case let .boundValue(fibreScope):
                 let estimatedProbes = 15 + min(128, fibreScope.boundSubtreeSize)
                 result.append(GraphTransformation(
                     operation: .minimize(scope),
