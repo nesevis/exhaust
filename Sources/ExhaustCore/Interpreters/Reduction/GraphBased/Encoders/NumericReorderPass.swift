@@ -1,17 +1,15 @@
 //
-//  HumanReadableOrderingPass.swift
+//  NumericReorderPass.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 25/3/2026.
 //
 
-/// Reorders elements within type-homogeneous sibling groups into natural numeric order.
+/// Reorders elements within type-homogeneous sibling groups into ascending numeric order.
 ///
-/// Shortlex reduction produces counterexamples like `[0, -1, 1]` because zigzag encoding maps `-1` to shortlex key `1` and `1` to key `2`. This encoder reorders to `[-1, 0, 1]` — the natural numeric ordering a human reader expects — and validates that the property still fails.
-///
-/// This is a natural endotransformation of Cand in the sense of Sepúlveda-Jiménez (Definition 5.3) — a post-processing map that is reduction-invariant.
-public struct HumanReadableOrderingPass: ReductionPass {
-    public let name: EncoderName = .humanOrderReorder
+/// Shortlex reduction produces counterexamples like `[0, -1, 1]` because zigzag encoding maps `-1` to shortlex key `1` and `1` to key `2`. This pass reorders to `[-1, 0, 1]` — the ascending numeric order a user expects — and validates that the property still fails.
+public struct NumericReorderPass: ReductionPass {
+    public let name: EncoderName = .numericReorder
 
     /// Reorders sibling groups into natural numeric order and validates the property still fails.
     ///

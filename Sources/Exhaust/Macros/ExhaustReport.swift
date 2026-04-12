@@ -157,10 +157,10 @@ public struct ExhaustReport: Sendable {
             ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
             : ""
         let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
-        let humanOrderProbes = encoderProbes[.humanOrderReorder] ?? 0
-        let hasPassData = humanOrderProbes > 0
+        let reorderProbes = encoderProbes[.numericReorder] ?? 0
+        let hasPassData = reorderProbes > 0
         let passLabel = hasPassData
-            ? " passes=\(humanOrderProbes)human"
+            ? " passes=\(reorderProbes)reorder"
             : ""
         return "cycles=\(cycles) probes=\(coverageInvocations)cov/\(randomSamplingInvocations)rand/\(reductionInvocations)red mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(passLabel)\(phaseLabel)"
     }

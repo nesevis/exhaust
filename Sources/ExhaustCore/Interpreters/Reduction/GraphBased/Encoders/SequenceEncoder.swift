@@ -33,8 +33,8 @@ public enum EncoderName: String, Hashable, Sendable {
     /// Searches pairs of values in tandem, moving them in coordinated steps. Used when two parameters are coupled and independent search on either one stalls — for example, an array and its expected length.
     case lockstep
 
-    /// Reorders sibling elements into ascending numeric order. Runs as a final pass after all other reduction is complete. Produces the human-expected ordering (for example, `[0, 1, 2]` instead of `[2, 0, 1]`) without changing counterexample validity.
-    case humanOrderReorder
+    /// Sorts sibling elements into ascending numeric order as a final pass after all other reduction is complete. The reducer works in shortlex order internally, which is consistent but not intuitive — this converts to the ordering a user would expect.
+    case numericReorder
 
     /// Probes each converged value one step below its floor to detect stale convergence. If a value that was previously stuck at some floor can now go lower (because other values changed around it), the floor was stale and reduction continues.
     case convergenceConfirmation
