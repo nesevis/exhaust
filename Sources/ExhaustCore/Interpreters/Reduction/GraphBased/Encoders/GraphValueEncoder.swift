@@ -55,6 +55,8 @@ struct GraphValueEncoder: GraphEncoder {
         var crossZero: CrossZeroState?
         /// Batch bisection state, active during the ``IntegerPhase/batchBisect`` phase.
         var bisection: BisectionState?
+        /// Whether the reduction target has been probed directly for the current leaf. Reset when advancing to the next leaf.
+        var semanticSimplestProbed: Bool = false
     }
 
     /// State for the cross-zero phase of per-leaf minimization.

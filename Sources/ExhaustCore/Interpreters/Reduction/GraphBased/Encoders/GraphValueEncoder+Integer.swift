@@ -253,6 +253,7 @@ extension GraphValueEncoder {
               bisection.convergedIndices.contains(state.leafIndex)
         {
             state.leafIndex += 1
+            state.semanticSimplestProbed = false
         }
         return nextPerLeafProbe(state: &state, lastAccepted: false)
     }
@@ -269,6 +270,7 @@ extension GraphValueEncoder {
                bisection.convergedIndices.contains(state.leafIndex)
             {
                 state.leafIndex += 1
+            state.semanticSimplestProbed = false
                 continue
             }
 
@@ -286,6 +288,7 @@ extension GraphValueEncoder {
                 // Cross-zero exhausted or accepted — move to the next leaf.
                 state.crossZero = nil
                 state.leafIndex += 1
+            state.semanticSimplestProbed = false
                 continue
             }
 
@@ -308,7 +311,36 @@ extension GraphValueEncoder {
                     continue
                 }
                 state.leafIndex += 1
+            state.semanticSimplestProbed = false
                 continue
+            }
+
+            // Direct shot at the reduction target before binary search. When the property-satisfying subset is sparse in the index space, binary search can settle at a local minimum because non-satisfying gaps cause it to stop early. A single probe at the target guarantees the reduction target is always attempted. One extra materialization per leaf, amortized by the fact that acceptance skips the entire binary search.
+            if state.stepper == nil, state.semanticSimplestProbed == false {
+                state.semanticSimplestProbed = true
+                let leaf = state.leafPositions[state.leafIndex]
+                let currentEntry = state.sequence[leaf.sequenceIndex]
+                if let currentChoice = currentEntry.value?.choice {
+                    let targetBP = leaf.targetBitPattern
+                    let currentBP = currentChoice.bitPattern64
+                    if currentBP != targetBP {
+                        let targetChoice = ChoiceValue(
+                            currentChoice.tag.makeConvertible(bitPattern64: targetBP),
+                            tag: currentChoice.tag
+                        )
+                        var candidate = state.sequence
+                        let targetEntry = ChoiceSequenceValue.value(.init(
+                            choice: targetChoice,
+                            validRange: currentEntry.value!.validRange,
+                            isRangeExplicit: currentEntry.value!.isRangeExplicit
+                        ))
+                        candidate[leaf.sequenceIndex] = targetEntry
+                        if candidate.shortLexPrecedes(state.sequence) {
+                            state.lastEmittedCandidate = candidate
+                            return candidate
+                        }
+                    }
+                }
             }
 
             // Binary search phase.
@@ -333,6 +365,7 @@ extension GraphValueEncoder {
             }
 
             state.leafIndex += 1
+            state.semanticSimplestProbed = false
         }
 
         return nil
