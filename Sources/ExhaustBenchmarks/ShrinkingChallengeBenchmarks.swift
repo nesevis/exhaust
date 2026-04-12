@@ -5,12 +5,6 @@ import Exhaust
 import ExhaustCore
 import Foundation
 
-// MARK: - Configuration
-
-let enableReport = true
-let enableCounterExamples = true
-private let reductionCount = 100
-
 /// Returns strategy variants of a base config.
 private func withStrategies(
     _ base: Interpreters.ReducerConfiguration = .fast
