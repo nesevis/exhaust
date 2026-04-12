@@ -62,7 +62,7 @@ struct StringAnagramChallenge {
         )
         let output = try #require(result)
 
-        // Both arrays should be length 2, using the two smallest printable ASCII chars
+        // Both arrays should be length 2, using the two smallest printable ASCII chars in the allowed range (space and !)
         #expect(output.0 == " !")
         #expect(output.1 == "! ")
     }
