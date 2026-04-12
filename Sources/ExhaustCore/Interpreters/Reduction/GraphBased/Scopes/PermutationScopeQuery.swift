@@ -11,7 +11,7 @@
 enum PermutationScopeQuery {
     /// Computes permutation scopes for zip nodes with same-shaped siblings.
     ///
-    /// Groups children by structural shape derived from graph node metadata. Children with the same shape can be swapped for shortlex improvement.
+    /// Groups children by structural shape derived from graph node metadata. Children with the same shape can be swapped for shortlex improvement. Only zip children are considered — sequence elements are excluded because their ordering is transient (value search minimizes them, and ``HumanReadableOrderingPass`` canonicalizes whatever remains). Including sequence elements caused a 6x materialization regression on NestedLists without improving the final counterexample.
     ///
     /// - Returns: One scope per zip node with at least one group of two or more same-shaped children.
     static func build(graph: ChoiceGraph) -> [PermutationScope] {
@@ -40,7 +40,7 @@ enum PermutationScopeQuery {
             guard swappableGroups.isEmpty == false else { continue }
 
             scopes.append(.siblingPermutation(SiblingPermutationScope(
-                zipNodeID: node.id,
+                parentNodeID: node.id,
                 swappableGroups: swappableGroups
             )))
         }

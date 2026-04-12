@@ -3,6 +3,8 @@
 //  Exhaust
 //
 
+import Foundation
+
 // MARK: - Replacement Source
 
 /// Emits replacement scopes in size-delta-descending order.
@@ -77,33 +79,26 @@ struct ReplacementSource: ScopeSource {
 
 // MARK: - Permutation Source
 
-/// Emits sibling swap scopes ordered by zip position (earlier = more shortlex impact).
+/// Emits sibling swap scopes with full same-shaped groups, ordered by zip position (earlier = more shortlex impact).
 ///
-/// Each scope specifies exactly which two children to swap. One probe per scope.
+/// Each scope carries the complete group of same-shaped siblings. The encoder picks the first improving pair internally, then adaptively extends on success (pushing the moved content further rightward via doubling). This replaces the prior O(N^2) pairwise decomposition in the source with O(1) emission per group plus O(log N) adaptive probes in the encoder.
 struct PermutationSource: ScopeSource {
-    private var candidates: [(zipNodeID: Int, nodeA: Int, nodeB: Int)]
+    private var candidates: [(parentNodeID: Int, group: [Int])]
     private var index = 0
 
     init(graph: ChoiceGraph) {
-        var entries: [(zipNodeID: Int, nodeA: Int, nodeB: Int)] = []
+        var entries: [(parentNodeID: Int, group: [Int])] = []
         for scope in PermutationScopeQuery.build(graph: graph) {
             guard case let .siblingPermutation(permScope) = scope else { continue }
             for group in permScope.swappableGroups {
-                for indexA in 0 ..< group.count {
-                    for indexB in (indexA + 1) ..< group.count {
-                        entries.append((
-                            zipNodeID: permScope.zipNodeID,
-                            nodeA: group[indexA],
-                            nodeB: group[indexB]
-                        ))
-                    }
-                }
+                guard group.count >= 2 else { continue }
+                entries.append((parentNodeID: permScope.parentNodeID, group: group))
             }
         }
-        // Order by position of the earlier child (earlier = more shortlex impact).
+        // Order by position of the earliest child (earlier = more shortlex impact).
         entries.sort { entryA, entryB in
-            let positionA = min(entryA.nodeA, entryA.nodeB)
-            let positionB = min(entryB.nodeA, entryB.nodeB)
+            let positionA = graph.nodes[entryA.group[0]].positionRange?.lowerBound ?? 0
+            let positionB = graph.nodes[entryB.group[0]].positionRange?.lowerBound ?? 0
             return positionA < positionB
         }
         candidates = entries
@@ -111,11 +106,13 @@ struct PermutationSource: ScopeSource {
 
     var peekYield: TransformationYield? {
         guard index < candidates.count else { return nil }
+        let groupSize = candidates[index].group.count
+        let estimatedProbes = groupSize <= 2 ? 1 : (1 + Int(log2(Double(groupSize))))
         return TransformationYield(
             structural: 0,
             value: 0,
             slack: .exact,
-            estimatedProbes: 1
+            estimatedProbes: estimatedProbes
         )
     }
 
@@ -125,19 +122,20 @@ struct PermutationSource: ScopeSource {
         index += 1
 
         let scope = SiblingPermutationScope(
-            zipNodeID: entry.zipNodeID,
-            swappableGroups: [[entry.nodeA, entry.nodeB]]
+            parentNodeID: entry.parentNodeID,
+            swappableGroups: [entry.group]
         )
 
+        let estimatedProbes = entry.group.count <= 2 ? 1 : (1 + Int(log2(Double(entry.group.count))))
         return GraphTransformation(
             operation: .permute(.siblingPermutation(scope)),
             yield: TransformationYield(
                 structural: 0,
                 value: 0,
                 slack: .exact,
-                estimatedProbes: 1
+                estimatedProbes: estimatedProbes
             ),
-            precondition: .nodeActive(entry.zipNodeID),
+            precondition: .nodeActive(entry.parentNodeID),
             postcondition: TransformationPostcondition(
                 isStructural: false,
                 invalidatesConvergence: [],

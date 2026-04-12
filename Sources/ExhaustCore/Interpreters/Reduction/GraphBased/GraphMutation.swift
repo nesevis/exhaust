@@ -36,8 +36,8 @@ enum ProjectedMutation {
         insertionOffset: Int
     )
 
-    /// Two same-shaped siblings swapped within a zip. Layer 7.
-    case siblingsSwapped(zipNodeID: Int, idA: Int, idB: Int)
+    /// Two same-shaped siblings swapped within a parent (zip or sequence). Layer 7.
+    case siblingsSwapped(parentNodeID: Int, idA: Int, idB: Int)
 }
 
 // MARK: - Leaf Change

@@ -7,12 +7,13 @@
 
 /// Applies a scope-determined structural mutation to the base sequence.
 ///
-/// Handles all pure (stateless) graph operations: removal, replacement, swap, and migration. For most operations the scope fully determines the probe — one scope, one probe, one ``nextProbe(lastAccepted:)`` call. The exception is ``RemovalScope/coveringAligned(_:)``, which carries a ``PullBasedCoveringArrayGenerator`` and emits one probe per covering array row until the generator is exhausted or a probe is accepted.
+/// Handles all pure (stateless) graph operations: removal, replacement, and migration. For most operations the scope fully determines the probe — one scope, one probe, one ``nextProbe(lastAccepted:)`` call. The exception is ``RemovalScope/coveringAligned(_:)``, which carries a ``PullBasedCoveringArrayGenerator`` and emits one probe per covering array row until the generator is exhausted or a probe is accepted.
+///
+/// Permutation (sibling swap) is handled by the stateful ``GraphSwapEncoder``, which supports adaptive rightward extension after a successful swap.
 ///
 /// The operation-specific candidate construction methods are delegated to dedicated extensions:
 /// - `GraphStructuralEncoder+Removal.swift`
 /// - `GraphStructuralEncoder+Replacement.swift`
-/// - `GraphStructuralEncoder+Swap.swift`
 /// - `GraphStructuralEncoder+Migration.swift`
 struct GraphStructuralEncoder: GraphEncoder {
     /// Set at ``start(scope:)`` from the operation type. Each structural operation reports under its own encoder name for logging and instrumentation.
@@ -56,15 +57,11 @@ struct GraphStructuralEncoder: GraphEncoder {
             name = .graphSubstitution
             probe = buildReplacementProbe(scope: replacementScope, sequence: sequence, tree: scope.tree, graph: graph)
 
-        case let .permute(permutationScope):
-            name = .graphSiblingSwap
-            probe = buildSwapProbe(scope: permutationScope, sequence: sequence, graph: graph)
-
         case let .migrate(migrationScope):
             name = .graphMigration
             probe = buildMigrationProbe(scope: migrationScope, sequence: sequence, graph: graph)
 
-        case .minimize, .exchange:
+        case .minimize, .exchange, .permute:
             break
         }
     }

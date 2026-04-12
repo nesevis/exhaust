@@ -107,7 +107,7 @@ extension ChoiceGraphScheduler {
             // with no reshape leaves. Layer 7a extends the same check to
             // ``ProjectedMutation/sequenceElementsRemoved(seqNodeID:removedNodeIDs:)``,
             // ``ProjectedMutation/sequenceElementsMigrated(sourceSeqID:receiverSeqID:movedNodeIDs:insertionOffset:)``,
-            // and ``ProjectedMutation/siblingsSwapped(zipNodeID:idA:idB:)``
+            // and ``ProjectedMutation/siblingsSwapped(parentNodeID:idA:idB:)``
             // — none of these change branch selections, so any branch
             // pivot encoder dispatched on the next cycle still finds its
             // alternative branches in ``PickMetadata/branchElements``,

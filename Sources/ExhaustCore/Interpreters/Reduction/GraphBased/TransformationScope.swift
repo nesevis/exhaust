@@ -303,10 +303,10 @@ enum PermutationScope {
     case siblingPermutation(SiblingPermutationScope)
 }
 
-/// Scope for sibling permutation at a zip node.
+/// Scope for sibling permutation at a parent node (zip or sequence).
 struct SiblingPermutationScope {
-    /// The zip node whose children may be permuted.
-    let zipNodeID: Int
+    /// The parent node whose children may be permuted. May be a zip or a sequence.
+    let parentNodeID: Int
 
     /// Groups of same-shaped children that can be swapped. Each inner array contains node IDs of children with the same structural shape.
     let swappableGroups: [[Int]]

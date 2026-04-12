@@ -398,7 +398,7 @@ enum TransformationEnumerator {
                     slack: .exact,
                     estimatedProbes: totalPairs
                 ),
-                precondition: .nodeActive(permScope.zipNodeID),
+                precondition: .nodeActive(permScope.parentNodeID),
                 postcondition: TransformationPostcondition(
                     isStructural: false,
                     invalidatesConvergence: [],
