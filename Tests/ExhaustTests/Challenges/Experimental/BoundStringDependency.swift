@@ -28,6 +28,6 @@ struct DependentStringChallenge {
             !(4 ... 5 ~= value.count)
         }
 
-        #expect(output == "\0\0\0\0")
+        #expect(output == "    ")
     }
 }
