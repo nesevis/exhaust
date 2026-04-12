@@ -11,10 +11,10 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .boundValueSearch
 
     /// Maximum number of combinations for exhaustive enumeration.
-    public static let exhaustiveThreshold: UInt64 = 128
+    public static let exhaustiveThreshold: UInt64 = 32
 
     /// Maximum probes for the covering array regime.
-    public static let coveringBudget: Int = 128
+    public static let coveringBudget: Int = 64
 
     // MARK: - State
 
