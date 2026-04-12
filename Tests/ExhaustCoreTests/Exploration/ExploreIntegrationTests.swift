@@ -97,7 +97,6 @@ struct ExploreIntegrationTests {
             gen: gen,
             property: { $0 < 500 },
             samplingBudget: 500,
-            reductionConfig: .fast,
             seed: 42,
             scorer: { Double($0) }
         )

@@ -8,13 +8,3 @@ public struct ReductionResult<Output> {
     /// Populated for guided-mode materializations; `nil` for exact mode.
     public let decodingReport: DecodingReport?
 }
-
-/// Categorizes which kind of spans a deletion encoder targets.
-enum DeletionSpanCategory {
-    case containerSpans
-    case sequenceElements
-    case sequenceBoundaries
-    case freeStandingValues
-    case siblingGroups
-    case mixed
-}

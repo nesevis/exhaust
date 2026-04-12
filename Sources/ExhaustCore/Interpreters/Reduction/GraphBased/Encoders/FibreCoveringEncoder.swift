@@ -9,7 +9,6 @@
 /// - **Large fibres** (2 or more parameters): pairwise covering (strength 2) via the density method (``PullBasedCoveringArrayGenerator``). Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
 public struct FibreCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .kleisliComposition
-    public let phase: ReductionPhase = .exploration
 
     /// Maximum number of combinations for exhaustive enumeration.
     public static let exhaustiveThreshold: UInt64 = 128
@@ -57,8 +56,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     public func estimatedCost(
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context _: ReductionContext
+        positionRange: ClosedRange<Int>
     ) -> Int? {
         let positions = collectValuePositions(in: positionRange, from: sequence)
         guard positions.isEmpty == false else { return nil }
@@ -72,8 +70,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     public mutating func start(
         sequence: ChoiceSequence,
         tree _: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context _: ReductionContext
+        positionRange: ClosedRange<Int>
     ) {
         baseSequence = sequence
         valuePositions = collectValuePositions(in: positionRange, from: sequence)

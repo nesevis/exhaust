@@ -27,7 +27,6 @@ public struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
     private let samplingBudget: UInt64
-    private let reductionConfig: Interpreters.ReductionBudget
     private let scorer: (Output) -> Double
 
     private var pool: DefaultSeedPool
@@ -39,7 +38,6 @@ public struct ExploreRunner<Output>: ~Copyable {
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
         samplingBudget: UInt64 = 10000,
-        reductionConfig: Interpreters.ReductionBudget = .fast,
         poolCapacity: Int = 256,
         generateRatio: Double = 0.2,
         seed: UInt64? = nil,
@@ -48,7 +46,6 @@ public struct ExploreRunner<Output>: ~Copyable {
         self.gen = gen
         self.property = property
         self.samplingBudget = samplingBudget
-        self.reductionConfig = reductionConfig
         self.scorer = scorer
         pool = DefaultSeedPool(
             capacity: poolCapacity,
@@ -213,7 +210,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 gen: gen,
                 tree: reduceTree,
                 output: value,
-                config: .init(from: reductionConfig),
+                config: .init(maxStalls: 2),
                 property: property
             ) {
                 return .failure(

@@ -61,7 +61,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         let commandGen = Spec.commandGenerator
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
-        let reductionConfig = budget.reducerBudget
 
         let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
             commandGen: commandGen,
@@ -106,7 +105,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         let maxIter = samplingBudget
         let covBudget = coverageBudget
         let replaySeed = seed
-        nonisolated(unsafe) let reduction = reductionConfig
         let randomOnly = useRandomOnly
 
         // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
@@ -121,7 +119,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                         commandGen: commandGen,
                         commandLimit: resolvedCommandLimit,
                         coverageBudget: covBudget,
-                        reductionConfig: reduction,
                         property: property
                     )
                 }
@@ -142,7 +139,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                             samplingBudget: maxIter,
                             coverageBudget: covBudget,
                             seed: replaySeed,
-                            reductionConfig: reduction,
                             suppressIssueReporting: true,
                             useRandomOnly: randomOnly || skipGenericCoverage,
                             logLevel: logLevel,

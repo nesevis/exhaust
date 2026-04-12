@@ -119,27 +119,11 @@ public struct ExhaustReport: Sendable {
     /// Per-fingerprint filter predicate observations accumulated during reduction.
     public var filterObservations: [UInt64: FilterObservation] = [:]
 
-    /// Per-cycle phase outcome data.
-    public var cycleOutcomes: [CycleOutcome] = []
-
     /// One-line summary of per-phase invocations and acceptances aggregated across all cycles.
     public var phaseSummary: String {
-        var phaseInvocations: [ReducerPhaseIdentifier: Int] = [:]
-        var phaseAcceptances: [ReducerPhaseIdentifier: Int] = [:]
-        var phaseStructural: [ReducerPhaseIdentifier: Int] = [:]
-        for outcome in cycleOutcomes {
-            for (phase, disposition) in [
-                (ReducerPhaseIdentifier.baseDescent, outcome.baseDescent),
-                (.fibreDescent, outcome.fibreDescent),
-                (.exploration, outcome.exploration),
-            ] {
-                if case let .ran(phaseOutcome) = disposition {
-                    phaseInvocations[phase, default: 0] += phaseOutcome.propertyInvocations
-                    phaseAcceptances[phase, default: 0] += phaseOutcome.acceptances
-                    phaseStructural[phase, default: 0] += phaseOutcome.structuralAcceptances
-                }
-            }
-        }
+        let phaseInvocations: [ReducerPhaseIdentifier: Int] = [:]
+        let phaseAcceptances: [ReducerPhaseIdentifier: Int] = [:]
+        let phaseStructural: [ReducerPhaseIdentifier: Int] = [:]
         func label(_ phase: ReducerPhaseIdentifier, _ tag: String) -> String {
             let invocations = phaseInvocations[phase, default: 0]
             let structural = phaseStructural[phase, default: 0]
@@ -206,6 +190,5 @@ public struct ExhaustReport: Sendable {
         fibreExhaustedWithFailureCount = stats.fibreExhaustedWithFailureCount
         fibreBailCount = stats.fibreBailCount
         filterObservations = stats.filterObservations
-        cycleOutcomes = stats.cycleOutcomes
     }
 }

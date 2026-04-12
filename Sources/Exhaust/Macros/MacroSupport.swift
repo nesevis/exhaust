@@ -151,7 +151,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
                 let samplingBudget = budget.samplingBudget
                 let coverageBudget = budget.coverageBudget
-                let reductionConfig = Interpreters.ReducerConfiguration(from: budget.reducerBudget)
+                let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
 
                 var report = ExhaustReport()
                 defer { onReportClosure?(report) }
@@ -1099,7 +1099,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ) -> Output? {
         var samplingBudget: UInt64 = 10000
         var seed: UInt64?
-        var reductionConfig: ReducerBudget = .fast
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
@@ -1121,8 +1120,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     )
                     return nil
                 }
-            case let .reductionBudget(config):
-                reductionConfig = config
             case .suppressIssueReporting:
                 suppressIssueReporting = true
             case let .poolCapacity(n):
@@ -1140,7 +1137,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 gen: gen,
                 property: property,
                 samplingBudget: samplingBudget,
-                reductionConfig: reductionConfig,
                 poolCapacity: poolCapacity,
                 generateRatio: generateRatio,
                 seed: seed,

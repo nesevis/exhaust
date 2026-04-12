@@ -65,7 +65,6 @@ public func __runContract<Spec: ContractSpec>(
     return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
-        let reductionConfig = budget.reducerBudget
 
         let commandGen = Spec.commandGenerator
         let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
@@ -120,7 +119,6 @@ public func __runContract<Spec: ContractSpec>(
                 commandGen: commandGen,
                 commandLimit: resolvedCommandLimit,
                 coverageBudget: coverageBudget,
-                reductionConfig: reductionConfig,
                 property: property
             )
         }
@@ -146,7 +144,6 @@ public func __runContract<Spec: ContractSpec>(
                     samplingBudget: samplingBudget,
                     coverageBudget: coverageBudget,
                     seed: seed,
-                    reductionConfig: reductionConfig,
                     suppressIssueReporting: true,
                     useRandomOnly: useRandomOnly || skipGenericCoverage,
                     collectOpenPBTStats: collectOpenPBTStats,
@@ -422,7 +419,6 @@ func runSCACoverage<Command>(
     commandGen: ReflectiveGenerator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
-    reductionConfig: ReducerBudget,
     property: @escaping @Sendable ([Command]) -> Bool
 ) -> SCAResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -510,7 +506,7 @@ func runSCACoverage<Command>(
                 gen: seqGen,
                 tree: reduceTree,
                 output: value,
-                config: .init(from: reductionConfig),
+                config: .init(maxStalls: 2),
                 property: property
             ) {
                 return (reducedValue, value)
@@ -538,7 +534,6 @@ func buildExhaustSettings<Output>(
     samplingBudget: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
-    reductionConfig: ReducerBudget,
     suppressIssueReporting: Bool,
     useRandomOnly: Bool,
     collectOpenPBTStats: Bool = false,
@@ -549,7 +544,6 @@ func buildExhaustSettings<Output>(
         .budget(.custom(
             coverage: coverageBudget,
             sampling: samplingBudget,
-            reduction: reductionConfig
         )),
     ]
     if let seed {

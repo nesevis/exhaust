@@ -9,7 +9,7 @@ struct ExhaustReportTests {
         #exhaust(
             #gen(.int(in: 0 ... 10)),
             .onReport { capturedReport = $0 },
-            .budget(.custom(coverage: 200, sampling: 50, reduction: .fast))
+            .budget(.custom(coverage: 200, sampling: 50))
         ) { value in
             value >= 0
         }
@@ -65,7 +65,7 @@ struct ExhaustReportTests {
         #exhaust(
             #gen(.int(in: 0 ... 10)),
             .onReport { capturedReport = $0 },
-            .budget(.custom(coverage: 100, sampling: 50, reduction: .fast))
+            .budget(.custom(coverage: 100, sampling: 50))
         ) { value in
             value >= 0
         }

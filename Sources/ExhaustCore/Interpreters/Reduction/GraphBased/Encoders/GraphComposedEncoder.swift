@@ -140,8 +140,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
         inner.start(
             sequence: sequence,
             tree: scope.tree,
-            positionRange: positionRange,
-            context: ReductionContext()
+            positionRange: positionRange
         )
         hasInner = true
     }

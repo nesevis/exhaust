@@ -305,38 +305,6 @@ public enum SequenceDecoder {
         }
     }
 
-    // MARK: - Decoder Selection
-
-    /// Decoder selection using ``ReductionMaterializer``-backed decoders.
-    ///
-    /// Simpler than the legacy path: the fresh materializer always produces a consistent
-    /// (sequence, tree) pair, so the exact/guided distinction maps cleanly to value vs
-    /// structural changes.
-    public static func `for`(_ context: DecoderContext) -> SequenceDecoder {
-        let hasBinds = context.bindIndex != nil
-            && context.bindIndex?.isEmpty == false
-        let picks = context.materializePicks
-
-        switch context.depth {
-        case .global:
-            // Cross-stage redistribution: guided re-derivation handles both
-            // inner and bound value changes uniformly.
-            return .guided(fallbackTree: context.fallbackTree, materializePicks: picks)
-
-        case .specific(0):
-            if hasBinds || context.strictness == .relaxed {
-                return .guided(fallbackTree: context.fallbackTree, materializePicks: picks)
-            }
-            return .exact(materializePicks: picks)
-
-        case .specific:
-            if context.strictness == .relaxed {
-                return .guided(fallbackTree: context.fallbackTree, materializePicks: picks)
-            }
-            return .exact(materializePicks: picks)
-        }
-    }
-
     // MARK: - Filter Observation Merging
 
     private func mergeFilterObservations(
