@@ -78,14 +78,17 @@ enum MinimizationScopeQuery {
             scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
 
-        // bound value: one scope per reduction edge. Matches the CDG's
-        // ``ChoiceDependencyGraph/reductionEdges()`` behavior, which deliberately does
-        // NOT filter on ``isStructurallyConstant``: a structurally constant bind (no
-        // nested binds/picks) can still carry domain-dependent values whose ranges
-        // shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ...
-        // max(2, n+1))` is the canonical example — the bound subtree contains only
-        // plain choices, but their ranges depend on `n`). The composition's downstream
-        // encoder finds these via the lift's fibre coverage.
+        // Bound value: one scope per reduction edge whose inner subtree has not
+        // fully converged. Once the inner converges, the bound subtree is
+        // structurally stable and its leaves are in the normal value scope above.
+        //
+        // Matches the CDG's ``ChoiceDependencyGraph/reductionEdges()`` behavior,
+        // which deliberately does NOT filter on ``isStructurallyConstant``: a
+        // structurally constant bind can still carry domain-dependent values
+        // whose ranges shift with the upstream value (Coupling's
+        // `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical
+        // example). The composition's downstream encoder finds these via the
+        // lift's fibre coverage.
         for node in graph.nodes {
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
@@ -93,6 +96,12 @@ enum MinimizationScopeQuery {
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
             guard graph.nodes[innerChildID].positionRange != nil else { continue }
+
+            // Skip when the inner subtree is fully converged — bound leaves
+            // have graduated to the normal value scope.
+            if isInnerSubtreeConverged(rootNodeID: innerChildID, graph: graph) {
+                continue
+            }
 
             let downstreamNodeIDs = collectDescendantLeaves(
                 from: boundChildID,
@@ -150,6 +159,32 @@ enum MinimizationScopeQuery {
             stack.append(contentsOf: node.children)
         }
         return result
+    }
+
+    /// Returns true when every chooseBits leaf in the subtree rooted at `rootNodeID` is either at its reduction target or at its convergence floor.
+    ///
+    /// For a single-leaf inner (the common case), this is a single node check. For complex inners (zip of multiple generators, nested structures), all descendant leaves must be settled before the bound subtree is considered structurally stable.
+    private static func isInnerSubtreeConverged(
+        rootNodeID: Int,
+        graph: ChoiceGraph
+    ) -> Bool {
+        var stack = [rootNodeID]
+        while let current = stack.popLast() {
+            let node = graph.nodes[current]
+            if case let .chooseBits(metadata) = node.kind, node.positionRange != nil {
+                let currentBitPattern = metadata.value.bitPattern64
+                let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
+                if currentBitPattern == targetBitPattern { continue }
+                if let converged = metadata.convergedOrigin,
+                   converged.bound == currentBitPattern
+                {
+                    continue
+                }
+                return false
+            }
+            stack.append(contentsOf: node.children)
+        }
+        return true
     }
 
     /// Finds the parent bind node of a given node, or nil.
