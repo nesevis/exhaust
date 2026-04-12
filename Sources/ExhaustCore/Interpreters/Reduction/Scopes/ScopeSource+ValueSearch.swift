@@ -28,6 +28,8 @@ struct MinimizationSource: ScopeSource {
                 }
             case let .boundValue(fibreScope):
                 fibreScope.boundSubtreeSize
+            case let .pivotThenMinimize(pivotScope):
+                pivotScope.subtreeSize
             }
 
             let estimatedProbes: Int = switch scope {
@@ -37,6 +39,8 @@ struct MinimizationSource: ScopeSource {
                 floatScope.leafNodeIDs.count * 15
             case let .boundValue(fibreScope):
                 15 + min(128, fibreScope.boundSubtreeSize)
+            case let .pivotThenMinimize(pivotScope):
+                pivotScope.alternativeBranchCount * 16
             }
 
             entries.append((

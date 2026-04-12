@@ -97,12 +97,6 @@ enum MinimizationScopeQuery {
             let boundChildID = node.children[metadata.boundChildIndex]
             guard graph.nodes[innerChildID].positionRange != nil else { continue }
 
-            // Skip when the inner subtree is fully converged — bound leaves
-            // have graduated to the normal value scope.
-            if isInnerSubtreeConverged(rootNodeID: innerChildID, graph: graph) {
-                continue
-            }
-
             let downstreamNodeIDs = collectDescendantLeaves(
                 from: boundChildID,
                 graph: graph
@@ -164,7 +158,7 @@ enum MinimizationScopeQuery {
     /// Returns true when every chooseBits leaf in the subtree rooted at `rootNodeID` is either at its reduction target or at its convergence floor.
     ///
     /// For a single-leaf inner (the common case), this is a single node check. For complex inners (zip of multiple generators, nested structures), all descendant leaves must be settled before the bound subtree is considered structurally stable.
-    private static func isInnerSubtreeConverged(
+    static func isInnerSubtreeConverged(
         rootNodeID: Int,
         graph: ChoiceGraph
     ) -> Bool {

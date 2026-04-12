@@ -176,6 +176,7 @@ enum ChoiceGraphScheduler {
             cycles += 1
             boundValueDispatchedThisCycle.removeAll(keepingCapacity: true)
             encoderCycleBudget.removeAll(keepingCapacity: true)
+            scopeRejectionCache.clearCoarse()
             for (name, emits) in encoderEmits {
                 let accepts = encoderAccepts[name, default: 0]
                 guard accepts == 0 else { continue }
@@ -277,6 +278,25 @@ enum ChoiceGraphScheduler {
                     if anyAccepted {
                         continue
                     }
+                    // Convergence gate: from cycle 2 onwards, skip when the
+                    // bind-inner has converged. Cycle 1 always allows composed
+                    // so it gets at least one dispatch before the skip fires.
+                    if config.convergenceGate,
+                       cycles >= 2,
+                       MinimizationScopeQuery.isInnerSubtreeConverged(
+                           rootNodeID: fibreScope.upstreamLeafNodeID,
+                           graph: graph
+                       )
+                    {
+                        continue
+                    }
+                }
+
+                // Pivot-then-minimize is deferred to stall cycles, same as bound value.
+                if case .minimize(.pivotThenMinimize) = transformation.operation {
+                    if anyAccepted {
+                        continue
+                    }
                 }
 
                 // Per-encoder cycle budget: skip if the budget has been exhausted for this encoder.
@@ -284,6 +304,7 @@ enum ChoiceGraphScheduler {
                 case .remove: .deletion
                 case .replace: .substitution
                 case .minimize(.boundValue): .composed
+                case .minimize(.pivotThenMinimize): .pivotMinimize
                 case .minimize(.valueLeaves): .valueSearch
                 case .minimize(.floatLeaves): .floatSearch
                 case .exchange(.redistribution): .redistribution
@@ -357,6 +378,10 @@ enum ChoiceGraphScheduler {
                         gen: erasedGen,
                         upstreamBudget: decayedBudget
                     )
+                } else if case .minimize(.pivotThenMinimize) = transformation.operation {
+                    var pivotEncoder = GraphPivotMinimizeEncoder()
+                    pivotEncoder.gen = erasedGen
+                    encoder = pivotEncoder
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
                 }

@@ -235,6 +235,10 @@ struct GraphValueEncoder: GraphEncoder {
             // constructed at the scheduler call site, never through this encoder.
             // Reaching this branch indicates a routing bug.
             assertionFailure("boundValue scopes must route through GraphComposedEncoder, not GraphValueEncoder")
+        case .pivotThenMinimize:
+            // Pivot-then-minimize scopes are dispatched via ``GraphPivotMinimizeEncoder``
+            // constructed at the scheduler call site.
+            assertionFailure("pivotThenMinimize scopes must route through GraphPivotMinimizeEncoder, not GraphValueEncoder")
             mode = .idle
         }
     }

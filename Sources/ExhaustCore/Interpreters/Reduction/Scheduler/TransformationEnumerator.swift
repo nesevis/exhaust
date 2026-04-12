@@ -266,6 +266,23 @@ enum TransformationEnumerator {
                         enablesRemoval: []
                     )
                 ))
+
+            case let .pivotThenMinimize(pivotScope):
+                result.append(GraphTransformation(
+                    operation: .minimize(scope),
+                    yield: TransformationYield(
+                        structural: pivotScope.subtreeSize,
+                        value: 0,
+                        slack: .exact,
+                        estimatedProbes: pivotScope.alternativeBranchCount * 16
+                    ),
+                    precondition: .nodeActive(pivotScope.pickNodeID),
+                    postcondition: TransformationPostcondition(
+                        isStructural: true,
+                        invalidatesConvergence: [],
+                        enablesRemoval: []
+                    )
+                ))
             }
         }
 
