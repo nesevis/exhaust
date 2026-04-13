@@ -40,7 +40,7 @@ extension GraphStructuralEncoder {
         }
     }
 
-    /// Copies donor entries into the target's position range.
+    /// Copies donor entries into the target's position range, expanding bare `.just` entries to full pick-site equivalents for depth-crossing compatibility.
     private func buildSelfSimilarCandidate(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
@@ -52,8 +52,9 @@ extension GraphStructuralEncoder {
             return nil
         }
         let donorEntries = Array(sequence[donorRange.lowerBound ... donorRange.upperBound])
+        let expanded = Self.expandBareJustEntries(donorEntries, pickMetadata: scope.targetNodeID, graph: graph)
         var candidate = sequence
-        candidate.replaceSubrange(targetRange.lowerBound ... targetRange.upperBound, with: donorEntries)
+        candidate.replaceSubrange(targetRange.lowerBound ... targetRange.upperBound, with: expanded)
         guard candidate.shortLexPrecedes(sequence) else { return nil }
         return candidate
     }
@@ -121,8 +122,9 @@ extension GraphStructuralEncoder {
             return nil
         }
         let descendantEntries = Array(sequence[descendantRange.lowerBound ... descendantRange.upperBound])
+        let expanded = Self.expandBareJustEntries(descendantEntries, pickMetadata: scope.ancestorPickNodeID, graph: graph)
         var candidate = sequence
-        candidate.replaceSubrange(ancestorRange.lowerBound ... ancestorRange.upperBound, with: descendantEntries)
+        candidate.replaceSubrange(ancestorRange.lowerBound ... ancestorRange.upperBound, with: expanded)
         guard candidate.shortLexPrecedes(sequence) else { return nil }
         return candidate
     }
@@ -173,5 +175,58 @@ extension GraphStructuralEncoder {
         case let .selected(inner):
             return .selected(minimizingLeaves(in: inner))
         }
+    }
+
+    // MARK: - Depth-Crossing Expansion
+
+    /// Expands bare `.just` entries to full pick-site equivalents for depth-crossing promotions.
+    ///
+    /// When a donor subtree from a shallower recursion depth is copied to a deeper target position, leaf positions that were depth-0 constants (`.just`) in the donor correspond to `oneOf` pick sites at the target depth. The bare `.just` entry is one position wide, but the target's materializer expects a full pick site (`group(true)`, `branch`, `just`, `group(false)` = four positions). This method expands each bare `.just` to match, so the candidate fully specifies the target structure without relying on fallback tree content.
+    ///
+    /// A `.just` is "bare" when it is not preceded by a `.branch` entry — pick-site `.just` entries always follow their branch marker directly.
+    static func expandBareJustEntries(
+        _ entries: [ChoiceSequenceValue],
+        pickMetadata pickNodeID: Int,
+        graph: ChoiceGraph
+    ) -> [ChoiceSequenceValue] {
+        guard case let .pick(metadata) = graph.nodes[pickNodeID].kind else { return entries }
+        guard let emptyBranchID = Self.findEmptyBranchID(in: metadata) else { return entries }
+
+        var result: [ChoiceSequenceValue] = []
+        result.reserveCapacity(entries.count)
+        var previousWasBranch = false
+
+        for entry in entries {
+            if case .just = entry, previousWasBranch == false {
+                result.append(.group(true))
+                result.append(.branch(.init(
+                    id: emptyBranchID,
+                    validIDs: metadata.branchIDs,
+                    fingerprint: metadata.fingerprint
+                )))
+                result.append(.just)
+                result.append(.group(false))
+            } else {
+                result.append(entry)
+            }
+            if case .branch = entry {
+                previousWasBranch = true
+            } else {
+                previousWasBranch = false
+            }
+        }
+        return result
+    }
+
+    /// Finds the branch ID of the first `.just` (constant) branch in a pick site's elements.
+    private static func findEmptyBranchID(in metadata: PickMetadata) -> UInt64? {
+        for (index, element) in metadata.branchElements.enumerated() {
+            guard index < metadata.branchIDs.count else { break }
+            let inner = element.isSelected ? element.unwrapped : element
+            if case let .branch(_, _, _, _, content) = inner, content.isJust {
+                return metadata.branchIDs[index]
+            }
+        }
+        return nil
     }
 }
