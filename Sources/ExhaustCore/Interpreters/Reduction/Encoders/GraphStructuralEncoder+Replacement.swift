@@ -254,35 +254,48 @@ extension GraphStructuralEncoder {
         return positions
     }
 
-    /// Walks a same-fingerprint pick's subtree to find base case roots.
+    /// Walks a same-fingerprint pick's subtree to find base case roots at recursive slots.
     ///
-    /// Recurses through structural intermediaries (bind, zip, group). At each node that could be a recursive slot: if it is a same-fingerprint pick, pushes it onto ``pickStack`` for further traversal. If it is anything else, records its position range as a base case needing expansion.
+    /// Recurses through structural intermediaries (bind, zip). At each zip, determines which child indices are recursive (occupied by same-fingerprint picks). Picks at those positions are pushed onto ``pickStack``. Non-pick nodes at recursive positions are recorded as base cases needing expansion. Non-pick nodes at non-recursive positions (fixed leaves that exist at all depths) are skipped. When a zip has no pick children (innermost level), ``inheritedRecursiveIndices`` provides the mask from a deeper level.
     private static func collectBaseCasePositions(
         fromPick pickID: Int,
         fingerprint: UInt64,
         graph: ChoiceGraph,
         pickStack: inout [Int],
-        positions: inout Set<Int>
+        positions: inout Set<Int>,
+        inheritedRecursiveIndices: Set<Int>? = nil
     ) {
-        var intermediaryStack = Array(graph.nodes[pickID].children)
+        var intermediaryStack: [(nodeID: Int, recursiveIndices: Set<Int>?)] = graph.nodes[pickID].children.map {
+            (nodeID: $0, recursiveIndices: inheritedRecursiveIndices)
+        }
 
         while intermediaryStack.isEmpty == false {
-            let nodeID = intermediaryStack.removeLast()
+            let (nodeID, recursiveIndices) = intermediaryStack.removeLast()
             let node = graph.nodes[nodeID]
 
             if case let .pick(metadata) = node.kind, metadata.fingerprint == fingerprint {
                 pickStack.append(nodeID)
             } else if case let .bind(bindMeta) = node.kind {
                 if bindMeta.boundChildIndex < node.children.count {
-                    intermediaryStack.append(node.children[bindMeta.boundChildIndex])
+                    intermediaryStack.append((node.children[bindMeta.boundChildIndex], recursiveIndices))
                 }
             } else if case .zip = node.kind {
-                for childID in node.children {
-                    intermediaryStack.append(childID)
+                // Determine which children are picks (recursive slots at this level).
+                var localRecursiveIndices = Set<Int>()
+                for (index, childID) in node.children.enumerated() {
+                    if case let .pick(childMeta) = graph.nodes[childID].kind, childMeta.fingerprint == fingerprint {
+                        localRecursiveIndices.insert(index)
+                    }
+                }
+
+                let mask = localRecursiveIndices.isEmpty == false ? localRecursiveIndices : recursiveIndices
+
+                for (index, childID) in node.children.enumerated() {
+                    if mask == nil || mask!.contains(index) {
+                        intermediaryStack.append((childID, mask))
+                    }
                 }
             } else if let range = node.positionRange {
-                // Skip nodes whose parent is a same-fingerprint pick — they're
-                // already inside that pick's branch structure and don't need wrapping.
                 let parentIsPick: Bool = if let parentID = node.parent,
                     case let .pick(parentMeta) = graph.nodes[parentID].kind,
                     parentMeta.fingerprint == fingerprint
