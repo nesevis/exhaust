@@ -324,7 +324,7 @@ extension GraphStructuralEncoder {
         graph: ChoiceGraph
     ) -> Set<Int>? {
         // Walk: pick → bind (bound child) → zip.
-        var current = pickID
+        let current = pickID
         // Follow the selected branch child, then through binds to the zip.
         var stack = Array(graph.nodes[current].children)
         while stack.isEmpty == false {
