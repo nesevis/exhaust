@@ -189,9 +189,19 @@ extension GraphStructuralEncoder {
 
     // MARK: - Depth-Crossing Expansion
 
-    /// Expands depth-0 leaf entries to full pick-site equivalents for depth-crossing promotions.
+    /// Wrapping kind for a depth-0 base case entry during cross-depth expansion.
+    private enum LeafWrapping {
+        /// Direct recursion (like BinaryHeap): wrap in pick-site markers.
+        case pick(branchID: UInt64, validIDs: [UInt64], fingerprint: UInt64)
+        /// `Gen.recursive` recursion: wrap in `._bound` bind markers with depth selector = 0.
+        case bind(depthSelectorEntry: ChoiceSequenceValue)
+    }
+
+    /// Expands depth-0 leaf entries for depth-crossing promotions.
     ///
-    /// When a donor subtree from a shallower recursion depth is copied to a deeper target position, depth-0 leaves (`.just` constants or `.chooseBits` values from the base case) land at positions where the target's materializer expects full `oneOf` pick sites. This method identifies those leaves via the graph, wraps each in the pick-site markers for the matching branch, and returns the expanded entries so the candidate is self-consistent at the target depth.
+    /// Two wrapping modes depending on the recursion pattern:
+    /// - **Pick wrapping** (direct recursion like BinaryHeap): the base case is inside a `oneOf`. Wrap in `group(true), branch(leafID), entry, group(false)`.
+    /// - **Bind wrapping** (`Gen.recursive`): the base case is inside a `._bound`. Wrap in `bind(true), value(0), entry, bind(false)`, selecting `layers[0]` = the base generator.
     static func expandDepthZeroLeaves(
         _ entries: [ChoiceSequenceValue],
         donorNodeID: Int,
@@ -200,29 +210,34 @@ extension GraphStructuralEncoder {
     ) -> [ChoiceSequenceValue] {
         guard case let .pick(donorMeta) = graph.nodes[donorNodeID].kind else { return entries }
 
-        let leafPositions = depthZeroLeafPositions(
+        let leafExpansions = depthZeroLeafExpansions(
             donorNodeID: donorNodeID,
+            donorRangeStart: donorRangeStart,
             fingerprint: donorMeta.fingerprint,
+            pickMetadata: donorMeta,
             graph: graph
         )
-        guard leafPositions.isEmpty == false else { return entries }
 
-        guard let leafBranchID = findLeafBranchID(in: donorMeta) else { return entries }
+        guard leafExpansions.isEmpty == false else { return entries }
 
         var result: [ChoiceSequenceValue] = []
-        result.reserveCapacity(entries.count + leafPositions.count * 3)
+        result.reserveCapacity(entries.count + leafExpansions.count * 3)
 
         for (index, entry) in entries.enumerated() {
             let absolutePosition = donorRangeStart + index
-            if leafPositions.contains(absolutePosition) {
-                result.append(.group(true))
-                result.append(.branch(.init(
-                    id: leafBranchID,
-                    validIDs: donorMeta.branchIDs,
-                    fingerprint: donorMeta.fingerprint
-                )))
-                result.append(entry)
-                result.append(.group(false))
+            if let wrapping = leafExpansions[absolutePosition] {
+                switch wrapping {
+                case let .pick(branchID, validIDs, fingerprint):
+                    result.append(.group(true))
+                    result.append(.branch(.init(id: branchID, validIDs: validIDs, fingerprint: fingerprint)))
+                    result.append(entry)
+                    result.append(.group(false))
+                case let .bind(depthSelectorEntry):
+                    result.append(.bind(true))
+                    result.append(depthSelectorEntry)
+                    result.append(entry)
+                    result.append(.bind(false))
+                }
             } else {
                 result.append(entry)
             }
@@ -230,15 +245,17 @@ extension GraphStructuralEncoder {
         return result
     }
 
-    /// Collects absolute start positions of depth-0 base case subtrees in the donor's subtree.
+    /// Collects depth-0 base case positions and their wrapping kinds for the donor's subtree.
     ///
-    /// Two-phase approach: first builds a per-branch recursive-slot mask from non-innermost picks (where the mask is directly observable as pick vs non-pick children), then applies those masks at innermost picks to identify base case positions.
-    private static func depthZeroLeafPositions(
+    /// Two-phase approach: first builds a per-branch recursive-slot mask from non-innermost picks (where the mask is directly observable as pick vs non-pick children), then applies those masks at innermost picks to identify base case positions and determine whether each needs pick wrapping (direct recursion) or bind wrapping (`Gen.recursive`).
+    private static func depthZeroLeafExpansions(
         donorNodeID: Int,
+        donorRangeStart: Int,
         fingerprint: UInt64,
+        pickMetadata: PickMetadata,
         graph: ChoiceGraph
-    ) -> Set<Int> {
-        // Phase 1: build per-branch masks from non-innermost picks across the entire self-similarity group (not just the donor's subtree). This ensures innermost donors can still derive masks from deeper picks elsewhere in the tree.
+    ) -> [Int: LeafWrapping] {
+        // Phase 1: build per-branch masks from non-innermost picks across the entire self-similarity group.
         var branchMasks: [UInt64: Set<Int>] = [:]
         let allGroupPicks = graph.selfSimilarityGroups[fingerprint] ?? []
         for pickID in allGroupPicks {
@@ -251,24 +268,30 @@ extension GraphStructuralEncoder {
         var allPicks: [Int] = []
         collectSelfSimilarPicks(rootID: donorNodeID, fingerprint: fingerprint, graph: graph, into: &allPicks)
 
-        // Phase 2: walk innermost picks in the donor's subtree and record base case positions using the masks.
-        var positions = Set<Int>()
+        // Phase 2: walk innermost picks and determine wrapping kind for each base case.
+        var expansions: [Int: LeafWrapping] = [:]
         for pickID in allPicks {
             guard case let .pick(pickMeta) = graph.nodes[pickID].kind else { continue }
             guard let zipMask = zipMaskForPick(pickID: pickID, fingerprint: fingerprint, graph: graph) else { continue }
-            // Non-innermost: skip (its recursive slots are picks, not base cases).
             guard zipMask.isEmpty else { continue }
-            // Innermost: use the precomputed mask for this branch. If no mask is available (the donor has no non-innermost picks to derive one from), expand all children — we cannot distinguish recursive from fixed slots without a deeper reference.
             let mask = branchMasks[pickMeta.selectedID]
+
+            // Determine wrapping: if the innermost pick's parent is a ._bound bind,
+            // skip expansion — the ._bound already handles depth-crossing via its
+            // depth selector. Adding expansion markers would double-wrap.
+            let wrapping = wrappingForInnermostPick(pickID: pickID, fingerprint: fingerprint, pickMetadata: pickMetadata, graph: graph)
+            guard let wrapping else { continue }
+
             collectBaseCasesFromInnermostPick(
                 pickID: pickID,
                 fingerprint: fingerprint,
                 mask: mask,
+                wrapping: wrapping,
                 graph: graph,
-                positions: &positions
+                expansions: &expansions
             )
         }
-        return positions
+        return expansions
     }
 
     /// Collects all active same-fingerprint pick node IDs in the subtree rooted at ``rootID``.
@@ -326,13 +349,44 @@ extension GraphStructuralEncoder {
         return nil
     }
 
-    /// Records base case positions from an innermost pick using a precomputed mask. When ``mask`` is nil (no non-innermost picks available to derive the mask), all zip children are expanded.
+    /// Determines the wrapping kind for an innermost pick's base cases, or nil if no expansion is needed.
+    ///
+    /// Returns nil when the pick is wrapped in a `._bound` bind (`Gen.recursive` pattern) — the `._bound`'s depth selector already handles depth-crossing, and adding expansion markers would double-wrap. Returns pick wrapping for direct recursion (like BinaryHeap) where the base case needs explicit pick-site markers.
+    private static func wrappingForInnermostPick(
+        pickID: Int,
+        fingerprint: UInt64,
+        pickMetadata: PickMetadata,
+        graph: ChoiceGraph
+    ) -> LeafWrapping? {
+        // Check if the pick's parent is a ._bound bind (bind → pick with same fingerprint).
+        if let parentID = graph.nodes[pickID].parent,
+           case let .bind(bindMeta) = graph.nodes[parentID].kind,
+           bindMeta.boundChildIndex < graph.nodes[parentID].children.count
+        {
+            let boundChildID = graph.nodes[parentID].children[bindMeta.boundChildIndex]
+            if case let .pick(boundMeta) = graph.nodes[boundChildID].kind,
+               boundMeta.fingerprint == fingerprint
+            {
+                // ._bound pattern: no expansion needed.
+                return nil
+            }
+        }
+
+        // Direct recursion: use pick wrapping.
+        if let leafBranchID = findLeafBranchID(in: pickMetadata) {
+            return .pick(branchID: leafBranchID, validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
+        }
+        return .pick(branchID: pickMetadata.branchIDs[0], validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
+    }
+
+    /// Records base case positions and wrapping kinds from an innermost pick using a precomputed mask. When ``mask`` is nil (no non-innermost picks available to derive the mask), all zip children are expanded.
     private static func collectBaseCasesFromInnermostPick(
         pickID: Int,
         fingerprint: UInt64,
         mask: Set<Int>?,
+        wrapping: LeafWrapping?,
         graph: ChoiceGraph,
-        positions: inout Set<Int>
+        expansions: inout [Int: LeafWrapping]
     ) {
         var stack = Array(graph.nodes[pickID].children)
         while stack.isEmpty == false {
@@ -353,7 +407,7 @@ extension GraphStructuralEncoder {
                         parentMeta.fingerprint == fingerprint
                     { true } else { false }
                     if parentIsPick == false, let range = child.positionRange {
-                        positions.insert(range.lowerBound)
+                        expansions[range.lowerBound] = wrapping
                     }
                 }
             }
