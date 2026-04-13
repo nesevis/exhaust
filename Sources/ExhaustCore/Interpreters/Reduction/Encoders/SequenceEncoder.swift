@@ -36,9 +36,6 @@ public enum EncoderName: String, Hashable, Sendable {
     /// Sorts sibling elements into ascending numeric order as a final pass after all other reduction is complete. The reducer works in shortlex order internally, which is consistent but not intuitive — this converts to the ordering a user would expect.
     case numericReorder
 
-    /// Composes a branch pivot with downstream value search to find failures through a passing intermediate. The pivot changes the tree structure; the downstream searches for values that fail the property under the new structure.
-    case pivotMinimize
-
     /// Probes each converged value one step below its floor to detect stale convergence. If a value that was previously stuck at some floor can now go lower (because other values changed around it), the floor was stale and reduction continues.
     case convergenceConfirmation
 }

@@ -299,7 +299,6 @@ enum ChoiceGraphScheduler {
                 case .remove: .deletion
                 case .replace: .substitution
                 case .minimize(.boundValue): .composed
-                case .minimize(.pivotThenMinimize): .pivotMinimize
                 case .minimize(.valueLeaves): .valueSearch
                 case .minimize(.floatLeaves): .floatSearch
                 case .exchange(.redistribution): .redistribution
@@ -373,10 +372,6 @@ enum ChoiceGraphScheduler {
                         gen: erasedGen,
                         upstreamBudget: decayedBudget
                     )
-                } else if case .minimize(.pivotThenMinimize) = transformation.operation {
-                    var pivotEncoder = GraphPivotMinimizeEncoder()
-                    pivotEncoder.gen = erasedGen
-                    encoder = pivotEncoder
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
                 }

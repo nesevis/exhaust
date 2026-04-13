@@ -161,9 +161,6 @@ enum MinimizationScope {
 
     /// Joint upstream/downstream minimization along a bind dependency edge. Each upstream probe on the controlling value triggers a full downstream search on the dependent subtree. Modelled as a single scope because the upstream and downstream are tightly interleaved at the probe level.
     case boundValue(BoundValueScope)
-
-    /// Branch pivot composed with downstream value search. Tries each available branch at a pick node, materializes the pivoted tree, and runs value search on the result to find failures through a passing intermediate.
-    case pivotThenMinimize(PivotMinimizeScope)
 }
 
 /// Per-leaf annotation in a value-only scope.
@@ -222,18 +219,6 @@ struct BoundValueScope {
 
     /// The bound subtree's position count (value yield of the compound).
     let boundSubtreeSize: Int
-}
-
-/// Scope for branch pivot composed with downstream value search.
-struct PivotMinimizeScope {
-    /// The pick node to pivot.
-    let pickNodeID: Int
-
-    /// Number of alternative branches (excluding current). Used for yield estimation.
-    let alternativeBranchCount: Int
-
-    /// Position count of the pick node's subtree.
-    let subtreeSize: Int
 }
 
 // MARK: - Exchange Scopes
