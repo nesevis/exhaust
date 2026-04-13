@@ -167,6 +167,9 @@ enum ChoiceGraphScheduler {
         // Per-bind-node bound value stall counter. Incremented when a bound value dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
         var boundValueStallCount: [Int: Int] = [:]
 
+        // Bind node IDs whose last composed dispatch produced zero accepts. The scheduler skips composed dispatch for binds in this set. Cleared entirely on structural graph rebuild.
+        var fruitlessBoundValueBinds = Set<Int>()
+
         // Per-encoder cumulative probe counts for the futility cap. See ``futilityEmitThreshold`` and ``futilityProbeBudget``.
         var encoderEmits: [EncoderName: Int] = [:]
         var encoderAccepts: [EncoderName: Int] = [:]
@@ -180,9 +183,9 @@ enum ChoiceGraphScheduler {
             for (name, emits) in encoderEmits {
                 let accepts = encoderAccepts[name, default: 0]
                 guard accepts == 0 else { continue }
-                // Search encoders are excluded — their acceptance pattern is dispatch-dependent (early dispatches have 0 accepts, later ones find accepts). Value search on Diff:One has 1024 total accepts but its first batch-zero dispatch has 0, triggering premature capping. Bound value search has its own stall-cycle gating. These encoders' convergence mechanisms handle their own waste.
+                // Search encoders and deletion are excluded. Search encoders have dispatch-dependent acceptance patterns (early dispatches have zero accepts, later ones find accepts). Bound value search has its own stall-cycle gating. Deletion is excluded because per-element deletion of zero-valued elements becomes viable after value search zeroes them — the scope rejection cache (which naturally invalidates on value change) handles deletion waste. Capping deletion under a shared budget starves per-element probes behind whole-array probes that exhaust the budget first.
                 switch name {
-                case .valueSearch, .floatSearch, .composed:
+                case .valueSearch, .floatSearch, .composed, .deletion:
                     continue
                 default:
                     break
@@ -278,6 +281,8 @@ enum ChoiceGraphScheduler {
                     if anyAccepted {
                         continue
                     }
+                    // Fruitless gate: skip composed dispatch for binds whose last dispatch produced zero accepts. Cleared on structural graph rebuild.
+                    if fruitlessBoundValueBinds.contains(fibreScope.bindNodeID) {
                         continue
                     }
                 }
@@ -420,8 +425,10 @@ enum ChoiceGraphScheduler {
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     if outcome.acceptCount > 0 {
                         boundValueStallCount[fibreScope.bindNodeID] = 0
+                        fruitlessBoundValueBinds.remove(fibreScope.bindNodeID)
                     } else {
                         boundValueStallCount[fibreScope.bindNodeID, default: 0] += 1
+                        fruitlessBoundValueBinds.insert(fibreScope.bindNodeID)
                     }
                 }
 
@@ -499,6 +506,7 @@ enum ChoiceGraphScheduler {
                         }
                         stats.graphRebuilds += 1
                         scopeRejectionCache.clear()
+                        fruitlessBoundValueBinds.removeAll(keepingCapacity: true)
                         sources = ScopeSourceBuilder.buildSources(from: graph)
 
                         if isInstrumented {
@@ -544,10 +552,7 @@ enum ChoiceGraphScheduler {
                             )
                         }
                     }
-                    // Pure value-only fast-path acceptances need no
-                    // bookkeeping here: graph and sources are still valid,
-                    // and the scope rejection cache self-invalidates via
-                    // hash change.
+                    // Pure value-only fast-path acceptances need no structural bookkeeping: graph and sources are still valid, and the scope rejection cache self-invalidates via hash change.
                 } else {
                     // Rejection: record in scope cache for structural operations.
                     scopeRejectionCache.recordRejection(
