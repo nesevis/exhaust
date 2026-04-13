@@ -40,7 +40,7 @@ extension GraphStructuralEncoder {
         }
     }
 
-    /// Copies donor entries into the target's position range, expanding bare `.just` entries to full pick-site equivalents for depth-crossing compatibility.
+    /// Copies donor entries into the target's position range, expanding depth-0 leaf entries to full pick-site equivalents for depth-crossing compatibility.
     private func buildSelfSimilarCandidate(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
@@ -52,7 +52,12 @@ extension GraphStructuralEncoder {
             return nil
         }
         let donorEntries = Array(sequence[donorRange.lowerBound ... donorRange.upperBound])
-        let expanded = Self.expandBareJustEntries(donorEntries, pickMetadata: scope.targetNodeID, graph: graph)
+        let expanded = Self.expandDepthZeroLeaves(
+            donorEntries,
+            donorNodeID: scope.donorNodeID,
+            donorRangeStart: donorRange.lowerBound,
+            graph: graph
+        )
         var candidate = sequence
         candidate.replaceSubrange(targetRange.lowerBound ... targetRange.upperBound, with: expanded)
         guard candidate.shortLexPrecedes(sequence) else { return nil }
@@ -122,7 +127,12 @@ extension GraphStructuralEncoder {
             return nil
         }
         let descendantEntries = Array(sequence[descendantRange.lowerBound ... descendantRange.upperBound])
-        let expanded = Self.expandBareJustEntries(descendantEntries, pickMetadata: scope.ancestorPickNodeID, graph: graph)
+        let expanded = Self.expandDepthZeroLeaves(
+            descendantEntries,
+            donorNodeID: scope.descendantPickNodeID,
+            donorRangeStart: descendantRange.lowerBound,
+            graph: graph
+        )
         var candidate = sequence
         candidate.replaceSubrange(ancestorRange.lowerBound ... ancestorRange.upperBound, with: expanded)
         guard candidate.shortLexPrecedes(sequence) else { return nil }
@@ -179,52 +189,123 @@ extension GraphStructuralEncoder {
 
     // MARK: - Depth-Crossing Expansion
 
-    /// Expands bare `.just` entries to full pick-site equivalents for depth-crossing promotions.
+    /// Expands depth-0 leaf entries to full pick-site equivalents for depth-crossing promotions.
     ///
-    /// When a donor subtree from a shallower recursion depth is copied to a deeper target position, leaf positions that were depth-0 constants (`.just`) in the donor correspond to `oneOf` pick sites at the target depth. The bare `.just` entry is one position wide, but the target's materializer expects a full pick site (`group(true)`, `branch`, `just`, `group(false)` = four positions). This method expands each bare `.just` to match, so the candidate fully specifies the target structure without relying on fallback tree content.
-    ///
-    /// A `.just` is "bare" when it is not preceded by a `.branch` entry — pick-site `.just` entries always follow their branch marker directly.
-    static func expandBareJustEntries(
+    /// When a donor subtree from a shallower recursion depth is copied to a deeper target position, depth-0 leaves (`.just` constants or `.chooseBits` values from the base case) land at positions where the target's materializer expects full `oneOf` pick sites. This method identifies those leaves via the graph, wraps each in the pick-site markers for the matching branch, and returns the expanded entries so the candidate is self-consistent at the target depth.
+    static func expandDepthZeroLeaves(
         _ entries: [ChoiceSequenceValue],
-        pickMetadata pickNodeID: Int,
+        donorNodeID: Int,
+        donorRangeStart: Int,
         graph: ChoiceGraph
     ) -> [ChoiceSequenceValue] {
-        guard case let .pick(metadata) = graph.nodes[pickNodeID].kind else { return entries }
-        guard let emptyBranchID = Self.findEmptyBranchID(in: metadata) else { return entries }
+        guard case let .pick(donorMeta) = graph.nodes[donorNodeID].kind else { return entries }
+
+        let leafPositions = depthZeroLeafPositions(
+            donorNodeID: donorNodeID,
+            fingerprint: donorMeta.fingerprint,
+            graph: graph
+        )
+        guard leafPositions.isEmpty == false else { return entries }
+
+        guard let leafBranchID = findLeafBranchID(in: donorMeta) else { return entries }
 
         var result: [ChoiceSequenceValue] = []
-        result.reserveCapacity(entries.count)
-        var previousWasBranch = false
+        result.reserveCapacity(entries.count + leafPositions.count * 3)
 
-        for entry in entries {
-            if case .just = entry, previousWasBranch == false {
+        for (index, entry) in entries.enumerated() {
+            let absolutePosition = donorRangeStart + index
+            if leafPositions.contains(absolutePosition) {
                 result.append(.group(true))
                 result.append(.branch(.init(
-                    id: emptyBranchID,
-                    validIDs: metadata.branchIDs,
-                    fingerprint: metadata.fingerprint
+                    id: leafBranchID,
+                    validIDs: donorMeta.branchIDs,
+                    fingerprint: donorMeta.fingerprint
                 )))
-                result.append(.just)
+                result.append(entry)
                 result.append(.group(false))
             } else {
                 result.append(entry)
-            }
-            if case .branch = entry {
-                previousWasBranch = true
-            } else {
-                previousWasBranch = false
             }
         }
         return result
     }
 
-    /// Finds the branch ID of the first `.just` (constant) branch in a pick site's elements.
-    private static func findEmptyBranchID(in metadata: PickMetadata) -> UInt64? {
+    /// Collects absolute start positions of depth-0 base case subtrees in the donor's subtree.
+    ///
+    /// Walks from same-fingerprint picks down through structural intermediaries (bind, zip). At each child that occupies a recursive slot (where a deeper tree would have another same-fingerprint pick), if the child is NOT a pick, it is a base case subtree whose entries need wrapping. Records its position range start so the expansion can insert pick-site markers around it.
+    private static func depthZeroLeafPositions(
+        donorNodeID: Int,
+        fingerprint: UInt64,
+        graph: ChoiceGraph
+    ) -> Set<Int> {
+        var positions = Set<Int>()
+        var pickStack = [donorNodeID]
+
+        while pickStack.isEmpty == false {
+            let pickID = pickStack.removeLast()
+            collectBaseCasePositions(
+                fromPick: pickID,
+                fingerprint: fingerprint,
+                graph: graph,
+                pickStack: &pickStack,
+                positions: &positions
+            )
+        }
+        return positions
+    }
+
+    /// Walks a same-fingerprint pick's subtree to find base case roots.
+    ///
+    /// Recurses through structural intermediaries (bind, zip, group). At each node that could be a recursive slot: if it is a same-fingerprint pick, pushes it onto ``pickStack`` for further traversal. If it is anything else, records its position range as a base case needing expansion.
+    private static func collectBaseCasePositions(
+        fromPick pickID: Int,
+        fingerprint: UInt64,
+        graph: ChoiceGraph,
+        pickStack: inout [Int],
+        positions: inout Set<Int>
+    ) {
+        var intermediaryStack = Array(graph.nodes[pickID].children)
+
+        while intermediaryStack.isEmpty == false {
+            let nodeID = intermediaryStack.removeLast()
+            let node = graph.nodes[nodeID]
+
+            if case let .pick(metadata) = node.kind, metadata.fingerprint == fingerprint {
+                pickStack.append(nodeID)
+            } else if case let .bind(bindMeta) = node.kind {
+                if bindMeta.boundChildIndex < node.children.count {
+                    intermediaryStack.append(node.children[bindMeta.boundChildIndex])
+                }
+            } else if case .zip = node.kind {
+                for childID in node.children {
+                    intermediaryStack.append(childID)
+                }
+            } else if let range = node.positionRange {
+                // Skip nodes whose parent is a same-fingerprint pick — they're
+                // already inside that pick's branch structure and don't need wrapping.
+                let parentIsPick: Bool = if let parentID = node.parent,
+                    case let .pick(parentMeta) = graph.nodes[parentID].kind,
+                    parentMeta.fingerprint == fingerprint
+                { true } else { false }
+                if parentIsPick == false {
+                    positions.insert(range.lowerBound)
+                }
+            }
+        }
+    }
+
+    /// Finds the branch ID of the first leaf (`.just` or `.choice`) branch in a pick site's elements.
+    private static func findLeafBranchID(in metadata: PickMetadata) -> UInt64? {
         for (index, element) in metadata.branchElements.enumerated() {
             guard index < metadata.branchIDs.count else { break }
             let inner = element.isSelected ? element.unwrapped : element
-            if case let .branch(_, _, _, _, content) = inner, content.isJust {
-                return metadata.branchIDs[index]
+            if case let .branch(_, _, _, _, content) = inner {
+                switch content {
+                case .just, .choice:
+                    return metadata.branchIDs[index]
+                default:
+                    continue
+                }
             }
         }
         return nil
