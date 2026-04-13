@@ -639,22 +639,6 @@ public extension ChoiceSequence {
         return keys
     }
 
-    /// Counts the number of aligned positions where two sequences differ under the shortlex ordering.
-    ///
-    /// Positions beyond the shorter sequence each count as one difference. Used as a cocartesian distance signal in fibration-based regime detection: a large distance indicates a lossy structural reduction; a small distance indicates a transparent one.
-    static func shortlexDistance(_ lhs: ChoiceSequence, _ rhs: ChoiceSequence) -> Int {
-        let minCount = Swift.min(lhs.count, rhs.count)
-        var distance = abs(lhs.count - rhs.count)
-        var i = 0
-        while i < minCount {
-            if lhs[i].shortLexCompare(rhs[i]) != .eq {
-                distance += 1
-            }
-            i += 1
-        }
-        return distance
-    }
-
     func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if count != other.count {
