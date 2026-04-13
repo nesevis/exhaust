@@ -155,32 +155,6 @@ enum MinimizationScopeQuery {
         return result
     }
 
-    /// Returns true when every chooseBits leaf in the subtree rooted at `rootNodeID` is either at its reduction target or at its convergence floor.
-    ///
-    /// For a single-leaf inner (the common case), this is a single node check. For complex inners (zip of multiple generators, nested structures), all descendant leaves must be settled before the bound subtree is considered structurally stable.
-    static func isInnerSubtreeConverged(
-        rootNodeID: Int,
-        graph: ChoiceGraph
-    ) -> Bool {
-        var stack = [rootNodeID]
-        while let current = stack.popLast() {
-            let node = graph.nodes[current]
-            if case let .chooseBits(metadata) = node.kind, node.positionRange != nil {
-                let currentBitPattern = metadata.value.bitPattern64
-                let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
-                if currentBitPattern == targetBitPattern { continue }
-                if let converged = metadata.convergedOrigin,
-                   converged.bound == currentBitPattern
-                {
-                    continue
-                }
-                return false
-            }
-            stack.append(contentsOf: node.children)
-        }
-        return true
-    }
-
     /// Finds the parent bind node of a given node, or nil.
     private static func findParentBind(of nodeID: Int, graph: ChoiceGraph) -> Int? {
         var current = nodeID

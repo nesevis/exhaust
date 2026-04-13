@@ -278,16 +278,6 @@ enum ChoiceGraphScheduler {
                     if anyAccepted {
                         continue
                     }
-                    // Convergence gate: from cycle 2 onwards, skip when the
-                    // bind-inner has converged. Cycle 1 always allows composed
-                    // so it gets at least one dispatch before the skip fires.
-                    if config.convergenceGate,
-                       cycles >= 2,
-                       MinimizationScopeQuery.isInnerSubtreeConverged(
-                           rootNodeID: fibreScope.upstreamLeafNodeID,
-                           graph: graph
-                       )
-                    {
                         continue
                     }
                 }

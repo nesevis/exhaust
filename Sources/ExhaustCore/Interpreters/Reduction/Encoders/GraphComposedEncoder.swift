@@ -194,15 +194,6 @@ struct GraphComposedEncoder: GraphEncoder {
     private var currentUpstreamProbe: EncoderProbe?
     private var downstreamActive = false
     private var upstreamProbesUsed = 0
-    private var consecutiveBarrenUpstream = 0
-    private var downstreamAcceptedAny = false
-
-    /// Maximum consecutive upstream probes whose downstream fibre search
-    /// found zero accepts before the composition bails. Each barren upstream
-    /// probe means a full fibre enumeration (up to the covering budget) with
-    /// nothing to show for it. Two consecutive barren probes is strong evidence
-    /// that the upstream range has no viable values.
-    private static let barrenUpstreamLimit = 2
 
     /// Creates a composition.
     ///
@@ -238,33 +229,18 @@ struct GraphComposedEncoder: GraphEncoder {
         currentUpstreamProbe = nil
         downstreamActive = false
         upstreamProbesUsed = 0
-        consecutiveBarrenUpstream = 0
-        downstreamAcceptedAny = false
         upstream.start(scope: scope)
     }
 
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         // Drain the active downstream first.
         if downstreamActive {
-            if lastAccepted {
-                downstreamAcceptedAny = true
-            }
             if let downstreamProbe = downstream.nextProbe(lastAccepted: lastAccepted) {
                 guard let upstreamProbe = currentUpstreamProbe else { return nil }
                 return wrap(downstreamProbe: downstreamProbe, upstreamProbe: upstreamProbe)
             }
-            // Downstream exhausted for this upstream probe.
             downstreamActive = false
-            if downstreamAcceptedAny {
-                consecutiveBarrenUpstream = 0
-            } else {
-                consecutiveBarrenUpstream += 1
-            }
-            downstreamAcceptedAny = false
         }
-
-        // Bail if consecutive upstream probes produced no downstream accepts.
-        guard consecutiveBarrenUpstream < Self.barrenUpstreamLimit else { return nil }
 
         // Advance upstream until we find one whose lift produces at least one downstream probe,
         // or until the upstream budget is exhausted. The budget caps the number of upstream probes
@@ -281,10 +257,7 @@ struct GraphComposedEncoder: GraphEncoder {
             if let firstDownstreamProbe = downstream.nextProbe(lastAccepted: false) {
                 return wrap(downstreamProbe: firstDownstreamProbe, upstreamProbe: upstreamProbe)
             }
-            // Downstream produced zero probes for this upstream — count as barren.
             downstreamActive = false
-            consecutiveBarrenUpstream += 1
-            if consecutiveBarrenUpstream >= Self.barrenUpstreamLimit { return nil }
         }
         return nil
     }
@@ -297,8 +270,6 @@ struct GraphComposedEncoder: GraphEncoder {
         currentUpstreamProbe = nil
         downstreamActive = false
         upstreamProbesUsed = 0
-        consecutiveBarrenUpstream = 0
-        downstreamAcceptedAny = false
     }
 
     /// Replaces a downstream probe's mutation with the upstream's mutation, lifted to set ``LeafChange/mayReshape`` to `true`.
