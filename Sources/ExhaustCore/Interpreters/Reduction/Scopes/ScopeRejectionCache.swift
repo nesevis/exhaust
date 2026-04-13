@@ -22,39 +22,33 @@ struct ScopeRejectionCache {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) {
-        // Branch pivot uses only the coarse (value-independent) cache, which
-        // is cleared per-cycle. A pivot rejected with old leaf values may
-        // succeed after value search changes the surrounding tree — the
-        // materializer fills the new branch with fresh values, so the property
-        // outcome depends on the whole tree, not just the pick node.
-        //
-        // Self-similar substitution and descendant promotion use the fine
-        // (value-dependent) cache. Their structural donor/target relationship
-        // is genuinely value-independent: the donor subtree is copied as-is,
-        // and surrounding value changes do not make a previously rejected
-        // replacement viable.
-        if case .replace(.branchPivot) = operation {
+        // Structural operations (replacement, deletion, migration) use the coarse (value-independent) cache, cleared per-cycle. A structural operation rejected with old leaf values may succeed after value search changes the surrounding tree — the property outcome depends on the whole tree, not just the targeted positions. Value-based operations (minimization, exchange) use the fine-grained cache.
+        switch operation {
+        case .replace, .remove, .migrate:
             if let hash = coarseScopeHash(operation: operation, graph: graph) {
                 coarseRejectedHashes.insert(hash)
             }
-        } else {
+        default:
             if let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) {
                 rejectedHashes.insert(hash)
             }
         }
     }
 
-    /// Returns true if this transformation was previously rejected. Checks the coarse (value-independent) cache for branch pivots, the fine-grained (value-dependent) cache for all others.
+    /// Returns true if this transformation was previously rejected. Checks the coarse (value-independent) cache for structural operations, the fine-grained (value-dependent) cache for value-based operations.
     func isRejected(
         operation: GraphOperation,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> Bool {
-        if case .replace(.branchPivot) = operation {
+        switch operation {
+        case .replace, .remove, .migrate:
             guard let hash = coarseScopeHash(operation: operation, graph: graph) else {
                 return false
             }
             return coarseRejectedHashes.contains(hash)
+        default:
+            break
         }
         guard let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) else {
             return false
