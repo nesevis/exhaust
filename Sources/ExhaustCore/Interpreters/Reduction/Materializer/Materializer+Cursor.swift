@@ -17,10 +17,6 @@ extension Materializer {
         private(set) var position: Int = 0
         var exhausted: Bool = false
 
-        /// When > 0, the cursor is inside a bind's bound subtree and should
-        /// behave as exhausted so the materializer falls back to PRNG.
-        private var bindSuspendDepth: Int = 0
-
         /// Stack of position limits for nested scopes (zip children).
         /// Max nesting depth ~3-4 in practice.
         private var scopeLimits: [Int] = {
@@ -90,68 +86,10 @@ extension Materializer {
             }
         }
 
-        // MARK: Bind support
-
-        /// Returns the top-level element count of the sequence starting at the current cursor
-        /// position, without advancing. Returns `nil` if the position does not hold a `.sequence(true)`
-        /// marker (after skipping transparent markers).
-        ///
-        /// Called before ``skipBindBound()`` to capture array lengths that bind-bound skipping would
-        /// otherwise discard from the prefix.
-        func peekSequenceLength() -> Int? {
-            var pos = position
-            while pos < effectiveEnd {
-                switch entries[pos] {
-                case .group, .bind, .just:
-                    pos &+= 1
-                default:
-                    guard case .sequence(true, _) = entries[pos] else { return nil }
-                    return countTopLevelElements(from: pos &+ 1)
-                }
-            }
-            return nil
-        }
-
-        /// Advance past the bound content of a `.bind` node.
-        mutating func skipBindBound() {
-            var depth = 0
-            while position < effectiveEnd {
-                switch entries[position] {
-                case .bind(true):
-                    depth &+= 1
-                    position += 1
-                case .bind(false):
-                    if depth == 0 {
-                        position &+= 1
-                        return
-                    }
-                    depth &-= 1
-                    position &+= 1
-                default:
-                    position &+= 1
-                }
-            }
-        }
-
-        private(set) var bindEncounterCount: Int = 0
-
-        mutating func suspendForBind() {
-            bindSuspendDepth &+= 1
-            bindEncounterCount += 1
-        }
-
-        mutating func resumeAfterBind() {
-            bindSuspendDepth &-= 1
-        }
-
-        var isSuspended: Bool {
-            bindSuspendDepth > 0
-        }
-
         // MARK: Consume entries
 
         mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
-            guard exhausted == false, isSuspended == false else { return nil }
+            guard exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -168,7 +106,7 @@ extension Materializer {
         }
 
         mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
-            guard exhausted == false, isSuspended == false else { return nil }
+            guard exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -187,7 +125,7 @@ extension Materializer {
         // MARK: Sequence markers
 
         mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
-            guard exhausted == false, isSuspended == false else { return nil }
+            guard exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
