@@ -154,8 +154,6 @@ public extension ChoiceGraph {
     /// Returns the bind nesting depth at a given sequence position.
     ///
     /// Counts the number of bind nodes whose bound child's position range contains the given position.
-    ///
-    /// - SeeAlso: ``BindSpanIndex/bindDepth(at:)``
     func bindDepth(at position: Int) -> Int {
         var depth = 0
         for node in nodes {
@@ -172,8 +170,6 @@ public extension ChoiceGraph {
     }
 
     /// Whether a sequence position falls inside any bind node's bound child range.
-    ///
-    /// - SeeAlso: ``BindSpanIndex/isInBoundSubtree(_:)``
     func isInBoundSubtree(_ position: Int) -> Bool {
         for node in nodes {
             guard case let .bind(metadata) = node.kind else { continue }
@@ -189,8 +185,6 @@ public extension ChoiceGraph {
     }
 
     /// Returns the bind node whose inner child's position range contains the given position, or nil.
-    ///
-    /// - SeeAlso: ``BindSpanIndex/bindRegionForInnerIndex(_:)``
     func bindNodeForInnerPosition(_ position: Int) -> ChoiceGraphNode? {
         for node in nodes {
             guard case let .bind(metadata) = node.kind else { continue }

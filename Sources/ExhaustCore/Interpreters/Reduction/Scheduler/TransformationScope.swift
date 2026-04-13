@@ -328,6 +328,33 @@ struct MigrationScope {
     let receiverPositionRange: ClosedRange<Int>
 }
 
+// MARK: - Reordering Scopes
+
+/// Defines the scope of a numeric reordering operation.
+///
+/// Reordering sorts type-homogeneous sequence element groups into ascending numeric order as a final canonicalization pass after all other reduction is complete.
+enum ReorderingScope {
+    /// Reorder sequence element groups into natural numeric order.
+    case numericReorder(NumericReorderScope)
+}
+
+/// Scope for numeric reordering of type-homogeneous sequence element groups.
+///
+/// Groups are derived from graph ``SequenceMetadata/childPositionRanges`` and pre-filtered for compatibility. Pre-sorted deepest-first, rightmost-first so inner groups settle before outer groups compare them.
+struct NumericReorderScope {
+    /// Pre-filtered reorderable groups, sorted deepest-first then rightmost-first.
+    let groups: [ReorderableGroup]
+}
+
+/// A group of type-homogeneous sibling elements within a sequence node eligible for numeric reordering.
+struct ReorderableGroup {
+    /// Containment-tree depth of the parent sequence node.
+    let depth: Int
+
+    /// Full ChoiceSequence extents of each sibling element, in position order.
+    let ranges: [ClosedRange<Int>]
+}
+
 // MARK: - Transformation Scope
 
 /// Bundles a graph transformation with its base sequence, tree, graph, and warm-start convergence records into a self-contained unit of work for an encoder.

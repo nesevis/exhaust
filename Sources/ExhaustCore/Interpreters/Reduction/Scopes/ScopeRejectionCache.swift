@@ -128,7 +128,7 @@ struct ScopeRejectionCache {
         case .replace: 0x1827_3645_5463_7281
         case .permute: 0x9182_7364_5546_3728
         case .migrate: 0x6372_8190_A0B0_C0D0
-        case .minimize, .exchange: 0
+        case .minimize, .exchange, .reorder: 0
         }
     }
 }

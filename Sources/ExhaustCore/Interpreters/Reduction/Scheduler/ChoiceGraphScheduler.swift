@@ -298,6 +298,7 @@ enum ChoiceGraphScheduler {
                 case .exchange(.tandem): .lockstep
                 case .permute: .siblingSwap
                 case .migrate: .migration
+                case .reorder: .numericReorder
                 }
                 if let budget = encoderCycleBudget[pendingEncoderName], budget <= 0 {
                     continue
@@ -632,21 +633,41 @@ enum ChoiceGraphScheduler {
         }
 
         // Human-readable ordering pass: reorders type-homogeneous sibling groups into natural numeric order so seeds with the same multiset of values converge to the same canonical counterexample.
-        let numericReorderPass = NumericReorderPass()
-        if let humanResult = numericReorderPass.encode(
-            gen: gen,
-            sequence: sequence,
-            tree: tree,
-            property: property
-        ) {
-            sequence = humanResult.result.sequence
-            tree = humanResult.result.tree
-            output = humanResult.result.output
-            if collectStats {
-                stats.totalMaterializations += humanResult.materializations
-                stats.encoderProbes[.numericReorder, default: 0] += humanResult.materializations
-            }
-            if isInstrumented {
+        if let reorderScope = ReorderingScopeQuery.build(graph: graph) {
+            let reorderTransformation = GraphTransformation(
+                operation: .reorder(reorderScope),
+                yield: TransformationYield(structural: 0, value: 0, slack: .exact, estimatedProbes: 1),
+                precondition: .unconditional,
+                postcondition: TransformationPostcondition(
+                    isStructural: false,
+                    invalidatesConvergence: [],
+                    enablesRemoval: []
+                )
+            )
+            let reorderScopeBundle = TransformationScope(
+                transformation: reorderTransformation,
+                baseSequence: sequence,
+                tree: tree,
+                graph: graph,
+                warmStartRecords: [:]
+            )
+            var reorderEncoder: any GraphEncoder = GraphReorderEncoder()
+            var reorderCache = Set<UInt64>()
+            let reorderOutcome = try ChoiceGraphScheduler.runProbeLoop(
+                encoder: &reorderEncoder,
+                scope: reorderScopeBundle,
+                graph: graph,
+                sequence: &sequence,
+                tree: &tree,
+                output: &output,
+                gen: erasedGen,
+                property: wrappedProperty,
+                rejectCache: &reorderCache,
+                stats: &stats,
+                collectStats: collectStats,
+                isInstrumented: isInstrumented
+            )
+            if isInstrumented, reorderOutcome.accepted {
                 ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
             }
         }
@@ -697,6 +718,8 @@ enum ChoiceGraphScheduler {
             GraphRedistributionEncoder()
         case .exchange(.tandem):
             GraphLockstepEncoder()
+        case .reorder:
+            GraphReorderEncoder()
         }
     }
 }
