@@ -167,8 +167,8 @@ enum ChoiceGraphScheduler {
         // Per-bind-node bound value stall counter. Incremented when a bound value dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
         var boundValueStallCount: [Int: Int] = [:]
 
-        // Bind node IDs whose last composed dispatch produced zero accepts. The scheduler skips composed dispatch for binds in this set. Cleared entirely on structural graph rebuild.
-        var fruitlessBoundValueBinds = Set<Int>()
+        // Node IDs whose last dependent-node dispatch (composed or pivot-then-minimize) produced zero accepts. The scheduler skips dispatch for nodes in this set. Cleared entirely on structural graph rebuild.
+        var fruitlessDependentNodes = Set<Int>()
 
         // Per-encoder cumulative probe counts for the futility cap. See ``futilityEmitThreshold`` and ``futilityProbeBudget``.
         var encoderEmits: [EncoderName: Int] = [:]
@@ -282,14 +282,7 @@ enum ChoiceGraphScheduler {
                         continue
                     }
                     // Fruitless gate: skip composed dispatch for binds whose last dispatch produced zero accepts. Cleared on structural graph rebuild.
-                    if fruitlessBoundValueBinds.contains(fibreScope.bindNodeID) {
-                        continue
-                    }
-                }
-
-                // Pivot-then-minimize is deferred to stall cycles, same as bound value.
-                if case .minimize(.pivotThenMinimize) = transformation.operation {
-                    if anyAccepted {
+                    if fruitlessDependentNodes.contains(fibreScope.bindNodeID) {
                         continue
                     }
                 }
@@ -416,17 +409,16 @@ enum ChoiceGraphScheduler {
                     encoderCycleBudget[pendingEncoderName] = budget
                 }
 
-                // bound value stall tracking: increment the per-bind-node counter when a dispatch produces zero accepts, reset on any acceptance. The stall count decays the upstream budget on subsequent dispatches.
+                // Dependent-node stall tracking: mark nodes fruitless on zero-accept dispatch, clear on any acceptance.
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     if outcome.acceptCount > 0 {
                         boundValueStallCount[fibreScope.bindNodeID] = 0
-                        fruitlessBoundValueBinds.remove(fibreScope.bindNodeID)
+                        fruitlessDependentNodes.remove(fibreScope.bindNodeID)
                     } else {
                         boundValueStallCount[fibreScope.bindNodeID, default: 0] += 1
-                        fruitlessBoundValueBinds.insert(fibreScope.bindNodeID)
+                        fruitlessDependentNodes.insert(fibreScope.bindNodeID)
                     }
                 }
-
                 if outcome.accepted {
                     anyAccepted = true
 
@@ -501,7 +493,7 @@ enum ChoiceGraphScheduler {
                         }
                         stats.graphRebuilds += 1
                         scopeRejectionCache.clear()
-                        fruitlessBoundValueBinds.removeAll(keepingCapacity: true)
+                        fruitlessDependentNodes.removeAll(keepingCapacity: true)
                         sources = ScopeSourceBuilder.buildSources(from: graph)
 
                         if isInstrumented {
