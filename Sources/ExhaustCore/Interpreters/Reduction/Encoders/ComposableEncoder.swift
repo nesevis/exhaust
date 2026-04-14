@@ -37,22 +37,12 @@ public protocol ComposableEncoder {
     ///
     /// Each entry maps a flat sequence index to the ``ConvergedOrigin`` at which the search converged.
     var convergenceRecords: [Int: ConvergedOrigin] { get }
-
-    /// Whether convergence records from the previous run are compatible with this run.
-    ///
-    /// Returns `true` by default — the encoder's semantics have not changed between runs. ``GraphComposedEncoder`` checks this after ``start()`` and cold-starts the convergence transfer when it returns `false`.
-    var isConvergenceTransferSafe: Bool { get }
 }
 
 public extension ComposableEncoder {
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
-    }
-
-    /// Default: convergence transfer is always safe (same encoder semantics across runs).
-    var isConvergenceTransferSafe: Bool {
-        true
     }
 
     /// Default cost estimate: nil (no work to do). Conformers should override.

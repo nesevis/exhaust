@@ -111,6 +111,7 @@ extension Interpreters {
                 choices: &choices
             )
         case let .filter(gen, _, _, predicate):
+            // Invariant: .filter's continuation is always .pure($0). The inner value is the output; the predicate is the only gate.
             guard let inner = try replayWithChoicesHelper(gen, choices: &choices),
                   predicate(inner)
             else {
@@ -118,6 +119,7 @@ extension Interpreters {
             }
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
+            // Invariant: .classify and .unique are transparent annotations whose continuation is always .pure($0). Their choices are entirely determined by the inner generator.
             return try replayWithChoicesHelper(gen, choices: &choices) as? Output
         case let .transform(kind, inner):
             let result: Any

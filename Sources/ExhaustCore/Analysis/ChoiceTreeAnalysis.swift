@@ -32,7 +32,6 @@
 /// - The generator uses `getSize` or `resize` (size-scaled generation is not analyzable).
 /// - A branch within a pick contains nested choices (parameters inside branches).
 /// - No explicit range metadata exists on a choice node (non-explicit ranges come from size scaling).
-/// - More than 20 parameters are extracted (covering array construction cost grows combinatorially).
 /// - Zero parameters are extracted.
 ///
 /// - SeeAlso: ``PullBasedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``

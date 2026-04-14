@@ -36,8 +36,7 @@ public extension ClosedRange where Bound == UInt64 {
             let extra: UInt64 = UInt64(i) < chunkRemainder ? 1 : 0
             let size = chunkSize + extra
             guard size > 0 else { break }
-            // Compute end = start + (size - 1) to avoid the overflow that (start + size) - 1 can cause
-            // when start + size exceeds UInt64.max.
+            // Compute end = start + (size - 1) to avoid the overflow that (start + size) - 1 can cause when start + size exceeds UInt64.max.
             let (tentativeEnd, overflow) = start.addingReportingOverflow(size - 1)
             let end = (overflow || tentativeEnd > upperBound) ? upperBound : tentativeEnd
 

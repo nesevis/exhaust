@@ -233,20 +233,8 @@ public enum BoundaryCoveringArrayReplay {
 
         var elementParamCount = 0
         for param in remainingParams {
-            switch param.kind {
-            case .sequenceElement, .finiteChooseBits, .chooseBits:
-                if case .sequenceElement = param.kind {
-                    elementParamCount += 1
-                } else {
-                    break
-                }
-            default:
-                break
-            }
-            if case .sequenceElement = param.kind {
-                continue
-            }
-            break
+            guard case .sequenceElement = param.kind else { break }
+            elementParamCount += 1
         }
 
         var elementTrees: [ChoiceTree] = []
