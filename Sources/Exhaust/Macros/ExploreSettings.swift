@@ -20,10 +20,10 @@ public enum ExploreSettings {
     /// Accepts a raw `UInt64` or a Crockford Base32 string.
     case replay(ReplaySeed)
 
-    /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
+    /// Silences issue reporting, log output, or both for this explore run.
     ///
-    /// Use this when the property test is *expected* to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure.
-    case suppressIssueReporting
+    /// Use `.suppress(.issueReporting)` when the explore run is expected to find a counterexample and the test asserts on the returned value. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
+    case suppress(SuppressOption)
 
     /// Maximum number of seeds to keep in the pool.
     case poolCapacity(Int)

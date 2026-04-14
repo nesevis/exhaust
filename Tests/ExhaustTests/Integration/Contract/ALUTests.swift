@@ -14,7 +14,7 @@ struct ALUTests {
             #exhaust(
                 ALUSpec.self,
                 commandLimit: 8,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 

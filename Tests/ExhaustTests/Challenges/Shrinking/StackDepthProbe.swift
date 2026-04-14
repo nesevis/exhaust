@@ -57,7 +57,7 @@ struct BindBoundMaterializationProbe {
     func depth100WithCoverage() {
         let gen = #gen(.int(in: 0 ... 100))
             .bind { depth in Self.fullExpAtDepth(depth) }
-        let result = #exhaust(gen, .suppressIssueReporting, .budget(.custom(coverage: 200, sampling: 1))) { _ in true }
+        let result = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(coverage: 200, sampling: 1))) { _ in true }
         print("Depth 100: \(String(describing: result))")
     }
 }

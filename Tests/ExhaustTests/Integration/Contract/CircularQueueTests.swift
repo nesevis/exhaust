@@ -39,7 +39,7 @@ struct CircularQueueTests {
                 CircularQueueContract.self,
                 commandLimit: 10,
                 .budget(.expensive),
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .replay(12_892_450_489_757_532_783)
             )
         )

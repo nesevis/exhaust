@@ -48,7 +48,7 @@ struct StrictlyIncreasingRunChallenge {
         let counterExample: [UInt64] = [0, 1, 2]
         #expect(property(counterExample) == false)
 
-        let output = #exhaust(gen, .suppressIssueReporting, property: property)
+        let output = #exhaust(gen, .suppress(.issueReporting), property: property)
 
         // Should be the minimal strictly increasing triple
         #expect(output == counterExample)

@@ -28,7 +28,7 @@ struct DistinctShrinkingChallenge {
         var report: ExhaustReport?
         let counterExample = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
 
             .replay(5_023_515_172_476_973_421),
             .onReport { report = $0 }
@@ -46,7 +46,7 @@ struct DistinctShrinkingChallenge {
         var report: ExhaustReport?
         let counterExample = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
 
             .reflecting(value),
             .onReport { report = $0 }

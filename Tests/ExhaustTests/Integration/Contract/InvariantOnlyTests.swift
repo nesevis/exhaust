@@ -11,7 +11,7 @@ struct InvariantOnlyTests {
             #exhaust(
                 CircularBufferContract.self,
                 commandLimit: 6,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 
@@ -27,7 +27,7 @@ struct InvariantOnlyTests {
             #exhaust(
                 SortedBackingContract.self,
                 commandLimit: 5,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 

@@ -30,7 +30,7 @@ struct KVStoreLifecycleTests {
             #exhaust(
                 KVStoreLifecycleContract.self,
                 commandLimit: 10,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 

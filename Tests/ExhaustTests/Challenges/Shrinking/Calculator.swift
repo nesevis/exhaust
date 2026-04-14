@@ -29,7 +29,7 @@ struct CalculatorShrinkingChallenge {
         let gen = #gen(Self.expression(depth: 4))
         let result = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .randomOnly,
             .replay("23KHVTCX48J7V"),
 //            .replay(5832967290043753512),

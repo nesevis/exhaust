@@ -11,7 +11,7 @@ struct PostconditionTests {
             #exhaust(
                 SetUniquenessContract.self,
                 commandLimit: 5,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 
@@ -27,7 +27,7 @@ struct PostconditionTests {
             #exhaust(
                 StackLIFOContract.self,
                 commandLimit: 4,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 
@@ -43,7 +43,7 @@ struct PostconditionTests {
             #exhaust(
                 DictionaryConsistencyContract.self,
                 commandLimit: 6,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 

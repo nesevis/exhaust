@@ -38,7 +38,7 @@ struct BinaryHeapShrinkingChallenge {
         let output = try #require(
             #exhaust(
                 Self.gen.unique(),
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .replay(1591),
                 .logging(.debug),
                 .onReport { report = $0 },

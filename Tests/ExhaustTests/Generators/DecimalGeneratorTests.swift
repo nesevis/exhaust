@@ -106,7 +106,7 @@ struct DecimalGeneratorTests {
             let threshold = Decimal(string: "50.00")!
 
             let output = try #require(
-                #exhaust(gen, .suppressIssueReporting) { value in value < threshold }
+                #exhaust(gen, .suppress(.issueReporting)) { value in value < threshold }
             )
 
             // Should shrink to exactly the threshold (smallest failing value)
@@ -121,7 +121,7 @@ struct DecimalGeneratorTests {
             let threshold = Decimal(string: "50.00")!
 
             let output = try #require(
-                #exhaust(gen, .suppressIssueReporting) { value in value < threshold }
+                #exhaust(gen, .suppress(.issueReporting)) { value in value < threshold }
             )
 
             #expect(output == threshold)

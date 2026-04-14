@@ -90,13 +90,13 @@ struct ContractMacroTests {
     func contractWithoutCommandLimitWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(Spec.self, .suppressIssueReporting)
+            #exhaust(Spec.self, .suppress(.issueReporting))
             """,
             expandedSource: """
             __runContract(
                 Spec.self,
                 commandLimit: nil,
-                settings: [.suppressIssueReporting],
+                settings: [.suppress(.issueReporting)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,

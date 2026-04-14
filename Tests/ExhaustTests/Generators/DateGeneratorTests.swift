@@ -209,7 +209,7 @@ struct DateGeneratorTests {
             let cutoff = lower.addingTimeInterval(86400 * 14 + 3600 * 12)
 
             let output = try #require(
-                #exhaust(gen, .suppressIssueReporting) { date in date < cutoff }
+                #exhaust(gen, .suppress(.issueReporting)) { date in date < cutoff }
             )
 
             // Should shrink to exactly the cutoff (first failing hour)
@@ -230,7 +230,7 @@ struct DateGeneratorTests {
             let threshold = lower.addingTimeInterval(86400 * 100)
 
             let output = try #require(
-                #exhaust(gen, .suppressIssueReporting) { date in date < threshold }
+                #exhaust(gen, .suppress(.issueReporting)) { date in date < threshold }
             )
 
             // Should shrink to exactly the threshold (first failing day)

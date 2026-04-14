@@ -11,7 +11,7 @@ struct AsyncContractTests {
             AsyncCounterSpec.self,
             commandLimit: 8,
             .budget(.custom(coverage: 500, sampling: 30)),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "Async counter spec should pass — model and SUT are identical")
     }
@@ -22,7 +22,7 @@ struct AsyncContractTests {
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .budget(.custom(coverage: 500, sampling: 100)),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         #expect(result != nil, "Buggy async counter should fail")
         if let result {
@@ -41,14 +41,14 @@ struct AsyncContractTests {
             AsyncSkipSpec.self,
             commandLimit: 8,
             .budget(.custom(coverage: 500, sampling: 30)),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "Async skip spec should pass")
     }
 
     @Test("Mixed sync+async commands produce AsyncContractSpec conformance")
     func mixedAsyncContract() async {
-        let result = await #exhaust(MixedAsyncSpec.self, commandLimit: 8, .budget(.custom(coverage: 500, sampling: 30)), .suppressIssueReporting)
+        let result = await #exhaust(MixedAsyncSpec.self, commandLimit: 8, .budget(.custom(coverage: 500, sampling: 30)), .suppress(.issueReporting))
         #expect(result == nil, "Mixed async spec should pass")
     }
 
@@ -59,7 +59,7 @@ struct AsyncContractTests {
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .replay(42),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")
 
@@ -67,7 +67,7 @@ struct AsyncContractTests {
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .replay(42),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         #expect(result2 != nil, "Same seed should reproduce the failure")
         if let result1, let result2 {
@@ -80,7 +80,7 @@ struct AsyncContractTests {
         let result = await #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 20,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .logging(.debug)
         )
         #expect(result != nil, "Should find a failure")
@@ -96,7 +96,7 @@ struct AsyncContractTests {
         let result1 = #exhaust(
             BuggyCounterSpec.self,
             commandLimit: 20,
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         print()
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")

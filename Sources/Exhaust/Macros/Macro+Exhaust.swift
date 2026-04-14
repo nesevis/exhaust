@@ -21,7 +21,9 @@ import ExhaustCore
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
 /// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
 /// - `.randomOnly`: disables structured coverage analysis.
-/// - `.suppressIssueReporting`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
+/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
+/// - `.suppress(.logs)`: silences all console output. Overrides `.logging(...)`.
+/// - `.suppress(.all)`: skips issue reporting and silences all console output.
 ///
 /// ## Examples
 ///

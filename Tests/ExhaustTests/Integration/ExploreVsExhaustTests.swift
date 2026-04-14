@@ -20,7 +20,7 @@ struct ExploreVsExhaustTests {
             gen,
             .budget(.expensive),
             .replay(577_118_919_570_660_442),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         ) { bst in
             !(bst.height == 5)
         }
@@ -43,7 +43,7 @@ struct ExploreVsExhaustTests {
             gen,
             .samplingBudget(200_000),
             .replay(15_190_352_305_301_843_617),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             scorer: { Double($0.height) }
         ) { bst in
             !(bst.height >= 5)
@@ -59,7 +59,7 @@ struct ExploreVsExhaustTests {
     @Test("#explore with scorer works for simple search")
     func exploreWithScorerWorks() {
         let gen = #gen(.int(in: 0 ... 1000))
-        let result = #explore(gen, .samplingBudget(500), .suppressIssueReporting,
+        let result = #explore(gen, .samplingBudget(500), .suppress(.issueReporting),
                               scorer: { Double($0) })
         { value in
             value < 500

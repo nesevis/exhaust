@@ -38,7 +38,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(1337),
             .onReport { report = $0 }
         ) { arr in
@@ -65,7 +65,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(1337),
             .onReport { report = $0 }
         ) { arr in
@@ -93,7 +93,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(1337),
             .onReport { report = $0 }
         ) { arr in
@@ -123,7 +123,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(1337),
             .onReport { report = $0 }
         ) { value in
@@ -153,7 +153,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(1337),
             .onReport { report = $0 }
         ) { x, y in
@@ -183,7 +183,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(1337),
             .onReport { report = $0 }
         ) { arr in
@@ -212,7 +212,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(1337),
             .onReport { report = $0 }
         ) { arr in
@@ -242,7 +242,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(42),
             .onReport { report = $0 }
         ) { small, large in
@@ -272,7 +272,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(42),
             .onReport { report = $0 }
         ) { arr in
@@ -305,7 +305,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(42),
             .onReport { report = $0 }
         ) { a, b, c, d in
@@ -333,7 +333,7 @@ struct StructuralPathologicalChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
 //            .randomOnly,
             .replay(12_791_394_592_254_154_946),
             .budget(.expedient),

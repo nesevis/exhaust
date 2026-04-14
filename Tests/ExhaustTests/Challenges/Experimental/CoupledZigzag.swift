@@ -49,7 +49,7 @@ struct CoupledZigzagChallenge {
         let value = try #require(
             #exhaust(
                 gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .replay(12_768_154_885_595_245_120),
                 .onReport { report = $0 },
                 .logging(.debug, .keyValue),
@@ -98,7 +98,7 @@ struct CoupledZigzagChallenge {
         let value = try #require(
             #exhaust(
                 gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .budget(.exorbitant),
                 .replay(15_376_868_453_505_688_755),
                 .onReport { report = $0 },

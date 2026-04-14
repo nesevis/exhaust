@@ -73,7 +73,7 @@ struct SparseModularZigzagChallenge {
         let value = try #require(
             #exhaust(
                 Self.gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .budget(.exorbitant),
                 .replay(11_933_936_430_368_835_868),
                 .onReport { report = $0 },

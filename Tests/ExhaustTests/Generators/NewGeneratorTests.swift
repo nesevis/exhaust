@@ -48,7 +48,7 @@ import Testing
             let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
 
             let output = try #require(
-                #exhaust(gen, .suppressIssueReporting) { value in value < Float16(50) }
+                #exhaust(gen, .suppress(.issueReporting)) { value in value < Float16(50) }
             )
 
             #expect(output == Float16(50))
@@ -148,7 +148,7 @@ struct DataGeneratorTests {
         let gen = #gen(.data(length: 0 ... 100))
 
         let output = try #require(
-            #exhaust(gen, .suppressIssueReporting) { data in data.count < 10 }
+            #exhaust(gen, .suppress(.issueReporting)) { data in data.count < 10 }
         )
 
         #expect(output.count == 10)

@@ -23,7 +23,7 @@ struct BudgetAffordabilityTests {
     func correctImplementation() {
         let result = #exhaust(
             BudgetAffordabilitySpec.self,
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "correct canAfford must agree with brute-force for all inputs")
     }
@@ -34,7 +34,7 @@ struct BudgetAffordabilityTests {
             #exhaust(
                 BuggyBudgetAffordabilitySpec.self,
                 commandLimit: 8,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
         #expect(result.trace.contains { step in

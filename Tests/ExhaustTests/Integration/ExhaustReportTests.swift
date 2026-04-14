@@ -26,7 +26,7 @@ struct ExhaustReportTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 1000)),
             .onReport { capturedReport = $0 },
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .randomOnly
         ) { value in
             value < 50
@@ -47,7 +47,7 @@ struct ExhaustReportTests {
             #gen(.int(in: 0 ... 100)),
             .reflecting(75),
             .onReport { capturedReport = $0 },
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         ) { value in
             value < 50
         }

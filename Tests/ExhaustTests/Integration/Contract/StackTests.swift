@@ -11,7 +11,7 @@ struct StackTests {
             StackSpec.self,
             commandLimit: 15,
             .budget(.custom(coverage: 500, sampling: 50)),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "Stack spec should pass — model and SUT are identical")
     }
