@@ -34,25 +34,23 @@ struct BinaryHeapShrinkingChallenge {
             return sorted == xs.sorted() && xs == xs.sorted()
         }
 
-        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 Self.gen.unique(),
                 .suppressIssueReporting,
-                .replay(1584),
-                .onReport { report = $0 },
+                .replay(1591),
+                .logging(.debug),
                 property: property
             )
         )
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 75)
-        #expect(rep.totalMaterializations == 73)
+        #expect(rep.propertyInvocations == 177)
+        #expect(rep.totalMaterializations == 175)
 
-        if let report { print("[PROFILE] BinaryHeap: \(report.profilingSummary)") }
         let outputValues = Self.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
         // 1 *should* be the last value, as this is the shortlex smallest, but
-        #expect(outputValues.sorted() == [0, 0, 0, 1] || outputValues.sorted() == [0, 0, 0, 0, 1])
+        #expect(outputValues.sorted() == [0, 0, 0, 1])
     }
 
     // MARK: - Heap type
