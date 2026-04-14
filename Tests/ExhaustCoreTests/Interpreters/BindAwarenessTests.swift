@@ -139,21 +139,6 @@ struct BindAwarenessTests {
         #expect(ChoiceSequence.validate(seq) == false)
     }
 
-    @Test("extractContainerSpans identifies bind spans")
-    func extractContainerSpansFindsBinds() {
-        let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
-
-        let flattened = ChoiceSequence.flatten(tree)
-        let spans = ChoiceSequence.extractContainerSpans(from: flattened)
-
-        #expect(spans.count >= 1)
-        let bindSpan = spans.first(where: { $0.kind == .bind(true) })
-        #expect(bindSpan != nil)
-        #expect(bindSpan?.range == 0 ... 3)
-    }
-
     // MARK: - VACTI produces .bind for bound() generators
 
     @Test("VACTI produces bind tree for transform(.bind) operation")

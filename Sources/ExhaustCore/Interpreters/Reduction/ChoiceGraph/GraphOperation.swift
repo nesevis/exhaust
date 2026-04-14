@@ -29,6 +29,11 @@ enum GraphOperation {
     /// Move elements between antichain-independent sequences to improve shortlex ordering.
     case migrate(MigrationScope)
 
+    /// Reorder sequence elements into natural numeric order as a final canonicalization pass.
+    ///
+    /// Only dispatched post-loop by ``ChoiceGraphScheduler`` after all other reduction is complete. Never emitted by any ``ScopeSource``.
+    case reorder(ReorderingScope)
+
     /// Whether this operation changes the generator's active execution path. Only replace is path-changing.
     var isPathChanging: Bool {
         if case .replace = self { return true }
@@ -74,6 +79,8 @@ enum GraphOperation {
         case let .migrate(scope):
             scope.elementNodeIDs + [scope.receiverSequenceNodeID]
         case .minimize, .exchange:
+            nil
+        case .reorder:
             nil
         }
     }

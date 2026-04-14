@@ -5,6 +5,7 @@ public extension Interpreters {
     struct ReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
         public var maxStalls: Int
+
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
 

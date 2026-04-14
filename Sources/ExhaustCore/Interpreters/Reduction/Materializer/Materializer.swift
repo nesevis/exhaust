@@ -413,10 +413,6 @@ extension Materializer {
         /// Used in exact mode: `boundDepth > 0` → clamp; `boundDepth == 0` → reject.
         var boundDepth: Int = 0
         var maximizeBoundRegionIndices: Set<Int>?
-        /// Sequence element count captured from the prefix before ``Cursor/skipBindBound()``
-        /// discards the sequence markers. Consumed once by ``handleSequence()`` Path B
-        /// to prefer the prefix-derived length over the fallback tree's stored length.
-        var capturedBindBoundSequenceLength: Int?
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false

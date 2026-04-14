@@ -26,9 +26,8 @@ extension ChoiceGraph {
              .selfSimilarReplaced,
              .descendantPromoted,
              .sequenceElementsMigrated,
-             .siblingsSwapped:
-            // Structural mutations are not yet implemented in the partial
-            // path. Layer 7 replaces these fallbacks with proper splice logic.
+             .siblingsSwapped,
+             .sequenceReordered:
             application.requiresFullRebuild = true
         }
         #if DEBUG

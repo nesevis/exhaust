@@ -167,6 +167,9 @@ enum ChoiceGraphScheduler {
         // Per-bind-node bound value stall counter. Incremented when a bound value dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
         var boundValueStallCount: [Int: Int] = [:]
 
+        // Node IDs whose last dependent-node dispatch (composed or pivot-then-minimize) produced zero accepts. The scheduler skips dispatch for nodes in this set. Cleared entirely on structural graph rebuild.
+        var fruitlessDependentNodes = Set<Int>()
+
         // Per-encoder cumulative probe counts for the futility cap. See ``futilityEmitThreshold`` and ``futilityProbeBudget``.
         var encoderEmits: [EncoderName: Int] = [:]
         var encoderAccepts: [EncoderName: Int] = [:]
@@ -176,12 +179,13 @@ enum ChoiceGraphScheduler {
             cycles += 1
             boundValueDispatchedThisCycle.removeAll(keepingCapacity: true)
             encoderCycleBudget.removeAll(keepingCapacity: true)
+            scopeRejectionCache.clearCoarse()
             for (name, emits) in encoderEmits {
                 let accepts = encoderAccepts[name, default: 0]
                 guard accepts == 0 else { continue }
-                // Search encoders are excluded — their acceptance pattern is dispatch-dependent (early dispatches have 0 accepts, later ones find accepts). Value search on Diff:One has 1024 total accepts but its first batch-zero dispatch has 0, triggering premature capping. Bound value search has its own stall-cycle gating. These encoders' convergence mechanisms handle their own waste.
+                // Search encoders and deletion are excluded. Search encoders have dispatch-dependent acceptance patterns (early dispatches have zero accepts, later ones find accepts). Bound value search has its own stall-cycle gating. Deletion is excluded because per-element deletion of zero-valued elements becomes viable after value search zeroes them — the scope rejection cache (which naturally invalidates on value change) handles deletion waste. Capping deletion under a shared budget starves per-element probes behind whole-array probes that exhaust the budget first.
                 switch name {
-                case .valueSearch, .floatSearch, .composed:
+                case .valueSearch, .floatSearch, .composed, .deletion:
                     continue
                 default:
                     break
@@ -277,6 +281,10 @@ enum ChoiceGraphScheduler {
                     if anyAccepted {
                         continue
                     }
+                    // Fruitless gate: skip composed dispatch for binds whose last dispatch produced zero accepts. Cleared on structural graph rebuild.
+                    if fruitlessDependentNodes.contains(fibreScope.bindNodeID) {
+                        continue
+                    }
                 }
 
                 // Per-encoder cycle budget: skip if the budget has been exhausted for this encoder.
@@ -290,6 +298,7 @@ enum ChoiceGraphScheduler {
                 case .exchange(.tandem): .lockstep
                 case .permute: .siblingSwap
                 case .migrate: .migration
+                case .reorder: .numericReorder
                 }
                 if let budget = encoderCycleBudget[pendingEncoderName], budget <= 0 {
                     continue
@@ -401,15 +410,16 @@ enum ChoiceGraphScheduler {
                     encoderCycleBudget[pendingEncoderName] = budget
                 }
 
-                // bound value stall tracking: increment the per-bind-node counter when a dispatch produces zero accepts, reset on any acceptance. The stall count decays the upstream budget on subsequent dispatches.
+                // Dependent-node stall tracking: mark nodes fruitless on zero-accept dispatch, clear on any acceptance.
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     if outcome.acceptCount > 0 {
                         boundValueStallCount[fibreScope.bindNodeID] = 0
+                        fruitlessDependentNodes.remove(fibreScope.bindNodeID)
                     } else {
                         boundValueStallCount[fibreScope.bindNodeID, default: 0] += 1
+                        fruitlessDependentNodes.insert(fibreScope.bindNodeID)
                     }
                 }
-
                 if outcome.accepted {
                     anyAccepted = true
 
@@ -484,6 +494,7 @@ enum ChoiceGraphScheduler {
                         }
                         stats.graphRebuilds += 1
                         scopeRejectionCache.clear()
+                        fruitlessDependentNodes.removeAll(keepingCapacity: true)
                         sources = ScopeSourceBuilder.buildSources(from: graph)
 
                         if isInstrumented {
@@ -529,10 +540,7 @@ enum ChoiceGraphScheduler {
                             )
                         }
                     }
-                    // Pure value-only fast-path acceptances need no
-                    // bookkeeping here: graph and sources are still valid,
-                    // and the scope rejection cache self-invalidates via
-                    // hash change.
+                    // Pure value-only fast-path acceptances need no structural bookkeeping: graph and sources are still valid, and the scope rejection cache self-invalidates via hash change.
                 } else {
                     // Rejection: record in scope cache for structural operations.
                     scopeRejectionCache.recordRejection(
@@ -625,21 +633,41 @@ enum ChoiceGraphScheduler {
         }
 
         // Human-readable ordering pass: reorders type-homogeneous sibling groups into natural numeric order so seeds with the same multiset of values converge to the same canonical counterexample.
-        let numericReorderPass = NumericReorderPass()
-        if let humanResult = numericReorderPass.encode(
-            gen: gen,
-            sequence: sequence,
-            tree: tree,
-            property: property
-        ) {
-            sequence = humanResult.result.sequence
-            tree = humanResult.result.tree
-            output = humanResult.result.output
-            if collectStats {
-                stats.totalMaterializations += humanResult.materializations
-                stats.encoderProbes[.numericReorder, default: 0] += humanResult.materializations
-            }
-            if isInstrumented {
+        if let reorderScope = ReorderingScopeQuery.build(graph: graph) {
+            let reorderTransformation = GraphTransformation(
+                operation: .reorder(reorderScope),
+                yield: TransformationYield(structural: 0, value: 0, slack: .exact, estimatedProbes: 1),
+                precondition: .unconditional,
+                postcondition: TransformationPostcondition(
+                    isStructural: false,
+                    invalidatesConvergence: [],
+                    enablesRemoval: []
+                )
+            )
+            let reorderScopeBundle = TransformationScope(
+                transformation: reorderTransformation,
+                baseSequence: sequence,
+                tree: tree,
+                graph: graph,
+                warmStartRecords: [:]
+            )
+            var reorderEncoder: any GraphEncoder = GraphReorderEncoder()
+            var reorderCache = Set<UInt64>()
+            let reorderOutcome = try ChoiceGraphScheduler.runProbeLoop(
+                encoder: &reorderEncoder,
+                scope: reorderScopeBundle,
+                graph: graph,
+                sequence: &sequence,
+                tree: &tree,
+                output: &output,
+                gen: erasedGen,
+                property: wrappedProperty,
+                rejectCache: &reorderCache,
+                stats: &stats,
+                collectStats: collectStats,
+                isInstrumented: isInstrumented
+            )
+            if isInstrumented, reorderOutcome.accepted {
                 ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
             }
         }
@@ -690,6 +718,8 @@ enum ChoiceGraphScheduler {
             GraphRedistributionEncoder()
         case .exchange(.tandem):
             GraphLockstepEncoder()
+        case .reorder:
+            GraphReorderEncoder()
         }
     }
 }

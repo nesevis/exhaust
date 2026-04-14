@@ -39,7 +39,7 @@ struct ParserShrinkingChallenge {
 //                .reflecting(Self.knownBad),
                 .logging(.debug, .keyValue),
                 .suppressIssueReporting,
-                .replay("4Z67HB4QNE1VY"),
+//                .replay(1337),
                 .onReport { report = $0 }
             ) { lang in
                 print("Attempt: \(lang)")
@@ -58,7 +58,7 @@ struct ParserShrinkingChallenge {
         // Exhaust averages ~3.67
         let outputSize = Self.size(output)
         print("Size: \(outputSize)")
-        #expect(outputSize <= 4)
+        #expect(outputSize < 4)
     }
 
     // MARK: - Examples

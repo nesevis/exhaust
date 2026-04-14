@@ -22,22 +22,33 @@ struct ScopeRejectionCache {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) {
-        if let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) {
-            rejectedHashes.insert(hash)
-        }
-        if case .replace = operation, let hash = coarseScopeHash(operation: operation, graph: graph) {
-            coarseRejectedHashes.insert(hash)
+        // Structural operations (replacement, deletion, migration) use the coarse (value-independent) cache, cleared per-cycle. A structural operation rejected with old leaf values may succeed after value search changes the surrounding tree — the property outcome depends on the whole tree, not just the targeted positions. Value-based operations (minimization, exchange) use the fine-grained cache.
+        switch operation {
+        case .replace, .remove, .migrate:
+            if let hash = coarseScopeHash(operation: operation, graph: graph) {
+                coarseRejectedHashes.insert(hash)
+            }
+        default:
+            if let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) {
+                rejectedHashes.insert(hash)
+            }
         }
     }
 
-    /// Returns true if this transformation was previously rejected. Checks the coarse (value-independent) cache first for replacement operations, then the fine-grained (value-dependent) cache.
+    /// Returns true if this transformation was previously rejected. Checks the coarse (value-independent) cache for structural operations, the fine-grained (value-dependent) cache for value-based operations.
     func isRejected(
         operation: GraphOperation,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> Bool {
-        if case .replace = operation, let hash = coarseScopeHash(operation: operation, graph: graph) {
-            if coarseRejectedHashes.contains(hash) { return true }
+        switch operation {
+        case .replace, .remove, .migrate:
+            guard let hash = coarseScopeHash(operation: operation, graph: graph) else {
+                return false
+            }
+            return coarseRejectedHashes.contains(hash)
+        default:
+            break
         }
         guard let hash = scopeHash(operation: operation, sequence: sequence, graph: graph) else {
             return false
@@ -117,7 +128,7 @@ struct ScopeRejectionCache {
         case .replace: 0x1827_3645_5463_7281
         case .permute: 0x9182_7364_5546_3728
         case .migrate: 0x6372_8190_A0B0_C0D0
-        case .minimize, .exchange: 0
+        case .minimize, .exchange, .reorder: 0
         }
     }
 }

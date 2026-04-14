@@ -61,7 +61,7 @@ struct GraphStructuralEncoder: GraphEncoder {
             name = .migration
             probe = buildMigrationProbe(scope: migrationScope, sequence: sequence, graph: graph)
 
-        case .minimize, .exchange, .permute:
+        case .minimize, .exchange, .permute, .reorder:
             break
         }
     }

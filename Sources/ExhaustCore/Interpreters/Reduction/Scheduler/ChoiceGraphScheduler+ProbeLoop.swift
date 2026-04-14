@@ -140,7 +140,7 @@ extension ChoiceGraphScheduler {
             let picksUnchanged = switch probe.mutation {
             case let .leafValues(changes):
                 changes.contains(where: \.mayReshape) == false
-            case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped:
+            case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped, .sequenceReordered:
                 true
             case .branchSelected, .selfSimilarReplaced, .descendantPromoted:
                 false

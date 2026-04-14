@@ -38,6 +38,11 @@ enum ProjectedMutation {
 
     /// Two same-shaped siblings swapped within a parent (zip or sequence). Layer 7.
     case siblingsSwapped(parentNodeID: Int, idA: Int, idB: Int)
+
+    /// Sequence elements permuted into natural numeric order by ``GraphReorderEncoder``.
+    ///
+    /// The graph's in-place apply path does not implement sequence reordering; the scheduler performs a full rebuild from `freshTree` after any accepted probe. Only dispatched by the post-loop reorder pass where graph freshness after the accepted probe is not required.
+    case sequenceReordered
 }
 
 // MARK: - Leaf Change

@@ -102,12 +102,6 @@ extension Materializer {
                     reusedChoice = prefixValue.choice
                 }
                 context.decodingReport?.record(tier: .exactCarryForward)
-            } else if let indices = context.maximizeBoundRegionIndices,
-                      context.cursor.isSuspended,
-                      indices.contains(context.cursor.bindEncounterCount - 1)
-            {
-                randomBits = max
-                context.decodingReport?.record(tier: .fallbackTree)
             } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
                 randomBits = Swift.min(Swift.max(value.bitPattern64, min), max)
                 context.decodingReport?.record(tier: .fallbackTree)
@@ -386,13 +380,8 @@ extension Materializer {
             // Exact mode: prefix exhausted or structural mismatch at sequence site.
             throw RejectionError()
         } else if let fbLen = fallbackLength {
-            // Cursor suspended (inside bind's bound content in guided mode). Prefer the
-            // prefix-derived element count captured before skipBindBound() discarded the
-            // sequence markers over the fallback tree's stored length. This keeps content
-            // that earlier reduction phases deleted from being regenerated.
-            // See docs/Guided Decoder Redistribution Gap.md.
-            let resolvedLen = context.capturedBindBoundSequenceLength.map { UInt64($0) } ?? fbLen
-            context.capturedBindBoundSequenceLength = nil
+            // Cursor exhausted in guided mode. Use the fallback tree's stored length, clamped to the generator's valid range.
+            let resolvedLen = fbLen
             let erasedLengthGen = lengthGen.erase()
             let savedMode = context.mode
             context.mode = .generate
@@ -632,24 +621,15 @@ extension Materializer {
                 // modifications to bound content are honoured. Compare flattened
                 // ChoiceSequences (strips metadata, compares only values/branches/
                 // markers).
-                let innerValueChanged = innerTree.isGetSize == false
-                    && innerFallback != nil
-                    && ChoiceSequence(innerTree) != ChoiceSequence(innerFallback!)
-                if innerValueChanged {
-                    let peeked = context.cursor.peekSequenceLength()
-                    context.capturedBindBoundSequenceLength = peeked
-                    context.cursor.skipBindBound()
-                    context.cursor.suspendForBind()
-                }
+                // No bind suspension: the cursor reads entries as-is. Cross-depth
+                // promotions have structurally compatible bound content; stale entries
+                // from value changes are caught by the property check.
                 context.boundDepth += 1
                 let boundResult = try generateRecursive(
                     boundGen, with: inputValue, context: &context,
                     fallbackTree: boundFallback
                 )
                 context.boundDepth -= 1
-                if innerValueChanged {
-                    context.cursor.resumeAfterBind()
-                }
                 guard let (boundValue, boundTree) = boundResult else { return nil }
                 return try runContinuation(
                     result: boundValue,

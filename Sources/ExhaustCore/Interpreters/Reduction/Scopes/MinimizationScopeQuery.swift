@@ -78,14 +78,7 @@ enum MinimizationScopeQuery {
             scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
 
-        // bound value: one scope per reduction edge. Matches the CDG's
-        // ``ChoiceDependencyGraph/reductionEdges()`` behavior, which deliberately does
-        // NOT filter on ``isStructurallyConstant``: a structurally constant bind (no
-        // nested binds/picks) can still carry domain-dependent values whose ranges
-        // shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ...
-        // max(2, n+1))` is the canonical example — the bound subtree contains only
-        // plain choices, but their ranges depend on `n`). The composition's downstream
-        // encoder finds these via the lift's fibre coverage.
+        // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage.
         for node in graph.nodes {
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }

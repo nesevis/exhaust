@@ -75,14 +75,30 @@ extension GraphRedistributionEncoder {
 
         guard pairs.isEmpty == false else { return }
 
-        // Largest-delta pairs first: high-impact consolidation pairs get probed
-        // before trivial distance=1 pairs. Mirrors the orientation sort in
-        // ``RedistributeAcrossValueContainersEncoder``, which uses the same
-        // source-distance ordering. Without this, the encoder would walk pairs
-        // in `typeCompatibilityEdges` insertion order — node-traversal order,
-        // not value-distance order — and burn its budget on low-yield tail
-        // pairs before reaching the easy wins.
-        pairs.sort { $0.maxDelta > $1.maxDelta }
+        // Sort by value-projection shortlex of each pair's full-delta candidate. Pairs whose full-delta probe produces the smallest value shortlex fire first — they make the most progress per probe, which matters when the futility budget is tight. Pre-building candidates is cheap (at most `maxPairsPerScope` sequence copies, each changing exactly two entries). Pairs whose full-delta candidate cannot be built sort last; among those, largest maxDelta sorts first as a fallback.
+        let fullDeltaCandidates: [ChoiceSequence?] = pairs.map { pair in
+            buildRedistributionCandidate(
+                sourceIndex: pair.sourceIndex,
+                sinkIndex: pair.sinkIndex,
+                sourceTag: pair.sourceTag,
+                sinkTag: pair.sinkTag,
+                delta: pair.maxDelta,
+                mixedContext: pair.mixedContext
+            )
+        }
+        let sortedIndices = pairs.indices.sorted { lhs, rhs in
+            switch (fullDeltaCandidates[lhs], fullDeltaCandidates[rhs]) {
+            case let (.some(lhsCandidate), .some(rhsCandidate)):
+                return lhsCandidate.shortLexPrecedes(rhsCandidate)
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                return pairs[lhs].maxDelta > pairs[rhs].maxDelta
+            }
+        }
+        pairs = sortedIndices.map { pairs[$0] }
 
         // Cap the working set to mirror Bonsai's `estimatedCost` ceiling of
         // 240 pairs. After sorting, the prefix is the highest-yield slice; the
