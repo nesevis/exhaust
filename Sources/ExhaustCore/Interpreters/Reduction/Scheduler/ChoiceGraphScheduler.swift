@@ -127,11 +127,7 @@ enum ChoiceGraphScheduler {
         var graphIsStripped = false
 
         if collectStats {
-            stats.graphNodeCount = graph.nodes.count
-            stats.graphDependencyEdgeCount = graph.dependencyEdges.count
-            stats.graphContainmentEdgeCount = graph.containmentEdges.count
-            stats.graphSelfSimilarityEdgeCount = graph.selfSimilarityGroups.values.reduce(0) { $0 + $1.count * ($1.count - 1) / 2 }
-            stats.graphDeletionAntichainSize = graph.deletionAntichain.count
+            stats.graphStats = ChoiceGraphStats.from(graph)
         }
 
         if isInstrumented {
@@ -333,10 +329,12 @@ enum ChoiceGraphScheduler {
                     ) {
                         tree = fullTree
                     }
+                    stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
+                    stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
                     let oldConvergence = extractAllConvergence(from: graph)
                     graph = ChoiceGraph.build(from: tree)
                     transferConvergence(oldConvergence, to: graph)
-                    stats.graphRebuilds += 1
+                    stats.graphStats.fullGraphRebuilds += 1
                     sources = ScopeSourceBuilder.buildSources(from: graph)
                     graphIsStripped = false
                     continue
@@ -470,6 +468,8 @@ enum ChoiceGraphScheduler {
                             boundPositionRange = graph.nodes[boundChildID].positionRange
                         }
 
+                        stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
+                        stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
                         let oldConvergence = extractAllConvergence(from: graph)
                         graph = ChoiceGraph.build(from: tree)
                         graphIsStripped = outcome.treeIsStripped
@@ -492,7 +492,7 @@ enum ChoiceGraphScheduler {
                                 )
                             }
                         }
-                        stats.graphRebuilds += 1
+                        stats.graphStats.fullGraphRebuilds += 1
                         scopeRejectionCache.clear()
                         fruitlessDependentNodes.removeAll(keepingCapacity: true)
                         sources = ScopeSourceBuilder.buildSources(from: graph)
@@ -580,11 +580,13 @@ enum ChoiceGraphScheduler {
                     // unconditionally stripped. Set the flag and let the
                     // lazy rematerialize check in the next cycle's
                     // source-pulling iteration handle it on demand.
+                    stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
+                    stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
                     let oldConvergence = extractAllConvergence(from: graph)
                     graph = ChoiceGraph.build(from: tree)
                     graphIsStripped = true
                     transferConvergence(oldConvergence, to: graph)
-                    stats.graphRebuilds += 1
+                    stats.graphStats.fullGraphRebuilds += 1
                     sources = ScopeSourceBuilder.buildSources(from: graph)
                 }
             }
@@ -672,6 +674,8 @@ enum ChoiceGraphScheduler {
             }
         }
 
+        stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
+        stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
         // swiftlint:disable:next force_cast
         let typedOutput = output as! Output

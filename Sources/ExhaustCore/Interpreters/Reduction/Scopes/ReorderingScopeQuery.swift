@@ -11,7 +11,7 @@
 enum ReorderingScopeQuery {
     /// Builds a reordering scope from the graph's sequence and zip nodes, or `nil` if no eligible groups exist.
     ///
-    /// For each sequence and zip node the builder groups direct children by ``kindCategory(_:)`` and emits one ``ReorderableGroup`` per kind-category bucket that has two or more members and passes the bind-inner containment check. This mirrors the per-kind subgroup logic of the former ``ChoiceSequence/extractSiblingGroups(from:)`` method.
+    /// For each sequence and zip node the builder groups direct children by ``kindCategory(_:)`` and emits one ``ReorderableGroup`` per kind-category bucket that has two or more members and passes the bind-inner containment check.
     ///
     /// The bind-inner exclusion uses a containment test (sibling ⊆ bind-inner range), not overlap. A bind block whose own length chooseBits sits inside it overlaps the bind-inner range but is not contained by it — moving the complete block carries inner and bound together, which is safe. Only a sibling whose range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child) must be excluded.
     ///
@@ -112,8 +112,7 @@ enum ReorderingScopeQuery {
     /// Maps a ``ChoiceGraphNodeKind`` to a category integer for same-kind sibling comparison.
     ///
     /// `chooseBits` and `just` are grouped together as bare-value leaves (category zero) because both
-    /// represent single-value contributions with no internal structure, mirroring the former
-    /// `SiblingChildKind.bareValue` case from `extractSiblingGroups`.
+    /// represent single-value contributions with no internal structure.
     private static func kindCategory(_ kind: ChoiceGraphNodeKind) -> Int {
         switch kind {
         case .chooseBits, .just: return 0
