@@ -77,7 +77,7 @@ import ExhaustCore
     named(commandGenerator),
     named(run),
     named(checkInvariants),
-    named(sut),
+    named(systemUnderTest),
     named(modelDescription),
     named(sutDescription)
 )
