@@ -10,26 +10,6 @@
 //
 // Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Zobrist hashing for O(1) incremental duplicate detection lives in ``ZobristHash``.
 
-/// A contiguous region of a ``ChoiceSequence``, identified by its kind, index range, and nesting depth.
-public struct ChoiceSpan: CustomDebugStringConvertible {
-    public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
-        self.kind = kind
-        self.range = range
-        self.depth = depth
-    }
-
-    /// The ``ChoiceSequenceValue`` that opened this span.
-    public let kind: ChoiceSequenceValue
-    /// The index range within the ``ChoiceSequence`` that this span covers.
-    public let range: ClosedRange<Int>
-    /// The nesting depth of this span (0 = top level).
-    public let depth: Int
-
-    public var debugDescription: String {
-        "<\(kind.shortString)> \(range.lowerBound)...\(range.upperBound) @ \(depth)"
-    }
-}
-
 public typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
 
 public extension Collection<ChoiceSequenceValue> {
@@ -172,71 +152,6 @@ public extension ChoiceSequence {
         return sequenceCount == 0 && groupCount == 0 && bindCount == 0
     }
 
-    static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
-        var spans: [ChoiceSpan] = []
-        var stack: [(kind: ChoiceSequenceValue, start: Int)] = []
-        // Maps stack depth to the span indices of children
-        // collected while that frame was open
-        var childrenAtDepth: [[Int]] = []
-
-        // while-loop: avoiding IteratorProtocol overhead in debug builds.
-        var i = 0
-        while i < sequence.count {
-            let entry = sequence[i]
-            switch entry {
-            case .sequence(true, isLengthExplicit: _):
-                stack.append((entry, i))
-                childrenAtDepth.append([])
-
-            case .group(true):
-                stack.append((.group(true), i))
-                childrenAtDepth.append([])
-
-            case .bind(true):
-                stack.append((.bind(true), i))
-                childrenAtDepth.append([])
-
-            case .sequence(false, isLengthExplicit: _), .group(false), .bind(false):
-                guard let frame = stack.popLast() else {
-                    i += 1
-                    continue
-                }
-
-                let spanIndex = spans.count
-                spans.append(ChoiceSpan(
-                    kind: frame.kind,
-                    range: frame.start ... i,
-                    depth: stack.count
-                ))
-
-                if case .sequence(true, isLengthExplicit: _) = frame.kind, frame.start < i - 1 {
-                    // A span representing all the contents, not inclusive sequence markers
-                    spans.append(ChoiceSpan(
-                        kind: frame.kind,
-                        range: (frame.start + 1) ... (i - 1),
-                        depth: stack.count
-                    ))
-                }
-
-                // Register this span as a child of the enclosing frame
-                if !childrenAtDepth.isEmpty {
-                    childrenAtDepth[childrenAtDepth.count - 1].append(spanIndex)
-                }
-
-            case .value, .reduced, .branch, .just:
-                break
-            }
-            i += 1
-        }
-
-        return spans.sorted(by: { lhs, rhs in
-            if lhs.depth == rhs.depth {
-                return lhs.range.lowerBound < rhs.range.lowerBound
-            }
-            return lhs.depth < rhs.depth
-        })
-    }
-
     // MARK: - Sibling groups
 
     /// Extracts groups of sibling elements within containers. A sibling group contains the immediate children of a sequence or group container, where all children are the same kind (all bare values or all containers of the same type).
@@ -317,90 +232,6 @@ public extension ChoiceSequence {
         return result
     }
 
-    /// Extracts immediate children of a single container range.
-    /// Children are returned in-order and include bare values and immediate nested containers.
-    static func extractImmediateChildren(
-        from sequence: ChoiceSequence,
-        in containerRange: ClosedRange<Int>
-    ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
-        guard !sequence.isEmpty else { return [] }
-        guard containerRange.lowerBound >= 0,
-              containerRange.upperBound < sequence.count
-        else { return [] }
-
-        let open = sequence[containerRange.lowerBound]
-        let close = sequence[containerRange.upperBound]
-        let isGroupContainer =
-            (open == .group(true) && close == .group(false))
-                || (open == .bind(true) && close == .bind(false))
-        let isSequenceContainer =
-            if case .sequence(true, isLengthExplicit: _) = open,
-            case .sequence(false, isLengthExplicit: _) = close {
-                true
-            } else {
-                false
-            }
-        guard isGroupContainer || isSequenceContainer else { return [] }
-
-        var children = [(range: ClosedRange<Int>, kind: SiblingChildKind)]()
-        var index = containerRange.lowerBound + 1
-
-        while index < containerRange.upperBound {
-            switch sequence[index] {
-            case .value, .reduced:
-                children.append((range: index ... index, kind: .bareValue))
-                index += 1
-
-            case .group(true), .bind(true), .sequence(true, isLengthExplicit: _):
-                let openEntry = sequence[index]
-                let isGroupChild = openEntry == .group(true) || openEntry == .bind(true)
-                let isSequenceEntry =
-                    if case .sequence(true, isLengthExplicit: _) = openEntry {
-                        true
-                    } else {
-                        false
-                    }
-                let start = index
-                var depth = 1
-                index += 1
-
-                while index <= containerRange.upperBound, depth > 0 {
-                    switch sequence[index] {
-                    case .group(true) where openEntry == .group(true),
-                         .bind(true) where openEntry == .bind(true):
-                        depth += 1
-                    case .group(false) where openEntry == .group(true),
-                         .bind(false) where openEntry == .bind(true):
-                        depth -= 1
-                    case .sequence(true, isLengthExplicit: _) where isSequenceEntry:
-                        depth += 1
-                    case .sequence(false, isLengthExplicit: _) where isSequenceEntry:
-                        depth -= 1
-                    default:
-                        break
-                    }
-                    if depth > 0 {
-                        index += 1
-                    }
-                }
-
-                guard depth == 0, index <= containerRange.upperBound else { return [] }
-                children.append((range: start ... index, kind: isGroupChild ? .group : .sequence))
-                index += 1
-
-            case .branch, .just:
-                // Branch and just markers are structural and not standalone children.
-                index += 1
-
-            case .group(false), .bind(false), .sequence(false, isLengthExplicit: _):
-                // Stray close marker inside the container; skip defensively.
-                index += 1
-            }
-        }
-
-        return children
-    }
-
     /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
     /// Used as a lexicographic comparison key for sibling reordering.
     static func siblingComparisonKey(
@@ -421,6 +252,8 @@ public extension ChoiceSequence {
         }
         return keys
     }
+    
+    // MARK: - Shortlex
 
     func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
@@ -438,6 +271,29 @@ public extension ChoiceSequence {
                 return false
             case .eq:
                 i += 1
+            }
+        }
+        // Value-projection tiebreaker: compare only value entries, ignoring structural noise that depends on generator argument order or tree topology rather than output simplicity.
+        var selfIdx = 0
+        var otherIdx = 0
+        while selfIdx < count, otherIdx < other.count {
+            while selfIdx < count, self[selfIdx].value == nil { selfIdx += 1 }
+            while otherIdx < other.count, other[otherIdx].value == nil { otherIdx += 1 }
+            guard selfIdx < count, otherIdx < other.count else { break }
+            switch self[selfIdx].value!.shortLexCompare(other[otherIdx].value!) {
+            case .lt: return true
+            case .gt: return false
+            case .eq:
+                selfIdx += 1
+                otherIdx += 1
+            }
+        }
+        // Fewer remaining values wins.
+        if selfIdx < count || otherIdx < other.count {
+            let selfRemaining = (selfIdx ..< count).count { self[$0].value != nil }
+            let otherRemaining = (otherIdx ..< other.count).count { other[$0].value != nil }
+            if selfRemaining != otherRemaining {
+                return selfRemaining < otherRemaining
             }
         }
         return false // equal

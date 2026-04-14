@@ -43,50 +43,25 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
-        case (.group(true), .group(true)),
-             (.sequence(true, isLengthExplicit: _),
-              .sequence(true, isLengthExplicit: _)),
-             (.bind(true), .bind(true)):
-            return .eq
-        case (.group(false), .group(false)),
-             (.sequence(false, isLengthExplicit: _),
-              .sequence(false, isLengthExplicit: _)),
-             (.bind(false), .bind(false)):
-            return .eq
         case (.group(false), .group(true)),
-             (.sequence(false, isLengthExplicit: _),
-              .sequence(true, isLengthExplicit: _)),
+             (.sequence(false, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)),
              (.bind(false), .bind(true)):
             return .lt
         case (.group(true), .group(false)),
-             (.sequence(true, isLengthExplicit: _),
-              .sequence(false, isLengthExplicit: _)),
+             (.sequence(true, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)),
              (.bind(true), .bind(false)):
             return .gt
-        case let (.branch(a), .branch(b)):
-            return a.shortLexCompare(b)
+        case (.just, .value), (.just, .reduced):
+            return .lt
+        case (.value, .just), (.reduced, .just):
+            return .gt
         case let (.value(a), .value(b)),
              let (.reduced(a), .reduced(b)),
              let (.value(a), .reduced(b)),
              let (.reduced(a), .value(b)):
             return a.shortLexCompare(b)
         default:
-            if kindOrder < other.kindOrder { return .lt }
-            if kindOrder > other.kindOrder { return .gt }
             return .eq
-        }
-    }
-
-    /// Canonical ordering of entry kinds for cross-kind comparison.
-    private var kindOrder: Int {
-        switch self {
-        case .just: 0
-        case .group: 1
-        case .bind: 1
-        case .sequence: 2
-        case .branch: 3
-        case .value: 4
-        case .reduced: 4
         }
     }
 
@@ -129,11 +104,6 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             self.id = id
             self.validIDs = validIDs
             self.fingerprint = fingerprint
-        }
-
-        /// Branch picks are transparent to shortlex ordering. The selected alternative's index is arbitrary (determined by declaration order in the user's generator), so comparing it would make structural simplification depend on naming order rather than content. Returning `.eq` lets the comparison fall through to the subtree entries that follow the branch marker, where actual structural and value differences decide the ordering.
-        public func shortLexCompare(_: Branch) -> ShortlexOrder {
-            .eq
         }
     }
 
@@ -179,16 +149,6 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
         public static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.choice == rhs.choice
-//            guard lhs.choice == rhs.choice, lhs.isRangeExplicit == rhs.isRangeExplicit else {
-//                return false
-//            }
-//            // When the range is derived from runtime context (size scaling),
-//            // it can differ between generation and reflection. Only compare
-//            // validRange when it was explicitly specified by the user.
-//            if lhs.isRangeExplicit {
-//                return lhs.validRange == rhs.validRange
-//            }
-//            return true
         }
     }
 }
