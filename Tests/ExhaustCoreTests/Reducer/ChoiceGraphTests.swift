@@ -269,6 +269,8 @@ struct ChoiceGraphTests {
 
     @Test("Bind depth counts enclosing bind regions")
     func bindDepthQuery() {
+        // Sequence: .bind(true), A, .bind(true), B, C, .bind(false), .bind(false)
+        // A is the outer inner (depth 0), B is the inner inner (depth 1), C is the inner bound (depth 2).
         let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valC = ChoiceTree.choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
@@ -277,35 +279,50 @@ struct ChoiceGraphTests {
 
         let graph = ChoiceGraph.build(from: outerBind)
         let sequence = ChoiceSequence(outerBind)
-        let bindIndex = BindSpanIndex(from: sequence)
 
-        // Compare graph bindDepth against BindSpanIndex for each value position.
         for position in 0 ..< sequence.count {
             switch sequence[position] {
             case .value, .reduced:
-                let graphDepth = graph.bindDepth(at: position)
-                let indexDepth = bindIndex.bindDepth(at: position)
-                #expect(graphDepth == indexDepth, "Position \(position): graph=\(graphDepth), index=\(indexDepth)")
+                let depth = graph.bindDepth(at: position)
+                // A is outer-inner: depth 0. B is inner-inner inside outer-bound: depth 1.
+                // C is inner-bound inside outer-bound: depth 2.
+                let value = sequence[position].value!.choice
+                switch value {
+                case .unsigned(10, _): #expect(depth == 0)
+                case .unsigned(20, _): #expect(depth == 1)
+                case .unsigned(30, _): #expect(depth == 2)
+                default: break
+                }
             default:
                 break
             }
         }
     }
 
-    @Test("isInBoundSubtree matches BindSpanIndex")
+    @Test("isInBoundSubtree identifies bound positions")
     func isInBoundSubtreeQuery() {
+        // Sequence: .bind(true), A, B, .bind(false)
+        // A is inner (not in bound subtree), B is bound (in bound subtree).
         let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let tree = ChoiceTree.bind(inner: valA, bound: valB)
 
         let graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence(tree)
-        let bindIndex = BindSpanIndex(from: sequence)
 
         for position in 0 ..< sequence.count {
-            let graphResult = graph.isInBoundSubtree(position)
-            let indexResult = bindIndex.isInBoundSubtree(position)
-            #expect(graphResult == indexResult, "Position \(position): graph=\(graphResult), index=\(indexResult)")
+            switch sequence[position] {
+            case .value, .reduced:
+                let inBound = graph.isInBoundSubtree(position)
+                let value = sequence[position].value!.choice
+                switch value {
+                case .unsigned(10, _): #expect(inBound == false) // inner
+                case .unsigned(20, _): #expect(inBound == true)  // bound
+                default: break
+                }
+            default:
+                break
+            }
         }
     }
 
