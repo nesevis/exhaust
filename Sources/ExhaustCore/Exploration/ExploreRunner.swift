@@ -4,7 +4,7 @@
 //
 
 /// Result of an exploration run.
-public enum ExploreResult<Output> {
+package enum ExploreResult<Output> {
     /// A counterexample was found and reduced.
     case failure(
         counterexample: Output,
@@ -23,7 +23,7 @@ public enum ExploreResult<Output> {
 /// Combines seed-pool-based hill climbing with fresh generation to search the input space toward high-scorer regions while testing a property.
 ///
 /// The runner uses a mandatory `scorer` function to guide hill-climbing: mutations that increase the scorer output are accepted, and the seed pool ranks by fitness.
-public struct ExploreRunner<Output>: ~Copyable {
+package struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
     private let samplingBudget: UInt64

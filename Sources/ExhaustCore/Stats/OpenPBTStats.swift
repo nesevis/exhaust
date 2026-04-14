@@ -8,7 +8,7 @@
 import Foundation
 
 /// Generation phase that produced an example.
-public enum OpenPBTStatsPhase: String, Codable, Sendable {
+package enum OpenPBTStatsPhase: String, Codable, Sendable {
     case coverage
     case random
 }
@@ -71,13 +71,13 @@ struct OpenPBTStatsLine: Encodable, Sendable {
 /// Accumulates OpenPBTStats JSONL lines during a test run.
 ///
 /// Not `Sendable` — used from a single thread within the generation loop.
-public final class OpenPBTStatsAccumulator {
+package final class OpenPBTStatsAccumulator {
     private let encoder: JSONEncoder
     private let runStart: Double
     private let propertyName: String
     private var lines: [Data] = []
 
-    public init(propertyName: String) {
+    package init(propertyName: String) {
         self.propertyName = propertyName
         runStart = Date().timeIntervalSince1970
         let encoder = JSONEncoder()
@@ -87,7 +87,7 @@ public final class OpenPBTStatsAccumulator {
     }
 
     /// Records a single test example with its choice tree and pass/fail result.
-    public func record(
+    package func record(
         representation: String,
         passed: Bool,
         tree: ChoiceTree,
@@ -135,7 +135,7 @@ public final class OpenPBTStatsAccumulator {
     }
 
     /// Records the reduced counterexample after reduction.
-    public func recordReduced(
+    package func recordReduced(
         representation: String,
         tree: ChoiceTree,
         reductionSeconds: Double
@@ -170,7 +170,7 @@ public final class OpenPBTStatsAccumulator {
     }
 
     /// Records synthetic "gave_up" lines for filter rejections.
-    public func recordDiscards(count: Int, phase: OpenPBTStatsPhase) {
+    package func recordDiscards(count: Int, phase: OpenPBTStatsPhase) {
         guard count > 0 else { return }
 
         let features = OpenPBTStatsFeatures(
@@ -201,7 +201,7 @@ public final class OpenPBTStatsAccumulator {
     }
 
     /// Returns the accumulated JSONL content as a UTF-8 string.
-    public func finalize() -> String {
+    package func finalize() -> String {
         lines.compactMap { String(data: $0, encoding: .utf8) }
             .joined(separator: "\n")
     }

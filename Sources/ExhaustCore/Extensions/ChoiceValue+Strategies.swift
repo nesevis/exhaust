@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 22/7/2025.
 //
 
-public extension ChoiceValue {
+package extension ChoiceValue {
     @inline(__always)
     var bitPattern64: UInt64 {
         switch self {

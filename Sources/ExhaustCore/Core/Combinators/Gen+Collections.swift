@@ -1,7 +1,7 @@
 // Operations for generating collections like arrays and dictionaries.
 // These combinators handle the complexities of generating structured data with proper reduction behavior.
 
-public extension Gen {
+package extension Gen {
     /// Creates a generator for an array of random values.
     ///
     /// This implementation is stack-safe and can generate very large arrays without overflowing.

@@ -5,7 +5,7 @@
 
 // MARK: - Dependency Queries
 
-public extension ChoiceGraph {
+package extension ChoiceGraph {
     /// Dependency edges where bound value composition is meaningful.
     ///
     /// Each edge connects a bind-inner node (controlling position) to its scope (controlled subtree). Ordered by topological sort (roots first).
@@ -74,7 +74,7 @@ public extension ChoiceGraph {
 
 // MARK: - Containment Queries
 
-public extension ChoiceGraph {
+package extension ChoiceGraph {
     /// Maximum antichain over deletable structural boundary nodes via Dilworth's theorem.
     ///
     /// A node is deletable if it is a child of a sequence node (an element that can be removed when the sequence's length constraint permits). Nodes whose parent is a zip are tuple slots and cannot be deleted. The root node and individual chooseBits leaves are also excluded.
@@ -150,7 +150,7 @@ public extension ChoiceGraph {
 
 // MARK: - Bind Queries
 
-public extension ChoiceGraph {
+package extension ChoiceGraph {
     /// Returns the bind nesting depth at a given sequence position.
     ///
     /// Counts the number of bind nodes whose bound child's position range contains the given position.
@@ -202,7 +202,7 @@ public extension ChoiceGraph {
 
 // MARK: - Self-Similarity Queries
 
-public extension ChoiceGraph {
+package extension ChoiceGraph {
     /// Returns self-similarity edges incident to a pick node, derived on demand from the group index.
     ///
     /// A positive delta means the neighbour is smaller (the queried node is the substitution target). Sorted by size delta descending (largest reduction first).
@@ -222,7 +222,7 @@ public extension ChoiceGraph {
 
 // MARK: - Structural Fingerprint
 
-public extension ChoiceGraph {
+package extension ChoiceGraph {
     /// Computes a structural fingerprint over the active region topology.
     ///
     /// The fingerprint hashes the multiset of `(kind, positionRange.lowerBound, positionRange.upperBound)` tuples for every active node (skipping tombstones and inactive branches). Per-node hashes are collected, sorted, then chained through an FNV-1a-style aggregator so the final value is independent of `nodes` array order. Crucially, the fingerprint does **not** include `node.id` — node identity is unstable across in-place mutations (the splice path keeps existing IDs and appends new ones, while a fresh ``ChoiceGraph/build(from:)`` walks the tree and assigns IDs in walk order), so including identity would make a structurally-correct splice compare unequal to its fresh-rebuild equivalent.

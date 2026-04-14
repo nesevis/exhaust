@@ -6,7 +6,7 @@
 //
 
 /// Utilities for float-specific reduction phases used by `reduceValues`.
-public enum FloatReduction {
+package enum FloatReduction {
     public static let doubleMantissaBits = 52
 
     public static let doubleExponentBias = 1023

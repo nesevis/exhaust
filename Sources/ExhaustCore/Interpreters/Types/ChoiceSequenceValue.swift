@@ -10,7 +10,7 @@ import Foundation
 /// An element in a flattened ``ChoiceSequence``, representing one entry from a ``ChoiceTree``.
 ///
 /// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` and ``reduced`` carry the actual numeric choices.
-public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
+package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`--`false` range are logically grouped.
     case group(Bool)
     /// The elements within the `true`--`false` range are elements of a sequence.

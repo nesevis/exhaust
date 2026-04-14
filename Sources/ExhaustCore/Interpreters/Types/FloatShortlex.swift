@@ -6,7 +6,7 @@
 //
 
 /// Utilities for float-specific shortlex/reduction ordering.
-public enum FloatShortlex {
+package enum FloatShortlex {
     public static let simpleIntegerUpperBound = 72_057_594_037_927_936.0 // 2^56
 
     public static let exponentMask: UInt64 = 0x7FF

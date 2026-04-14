@@ -25,7 +25,7 @@
 /// This file holds the class definition, lazy cache state, invalidation hooks, the convergence-record helpers, and the copy / init plumbing. Read-only graph queries (dependency, containment, bind, self-similarity, structural fingerprint) live in `ChoiceGraph+Queries.swift`. The on-demand computation that backs the lazy caches lives in `ChoiceGraph+LazyComputation.swift`. Mutation entry points (`apply`, `applyBindReshape`, dynamic rebuild) live in `ChoiceGraph+Lifecycle.swift` and its sibling files. Per-scope query families (removal, replacement, minimization, exchange, permutation) each have their own `ChoiceGraph+*Scopes.swift`.
 ///
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``SelfSimilarityEdge``, ``TypeCompatibilityEdge``
-public final class ChoiceGraph {
+package final class ChoiceGraph {
     /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``. Tombstoned IDs (members of ``removedNodeIDs``) remain in the array so that surviving IDs stay stable; iteration sites must filter them via ``isTombstoned(_:)``.
     public var nodes: [ChoiceGraphNode]
 
@@ -222,7 +222,7 @@ public final class ChoiceGraph {
 
 // MARK: - Construction
 
-public extension ChoiceGraph {
+package extension ChoiceGraph {
     /// Builds a ``ChoiceGraph`` from a choice tree.
     ///
     /// The tree contains all structural and value information needed for graph construction. Type-compatibility edges and source/sink annotations are deferred until first access.

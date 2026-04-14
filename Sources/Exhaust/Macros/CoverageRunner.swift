@@ -6,9 +6,9 @@
 import ExhaustCore
 
 /// Runs the structured coverage phase of a property test, exhausting the generator's finite or boundary domain before the random phase.
-public enum CoverageRunner {
+package enum CoverageRunner {
     /// The outcome of a coverage run.
-    public enum Result<Output> {
+    package enum Result<Output> {
         /// Coverage found a counterexample before exhausting the domain.
         case failure(
             value: Output, tree: ChoiceTree,
@@ -27,7 +27,7 @@ public enum CoverageRunner {
     }
 
     /// Runs coverage analysis and iterates through the covering array, calling `property` for each row.
-    public static func run<Output>(
+    package static func run<Output>(
         _ gen: ReflectiveGenerator<Output>,
         coverageBudget: UInt64,
         property: (Output) -> Bool,

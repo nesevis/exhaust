@@ -2,7 +2,7 @@ import Foundation
 
 /// Operations for making choices and generating random values within ranges.
 /// These combinators handle weighted selection and bounded value generation.
-public extension Gen {
+package extension Gen {
     /// Creates a generator that randomly selects from multiple weighted options.
     ///
     /// This combinator enables probabilistic generation where different outcomes have different likelihoods. The weights don't need to sum to any particular value - they're interpreted as relative frequencies.

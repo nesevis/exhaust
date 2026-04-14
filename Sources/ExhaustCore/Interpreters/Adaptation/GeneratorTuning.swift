@@ -18,7 +18,7 @@ import Foundation
 /// `chooseBits` and `getSize` operations are subdivided into synthesised picks of subranges, then tuned through the pick path.
 ///
 /// The specification-entropy objective and symbolic weight computation are based on Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025). Exhaust diverges by using convergence-gated batched sampling instead of the paper's fixed sample budget.
-public enum GeneratorTuning {
+package enum GeneratorTuning {
     // MARK: - Context
 
     final class TuningContext {

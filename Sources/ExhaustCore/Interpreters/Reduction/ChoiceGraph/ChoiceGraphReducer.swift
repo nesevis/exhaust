@@ -5,7 +5,7 @@
 
 // MARK: - Choice Graph Reducer
 
-public extension Interpreters {
+package extension Interpreters {
     /// Reduces a failing counterexample using the graph-based reduction pipeline.
     ///
     /// Builds a ``ChoiceGraph`` from the failing tree and drives four graph encoders (branch pivot, deletion, value search, redistribution) in a cycle loop until convergence.

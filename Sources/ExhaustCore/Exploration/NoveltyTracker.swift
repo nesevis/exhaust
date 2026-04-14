@@ -7,7 +7,7 @@
 ///
 /// - Tier 1: branch-path fingerprints (structural novelty) — the vector of `(fingerprint, branchID)` pairs at each pick site, hashed to a `UInt64`.
 /// - Tier 2: full `ChoiceSequence` deduplication (value-level novelty).
-public struct NoveltyTracker {
+package struct NoveltyTracker {
     /// Tier 1: branch-path fingerprint hashes (structural novelty).
     private var seenBranchPaths: Set<UInt64> = []
     /// Tier 2: full sequence deduplication (value-level novelty).

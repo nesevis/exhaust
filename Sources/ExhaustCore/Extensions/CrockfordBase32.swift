@@ -3,7 +3,7 @@
 /// Uses the alphabet `0123456789ABCDEFGHJKMNPQRSTVWXYZ` — excludes `I`, `L`, `O`, `U`
 /// to avoid visual ambiguity with `1`, `1`, `0`, and `V`. Case-insensitive on decode.
 /// A `UInt64` encodes to at most 13 characters.
-public enum CrockfordBase32 {
+package enum CrockfordBase32 {
     // MARK: - Encoding
 
     private static let alphabet: [Character] = [

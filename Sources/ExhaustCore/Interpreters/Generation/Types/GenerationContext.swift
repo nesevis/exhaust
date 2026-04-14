@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
-public struct GenerationContext: ~Copyable {
+package struct GenerationContext: ~Copyable {
     // Constants
     public let maxRuns: UInt64
     public let baseSeed: UInt64

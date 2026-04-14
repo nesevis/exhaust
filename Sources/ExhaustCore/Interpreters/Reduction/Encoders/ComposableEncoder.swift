@@ -7,7 +7,7 @@
 /// ## Composability
 ///
 /// A ``GraphComposedEncoder`` composes two composable encoders through a generator lift. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
-public protocol ComposableEncoder {
+package protocol ComposableEncoder {
     /// Typed identifier for dominance pruning and logging.
     var name: EncoderName { get }
 
@@ -39,7 +39,7 @@ public protocol ComposableEncoder {
     var convergenceRecords: [Int: ConvergedOrigin] { get }
 }
 
-public extension ComposableEncoder {
+package extension ComposableEncoder {
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]

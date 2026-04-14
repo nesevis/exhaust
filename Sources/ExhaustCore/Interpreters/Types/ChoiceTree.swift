@@ -15,7 +15,7 @@ import Foundation
 /// A tree of choices that captures every decision made during generation.
 ///
 /// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, reduce, or analyze generated values.
-public enum ChoiceTree: Hashable, Equatable, Sendable {
+package enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
 
@@ -57,7 +57,7 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
     indirect case selected(ChoiceTree)
 }
 
-public extension ChoiceTree {
+package extension ChoiceTree {
     /// The number of entries this tree produces when flattened to a ``ChoiceSequence``.
     ///
     /// Matches the count of `ChoiceSequence.flatten(self)` without allocating.
@@ -213,7 +213,7 @@ public extension ChoiceTree {
     }
 }
 
-public extension ChoiceTree {
+package extension ChoiceTree {
     /// Recursively transforms a ``ChoiceTree`` by applying a given closure to each node.
     ///
     /// - Parameter transform: A closure that takes a ``ChoiceTree`` and returns a transformed ``ChoiceTree``.
@@ -426,7 +426,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
 // MARK: - Normalized Complexity Scores
 
 /// Summary statistics derived from per-choice-point normalized scores.
-public struct ComplexityFeatures: Sendable {
+package struct ComplexityFeatures: Sendable {
     /// Number of choice points in the tree.
     public let choiceCount: Int
     /// Minimum normalized score across all choice points.
@@ -460,7 +460,7 @@ public struct ComplexityFeatures: Sendable {
     }
 }
 
-public extension ChoiceTree {
+package extension ChoiceTree {
     /// Computes a normalized complexity score for each choice point in the tree.
     ///
     /// Each score is in [0, 1] and represents where the chosen value sits within its allowable range. A score of 0 means the minimum was chosen, 1 means the maximum. The length of the returned array is itself a signal — more complex values produce more choice points.

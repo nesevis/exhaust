@@ -4,7 +4,7 @@
 //
 
 /// Result of a single hill-climbing pass on a seed.
-public enum HillClimbResult<Output> {
+package enum HillClimbResult<Output> {
     /// A property-violating value was discovered during climbing.
     case counterexample(value: Output, tree: ChoiceTree, probesUsed: Int)
     /// The seed was improved (higher scorer output).
@@ -37,7 +37,7 @@ public enum HillClimbResult<Output> {
 /// **Deeper issue**: even with strict branch acceptance, fingerprint-based siteIDs cause a 36x slowdown (50ms → 1800ms on `exploreWithScorerFindsDeepBSTs`). The cause is likely in the ``NoveltyTracker``'s branch-path fingerprinting: stable siteIDs collapse the tier-1 novelty signal for structurally similar seeds, reducing seed pool diversity and forcing the explorer to exhaust its budget. This is a fundamental tension — stable siteIDs help the reducer (branch promotion, sibling swap) but hurt the explorer (novelty detection).
 ///
 /// **Possible resolution**: split fingerprint strategies — PRNG at generation time (VACTI) for exploration diversity, fingerprint + depth augmentation at materialization time (``ReductionMaterializer``) for reducer stability. The reducer re-materializes before branch encoders run, so generation-time siteIDs don't affect reduction. This split has not been implemented.
-public enum HillClimber {
+package enum HillClimber {
     /// Performs one hill-climbing pass on `seed`, probing mutations up to `budget` times and returning an improved seed, a counterexample, or unchanged.
     public static func climb<Output>(
         seed: Seed,

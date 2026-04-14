@@ -15,7 +15,7 @@ import Foundation
 /// For `c` command types, sequence length `L`, strength `t`, the covering array produces roughly `c^t × log(L)` rows.
 /// - 5 commands, length 10, t=2: ~40–50 rows
 /// - 10 commands, length 15, t=2: ~150–200 rows
-public enum SequenceCoveringArray {
+package enum SequenceCoveringArray {
     /// Computes the per-parameter finite threshold for SCA domain construction, derived from the covering array budget.
     ///
     /// At strength t=2, the covering array produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to boundary-value representatives.
@@ -432,7 +432,7 @@ public enum SequenceCoveringArray {
 /// Per-branch analysis result for SCA domain construction.
 ///
 /// Determines how many domain values a branch contributes to each position's combined domain in the covering array.
-public enum BranchArgProfile {
+package enum BranchArgProfile {
     /// Branch generator has no parameters — contributes 1 domain value.
     case parameterFree
     /// Branch generator has analyzable parameters — contributes product-of-domainSizes domain values.
@@ -444,7 +444,7 @@ public enum BranchArgProfile {
 /// Maps a range of flat domain indices to a branch and its argument decomposition.
 ///
 /// Each slot covers `[flatOffset, flatOffset + contribution)` in the flat domain. Used by ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)`` to decompose a flat index into branch selection + argument values.
-public struct SCADomainSlot {
+package struct SCADomainSlot {
     public let branchIndex: Int
     public let flatOffset: UInt64
     public let contribution: UInt64
@@ -454,7 +454,7 @@ public struct SCADomainSlot {
 /// Lookup structure for converting flat domain indices to branch + argument values.
 ///
 /// Shared between ``SequenceCoveringArray/buildProfile(sequenceLength:pickChoices:branchProfiles:)`` and ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)``.
-public struct SCADomainMapping {
+package struct SCADomainMapping {
     public let slots: [SCADomainSlot]
     public let totalDomainSize: UInt64
     public let pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>

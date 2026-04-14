@@ -8,7 +8,7 @@
 /// Directed edge from a bind-inner node to a node within its bound subtree.
 ///
 /// The bound content's structure is contingent on the bind-inner value. Reduction must be ordered — parent before child. A change upstream invalidates everything downstream. Topological sort and reachability computation operate on this edge layer.
-public struct DependencyEdge: Equatable {
+package struct DependencyEdge: Equatable {
     /// Node ID of the bind-inner (controlling) node.
     public let source: Int
 
@@ -21,7 +21,7 @@ public struct DependencyEdge: Equatable {
 /// Directed edge from a parent node to a child in the containment tree.
 ///
 /// Connects zip → children, sequence → elements, pick → branches (active and inactive), bind → inner and bound. The direction is hierarchical (parent → child) but carries no dependency semantics — siblings are structurally independent. The containment layer defines the independence structure for antichain computation.
-public struct ContainmentEdge: Equatable {
+package struct ContainmentEdge: Equatable {
     /// Node ID of the parent.
     public let source: Int
 
@@ -34,7 +34,7 @@ public struct ContainmentEdge: Equatable {
 /// Undirected edge between two active pick nodes with matching `fingerprint`.
 ///
 /// These picks belong to the same recursive generator at different depths and are structurally exchangeable. The size delta determines substitution direction: a positive delta means the neighbour is smaller (the source is the substitution target, the neighbour is the donor).
-public struct SelfSimilarityEdge: Equatable {
+package struct SelfSimilarityEdge: Equatable {
     /// Node ID of one pick node.
     public let nodeA: Int
 
@@ -50,7 +50,7 @@ public struct SelfSimilarityEdge: Equatable {
 /// Undirected edge between two nodes in the same antichain with compatible types.
 ///
 /// Connects `chooseBits` leaves with matching ``TypeTag``, or `sequence` nodes with matching element generator identity. The edge itself is structurally stable — it changes only when the antichain changes. Source/sink annotations are dynamic and updated on any acceptance.
-public struct TypeCompatibilityEdge: Equatable {
+package struct TypeCompatibilityEdge: Equatable {
     /// Node ID of one endpoint.
     public let nodeA: Int
 
@@ -66,7 +66,7 @@ public struct TypeCompatibilityEdge: Equatable {
 /// Redistribution role of a leaf node based on its current value.
 ///
 /// Updated on any acceptance (structural or value). A non-zero leaf is a source (can donate magnitude); a zero-valued leaf is a sink (can absorb).
-public enum SourceSinkStatus {
+package enum SourceSinkStatus {
     /// Non-zero value — can donate magnitude to a type-compatible sink.
     case source
 

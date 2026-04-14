@@ -50,7 +50,7 @@ public struct ChoiceGraphStats: Sendable {
     }
 
     /// Populates construction-time stats from a ``ChoiceGraph``.
-    public static func from(_ graph: ChoiceGraph) -> ChoiceGraphStats {
+    package static func from(_ graph: ChoiceGraph) -> ChoiceGraphStats {
         var stats = ChoiceGraphStats()
         stats.nodeCount = graph.nodes.count
         stats.dependencyEdgeCount = graph.dependencyEdges.count

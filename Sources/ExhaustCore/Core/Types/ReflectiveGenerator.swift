@@ -32,7 +32,7 @@
 /// - SeeAlso: ``Gen`` for generator construction, ``Interpreters`` for execution
 public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
 
-public extension ReflectiveGenerator where Operation == ReflectiveOperation {
+package extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Monadic bind operation that sequences computations with effects.
     ///
     /// This is the fundamental operation for chaining effectful computations. It allows you to use the result of one computation to determine the next computation, properly handling both pure values and suspended operations.

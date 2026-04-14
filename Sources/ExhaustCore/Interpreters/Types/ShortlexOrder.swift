@@ -6,6 +6,6 @@
 //
 
 /// Lightweight three-way comparison result without Foundation dependency.
-public enum ShortlexOrder: Equatable, Hashable {
+package enum ShortlexOrder: Equatable, Hashable {
     case lt, eq, gt
 }

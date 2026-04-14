@@ -1,7 +1,7 @@
 // Combinator for recursive generator definitions.
 // Enables declarative recursive data type generation with explicit depth control.
 
-public extension Gen {
+package extension Gen {
     /// Creates a recursive generator with a constant base case value.
     ///
     /// The `extend` closure receives two arguments:

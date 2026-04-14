@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
-public enum ChoiceTreeHandlers {
+package enum ChoiceTreeHandlers {
     /// Resolves the generator to use for a filter operation, using the tuning cache.
     @inline(__always)
     public static func resolveFilterGenerator(

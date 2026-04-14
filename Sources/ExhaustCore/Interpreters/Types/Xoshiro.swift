@@ -6,7 +6,7 @@
 //
 
 /// The magical 3-in-1 PRNG
-public struct Xoshiro256: ~Copyable {
+package struct Xoshiro256: ~Copyable {
     public typealias StateType = (UInt64, UInt64, UInt64, UInt64)
 
     public let seed: UInt64

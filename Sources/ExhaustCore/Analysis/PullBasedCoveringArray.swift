@@ -250,7 +250,7 @@ private struct ParameterOrdering {
 /// The interaction strength is fixed at initialization and supports values 2, 3, or 4. It does not escalate during generation — all rows target the same strength throughout the generator's lifetime.
 ///
 /// Parameters are reordered internally so that smallest domains come first. This means early columns have fewer completing slices and fewer candidate values, resolving quickly. Later columns have the most completing slices and the richest greedy signal. Rows are restored to the original parameter order before being returned.
-public struct PullBasedCoveringArrayGenerator {
+package struct PullBasedCoveringArrayGenerator {
     private let strength: Int
     private let paramCount: Int
     private let ordering: ParameterOrdering

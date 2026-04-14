@@ -74,7 +74,7 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     }
 }
 
-public extension TypeTag {
+package extension TypeTag {
     /// Whether this tag represents a signed integer type.
     var isSigned: Bool {
         switch self {

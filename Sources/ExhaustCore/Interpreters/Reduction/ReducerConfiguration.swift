@@ -1,6 +1,6 @@
 // MARK: - Reducer Configuration
 
-public extension Interpreters {
+package extension Interpreters {
     /// Controls the reducer's pass pipeline: stall budget, beam search tuning, and visualization.
     struct ReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.

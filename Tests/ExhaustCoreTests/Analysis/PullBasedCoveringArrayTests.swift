@@ -3,7 +3,7 @@
 //  Exhaust
 //
 
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 import Testing
 
 @Suite("Pull-Based Covering Array")
