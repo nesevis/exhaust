@@ -14,8 +14,8 @@ import ExhaustCore
 
 @freestanding(expression)
 @discardableResult
-public macro examine<T>(
-    _ gen: ReflectiveGenerator<T>,
+public macro examine<GeneratedValue>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     samples: Int = 200,
     seed: UInt64? = nil
 ) -> ValidationReport = #externalMacro(module: "ExhaustMacros", type: "ExamineMacro")

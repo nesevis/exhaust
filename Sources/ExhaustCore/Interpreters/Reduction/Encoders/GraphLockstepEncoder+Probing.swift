@@ -55,18 +55,18 @@ extension GraphLockstepEncoder {
         let tag = firstValue.choice.tag
 
         // All entries must share the same tag.
-        var idx = 1
-        while idx < windowIndices.count {
-            let windowIndex = windowIndices[idx]
+        var i = 1
+        while i < windowIndices.count {
+            let windowIndex = windowIndices[i]
             guard windowIndex < valueState.sequence.count,
                   let value = valueState.sequence[windowIndex].value,
                   value.choice.tag == tag else { return nil }
-            idx += 1
+            i += 1
         }
 
-        let currentBP = firstValue.choice.bitPattern64
-        let targetBP = firstValue.choice.reductionTarget(in: firstValue.validRange)
-        guard currentBP != targetBP else { return nil }
+        let currentBitPattern = firstValue.choice.bitPattern64
+        let targetBitPattern = firstValue.choice.reductionTarget(in: firstValue.validRange)
+        guard currentBitPattern != targetBitPattern else { return nil }
 
         let usesFloatingSteps = tag.isFloatingPoint
         let searchUpward: Bool
@@ -74,7 +74,7 @@ extension GraphLockstepEncoder {
         if usesFloatingSteps {
             guard case let .floating(currentFloat, _, _) = firstValue.choice else { return nil }
             let targetChoice = ChoiceValue(
-                tag.makeConvertible(bitPattern64: targetBP),
+                tag.makeConvertible(bitPattern64: targetBitPattern),
                 tag: tag
             )
             guard case let .floating(targetFloat, _, _) = targetChoice,
@@ -85,8 +85,8 @@ extension GraphLockstepEncoder {
             guard rawDistance >= 1 else { return nil }
             distance = UInt64(rawDistance)
         } else {
-            searchUpward = targetBP > currentBP
-            distance = searchUpward ? targetBP - currentBP : currentBP - targetBP
+            searchUpward = targetBitPattern > currentBitPattern
+            distance = searchUpward ? targetBitPattern - currentBitPattern : currentBitPattern - targetBitPattern
             guard distance >= 1 else { return nil }
         }
 
@@ -176,7 +176,7 @@ extension GraphLockstepEncoder {
         var entryOffset = 0
         while entryOffset < plan.originalEntries.count {
             let pair = plan.originalEntries[entryOffset]
-            let idx = pair.index
+            let i = pair.index
             let originalEntry = pair.entry
             guard let value = originalEntry.value else {
                 entryOffset += 1
@@ -199,11 +199,11 @@ extension GraphLockstepEncoder {
                     : value.choice.bitPattern64 >= delta
                 else { return nil }
 
-                let newBP = plan.searchUpward
+                let newBitPattern = plan.searchUpward
                     ? value.choice.bitPattern64 + delta
                     : value.choice.bitPattern64 - delta
                 newChoice = ChoiceValue(
-                    plan.tag.makeConvertible(bitPattern64: newBP),
+                    plan.tag.makeConvertible(bitPattern64: newBitPattern),
                     tag: plan.tag
                 )
             }
@@ -229,7 +229,7 @@ extension GraphLockstepEncoder {
                 hasDifference = true
                 firstDifferenceOrder = order
             }
-            candidate[idx] = newEntry
+            candidate[i] = newEntry
             entryOffset += 1
         }
 

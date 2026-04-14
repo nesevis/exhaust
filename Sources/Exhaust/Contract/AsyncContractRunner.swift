@@ -67,7 +67,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             coverageBudget: coverageBudget
         )
 
-        let seqGen = commandGen.array(
+        let commandSequenceGenerator = commandGen.array(
             length: 0 ... resolvedCommandLimit
         )
 
@@ -115,7 +115,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                 var scaResult: SCAResult<Spec.Command>?
                 if !randomOnly, replaySeed == nil {
                     scaResult = runSCACoverage(
-                        seqGen: seqGen,
+                        seqGen: commandSequenceGenerator,
                         commandGen: commandGen,
                         commandLimit: resolvedCommandLimit,
                         coverageBudget: covBudget,
@@ -134,7 +134,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                         !randomOnly && replaySeed == nil
                             && extractPickChoices(from: commandGen) != nil
                     let exhaustResult = __ExhaustRuntime.__exhaust(
-                        seqGen,
+                        commandSequenceGenerator,
                         settings: buildExhaustSettings(
                             samplingBudget: maxIter,
                             coverageBudget: covBudget,
@@ -174,7 +174,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         let result = ContractResult<Spec>(
             commands: failingSequence,
             trace: trace,
-            sut: spec.sut,
+            systemUnderTest: spec.systemUnderTest,
             seed: seed,
             discoveryMethod: failureInfo.discoveryMethod
         )

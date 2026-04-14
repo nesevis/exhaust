@@ -87,7 +87,7 @@ public enum HillClimber {
                 }
 
                 let choiceTag = v.choice.tag
-                var currentBP = v.choice.bitPattern64
+                var currentBitPattern = v.choice.bitPattern64
                 let validRange = v.validRange
                 let isRangeExplicit = v.isRangeExplicit
 
@@ -102,21 +102,21 @@ public enum HillClimber {
                         guard probesUsed < budget else { return false }
                         guard k <= 1 << 20 else { return false }
 
-                        let newBP: UInt64
+                        let newBitPattern: UInt64
                         if direction {
-                            guard UInt64.max - k >= currentBP else { return false }
-                            newBP = currentBP + k
+                            guard UInt64.max - k >= currentBitPattern else { return false }
+                            newBitPattern = currentBitPattern + k
                         } else {
-                            guard currentBP >= k else { return false }
-                            newBP = currentBP - k
+                            guard currentBitPattern >= k else { return false }
+                            newBitPattern = currentBitPattern - k
                         }
 
-                        if let validRange, isRangeExplicit, !validRange.contains(newBP) {
+                        if let validRange, isRangeExplicit, !validRange.contains(newBitPattern) {
                             return false
                         }
 
                         let newChoice = ChoiceValue(
-                            choiceTag.makeConvertible(bitPattern64: newBP),
+                            choiceTag.makeConvertible(bitPattern64: newBitPattern),
                             tag: choiceTag
                         )
                         let newEntry = ChoiceSequenceValue.value(.init(
@@ -161,7 +161,7 @@ public enum HillClimber {
                             currentScore = score
                             bestOutput = value
                             currentSequence = sequence
-                            currentBP = newBP
+                            currentBitPattern = newBitPattern
                             didAccept = true
                             // Return false to stop findInteger — we've accepted and
                             // need to restart the outer loop with the new sequence.
@@ -195,9 +195,9 @@ public enum HillClimber {
                 }
 
                 var shuffled = alternatives
-                for idx in stride(from: shuffled.count - 1, through: 1, by: -1) {
-                    let j = Int(prng.next(upperBound: UInt64(idx + 1)))
-                    shuffled.swapAt(idx, j)
+                for i in stride(from: shuffled.count - 1, through: 1, by: -1) {
+                    let j = Int(prng.next(upperBound: UInt64(i + 1)))
+                    shuffled.swapAt(i, j)
                 }
 
                 var branchAccepted = false

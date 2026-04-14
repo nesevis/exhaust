@@ -22,7 +22,7 @@ public protocol ContractSpecBase {
     static var commandGenerator: ReflectiveGenerator<Command> { get }
 
     /// The system under test instance, for typed access in results and failure reports.
-    var sut: SystemUnderTest { get }
+    var systemUnderTest: SystemUnderTest { get }
 
     /// A human-readable description of the model state, used in failure reports.
     var modelDescription: String { get }

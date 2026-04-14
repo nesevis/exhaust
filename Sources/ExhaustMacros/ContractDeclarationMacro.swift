@@ -71,19 +71,19 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         // 1. Command enum
         decls.append(synthesizeCommandEnum(commands: commands))
 
-        // 2. SystemUnderTest typealias + sut accessor
+        // 2. SystemUnderTest typealias + systemUnderTest accessor
         if let sutProp = sutProps.first, let sutType = sutProp.type {
             decls.append("typealias SystemUnderTest = \(raw: sutType)")
-            decls.append("var sut: SystemUnderTest { \(raw: sutProp.name) }")
+            decls.append("var systemUnderTest: SystemUnderTest { \(raw: sutProp.name) }")
         } else if let sutProp = sutProps.first {
             // No type available — use Never as a placeholder and emit a note.
-            // The compiler will produce a type mismatch if the user accesses .sut,
+            // The compiler will produce a type mismatch if the user accesses .systemUnderTest,
             // which is better than a confusing "could not infer" error.
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: ContractDiagnostic.sutTypeNotInferred
             ))
-            decls.append("var sut: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SUT property\") }")
+            decls.append("var systemUnderTest: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SUT property\") }")
         }
 
         // 3. commandGenerator

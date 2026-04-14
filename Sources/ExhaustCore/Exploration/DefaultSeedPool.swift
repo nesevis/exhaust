@@ -56,11 +56,11 @@ public struct DefaultSeedPool: SeedPool {
     }
 
     public mutating func revise() {
-        guard let idx = lastSampledIndex, idx < seeds.count else { return }
+        guard let i = lastSampledIndex, i < seeds.count else { return }
         if useFitness {
-            seeds[idx].fitness *= 0.5
+            seeds[i].fitness *= 0.5
         } else {
-            seeds[idx].noveltyScore *= 0.5
+            seeds[i].noveltyScore *= 0.5
         }
     }
 
@@ -91,9 +91,9 @@ public struct DefaultSeedPool: SeedPool {
         }
 
         // Fallback: return last seed
-        let idx = seeds.count - 1
-        lastSampledIndex = idx
-        return .mutate(seeds[idx])
+        let i = seeds.count - 1
+        lastSampledIndex = i
+        return .mutate(seeds[i])
     }
 
     // MARK: - Private

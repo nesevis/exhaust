@@ -73,7 +73,7 @@ public func __runContract<Spec: ContractSpec>(
         )
 
         // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can reduce sequences below the user's minimum — the minimum is a generation hint, not a reduction floor.
-        let seqGen = commandGen.array(
+        let commandSequenceGenerator = commandGen.array(
             length: 0 ... resolvedCommandLimit,
             scaling: .constant
         )
@@ -115,7 +115,7 @@ public func __runContract<Spec: ContractSpec>(
         }
         if !useRandomOnly, seed == nil {
             scaResult = runSCACoverage(
-                seqGen: seqGen,
+                seqGen: commandSequenceGenerator,
                 commandGen: commandGen,
                 commandLimit: resolvedCommandLimit,
                 coverageBudget: coverageBudget,
@@ -139,7 +139,7 @@ public func __runContract<Spec: ContractSpec>(
                 !useRandomOnly && seed == nil
                     && extractPickChoices(from: commandGen) != nil
             failingSequence = __ExhaustRuntime.__exhaust(
-                seqGen,
+                commandSequenceGenerator,
                 settings: buildExhaustSettings(
                     samplingBudget: samplingBudget,
                     coverageBudget: coverageBudget,
@@ -173,7 +173,7 @@ public func __runContract<Spec: ContractSpec>(
         let result = ContractResult<Spec>(
             commands: failingSequence,
             trace: trace,
-            sut: spec.sut,
+            systemUnderTest: spec.systemUnderTest,
             seed: seed,
             discoveryMethod: failureInfo.discoveryMethod
         )
@@ -305,7 +305,7 @@ func renderFailure<Spec: ContractSpecBase>(
 
     lines.append("")
     lines.append("Model: \(modelDescription)")
-    lines.append("SUT:   \(result.sut)")
+    lines.append("SUT:   \(result.systemUnderTest)")
 
     if let seed = result.seed {
         lines.append("")
@@ -431,8 +431,8 @@ func runSCACoverage<Command>(
         return nil
     }
 
-    let seqLen = commandLimit
-    guard seqLen >= 2 else {
+    let sequenceLength = commandLimit
+    guard sequenceLength >= 2 else {
         ExhaustLog.notice(
             category: .propertyTest,
             event: "sca_coverage_skipped",
@@ -445,9 +445,9 @@ func runSCACoverage<Command>(
     }
 
     // Cap interaction strength based on sequence length. Higher strength gives better
-    // coverage but the number of covering array rows grows with C(seqLen, t).
+    // coverage but the number of covering array rows grows with C(sequenceLength, t).
     // Short sequences can afford high strength; long sequences fall back to pairwise.
-    let strengthCap = switch seqLen {
+    let strengthCap = switch sequenceLength {
     case ...6: 6
     case ...8: 5
     case ...12: 4
@@ -456,7 +456,7 @@ func runSCACoverage<Command>(
     }
 
     guard let domain = SCADomain.build(
-        sequenceLength: seqLen,
+        sequenceLength: sequenceLength,
         pickChoices: pickChoices,
         coverageBudget: coverageBudget,
         strengthCap: strengthCap
@@ -523,7 +523,7 @@ func runSCACoverage<Command>(
             "command_types": "\(pickChoices.count)",
             "iterations": "\(iterations)",
             "rows": "\(iterations)",
-            "sequence_length": "\(seqLen)",
+            "sequence_length": "\(sequenceLength)",
             "strength": "\(strength)",
         ]
     )

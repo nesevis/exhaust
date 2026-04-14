@@ -415,9 +415,9 @@ public enum SequenceCoveringArray {
     ) -> ChoiceTree? {
         var valueIndices = [UInt64](repeating: 0, count: params.count)
         var remainder = localIndex
-        for idx in (0 ..< params.count).reversed() {
-            let domain = params[idx].domainSize
-            valueIndices[idx] = remainder % domain
+        for i in (0 ..< params.count).reversed() {
+            let domain = params[i].domainSize
+            valueIndices[i] = remainder % domain
             remainder /= domain
         }
 

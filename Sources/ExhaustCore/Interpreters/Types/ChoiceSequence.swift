@@ -64,15 +64,15 @@ public extension ChoiceSequence {
         case let .branch(_, _, _, _, gen):
             flatten(gen, includingAllBranches: includingAllBranches, into: &output)
         case let .group(array, _):
-            var idx = 0
+            var i = 0
             var selectedBranchTree: ChoiceTree?
-            while idx < array.count {
-                let candidate = array[idx]
+            while i < array.count {
+                let candidate = array[i]
                 if candidate.isSelected, candidate.unwrapped.isBranch {
                     selectedBranchTree = candidate
                     break
                 }
-                idx += 1
+                i += 1
             }
             if case let .selected(.branch(_, _, id, branchIDs, choice)) = selectedBranchTree {
                 output.append(.group(true))
@@ -160,15 +160,15 @@ public extension ChoiceSequence {
     ) -> [ChoiceValue] {
         var keys: [ChoiceValue] = []
         // while-loop: avoiding IteratorProtocol overhead in debug builds.
-        var idx = range.lowerBound
-        while idx <= range.upperBound {
-            switch sequence[idx] {
+        var i = range.lowerBound
+        while i <= range.upperBound {
+            switch sequence[i] {
             case let .value(v), let .reduced(v):
                 keys.append(v.choice)
             case .branch, .sequence, .group, .bind, .just:
                 break
             }
-            idx += 1
+            i += 1
         }
         return keys
     }

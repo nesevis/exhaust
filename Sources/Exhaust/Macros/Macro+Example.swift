@@ -14,10 +14,10 @@
 import ExhaustCore
 
 @freestanding(expression)
-public macro example<T>(
-    _ gen: ReflectiveGenerator<T>,
+public macro example<GeneratedValue>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     seed: UInt64? = nil
-) -> T = #externalMacro(module: "ExhaustMacros", type: "ExampleMacro")
+) -> GeneratedValue = #externalMacro(module: "ExhaustMacros", type: "ExampleMacro")
 
 /// Generates an array of values from a generator without running a property test.
 ///
@@ -34,8 +34,8 @@ public macro example<T>(
 ///   - seed: Optional seed for deterministic replay.
 /// - Returns: An array of generated values.
 @freestanding(expression)
-public macro example<T>(
-    _ gen: ReflectiveGenerator<T>,
+public macro example<GeneratedValue>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     count: UInt64,
     seed: UInt64? = nil
-) -> [T] = #externalMacro(module: "ExhaustMacros", type: "ExampleMacro")
+) -> [GeneratedValue] = #externalMacro(module: "ExhaustMacros", type: "ExampleMacro")

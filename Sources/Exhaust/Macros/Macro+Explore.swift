@@ -23,9 +23,9 @@ import ExhaustCore
 
 @freestanding(expression)
 @discardableResult
-public macro explore<T>(
-    _ gen: ReflectiveGenerator<T>,
+public macro explore<GeneratedValue>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
-    scorer: (T) -> Double,
-    property: (T) throws -> Bool
-) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")
+    scorer: (GeneratedValue) -> Double,
+    property: (GeneratedValue) throws -> Bool
+) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")

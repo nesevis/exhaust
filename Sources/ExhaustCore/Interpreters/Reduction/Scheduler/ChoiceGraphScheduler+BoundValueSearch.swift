@@ -103,9 +103,9 @@ extension ChoiceGraphScheduler {
 
         // Read the proposed upstream value for instrumentation.
         let upstreamSeqIndex = parent.graph.nodes[fibreScope.upstreamLeafNodeID].positionRange?.lowerBound
-        let upstreamProposedBP: UInt64? = upstreamSeqIndex.flatMap { idx in
-            idx < upstreamProbe.candidate.count
-                ? upstreamProbe.candidate[idx].value?.choice.bitPattern64
+        let upstreamProposedBitPattern: UInt64? = upstreamSeqIndex.flatMap { i in
+            i < upstreamProbe.candidate.count
+                ? upstreamProbe.candidate[i].value?.choice.bitPattern64
                 : nil
         }
 
@@ -129,7 +129,7 @@ extension ChoiceGraphScheduler {
                     category: .reducer,
                     event: "bound_value_lift_failed",
                     metadata: [
-                        "upstream_bp": upstreamProposedBP.map { "\($0)" } ?? "nil",
+                        "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
                         "candidate_len": "\(upstreamProbe.candidate.count)",
                     ]
                 )
@@ -191,7 +191,7 @@ extension ChoiceGraphScheduler {
                 category: .reducer,
                 event: "bound_value_lift_built",
                 metadata: [
-                    "upstream_bp": upstreamProposedBP.map { "\($0)" } ?? "nil",
+                    "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
                     "parent_seq_len": "\(parent.baseSequence.count)",
                     "lifted_seq_len": "\(liftedSequence.count)",
                     "downstream_leaves": "\(downstreamLeaves.count)",
