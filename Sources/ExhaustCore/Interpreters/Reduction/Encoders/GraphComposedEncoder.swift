@@ -11,7 +11,7 @@
 ///
 /// ## Why not ``GraphValueEncoder``?
 ///
-/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one ``GeneratorLift`` materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
+/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
 ///
 /// ## Lifecycle
 ///
@@ -101,7 +101,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
 ///
 /// ``FibreCoveringEncoder`` enumerates the entire fibre value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
 ///
-/// The wrapper expects the scope's operation to be ``MinimizationScope/integerLeaves(_:)``: the leaf positions are read from the scope's leaves, the contiguous position range is computed from them, and the inner encoder is started on the scope's `baseSequence` over that range.
+/// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the leaf positions are read from the scope's leaves, the contiguous position range is computed from them, and the inner encoder is started on the scope's `baseSequence` over that range.
 struct GraphFibreCoveringEncoder: GraphEncoder {
     let name: EncoderName = .boundValueSearch
 

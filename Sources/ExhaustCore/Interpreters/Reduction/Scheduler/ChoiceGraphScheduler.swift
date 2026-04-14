@@ -267,9 +267,8 @@ enum ChoiceGraphScheduler {
                 //    progress in this cycle, the bound value composition is redundant — the
                 //    cheaper encoders are still finding improvements and the next cycle
                 //    will re-evaluate. Bound value search only fires in cycles where the cheap
-                //    encoders couldn't make progress, mirroring Bonsai's Stage-2 design
-                //    where bound value search is the explicit fallback after
-                //    ``runFibreDescent`` exhausts.
+                //    encoders couldn't make progress — bound value search is the
+                //    explicit fallback after cheaper encoders exhaust.
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     if boundValueDispatchedThisCycle.contains(fibreScope.bindNodeID) {
                         continue

@@ -577,7 +577,7 @@ extension GraphValueEncoder {
     ///
     /// Returns `true` when the leaf is a signed type with a current shortlex key > 0 (there is at least one strictly simpler value to try). On success, ``IntegerState/crossZero`` is set and the per-leaf dispatch loop will emit the first probe on its next iteration.
     ///
-    /// The probe budget adapts to the current shortlex key: roughly `log₂(key) + 4`, clamped to `[4, 16]`. Rationale: bit-pattern binary search has already covered the large-magnitude neighborhood by the time cross-zero runs, so cross-zero's contribution is bounded to the last few shortlex keys near zero. Small-magnitude leaves get full coverage of every key below their current one; large-magnitude leaves get the simplest 16 keys. Bonsai's fixed 16-probe cap is a special case of this at the upper end of the range.
+    /// The probe budget adapts to the current shortlex key: roughly `log₂(key) + 4`, clamped to `[4, 16]`. Rationale: bit-pattern binary search has already covered the large-magnitude neighborhood by the time cross-zero runs, so cross-zero's contribution is bounded to the last few shortlex keys near zero. Small-magnitude leaves get full coverage of every key below their current one; large-magnitude leaves get the simplest 16 keys. A fixed 16-probe cap is a special case of this at the upper end of the range.
     mutating func tryEnterCrossZero(state: inout IntegerState) -> Bool {
         let leaf = state.leafPositions[state.leafIndex]
         guard leaf.typeTag.isSigned else { return false }

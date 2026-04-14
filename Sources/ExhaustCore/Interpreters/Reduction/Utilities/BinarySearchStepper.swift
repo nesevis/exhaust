@@ -5,12 +5,11 @@
 //  Created by Chris Kolbu on 12/4/2026.
 //
 
-/// Step-by-step driver for ``AdaptiveProbe.binarySearchWithGuess``, for use in ``AdaptiveEncoder`` conformances.
+/// Step-by-step driver for ``AdaptiveProbe.binarySearchWithGuess``, for use in ``ComposableEncoder`` conformances.
 ///
-/// Produces probes in the same order as ``binarySearchWithGuess`` — starts at the guess, then uses ``findInteger``-style expansion/contraction based on whether the guess was on the "good" or "bad" side.
-/// Searches for the **smallest** accepted value via binary search.
+/// Produces probes in the same order as ``binarySearchWithGuess`` — starts at the guess, then uses ``findInteger``-style expansion/contraction based on whether the guess was on the "good" or "bad" side. Searches for the smallest accepted value via binary search.
 ///
-/// On acceptance, narrows the upper bound (`hi = probe`). On rejection, narrows the lower bound (`lo = probe + 1`). Converges to the smallest value that is accepted. Used by ``BinarySearchToSemanticSimplestEncoder`` and ``BinarySearchToRangeMinimumEncoder`` where the goal is to find the simplest (smallest bit pattern) value that still fails the property.
+/// On acceptance, narrows the upper bound (`hi = probe`). On rejection, narrows the lower bound (`lo = probe + 1`). Converges to the smallest value that is accepted.
 struct BinarySearchStepper {
     // MARK: - State
 

@@ -2,7 +2,7 @@
 
 /// Searches a fibre for any failing point by systematically covering value combinations.
 ///
-/// Unlike per-coordinate minimizers (``ZeroValueEncoder``, ``BinarySearchToSemanticSimplestEncoder``), this encoder does not assume the current state already fails the property. It searches the fibre space for ANY assignment that fails — the right strategy for the downstream slot of a ``GraphComposedEncoder``, where the lifted state may pass the property and a failure needs to be discovered.
+/// Unlike per-coordinate minimizers, this encoder does not assume the current state already fails the property. It searches the fibre space for ANY assignment that fails — the right strategy for the downstream slot of a ``GraphComposedEncoder``, where the lifted state may pass the property and a failure needs to be discovered.
 ///
 /// Two regimes based on the fibre's total domain size:
 /// - **Small fibres** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.

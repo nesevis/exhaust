@@ -100,8 +100,7 @@ extension GraphRedistributionEncoder {
         }
         pairs = sortedIndices.map { pairs[$0] }
 
-        // Cap the working set to mirror Bonsai's `estimatedCost` ceiling of
-        // 240 pairs. After sorting, the prefix is the highest-yield slice; the
+        // Cap the working set to limited subset of pairs. After sorting, the prefix is the highest-yield slice; the
         // tail is the long stretch of low-distance pairs whose acceptance rate
         // is near zero on workloads with many type-compatible leaves.
         if pairs.count > Self.maxPairsPerScope {
