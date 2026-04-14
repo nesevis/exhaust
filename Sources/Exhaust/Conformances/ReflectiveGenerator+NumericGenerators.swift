@@ -160,6 +160,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt16` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.uint16(in: 0...1000))
+    /// ```
     static func uint16(
         in range: ClosedRange<UInt16>? = nil,
         scaling: SizeScaling<UInt16>? = nil
@@ -191,6 +195,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt32` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.uint32(in: 0...100_000))
+    /// ```
     static func uint32(
         in range: ClosedRange<UInt32>? = nil,
         scaling: SizeScaling<UInt32>? = nil
@@ -222,6 +230,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt64` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.uint64(in: 0...1_000_000))
+    /// ```
     static func uint64(
         in range: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64>? = nil
@@ -253,6 +265,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.uint(in: 0...100))
+    /// ```
     static func uint(
         in range: ClosedRange<UInt>? = nil,
         scaling: SizeScaling<UInt>? = nil
@@ -288,6 +304,10 @@ public extension ReflectiveGenerator {
 
 public extension ReflectiveGenerator {
     /// Generates arbitrary `Int8` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int8(in: -100...100))
+    /// ```
     static func int8(
         in range: ClosedRange<Int8>? = nil,
         scaling: SizeScaling<Int8>? = nil
@@ -315,6 +335,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `Int16` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int16(in: -1000...1000))
+    /// ```
     static func int16(
         in range: ClosedRange<Int16>? = nil,
         scaling: SizeScaling<Int16>? = nil
@@ -342,6 +366,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `Int32` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int32(in: -100_000...100_000))
+    /// ```
     static func int32(
         in range: ClosedRange<Int32>? = nil,
         scaling: SizeScaling<Int32>? = nil
@@ -369,6 +397,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `Int64` values within the given range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int64(in: -1_000_000...1_000_000))
+    /// ```
     static func int64(
         in range: ClosedRange<Int64>? = nil,
         scaling: SizeScaling<Int64>? = nil

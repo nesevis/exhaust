@@ -15,7 +15,7 @@ public extension ReflectiveGenerator {
     /// The array length scales with the interpreter's size parameter (1–100), producing shorter arrays early in a test run and longer ones later.
     ///
     /// ```swift
-    /// let arrays = ReflectiveGenerator.array(.int(in: 0...10))
+    /// let gen = #gen(.array(.int(in: 0...10)))
     /// ```
     ///
     /// - Parameter gen: Generator for each array element.
@@ -29,7 +29,7 @@ public extension ReflectiveGenerator {
     /// Creates a generator that produces arrays with length within a specified range.
     ///
     /// ```swift
-    /// let pairs = ReflectiveGenerator.array(.bool(), length: 2...5)
+    /// let gen = #gen(.array(.bool(), length: 2...5))
     /// ```
     ///
     /// - Parameters:
@@ -50,7 +50,7 @@ public extension ReflectiveGenerator {
     /// Creates a generator that produces arrays of an exact fixed length.
     ///
     /// ```swift
-    /// let triple = ReflectiveGenerator.array(.int(in: 0...9), length: 3)
+    /// let gen = #gen(.array(.int(in: 0...9), length: 3))
     /// ```
     ///
     /// - Parameters:
@@ -69,7 +69,7 @@ public extension ReflectiveGenerator {
     /// Elements are deduplicated by hash, so the generated set may be smaller than the requested count if the element generator produces duplicates.
     ///
     /// ```swift
-    /// let tags = ReflectiveGenerator.set(.element(from: ["a", "b", "c", "d"]))
+    /// let gen = #gen(.set(.element(from: ["a", "b", "c", "d"])))
     /// ```
     ///
     /// - Parameter gen: Generator for each set element.
@@ -81,6 +81,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Creates a generator that produces sets with count within a specified range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.set(.int(in: 0...100), count: 1...5))
+    /// ```
     ///
     /// - Parameters:
     ///   - gen: Generator for each set element.
@@ -99,6 +103,10 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that produces sets of an exact fixed count.
     ///
+    /// ```swift
+    /// let gen = #gen(.set(.int(in: 0...100), count: UInt64(3)))
+    /// ```
+    ///
     /// - Parameters:
     ///   - gen: Generator for each set element.
     ///   - count: The exact number of elements in each generated set.
@@ -115,7 +123,7 @@ public extension ReflectiveGenerator {
     /// Array length (and thus dictionary size) is size-scaled. Keys are deduplicated by hash — if the key generator produces duplicates, later values overwrite earlier ones.
     ///
     /// ```swift
-    /// let config = ReflectiveGenerator.dictionary(.asciiString(), .int(in: 0...100))
+    /// let gen = #gen(.dictionary(.asciiString(), .int(in: 0...100)))
     /// ```
     ///
     /// - Parameters:
@@ -133,6 +141,10 @@ public extension ReflectiveGenerator {
     ///
     /// Generates the full collection, then selects a random start index and length to produce a `SubSequence`.
     ///
+    /// ```swift
+    /// let gen = #gen(.slice(.array(.int(in: 0...9), length: 5...10)))
+    /// ```
+    ///
     /// - Parameter gen: Generator for the source collection to slice.
     /// - Returns: A generator producing random sub-sequences.
     static func slice<C: Collection>(
@@ -144,6 +156,10 @@ public extension ReflectiveGenerator {
     /// Creates a generator that produces randomly shuffled versions of a generated collection.
     ///
     /// Generates the collection, then applies a random permutation.
+    ///
+    /// ```swift
+    /// let gen = #gen(.shuffled(.array(.int(in: 0...9))))
+    /// ```
     ///
     /// - Parameter gen: Generator for the source collection to shuffle.
     /// - Returns: A generator producing shuffled arrays.
@@ -201,12 +217,20 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Wraps this element generator to produce sets with size-scaled count.
     ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 0...100)).set()
+    /// ```
+    ///
     /// - Returns: A generator producing sets of this generator's values.
     func set() -> ReflectiveGenerator<Set<Value>> where Value: Hashable {
         Gen.setOf(self)
     }
 
     /// Wraps this element generator to produce sets with count in a specified range.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 0...100)).set(count: 1...5)
+    /// ```
     ///
     /// - Parameters:
     ///   - count: The allowed range of set sizes.
@@ -222,6 +246,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     }
 
     /// Wraps this element generator to produce sets of an exact fixed count.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 0...100)).set(count: UInt64(3))
+    /// ```
     ///
     /// - Parameter count: The exact number of elements in each generated set.
     /// - Returns: A generator producing sets of the specified size.
@@ -245,7 +273,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and test case reduction.
     ///
     /// ```swift
-    /// let suit = ReflectiveGenerator.element(from: ["♠", "♥", "♦", "♣"])
+    /// let gen = #gen(.element(from: ["♠", "♥", "♦", "♣"]))
     /// ```
     ///
     /// - Parameter collection: The collection to pick elements from.
@@ -259,6 +287,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Picks a random element from a fixed collection (non-Hashable variant).
     ///
     /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and test case reduction.
+    ///
+    /// ```swift
+    /// let gen = #gen(.element(from: [1.0, 2.5, 3.14]))
+    /// ```
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.

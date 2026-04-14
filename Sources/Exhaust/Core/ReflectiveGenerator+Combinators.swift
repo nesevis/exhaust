@@ -113,6 +113,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// Reflection behavior: When reflecting on `nil`, throws `ReflectionError.reflectedNil` to signal that the non-optional branch should be pruned. When reflecting on `.some(value)`, extracts the wrapped value for the underlying generator to reflect on.
     ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 0...10)).asOptional()
+    /// ```
+    ///
     /// - Returns: A generator that produces optional versions of the original values.
     func asOptional() -> ReflectiveGenerator<Value?> {
         let description = String(describing: Value.self)
@@ -291,15 +295,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a recursive generator with a constant base case value.
     ///
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
-    /// TODO: Code example needs updating
+    ///
     /// ```swift
-    /// .recursive(base: .leaf, depthRange: 1...5) { recurse, remaining in
-    ///     guard remaining > 1 else { return .just(.leaf) }
-    ///     .oneOf(weighted:
-    ///         (1, .just(.leaf)),
-    ///         (Int(remaining), #gen(recurse(), .uint(in: 0...9), recurse()).map { .node($0, $1, $2) })
+    /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
+    ///     base: .leaf,
+    ///     depthRange: 0...5
+    /// ) { recurse, remaining in
+    ///     .oneOf(
+    ///         .just(.leaf),
+    ///         #gen(recurse(), .int(in: 0...9), recurse()).map { .node($0, $1, $2) }
     ///     )
-    /// }
+    /// })
     /// ```
     ///
     /// - Parameters:
@@ -321,15 +327,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a recursive generator with a constant base case value.
     ///
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
-    /// TODO: Code example needs updating
+    ///
     /// ```swift
-    /// .recursive(base: .leaf, depthRange: 1...5) { recurse, remaining in
-    ///     guard remaining > 1 else { return .just(.leaf) }
-    ///     .oneOf(weighted:
-    ///         (1, .just(.leaf)),
-    ///         (Int(remaining), #gen(recurse(), .uint(in: 0...9), recurse()).map { .node($0, $1, $2) })
+    /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
+    ///     base: .leaf,
+    ///     depthRange: UInt64(0)...UInt64(5)
+    /// ) { recurse, remaining in
+    ///     .oneOf(
+    ///         .just(.leaf),
+    ///         #gen(recurse(), .int(in: 0...9), recurse()).map { .node($0, $1, $2) }
     ///     )
-    /// }
+    /// })
     /// ```
     ///
     /// - Parameters:
@@ -546,6 +554,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Chains this generator with a dependent generator, using a partial path for backward extraction.
     ///
     /// This overload uses a ``PartialPath`` for the backward transformation, which can fail gracefully when the reflection target doesn't contain the expected structure. If extraction fails, that reflection branch is pruned.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 1...10)).bound(
+    ///     forward: { n in .string(length: n) },
+    ///     backward: \String.count
+    /// )
+    /// ```
     ///
     /// - Parameters:
     ///   - forward: Function that takes the generated value and returns a new generator.

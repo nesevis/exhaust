@@ -48,11 +48,11 @@ public extension ReflectiveGenerator {
     /// Defaults to `TimeZone.current` when not specified.
     ///
     /// ```swift
-    /// let gen: ReflectiveGenerator<Date> = .date(
+    /// let gen = #gen(.date(
     ///     between: startDate ... endDate,
     ///     interval: .hours(1),
     ///     timeZone: .init(identifier: "America/New_York")!
-    /// )
+    /// ))
     /// ```
     static func date(
         between range: ClosedRange<Date>,

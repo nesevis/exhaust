@@ -11,6 +11,10 @@ import Foundation
 public extension ReflectiveGenerator {
     /// Generates a random Unicode character, optionally within the given range.
     ///
+    /// ```swift
+    /// let gen = #gen(.character(in: "a"..."z"))
+    /// ```
+    ///
     /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. This character occupies index 0 in the shortlex ordering, so any character that is not essential to the property failure will be replaced by it. Defaults to space if the range contains it, otherwise the range's lower bound. Must be within the range.
     static func character(
         in range: ClosedRange<Character>? = nil,
@@ -39,6 +43,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates a random printable ASCII string (U+0020--U+007E) with size-scaled or fixed length.
+    ///
+    /// ```swift
+    /// let gen = #gen(.asciiString(length: 1...20))
+    /// ```
     static func asciiString(
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
@@ -72,6 +80,10 @@ public extension ReflectiveGenerator {
     ///
     /// Uses ``ScalarRangeSet`` to flatten the character set into a single contiguous index space, then picks via ``Gen/choose(in:)`` with O(log n) lookup.
     ///
+    /// ```swift
+    /// let gen = #gen(.character(from: .letters))
+    /// ```
+    ///
     /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
     static func character(
         from characterSet: CharacterSet,
@@ -82,12 +94,20 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates a random character from the union of two or more ``CharacterSet``s.
+    ///
+    /// ```swift
+    /// let gen = #gen(.character(from: .letters, .decimalDigits))
+    /// ```
     static func character(from first: CharacterSet, _ rest: CharacterSet...) -> ReflectiveGenerator<Character> {
         let combined = rest.reduce(first) { $0.union($1) }
         return character(from: combined)
     }
 
     /// Generates a random string whose characters are drawn from the given ``CharacterSet``.
+    ///
+    /// ```swift
+    /// let gen = #gen(.string(from: .letters, length: 1...10))
+    /// ```
     ///
     /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
     static func string(
