@@ -162,11 +162,11 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 // Precompute for strategies that need cross-choice context
                 let precomputedWeights: ContiguousArray<UInt64>? = switch strategy {
                 case .fitnessSharing:
-                    computeFitnessSharingWeights(choices: choices, accumulator: accumulator)
+                    computeFitnessSharingWeights(choices: choices, records: accumulator.records)
                 case let .ucb(explorationConstant):
                     computeUCBWeights(
                         choices: choices,
-                        accumulator: accumulator,
+                        records: accumulator.records,
                         explorationConstant: explorationConstant
                     )
                 default:
@@ -309,7 +309,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
     /// 1 + 4×0.1 = 1.4. Dividing raw fitness by the niche count compresses the ratio from 9:1 down to ~1.96:0.71 ≈ 2.7:1 — still favoring the winner, but giving the minority choice meaningful sampling probability.
     private static func computeFitnessSharingWeights(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        accumulator: FitnessAccumulator
+        records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord]
     ) -> ContiguousArray<UInt64> {
         let count = choices.count
         var rawFitnesses = ContiguousArray<Double>()
@@ -319,7 +319,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
         var siteTotal: Double = 0
         for choice in choices {
             let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
-            let fitness = accumulator.records[key].map { Double($0.totalFitness) } ?? 0
+            let fitness = records[key].map { Double($0.totalFitness) } ?? 0
             rawFitnesses.append(fitness)
             siteTotal += fitness
         }
@@ -344,19 +344,19 @@ public enum ChoiceGradientTuner<FinalOutput> {
     /// UCB1 (Upper Confidence Bound) exploration bonus from multi-armed bandit literature. Each choice's weight is `meanFitness + C × √(ln(N) / n_i)` where `N` is total observations across all choices at the site and `n_i` is this choice's observation count. The exploration term decays as a choice is sampled more, naturally balancing exploitation of known-good choices with exploration of under-sampled ones. Unobserved choices get the maximum exploration bonus `C × √(ln(N))`.
     private static func computeUCBWeights(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        accumulator: FitnessAccumulator,
+        records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord],
         explorationConstant: Double
     ) -> ContiguousArray<UInt64> {
         let count = choices.count
 
         // Gather per-choice stats and total site observations
         var totalSiteObservations: UInt64 = 0
-        var records = ContiguousArray<FitnessAccumulator.FitnessRecord?>()
-        records.reserveCapacity(count)
+        var fitnessRecords = ContiguousArray<FitnessAccumulator.FitnessRecord?>()
+        fitnessRecords.reserveCapacity(count)
         for choice in choices {
             let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
-            let record = accumulator.records[key]
-            records.append(record)
+            let record = records[key]
+            fitnessRecords.append(record)
             totalSiteObservations += record?.observationCount ?? 0
         }
 
@@ -364,7 +364,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
         var weights = ContiguousArray<UInt64>()
         weights.reserveCapacity(count)
 
-        for record in records {
+        for record in fitnessRecords {
             let ucbScore: Double
             if let record, record.observationCount > 0 {
                 let meanFitness = Double(record.totalFitness) / Double(record.observationCount)

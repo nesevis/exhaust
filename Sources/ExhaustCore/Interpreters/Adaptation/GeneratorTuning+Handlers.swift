@@ -8,22 +8,31 @@
 import Foundation
 
 extension GeneratorTuning {
-    // MARK: - Pick
+    // MARK: - Fitness Measurement
 
-    static func measureAndTunePick<Output>(
+    /// Accumulated sampling results from Phase 1 of ``measureAndTunePick(_:continuation:context:insideSubdividedChooseBits:predicate:)``.
+    private struct FitnessMeasurement {
+        /// Number of predicate-passing samples per choice index.
+        var successCounts: [UInt64]
+        /// Frequency distribution of valid outputs per choice index, for entropy weighting.
+        var outputFrequencies: [[AnyHashable: UInt64]]
+        /// Final RNG states per choice index, for deterministic Phase 2 cache fallback.
+        var rngStates: [(seed: UInt64, state: Xoshiro256.StateType)]
+        /// Cache of inner-value → predicate result from Phase 1, for Phase 2 composed predicate.
+        var continuationCaches: [[AnyHashable: Bool]]
+    }
+
+    /// Samples each choice in `choices` with independent RNG streams and measures success rates and output diversity.
+    ///
+    /// Runs until the maximum sample budget is consumed or the normalized success distribution converges. Returns a ``FitnessMeasurement`` with per-choice accumulators for use in Phase 2 tuning.
+    private static func measureFitness<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
-        insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
-    ) throws -> ReflectiveGenerator<Output> {
-        context.depth += 1
-        defer { context.depth -= 1 }
-
+    ) throws -> FitnessMeasurement {
         let choiceCount = choices.count
         let maxSamples = context.maxSamplesPerSite
-
-        // --- Phase 1: Batched sampling of all choices with convergence ---
 
         // Per-choice state: independent RNG stream (stored as seed+state tuples
         // since ~Copyable Xoshiro256 can't be stored in Array), accumulators, cache
@@ -133,6 +142,41 @@ extension GeneratorTuning {
 
             previousNormalized = normalized
         }
+
+        return FitnessMeasurement(
+            successCounts: successCounts,
+            outputFrequencies: outputFrequencies,
+            rngStates: choiceRngStates,
+            continuationCaches: continuationCaches
+        )
+    }
+
+    // MARK: - Pick
+
+    static func measureAndTunePick<Output>(
+        choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        context: TuningContext,
+        insideSubdividedChooseBits: Bool,
+        predicate: @escaping (Output) -> Bool
+    ) throws -> ReflectiveGenerator<Output> {
+        context.depth += 1
+        defer { context.depth -= 1 }
+
+        let choiceCount = choices.count
+
+        // --- Phase 1: Batched sampling of all choices with convergence ---
+
+        let measurement = try measureFitness(
+            choices: choices,
+            continuation: continuation,
+            context: context,
+            predicate: predicate
+        )
+        let successCounts = measurement.successCounts
+        let outputFrequencies = measurement.outputFrequencies
+        let choiceRngStates = measurement.rngStates
+        let continuationCaches = measurement.continuationCaches
 
         // Advance context RNG once for deterministic Phase 2
         context.rng.jump()
