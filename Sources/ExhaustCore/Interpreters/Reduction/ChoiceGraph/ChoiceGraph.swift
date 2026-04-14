@@ -41,6 +41,9 @@ public final class ChoiceGraph {
     /// Node IDs that have been removed from the graph by an in-place mutation but whose array slots are retained for ID stability. Iteration sites must skip these via ``isTombstoned(_:)``. Always empty until Layer 4 of the partial-rebuild rollout introduces in-place mutation; Layer 1 adds the field, the helper, and the filtering as a no-op precondition.
     var removedNodeIDs: Set<Int> = []
 
+    /// Lifecycle statistics accumulated on this graph instance. Dynamic fields (``ChoiceGraphStats/dynamicRegionRebuilds``, ``ChoiceGraphStats/dynamicRegionNodesRebuilt``) are incremented by ``applyBindReshape(forLeaf:freshTree:into:)``; construction-time fields are zero until the scheduler calls ``ChoiceGraphStats/from(_:)`` and merges them into ``ReductionStats/graphStats``.
+    var graphStats = ChoiceGraphStats()
+
     /// Returns true when `nodeID` has been removed from the graph but its array slot is retained. Used by every iteration site on ``ChoiceGraph`` to skip removed nodes.
     func isTombstoned(_ nodeID: Int) -> Bool {
         removedNodeIDs.contains(nodeID)
@@ -208,6 +211,7 @@ public final class ChoiceGraph {
             selfSimilarityGroups: selfSimilarityGroups
         )
         result.removedNodeIDs = removedNodeIDs
+        result.graphStats = graphStats
         result.cachedTypeCompatibilityEdges = cachedTypeCompatibilityEdges
         result.cachedSourceSinkStatus = cachedSourceSinkStatus
         result.cachedTopologicalOrder = cachedTopologicalOrder

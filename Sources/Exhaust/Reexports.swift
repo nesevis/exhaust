@@ -16,6 +16,7 @@ public typealias Interpreters = ExhaustCore.Interpreters
 public typealias GeneratorError = ExhaustCore.GeneratorError
 public typealias EncoderName = ExhaustCore.EncoderName
 public typealias ReductionStats = ExhaustCore.ReductionStats
+public typealias ChoiceGraphStats = ExhaustCore.ChoiceGraphStats
 public typealias LogLevel = ExhaustCore.LogLevel
 public typealias LogFormat = ExhaustCore.LogFormat
 

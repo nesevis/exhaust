@@ -219,6 +219,8 @@ extension ChoiceGraph {
         nodes.append(contentsOf: rebuilt.nodes)
         containmentEdges.append(contentsOf: rebuilt.containmentEdges)
         dependencyEdges.append(contentsOf: rebuilt.dependencyEdges)
+        graphStats.dynamicRegionRebuilds += 1
+        graphStats.dynamicRegionNodesRebuilt += rebuilt.nodes.count
 
         // Step 7: patch the bind node's children to reference the new bound
         // child, and add the containment edge from the bind to the new

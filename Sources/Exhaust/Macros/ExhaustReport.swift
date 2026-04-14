@@ -51,73 +51,28 @@ public struct ExhaustReport: Sendable {
 
     /// Per-encoder probe counts from the reduction phase.
     ///
-    /// Each key is an ``EncoderName`` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles.
-    /// **Includes cache rejections that did not lead to a materialization**
+    /// Each key is an ``EncoderName`` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
     public var encoderProbes: [EncoderName: Int] = [:]
+
+    /// Per-encoder counts of probes that were accepted (decoder produced a valid shrink) during the reduction phase.
+    public var encoderProbesAccepted: [EncoderName: Int] = [:]
+
+    /// Per-encoder counts of probes that were rejected by the scope rejection cache without materializing.
+    public var encoderProbesRejectedByCache: [EncoderName: Int] = [:]
+
+    /// Per-encoder counts of probes that were materialized but rejected by the decoder (failed shortlex check, range violation, or property still passes).
+    public var encoderProbesRejectedByDecoder: [EncoderName: Int] = [:]
 
     /// Total reduction cycles completed.
     public var cycles: Int = 0
 
-    // MARK: - Decision Tree Profiling
-
-    /// Number of coordinates with cached convergence floors at Phase 2 start (cumulative across cycles).
-    public var convergedCoordinatesAtPhaseTwoStart: Int = 0
-
-    /// Total value coordinates at Phase 2 start (cumulative across cycles — denominator for re-confirmation ratio).
-    public var totalValueCoordinatesAtPhaseTwoStart: Int = 0
-
-    /// Times the fibre covering encoder discovered a fibre > 64 at `start()` (exhaustive selected, fibre too large).
-    public var fibreExceededExhaustiveThreshold: Int = 0
-
-    /// Times pairwise ran on a fibre ≤ 64 (pairwise selected, exhaustive would have worked).
-    public var pairwiseOnExhaustibleFibre: Int = 0
-
-    /// Number of downstream starts using ZeroValue fallback (fibre too large for covering).
-    public var fibreZeroValueStarts: Int = 0
-
-    /// Compositions that produced zero accepted probes within budget.
-    public var futileCompositions: Int = 0
-
-    /// Total composition edges attempted.
-    public var compositionEdgesAttempted: Int = 0
-
-    /// Convergence transfers attempted (driver validated pending origins).
-    public var convergenceTransfersAttempted: Int = 0
-
-    /// Convergence transfers where all origins passed floor-1 validation.
-    public var convergenceTransfersValidated: Int = 0
-
-    /// Convergence transfers where at least one origin was stale.
-    public var convergenceTransfersStale: Int = 0
-
-    /// Probes used by the post-termination verification sweep.
-    public var verificationSweepProbes: Int = 0
-
-    /// Whether the verification sweep detected cache staleness.
-    public var verificationSweepFoundStaleness: Bool = false
-
-    /// Composition edges where the pre-lift fibre prediction matched the actual encoder mode.
-    public var fibrePredictionCorrect: Int = 0
-
-    /// Composition edges where the pre-lift fibre prediction disagreed with the actual encoder mode.
-    public var fibrePredictionWrong: Int = 0
-
-    // MARK: - Convergence Signal Counts
-
-    /// Coordinates where zero-value batch zeroing failed but individual zeroing succeeded.
-    public var zeroingDependencyCount: Int = 0
-
-    /// Composition edges where the downstream exhaustively searched the fibre and found no failure.
-    public var fibreExhaustedCleanCount: Int = 0
-
-    /// Composition edges where the downstream exhaustively searched the fibre and found a failure.
-    public var fibreExhaustedWithFailureCount: Int = 0
-
-    /// Composition edges where the downstream bailed before completing coverage.
-    public var fibreBailCount: Int = 0
-
     /// Per-fingerprint filter predicate observations accumulated during reduction.
     public var filterObservations: [UInt64: FilterObservation] = [:]
+
+    // MARK: - Graph Reducer
+
+    /// Graph structure and lifecycle statistics from the reduction phase. `nil` when the reduction phase did not run.
+    public var graphStats: ChoiceGraphStats?
 
     /// One-line summary of per-phase invocations and acceptances aggregated across all cycles.
     public var phaseSummary: String {
@@ -126,52 +81,35 @@ public struct ExhaustReport: Sendable {
 
     /// One-line summary of profiling data for the reduction planning decision tree.
     public var profilingSummary: String {
-        let reconfirmRatio = totalValueCoordinatesAtPhaseTwoStart > 0
-            ? String(format: "%.0f%%", Double(convergedCoordinatesAtPhaseTwoStart) / Double(totalValueCoordinatesAtPhaseTwoStart) * 100)
-            : "n/a"
-        let predictionTotal = fibrePredictionCorrect + fibrePredictionWrong
-        let predictionLabel = predictionTotal > 0
-            ? "\(fibrePredictionCorrect)/\(predictionTotal)"
-            : "n/a"
-        let hasSignals =
-            zeroingDependencyCount > 0
-                || fibreExhaustedCleanCount > 0
-                || fibreBailCount > 0
-        let signalLabel = hasSignals
-            ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
-            : ""
         let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
-        let reorderProbes = encoderProbes[.numericReorder] ?? 0
-        let hasPassData = reorderProbes > 0
-        let passLabel = hasPassData
-            ? " passes=\(reorderProbes)reorder"
-            : ""
-        return "cycles=\(cycles) probes=\(coverageInvocations)cov/\(randomSamplingInvocations)rand/\(reductionInvocations)red mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(passLabel)\(phaseLabel)"
+        let graphLabel: String
+        if let graphStats {
+            graphLabel = " graph=\(graphStats.nodeCount)n/\(graphStats.fullGraphRebuilds)r/\(graphStats.dynamicRegionRebuilds)dr"
+        } else {
+            graphLabel = ""
+        }
+        let activeEncoders = encoderProbes.keys.sorted { encoderProbes[$0, default: 0] > encoderProbes[$1, default: 0] }
+        let encoderLabel = activeEncoders.isEmpty ? "" : " " + activeEncoders.map { name in
+            let emitted = encoderProbes[name] ?? 0
+            let accepted = encoderProbesAccepted[name] ?? 0
+            let cacheRej = encoderProbesRejectedByCache[name] ?? 0
+            let decRej = encoderProbesRejectedByDecoder[name] ?? 0
+            let invocations = emitted - cacheRej - decRej
+            let pct = invocations > 0 ? accepted * 100 / invocations : 0
+            return "\(name.rawValue)=i\(invocations)/a\(accepted)/c\(cacheRej)/d\(decRej)/\(pct)%"
+        }.joined(separator: " ")
+        return "cycles=\(cycles) invocations=\(propertyInvocations) materializations=\(totalMaterializations) probes=\(coverageInvocations)cov/\(randomSamplingInvocations)rand\(graphLabel)\(encoderLabel)\(phaseLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
     public mutating func applyReductionStats(_ stats: ReductionStats) {
         encoderProbes = stats.encoderProbes
+        encoderProbesAccepted = stats.encoderProbesAccepted
+        encoderProbesRejectedByCache = stats.encoderProbesRejectedByCache
+        encoderProbesRejectedByDecoder = stats.encoderProbesRejectedByDecoder
         totalMaterializations = stats.totalMaterializations
         cycles = stats.cycles
-        convergedCoordinatesAtPhaseTwoStart = stats.convergedCoordinatesAtPhaseTwoStart
-        totalValueCoordinatesAtPhaseTwoStart = stats.totalValueCoordinatesAtPhaseTwoStart
-        fibreExceededExhaustiveThreshold = stats.fibreExceededExhaustiveThreshold
-        pairwiseOnExhaustibleFibre = stats.pairwiseOnExhaustibleFibre
-        futileCompositions = stats.futileCompositions
-        compositionEdgesAttempted = stats.compositionEdgesAttempted
-        convergenceTransfersAttempted = stats.convergenceTransfersAttempted
-        convergenceTransfersValidated = stats.convergenceTransfersValidated
-        convergenceTransfersStale = stats.convergenceTransfersStale
-        verificationSweepProbes = stats.verificationSweepProbes
-        verificationSweepFoundStaleness = stats.verificationSweepFoundStaleness
-        fibrePredictionCorrect = stats.fibrePredictionCorrect
-        fibrePredictionWrong = stats.fibrePredictionWrong
-        fibreZeroValueStarts = stats.fibreZeroValueStarts
-        zeroingDependencyCount = stats.zeroingDependencyCount
-        fibreExhaustedCleanCount = stats.fibreExhaustedCleanCount
-        fibreExhaustedWithFailureCount = stats.fibreExhaustedWithFailureCount
-        fibreBailCount = stats.fibreBailCount
         filterObservations = stats.filterObservations
+        graphStats = stats.graphStats
     }
 }
