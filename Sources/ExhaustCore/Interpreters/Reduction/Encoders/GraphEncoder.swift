@@ -66,7 +66,7 @@ protocol GraphEncoder {
     /// 3. Preserve convergence records by nodeID. Records whose nodeID is now tombstoned (`positionRange == nil`) should be dropped; surviving nodeIDs keep their records.
     /// 4. Update the encoder's internal sequence reference (``IntegerState/sequence`` and similar) to match the live `sequence` parameter.
     ///
-    /// The default implementation is a no-op, suitable for single-shot encoders that emit one probe per scope (for example, ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that already self-reset on every accepted probe (for example, ``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within a pass (``GraphValueEncoder``, ``GraphExchangeEncoder``) must override this method.
+    /// The default implementation is a no-op, suitable for single-shot encoders that emit one probe per scope (for example, ``GraphStructuralEncoder``, ``GraphSwapEncoder``, ``GraphReorderEncoder``) and for encoders that already self-reset on every accepted probe. Stateful encoders that cache leaf positions across multiple probes within a pass (``GraphValueEncoder``, ``GraphRedistributionEncoder``) must override this method.
     ///
     /// - Parameters:
     ///   - graph: The live graph after the structural mutation.

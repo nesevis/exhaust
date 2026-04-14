@@ -143,8 +143,7 @@ enum TransformationPrecondition {
 }
 
 extension TransformationPrecondition {
-    /// Walks dependency edges in reverse from a leaf to verify all bind-inner
-    /// ancestors have convergence records.
+    /// Walks dependency edges in reverse from a leaf to verify all bind-inner ancestors have convergence records.
     private static func checkDependencyChain(
         from leafNodeID: Int,
         in graph: ChoiceGraph
@@ -200,9 +199,7 @@ struct TransformationPostcondition {
 
 /// A graph-derived transformation scope with yield estimate and precondition.
 ///
-/// This is a morphism in OptRed_{T,alpha} (Sepulveda-Jimenez, Def. 10.3):
-/// the operation defines enc_a, the materialiser provides dec_a, and the
-/// grade packages approximation slack with resource cost.
+/// This is a morphism in OptRed_{T,alpha} (Sepulveda-Jimenez, Def. 10.3): the operation defines enc_a, the materializer provides dec_a, and the grade packages approximation slack with resource cost.
 struct GraphTransformation {
     /// The graph operation this transformation enacts.
     let operation: GraphOperation
@@ -217,42 +214,3 @@ struct GraphTransformation {
     let postcondition: TransformationPostcondition
 }
 
-// MARK: - Compound Transformations
-
-/// A multi-step transformation with a shared execution model.
-///
-/// The grade of the compound is the monoidal product of its steps' grades (Sepulveda-Jimenez, Proposition 10.4): structural yields sum, value yields take the max, slack composes, and costs sum.
-struct CompoundTransformation {
-    /// Steps to execute in order.
-    let steps: [CompoundStep]
-
-    /// How the steps are executed together.
-    let executionModel: CompoundExecutionModel
-
-    /// The composed grade across all steps.
-    var composedYield: TransformationYield {
-        steps.reduce(.identity) { partial, step in
-            partial.composed(with: step.transformation.yield)
-        }
-    }
-}
-
-/// One step of a compound transformation.
-struct CompoundStep {
-    /// The transformation to apply.
-    let transformation: GraphTransformation
-
-    /// Whether this step must be accepted for the compound to proceed.
-    let required: Bool
-}
-
-/// Execution model for compound transformations.
-///
-/// Multi-sequence deletion is NOT a compound transformation — it is a single ``GraphTransformation`` with ``GraphOperation/remove(.elements(...))`` whose encoder constructs candidates that modify multiple sequence regions in a single probe. ``CompoundTransformation`` is reserved for multi-probe, multi-step compositions where intermediate results are separately probed.
-enum CompoundExecutionModel {
-    /// Steps applied in order, each probed independently. Intermediate acceptances stand on their own — no rollback of earlier steps if a later step fails. Sequential compounds can be interleaved in the priority queue alongside simple transformations, ordered by composed yield.
-    case sequential
-
-    /// Checkpoint before step 1. If the final step fails to restore predicate failure, rollback to the checkpoint. The checkpoint includes (sequence, tree, output) and convergence records extracted from the graph. Speculative compounds are stall-triggered — only attempted after the simple queue is exhausted with no acceptance.
-    case speculative
-}

@@ -51,7 +51,7 @@ extension Materializer {
         )
     }
 
-    // MARK: chooseBits
+    // MARK: - chooseBits
 
     @inline(__always)
     static func handleChooseBits(
@@ -130,7 +130,7 @@ extension Materializer {
         )
     }
 
-    // MARK: pick (with materialized alternatives)
+    // MARK: - pick (with materialized alternatives)
 
     @inline(__always)
     static func handlePick(
@@ -295,7 +295,7 @@ extension Materializer {
         return (value, .group(branches))
     }
 
-    // MARK: sequence
+    // MARK: - sequence
 
     @inline(__always)
     static func handleSequence(
@@ -325,7 +325,7 @@ extension Materializer {
                 // can't consume it from the cursor. Use the prefix element count.
                 length = UInt64(seqInfo.elementCount)
                 // Fast path: extract metadata directly from chooseBits length generators
-                // (the common case, e.g. `array(length: 0...10)`), avoiding a full
+                // (the common case, for example `array(length: 0...10)`), avoiding a full
                 // generateRecursive + runContinuation round-trip.
                 if case let .impure(.chooseBits(min, max, _, isRangeExplicit), _) = lengthGen {
                     lengthMeta = ChoiceMetadata(
@@ -349,8 +349,8 @@ extension Materializer {
             } else if seqInfo.isLengthExplicit {
                 // Guided/generate mode + explicit-length: use the prefix element
                 // count, clamped to the generator's valid range. For fixed-length
-                // generators (e.g. `exactly: 2`, range 2...2) this produces 2
-                // regardless of prefix. For variable-length generators (e.g.
+                // generators (for example `exactly: 2`, range 2...2) this produces 2
+                // regardless of prefix. For variable-length generators (for example
                 // `length: 0...10`) this preserves the prefix count. Analogous to
                 // the fallback-length clamping at the cursor-suspended path below.
                 let prefixCount = UInt64(seqInfo.elementCount)
@@ -447,7 +447,7 @@ extension Materializer {
         return nil
     }
 
-    // MARK: zip
+    // MARK: - zip
 
     @inline(__always)
     static func handleZip(
@@ -514,7 +514,7 @@ extension Materializer {
         )
     }
 
-    // MARK: resize
+    // MARK: - resize
 
     @inline(__always)
     static func handleResize(
@@ -549,7 +549,7 @@ extension Materializer {
         )
     }
 
-    // MARK: transform (map / bind)
+    // MARK: - transform (map / bind)
 
     @inline(__always)
     static func handleTransform(

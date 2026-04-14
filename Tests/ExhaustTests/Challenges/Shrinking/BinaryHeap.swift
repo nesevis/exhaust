@@ -34,12 +34,14 @@ struct BinaryHeapShrinkingChallenge {
             return sorted == xs.sorted() && xs == xs.sorted()
         }
 
+        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 Self.gen.unique(),
                 .suppressIssueReporting,
                 .replay(1591),
                 .logging(.debug),
+                .onReport { report = $0 },
                 property: property
             )
         )

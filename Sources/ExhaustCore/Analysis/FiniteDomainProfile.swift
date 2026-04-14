@@ -5,6 +5,8 @@
 
 /// A single factor in the combinatorial model.
 public struct FiniteParameter: @unchecked Sendable {
+    // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+
     /// The type of generator operation this parameter came from.
     public enum Kind {
         case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
@@ -18,12 +20,12 @@ public struct FiniteParameter: @unchecked Sendable {
 
 /// Result of analyzing a generator for finite-domain structure.
 public struct FiniteDomainProfile: @unchecked Sendable {
+    // @unchecked Sendable: stores `[FiniteParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+
     public let parameters: [FiniteParameter]
     /// Product of all domainSizes. Capped at UInt64.max on overflow.
     public let totalSpace: UInt64
-    /// The original ChoiceTree from VACTI, used as a template for covering array replay.
-    /// When present, `CoveringArrayReplay.buildTree` walks this tree and substitutes
-    /// parameter values at matching positions, preserving structural nodes like `.bind`.
+    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, `CoveringArrayReplay.buildTree` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
     public let originalTree: ChoiceTree?
 
     public init(parameters: [FiniteParameter], totalSpace: UInt64, originalTree: ChoiceTree? = nil) {

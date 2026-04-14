@@ -12,7 +12,7 @@ public struct ContractResult<Spec: ContractSpecBase> {
     public let trace: [TraceStep]
 
     /// The system under test's state after executing the failing sequence.
-    public let sut: Spec.SystemUnderTest
+    public let systemUnderTest: Spec.SystemUnderTest
 
     /// The seed for deterministic replay, if available.
     public let seed: UInt64?

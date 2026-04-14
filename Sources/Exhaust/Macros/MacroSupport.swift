@@ -29,6 +29,7 @@ import IssueReporting
     }
 #endif
 
+/// Runtime support namespace for `#exhaust`, `#explore`, and `#examine` macro expansions.
 public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Thrown by the detection closure when a rewritten `#expect`/`#require` fails.
     ///

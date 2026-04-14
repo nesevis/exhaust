@@ -21,10 +21,10 @@ public extension Gen {
     /// ```
     ///
     /// - Parameters:
-    ///   - base: The ground value used when recursion bottoms out
-    ///   - maxDepth: Maximum number of recursive layers to unfold
-    ///   - extend: Closure that builds one recursive layer from the previous layer
-    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    ///   - base: The ground value used when recursion bottoms out.
+    ///   - depthRange: The range of recursive layers to unfold.
+    ///   - extend: Closure that builds one recursive layer from the previous layer.
+    /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive<Output>(
         base: Output,
         depthRange: ClosedRange<Int>,
@@ -39,15 +39,15 @@ public extension Gen {
 
     /// Creates a recursive generator with a generator base case.
     ///
-    /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
+    /// Use this overload when the base case itself needs randomness (for example random leaf values).
     ///
     /// The generator is eagerly unfolded at construction time into a plain generator tree — no special runtime operation exists. This means recursive generators are fully transparent to all interpreters (generation, reflection, replay, CGS tuning).
     ///
     /// - Parameters:
-    ///   - base: Generator for the base case
-    ///   - maxDepth: Maximum number of recursive layers to unfold
-    ///   - extend: Closure that builds one recursive layer from the previous layer
-    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    ///   - base: Generator for the base case.
+    ///   - depthRange: The range of recursive layers to unfold.
+    ///   - extend: Closure that builds one recursive layer from the previous layer.
+    /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive<Output>(
         base: ReflectiveGenerator<Output>,
         depthRange: ClosedRange<UInt64>,

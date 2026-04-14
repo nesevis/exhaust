@@ -7,10 +7,10 @@
         /// The iteration budget, or `nil` to use the inline setting or default.
         public var budget: ExhaustBudget?
 
-        /// Regression seeds (Crockford Base32 encoded) to replay before the normal pipeline.
+        /// Regression seeds (Crockford Base32 encoded) to replay at the start of each run.
         public var regressions: [String]
 
-        /// The current trait configuration, set by `ExhaustTrait.provideScope`.
+        /// The active trait configuration for the current test, set by ``ExhaustTrait``'s `provideScope` method.
         @TaskLocal public static var current: ExhaustTraitConfiguration?
     }
 
@@ -42,9 +42,7 @@
 
         /// Sets the trait configuration as a task-local for the duration of the test body.
         ///
-        /// The `testCase` parameter is intentionally ignored. Since `#exhaust` drives its own
-        /// iteration internally rather than using `@Test(arguments:)`, the trait always hits
-        /// the single-case path.
+        /// The `testCase` parameter is intentionally ignored. Since `#exhaust` drives its own iteration internally rather than using `@Test(arguments:)`, the trait always hits the single-case path.
         public func provideScope(
             for _: Test,
             testCase _: Test.Case?,

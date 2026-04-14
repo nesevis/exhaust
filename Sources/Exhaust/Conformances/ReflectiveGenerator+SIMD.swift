@@ -173,9 +173,7 @@ public extension ReflectiveGenerator {
 
 // MARK: - Private helpers
 
-/// Builds a flat opaque zip of `lanes` copies of a scalar generator, then maps
-/// the result into a SIMD vector. A single flat group avoids the nested-group
-/// reflection issues that half-based recursive composition would cause.
+/// Builds a flat opaque zip of `lanes` copies of a scalar generator, then maps the result into a SIMD vector. A single flat group avoids the nested-group reflection issues that half-based recursive composition would cause.
 private func flatSIMD<Scalar: SIMDScalar, Vector: SIMD>(
     _ s: ReflectiveGenerator<Scalar>,
     lanes: Int

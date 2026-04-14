@@ -34,7 +34,7 @@ public enum SequenceCoveringArray {
 
     // MARK: - Legacy API (parameter-free branches only)
 
-    /// Builds a `FiniteDomainProfile` where each parameter represents one position in the command sequence, with domain values being command type indices.
+    /// Builds a ``FiniteDomainProfile`` where each parameter represents one position in the command sequence, with domain values being command type indices.
     ///
     /// - Parameters:
     ///   - sequenceLength: Number of positions in each test sequence.
@@ -66,7 +66,7 @@ public enum SequenceCoveringArray {
         return FiniteDomainProfile(parameters: parameters, totalSpace: totalSpace)
     }
 
-    /// Converts a covering array row into a `ChoiceTree` representing a command sequence that can be replayed through the array generator.
+    /// Converts a covering array row into a ``ChoiceTree`` representing a command sequence that can be replayed through the array generator.
     ///
     /// Each row value selects a command type (pick branch) at the corresponding sequence position. The result is a `.sequence` node wrapping pick-site groups.
     ///
@@ -74,7 +74,7 @@ public enum SequenceCoveringArray {
     ///   - row: The covering array row with command type indices per position.
     ///   - profile: The SCA profile (one pick parameter per position).
     ///   - sequenceLengthRange: The valid length range for the sequence metadata.
-    /// - Returns: A `ChoiceTree` suitable for `Interpreters.replay`, or `nil` on failure.
+    /// - Returns: A ``ChoiceTree`` suitable for ``Interpreters/replay``, or `nil` on failure.
     public static func buildTree(
         row: CoveringArrayRow,
         profile: FiniteDomainProfile,
@@ -120,7 +120,7 @@ public enum SequenceCoveringArray {
     /// For each pick branch:
     /// - Parameter-free branches (no choices in the sub-generator) → `.parameterFree` (1 domain value)
     /// - Analyzable branches → `.analyzed([BoundaryParameter])` with threshold normalization
-    /// - Unanalyzable branches (uses `getSize`, etc.) → `.unanalyzable` (1 domain value, random at replay)
+    /// - Unanalyzable branches (uses `getSize`, and so on) → `.unanalyzable` (1 domain value, random at replay)
     ///
     /// Parameters with domain size above `threshold` are converted to boundary-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
     public static func analyzeBranches(
@@ -144,7 +144,7 @@ public enum SequenceCoveringArray {
         }
     }
 
-    /// Builds a `FiniteDomainProfile` and `SCADomainMapping` incorporating argument domains.
+    /// Builds a ``FiniteDomainProfile`` and ``SCADomainMapping`` incorporating argument domains.
     ///
     /// Each position's domain size is the sum of all branch contributions:
     /// - `.parameterFree` → 1
@@ -212,7 +212,7 @@ public enum SequenceCoveringArray {
         return (finiteProfile, mapping)
     }
 
-    /// Converts a covering array row into a `ChoiceTree` using the SCA domain mapping.
+    /// Converts a covering array row into a ``ChoiceTree`` using the SCA domain mapping.
     ///
     /// For each position, decomposes the flat domain index into a branch selection plus concrete argument values. Branches with analyzed arguments get sub-trees encoding specific parameter values; parameter-free and unanalyzable branches get `.just` sub-trees (unanalyzable branches will receive random arguments during replay since the sub-tree carries no argument constraints).
     ///
@@ -221,7 +221,7 @@ public enum SequenceCoveringArray {
     ///   - profile: The SCA profile (one parameter per position).
     ///   - mapping: The domain mapping from ``buildProfile(sequenceLength:pickChoices:branchProfiles:)``.
     ///   - sequenceLengthRange: The valid length range for the sequence metadata.
-    /// - Returns: A `ChoiceTree` suitable for `Interpreters.replay`, or `nil` on failure.
+    /// - Returns: A ``ChoiceTree`` suitable for ``Interpreters/replay``, or `nil` on failure.
     public static func buildTree(
         row: CoveringArrayRow,
         profile: FiniteDomainProfile,
@@ -309,7 +309,7 @@ public enum SequenceCoveringArray {
 
     /// Normalizes an analysis result to `[BoundaryParameter]` with a budget-derived threshold.
     ///
-    /// For `.finite` results, converts `FiniteParameter` → `BoundaryParameter`. For both result types, parameters with domain size above `threshold` are recomputed as boundary-value representatives.
+    /// For `.finite` results, converts ``FiniteParameter`` → ``BoundaryParameter``. For both result types, parameters with domain size above `threshold` are recomputed as boundary-value representatives.
     private static func normalizeToBoundaryParameters(
         _ result: ChoiceTreeAnalysis.AnalysisResult,
         threshold: UInt64
@@ -374,9 +374,7 @@ public enum SequenceCoveringArray {
 
     /// Finds the slot that contains the given flat domain index.
     ///
-    /// Slots are sorted by `flatOffset` by construction. Uses `AdaptiveProbe.binarySearchWithGuess`
-    /// with a linear-interpolation guess, giving O(log|guess − answer|) cost — nearly O(1) when
-    /// slots have similar contribution sizes.
+    /// Slots are sorted by `flatOffset` by construction. Uses `AdaptiveProbe.binarySearchWithGuess` with a linear-interpolation guess, giving O(log|guess − answer|) cost — nearly O(1) when slots have similar contribution sizes.
     private static func findSlot(
         for value: UInt64,
         in slots: [SCADomainSlot]
@@ -410,16 +408,16 @@ public enum SequenceCoveringArray {
         return slot
     }
 
-    /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to `BoundaryCoveringArrayReplay` to build the sub-tree.
+    /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to ``BoundaryCoveringArrayReplay`` to build the sub-tree.
     private static func buildArgTree(
         localIndex: UInt64,
         params: [BoundaryParameter]
     ) -> ChoiceTree? {
         var valueIndices = [UInt64](repeating: 0, count: params.count)
         var remainder = localIndex
-        for idx in (0 ..< params.count).reversed() {
-            let domain = params[idx].domainSize
-            valueIndices[idx] = remainder % domain
+        for i in (0 ..< params.count).reversed() {
+            let domain = params[i].domainSize
+            valueIndices[i] = remainder % domain
             remainder /= domain
         }
 

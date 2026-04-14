@@ -19,7 +19,7 @@ extension GraphValueEncoder {
             if preservingConvergence[nodeID] != nil { continue }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
-            guard case let .floating(currentValue, currentBP, _) = metadata.value else { continue }
+            guard case let .floating(currentValue, currentBitPattern, _) = metadata.value else { continue }
             targets.append(FloatTarget(
                 nodeID: nodeID,
                 sequenceIndex: range.lowerBound,
@@ -27,7 +27,7 @@ extension GraphValueEncoder {
                 validRange: metadata.validRange,
                 isRangeExplicit: metadata.isRangeExplicit,
                 currentValue: currentValue,
-                currentBitPattern: currentBP,
+                currentBitPattern: currentBitPattern,
                 mayReshape: entry.mayReshapeOnAcceptance
             ))
         }
@@ -114,11 +114,11 @@ extension GraphValueEncoder {
         guard target.sequenceIndex < state.sequence.count,
               let entry = state.sequence[target.sequenceIndex].value else { return }
         let isWithinRecordedRange = entry.isRangeExplicit && entry.choice.fits(in: entry.validRange)
-        let targetBP = isWithinRecordedRange
+        let targetBitPattern = isWithinRecordedRange
             ? entry.choice.reductionTarget(in: entry.validRange)
             : entry.choice.semanticSimplest.bitPattern64
-        if targetBP != target.currentBitPattern {
-            candidates.append(targetBP)
+        if targetBitPattern != target.currentBitPattern {
+            candidates.append(targetBitPattern)
         }
 
         for special in FloatReduction.specialValues(for: target.typeTag) {

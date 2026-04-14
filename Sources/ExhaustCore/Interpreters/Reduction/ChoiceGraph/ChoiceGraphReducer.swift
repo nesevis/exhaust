@@ -96,7 +96,7 @@ public extension Interpreters {
         return result
     }
 
-    /// Convenience overload that materialises the output from the tree before reducing.
+    /// Convenience overload that materializes the output from the tree before reducing.
     static func choiceGraphReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

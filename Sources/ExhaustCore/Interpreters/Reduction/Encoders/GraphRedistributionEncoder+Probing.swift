@@ -100,8 +100,7 @@ extension GraphRedistributionEncoder {
         }
         pairs = sortedIndices.map { pairs[$0] }
 
-        // Cap the working set to mirror Bonsai's `estimatedCost` ceiling of
-        // 240 pairs. After sorting, the prefix is the highest-yield slice; the
+        // Cap the working set to limited subset of pairs. After sorting, the prefix is the highest-yield slice; the
         // tail is the long stretch of low-distance pairs whose acceptance rate
         // is near zero on workloads with many type-compatible leaves.
         if pairs.count > Self.maxPairsPerScope {
@@ -280,9 +279,9 @@ extension GraphRedistributionEncoder {
         }
 
         // Same-tag integer: bit-pattern distance.
-        let sourceBP = sourceValue.choice.bitPattern64
-        let targetBP = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
-        let distance = sourceBP > targetBP ? sourceBP - targetBP : targetBP - sourceBP
+        let sourceBitPattern = sourceValue.choice.bitPattern64
+        let targetBitPattern = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
+        let distance = sourceBitPattern > targetBitPattern ? sourceBitPattern - targetBitPattern : targetBitPattern - sourceBitPattern
         return (distance, nil)
     }
 
@@ -362,57 +361,57 @@ extension GraphRedistributionEncoder {
         // `graph-exchange-semantic-cast-removal.md` for the rationale and
         // for the discussion of the latent bugs in the previous
         // semantic-Int64 implementation that this rewrite addresses.
-        let sourceBP = sourceValue.choice.bitPattern64
-        let sinkBP = sinkValue.choice.bitPattern64
-        let targetBP = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
+        let sourceBitPattern = sourceValue.choice.bitPattern64
+        let sinkBitPattern = sinkValue.choice.bitPattern64
+        let targetBitPattern = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
 
         if sinkValue.allowsModularArithmetic {
             let mask = sinkValue.choice.tag.bitPatternRange.upperBound
-            let newSourceBP: UInt64
-            let newSinkBP: UInt64
-            if sourceBP > targetBP {
-                newSourceBP = (sourceBP &- delta) & mask
-                newSinkBP = (sinkBP &+ delta) & mask
+            let newSourceBitPattern: UInt64
+            let newSinkBitPattern: UInt64
+            if sourceBitPattern > targetBitPattern {
+                newSourceBitPattern = (sourceBitPattern &- delta) & mask
+                newSinkBitPattern = (sinkBitPattern &+ delta) & mask
             } else {
-                newSourceBP = (sourceBP &+ delta) & mask
-                newSinkBP = (sinkBP &- delta) & mask
+                newSourceBitPattern = (sourceBitPattern &+ delta) & mask
+                newSinkBitPattern = (sinkBitPattern &- delta) & mask
             }
 
             var candidate = valueState.sequence
-            candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBP)
-            candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBP)
+            candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBitPattern)
+            candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBitPattern)
             return candidate
         }
 
         // Narrow-sink fallback: UInt64 bit-pattern arithmetic with explicit
         // bounds enforcement.
-        let newSourceBP: UInt64
-        let newSinkBP: UInt64
-        if sourceBP > targetBP {
+        let newSourceBitPattern: UInt64
+        let newSinkBitPattern: UInt64
+        if sourceBitPattern > targetBitPattern {
             // Source moves down (toward target), sink moves up.
             // The encoder bounds delta to `currentMaxDelta`'s `distance =
-            // sourceBP - targetBP`, and `targetBP >= 0`, so this subtraction
+            // sourceBitPattern - targetBitPattern`, and `targetBitPattern >= 0`, so this subtraction
             // cannot underflow. Defensive guard against stale state.
-            guard sourceBP >= delta else { return nil }
-            newSourceBP = sourceBP - delta
-            let (sinkSum, sinkOverflow) = sinkBP.addingReportingOverflow(delta)
+            guard sourceBitPattern >= delta else { return nil }
+            newSourceBitPattern = sourceBitPattern - delta
+            let (sinkSum, sinkOverflow) = sinkBitPattern.addingReportingOverflow(delta)
             guard sinkOverflow == false else { return nil }
-            newSinkBP = sinkSum
+            newSinkBitPattern = sinkSum
         } else {
             // Source moves up (toward target), sink moves down.
-            let (sourceSum, sourceOverflow) = sourceBP.addingReportingOverflow(delta)
+            let (sourceSum, sourceOverflow) = sourceBitPattern.addingReportingOverflow(delta)
             guard sourceOverflow == false else { return nil }
-            newSourceBP = sourceSum
-            guard sinkBP >= delta else { return nil }
-            newSinkBP = sinkBP - delta
+            newSourceBitPattern = sourceSum
+            guard sinkBitPattern >= delta else { return nil }
+            newSinkBitPattern = sinkBitPattern - delta
         }
 
         // Enforce natural type bounds. Replaces the per-tag range checks
         // that the deleted `bitPattern(fromSemantic:tag:)` helper used to
         // do — `tag.bitPatternRange` is the same set, so this is a
         // structural simplification, not a behavior change.
-        guard sourceTag.bitPatternRange.contains(newSourceBP),
-              sinkValue.choice.tag.bitPatternRange.contains(newSinkBP)
+        guard sourceTag.bitPatternRange.contains(newSourceBitPattern),
+              sinkValue.choice.tag.bitPatternRange.contains(newSinkBitPattern)
         else {
             return nil
         }
@@ -423,20 +422,20 @@ extension GraphRedistributionEncoder {
         // let candidates escape the user's declared domain.
         if sourceValue.isRangeExplicit,
            let range = sourceValue.validRange,
-           range.contains(newSourceBP) == false
+           range.contains(newSourceBitPattern) == false
         {
             return nil
         }
         if sinkValue.isRangeExplicit,
            let range = sinkValue.validRange,
-           range.contains(newSinkBP) == false
+           range.contains(newSinkBitPattern) == false
         {
             return nil
         }
 
         var candidate = valueState.sequence
-        candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBP)
-        candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBP)
+        candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBitPattern)
+        candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBitPattern)
         return candidate
     }
 }

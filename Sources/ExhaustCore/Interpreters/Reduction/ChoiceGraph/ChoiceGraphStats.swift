@@ -6,7 +6,7 @@
 /// Statistics collected during ``ChoiceGraph`` construction and lifecycle operations.
 ///
 /// Accumulated by the builder during construction and updated by lifecycle methods. Gate logging on `isInstrumented` using the existing ``ExhaustLog`` pattern.
-public struct ChoiceGraphStats {
+public struct ChoiceGraphStats: Sendable {
     /// Total node count in the graph (all kinds, active and inactive).
     public var nodeCount: Int
 
@@ -28,6 +28,12 @@ public struct ChoiceGraphStats {
     /// Total nodes rebuilt across all dynamic region rebuilds.
     public var dynamicRegionNodesRebuilt: Int
 
+    /// Number of sequence-element nodes in the deletion antichain at initial graph construction.
+    public var deletionAntichainSize: Int
+
+    /// Number of full ``ChoiceGraph/build(from:)`` rebuilds triggered by structural acceptances during reduction.
+    public var fullGraphRebuilds: Int
+
     /// Creates empty stats.
     public init() {
         nodeCount = 0
@@ -39,6 +45,8 @@ public struct ChoiceGraphStats {
         inactiveNodeCount = 0
         dynamicRegionRebuilds = 0
         dynamicRegionNodesRebuilt = 0
+        deletionAntichainSize = 0
+        fullGraphRebuilds = 0
     }
 
     /// Populates construction-time stats from a ``ChoiceGraph``.
@@ -53,6 +61,7 @@ public struct ChoiceGraphStats {
         stats.typeCompatibilityEdgeCount = graph.typeCompatibilityEdges.count
         stats.activeNodeCount = graph.nodes.count(where: { $0.positionRange != nil })
         stats.inactiveNodeCount = graph.nodes.count(where: { $0.positionRange == nil })
+        stats.deletionAntichainSize = graph.deletionAntichain.count
         return stats
     }
 }

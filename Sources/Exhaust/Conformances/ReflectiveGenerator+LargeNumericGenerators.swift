@@ -16,6 +16,10 @@ import ExhaustCore
 
 public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt128` values from two `UInt64` halves.
+    ///
+    /// ```swift
+    /// let gen = #gen(.uint128())
+    /// ```
     static func uint128() -> ReflectiveGenerator<UInt128> {
         Gen.zip(
             Gen.chooseBits(),
@@ -34,6 +38,10 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Int128` values from two `UInt64` halves.
     ///
     /// The high half uses sign-bit XOR so that test case reduction naturally drives toward zero: the mapped bit pattern orders negative → zero → positive.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int128())
+    /// ```
     static func int128() -> ReflectiveGenerator<Int128> {
         Gen.zip(
             Gen.chooseBits(),

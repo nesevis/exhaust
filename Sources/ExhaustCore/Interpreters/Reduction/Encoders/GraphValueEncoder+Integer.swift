@@ -147,10 +147,10 @@ extension GraphValueEncoder {
                     guard bisection.convergedIndices.contains(index) == false else { continue }
                     let leaf = state.leafPositions[index]
                     // Read the accepted value from the baseline sequence (which was updated by the caller).
-                    let acceptedBP = state.sequence[leaf.sequenceIndex].value?.choice.bitPattern64 ?? leaf.currentBitPattern
-                    state.leafPositions[index].currentBitPattern = acceptedBP
+                    let acceptedBitPattern = state.sequence[leaf.sequenceIndex].value?.choice.bitPattern64 ?? leaf.currentBitPattern
+                    state.leafPositions[index].currentBitPattern = acceptedBitPattern
                     // If the leaf reached its target, mark converged.
-                    if acceptedBP == leaf.targetBitPattern {
+                    if acceptedBitPattern == leaf.targetBitPattern {
                         bisection.convergedIndices.insert(index)
                         convergenceStore[leaf.nodeID] = ConvergedOrigin(
                             bound: leaf.targetBitPattern,
@@ -216,20 +216,20 @@ extension GraphValueEncoder {
                 let leaf = state.leafPositions[index]
                 guard leaf.currentBitPattern != leaf.targetBitPattern else { continue }
 
-                let probeBP: UInt64
+                let probeBitPattern: UInt64
                 if leaf.currentBitPattern > leaf.targetBitPattern {
                     let range = leaf.currentBitPattern - leaf.targetBitPattern
                     let step = range / bisection.divisor
-                    probeBP = step > 0 ? leaf.targetBitPattern + step : leaf.targetBitPattern
+                    probeBitPattern = step > 0 ? leaf.targetBitPattern + step : leaf.targetBitPattern
                 } else {
                     let range = leaf.targetBitPattern - leaf.currentBitPattern
                     let step = range / bisection.divisor
-                    probeBP = step > 0 ? leaf.targetBitPattern - step : leaf.targetBitPattern
+                    probeBitPattern = step > 0 ? leaf.targetBitPattern - step : leaf.targetBitPattern
                 }
 
-                if probeBP != leaf.currentBitPattern {
+                if probeBitPattern != leaf.currentBitPattern {
                     candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                        .withBitPattern(probeBP)
+                        .withBitPattern(probeBitPattern)
                     anyChanged = true
                 }
             }
@@ -302,7 +302,7 @@ extension GraphValueEncoder {
                 }
                 // Scan exhausted — record convergence, then try cross-zero
                 // before advancing to the next leaf. Linear scan probes only
-                // `[targetBP, bestAccepted)` which for signed types is one
+                // `[targetBitPattern, bestAccepted)` which for signed types is one
                 // side of zero; cross-zero walks shortlex keys from 0 upward
                 // and reaches values on the opposite side that linear scan
                 // cannot. They are complementary.
@@ -321,11 +321,11 @@ extension GraphValueEncoder {
                 let leaf = state.leafPositions[state.leafIndex]
                 let currentEntry = state.sequence[leaf.sequenceIndex]
                 if let currentChoice = currentEntry.value?.choice {
-                    let targetBP = leaf.targetBitPattern
-                    let currentBP = currentChoice.bitPattern64
-                    if currentBP != targetBP {
+                    let targetBitPattern = leaf.targetBitPattern
+                    let currentBitPattern = currentChoice.bitPattern64
+                    if currentBitPattern != targetBitPattern {
                         let targetChoice = ChoiceValue(
-                            currentChoice.tag.makeConvertible(bitPattern64: targetBP),
+                            currentChoice.tag.makeConvertible(bitPattern64: targetBitPattern),
                             tag: currentChoice.tag
                         )
                         var candidate = state.sequence
@@ -388,10 +388,10 @@ extension GraphValueEncoder {
             guard let currentChoice = currentEntry.value?.choice else {
                 return nil
             }
-            let currentBP = currentChoice.bitPattern64
-            let targetBP = leaf.targetBitPattern
+            let currentBitPattern = currentChoice.bitPattern64
+            let targetBitPattern = leaf.targetBitPattern
 
-            guard currentBP != targetBP else {
+            guard currentBitPattern != targetBitPattern else {
                 return nil
             }
 
@@ -404,59 +404,59 @@ extension GraphValueEncoder {
             let warmStart = state.warmStartRecords[leaf.nodeID]
             let validWarmStart: ConvergedOrigin? = warmStart.flatMap { ws in
                 guard ws.configuration == .binarySearchSemanticSimplest else { return nil }
-                if currentBP > targetBP {
+                if currentBitPattern > targetBitPattern {
                     // Downward search: bound must be in [target, current].
-                    return ws.bound >= targetBP && ws.bound <= currentBP ? ws : nil
+                    return ws.bound >= targetBitPattern && ws.bound <= currentBitPattern ? ws : nil
                 } else {
                     // Upward search: bound must be in [current, target].
-                    return ws.bound >= currentBP && ws.bound <= targetBP ? ws : nil
+                    return ws.bound >= currentBitPattern && ws.bound <= targetBitPattern ? ws : nil
                 }
             }
 
-            if currentBP > targetBP {
-                let effectiveLo = validWarmStart?.bound ?? targetBP
-                let range = currentBP - effectiveLo
+            if currentBitPattern > targetBitPattern {
+                let effectiveLo = validWarmStart?.bound ?? targetBitPattern
+                let range = currentBitPattern - effectiveLo
                 if range < InterpolationSearchStepper.binaryThreshold {
                     state.stepper = .downwardBinary(
-                        BinarySearchStepper(lo: effectiveLo, hi: currentBP)
+                        BinarySearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 } else {
                     state.stepper = .downward(
-                        InterpolationSearchStepper(lo: effectiveLo, hi: currentBP)
+                        InterpolationSearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 }
             } else {
-                let effectiveHi = validWarmStart?.bound ?? targetBP
-                let range = effectiveHi - currentBP
+                let effectiveHi = validWarmStart?.bound ?? targetBitPattern
+                let range = effectiveHi - currentBitPattern
                 if range < MaxInterpolationSearchStepper.binaryThreshold {
                     state.stepper = .upwardBinary(
-                        MaxBinarySearchStepper(lo: currentBP, hi: effectiveHi)
+                        MaxBinarySearchStepper(lo: currentBitPattern, hi: effectiveHi)
                     )
                 } else {
                     state.stepper = .upward(
-                        MaxInterpolationSearchStepper(lo: currentBP, hi: effectiveHi)
+                        MaxInterpolationSearchStepper(lo: currentBitPattern, hi: effectiveHi)
                     )
                 }
             }
 
-            guard let firstBP = state.stepper?.start() else {
+            guard let firstBitPattern = state.stepper?.start() else {
                 state.stepper = nil
                 return nil
             }
 
             var candidate = state.sequence
             candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                .withBitPattern(firstBP)
+                .withBitPattern(firstBitPattern)
             if candidate.shortLexPrecedes(state.sequence) {
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
         }
 
-        if let nextBP = state.stepper?.advance(lastAccepted: lastAccepted) {
+        if let nextBitPattern = state.stepper?.advance(lastAccepted: lastAccepted) {
             var candidate = state.sequence
             candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                .withBitPattern(nextBP)
+                .withBitPattern(nextBitPattern)
             if candidate.shortLexPrecedes(state.sequence) {
                 state.lastEmittedCandidate = candidate
                 return candidate
@@ -491,7 +491,7 @@ extension GraphValueEncoder {
                     configuration: .binarySearchSemanticSimplest,
                     cycle: 0
                 )
-                // Set up inline linear scan of [targetBP, bestAccepted).
+                // Set up inline linear scan of [targetBitPattern, bestAccepted).
                 let scanLo = min(leaf.targetBitPattern, bestAccepted)
                 let scanHi = max(leaf.targetBitPattern, bestAccepted)
                 var values: [UInt64] = []
@@ -577,7 +577,7 @@ extension GraphValueEncoder {
     ///
     /// Returns `true` when the leaf is a signed type with a current shortlex key > 0 (there is at least one strictly simpler value to try). On success, ``IntegerState/crossZero`` is set and the per-leaf dispatch loop will emit the first probe on its next iteration.
     ///
-    /// The probe budget adapts to the current shortlex key: roughly `log₂(key) + 4`, clamped to `[4, 16]`. Rationale: bit-pattern binary search has already covered the large-magnitude neighborhood by the time cross-zero runs, so cross-zero's contribution is bounded to the last few shortlex keys near zero. Small-magnitude leaves get full coverage of every key below their current one; large-magnitude leaves get the simplest 16 keys. Bonsai's fixed 16-probe cap is a special case of this at the upper end of the range.
+    /// The probe budget adapts to the current shortlex key: roughly `log₂(key) + 4`, clamped to `[4, 16]`. Rationale: bit-pattern binary search has already covered the large-magnitude neighborhood by the time cross-zero runs, so cross-zero's contribution is bounded to the last few shortlex keys near zero. Small-magnitude leaves get full coverage of every key below their current one; large-magnitude leaves get the simplest 16 keys. A fixed 16-probe cap is a special case of this at the upper end of the range.
     mutating func tryEnterCrossZero(state: inout IntegerState) -> Bool {
         let leaf = state.leafPositions[state.leafIndex]
         guard leaf.typeTag.isSigned else { return false }
@@ -612,8 +612,8 @@ extension GraphValueEncoder {
             // that this exact boundary value is required. Saves the full
             // budget of wasted probes per pinned leaf (for example, Bound5's
             // leaves at `Int16.min`).
-            let currentBP = currentEntry.choice.bitPattern64
-            if currentBP == range.lowerBound || currentBP == range.upperBound {
+            let currentBitPattern = currentEntry.choice.bitPattern64
+            if currentBitPattern == range.lowerBound || currentBitPattern == range.upperBound {
                 return false
             }
         }

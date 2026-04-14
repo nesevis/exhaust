@@ -73,8 +73,7 @@ struct TransformationYield: Comparable, Equatable {
     /// Composes two yields under the monoidal product.
     ///
     /// Structural yields sum (both steps reduce the sequence independently).
-    /// Value yield takes the max (the compound enables the most enabling
-    /// step's potential). Slack composes via ``AffineSlack/composed(with:)``.
+    /// Value yield takes the max (the compound enables the most enabling step's potential). Slack composes via ``AffineSlack/composed(with:)``.
     /// Costs sum (sequential probe budgets are additive).
     ///
     /// - Parameter other: The downstream yield to compose with.

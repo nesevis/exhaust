@@ -27,9 +27,9 @@
 ///
 /// The bidirectional generator design is based on Harrison Goldstein's dissertation, "Property-Based Testing for the People" (UPenn, 2024).
 ///
-/// **Construction**: Use `Gen` combinators, never construct directly.
+/// **Construction**: Use ``Gen`` combinators, never construct directly.
 ///
-/// - SeeAlso: `Gen` for generator construction, `Interpreters` for execution
+/// - SeeAlso: ``Gen`` for generator construction, ``Interpreters`` for execution
 public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
@@ -42,8 +42,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// This operation is associative and follows the monad laws, enabling safe composition of complex effectful programs from simpler building blocks.
     ///
-    /// - Parameter transform: A function that takes the current value and produces a new computation
-    /// - Returns: A new computation representing the sequenced effects
+    /// - Parameter transform: A function that takes the current value and produces a new computation.
+    /// - Returns: A new computation representing the sequenced effects.
     /// - Throws: Rethrows any errors from the transform function
     func _bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
         Gen.liftF(.transform(
@@ -59,9 +59,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Chains this generator with a dependent generator, with a backward extraction function for reflection.
     ///
-    /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function
-    /// extracts the inner generator's input from the final output, enabling reflection (and therefore
-    /// reduction) through the bind.
+    /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function extracts the inner generator's input from the final output, enabling reflection (and therefore reduction) through the bind.
     ///
     /// - **Forward**: Takes the inner value `A` and returns a dependent generator over `B`
     /// - **Backward**: Extracts `A` from a `B` — the `comap` annotation at bind sites (Xia et al. ESOP 2019)
@@ -74,9 +72,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     ///
     /// - Parameters:
-    ///   - forward: Function that takes the generated value and returns a new generator
-    ///   - backward: Function that extracts the inner value from the final output
-    /// - Returns: A generator that sequences the two computations with bidirectional support
+    ///   - forward: Function that takes the generated value and returns a new generator.
+    ///   - backward: Function that extracts the inner value from the final output.
+    /// - Returns: A generator that sequences the two computations with bidirectional support.
     func _bound<NewValue>(
         forward: @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
         backward: @escaping (NewValue) throws -> Value
@@ -92,18 +90,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         ))
     }
 
-    /// The bit pattern range associated with this generator's immediate choice operation.
-    ///
-    /// For generators wrapping a `chooseBits` operation, returns the min/max range that constrains the random values. Returns `nil` for pure values or non-choice operations.
-    ///
-    /// This property is used internally for optimization and analysis of generator constraints.
-    ///
-    /// - Returns: The UInt64 range for choice operations, or nil if not applicable
+    /// Returns `true` when this generator is a `.pure` value with no pending effects.
     var isPure: Bool {
         if case .pure = self { return true }
         return false
     }
 
+    /// The bit pattern range associated with this generator's immediate choice operation.
+    ///
+    /// For generators wrapping a `chooseBits` operation, returns the min/max range that constrains the random values. Returns `nil` for pure values or non-choice operations.
+    ///
+    /// This property is used internally for optimization and analysis of generator constraints.
     var associatedRange: ClosedRange<UInt64>? {
         switch self {
         case .pure:

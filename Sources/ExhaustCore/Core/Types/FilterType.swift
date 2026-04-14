@@ -18,7 +18,7 @@ public enum FilterType: Equatable, Hashable, CaseIterable {
     /// Probes each branching point's choices through the continuation pipeline to measure predicate satisfaction rates, then biases weights toward valid outputs before generation begins.
     case probeSampling
 
-    /// Uses online CGS derivative sampling to condition pick weights on upstream choices, then bakes them with fitness sharing to prevent overcommitting to the dominant cluster. Produces the best-quality outputs for recursive generators (e.g. BSTs, AVL trees) at the cost of a short warmup pass.
+    /// Uses online CGS derivative sampling to condition pick weights on upstream choices, then bakes them with fitness sharing to prevent overcommitting to the dominant cluster. Produces the best-quality outputs for recursive generators (for example BSTs, AVL trees) at the cost of a short warmup pass.
     case choiceGradientSampling
 }
 

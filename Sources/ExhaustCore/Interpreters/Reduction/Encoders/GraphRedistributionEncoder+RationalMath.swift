@@ -22,12 +22,12 @@ extension GraphRedistributionEncoder {
         }
 
         // Compute source's reduction target as a rational.
-        let sourceTargetBP = sourceChoice.reductionTarget(
+        let sourceTargetBitPattern = sourceChoice.reductionTarget(
             in: sourceIsRangeExplicit ? sourceValidRange : nil
         )
         guard let targetRatio = rationalForTarget(
             sourceChoice,
-            targetBitPattern: sourceTargetBP
+            targetBitPattern: sourceTargetBitPattern
         ) else { return nil }
 
         guard let lcmAB = leastCommonMultiple(sourceRatio.denominator, sinkRatio.denominator),

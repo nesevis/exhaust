@@ -183,7 +183,7 @@ struct LeafEntry {
 
 /// Scope for integer leaf value minimization.
 struct ValueMinimizationScope {
-    /// Leaves to minimise, ordered by value yield descending (bind-inner leaves with large bound subtrees first). Each entry carries the bind-inner reshape marker so the graph can route value updates per leaf without the encoder having to know.
+    /// Leaves to minimize, ordered by value yield descending (bind-inner leaves with large bound subtrees first). Each entry carries the bind-inner reshape marker so the graph can route value updates per leaf without the encoder having to know.
     let leaves: [LeafEntry]
 
     /// Whether batch zeroing should be attempted first.
@@ -197,7 +197,7 @@ struct ValueMinimizationScope {
 
 /// Scope for float leaf value minimization.
 struct FloatMinimizationScope {
-    /// Float leaves to minimise. Each entry carries the bind-inner reshape marker.
+    /// Float leaves to minimize. Each entry carries the bind-inner reshape marker.
     let leaves: [LeafEntry]
 
     /// Backward-compat shorthand. Layer 3 will update encoders to read ``leaves`` directly.

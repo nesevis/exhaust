@@ -15,9 +15,9 @@ public enum AdaptiveSmoothing {
     ///
     /// - Parameters:
     ///   - generator: A tuned generator (typically the output of a tuning pass).
-    ///   - epsilon: Laplace smoothing constant. Default: 1.0
-    ///   - baseTemperature: Temperature for well-distributed sites. Default: 1.0
-    ///   - maxTemperature: Temperature for bottleneck sites. Default: 4.0
+    ///   - epsilon: Laplace smoothing constant. Default: 1.0.
+    ///   - baseTemperature: Temperature for well-distributed sites. Default: 1.0.
+    ///   - maxTemperature: Temperature for bottleneck sites. Default: 4.0.
     /// - Returns: A generator with adaptively smoothed pick weights.
     public static func smooth<Output>(
         _ generator: ReflectiveGenerator<Output>,

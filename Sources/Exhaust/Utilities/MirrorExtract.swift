@@ -1,8 +1,8 @@
-// Extracts a child value from a Mirror by label.
-//
-// Runtime support for the `#gen` macro's backward mapping. Not intended for direct use.
 import ExhaustCore
 
+/// Extracts a single child value from a Mirror by label.
+///
+/// Runtime support for the `#gen` macro's backward mapping. Not intended for direct use.
 public func _mirrorExtract(_ value: Any, label: String) -> Any {
     Mirror(reflecting: value).children.first(where: { $0.label == label })!.value
 }

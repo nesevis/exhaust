@@ -11,7 +11,7 @@
 ///
 /// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)`` to maintain position-to-node correspondence.
 ///
-/// The active-branch walk and assembly pass live in this file. The inactive-branch walk (used to materialise non-selected branches with nil position ranges) lives in `ChoiceGraphBuilder+InactiveBranch.swift`. The subtree splice helpers used by ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` live in `ChoiceGraphBuilder+Subtree.swift`.
+/// The active-branch walk and assembly pass live in this file. The inactive-branch walk (used to materialize non-selected branches with nil position ranges) lives in `ChoiceGraphBuilder+InactiveBranch.swift`. The subtree splice helpers used by ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` live in `ChoiceGraphBuilder+Subtree.swift`.
 struct ChoiceGraphBuilder {
     var nodes: [ChoiceGraphNode] = []
     var containmentEdges: [ContainmentEdge] = []
@@ -24,7 +24,7 @@ struct ChoiceGraphBuilder {
     ///
     /// The tree contains all structural and value information needed for graph construction. The ``ChoiceSequence`` is a projection of the tree and is not required — sequence offsets are computed from the tree's own structure.
     ///
-    /// - Parameter tree: The generator's compositional structure. Produced by the materialiser with `materializePicks` controlling whether inactive branches have full subtrees.
+    /// - Parameter tree: The generator's compositional structure. Produced by the materializer with `materializePicks` controlling whether inactive branches have full subtrees.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
         var builder = ChoiceGraphBuilder()
         _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0)

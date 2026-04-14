@@ -7,8 +7,11 @@
 
 /// A seed: the ChoiceSequence (for mutation) + ChoiceTree (for structural info) + metadata.
 public struct Seed {
+    /// The flat choice sequence used as a mutation substrate by ``HillClimber``.
     public let sequence: ChoiceSequence
+    /// The structured choice tree produced alongside the value, used for structural analysis.
     public let tree: ChoiceTree
+    /// Novelty score assigned by ``NoveltyTracker``; higher means more distinct from previously seen seeds.
     public var noveltyScore: Double
     /// Target function score. Used for fitness-guided search when a `.target` is provided.
     public var fitness: Double

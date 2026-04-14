@@ -23,9 +23,9 @@ public extension Gen {
     /// **Reporting**: Statistics are printed when the generator reaches `maxRuns`, showing counts and percentages for each classifier. Values can satisfy multiple classifiers simultaneously for comprehensive coverage analysis.
     ///
     /// - Parameters:
-    ///   - generator: The base generator to wrap with classification
-    ///   - classifiers: Variadic (label, predicate) pairs for categorizing generated values
-    /// - Returns: A generator that produces the same values while collecting statistics
+    ///   - generator: The base generator to wrap with classification.
+    ///   - classifiers: Variadic (label, predicate) pairs for categorizing generated values.
+    /// - Returns: A generator that produces the same values while collecting statistics.
     static func classify<Output>(
         _ generator: ReflectiveGenerator<Output>,
         _ classifiers: (String, (Output) -> Bool)...

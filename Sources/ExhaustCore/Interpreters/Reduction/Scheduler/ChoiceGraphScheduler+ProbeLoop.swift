@@ -58,8 +58,7 @@ extension ChoiceGraphScheduler {
         var latestAcceptedTreeIsStripped = false
         var probeCount = 0
         var acceptCount = 0
-        // Per-encoder rejection breakdown for the wasted-mats investigation
-        // (Bonsai vs Graph mat-count gap). Cache hits cost zero materializations;
+        // Per-encoder rejection breakdown. Cache hits cost zero materializations;
         // decoder rejections cost one materialization each. Aggregated into
         // `stats.encoderProbesAccepted` and so on at the end of the loop.
         var cacheHitCount = 0

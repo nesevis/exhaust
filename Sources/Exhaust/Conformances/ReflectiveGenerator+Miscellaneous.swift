@@ -9,11 +9,19 @@ import ExhaustCore
 
 public extension ReflectiveGenerator {
     /// Creates a generator that always produces the same constant value.
+    ///
+    /// ```swift
+    /// let gen = #gen(.just(42))
+    /// ```
     static func just(_ value: Value) -> ReflectiveGenerator<Value> {
         Gen.just(value)
     }
 
     /// Generates arbitrary `Bool` values. Reduces toward `false`.
+    ///
+    /// ```swift
+    /// let gen = #gen(.bool())
+    /// ```
     static func bool() -> ReflectiveGenerator<Bool> {
         Gen.choose(in: UInt8(0) ... 1)
             .mapped(
@@ -23,6 +31,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Creates a generator that randomly selects from one of the provided generators with equal weight.
+    ///
+    /// ```swift
+    /// let gen = #gen(.oneOf(.int(in: 0...5), .int(in: 100...105)))
+    /// ```
     static func oneOf(
         _ generators: ReflectiveGenerator<Value>...,
         fileID: String = #fileID,
@@ -33,6 +45,10 @@ public extension ReflectiveGenerator {
     }
 
     /// Creates a generator that randomly selects from weighted generators.
+    ///
+    /// ```swift
+    /// let gen = #gen(.oneOf(weighted: (1, .just(0)), (5, .int(in: 1...100))))
+    /// ```
     static func oneOf(
         weighted choices: (Int, ReflectiveGenerator<Value>)...,
         fileID: String = #fileID,
@@ -45,6 +61,10 @@ public extension ReflectiveGenerator {
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Wraps this generator to produce optional values, choosing between `nil` and a generated value.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 0...10)).optional()
+    /// ```
     func optional() -> ReflectiveGenerator<Value?> {
         Gen.pick(choices: [
             (1, Gen.just(.none)),
@@ -56,7 +76,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 public extension ReflectiveGenerator {
     /// Generates arbitrary `Result` values by choosing between a success and a failure generator with equal weight.
     ///
-    /// Both branches are fully reflective — the backward pass extracts the inner value from the matching `Result` case and signals a mismatch for the other case, allowing `pick` to select the correct branch during reflection.
+    /// Both branches are fully reflective — the backward pass extracts the inner value from the matching `Result` case and signals a mismatch for the other case, allowing ``Gen/pick(choices:)`` to select the correct branch during reflection.
     ///
     /// ```swift
     /// let gen = #gen(.result(

@@ -15,7 +15,7 @@ public enum AdaptiveProbe {
     ///
     /// `predicate(0)` is assumed true and is not checked. The predicate must be monotonic: once it returns `false` for some value, it must return `false` for all larger values.
     ///
-    /// Used wherever a pass needs to find "how many of these can I do at once" — e.g., batch-deleting the largest contiguous run of spans in adaptive span deletion.
+    /// Used wherever a pass needs to find "how many of these can I do at once" — for example, batch-deleting the largest contiguous run of spans in adaptive span deletion.
     ///
     /// - Parameter predicate: A monotonic predicate where `predicate(0)` is assumed true.
     /// - Returns: The largest `k >= 0` for which `predicate(k)` holds.

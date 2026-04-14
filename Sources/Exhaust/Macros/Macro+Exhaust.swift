@@ -17,7 +17,7 @@ import ExhaustCore
 ///
 /// ## Settings
 ///
-/// - `.budget(_)`: controls iteration budgets for coverage, sampling, and reduction. Presets: `.expedient` (200/200, default), `.expensive` (500/500), `.exorbitant` (2000/2000), or `.custom(coverage:sampling:reduction:)`.
+/// - `.budget(_)`: controls iteration budgets for coverage, sampling, and reduction. Presets: `.expedient` (200/200, default), `.expensive` (500/500), `.exorbitant` (2000/2000), or `.custom(coverage:sampling:)`.
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
 /// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
 /// - `.randomOnly`: disables structured coverage analysis.
@@ -59,11 +59,11 @@ import ExhaustCore
 /// The `Void` path detects `#expect` failures automatically (including inside helper functions) using `withKnownIssue`. After reduction, the property is re-run one final time without suppression so `#expect` failures record with the reduced values. The only Exhaust artifact is the replay seed.
 @freestanding(expression)
 @discardableResult
-public macro exhaust<T, R>(
-    _ gen: ReflectiveGenerator<T>,
-    _ settings: ExhaustSettings<T>...,
-    property: (T) throws -> R
-) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
+public macro exhaust<GeneratedValue, PropertyResult>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
+    _ settings: ExhaustSettings<GeneratedValue>...,
+    property: (GeneratedValue) throws -> PropertyResult
+) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
 /// Runs a property test with an async property closure.
 ///
@@ -72,11 +72,11 @@ public macro exhaust<T, R>(
 /// - Returns: The reduced counterexample if the property fails, or `nil` if all test cases pass.
 @freestanding(expression)
 @discardableResult
-public macro exhaust<T, R>(
-    _ gen: ReflectiveGenerator<T>,
-    _ settings: ExhaustSettings<T>...,
-    property: (T) async throws -> R
-) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
+public macro exhaust<GeneratedValue, PropertyResult>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
+    _ settings: ExhaustSettings<GeneratedValue>...,
+    property: (GeneratedValue) async throws -> PropertyResult
+) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
 
 /// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts (invariants, postconditions, and optional model comparisons) hold after every step.
 ///

@@ -13,7 +13,7 @@ enum ClosureAnalysisOutcome {
     /// The closure body is a simple initializer/function call with labeled arguments that correspond 1:1 with closure parameters, enabling backward mapping.
     case bidirectional(BidirectionalResult)
 
-    /// The closure body is a single-argument, unlabeled type conversion (e.g. `Int($0)`).
+    /// The closure body is a single-argument, unlabeled type conversion (for example `Int($0)`).
     /// The backward pass is generated via constrained overloads at the expansion site rather than Mirror extraction.
     case scalarConversion
 
@@ -25,7 +25,7 @@ enum ClosureAnalysisOutcome {
 struct BidirectionalResult {
     /// The argument labels from the function/initializer call, in argument order.
     /// For struct inits these become Mirror extraction labels.
-    /// For enum cases with positional fallback these are ".0", ".1", etc. (unused).
+    /// For enum cases with positional fallback these are ".0", ".1", and so on (unused).
     let labels: [String]
 
     /// The parameter names from the closure signature, in parameter order.
@@ -36,18 +36,18 @@ struct BidirectionalResult {
     /// Same length and order as `labels`.
     let argumentParamRefs: [String]
 
-    /// If the callee is a member access (e.g. `Pet.cat`), the member name.
+    /// If the callee is a member access (for example `Pet.cat`), the member name.
     /// When set, the backward mapping uses pattern matching instead of Mirror.
     let caseName: String?
 
-    /// Original argument labels from the call site, in argument order. `nil` for unlabeled arguments. Used to generate labeled pattern bindings for enum case backward mapping (e.g. `case let .cat(age: v0)`).
+    /// Original argument labels from the call site, in argument order. `nil` for unlabeled arguments. Used to generate labeled pattern bindings for enum case backward mapping (for example `case let .cat(age: v0)`).
     let originalArgumentLabels: [String?]
 }
 
 /// Analyzes a closure expression to determine if it can support automatic backward mapping.
 ///
 /// The analysis succeeds (returns `.bidirectional`) when:
-/// 1. The closure has explicitly named parameters or uses shorthand `$0`, `$1`, etc.
+/// 1. The closure has explicitly named parameters or uses shorthand `$0`, `$1`, and so on.
 /// 2. The body is a single expression (or single return statement)
 /// 3. That expression is a function/initializer call
 /// 4. All arguments are labeled
@@ -89,7 +89,7 @@ func analyzeClosureForBidirectional(
 
 /// Analyzes a closure that uses shorthand parameters ($0, $1, ...) for bidirectional capability.
 ///
-/// Shorthand params provide implicit positional ordering — `$0` corresponds to the first generator, `$1` to the second, etc. The labels needed for Mirror-based backward extraction come from the function call argument labels, not from parameter names.
+/// Shorthand params provide implicit positional ordering — `$0` corresponds to the first generator, `$1` to the second, and so on. The labels needed for Mirror-based backward extraction come from the function call argument labels, not from parameter names.
 private func analyzeShorthandClosure(
     _ closure: ClosureExprSyntax,
     generatorCount: Int
@@ -159,8 +159,8 @@ private func analyzeShorthandClosure(
 /// Analyzes a single expression for a function call with 1:1 parameter correspondence.
 ///
 /// Detects two callee patterns:
-/// - **Direct call** (e.g. `Person(name: name)`): struct/class init → Mirror-based backward
-/// - **Member access** (e.g. `Pet.cat(age)`): likely enum case → pattern-matching backward
+/// - **Direct call** (for example `Person(name: name)`): struct/class init → Mirror-based backward
+/// - **Member access** (for example `Pet.cat(age)`): likely enum case → pattern-matching backward
 private func analyzeFunctionCall(
     _ singleExpr: ExprSyntax,
     parameterNames: [String],

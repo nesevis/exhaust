@@ -11,7 +11,7 @@
 ///
 /// ## Why not ``GraphValueEncoder``?
 ///
-/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one ``GeneratorLift`` materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
+/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
 ///
 /// ## Lifecycle
 ///
@@ -49,16 +49,16 @@ struct GraphBinarySearchEncoder: GraphEncoder {
               scope.baseSequence[range.lowerBound].value != nil
         else { return }
 
-        let currentBP = metadata.value.bitPattern64
-        let targetBP = metadata.value.reductionTarget(in: metadata.validRange)
-        guard currentBP > targetBP else { return }
+        let currentBitPattern = metadata.value.bitPattern64
+        let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
+        guard currentBitPattern > targetBitPattern else { return }
 
         leafNodeID = entry.nodeID
         sequenceIndex = range.lowerBound
         typeTag = metadata.typeTag
         validRange = metadata.validRange
         isRangeExplicit = metadata.isRangeExplicit
-        stepper = BinarySearchStepper(lo: targetBP, hi: currentBP)
+        stepper = BinarySearchStepper(lo: targetBitPattern, hi: currentBitPattern)
     }
 
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
@@ -101,7 +101,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
 ///
 /// ``FibreCoveringEncoder`` enumerates the entire fibre value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
 ///
-/// The wrapper expects the scope's operation to be ``MinimizationScope/integerLeaves(_:)``: the leaf positions are read from the scope's leaves, the contiguous position range is computed from them, and the inner encoder is started on the scope's `baseSequence` over that range.
+/// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the leaf positions are read from the scope's leaves, the contiguous position range is computed from them, and the inner encoder is started on the scope's `baseSequence` over that range.
 struct GraphFibreCoveringEncoder: GraphEncoder {
     let name: EncoderName = .boundValueSearch
 
@@ -202,7 +202,7 @@ struct GraphComposedEncoder: GraphEncoder {
     ///   - upstream: Encoder driving the outer iteration. Receives the original scope passed to ``start(scope:)``.
     ///   - downstream: Encoder driving the inner iteration. Receives the lifted scope per upstream probe.
     ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialisation) plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
-    ///   - lift: Closure that materialises the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialisation fails).
+    ///   - lift: Closure that materializes the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialization fails).
     init(
         name: EncoderName,
         upstream: any GraphEncoder,

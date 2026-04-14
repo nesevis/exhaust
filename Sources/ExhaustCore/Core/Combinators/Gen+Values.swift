@@ -8,8 +8,8 @@ public extension Gen {
     ///
     /// For validation during reflection, see `Gen.exact` instead.
     ///
-    /// - Parameter value: The constant value to always generate
-    /// - Returns: A generator that produces the constant value
+    /// - Parameter value: The constant value to always generate.
+    /// - Returns: A generator that produces the constant value.
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Output> {
         liftF(.just(value))
     }
@@ -25,8 +25,8 @@ public extension Gen {
     ///
     /// This validation behavior makes `Gen.exact` essential for property-based testing where you need to verify that generated structures contain specific expected values.
     ///
-    /// - Parameter value: The constant value to generate and validate against
-    /// - Returns: A generator that produces the constant and validates during reflection
+    /// - Parameter value: The constant value to generate and validate against.
+    /// - Returns: A generator that produces the constant and validates during reflection.
     static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value> {
         // Use contramap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.

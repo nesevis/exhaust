@@ -11,7 +11,7 @@ import Foundation
 
 /// Online Choice Gradient Sampling interpreter that generates values directly.
 ///
-/// Unlike the eager `GeneratorTuning` tuner (which pre-computes all pick weights in a single top-down pass), this interpreter implements the paper's **online, per-value** algorithm (Figure 3.3). At each `pick` encountered during generation, it computes
+/// Unlike the eager ``GeneratorTuning`` tuner (which pre-computes all pick weights in a single top-down pass), this interpreter implements the paper's **online, per-value** algorithm (Figure 3.3). At each `pick` encountered during generation, it computes
 /// "derivatives" (residual generators after choosing each branch), samples from each derivative to measure fitness, and selects based on those fitness scores.
 ///
 /// This avoids diversity collapse on recursive generators because each derivative has already fixed all choices above it, making deeper sampling tractable.
@@ -22,7 +22,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
     // MARK: - Derivative Context
 
-    /// An inspectable data structure representing the composition of all outer continuations needed to produce a `FinalOutput` from a local sub-generator. Each `handlePick` or `handleZip` call pushes a frame; `apply` composes them to build a full derivative.
+    /// An inspectable data structure representing the composition of all outer continuations needed to produce a `FinalOutput` from a local sub-generator. Each ``handlePick`` or ``handleZip`` call pushes a frame; `apply` composes them to build a full derivative.
     ///
     /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized representation, matching the paper's treatment of CGS derivatives as syntactic transformations on the generator data structure (Goldstein, Ch. 3).
     public struct DerivativeContext {
@@ -726,27 +726,11 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         let choiceCount = choices.count
         let minDeadObservations: UInt64 = 30
 
-        var liveChoiceIndices = ContiguousArray<Int>()
-        liveChoiceIndices.reserveCapacity(choiceCount)
-        if let accumulator = cgsState.fitnessAccumulator {
-            for (i, choice) in choices.enumerated() {
-                let key = FitnessAccumulator.SiteChoiceKey(
-                    fingerprint: choice.fingerprint, choiceID: choice.id
-                )
-                if let record = accumulator.records[key],
-                   record.observationCount >= minDeadObservations,
-                   record.totalFitness == 0
-                {
-                    continue
-                }
-                liveChoiceIndices.append(i)
-            }
-            if liveChoiceIndices.isEmpty {
-                liveChoiceIndices = ContiguousArray(0 ..< choiceCount)
-            }
-        } else {
-            liveChoiceIndices = ContiguousArray(0 ..< choiceCount)
-        }
+        let liveChoiceIndices = liveIndices(
+            for: choices,
+            records: cgsState.fitnessAccumulator?.records,
+            minDeadObservations: minDeadObservations
+        )
 
         // Single live choice after elimination — skip derivative evaluation
         if liveChoiceIndices.count == 1 {
@@ -905,6 +889,37 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             cgsState: &cgsState,
             derivativeContext: derivativeContext
         )
+    }
+
+    // MARK: - Vocabulary Elimination
+
+    /// Returns the indices of live choices — those not yet eliminated by vocabulary pruning.
+    ///
+    /// A choice is eliminated when its observation count reaches `minDeadObservations` and its total fitness is zero. When all choices would be eliminated, all indices are returned (prevents empty pick). When `records` is `nil`, all indices are returned.
+    private static func liveIndices(
+        for choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord]?,
+        minDeadObservations: UInt64
+    ) -> ContiguousArray<Int> {
+        guard let records else {
+            return ContiguousArray(0 ..< choices.count)
+        }
+        var live = ContiguousArray<Int>()
+        live.reserveCapacity(choices.count)
+        for (i, choice) in choices.enumerated() {
+            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
+            if let record = records[key],
+               record.observationCount >= minDeadObservations,
+               record.totalFitness == 0
+            {
+                continue
+            }
+            live.append(i)
+        }
+        if live.isEmpty {
+            return ContiguousArray(0 ..< choices.count)
+        }
+        return live
     }
 
     // MARK: - Zip

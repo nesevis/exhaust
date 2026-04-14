@@ -49,7 +49,7 @@ public extension ChoiceTree {
 
 /// Namespace for tree visualization internals.
 private enum TreeVisualization {
-    // MARK: Complexity Tier
+    // MARK: - Complexity Tier
 
     /// Maps a choice value's shortlex distance from zero to one of five visual tiers.
     enum ComplexityTier: Int {
@@ -115,12 +115,11 @@ private enum TreeVisualization {
         }
     }
 
-    // MARK: Render Tree
+    // MARK: - Render Tree
 
     /// An intermediate tree containing only the information needed for visualization.
     ///
-    /// Invisible structural nodes have `symbol == nil`. Single-child invisible chains
-    /// are collapsed so the tree is as shallow as possible.
+    /// Invisible structural nodes have `symbol == nil`. Single-child invisible chains are collapsed so the tree is as shallow as possible.
     struct RenderTree {
         let symbol: Character?
         let children: [RenderTree]
@@ -183,7 +182,7 @@ private enum TreeVisualization {
         return current
     }
 
-    // MARK: Layout
+    // MARK: - Layout
 
     /// A node with computed position and subtree bounds.
     struct LayoutNode {
@@ -260,7 +259,7 @@ private enum TreeVisualization {
         )
     }
 
-    // MARK: Rendering
+    // MARK: - Rendering
 
     /// A node with integer screen coordinates ready for grid placement.
     struct PlacedNode {
@@ -381,7 +380,7 @@ private enum TreeVisualization {
         return result.joined(separator: "\n")
     }
 
-    // MARK: Connector Drawing
+    // MARK: - Connector Drawing
 
     /// Bundles the parameters shared by connector-drawing routines.
     struct ConnectionSpec {
@@ -444,7 +443,7 @@ private enum TreeVisualization {
         }
     }
 
-    // MARK: Grid Helpers
+    // MARK: - Grid Helpers
 
     private static func placeChar(
         _ grid: inout [[Character]],
@@ -459,7 +458,7 @@ private enum TreeVisualization {
         }
     }
 
-    // MARK: Layout Helpers
+    // MARK: - Layout Helpers
 
     private static func flattenToPlaced(
         _ node: LayoutNode,

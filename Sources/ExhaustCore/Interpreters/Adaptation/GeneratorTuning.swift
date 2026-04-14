@@ -9,7 +9,7 @@ import Foundation
 
 /// Offline, one-shot tuning that transforms a generator's pick structure using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
 ///
-/// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal `ReflectiveGenerator` with synthesised pick structure whose weights reflect predicate satisfaction rates. Reduction is unaffected because the reducer operates on `ChoiceTree`/`ChoiceSequence` and is weight-agnostic.
+/// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal ``ReflectiveGenerator`` with synthesised pick structure whose weights reflect predicate satisfaction rates. Reduction is unaffected because the reducer operates on ``ChoiceTree``/``ChoiceSequence`` and is weight-agnostic.
 ///
 /// ## Algorithm
 ///
@@ -54,7 +54,7 @@ public enum GeneratorTuning {
     /// Minimum selection probability per choice. Prevents extreme weight ratios from compounding across depth levels, which would collapse rare-but-valid deep paths to near-zero probability. The paper (§4.3, Figure 13) shows that bounding weights to [0.1, 0.9] prevents overfitting and improves output diversity.
     ///
     /// **Caveat for wide picks:** the floor applies per-choice, so a pick with many dead branches pays a cost proportional to `deadBranches / totalBranches`.
-    /// Binary picks lose at most ~10% of selection probability to the floor, but e.g. a 20-way pick with 2 valid branches drops valid selection from ~100% to ~36%. If this becomes a problem, scale the fraction inversely with branch count (`weightFloorFraction / choiceCount`) to cap total floor budget at a fixed share of weight regardless of branch count.
+    /// Binary picks lose at most ~10% of selection probability to the floor, but for example a 20-way pick with 2 valid branches drops valid selection from ~100% to ~36%. If this becomes a problem, scale the fraction inversely with branch count (`weightFloorFraction / choiceCount`) to cap total floor budget at a fixed share of weight regardless of branch count.
     static let weightFloorFraction: Double = 0.1
 
     // MARK: - Public API

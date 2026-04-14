@@ -143,9 +143,9 @@ extension GraphStructuralEncoder {
     static func minimizingLeaves(in tree: ChoiceTree) -> ChoiceTree {
         switch tree {
         case let .choice(value, metadata):
-            let targetBP = value.reductionTarget(in: metadata.validRange)
+            let targetBitPattern = value.reductionTarget(in: metadata.validRange)
             let targetValue = ChoiceValue(
-                value.tag.makeConvertible(bitPattern64: targetBP),
+                value.tag.makeConvertible(bitPattern64: targetBitPattern),
                 tag: value.tag
             )
             return .choice(targetValue, metadata)

@@ -7,7 +7,7 @@
 
 /// Stores the convergence bound and observation from a prior encoder pass.
 ///
-/// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored in the ``ConvergenceCache`` and supplied to encoders via ``ReductionContext/convergedOrigins``.
+/// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored per graph node in ``ChoiceGraphNode/convergedOrigin`` and harvested by the scheduler after each probe loop.
 public struct ConvergedOrigin: Sendable {
     /// The bit-pattern value at which the search converged. Warm-start data.
     public let bound: UInt64
@@ -57,5 +57,4 @@ public enum ConvergenceSignal: Hashable, Sendable {
 public enum EncoderConfiguration: Hashable, Sendable {
     case binarySearchSemanticSimplest
     case linearScan
-    case zeroValue
 }

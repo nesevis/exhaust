@@ -11,12 +11,12 @@ public protocol PartialPath<Root, Value> {
     associatedtype Root
     associatedtype Value
 
-    /// Attempts to extract the `Value` from an instance of the `Root`.
+    /// Attempts to extract the ``Value`` from an instance of the ``Root``.
     ///
     /// This function is used by the "reflect" interpreter to get the sub-value it needs to recursively reflect upon.
     ///
     /// - Parameter root: The root value to extract from.
-    /// - Returns: The `Value` if extraction is successful, otherwise `nil`.
+    /// - Returns: The ``Value`` if extraction is successful, otherwise `nil`.
     func extract(from root: Any) throws -> Value?
 }
 

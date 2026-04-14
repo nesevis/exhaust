@@ -9,7 +9,7 @@ let reductionCount = 400
 let benchmarkSeedsToRun = 1000
 let reducerConfig = Interpreters.ReducerConfiguration.slow
 
- registerShrinkingChallengeBenchmarks()
-//registerECOOPBenchmarks()
+// registerShrinkingChallengeBenchmarks()
+registerECOOPBenchmarks()
 // registerComplexGrammarBenchmarks()
 Benchmark.main()

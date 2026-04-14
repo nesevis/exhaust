@@ -3,8 +3,7 @@
 //  Exhaust
 //
 
-/// Materializer that always produces a fresh ``ChoiceTree`` with current ``validRange`` metadata
-/// and all branch alternatives at pick sites.
+/// Materializer that always produces a fresh ``ChoiceTree`` with current ``validRange`` metadata and all branch alternatives at pick sites.
 ///
 /// This materializer:
 /// - Rebuilds the tree from the generator on every invocation (no stale metadata).
@@ -21,8 +20,7 @@ public enum Materializer {
         /// No cursor suspension for binds.
         case exact
 
-        /// Three-tiered resolution: prefix → fallback → PRNG. Clamp to range. Cursor suspension
-        /// at bind sites.
+        /// Three-tiered resolution: prefix → fallback → PRNG. Clamp to range. Cursor suspension at bind sites.
         case guided(seed: UInt64, fallbackTree: ChoiceTree?,
                     maximizeBoundRegionIndices: Set<Int>? = nil)
     }

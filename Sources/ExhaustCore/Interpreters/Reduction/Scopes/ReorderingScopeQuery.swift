@@ -11,7 +11,7 @@
 enum ReorderingScopeQuery {
     /// Builds a reordering scope from the graph's sequence and zip nodes, or `nil` if no eligible groups exist.
     ///
-    /// For each sequence and zip node the builder groups direct children by ``kindCategory(_:)`` and emits one ``ReorderableGroup`` per kind-category bucket that has two or more members and passes the bind-inner containment check. This mirrors the per-kind subgroup logic of the former ``ChoiceSequence/extractSiblingGroups(from:)`` method.
+    /// For each sequence and zip node the builder groups direct children by ``kindCategory(_:)`` and emits one ``ReorderableGroup`` per kind-category bucket that has two or more members and passes the bind-inner containment check.
     ///
     /// The bind-inner exclusion uses a containment test (sibling ⊆ bind-inner range), not overlap. A bind block whose own length chooseBits sits inside it overlaps the bind-inner range but is not contained by it — moving the complete block carries inner and bound together, which is safe. Only a sibling whose range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child) must be excluded.
     ///
@@ -89,11 +89,7 @@ enum ReorderingScopeQuery {
 
     /// Returns `true` when no sibling range is entirely contained within any bind-inner range.
     ///
-    /// Uses containment rather than overlap. A bind block that contains its own length chooseBits
-    /// overlaps the bind-inner range of that chooseBits, but the block is not contained by it.
-    /// Reordering the block moves inner and bound together, which is safe. Only a sibling whose
-    /// range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child)
-    /// must be excluded.
+    /// Uses containment rather than overlap. A bind block that contains its own length chooseBits overlaps the bind-inner range of that chooseBits, but the block is not contained by it. Reordering the block moves inner and bound together, which is safe. Only a sibling whose range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child) must be excluded.
     private static func noBindInnerContainment(
         _ childRanges: [ClosedRange<Int>],
         bindInnerRanges: [ClosedRange<Int>]
@@ -111,16 +107,18 @@ enum ReorderingScopeQuery {
 
     /// Maps a ``ChoiceGraphNodeKind`` to a category integer for same-kind sibling comparison.
     ///
-    /// `chooseBits` and `just` are grouped together as bare-value leaves (category zero) because both
-    /// represent single-value contributions with no internal structure, mirroring the former
-    /// `SiblingChildKind.bareValue` case from `extractSiblingGroups`.
+    /// `chooseBits` nodes are split by type family (unsigned/signed/floating) so that only siblings with comparable ``ChoiceValue`` types are grouped. `just` nodes are constant leaves with no value contribution and form their own category. Structural nodes (`bind`, `zip`, `sequence`, `pick`) each occupy a distinct category.
     private static func kindCategory(_ kind: ChoiceGraphNodeKind) -> Int {
         switch kind {
-        case .chooseBits, .just: return 0
-        case .bind: return 1
-        case .zip: return 2
-        case .sequence: return 3
-        case .pick: return 4
+        case let .chooseBits(metadata):
+            if metadata.typeTag.isFloatingPoint { return 2 }
+            if metadata.typeTag.isSigned { return 1 }
+            return 0
+        case .just: return 3
+        case .bind: return 4
+        case .zip: return 5
+        case .sequence: return 6
+        case .pick: return 7
         }
     }
 

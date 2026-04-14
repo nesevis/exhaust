@@ -175,21 +175,4 @@ public extension ChoiceValue {
         guard let range else { return true }
         return range.contains(bitPattern)
     }
-
-    var fundamentalValues: [ChoiceValue] {
-        switch self {
-        case .unsigned:
-            let values: [UInt64] = [0, 1, 2]
-            return values
-                .map { ChoiceValue($0, tag: .uint64) }
-        case .signed:
-            let values: [Int64] = [0, -1, 1, 2, -2]
-            return values
-                .map { ChoiceValue($0, tag: .int64) }
-        case .floating:
-            let values: [Double] = [0, -0.1, -0.01, -0.001, -Double.ulpOfOne, -0.0001, Double.ulpOfOne, 0.001, 0.01, 0.1]
-            return values
-                .map { ChoiceValue($0, tag: .double) }
-        }
-    }
 }
