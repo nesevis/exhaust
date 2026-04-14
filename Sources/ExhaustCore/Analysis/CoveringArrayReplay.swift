@@ -4,7 +4,7 @@
 //
 
 /// Converts covering array rows into ``ChoiceTree`` structures for replay.
-public enum CoveringArrayReplay {
+package enum CoveringArrayReplay {
     /// Builds a ``ChoiceTree`` from a covering array row that can be replayed through the original generator via ``Interpreters/replay``.
     ///
     /// When the profile contains an original tree (from VACTI), walks the tree as a template and substitutes parameter values at matching positions. This preserves structural nodes like `.bind` that the flat parameter list doesn't capture. Falls back to flat construction when no original tree is available.

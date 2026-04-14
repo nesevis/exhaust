@@ -41,7 +41,7 @@ public enum FreerMonad<Operation, Value> {
 
 // MARK: - Functor and Monad
 
-public extension FreerMonad {
+package extension FreerMonad {
     /// Monadic bind operation that sequences computations with effects.
     ///
     /// This is the fundamental operation for chaining effectful computations. It allows you to use the result of one computation to determine the next computation, properly handling both pure values and suspended operations.
@@ -123,7 +123,7 @@ public extension FreerMonad {
 /// Together, these guarantees mean that a `FreerMonad<ReflectiveOperation, Value>` (that is, `ReflectiveGenerator<Value>`) can be safely shared across concurrency domains — for example, reusing the same generator across parallel test methods in Swift Testing.
 extension FreerMonad: @unchecked Sendable {}
 
-public extension FreerMonad where Value == Any {
+package extension FreerMonad where Value == Any {
     /// Optimized erasure for computations that are already type-erased.
     ///
     /// This specialization provides a no-op implementation of `erase()` for computations where the value type is already `Any`. This avoids unnecessary traversal and reconstruction of the computation tree.

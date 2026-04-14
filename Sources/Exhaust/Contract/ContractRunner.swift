@@ -31,6 +31,7 @@ public func __runContract<Spec: ContractSpec>(
     var budget = ExhaustBudget.expensive
     var seed: UInt64?
     var suppressIssueReporting = false
+    var suppressLogs = false
     var useRandomOnly = false
     var collectOpenPBTStats = false
     var logLevel: LogLevel = .error
@@ -51,8 +52,16 @@ public func __runContract<Spec: ContractSpec>(
                 )
                 return nil
             }
-        case .suppressIssueReporting:
-            suppressIssueReporting = true
+        case let .suppress(option):
+            switch option {
+            case .issueReporting:
+                suppressIssueReporting = true
+            case .logs:
+                suppressLogs = true
+            case .all:
+                suppressIssueReporting = true
+                suppressLogs = true
+            }
         case .randomOnly:
             useRandomOnly = true
         case .collectOpenPBTStats:
@@ -62,7 +71,7 @@ public func __runContract<Spec: ContractSpec>(
             logFormat = format
         }
     }
-    return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
+    return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
 
@@ -552,7 +561,7 @@ func buildExhaustSettings<Output>(
         settings.append(.replay(.numeric(seed)))
     }
     if suppressIssueReporting {
-        settings.append(.suppressIssueReporting)
+        settings.append(.suppress(.issueReporting))
     }
     if useRandomOnly {
         settings.append(.randomOnly)

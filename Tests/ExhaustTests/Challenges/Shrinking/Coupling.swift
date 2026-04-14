@@ -45,7 +45,7 @@ struct CouplingShrinkingChallenge {
         let value = try #require(
             #exhaust(
                 Self.gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .onReport { report = $0 },
                 .logging(.debug, .keyValue),
                 .replay(1546),
@@ -63,7 +63,7 @@ struct CouplingShrinkingChallenge {
         let value = try #require(
             #exhaust(
                 Self.gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .onReport { report = $0 },
                 property: Self.property
             )
@@ -79,7 +79,7 @@ struct CouplingShrinkingChallenge {
         let value = try #require(
             #exhaust(
                 Self.gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .onReport { report = $0 },
                 .logging(.debug, .keyValue),
                 property: Self.property

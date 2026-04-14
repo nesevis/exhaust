@@ -6,7 +6,7 @@
 //
 
 /// https://nilcoalescing.com/blog/CheckIfTwoValuesOfTypeAnyAreEqual/
-public extension Equatable {
+package extension Equatable {
     func isEqual(_ other: any Equatable) -> Bool {
         guard let other = other as? Self else {
             return other.isExactlyEqual(self)

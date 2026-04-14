@@ -5,7 +5,7 @@
 //  Created by Codex on 21/2/2026.
 //
 
-public enum SequenceExecutionKernel {
+package enum SequenceExecutionKernel {
     @inline(__always)
     public static func run(
         count: UInt64,

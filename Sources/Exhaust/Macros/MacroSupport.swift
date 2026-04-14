@@ -96,6 +96,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             var budget = ExhaustBudget.expedient
             var seed: UInt64?
             var suppressIssueReporting = false
+            var suppressLogs = false
             var reflectingValue: Output?
             var useRandomOnly = false
             var visualize = false
@@ -120,8 +121,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         )
                         return nil
                     }
-                case .suppressIssueReporting:
-                    suppressIssueReporting = true
+                case let .suppress(option):
+                    switch option {
+                    case .issueReporting:
+                        suppressIssueReporting = true
+                    case .logs:
+                        suppressLogs = true
+                    case .all:
+                        suppressIssueReporting = true
+                        suppressLogs = true
+                    }
                 case let .reflecting(value):
                     reflectingValue = value
                 case .randomOnly:
@@ -138,7 +147,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 }
             }
 
-            return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
+            return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
                 // Merge trait configuration — trait provides defaults, inline settings override.
                 #if canImport(Testing)
                     if let traitConfig = ExhaustTraitConfiguration.current {
@@ -723,14 +732,25 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ) -> Output? {
         var logLevel: LogLevel = .error
         var logFormat: LogFormat = .keyValue
+        var suppressLogs = false
         for setting in settings {
-            if case let .logging(level, format) = setting {
+            switch setting {
+            case let .logging(level, format):
                 logLevel = level
                 logFormat = format
+            case let .suppress(option):
+                switch option {
+                case .logs, .all:
+                    suppressLogs = true
+                default:
+                    break
+                }
+            default:
+                break
             }
         }
 
-        return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
+        return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
             withoutActuallyEscaping(detection) { detection in
                 let boolProperty = wrapDetectionProperty(detection)
 
@@ -743,7 +763,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     // Replay regression seeds from the trait before the normal pipeline.
                     #if canImport(Testing)
                         let suppressIssueReportingForRegressions = settings.contains { setting in
-                            if case .suppressIssueReporting = setting { return true }
+                            if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
                             return false
                         }
                         if let traitConfig = ExhaustTraitConfiguration.current {
@@ -762,7 +782,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                     gen,
                                     settings: [
                                         .replay(.numeric(seed)),
-                                        .suppressIssueReporting,
+                                        .suppress(.issueReporting),
                                     ] + settings.filter { setting in
                                         // Forward budget from inline settings; trait budget is merged by __exhaust.
                                         if case .budget = setting { return true }
@@ -797,7 +817,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     #endif
 
                     // Capture the actual seed from the Bool pipeline via .onReport.
-                    var augmentedSettings = settings + [.suppressIssueReporting]
+                    var augmentedSettings = settings + [.suppress(.issueReporting)]
                     augmentedSettings.append(.onReport { report in
                         capturedSeed = report.seed
                     })
@@ -818,10 +838,10 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
                 guard let counterexample = pipelineResult else { return nil }
 
-                // When suppressIssueReporting is set, the caller is asserting on the return value.
+                // When suppress(.issueReporting) is set, the caller is asserting on the return value.
                 // Skip the final re-run and replay message.
                 let suppressIssueReporting = settings.contains { setting in
-                    if case .suppressIssueReporting = setting { return true }
+                    if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
                     return false
                 }
                 if suppressIssueReporting == false {
@@ -969,7 +989,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         // Replay regression seeds from the trait before the normal pipeline.
                         #if canImport(Testing)
                             let suppressIssueReportingForRegressions = settings.contains { setting in
-                                if case .suppressIssueReporting = setting { return true }
+                                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
                                 return false
                             }
                             if let traitConfig = ExhaustTraitConfiguration.current {
@@ -988,7 +1008,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                         gen,
                                         settings: [
                                             .replay(.numeric(seed)),
-                                            .suppressIssueReporting,
+                                            .suppress(.issueReporting),
                                         ] + settings.filter { setting in
                                             if case .budget = setting { return true }
                                             return false
@@ -1021,7 +1041,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         #endif
 
                         // Capture the actual seed from the Bool pipeline via .onReport.
-                        var augmentedSettings = settings + [.suppressIssueReporting]
+                        var augmentedSettings = settings + [.suppress(.issueReporting)]
                         augmentedSettings.append(.onReport { report in
                             capturedSeed = report.seed
                         })
@@ -1046,9 +1066,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
             guard let counterexample = pipelineResult else { return nil }
 
-            // When suppressIssueReporting is set, the caller is asserting on the return value.
+            // When suppress(.issueReporting) is set, the caller is asserting on the return value.
             let suppressIssueReporting = settings.contains { setting in
-                if case .suppressIssueReporting = setting { return true }
+                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
                 return false
             }
             if suppressIssueReporting == false {
@@ -1101,6 +1121,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var samplingBudget: UInt64 = 10000
         var seed: UInt64?
         var suppressIssueReporting = false
+        var suppressLogs = false
         var poolCapacity = 256
         var generateRatio = 0.2
         var logLevel: LogLevel = .error
@@ -1121,8 +1142,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     )
                     return nil
                 }
-            case .suppressIssueReporting:
-                suppressIssueReporting = true
+            case let .suppress(option):
+                switch option {
+                case .issueReporting:
+                    suppressIssueReporting = true
+                case .logs:
+                    suppressLogs = true
+                case .all:
+                    suppressIssueReporting = true
+                    suppressLogs = true
+                }
             case let .poolCapacity(n):
                 poolCapacity = n
             case let .generateRatio(r):
@@ -1133,7 +1162,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             }
         }
 
-        return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
+        return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
             var runner = ExploreRunner(
                 gen: gen,
                 property: property,

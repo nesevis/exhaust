@@ -3,7 +3,7 @@
 
 import Foundation
 
-public enum AdaptiveSmoothing {
+package enum AdaptiveSmoothing {
     /// Applies per-site temperature scaling based on entropy analysis.
     ///
     /// Unlike uniform smoothing which applies the same temperature everywhere, this function computes each pick site's entropy ratio and derives a site-specific temperature:

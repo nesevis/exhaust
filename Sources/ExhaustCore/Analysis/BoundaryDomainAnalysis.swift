@@ -6,7 +6,7 @@
 import Foundation
 
 /// A parameter in the boundary model with synthetic values derived from boundary value analysis of the underlying generator operation.
-public struct BoundaryParameter: @unchecked Sendable {
+package struct BoundaryParameter: @unchecked Sendable {
     // @unchecked Sendable: stores `BoundaryParameterKind`, which in its `.pick` case holds generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     public let index: Int
@@ -15,7 +15,7 @@ public struct BoundaryParameter: @unchecked Sendable {
     public let kind: BoundaryParameterKind
 }
 
-public enum BoundaryParameterKind: @unchecked Sendable {
+package enum BoundaryParameterKind: @unchecked Sendable {
     // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     /// A chooseBits with a range too large for finite-domain analysis. Values are boundary representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
@@ -35,7 +35,7 @@ public enum BoundaryParameterKind: @unchecked Sendable {
 }
 
 /// Result of boundary analysis — a synthetic finite domain suitable for covering array generation.
-public struct BoundaryDomainProfile: @unchecked Sendable {
+package struct BoundaryDomainProfile: @unchecked Sendable {
     // @unchecked Sendable: stores `[BoundaryParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     public let parameters: [BoundaryParameter]
@@ -72,7 +72,7 @@ extension BoundaryDomainProfile: CoverageProfile {
 // MARK: - Boundary Value Computation
 
 /// Boundary value selection functions used by ``ChoiceTreeAnalysis``.
-public enum BoundaryDomainAnalysis {
+package enum BoundaryDomainAnalysis {
     /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
     public static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
@@ -329,7 +329,7 @@ public enum BoundaryDomainAnalysis {
 // MARK: - DST Transition Computation
 
 /// Computes DST transition times using Foundation's `TimeZone.nextDaylightSavingTimeTransition`.
-public enum DSTTransitions {
+package enum DSTTransitions {
     /// Returns DST transition times (seconds since reference date) that fall within [lower, upper] for the given timezone.
     ///
     /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself plus the start and end of its calendar day.

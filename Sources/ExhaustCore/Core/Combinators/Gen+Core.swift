@@ -4,9 +4,9 @@
 /// Namespace for generator factory methods and combinators.
 ///
 /// `Gen` provides a unified entry point to all generator construction. Import `Exhaust` and use `Gen.int(in:)`, `Gen.string()`, `Gen.pick(choices:)`, and so on, or use the ``#gen(_:transform:)`` macro for composing generators from existing ones.
-public enum Gen {}
+package enum Gen {}
 
-public extension Gen {
+package extension Gen {
     /// Lifts a reflective operation into a generator with type-safe result handling.
     ///
     /// This is the fundamental operation that bridges between raw reflective operations and type-safe generators. It handles the unsafe casting and error reporting when the reflection system returns unexpected types.

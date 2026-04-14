@@ -5,7 +5,7 @@
 //  Created by Codex on 21/2/2026.
 //
 
-public enum PickBranchResolution {
+package enum PickBranchResolution {
     public struct Branch {
         public let id: UInt64
         public let choice: ChoiceTree

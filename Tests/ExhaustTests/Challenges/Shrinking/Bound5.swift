@@ -42,7 +42,7 @@ struct Bound5ShrinkingChallenge {
         let output = #exhaust(
             Self.gen,
             .randomOnly,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(16_799_307_796_119_368_455),
             .onReport { report = $0 },
             .logging(.debug),
@@ -67,7 +67,7 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 },
             property: Self.property
@@ -91,7 +91,7 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 },
             property: Self.property
@@ -114,7 +114,7 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 },
             .logging(.debug, .keyValue),
@@ -141,7 +141,7 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
-            .suppressIssueReporting,
+            .suppress(.all),
             .reflecting(value),
             .onReport { report = $0 },
             property: Self.property
@@ -156,7 +156,7 @@ struct Bound5ShrinkingChallenge {
     func bound5Pathological5() {
         let output = #exhaust(
             Self.gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(12_394_678_611_125_950_626),
             .logging(.debug, .jsonl),
             property: Self.property
@@ -170,7 +170,7 @@ struct Bound5ShrinkingChallenge {
     func bound5CoveringArray() {
         let output = #exhaust(
             Self.gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             property: Self.property
         )
 
@@ -185,7 +185,7 @@ struct Bound5ShrinkingChallenge {
         for bound5 in bound5s {
             let output = #exhaust(
                 Self.gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .reflecting(bound5),
                 .randomOnly,
                 property: Self.property
@@ -211,7 +211,7 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay("B0ZF4ZX2NK312"),
             .onReport { report = $0 },
             .logging(.debug)

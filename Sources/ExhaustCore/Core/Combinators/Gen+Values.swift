@@ -1,7 +1,7 @@
 // Operations for generating specific constant and validated values.
 // These combinators handle scenarios where exact values or validation are required.
 
-public extension Gen {
+package extension Gen {
     /// Creates a generator that always produces the same constant value.
     ///
     /// This generator always succeeds during both generation and reflection phases, regardless of what target value is being reflected against. It's the most permissive constant value generator.

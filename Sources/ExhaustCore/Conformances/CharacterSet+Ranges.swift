@@ -11,7 +11,7 @@ import Foundation
 /// Provides O(log n) index-to-scalar lookup for single-pick generation.
 ///
 /// When ``bottomCodepoint`` is non-nil, index 0 is reserved for that scalar and all other indices are offset by 1. The bottom codepoint does not need to be a member of the underlying range set. This makes the reducer (which shrinks toward bit pattern 0, that is, index 0) converge toward the nominated character without any pipeline changes.
-public struct ScalarRangeSet: Sendable {
+package struct ScalarRangeSet: Sendable {
     public let rangeSet: RangeSet<UInt32>
 
     /// Cached sorted, non-overlapping ranges (avoids re-allocating on every lookup).
@@ -137,7 +137,7 @@ extension CharacterSet {
     /// - Parameter bottomCodepoint: When non-nil, reserves index 0 for this scalar and offsets all range-derived indices by 1. The scalar does not need to be a member of the character set.
     /// - Plane 0 (BMP): first 8192 bytes, 1 bit per scalar U+0000…U+FFFF
     /// - Planes 1–16: each occupied plane appends 8193 bytes (1-byte plane index + 8192-byte bitmap)
-    public func scalarRangeSet(bottomCodepoint: Unicode.Scalar? = nil) -> ScalarRangeSet {
+    package func scalarRangeSet(bottomCodepoint: Unicode.Scalar? = nil) -> ScalarRangeSet {
         let bitmap = bitmapRepresentation
         let planeSize = 8192
         var rangeSet = RangeSet<UInt32>()

@@ -15,7 +15,7 @@
 /// - **Insertion**: Accept if novelty > 0. Evict the lowest-novelty seed.
 /// - **Sampling**: Weighted random by novelty score.
 /// - **Revise**: Halves the novelty score of the most-recently-sampled seed.
-public struct DefaultSeedPool: SeedPool {
+package struct DefaultSeedPool: SeedPool {
     private var seeds: [Seed] = []
     private let capacity: Int
     private let generateRatio: Double

@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
-public extension Sequence {
+package extension Sequence {
     /// Returns the first non-`nil` result obtained from applying the given transformation to the elements of the sequence.
     ///
     ///     let strings = ["three", "3.14", "-5", "2"] if let firstInt = strings.firstNonNil({ Int($0) }) { print(firstInt)

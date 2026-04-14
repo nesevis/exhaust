@@ -5,7 +5,7 @@
 
 // MARK: - Public API
 
-public extension ChoiceTree {
+package extension ChoiceTree {
     /// Renders a bottom-up tree visualization centered within the given width.
     ///
     /// Choice nodes appear as circles sized by their shortlex complexity relative to their valid range. Smaller circles represent values closer to the semantic simplest (zero). Structural nodes (groups, sequences, branches, and so on) are invisible; only their branching connectors appear. Just nodes appear as small diamonds.

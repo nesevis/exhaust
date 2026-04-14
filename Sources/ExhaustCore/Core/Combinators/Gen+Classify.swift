@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 14/8/2025.
 //
 
-public extension Gen {
+package extension Gen {
     /// Creates a generator that categorizes generated values for statistical analysis.
     ///
     /// Wraps the provided generator with classification predicates that track how frequently different types of test data are generated. When test execution completes, statistics are automatically reported to help developers understand test coverage and generator bias.

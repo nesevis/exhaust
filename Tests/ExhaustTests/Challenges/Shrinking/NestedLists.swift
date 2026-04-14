@@ -25,7 +25,7 @@ struct NestedListsShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
 //            .onReport { report = $0 },
             .logging(.debug, .keyValue),
             .reflecting(Self.counterExample)

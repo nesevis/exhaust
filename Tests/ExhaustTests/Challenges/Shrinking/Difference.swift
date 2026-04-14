@@ -42,7 +42,7 @@ struct DifferenceShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting([700, 700]),
             .onReport { report = $0 },
             property: property
@@ -64,7 +64,7 @@ struct DifferenceShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting([700, 701]),
             .onReport { report = $0 },
             property: property
@@ -81,7 +81,7 @@ struct DifferenceShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .onReport { report = $0 }
         ) { arr in
             let diff = abs(arr[0] - arr[1])

@@ -54,7 +54,7 @@ struct StringAnagramChallenge {
 
         let result = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .logging(.debug),
             property: property
@@ -71,7 +71,7 @@ struct StringAnagramChallenge {
         let needle = "syzygy"
         let result = #exhaust(
             .string(),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .logging(.debug),
             .reflecting(Self.haystack)
         ) {

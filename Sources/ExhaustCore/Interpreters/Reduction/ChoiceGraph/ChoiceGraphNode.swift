@@ -26,7 +26,7 @@
 ///
 /// ## just
 /// Constant leaf with no value choices — corresponds to `.pure` in the Freer Monad. Position range covers its single sequence entry. No metadata needed. Treated like `chooseBits` for dependency-edge purposes (no edges) but excluded from leaf-position and value-minimisation passes.
-public enum ChoiceGraphNodeKind {
+package enum ChoiceGraphNodeKind {
     /// Leaf value with type, range, and current value.
     case chooseBits(ChooseBitsMetadata)
 
@@ -49,7 +49,7 @@ public enum ChoiceGraphNodeKind {
 // MARK: - Per-Kind Metadata
 
 /// Metadata for a ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf node.
-public struct ChooseBitsMetadata {
+package struct ChooseBitsMetadata {
     /// Semantic type of the value.
     public let typeTag: TypeTag
 
@@ -67,7 +67,7 @@ public struct ChooseBitsMetadata {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.
-public struct PickMetadata {
+package struct PickMetadata {
     /// Pick site fingerprint. Two picks with matching values belong to the same recursive generator (possibly at different depths).
     public let fingerprint: UInt64
 
@@ -85,7 +85,7 @@ public struct PickMetadata {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/bind(_:)`` dependency node.
-public struct BindMetadata {
+package struct BindMetadata {
     /// Whether the bound subtree contains no nested binds or picks, meaning the inner value controls ranges and counts but not tree shape.
     public let isStructurallyConstant: Bool
 
@@ -100,13 +100,13 @@ public struct BindMetadata {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.
-public struct ZipMetadata {
+package struct ZipMetadata {
     /// When true, coverage analysis skips this subtree.
     public let isOpaque: Bool
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/sequence(_:)`` node.
-public struct SequenceMetadata {
+package struct SequenceMetadata {
     /// Explicit length range from ``ChoiceMetadata``, if any. Constrains deletion — the reducer cannot delete below the lower bound. This is metadata on the node, not a containment edge to a child.
     public let lengthConstraint: ClosedRange<UInt64>?
 
@@ -131,7 +131,7 @@ public struct SequenceMetadata {
 /// A node in the ``ChoiceGraph`` representing a value-structural operation in the generator.
 ///
 /// Each node stores its identity, kind with per-kind metadata, position mapping to the flat ``ChoiceSequence``, and parent-child relationships forming the containment tree.
-public struct ChoiceGraphNode {
+package struct ChoiceGraphNode {
     /// Stable identity assigned during graph construction.
     public let id: Int
 

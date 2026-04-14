@@ -21,7 +21,7 @@ import Foundation
 //   negative (sign bit set):   encoded = ~rawBits
 
 /// Platform-independent IEEE 754 binary16 (half-precision) emulation for the reduction pipeline.
-public enum Float16Emulation {
+package enum Float16Emulation {
     private static let signBitMask: UInt16 = 0x8000
     private static let exponentMask: UInt16 = 0x7C00
     private static let mantissaMask: UInt16 = 0x03FF

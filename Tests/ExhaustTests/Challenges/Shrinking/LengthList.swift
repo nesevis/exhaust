@@ -31,7 +31,7 @@ struct LengthListShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .onReport { report = $0 },
             property: Self.property
         )

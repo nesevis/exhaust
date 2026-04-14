@@ -38,7 +38,7 @@ struct DateDSTPropertyTests {
     func daysBetweenDSTBug() {
         let gen = #gen(.date(between: Self.springRange, interval: .hours(1), timeZone: Self.usEastern))
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
             let anchor = Self.springRange.lowerBound
             // BUG: dividing elapsed seconds by 86400 assumes every day has exactly 86400 seconds
             let buggyDays = Int(date.timeIntervalSince(anchor)) / 86400
@@ -57,7 +57,7 @@ struct DateDSTPropertyTests {
     func secondsInDayDSTBug() {
         let gen = #gen(.date(between: Self.springRange, interval: .hours(1), timeZone: Self.usEastern))
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
             // BUG: hardcoded assumption that every day is 86400 seconds
             let buggySeconds = 86400
             var calendar = Calendar(identifier: .gregorian)
@@ -79,7 +79,7 @@ struct DateDSTPropertyTests {
     func hourOfDayDSTBug() {
         let gen = #gen(.date(between: Self.springRange, interval: .minutes(30), timeZone: Self.usEastern))
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
             let midnight = calendar.startOfDay(for: date)
@@ -112,7 +112,7 @@ struct DateDSTPropertyTests {
 
         // The specific Closure Library bug: two dates on the SAME calendar day
         // where the buggy formula says "tomorrow" instead of "today".
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .budget(.exorbitant)) { now, target in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting), .budget(.exorbitant)) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 
@@ -143,7 +143,7 @@ struct DateDSTPropertyTests {
         //
         // With .randomOnly, hitting this requires BOTH dates to land on the
         // fall-back day's ~1h window — roughly (1/672)^2 ≈ 0.0002% per sample.
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .randomOnly) { now, target in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting), .randomOnly) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 
@@ -190,7 +190,7 @@ struct DateDSTPropertyTests {
     func iOSAlarmBugSpringForward() {
         let gen = #gen(.date(between: Self.auSpringForwardRange, interval: .hours(1), timeZone: Self.auSydney))
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { alarmTime in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { alarmTime in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.auSydney
 
@@ -215,7 +215,7 @@ struct DateDSTPropertyTests {
     func iOSAlarmBugFallBack() {
         let gen = #gen(.date(between: Self.auFallBackRange, interval: .hours(1), timeZone: Self.auSydney))
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { alarmTime in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { alarmTime in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.auSydney
 
@@ -268,7 +268,7 @@ struct DateDSTPropertyTests {
         buggyFormatter.timeZone = TimeZone(identifier: "America/Havana")!
         buggyFormatter.isLenient = false
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .logging(.debug)) { date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting), .logging(.debug)) { date in
             // Format as date-only string, then parse back — the round-trip
             let dateString = buggyFormatter.string(from: date)
             let parsed = buggyFormatter.date(from: dateString)

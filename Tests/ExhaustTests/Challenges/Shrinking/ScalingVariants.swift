@@ -37,7 +37,7 @@ struct Bound5ScalingVariant {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 }
         ) { b5 in
@@ -74,7 +74,7 @@ struct BinaryHeapScalingVariant {
         let output = try #require(
             #exhaust(
                 gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .replay(10_128_299_447_377_935_498),
                 .onReport { report = $0 },
                 property: property
@@ -132,7 +132,7 @@ struct CalculatorScalingVariant {
         var report: ExhaustReport?
         let result = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(Expr.div(.value(5), .add(.value(3), .value(-3)))),
             .onReport { report = $0 }
         ) { expr in
@@ -220,7 +220,7 @@ struct CouplingScalingVariant {
         let value = try #require(
             #exhaust(
                 gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .replay(9_293_532_994_034_525_134),
                 .onReport { report = $0 }
             ) { arr in
@@ -265,7 +265,7 @@ struct DeletionScalingVariant {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(([5, 3, 5, 7], 5)),
             .onReport { report = $0 },
             property: property
@@ -289,7 +289,7 @@ struct DifferenceScalingVariant {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting([700, 700]),
             .onReport { report = $0 }
         ) { arr in
@@ -315,7 +315,7 @@ struct DistinctScalingVariant {
         var report: ExhaustReport?
         let counterExample = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
 
             .reflecting([1337, 80085, 69, 67]),
             .onReport { report = $0 }
@@ -344,7 +344,7 @@ struct LargeUnionListScalingVariant {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .logging(.debug, .keyValue),
             .onReport { report = $0 }
@@ -373,7 +373,7 @@ struct NestedListsScalingVariant {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 }
         ) { arr in
@@ -401,7 +401,7 @@ struct ReverseScalingVariant {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
 
             .onReport { report = $0 }
@@ -430,7 +430,7 @@ struct LengthListScalingVariant {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 }
         ) { arr in

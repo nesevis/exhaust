@@ -1,7 +1,7 @@
 /// Materializes a candidate sequence and checks feasibility.
 ///
 /// Selected by ``DecoderContext``, shared by all encoders at a given depth. Implemented as a concrete enum to avoid heap allocation — decoder types carry associated data that exceeds Swift's three-word inline existential buffer.
-public enum SequenceDecoder {
+package enum SequenceDecoder {
     /// Materializes in exact mode. Produces a fresh tree with current ``validRange`` and all branch alternatives. Rejects inner values that are out of range; clamps bound values.
     case exact(materializePicks: Bool = false)
 

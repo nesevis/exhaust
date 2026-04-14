@@ -45,6 +45,18 @@ extension ReplaySeed: ExpressibleByStringLiteral {
     }
 }
 
+/// Controls which outputs a test run silences.
+///
+/// Pass a single option to ``ExhaustSettings/suppress(_:)`` to disable issue reporting, log output, or both.
+public enum SuppressOption: Sendable, Equatable {
+    /// Suppresses `reportIssue()` calls on failure. The test does not fail via the framework; the caller asserts on the returned value instead.
+    case issueReporting
+    /// Suppresses all log output to the console. Overrides any `.logging(level:format:)` setting.
+    case logs
+    /// Suppresses both issue reporting and log output. The test run is completely silent.
+    case all
+}
+
 /// Controls the iteration budgets for coverage, random sampling, and reduction.
 ///
 /// Three named presets cover common use cases. Use `.custom` for fine-grained control.
@@ -100,10 +112,10 @@ public enum ExhaustSettings<Output> {
     /// ```
     case replay(ReplaySeed)
 
-    /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
+    /// Silences issue reporting, log output, or both for this test run.
     ///
-    /// Use this when the property test is *expected* to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure.
-    case suppressIssueReporting
+    /// Use `.suppress(.issueReporting)` when the property test is expected to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
+    case suppress(SuppressOption)
 
     /// Reflects an existing value through the generator and attempts to reduce it.
     ///

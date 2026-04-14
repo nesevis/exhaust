@@ -7,7 +7,7 @@ import Testing
     @Test func voidPropertyReducesToMinimalCounterexample() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
@@ -19,7 +19,7 @@ import Testing
     @Test func voidPropertyWithRequire() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
@@ -34,7 +34,7 @@ import Testing
     @Test func voidPropertyPassesWhenNoFailure() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 20)),
             .randomOnly
         ) { value in
@@ -47,7 +47,7 @@ import Testing
     @Test func voidPropertyWithMultipleExpectFailures() {
         let result = #exhaust(
             #gen(.int(in: -10 ... 10)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
@@ -61,7 +61,7 @@ import Testing
         struct TestError: Error {}
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
@@ -77,7 +77,7 @@ import Testing
     @Test func boolPropertyStillWorks() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
@@ -92,7 +92,7 @@ import Testing
         // { value in value < 50 } returns Bool — uses #exhaust.
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
@@ -105,7 +105,7 @@ import Testing
         // { value in #expect(value < 50) } returns Void — should resolve to Void overload.
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
@@ -119,7 +119,7 @@ import Testing
     @Test func replayWithNumericSeed() {
         let result1 = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(42),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
@@ -129,7 +129,7 @@ import Testing
 
         let result2 = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(42),
             .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
@@ -161,7 +161,7 @@ import Testing
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: Int.min ... Int.max)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .randomOnly,
             .onReport { report in
                 capturedReport = report
@@ -180,7 +180,7 @@ import Testing
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 10)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 5)),
             .randomOnly,
             .onReport { report in
@@ -199,7 +199,7 @@ import Testing
         // Seed "1A" (= 42) should reproduce a counterexample for value < 50 on 0...100.
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         ) { value in
             #expect(value < 50)
         }
@@ -213,7 +213,7 @@ import Testing
         // Since suppressing, we just verify the pipeline continues to the normal run.
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         ) { value in
             #expect(value >= 0)
         }

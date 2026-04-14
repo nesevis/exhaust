@@ -7,7 +7,7 @@
 /// Two regimes based on the fibre's total domain size:
 /// - **Small fibres** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
 /// - **Large fibres** (2 or more parameters): pairwise covering (strength 2) via the density method (``PullBasedCoveringArrayGenerator``). Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
-public struct FibreCoveringEncoder: ComposableEncoder {
+package struct FibreCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .boundValueSearch
 
     /// Maximum number of combinations for exhaustive enumeration.

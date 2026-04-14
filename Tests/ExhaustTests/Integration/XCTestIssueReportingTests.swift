@@ -5,7 +5,7 @@ import XCTest
 ///
 /// The framework uses `reportIssue` from the IssueReporting library, which bridges
 /// to `XCTFail` under XCTest. These tests confirm that bridge works: a failing
-/// property should produce an XCTest failure, and `.suppressIssueReporting` should
+/// property should produce an XCTest failure, and `.suppress(.issueReporting)` should
 /// prevent it.
 final class XCTestIssueReportingTests: XCTestCase {
     func testFailingPropertyRecordsXCTestFailure() {
@@ -26,7 +26,7 @@ final class XCTestIssueReportingTests: XCTestCase {
         // With suppressIssueReporting, no XCTest issue should be recorded.
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 10)),
             .randomOnly
         ) { value in

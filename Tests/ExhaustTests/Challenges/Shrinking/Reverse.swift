@@ -21,7 +21,7 @@ struct ReverseShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
 
             .replay(33_556_013_978_236_435),
             .logging(.debug, .keyValue),

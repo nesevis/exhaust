@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 21/7/2025.
 //
 
-public extension Gen {
+package extension Gen {
     /// Combines two or more generators into a tuple generator, running each in sequence.
     ///
     /// ```swift

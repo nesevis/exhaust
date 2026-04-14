@@ -6,7 +6,7 @@
 // MARK: - Seed
 
 /// A seed: the ChoiceSequence (for mutation) + ChoiceTree (for structural info) + metadata.
-public struct Seed {
+package struct Seed {
     /// The flat choice sequence used as a mutation substrate by ``HillClimber``.
     public let sequence: ChoiceSequence
     /// The structured choice tree produced alongside the value, used for structural analysis.
@@ -35,7 +35,7 @@ public struct Seed {
 
 // MARK: - SearchDirective
 
-public enum SearchDirective {
+package enum SearchDirective {
     /// Produce a fresh value from the generator.
     case generate
     /// Mutate an existing interesting seed.
@@ -45,7 +45,7 @@ public enum SearchDirective {
 // MARK: - SeedPool
 
 /// Storage + sampling of interesting inputs.
-public protocol SeedPool {
+package protocol SeedPool {
     /// Add a seed deemed interesting. Pool decides whether to accept and where to rank it.
     mutating func invest(_ seed: Seed)
 

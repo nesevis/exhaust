@@ -5,7 +5,7 @@
 //  Created by Codex on 21/2/2026.
 //
 
-public enum InterpreterWrapperHandlers {
+package enum InterpreterWrapperHandlers {
     @inline(__always)
     public static func continueAfterSubgenerator<SubResult, Output>(
         runSubgenerator: () throws -> SubResult?,

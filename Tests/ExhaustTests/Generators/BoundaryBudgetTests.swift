@@ -34,7 +34,7 @@ struct BoundaryBudgetTests {
     @Test("1-param year range, hourly interval")
     func oneParamYearHourly() {
         let gen = #gen(.date(between: Self.year2024, interval: .hours(1)))
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
             // Property: every date in 2024 has a valid weekday (1–7)
             let calendar = Calendar(identifier: .gregorian)
             let weekday = calendar.component(.weekday, from: date)
@@ -48,7 +48,7 @@ struct BoundaryBudgetTests {
     func oneParamYear15Min() {
         let gen = #gen(.date(between: Self.year2024, interval: .minutes(15)))
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
             // Property: timeIntervalSinceReferenceDate round-trips through Date
             let seconds = date.timeIntervalSinceReferenceDate
             let roundTripped = Date(timeIntervalSinceReferenceDate: seconds)
@@ -69,7 +69,7 @@ struct BoundaryBudgetTests {
 
         // Property: if eventEnd > eventStart, the duration is positive
         // (This is trivially true but exercises the 2-param covering array)
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { start, end in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { start, end in
             guard end > start else { return true }
             return end.timeIntervalSince(start) > 0
         }
@@ -85,7 +85,7 @@ struct BoundaryBudgetTests {
         )
 
         // Property: Q4 date is always after Q1 date
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { q1Date, q4Date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { q1Date, q4Date in
             q4Date > q1Date
         }
 
@@ -103,7 +103,7 @@ struct BoundaryBudgetTests {
         // they fall on the same weekday
         let counterExample = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .replay(9_233_197_236_318_045_878)
         ) { date1, date2 in
             var calendar = Calendar(identifier: .gregorian)
@@ -129,7 +129,7 @@ struct BoundaryBudgetTests {
         )
 
         // Property: date comparison is transitive (a < b && b < c → a < c)
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { a, b, c in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b, c in
             guard a < b, b < c else { return true }
             return a < c
         }
@@ -147,7 +147,7 @@ struct BoundaryBudgetTests {
 
         // Property: if a and c are on the same calendar day, and a <= b <= c,
         // then b is also on the same calendar day.
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { a, b, c in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b, c in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
             // Sort so we have ordered dates
@@ -176,7 +176,7 @@ struct BoundaryBudgetTests {
         )
 
         // Property: overlap is symmetric — if A overlaps B, then B overlaps A
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { s1, e1, s2, e2 in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { s1, e1, s2, e2 in
             let start1 = min(s1, e1), end1 = max(s1, e1)
             let start2 = min(s2, e2), end2 = max(s2, e2)
             let aOverlapsB = start1 < end2 && start2 < end1
@@ -197,7 +197,7 @@ struct BoundaryBudgetTests {
         )
 
         // Property: adding N hours via seconds matches Calendar.date(byAdding:)
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date, hours in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date, hours in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
             let bySeconds = date.addingTimeInterval(Double(hours) * 3600)
@@ -221,7 +221,7 @@ struct BoundaryBudgetTests {
         )
 
         // Property: adding hours is associative — (date + a) + b == date + (a + b)
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date, a, b in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date, a, b in
             let stepwise = date.addingTimeInterval(Double(a) * 3600)
                 .addingTimeInterval(Double(b) * 3600)
             let combined = date.addingTimeInterval(Double(a + b) * 3600)
@@ -244,7 +244,7 @@ struct BoundaryBudgetTests {
         )
 
         // Property: createdDate <= modifiedDate (treating params as: start, end, modified, created, due)
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { start, end, modified, created, _ in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { start, end, modified, created, _ in
             guard created <= modified else { return true } // precondition
             guard start <= end else { return true } // precondition
             // Trivially true — just exercising the covering array
@@ -265,7 +265,7 @@ struct BoundaryBudgetTests {
             .int(in: 1 ... 5) // priority
         )
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { _, _, _, _, status, priority in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { _, _, _, _, status, priority in
             (1 ... 5).contains(priority) && (0 ... 4).contains(status)
         }
 
@@ -282,7 +282,7 @@ struct BoundaryBudgetTests {
         )
 
         // Property: dates preserve their relative ordering through Calendar
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date1, date2 in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date1, date2 in
             guard date1 != date2 else { return true }
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern

@@ -39,7 +39,7 @@ struct ReplacementChallenge {
         let output = try #require(
             #exhaust(
                 gen,
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
                 .onReport { report = $0 }
             ) { initial, multipliers in
                 Self.prods(initial, multipliers).allSatisfy { $0 < 1_000_000 }

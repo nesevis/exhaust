@@ -42,7 +42,7 @@ struct DeletionShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .onReport { report = $0 },
             property: property
         )

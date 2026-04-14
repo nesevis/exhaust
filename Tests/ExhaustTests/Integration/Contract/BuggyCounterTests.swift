@@ -11,7 +11,7 @@ struct BuggyCounterTests {
             #exhaust(
                 BuggyCounterSpec.self,
                 commandLimit: 10,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
         // The trace should end with a failing step
@@ -30,7 +30,7 @@ struct BuggyCounterTests {
             #exhaust(
                 BuggyCounterSpec.self,
                 commandLimit: 10,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
 

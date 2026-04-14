@@ -6,7 +6,7 @@
 //  No ChoiceTree, no GenerationContext — just uniform generation.
 //
 
-public enum LightweightSampler {
+package enum LightweightSampler {
     @inline(__always)
     public static func sample<Output>(
         _ gen: ReflectiveGenerator<Output>,

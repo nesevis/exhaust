@@ -26,6 +26,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     var budget = ExhaustBudget.expensive
     var seed: UInt64?
     var suppressIssueReporting = false
+    var suppressLogs = false
     var useRandomOnly = false
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
@@ -45,8 +46,16 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                 )
                 return nil
             }
-        case .suppressIssueReporting:
-            suppressIssueReporting = true
+        case let .suppress(option):
+            switch option {
+            case .issueReporting:
+                suppressIssueReporting = true
+            case .logs:
+                suppressLogs = true
+            case .all:
+                suppressIssueReporting = true
+                suppressLogs = true
+            }
         case .randomOnly:
             useRandomOnly = true
         case .collectOpenPBTStats:
@@ -57,7 +66,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         }
     }
 
-    return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
+    return await ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
         let commandGen = Spec.commandGenerator
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget

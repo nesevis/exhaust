@@ -18,7 +18,7 @@ extension Gen {
     }
 }
 
-public extension Gen {
+package extension Gen {
     /// Retrieves the current size parameter and feeds it into a generator-producing closure.
     ///
     /// The size parameter controls how complex generated values should be. It typically starts small and grows as tests progress, allowing the system to find simple counterexamples first before exploring more complex cases. The closure receives the current size (1-100) and returns a generator to run.

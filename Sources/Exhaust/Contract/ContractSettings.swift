@@ -11,8 +11,10 @@ public enum ContractSettings {
     /// Accepts a raw `UInt64` or a Crockford Base32 string.
     case replay(ReplaySeed)
 
-    /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
-    case suppressIssueReporting
+    /// Silences issue reporting, log output, or both for this contract test run.
+    ///
+    /// Use `.suppress(.issueReporting)` when the run is expected to find a failing command sequence and the test asserts on the returned value. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
+    case suppress(SuppressOption)
 
     /// Disables structured coverage analysis of command orderings.
     case randomOnly

@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum WeightedPickSelection {
+package enum WeightedPickSelection {
     @inline(__always)
     public static func draw(
         from choices: ContiguousArray<ReflectiveOperation.PickTuple>,

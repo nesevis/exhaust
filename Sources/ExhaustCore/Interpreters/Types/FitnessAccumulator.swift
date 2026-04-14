@@ -7,7 +7,7 @@
 
 /// Collects per-site, per-choice fitness data during tuning runs.
 /// Reference semantics so the accumulator is shared across recursive calls.
-public final class FitnessAccumulator {
+package final class FitnessAccumulator {
     public struct SiteChoiceKey: Hashable {
         public let fingerprint: UInt64
         public let choiceID: UInt64

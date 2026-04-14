@@ -35,7 +35,7 @@
 /// - Zero parameters are extracted.
 ///
 /// - SeeAlso: ``PullBasedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
-public enum ChoiceTreeAnalysis {
+package enum ChoiceTreeAnalysis {
     public enum AnalysisResult {
         /// All parameters have at most 256 values. Eligible for exhaustive enumeration or t-way covering.
         case finite(FiniteDomainProfile)

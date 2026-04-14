@@ -8,7 +8,7 @@
 /// A single primitive value in the choice tree, tagged with its numeric type.
 ///
 /// Each case carries the decoded value for comparison, the raw `UInt64` bit pattern for hashing, and a ``TypeTag`` for reconstruction.
-public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
+package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     /// An unsigned integer value.
     case unsigned(UInt64, TypeTag)
     /// A signed integer value. The `UInt64` represents its hashable bit pattern.

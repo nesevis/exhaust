@@ -5,7 +5,7 @@
 
 // MARK: - Dynamic Region Rebuild
 
-public extension ChoiceGraph {
+package extension ChoiceGraph {
     /// Updates leaf node values from the current sequence without rebuilding the graph structure.
     ///
     /// For value-only cycles (no structural changes), this replaces a full ``ChoiceGraphBuilder/build(from:)`` call. Only ``ChooseBitsMetadata/value`` on active leaf nodes is refreshed. Edges, topological order, reachability, and position ranges are unchanged. Type-compatibility edges and source/sink annotations are invalidated since they depend on leaf values.

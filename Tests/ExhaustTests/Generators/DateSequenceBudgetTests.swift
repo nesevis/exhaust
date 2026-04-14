@@ -33,7 +33,7 @@ struct DateSequenceBudgetTests {
         )
 
         // Property: dates in the array are all within the year range
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { dates in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { dates in
             dates.allSatisfy { $0 >= Self.year2024Start && $0 <= Self.year2024End }
         }
 
@@ -48,7 +48,7 @@ struct DateSequenceBudgetTests {
         )
 
         // Property: array is generated with valid dates
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { dates in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { dates in
             !dates.isEmpty
         }
 
@@ -66,7 +66,7 @@ struct DateSequenceBudgetTests {
         )
 
         // Property: sorting is idempotent
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { dates, pivot in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { dates, pivot in
             let withPivot = dates + [pivot]
             let sorted = withPivot.sorted()
             return sorted == sorted.sorted()
@@ -87,7 +87,7 @@ struct DateSequenceBudgetTests {
         )
 
         // Property: merging two sorted arrays preserves total count
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { a, b in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b in
             let merged = (a + b).sorted()
             return merged.count == a.count + b.count
         }
@@ -106,7 +106,7 @@ struct DateSequenceBudgetTests {
         )
 
         // Property: shifting all dates by the same offset preserves relative order
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { dates, hours in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { dates, hours in
             let sorted = dates.sorted()
             let shifted = sorted.map { $0.addingTimeInterval(Double(hours) * 3600) }
             return shifted == shifted.sorted()
@@ -128,7 +128,7 @@ struct DateSequenceBudgetTests {
         )
 
         // Property: total element count is consistent
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { a, b, extra in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b, extra in
             let all = a + b + [extra]
             return all.count == a.count + b.count + 1
         }

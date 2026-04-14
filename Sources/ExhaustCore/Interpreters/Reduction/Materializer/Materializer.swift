@@ -13,7 +13,7 @@
 /// Guided mode computes the canonical cartesian lift in the simple fibration over trace space. The trace space is fibred: the base is the set of trace structures (which choice points exist and what controls them), and above each structure sits a fibre — the set of value assignments compatible with that structure. A structural reduction is a morphism in the base; guided mode lifts it canonically by replaying the current value assignment into the new fibre, carrying forward each value where it fits in the new domain and falling back to the fallback tree or PRNG otherwise. The three-tier resolution (prefix → fallback tree → PRNG) approximates this lift for the common case where the new domain is a strict subset of the old domain and the carried-forward value would be out of range. The canonical lift itself — carrying the value unchanged — is the unique cartesian morphism in the simple fibration (Jacobs, *Categorical Logic and Type Theory*, 1999, §1.4).
 ///
 /// The result intentionally omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata. The tree is the single source of truth.
-public enum Materializer {
+package enum Materializer {
     /// Controls how values are resolved at each choice point.
     public enum Mode {
         /// Replay all values from prefix. Reject out-of-range inner values, clamp bound values.

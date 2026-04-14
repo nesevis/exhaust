@@ -10,9 +10,9 @@
 //
 // Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Zobrist hashing for O(1) incremental duplicate detection lives in ``ZobristHash``.
 
-public typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
+package typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
 
-public extension Collection<ChoiceSequenceValue> {
+package extension Collection<ChoiceSequenceValue> {
     var shortString: String {
         map(\.shortString).joined()
     }
@@ -20,7 +20,7 @@ public extension Collection<ChoiceSequenceValue> {
 
 // MARK: - Helper functions
 
-public extension ChoiceSequence {
+package extension ChoiceSequence {
     /// Creates a flat ``ChoiceSequence`` by flattening the given ``ChoiceTree``.
     init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)

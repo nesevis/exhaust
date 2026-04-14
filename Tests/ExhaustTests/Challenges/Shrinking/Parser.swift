@@ -38,7 +38,7 @@ struct ParserShrinkingChallenge {
                 .budget(.exorbitant),
 //                .reflecting(Self.knownBad),
                 .logging(.debug, .keyValue),
-                .suppressIssueReporting,
+                .suppress(.issueReporting),
 //                .replay(1337),
                 .onReport { report = $0 }
             ) { lang in

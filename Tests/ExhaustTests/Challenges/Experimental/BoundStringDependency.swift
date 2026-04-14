@@ -22,7 +22,7 @@ struct DependentStringChallenge {
 
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
+            .suppress(.issueReporting),
             .logging(.debug)
         ) { value in
             !(4 ... 5 ~= value.count)

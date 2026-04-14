@@ -34,7 +34,7 @@ struct ExamGraderTests {
             #exhaust(
                 ExamGraderContract.self,
                 commandLimit: 8,
-                .suppressIssueReporting
+                .suppress(.issueReporting)
             )
         )
         #expect(result.trace.contains { step in
@@ -56,7 +56,7 @@ struct ExamGraderTests {
         let counterExample = #exhaust(
             gen,
             .budget(.expensive),
-            .suppressIssueReporting
+            .suppress(.issueReporting)
         ) { exam, answers in
             let instance = ExamInstance(student: "student", exam: exam, answers: answers)
             let score = grader.grade(instance)
