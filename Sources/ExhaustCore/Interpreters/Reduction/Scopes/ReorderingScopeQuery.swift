@@ -111,15 +111,21 @@ enum ReorderingScopeQuery {
 
     /// Maps a ``ChoiceGraphNodeKind`` to a category integer for same-kind sibling comparison.
     ///
-    /// `chooseBits` and `just` are grouped together as bare-value leaves (category zero) because both
-    /// represent single-value contributions with no internal structure.
+    /// `chooseBits` nodes are split by type family (unsigned/signed/floating) so that only siblings with
+    /// comparable ``ChoiceValue`` types are grouped. `just` nodes are constant leaves with no value
+    /// contribution and form their own category. Structural nodes (`bind`, `zip`, `sequence`, `pick`)
+    /// each occupy a distinct category.
     private static func kindCategory(_ kind: ChoiceGraphNodeKind) -> Int {
         switch kind {
-        case .chooseBits, .just: return 0
-        case .bind: return 1
-        case .zip: return 2
-        case .sequence: return 3
-        case .pick: return 4
+        case let .chooseBits(metadata):
+            if metadata.typeTag.isFloatingPoint { return 2 }
+            if metadata.typeTag.isSigned { return 1 }
+            return 0
+        case .just: return 3
+        case .bind: return 4
+        case .zip: return 5
+        case .sequence: return 6
+        case .pick: return 7
         }
     }
 

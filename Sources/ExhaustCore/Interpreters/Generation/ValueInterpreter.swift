@@ -496,9 +496,4 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         return try runContinuation(result, &context)
     }
 
-    // MARK: - Hashable
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(context.baseSeed)
-    }
 }

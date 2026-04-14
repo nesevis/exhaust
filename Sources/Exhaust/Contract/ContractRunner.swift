@@ -406,14 +406,14 @@ func estimateCommandLimit(
     return limit
 }
 
+/// Return type for SCA coverage: the reduced (or unreduced) failing sequence plus the original.
+typealias SCAResult<Command> = (commands: [Command], original: [Command])
+
 /// Runs SCA coverage for contract command sequences.
 ///
 /// Builds a covering array where each position's domain is the flattened union of `(commandType × argumentCombinations)`. Parameter-free branches contribute one domain value each; analyzed branches contribute the product of their parameter domain sizes. When any branch has analyzed arguments, interaction strength caps at t=2 to keep covering array sizes manageable; otherwise higher strengths (up to t=6 for short sequences) are used.
 ///
 /// If domain construction fails or the domain is too small for pairwise coverage, SCA is skipped and the caller falls through to random sampling.
-/// Return type for SCA coverage: the reduced (or unreduced) failing sequence plus the original.
-typealias SCAResult<Command> = (commands: [Command], original: [Command])
-
 func runSCACoverage<Command>(
     seqGen: ReflectiveGenerator<[Command]>,
     commandGen: ReflectiveGenerator<Command>,

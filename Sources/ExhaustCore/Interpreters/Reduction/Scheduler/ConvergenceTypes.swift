@@ -57,5 +57,4 @@ public enum ConvergenceSignal: Hashable, Sendable {
 public enum EncoderConfiguration: Hashable, Sendable {
     case binarySearchSemanticSimplest
     case linearScan
-    case zeroValue
 }

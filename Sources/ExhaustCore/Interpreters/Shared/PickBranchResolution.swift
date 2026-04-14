@@ -40,8 +40,4 @@ public enum PickBranchResolution {
         return branches
     }
 
-    @inline(__always)
-    public static func firstSelectedBranch(in branches: [ChoiceTree]) -> ChoiceTree? {
-        branches.first(where: \.isSelected)
-    }
 }
