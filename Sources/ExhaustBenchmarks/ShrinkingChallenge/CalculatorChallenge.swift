@@ -79,13 +79,13 @@ func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
                     }
                 }
             )
-        let div = #gen(leaf, recurse())
+        let div = #gen(recurse(), leaf)
             .mapped(
-                forward: { lhs, rhs in Expr.div(lhs, rhs) },
+                forward: { lhs, rhs in Expr.div(rhs, lhs) },
                 backward: { value in
                     switch value {
-                    case let .add(lhs, rhs): (lhs, rhs)
-                    case let .div(lhs, rhs): (lhs, rhs)
+                    case let .add(lhs, rhs): (rhs, lhs)
+                    case let .div(lhs, rhs): (rhs, lhs)
                     case .value:
                         (value, value)
                     }

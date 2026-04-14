@@ -13,9 +13,9 @@ import ExhaustCore
 import Foundation
 
 func registerECOOPBenchmarks() {
-    let seedCount = 1000
+    let seedCount = benchmarkSeedsToRun
     let baseSeed: UInt64 = 1337
-    let config = Interpreters.ReducerConfiguration.slow
+    let config = reducerConfig
 
     registerECOOPPair(
         name: "Bound5", gen: bound5Gen, property: bound5Property,
@@ -75,6 +75,11 @@ func registerECOOPBenchmarks() {
     registerECOOPPair(
         name: "Replacement", gen: replacementGen, property: replacementProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    
+    registerECOOPPair(
+        name: "Parser", gen: parserLangGen, property: parserProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, sizeMetric: parserSize
     )
 }
 

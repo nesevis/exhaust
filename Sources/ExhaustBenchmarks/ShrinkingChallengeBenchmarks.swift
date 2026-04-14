@@ -7,7 +7,7 @@ import Foundation
 
 /// Returns strategy variants of a base config.
 private func withStrategies(
-    _ base: Interpreters.ReducerConfiguration = .fast
+    _ base: Interpreters.ReducerConfiguration = reducerConfig
 ) -> [(name: String, config: Interpreters.ReducerConfiguration)] {
     [("adaptive", base)]
 }
@@ -466,8 +466,7 @@ private func runReflectableBenchmark<Output>(
     config: Interpreters.ReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
-    var seenCEs = Set<String>()
-    for value in failingValues {
+    for (index, value) in failingValues.enumerated() {
         guard let tree = try? Interpreters.reflect(gen, with: value) else {
             continue
         }
@@ -476,7 +475,6 @@ private func runReflectableBenchmark<Output>(
             invocationCount += 1
             return property(candidate)
         }
-        var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
@@ -486,20 +484,14 @@ private func runReflectableBenchmark<Output>(
             property: countingProperty
         )
         let endTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        output = result?.1
+        let output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-//        if enableCounterExamples, seenCEs.insert(description).inserted {
-//            print("  (\(String(describing: value)) -> \(description))")
-//        }
-//        } else {
-//            let ceTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-//            let ms = Double(ceTime - startTime) / 1_000_000.0
-//            print("  \(ms)(\(String(describing: value)) -> \(description))")
-//        }
         results.append(ReductionResult(
+            index: index,
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
+            inputDescription: String(describing: value),
             counterexampleDescription: description
         ))
     }
@@ -513,14 +505,12 @@ private func runNonReflectableBenchmark<Output>(
     config: Interpreters.ReducerConfiguration = .fast
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
-    var seenCEs = Set<String>()
-    for (value, tree) in failingPairs {
+    for (index, (value, tree)) in failingPairs.enumerated() {
         var invocationCount = 0
         let countingProperty: (Output) -> Bool = { candidate in
             invocationCount += 1
             return property(candidate)
         }
-        var output: Output?
         let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
@@ -530,15 +520,14 @@ private func runNonReflectableBenchmark<Output>(
             property: countingProperty
         )
         let endTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        output = result?.1
+        let output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
-//        if enableCounterExamples, seenCEs.insert(description).inserted {
-//            print("  (\(String(describing: value)) -> \(description))")
-//        }
         results.append(ReductionResult(
+            index: index,
             propertyInvocations: invocationCount,
             reductionMilliseconds: milliseconds,
+            inputDescription: String(describing: value),
             counterexampleDescription: description
         ))
     }
@@ -632,8 +621,10 @@ private func measureIterationsToFirstFailure<Output>(
 // MARK: - Reporting Infrastructure
 
 struct ReductionResult {
+    let index: Int
     let propertyInvocations: Int
     let reductionMilliseconds: Double
+    let inputDescription: String
     let counterexampleDescription: String
 }
 
@@ -675,9 +666,23 @@ private func printChallengeReport(
 
     print("[\(name)] invocations: median=\(medianInvocations) mean=\(meanInvocations) min=\(minInvocations) max=\(maxInvocations) | time(ms): median=\(medianTime) mean=\(meanTime) counterexamples=\(uniqueCounterexamples.count) | coverage=\(foundWithCoveringArray) iterToFail: median=\(medianIter) mean=\(meanIter)")
     if enableCounterExamples {
+        var indicesByCE: [String: [Int]] = [:]
+        var firstInputByCE: [String: String] = [:]
+        for result in results {
+            indicesByCE[result.counterexampleDescription, default: []].append(result.index)
+            if firstInputByCE[result.counterexampleDescription] == nil {
+                firstInputByCE[result.counterexampleDescription] = result.inputDescription
+            }
+        }
+        let sortedCEs = indicesByCE.sorted { $0.value.count > $1.value.count }
+        let totalCount = results.count
         print("[\(name)] unique counterexamples (\(uniqueCounterexamples.count)):")
-        for counterexample in uniqueCounterexamples {
-            print("  \(counterexample)")
+        for (counterexample, indices) in sortedCEs {
+            let percentage = String(format: "%.1f", Double(indices.count) / Double(totalCount) * 100)
+            let indexPreview = indices.prefix(3).map { String($0) }.joined(separator: ", ")
+            let suffix = indices.count > 3 ? ", ... (\(indices.count) total)" : " (\(indices.count) total)"
+            let input = firstInputByCE[counterexample].map { " from: \($0)" } ?? ""
+            print("  \(percentage)% \(counterexample) — indices: \(indexPreview)\(suffix)\(input)")
         }
     }
 }
