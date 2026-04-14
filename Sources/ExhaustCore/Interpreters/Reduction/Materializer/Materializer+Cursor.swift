@@ -37,7 +37,7 @@ extension Materializer {
             effectiveEnd = entries.count
         }
 
-        // MARK: Scope management
+        // MARK: - Scope management
 
         mutating func pushScope(limit: Int) {
             scopeLimits.append(limit)
@@ -53,7 +53,7 @@ extension Materializer {
             }
         }
 
-        // MARK: Skip transparent markers
+        // MARK: - Skip transparent markers
 
         mutating func skipGroups() {
             while position < effectiveEnd {
@@ -86,7 +86,7 @@ extension Materializer {
             }
         }
 
-        // MARK: Consume entries
+        // MARK: - Consume entries
 
         mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
             guard exhausted == false else { return nil }
@@ -122,7 +122,7 @@ extension Materializer {
             }
         }
 
-        // MARK: Sequence markers
+        // MARK: - Sequence markers
 
         mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
             guard exhausted == false else { return nil }

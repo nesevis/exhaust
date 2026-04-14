@@ -13,8 +13,8 @@ import ExhaustCore
 /// A contract defines the rules a system must obey under arbitrary sequences of operations. Three styles of contract are supported:
 ///
 /// - **Model-based**: Compare the SUT against a reference model using `@Model` properties and `@Invariant` methods that assert equivalence.
-/// - **Invariant-only**: Check structural properties of the SUT alone (e.g., "the tree is always balanced") without a reference model.
-/// - **Postcondition-only**: Use `check()` inside `@Command` methods to verify per-operation guarantees (e.g., "after `add(x)`, `contains(x)` is true").
+/// - **Invariant-only**: Check structural properties of the SUT alone (for example, "the tree is always balanced") without a reference model.
+/// - **Postcondition-only**: Use `check()` inside `@Command` methods to verify per-operation guarantees (for example, "after `add(x)`, `contains(x)` is true").
 ///
 /// The struct must contain:
 /// - Exactly one `@SUT` property (system under test).

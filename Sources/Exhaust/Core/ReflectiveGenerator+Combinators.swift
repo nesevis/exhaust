@@ -90,7 +90,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Transforms generated values through a partial path, producing optional results.
     ///
-    /// Applies the partial path's extraction to each generated value. Since extraction may fail (e.g. a case path that doesn't match), the result type is optional.
+    /// Applies the partial path's extraction to each generated value. Since extraction may fail (for example a case path that doesn't match), the result type is optional.
     ///
     /// - Parameter path: Partial path to extract the new value from the generated value
     /// - Returns: A generator producing optional values of the extracted type

@@ -58,7 +58,7 @@ extension GeneratorTuning {
                 )
                 for _ in totalSampled ..< batchEnd {
                     // Advance RNG to ensure each sample sees a unique state.
-                    // Without this, choices with trivial generators (e.g. .just)
+                    // Without this, choices with trivial generators (for example .just)
                     // leave the RNG frozen — the entire predicate chain may
                     // consist of .pure unwrapping that consumes no randomness,
                     // making all samples identical.
@@ -228,7 +228,7 @@ extension GeneratorTuning {
 
         // Weight floor: bound each choice's selection probability to at least
         // weightFloorFraction. This prevents extreme ratios from compounding
-        // multiplicatively across depth (e.g. 0.9^5 leaf bias at every level
+        // multiplicatively across depth (for example 0.9^5 leaf bias at every level
         // would collapse h5 BST probability to 0.00001%).
         let totalWeight = tunedChoices.reduce(UInt64(0)) { $0 + $1.weight }
         if totalWeight > 0 {

@@ -35,7 +35,7 @@ public final class FitnessAccumulator {
 
     /// Checks if the normalized weight distribution has stabilized across all observed pick sites. Computes current shares and compares to the previous snapshot; returns `true` when the maximum absolute shift across all sites and choices is below `threshold`.
     ///
-    /// Each call captures a new snapshot, so call at regular intervals (e.g., every 20 warmup runs) rather than on every run.
+    /// Each call captures a new snapshot, so call at regular intervals (for example, every 20 warmup runs) rather than on every run.
     public func hasConverged(threshold: Double = 0.05) -> Bool {
         // Group records by fingerprint
         var siteFitnesses: [UInt64: ContiguousArray<(choiceID: UInt64, fitness: Double)>] = [:]

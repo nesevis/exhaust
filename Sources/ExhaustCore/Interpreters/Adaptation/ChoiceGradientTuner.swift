@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Three-stage offline tuner for pick-heavy generators (BST, AVL, etc.).
+/// Three-stage offline tuner for pick-heavy generators (BST, AVL, and so on).
 ///
 /// Pure online CGS (`OnlineCGSInterpreter`) gives excellent *ranking* of choices — it knows which picks lead to valid outputs — but it's expensive per-sample (derivative evaluation at every site) and overcommits to the dominant winner, quickly exhausting unique values. This tuner addresses both problems:
 ///

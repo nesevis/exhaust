@@ -202,7 +202,7 @@ struct GraphComposedEncoder: GraphEncoder {
     ///   - upstream: Encoder driving the outer iteration. Receives the original scope passed to ``start(scope:)``.
     ///   - downstream: Encoder driving the inner iteration. Receives the lifted scope per upstream probe.
     ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialisation) plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
-    ///   - lift: Closure that materialises the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialisation fails).
+    ///   - lift: Closure that materializes the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialization fails).
     init(
         name: EncoderName,
         upstream: any GraphEncoder,

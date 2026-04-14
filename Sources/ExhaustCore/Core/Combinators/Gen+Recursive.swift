@@ -39,7 +39,7 @@ public extension Gen {
 
     /// Creates a recursive generator with a generator base case.
     ///
-    /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
+    /// Use this overload when the base case itself needs randomness (for example random leaf values).
     ///
     /// The generator is eagerly unfolded at construction time into a plain generator tree — no special runtime operation exists. This means recursive generators are fully transparent to all interpreters (generation, reflection, replay, CGS tuning).
     ///

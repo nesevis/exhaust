@@ -22,7 +22,7 @@
 /// Parallel composition. Children are structurally independent — no ordering constraint. Defines the independence structure for antichain computation.
 ///
 /// ## sequence
-/// Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materialiser derives actual length from element count, not from the length generator's output.
+/// Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materializer derives actual length from element count, not from the length generator's output.
 ///
 /// ## just
 /// Constant leaf with no value choices — corresponds to `.pure` in the Freer Monad. Position range covers its single sequence entry. No metadata needed. Treated like `chooseBits` for dependency-edge purposes (no edges) but excluded from leaf-position and value-minimisation passes.

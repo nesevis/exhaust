@@ -88,12 +88,12 @@ public extension ChoiceGraph {
 
     /// Updates a pick node after a branch pivot.
     ///
-    /// The previously-active branch becomes inactive (nil position ranges on all its subtree nodes). The newly-active branch's subtree is populated from the materialised result. This is a structural change that invalidates derived edges.
+    /// The previously-active branch becomes inactive (nil position ranges on all its subtree nodes). The newly-active branch's subtree is populated from the materialized result. This is a structural change that invalidates derived edges.
     ///
     /// - Parameters:
     ///   - pickNodeID: The pick node whose selection changed.
     ///   - newSelectedID: The branch ID of the newly selected branch.
-    ///   - newTree: The new ``ChoiceTree`` for the pick site, produced by the materialiser.
+    ///   - newTree: The new ``ChoiceTree`` for the pick site, produced by the materializer.
     func updateBranchSelection(
         pickNodeID: Int,
         newSelectedID: UInt64,

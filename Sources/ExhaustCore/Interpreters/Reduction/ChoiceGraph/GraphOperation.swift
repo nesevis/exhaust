@@ -201,7 +201,7 @@ struct TransformationPostcondition {
 /// A graph-derived transformation scope with yield estimate and precondition.
 ///
 /// This is a morphism in OptRed_{T,alpha} (Sepulveda-Jimenez, Def. 10.3):
-/// the operation defines enc_a, the materialiser provides dec_a, and the
+/// the operation defines enc_a, the materializer provides dec_a, and the
 /// grade packages approximation slack with resource cost.
 struct GraphTransformation {
     /// The graph operation this transformation enacts.

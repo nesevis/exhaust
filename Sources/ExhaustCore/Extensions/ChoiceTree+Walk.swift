@@ -20,7 +20,7 @@ public struct Fingerprint: Hashable, Sendable {
         return copy
     }
 
-    /// Returns `true` when `self` is a strict ancestor of `other` (i.e. `other.steps` starts with `self.steps` and is longer).
+    /// Returns `true` when `self` is a strict ancestor of `other` (that is, `other.steps` starts with `self.steps` and is longer).
     public func isAncestor(of other: Fingerprint) -> Bool {
         steps.count < other.steps.count && other.steps.starts(with: steps)
     }

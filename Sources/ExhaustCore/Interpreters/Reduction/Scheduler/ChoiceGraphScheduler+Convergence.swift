@@ -52,7 +52,7 @@ extension ChoiceGraphScheduler {
     /// Transfers convergence records from old graph positions to matching leaves in the new graph.
     ///
     /// Two-tier policy:
-    /// - Leaves in structurally-constant bind subtrees (or outside any bind): match on position + typeTag only. The validRange may have changed but the materialiser handles clamping.
+    /// - Leaves in structurally-constant bind subtrees (or outside any bind): match on position + typeTag only. The validRange may have changed but the materializer handles clamping.
     /// - Leaves in non-constant bind subtrees: match on position + typeTag + validRange. The subtree was rebuilt — ranges may be different.
     static func transferConvergence(
         _ records: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)],

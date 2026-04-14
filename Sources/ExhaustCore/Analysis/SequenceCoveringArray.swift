@@ -120,7 +120,7 @@ public enum SequenceCoveringArray {
     /// For each pick branch:
     /// - Parameter-free branches (no choices in the sub-generator) → `.parameterFree` (1 domain value)
     /// - Analyzable branches → `.analyzed([BoundaryParameter])` with threshold normalization
-    /// - Unanalyzable branches (uses `getSize`, etc.) → `.unanalyzable` (1 domain value, random at replay)
+    /// - Unanalyzable branches (uses `getSize`, and so on) → `.unanalyzable` (1 domain value, random at replay)
     ///
     /// Parameters with domain size above `threshold` are converted to boundary-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
     public static func analyzeBranches(

@@ -8,7 +8,7 @@
 extension ChoiceGraphScheduler {
     /// Builds a ``GraphComposedEncoder`` for a bound value scope.
     ///
-    /// The upstream encoder is a ``GraphValueEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``BoundValueScope/upstreamLeafNodeID``. The downstream encoder is another ``GraphValueEncoder`` started by the lift closure on the lifted graph's bound-subtree leaves. The lift materialises each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
+    /// The upstream encoder is a ``GraphValueEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``BoundValueScope/upstreamLeafNodeID``. The downstream encoder is another ``GraphValueEncoder`` started by the lift closure on the lifted graph's bound-subtree leaves. The lift materializes each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
     ///
     /// - Parameters:
     ///   - fibreScope: The bound value scope from the source pipeline.

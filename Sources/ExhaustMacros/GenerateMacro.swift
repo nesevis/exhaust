@@ -7,7 +7,7 @@ import SwiftSyntaxMacros
 ///
 /// When the closure body is a struct or class initializer call with labeled arguments that map 1:1 to the closure parameters, the macro synthesizes a Mirror-based backward mapping, producing a fully bidirectional generator.
 ///
-/// When the closure body is an enum case construction (detected via member access callee, e.g. `Pet.cat(age)`), the macro synthesizes a pattern-matching backward closure inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free. This returns `nil` for non-matching cases, enabling `pick` to prune branches during reflection.
+/// When the closure body is an enum case construction (detected via member access callee, for example `Pet.cat(age)`), the macro synthesizes a pattern-matching backward closure inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free. This returns `nil` for non-matching cases, enabling `pick` to prune branches during reflection.
 ///
 /// When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` with a warning.
 public struct GenerateMacro: ExpressionMacro {
@@ -168,7 +168,7 @@ public struct GenerateMacro: ExpressionMacro {
         return result.parameterNames.map { paramToArgIndex[$0]! }
     }
 
-    /// Builds the expansion for a single-generator, unlabeled-argument closure (e.g. `#gen(.uint64()) { Int($0) }`).
+    /// Builds the expansion for a single-generator, unlabeled-argument closure (for example `#gen(.uint64()) { Int($0) }`).
     ///
     /// Emits `__ExhaustRuntime._macroMapScalar(gen, forward: closure)` which has constrained overloads for `BinaryInteger` and `BinaryFloatingPoint` that synthesize the backward pass at compile time, with an unconstrained fallback that is forward-only.
     private static func buildScalarConversionExpansion(

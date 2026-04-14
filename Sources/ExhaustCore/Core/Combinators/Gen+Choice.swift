@@ -124,7 +124,7 @@ public extension Gen {
             ._map { collection[$0 % count] }
     }
 
-    /// Internal helper for choose ranges derived from runtime context (e.g. `getSize`).
+    /// Internal helper for choose ranges derived from runtime context (for example `getSize`).
     ///
     /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
     static func chooseDerived<Output: BitPatternConvertible>(

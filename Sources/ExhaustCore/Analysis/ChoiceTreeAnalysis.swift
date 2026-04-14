@@ -54,7 +54,7 @@ public enum ChoiceTreeAnalysis {
 
     /// Analyzes a generator by running it through VACTI and walking the resulting ChoiceTree.
     ///
-    /// Returns `.finite` if all parameters have small domains (≤256 values), `.boundary` if some parameters need boundary value synthesis, or `nil` if the generator is not analyzable (e.g., uses getSize/resize).
+    /// Returns `.finite` if all parameters have small domains (≤256 values), `.boundary` if some parameters need boundary value synthesis, or `nil` if the generator is not analyzable (for example, uses getSize/resize).
     ///
     /// Tries multiple seeds to maximize element coverage for sequences.
     public static func analyze(_ gen: ReflectiveGenerator<some Any>) -> AnalysisResult? {
