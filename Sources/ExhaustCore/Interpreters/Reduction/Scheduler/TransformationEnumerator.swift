@@ -425,8 +425,7 @@ enum TransformationEnumerator {
         return graph.nodes[boundChildID].positionRange?.count ?? 0
     }
 
-    /// Computes enabling yield for a source leaf by walking up the containment
-    /// tree to find sequence-element ancestors in the deletion antichain.
+    /// Computes enabling yield for a source leaf by walking up the containment tree to find sequence-element ancestors in the deletion antichain.
     private static func computeEnablingYield(
         sourceNodeID: Int,
         antichainSet: Set<Int>,

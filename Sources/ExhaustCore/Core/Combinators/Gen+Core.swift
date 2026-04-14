@@ -1,6 +1,9 @@
 // Core fundamental operations for the generator combinators.
 // These operations form the building blocks for more complex generator behavior.
 
+/// Namespace for generator factory methods and combinators.
+///
+/// `Gen` provides a unified entry point to all generator construction. Import `Exhaust` and use `Gen.int(in:)`, `Gen.string()`, `Gen.pick(choices:)`, and so on, or use the ``#gen(_:transform:)`` macro for composing generators from existing ones.
 public enum Gen {}
 
 public extension Gen {
@@ -8,8 +11,8 @@ public extension Gen {
     ///
     /// This is the fundamental operation that bridges between raw reflective operations and type-safe generators. It handles the unsafe casting and error reporting when the reflection system returns unexpected types.
     ///
-    /// - Parameter operation: The low-level reflective operation to lift
-    /// - Returns: A generator that executes the operation and validates the result type
+    /// - Parameter operation: The low-level reflective operation to lift.
+    /// - Returns: A generator that executes the operation and validates the result type.
     static func liftF<Output>(
         _ operation: ReflectiveOperation
     ) -> ReflectiveGenerator<Output> {
@@ -28,8 +31,8 @@ public extension Gen {
     ///
     /// Pruning is used during reduction to eliminate branches that don't contribute to the final result. This optimization helps make property-based testing more efficient by focusing on relevant test cases.
     ///
-    /// - Parameter generator: The generator to apply pruning to
-    /// - Returns: A generator with pruning applied
+    /// - Parameter generator: The generator to apply pruning to.
+    /// - Returns: A generator with pruning applied.
     static func prune<Output>(
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
@@ -41,9 +44,9 @@ public extension Gen {
     /// This is the fundamental operation for transforming inputs in the backward direction during reflection. It allows a generator expecting one input type to work with a different input type via a transformation function.
     ///
     /// - Parameters:
-    ///   - transform: A function that transforms the new input type to the expected input type
-    ///   - generator: The generator to apply the transformation to
-    /// - Returns: A generator that accepts the new input type
+    ///   - transform: A function that transforms the new input type to the expected input type.
+    ///   - generator: The generator to apply the transformation to.
+    /// - Returns: A generator that accepts the new input type.
     static func contramap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> some Any,
         _ generator: ReflectiveGenerator<Output>
@@ -83,9 +86,9 @@ public extension Gen {
     /// This is useful for generators that should only succeed under certain conditions.
     ///
     /// - Parameters:
-    ///   - transform: A function that transforms the input, returning nil to indicate failure
-    ///   - generator: The generator to apply the transformation to
-    /// - Returns: A generator that prunes on transformation failure
+    ///   - transform: A function that transforms the input, returning nil to indicate failure.
+    ///   - generator: The generator to apply the transformation to.
+    /// - Returns: A generator that prunes on transformation failure.
     static func comap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> (some Any)?,
         _ generator: ReflectiveGenerator<Output>

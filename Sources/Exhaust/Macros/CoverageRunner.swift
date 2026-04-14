@@ -5,25 +5,28 @@
 // property. Stops on first failure or budget.
 import ExhaustCore
 
+/// Runs the structured coverage phase of a property test, exhausting the generator's finite or boundary domain before the random phase.
 public enum CoverageRunner {
+    /// The outcome of a coverage run.
     public enum Result<Output> {
-        /// Coverage found a counterexample.
+        /// Coverage found a counterexample before exhausting the domain.
         case failure(
             value: Output, tree: ChoiceTree,
             iteration: Int, strength: Int, rows: Int,
             parameters: Int, totalSpace: UInt64, kind: String
         )
-        /// Exhaustive coverage passed — entire space tested, skip random phase.
+        /// The entire finite domain was tested without finding a counterexample; the random phase can be skipped.
         case exhaustive(iterations: Int)
-        /// Partial coverage completed — proceed to random phase.
+        /// Coverage completed its budget without a counterexample; proceed to the random phase.
         case partial(
             iterations: Int, strength: Int, rows: Int,
             parameters: Int, totalSpace: UInt64, kind: String
         )
-        /// Analysis found nothing to cover — skip to random.
+        /// The generator has no analyzable finite or boundary domain; skip coverage entirely.
         case notApplicable
     }
 
+    /// Runs coverage analysis and iterates through the covering array, calling `property` for each row.
     public static func run<Output>(
         _ gen: ReflectiveGenerator<Output>,
         coverageBudget: UInt64,

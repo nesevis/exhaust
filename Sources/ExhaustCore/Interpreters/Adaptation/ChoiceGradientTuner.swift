@@ -9,14 +9,14 @@ import Foundation
 
 /// Three-stage offline tuner for pick-heavy generators (BST, AVL, and so on).
 ///
-/// Pure online CGS (`OnlineCGSInterpreter`) gives excellent *ranking* of choices — it knows which picks lead to valid outputs — but it's expensive per-sample (derivative evaluation at every site) and overcommits to the dominant winner, quickly exhausting unique values. This tuner addresses both problems:
+/// Pure online CGS (``OnlineCGSInterpreter``) gives excellent *ranking* of choices — it knows which picks lead to valid outputs — but it's expensive per-sample (derivative evaluation at every site) and overcommits to the dominant winner, quickly exhausting unique values. This tuner addresses both problems:
 ///
 /// ## Stage 1: Online CGS warmup
 ///
-/// Runs the generator through `OnlineCGSInterpreter` for a fixed number of warmup passes, collecting per-site, per-choice fitness data into a `FitnessAccumulator`.
-/// Unlike probe-based tuning which samples each site independently, CGS conditions on upstream choices via `DerivativeContext`, producing better weights for recursive generators where the validity of a subtree depends on ancestors.
+/// Runs the generator through ``OnlineCGSInterpreter`` for a fixed number of warmup passes, collecting per-site, per-choice fitness data into a ``FitnessAccumulator``.
+/// Unlike probe-based tuning which samples each site independently, CGS conditions on upstream choices via ``DerivativeContext``, producing better weights for recursive generators where the validity of a subtree depends on ancestors.
 ///
-/// The warmup is the only expensive phase. All subsequent generation uses the cheap `ValueAndChoiceTreeInterpreter` with the baked weights — same quality signal,
+/// The warmup is the only expensive phase. All subsequent generation uses the cheap ``ValueAndChoiceTreeInterpreter`` with the baked weights — same quality signal,
 /// ~100x cheaper per sample.
 ///
 /// ## Stage 2: Fitness-shared weight baking
@@ -33,7 +33,7 @@ import Foundation
 ///
 /// ## Result
 ///
-/// A statically-tuned generator suitable for `ValueAndChoiceTreeInterpreter`.
+/// A statically-tuned generator suitable for ``ValueAndChoiceTreeInterpreter``.
 /// The three stages compose: CGS provides the right ranking, fitness sharing prevents overcommitment to the winner, and adaptive smoothing ensures no single site strangles diversity.
 ///
 /// Online CGS warmup is based on the per-value derivative sampling algorithm (Goldstein, Ch. 3, Fig 3.3). The offline weight-baking pipeline draws on Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025). Fitness sharing and adaptive smoothing are Exhaust extensions.

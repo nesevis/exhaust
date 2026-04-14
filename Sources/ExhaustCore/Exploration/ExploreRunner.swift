@@ -34,6 +34,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     private var schedule: LogarithmicSchedule
     private var prng: Xoshiro256
 
+    /// Creates an ``ExploreRunner`` with the given generator, property, budget, pool parameters, optional fixed seed, and scorer function.
     public init(
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
@@ -67,6 +68,7 @@ public struct ExploreRunner<Output>: ~Copyable {
 
     // MARK: - Run
 
+    /// Runs the exploration loop up to `samplingBudget` iterations, returning the first reduced failure or a passed result.
     public mutating func run() -> ExploreResult<Output> {
         var iteration: UInt64 = 0
 

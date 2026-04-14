@@ -10,13 +10,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// This is the fundamental operation for adapting generators to work with different types while preserving the bidirectional capability. Both directions must be provided:
     ///
-    /// - **Forward**: Transforms generated values to the new output type
-    /// - **Backward**: During reflection, transforms target values back to the original type
+    /// - Forward: Transforms generated values to the new output type.
+    /// - Backward: During reflection, transforms target values back to the original type.
     ///
     /// - Parameters:
-    ///   - forward: Function to transform generated values
-    ///   - backward: Function to transform reflection targets back to original type
-    /// - Returns: A generator producing values of the new output type
+    ///   - forward: Function to transform generated values.
+    ///   - backward: Function to transform reflection targets back to original type.
+    /// - Returns: A generator producing values of the new output type.
     /// - Throws: Rethrows errors from the transformation functions
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
@@ -27,12 +27,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Creates a bidirectional transformation using a forward function and a partial path for backward.
     ///
-    /// This overload uses a `PartialPath` for the backward transformation, which can fail gracefully when the reflection target doesn't contain the expected structure. If extraction fails, that reflection branch is pruned.
+    /// This overload uses a ``PartialPath`` for the backward transformation, which can fail gracefully when the reflection target doesn't contain the expected structure. If extraction fails, that reflection branch is pruned.
     ///
     /// - Parameters:
-    ///   - forward: Function to transform generated values
-    ///   - backward: Partial path to extract the original value from the new type
-    /// - Returns: A generator producing values of the new output type
+    ///   - forward: Function to transform generated values.
+    ///   - backward: Partial path to extract the original value from the new type.
+    /// - Returns: A generator producing values of the new output type.
     /// - Throws: Rethrows errors from the forward transformation
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
@@ -52,9 +52,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The result type is optional to handle extraction failures.
     ///
     /// - Parameters:
-    ///   - forward: Partial path to transform from original to new type
-    ///   - backward: Partial path to transform back during reflection
-    /// - Returns: A generator producing optional values of the new type
+    ///   - forward: Partial path to transform from original to new type.
+    ///   - backward: Partial path to transform back during reflection.
+    /// - Returns: A generator producing optional values of the new type.
     /// - Throws: Errors from path extraction during setup
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
@@ -71,12 +71,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Creates a bidirectional transformation using a partial path for forward and a function for backward.
     ///
-    /// This overload uses a `PartialPath` for the forward transformation and a closure for the backward direction. The result type is optional because the forward path extraction may not match.
+    /// This overload uses a ``PartialPath`` for the forward transformation and a closure for the backward direction. The result type is optional because the forward path extraction may not match.
     ///
     /// - Parameters:
-    ///   - forward: Partial path to transform from original to new type
-    ///   - backward: Function to transform back during reflection
-    /// - Returns: A generator producing optional values of the new type
+    ///   - forward: Partial path to transform from original to new type.
+    ///   - backward: Function to transform back during reflection.
+    /// - Returns: A generator producing optional values of the new type.
     /// - Throws: Errors from path extraction during setup
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
@@ -92,8 +92,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// Applies the partial path's extraction to each generated value. Since extraction may fail (for example a case path that doesn't match), the result type is optional.
     ///
-    /// - Parameter path: Partial path to extract the new value from the generated value
-    /// - Returns: A generator producing optional values of the extracted type
+    /// - Parameter path: Partial path to extract the new value from the generated value.
+    /// - Returns: A generator producing optional values of the extracted type.
     func map<NewOutput>(
         _ path: some PartialPath<Value, NewOutput>
     ) throws -> ReflectiveGenerator<NewOutput?> {
@@ -111,9 +111,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// This transformation is essential for generators that need to handle optional types or work with nullable fields. During reflection, it properly handles the distinction between `.none` and `.some(value)` cases.
     ///
-    /// **Reflection behavior**: When reflecting on `nil`, throws `ReflectionError.reflectedNil` to signal that the non-optional branch should be pruned. When reflecting on `.some(value)`, extracts the wrapped value for the underlying generator to reflect on.
+    /// Reflection behavior: When reflecting on `nil`, throws `ReflectionError.reflectedNil` to signal that the non-optional branch should be pruned. When reflecting on `.some(value)`, extracts the wrapped value for the underlying generator to reflect on.
     ///
-    /// - Returns: A generator that produces optional versions of the original values
+    /// - Returns: A generator that produces optional versions of the original values.
     func asOptional() -> ReflectiveGenerator<Value?> {
         let description = String(describing: Value.self)
         return .impure(operation: .contramap(
@@ -303,10 +303,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     ///
     /// - Parameters:
-    ///   - base: The ground value used when recursion bottoms out
-    ///   - maxDepth: Maximum number of recursive layers to unfold
-    ///   - extend: Closure that builds one recursive layer from the previous layer
-    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    ///   - base: The ground value used when recursion bottoms out.
+    ///   - depthRange: The range of recursive layers to unfold.
+    ///   - extend: Closure that builds one recursive layer from the previous layer.
+    /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
         base: Value,
         depthRange: ClosedRange<Int>,
@@ -333,10 +333,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     ///
     /// - Parameters:
-    ///   - base: The ground value used when recursion bottoms out
-    ///   - maxDepth: Maximum number of recursive layers to unfold
-    ///   - extend: Closure that builds one recursive layer from the previous layer
-    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    ///   - base: The ground value used when recursion bottoms out.
+    ///   - depthRange: The range of recursive layers to unfold.
+    ///   - extend: Closure that builds one recursive layer from the previous layer.
+    /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
         base: Value,
         depthRange: ClosedRange<UInt64>,
@@ -353,10 +353,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
     /// - Parameters:
-    ///   - base: Generator for the base case
-    ///   - depthRange: Range of depths to draw from (lower bound can be 0 for fully collapsible trees)
-    ///   - extend: Closure that builds one recursive layer from the previous layer
-    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    ///   - base: Generator for the base case.
+    ///   - depthRange: Range of depths to draw from (lower bound can be 0 for fully collapsible trees).
+    ///   - extend: Closure that builds one recursive layer from the previous layer.
+    /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
         base: ReflectiveGenerator<Value>,
         depthRange: ClosedRange<Int>,
@@ -378,10 +378,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
     /// - Parameters:
-    ///   - base: Generator for the base case
-    ///   - depthRange: Range of depths to draw from (lower bound can be 0 for fully collapsible trees)
-    ///   - extend: Closure that builds one recursive layer from the previous layer
-    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    ///   - base: Generator for the base case.
+    ///   - depthRange: Range of depths to draw from (lower bound can be 0 for fully collapsible trees).
+    ///   - extend: Closure that builds one recursive layer from the previous layer.
+    /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
         base: ReflectiveGenerator<Value>,
         depthRange: ClosedRange<UInt64>,
@@ -421,8 +421,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// let lengths = #gen(.asciiString()).map { $0.count }
     /// ```
     ///
-    /// - Parameter transform: A function to apply to each generated value
-    /// - Returns: A generator producing the transformed values
+    /// - Parameter transform: A function to apply to each generated value.
+    /// - Returns: A generator producing the transformed values.
     func map<NewValue>(
         _ transform: @Sendable @escaping (Value) throws -> NewValue
     ) rethrows -> ReflectiveGenerator<NewValue> {
@@ -492,7 +492,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Chains this generator with a dependent generator.
     ///
     /// Use `bind` when the next generator depends on the value produced by this one.
-    /// This is more powerful than `map` but **breaks reflection** — the backward pass cannot see through the dependency, so test case reduction will not work through `bind` chains.
+    /// This is more powerful than `map` but breaks reflection — the backward pass cannot see through the dependency, so test case reduction will not work through `bind` chains.
     ///
     /// Prefer `map`, `zip`, or `#gen(a, b) { ... }` when possible. Use `bind` only when you genuinely need dependent generation.
     ///
@@ -502,8 +502,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// }
     /// ```
     ///
-    /// - Parameter transform: A function that takes the generated value and returns a new generator
-    /// - Returns: A generator that sequences the two computations
+    /// - Parameter transform: A function that takes the generated value and returns a new generator.
+    /// - Returns: A generator that sequences the two computations.
     func bind<NewValue>(
         _ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>
     ) rethrows -> ReflectiveGenerator<NewValue> {
@@ -520,12 +520,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Chains this generator with a dependent generator, with a backward extraction function for reflection.
     ///
-    /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function
-    /// extracts the inner generator's input from the final output, enabling reflection (and therefore
-    /// reduction) through the bind.
+    /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function extracts the inner generator's input from the final output, enabling reflection (and therefore reduction) through the bind.
     ///
-    /// - **Forward**: Takes the inner value `A` and returns a dependent generator over `B`
-    /// - **Backward**: Extracts `A` from a `B` — the `comap` annotation at bind sites (Xia et al. ESOP 2019)
+    /// - Forward: Takes the inner value `A` and returns a dependent generator over `B`.
+    /// - Backward: Extracts `A` from a `B` — the `comap` annotation at bind sites (Xia et al. ESOP 2019).
     ///
     /// ```swift
     /// let sized = #gen(.int(in: 1...10)).bound(
@@ -535,9 +533,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     ///
     /// - Parameters:
-    ///   - forward: Function that takes the generated value and returns a new generator
-    ///   - backward: Function that extracts the inner value from the final output
-    /// - Returns: A generator that sequences the two computations with bidirectional support
+    ///   - forward: Function that takes the generated value and returns a new generator.
+    ///   - backward: Function that extracts the inner value from the final output.
+    /// - Returns: A generator that sequences the two computations. with bidirectional support.
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
         backward: @Sendable @escaping (NewValue) throws -> Value
@@ -547,14 +545,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Chains this generator with a dependent generator, using a partial path for backward extraction.
     ///
-    /// This overload uses a `PartialPath` for the backward transformation, which can fail gracefully
-    /// when the reflection target doesn't contain the expected structure. If extraction fails,
-    /// that reflection branch is pruned.
+    /// This overload uses a ``PartialPath`` for the backward transformation, which can fail gracefully when the reflection target doesn't contain the expected structure. If extraction fails, that reflection branch is pruned.
     ///
     /// - Parameters:
-    ///   - forward: Function that takes the generated value and returns a new generator
-    ///   - backward: Partial path to extract the inner value from the final output
-    /// - Returns: A generator that sequences the two computations with bidirectional support
+    ///   - forward: Function that takes the generated value and returns a new generator.
+    ///   - backward: Partial path to extract the inner value from the final output.
+    /// - Returns: A generator that sequences the two computations. with bidirectional support.
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
         backward: some PartialPath<NewValue, Value>

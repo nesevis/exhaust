@@ -36,6 +36,7 @@ public struct DefaultSeedPool: SeedPool {
         seeds.count
     }
 
+    /// Returns `true` when the pool contains no seeds.
     public var isEmpty: Bool {
         seeds.isEmpty
     }

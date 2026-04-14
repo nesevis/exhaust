@@ -28,10 +28,10 @@
 ///
 /// Operations use type erasure (`Any`) because Swift enums cannot change generic parameters across cases. The FreerMonad continuation handles type-safe conversion back to the expected output type, enabling the separation of effect description from interpretation.
 ///
-/// **Construction**: Operations are created by `Gen` combinators and interpreted by `Interpreters`.
+/// **Construction**: Operations are created by ``Gen`` combinators and interpreted by ``Interpreters``.
 /// Never construct directly.
 ///
-/// - SeeAlso: `ReflectiveGenerator`, `Gen`, `Interpreters`
+/// - SeeAlso: ``ReflectiveGenerator``, ``Gen``, ``Interpreters``
 public enum ReflectiveOperation {
 // MARK: - Academic Provenance
 //
@@ -55,6 +55,7 @@ public enum ReflectiveOperation {
     /// - **weight**: Probability mass for random selection during generation
     /// - **generator**: The sub-generator to execute if this choice is selected
     public struct PickTuple {
+        /// A stable hash of the choice's generator structure, used to match branches across separate generation runs.
         public let fingerprint: UInt64
         public let id: UInt64
         public let weight: UInt64
@@ -85,8 +86,8 @@ public enum ReflectiveOperation {
     /// This enables conditional generation based on input structure.
     ///
     /// - Parameters:
-    ///   - transform: Function that extracts focus area, returning nil to prune branches
-    ///   - next: Generator to apply to the extracted input
+    ///   - transform: Function that extracts focus area, returning nil to prune branches.
+    ///   - next: Generator to apply to the extracted input.
     case contramap(transform: (Any) throws -> Any?, next: ReflectiveGenerator<Any>)
 
     /// Weighted random choice between multiple generation strategies.
@@ -99,7 +100,7 @@ public enum ReflectiveOperation {
     ///
     /// **Performance note**: ContiguousArray provides better cache locality than Array for frequent iteration during reflection.
     ///
-    /// - Parameter choices: Array of weighted generator options with replay labels
+    /// - Parameter choices: Array of weighted generator options with replay labels.
     case pick(choices: ContiguousArray<PickTuple>)
 
     /// Conditional generation that prunes invalid branches during reflection.
@@ -112,30 +113,30 @@ public enum ReflectiveOperation {
     ///
     /// **Why separate from contramap**: This separation allows interpreters to handle failure cases explicitly, enabling different strategies for invalid branches.
     ///
-    /// - Parameter next: Generator to apply if the input is valid (non-nil)
+    /// - Parameter next: Generator to apply if the input is valid (non-nil).
     case prune(next: ReflectiveGenerator<Any>)
 
     /// Primitive random bit pattern generation within a bounded range.
     ///
     /// This is the fundamental randomness operation that underlies all bounded value generation.
-    /// By working at the bit pattern level, it provides a unified interface for generating any `BitPatternConvertible` type with proper reflection support.
+    /// By working at the bit pattern level, it provides a unified interface for generating any ``BitPatternConvertible`` type with proper reflection support.
     ///
     /// **Forward pass**: Generates random UInt64 between min and max (inclusive)
     /// **Backward pass**: Checks if target value's bit pattern falls within [min, max]
     /// **Replay pass**: Uses recorded bit pattern from choice tree
     ///
-    /// **Type handling**: The `TypeTag` enables type-specific interpretation:
+    /// **Type handling**: The ``TypeTag`` enables type-specific interpretation:
     /// - `Int`: Bit pattern represents signed integer
     /// - `Float`: Bit pattern represents IEEE 754 floating point
-    /// - `Character`: Bit pattern represents an index into a `CharacterSet`
+    /// - `Character`: Bit pattern represents an index into a ``CharacterSet``
     /// - `Bool`: Bit pattern 0 = false, 1 = true
     ///
     /// **Uniformity**: The bit-level approach ensures uniform distribution across the specified range, avoiding bias that can occur with modular arithmetic.
     ///
     /// - Parameters:
-    ///   - min: Minimum bit pattern value (inclusive)
-    ///   - max: Maximum bit pattern value (inclusive)
-    ///   - tag: Type tag for proper interpretation of bit patterns
+    ///   - min: Minimum bit pattern value (inclusive).
+    ///   - max: Maximum bit pattern value (inclusive).
+    ///   - tag: Type tag for proper interpretation of bit patterns.
     ///   - isRangeExplicit: Whether `min...max` came from an explicit, stable bound that reflection should preserve and validate.
     case chooseBits(min: UInt64, max: UInt64, tag: TypeTag, isRangeExplicit: Bool)
 
@@ -161,8 +162,8 @@ public enum ReflectiveOperation {
     /// **Stack safety**: Unlike recursive monadic composition, this operation is interpreted iteratively by the interpreter, avoiding deep call stacks for large collections.
     ///
     /// - Parameters:
-    ///   - length: Generator that determines the sequence length
-    ///   - gen: Generator applied to each element position
+    ///   - length: Generator that determines the sequence length.
+    ///   - gen: Generator applied to each element position.
     case sequence(length: ReflectiveGenerator<UInt64>, gen: ReflectiveGenerator<Any>)
 
     /// Parallel composition of multiple generators into a tuple result.
@@ -178,7 +179,7 @@ public enum ReflectiveOperation {
     /// **Type erasure**: All generators are erased to `ReflectiveGenerator<Any>` because Swift enums cannot store heterogeneous generic types. The interpreter handles type-safe reconstruction of the final tuple.
     ///
     /// - Parameters:
-    ///   - generators: Array of generators to compose in parallel
+    ///   - generators: Array of generators to compose in parallel.
     ///   - isOpaque: When `true`, the resulting ``ChoiceTree/group(_:isOpaque:)`` is marked opaque so coverage analysis skips its subtree.
     case zip(ContiguousArray<ReflectiveGenerator<Any>>, isOpaque: Bool = false)
 
@@ -199,7 +200,7 @@ public enum ReflectiveOperation {
     /// **Type erasure**: Value stored as `Any` due to enum constraints.
     /// The containing generator's continuation handles type-safe casting.
     ///
-    /// - Parameter value: The constant value to always produce
+    /// - Parameter value: The constant value to always produce.
     case just(Any)
 
     /// Accesses the current size parameter for complexity-scaled generation.
@@ -218,7 +219,7 @@ public enum ReflectiveOperation {
     ///
     /// **Reflection implications**: During reflection, size represents the complexity of the target value being analyzed, helping guide the search through possible generation paths.
     ///
-    /// - Returns: Current size parameter as UInt64
+    /// - Returns: Current size parameter as UInt64.
     case getSize
 
     /// Temporarily overrides the size parameter for a nested generator scope.
@@ -238,8 +239,8 @@ public enum ReflectiveOperation {
     /// After completion, the original size parameter is automatically restored.
     ///
     /// - Parameters:
-    ///   - newSize: Temporary size parameter for the nested scope
-    ///   - next: Generator to run with the modified size
+    ///   - newSize: Temporary size parameter for the nested scope.
+    ///   - next: Generator to run with the modified size.
     case resize(newSize: UInt64, next: ReflectiveGenerator<Any>)
 
     /// Identifies generators with validity conditions that can be optimized.
@@ -263,10 +264,10 @@ public enum ReflectiveOperation {
     /// - Mathematical invariants (value relationships)
     ///
     /// - Parameters:
-    ///   - gen: The base generator to filter
-    ///   - fingerprint: Unique identifier for this filter condition (for optimization caching)
-    ///   - filterType: Strategy to use for satisfying the predicate
-    ///   - predicate: Validity condition that generated values must satisfy
+    ///   - gen: The base generator to filter.
+    ///   - fingerprint: Unique identifier for this filter condition (for optimization caching).
+    ///   - filterType: Strategy to use for satisfying the predicate.
+    ///   - predicate: Validity condition that generated values must satisfy.
     case filter(
         gen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
@@ -290,9 +291,9 @@ public enum ReflectiveOperation {
     /// - Tune generator weights: "Should I adjust probabilities?"
     ///
     /// - Parameters:
-    ///   - gen: The base generator to classify
-    ///   - fingerprint: Unique identifier for this classification operation
-    ///   - classifiers: Array of (label, predicate) pairs for categorizing values
+    ///   - gen: The base generator to classify.
+    ///   - fingerprint: Unique identifier for this classification operation.
+    ///   - classifiers: Array of (label, predicate) pairs for categorizing values.
     case classify(
         gen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
@@ -303,7 +304,7 @@ public enum ReflectiveOperation {
     ///
     /// This operation wraps a generator and tracks previously seen outputs to prevent duplicates. Two deduplication strategies are supported:
     ///
-    /// - **Choice-sequence based** (`keyExtractor == nil`): Deduplicates by the flattened `ChoiceSequence` of the inner generator's choice tree. Two values are considered duplicates if they were produced by the same random choices, even if the resulting values differ in non-deterministic ways.
+    /// - **Choice-sequence based** (`keyExtractor == nil`): Deduplicates by the flattened ``ChoiceSequence`` of the inner generator's choice tree. Two values are considered duplicates if they were produced by the same random choices, even if the resulting values differ in non-deterministic ways.
     ///
     /// - **Key-based** (`keyExtractor != nil`): Deduplicates by a user-provided key extracted from the generated value. This enables value-based deduplication using key paths or arbitrary transforms.
     ///
@@ -312,8 +313,8 @@ public enum ReflectiveOperation {
     /// **Replay pass**: Passes through to inner generator (no dedup during replay)
     ///
     /// - Parameters:
-    ///   - gen: The base generator to deduplicate
-    ///   - fingerprint: Unique identifier for this unique site (for per-site tracking)
+    ///   - gen: The base generator to deduplicate.
+    ///   - fingerprint: Unique identifier for this unique site (for per-site tracking).
     ///   - keyExtractor: Optional function to extract a hashable key from generated values.
     ///     When `nil`, deduplication uses the choice sequence instead.
     case unique(
@@ -335,8 +336,8 @@ public enum ReflectiveOperation {
     /// For bidirectional transforms, use `mapped(forward:backward:)` which pairs a `contramap` with an invisible `_map` — no `.transform` operation is created.
     ///
     /// - Parameters:
-    ///   - kind: Whether this is a `map` (pure function) or `bind` (dependent generator)
-    ///   - inner: The generator whose output is being transformed
+    ///   - kind: Whether this is a `map` (pure function) or `bind` (dependent generator).
+    ///   - inner: The generator whose output is being transformed.
     case transform(kind: TransformKind, inner: ReflectiveGenerator<Any>)
 }
 

@@ -10,7 +10,7 @@ public extension Gen {
     /// During reduction, the system will try simpler choices first based on their position in the choices array and their weights.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
-    /// - Returns: A generator that produces values from one of the provided generators
+    /// - Returns: A generator that produces values from one of the provided generators.
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)],
@@ -46,7 +46,7 @@ public extension Gen {
     /// During reduction, the system will try simpler choices first based on their position in the choices array and their weights.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
-    /// - Returns: A generator that produces values from one of the provided generators
+    /// - Returns: A generator that produces values from one of the provided generators.
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
         choices: [(weight: Int, generator: ReflectiveGenerator<Output>)],
@@ -74,9 +74,9 @@ public extension Gen {
     /// The type parameter allows the compiler to infer the return type, while the range parameter controls the bounds. If no range is provided, the full range for the type is used.
     ///
     /// - Parameters:
-    ///   - range: The range of values to generate from. Defaults to the type's full range
-    ///   - type: The output type to generate. Usually inferred from context
-    /// - Returns: A generator that produces random values of the specified type within the range
+    ///   - range: The range of values to generate from. Defaults to the type's full range.
+    ///   - type: The output type to generate. Usually inferred from context.
+    /// - Returns: A generator that produces random values of the specified type within the range.
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self

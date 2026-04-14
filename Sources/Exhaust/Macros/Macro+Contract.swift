@@ -92,7 +92,7 @@ public macro Model() = #externalMacro(module: "ExhaustMacros", type: "ModelMacro
 
 /// Marks a property as the system under test in a `@Contract` struct.
 ///
-/// Exactly one `@SUT` property is required per state-machine specification. It is included in `sutDescription` for failure reports.
+/// Exactly one `@SUT` property is required per `@Contract` specification. It is included in `sutDescription` for failure reports.
 @attached(peer)
 public macro SUT() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
 

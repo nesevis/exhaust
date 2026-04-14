@@ -68,9 +68,9 @@ public extension ReflectiveGenerator {
 
     // MARK: - CharacterSet-based generators
 
-    /// Generates a random character from the given `CharacterSet`.
+    /// Generates a random character from the given ``CharacterSet``.
     ///
-    /// Uses `ScalarRangeSet` to flatten the character set into a single contiguous index space, then picks via `Gen.choose(in: 0...n-1)` with O(log n) lookup.
+    /// Uses ``ScalarRangeSet`` to flatten the character set into a single contiguous index space, then picks via ``Gen/choose(in:)`` with O(log n) lookup.
     ///
     /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
     static func character(
@@ -81,13 +81,13 @@ public extension ReflectiveGenerator {
         return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom))
     }
 
-    /// Generates a random character from the union of two or more `CharacterSet`s.
+    /// Generates a random character from the union of two or more ``CharacterSet``s.
     static func character(from first: CharacterSet, _ rest: CharacterSet...) -> ReflectiveGenerator<Character> {
         let combined = rest.reduce(first) { $0.union($1) }
         return character(from: combined)
     }
 
-    /// Generates a random string whose characters are drawn from the given `CharacterSet`.
+    /// Generates a random string whose characters are drawn from the given ``CharacterSet``.
     ///
     /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
     static func string(
@@ -126,7 +126,7 @@ private func resolveSimplest(
 
 // MARK: - ScalarRangeSet-based generators (no CharacterSet reconstruction)
 
-/// Builds a character generator directly from a pre-computed `ScalarRangeSet`.
+/// Builds a character generator directly from a pre-computed ``ScalarRangeSet``.
 private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator<Character> {
     let operation = ReflectiveOperation.chooseBits(
         min: 0,
@@ -156,7 +156,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator
     )
 }
 
-/// Builds a string generator directly from a pre-computed `ScalarRangeSet`.
+/// Builds a string generator directly from a pre-computed ``ScalarRangeSet``.
 ///
 /// String <-> [Character] isn't bijective when the CharacterSet includes combining marks.
 /// The generator produces single-scalar characters, but Array(string) splits by grapheme clusters — so if "e" followed by U+0301 (combining accent) were generated as two characters, the String merges them into "é", and Array(...) returns one Character instead of two. We use `unicodeScalars.map` in the backward direction to preserve the original scalar count.

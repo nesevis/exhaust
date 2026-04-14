@@ -38,6 +38,7 @@ public enum HillClimbResult<Output> {
 ///
 /// **Possible resolution**: split fingerprint strategies — PRNG at generation time (VACTI) for exploration diversity, fingerprint + depth augmentation at materialization time (``ReductionMaterializer``) for reducer stability. The reducer re-materializes before branch encoders run, so generation-time siteIDs don't affect reduction. This split has not been implemented.
 public enum HillClimber {
+    /// Performs one hill-climbing pass on `seed`, probing mutations up to `budget` times and returning an improved seed, a counterexample, or unchanged.
     public static func climb<Output>(
         seed: Seed,
         gen: ReflectiveGenerator<Output>,

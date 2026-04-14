@@ -7,6 +7,10 @@ import Foundation
 
 /// A parameter in the boundary model with synthetic values derived from boundary value analysis of the underlying generator operation.
 public struct BoundaryParameter: @unchecked Sendable {
+    // @unchecked Sendable: stores `BoundaryParameterKind`, which in its `.pick` case holds
+    // generator closures the compiler cannot verify as Sendable. All closures are
+    // framework-controlled and do not capture shared mutable state.
+
     public let index: Int
     public let values: [UInt64]
     public let domainSize: UInt64
@@ -14,16 +18,17 @@ public struct BoundaryParameter: @unchecked Sendable {
 }
 
 public enum BoundaryParameterKind: @unchecked Sendable {
-    /// A chooseBits with a range too large for finite-domain analysis.
-    /// Values are boundary representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
+    // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`,
+    // which contains generator closures the compiler cannot verify as Sendable. All closures
+    // are framework-controlled and do not capture shared mutable state.
+
+    /// A chooseBits with a range too large for finite-domain analysis. Values are boundary representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
     case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
 
-    /// A sequence length, capped at 2 for the boundary model.
-    /// Values are: {0, 1, 2} (or subset if range is smaller)
+    /// A sequence length, capped at 2 for the boundary model. Values are: {0, 1, 2} (or subset if range is smaller)
     case sequenceLength(lengthRange: ClosedRange<UInt64>)
 
-    /// An element within a boundary-modeled sequence.
-    /// Same boundary values as chooseBits for the element generator.
+    /// An element within a boundary-modeled sequence. Same boundary values as chooseBits for the element generator.
     case sequenceElement(elementIndex: Int, range: ClosedRange<UInt64>, tag: TypeTag)
 
     /// A pick between branches (same as finite-domain pick).
@@ -35,10 +40,12 @@ public enum BoundaryParameterKind: @unchecked Sendable {
 
 /// Result of boundary analysis — a synthetic finite domain suitable for covering array generation.
 public struct BoundaryDomainProfile: @unchecked Sendable {
+    // @unchecked Sendable: stores `[BoundaryParameter]` and `ChoiceTree?`. `ChoiceTree` nodes
+    // contain generator closures the compiler cannot verify as Sendable. All closures are
+    // framework-controlled and do not capture shared mutable state.
+
     public let parameters: [BoundaryParameter]
-    /// The original ChoiceTree from VACTI, used as a template for covering array replay.
-    /// When present, `BoundaryCoveringArrayReplay.buildTree` walks this tree and substitutes
-    /// parameter values at matching positions, preserving structural nodes like `.bind`.
+    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, `BoundaryCoveringArrayReplay.buildTree` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
     public let originalTree: ChoiceTree?
 
     public init(parameters: [BoundaryParameter], originalTree: ChoiceTree? = nil) {
@@ -70,8 +77,9 @@ extension BoundaryDomainProfile: CoverageProfile {
 
 // MARK: - Boundary Value Computation
 
-/// Boundary value selection functions used by `ChoiceTreeAnalysis`.
+/// Boundary value selection functions used by ``ChoiceTreeAnalysis``.
 public enum BoundaryDomainAnalysis {
+    /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
     public static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
         case _ where tag.isFloatingPoint:

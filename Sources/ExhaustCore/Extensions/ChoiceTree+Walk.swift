@@ -10,10 +10,13 @@
 /// Each step in the path is a child index at the corresponding depth.
 /// For example, `[1, 0]` means "second child of root, then first child of that node".
 public struct Fingerprint: Hashable, Sendable {
+    /// The sequence of child indices that form the path from the root to a node.
     public private(set) var steps: [Int]
 
+    /// The empty fingerprint representing the root of a tree.
     public static let root = Fingerprint(steps: [])
 
+    /// Returns a new fingerprint with `childIndex` appended as the next step.
     public func appending(_ childIndex: Int) -> Fingerprint {
         var copy = self
         copy.steps.append(childIndex)
@@ -83,6 +86,7 @@ public extension ChoiceTree {
 
 /// A depth-first iterator that yields `(Fingerprint, ChoiceTree)` pairs for every node in a tree.
 public struct ChoiceTreeWalker: IteratorProtocol, Sequence {
+    /// A single item produced by ``ChoiceTreeWalker``, pairing a node with its path from the root.
     public struct Element {
         public let fingerprint: Fingerprint
         public let node: ChoiceTree

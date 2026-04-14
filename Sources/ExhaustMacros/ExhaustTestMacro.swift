@@ -144,9 +144,7 @@ private func containsReturnWithValueRecursive(_ node: Syntax) -> Bool {
 
 /// Rewrites `#expect` and `#require` calls in a closure body to use `__ExhaustRuntime.__detectRequire`.
 ///
-/// This replaces Swift Testing assertion macros with plain throwing function calls that don't
-/// call `Issue.record()`, producing no test output during reduction. Both boolean checks and
-/// optional unwraps are handled:
+/// This replaces Swift Testing assertion macros with plain throwing function calls that don't call `Issue.record()`, producing no test output during reduction. Both boolean checks and optional unwraps are handled:
 ///
 /// - `#expect(condition)` → `try __ExhaustRuntime.__detectRequire(condition)`
 /// - `try #require(condition)` → `try __ExhaustRuntime.__detectRequire(condition)`
@@ -160,9 +158,7 @@ private func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExpr
 
 /// Rewrites `#expect`/`#require` calls in the property closure to include explicit `sourceLocation:` parameters.
 ///
-/// In a macro expansion, `#_sourceLocation` resolves to the expansion site (the `#exhaust` line),
-/// not the original assertion line. This rewriter uses `MacroExpansionContext.location(of:)` to
-/// get each assertion's original source location and injects it as an explicit argument.
+/// In a macro expansion, `#_sourceLocation` resolves to the expansion site (the `#exhaust` line), not the original assertion line. This rewriter uses `MacroExpansionContext.location(of:)` to get each assertion's original source location and injects it as an explicit argument.
 private final class SourceLocationRewriter: SyntaxRewriter {
     let context: any MacroExpansionContext
     private var closureDepth = 0
@@ -384,8 +380,7 @@ private func expandExhaustFunctionReference(
 /// Expression macro that expands `#exhaust(gen, .settings...) { value in await ... }` into a call to
 /// `__ExhaustRuntime.__exhaustAsync(...)` or `__ExhaustRuntime.__exhaustExpectAsync(...)`.
 ///
-/// Identical to ``ExhaustTestMacro`` but emits the async runtime variants. Swift's overload resolution
-/// routes here when the trailing closure's type is `(T) async throws -> R`.
+/// Identical to ``ExhaustTestMacro`` but emits the async runtime variants. Swift's overload resolution routes here when the trailing closure's type is `(T) async throws -> R`.
 public struct ExhaustAsyncTestMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,

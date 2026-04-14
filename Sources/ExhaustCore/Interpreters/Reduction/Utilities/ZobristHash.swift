@@ -7,8 +7,7 @@
 
 /// Zobrist hashing utilities for ``ChoiceSequence`` duplicate detection during reduction.
 ///
-/// Computes position-dependent XOR hashes that support O(1) incremental updates when single
-/// elements change. Used by reducer code for PRNG seeding and ``ReducerCache`` lookups.
+/// Computes position-dependent XOR hashes that support O(1) incremental updates when single elements change. Used by reducer code for PRNG seeding and ``ReducerCache`` lookups.
 public enum ZobristHash {
     /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
     /// Enables O(1) incremental updates when single elements change.
@@ -25,10 +24,7 @@ public enum ZobristHash {
 
     /// Computes the hash of `probe` incrementally from a cached `baseHash` and `baseSequence`.
     ///
-    /// Scans for differing positions between `baseSequence` and `probe`, then XOR-updates the
-    /// base hash with removed and added contributions. Avoids splitmix64 mixing for unchanged
-    /// elements. For k changed positions out of n total, cost is O(n) comparison + O(k) mixing
-    /// instead of O(n) mixing.
+    /// Scans for differing positions between `baseSequence` and `probe`, then XOR-updates the base hash with removed and added contributions. Avoids splitmix64 mixing for unchanged elements. For k changed positions out of n total, cost is O(n) comparison + O(k) mixing instead of O(n) mixing.
     static func incrementalHash(
         baseHash: UInt64,
         baseSequence: ChoiceSequence,

@@ -66,15 +66,9 @@ extension Materializer {
             }
         }
 
-        /// Advances past any trailing `.group(false)` and `.bind(false)` markers at the current
-        /// position.
+        /// Advances past any trailing `.group(false)` and `.bind(false)` markers at the current position.
         ///
-        /// Called in ``handleZip(_:continuation:inputValue:context:calleeFallback:continuationFallback:)``
-        /// after each child's scope is popped, so that `childStartPosition` reflects the start of the
-        /// next child's entries rather than the closing markers of the completed child. This prevents
-        /// the next child's scope from being computed too tightly: without this call, a getSize-bind
-        /// child (whose `.group(false)` close marker is left unconsumed) causes the following child
-        /// to receive a scope that excludes its own value entry.
+        /// Called in ``handleZip(_:continuation:inputValue:context:calleeFallback:continuationFallback:)`` after each child's scope is popped, so that `childStartPosition` reflects the start of the next child's entries rather than the closing markers of the completed child. This prevents the next child's scope from being computed too tightly: without this call, a getSize-bind child (whose `.group(false)` close marker is left unconsumed) causes the following child to receive a scope that excludes its own value entry.
         mutating func skipGroupCloses() {
             while position < effectiveEnd {
                 switch entries[position] {

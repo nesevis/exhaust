@@ -267,6 +267,7 @@ private func buildTrace<Spec: ContractSpec>(
 
 // MARK: - Failure rendering
 
+/// Formats a ``ContractResult`` and its associated failure metadata into a human-readable failure message.
 func renderFailure<Spec: ContractSpecBase>(
     _ result: ContractResult<Spec>,
     failureInfo: ContractFailureInfo<Spec.Command>,
@@ -326,7 +327,7 @@ struct ContractFailureInfo<Command> {
 
 // MARK: - Sequence Covering Array (SCA) coverage
 
-/// Extracts pick choices from a command generator if it's a top-level `Gen.pick`.
+/// Extracts pick choices from a command generator when the generator is a top-level `Gen.pick`.
 func extractPickChoices(
     from gen: ReflectiveGenerator<some Any>
 ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
@@ -530,6 +531,7 @@ func runSCACoverage<Command>(
     return nil
 }
 
+/// Builds a ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
 func buildExhaustSettings<Output>(
     samplingBudget: UInt64,
     coverageBudget: UInt64,

@@ -6,6 +6,17 @@
 //
 
 public extension Gen {
+    /// Combines two or more generators into a tuple generator, running each in sequence.
+    ///
+    /// ```swift
+    /// let pairGen = Gen.zip(Gen.int(in: 0...99), Gen.string())
+    /// // produces ReflectiveGenerator<(Int, String)>
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - generators: The generators to combine.
+    ///   - isOpaque: When `true`, the resulting zip node is treated as a single unit during coverage analysis. Defaults to `false`.
+    /// - Returns: A generator producing a tuple of values, one per input generator.
     static func zip<each T>(
         _ generators: repeat ReflectiveGenerator<each T>,
         isOpaque: Bool = false

@@ -1,4 +1,5 @@
 public extension ClosedRange where Bound == UInt64 {
+    /// Splits the range into `chunks` roughly equal sub-ranges, distributing any remainder across the leading sub-ranges.
     func split(into chunks: Int) -> [ClosedRange<UInt64>] {
         guard chunks > 0 else { return [] }
         guard chunks > 1 else { return [self] }

@@ -1,38 +1,32 @@
-// Constructs a `ReflectiveGenerator` from one or more generators and a transform closure.
-//
-// When the closure body is a struct or class initializer call with labeled arguments
-// that map 1:1 to the closure parameters, the macro automatically synthesizes a
-// Mirror-based backward mapping, producing a fully bidirectional generator. Using
-// `Mirror` allows the backward pass to work regardless of property access control.
-//
-// When backward inference is not possible (complex expressions, multi-statement bodies),
-// the macro falls back to a forward-only `.map` and emits a warning explaining why.
-//
-// Both named parameters and shorthand parameters (`$0`, `$1`, …) are supported for
-// bidirectional mapping — the labels come from the call-site argument labels, while
-// the shorthand indices provide the positional correspondence to generators.
-//
-// ## Single Generator
-// ```swift
-// let personGen = #gen(nameGen) { name in
-//     Person(name: name)
-// }
-// // Expands to: Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { ... })
-// ```
-//
-// ## Multiple Generators
-// ```swift
-// let personGen = #gen(nameGen, ageGen) { name, age in
-//     Person(name: name, age: age)
-// }
-// // Expands to: Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
-// ```
-//
-// ## Shorthand Parameters
-// ```swift
-// let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
-// // Expands to: Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
-// ```
+/// Constructs a ``ReflectiveGenerator`` from one or more component generators and a transform closure.
+///
+/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro automatically synthesizes a `Mirror`-based backward mapping, producing a fully bidirectional generator. Using `Mirror` allows the backward pass to work regardless of property access control.
+///
+/// When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
+///
+/// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported for bidirectional mapping — the labels come from the call-site argument labels, while the shorthand indices provide the positional correspondence to generators.
+///
+/// Single generator:
+///
+/// ```swift
+/// let personGen = #gen(nameGen) { name in
+///     Person(name: name)
+/// }
+/// ```
+///
+/// Multiple generators:
+///
+/// ```swift
+/// let personGen = #gen(nameGen, ageGen) { name, age in
+///     Person(name: name, age: age)
+/// }
+/// ```
+///
+/// Shorthand parameters:
+///
+/// ```swift
+/// let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
+/// ```
 import ExhaustCore
 
 @freestanding(expression)

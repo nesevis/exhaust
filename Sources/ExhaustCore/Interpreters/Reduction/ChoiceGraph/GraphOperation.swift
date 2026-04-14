@@ -143,8 +143,7 @@ enum TransformationPrecondition {
 }
 
 extension TransformationPrecondition {
-    /// Walks dependency edges in reverse from a leaf to verify all bind-inner
-    /// ancestors have convergence records.
+    /// Walks dependency edges in reverse from a leaf to verify all bind-inner ancestors have convergence records.
     private static func checkDependencyChain(
         from leafNodeID: Int,
         in graph: ChoiceGraph
@@ -200,9 +199,7 @@ struct TransformationPostcondition {
 
 /// A graph-derived transformation scope with yield estimate and precondition.
 ///
-/// This is a morphism in OptRed_{T,alpha} (Sepulveda-Jimenez, Def. 10.3):
-/// the operation defines enc_a, the materializer provides dec_a, and the
-/// grade packages approximation slack with resource cost.
+/// This is a morphism in OptRed_{T,alpha} (Sepulveda-Jimenez, Def. 10.3): the operation defines enc_a, the materializer provides dec_a, and the grade packages approximation slack with resource cost.
 struct GraphTransformation {
     /// The graph operation this transformation enacts.
     let operation: GraphOperation

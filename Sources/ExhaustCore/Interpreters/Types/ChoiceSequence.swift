@@ -152,7 +152,7 @@ public extension ChoiceSequence {
         return sequenceCount == 0 && groupCount == 0 && bindCount == 0
     }
 
-    /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
+    /// Returns the flattened ``ChoiceValue``s within the given range, ignoring structural markers.
     /// Used as a lexicographic comparison key for sibling reordering.
     static func siblingComparisonKey(
         from sequence: ChoiceSequence,

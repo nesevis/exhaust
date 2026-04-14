@@ -89,11 +89,7 @@ enum ReorderingScopeQuery {
 
     /// Returns `true` when no sibling range is entirely contained within any bind-inner range.
     ///
-    /// Uses containment rather than overlap. A bind block that contains its own length chooseBits
-    /// overlaps the bind-inner range of that chooseBits, but the block is not contained by it.
-    /// Reordering the block moves inner and bound together, which is safe. Only a sibling whose
-    /// range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child)
-    /// must be excluded.
+    /// Uses containment rather than overlap. A bind block that contains its own length chooseBits overlaps the bind-inner range of that chooseBits, but the block is not contained by it. Reordering the block moves inner and bound together, which is safe. Only a sibling whose range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child) must be excluded.
     private static func noBindInnerContainment(
         _ childRanges: [ClosedRange<Int>],
         bindInnerRanges: [ClosedRange<Int>]
@@ -111,10 +107,7 @@ enum ReorderingScopeQuery {
 
     /// Maps a ``ChoiceGraphNodeKind`` to a category integer for same-kind sibling comparison.
     ///
-    /// `chooseBits` nodes are split by type family (unsigned/signed/floating) so that only siblings with
-    /// comparable ``ChoiceValue`` types are grouped. `just` nodes are constant leaves with no value
-    /// contribution and form their own category. Structural nodes (`bind`, `zip`, `sequence`, `pick`)
-    /// each occupy a distinct category.
+    /// `chooseBits` nodes are split by type family (unsigned/signed/floating) so that only siblings with comparable ``ChoiceValue`` types are grouped. `just` nodes are constant leaves with no value contribution and form their own category. Structural nodes (`bind`, `zip`, `sequence`, `pick`) each occupy a distinct category.
     private static func kindCategory(_ kind: ChoiceGraphNodeKind) -> Int {
         switch kind {
         case let .chooseBits(metadata):

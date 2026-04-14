@@ -7,7 +7,7 @@ import Foundation
 
 // MARK: - ScalarRangeSet
 
-/// A set of `UInt32` ranges representing Unicode scalar values, backed by `RangeSet`.
+/// A set of `UInt32` ranges representing Unicode scalar values, backed by ``RangeSet``.
 /// Provides O(log n) index-to-scalar lookup for single-pick generation.
 ///
 /// When ``bottomCodepoint`` is non-nil, index 0 is reserved for that scalar and all other indices are offset by 1. The bottom codepoint does not need to be a member of the underlying range set. This makes the reducer (which shrinks toward bit pattern 0, that is, index 0) converge toward the nominated character without any pipeline changes.
@@ -31,6 +31,7 @@ public struct ScalarRangeSet: Sendable {
     /// When non-nil, index 0 maps to this scalar and all range-derived indices are offset by 1.
     public let bottomCodepoint: Unicode.Scalar?
 
+    /// Creates a ``ScalarRangeSet`` from a `RangeSet<UInt32>`, optionally pinning index zero to `bottomCodepoint` so the reducer converges toward that scalar.
     public init(_ rangeSet: RangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
         precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty RangeSet")
         self.rangeSet = rangeSet
@@ -131,7 +132,7 @@ public struct ScalarRangeSet: Sendable {
 // MARK: - CharacterSet → ScalarRangeSet
 
 extension CharacterSet {
-    /// Parses `bitmapRepresentation` into a `ScalarRangeSet` of `UInt32` scalar values.
+    /// Parses `bitmapRepresentation` into a ``ScalarRangeSet`` of `UInt32` scalar values.
     ///
     /// - Parameter bottomCodepoint: When non-nil, reserves index 0 for this scalar and offsets all range-derived indices by 1. The scalar does not need to be a member of the character set.
     /// - Plane 0 (BMP): first 8192 bytes, 1 bit per scalar U+0000…U+FFFF

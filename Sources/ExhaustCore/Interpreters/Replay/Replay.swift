@@ -17,7 +17,7 @@ extension Interpreters {
 
     // MARK: - Public-Facing Replay Function
 
-    /// Deterministically reproduces a value by executing a generator with a structured `ChoiceTree`.
+    /// Deterministically reproduces a value by executing a generator with a structured ``ChoiceTree``.
     ///
     /// - Parameters:
     ///   - gen: The generator to execute.
@@ -37,6 +37,7 @@ extension Interpreters {
 
     // MARK: - Private Recursive Replay Engine
 
+    /// Replays `gen` against a flat array of ``ChoiceTree`` choices, consuming them left-to-right and returning the produced value, or `nil` if the sequence is exhausted.
     private static func replayWithChoices<Output>(
         _ gen: ReflectiveGenerator<Output>,
         choices: [ChoiceTree]

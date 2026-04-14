@@ -119,8 +119,7 @@ private enum TreeVisualization {
 
     /// An intermediate tree containing only the information needed for visualization.
     ///
-    /// Invisible structural nodes have `symbol == nil`. Single-child invisible chains
-    /// are collapsed so the tree is as shallow as possible.
+    /// Invisible structural nodes have `symbol == nil`. Single-child invisible chains are collapsed so the tree is as shallow as possible.
     struct RenderTree {
         let symbol: Character?
         let children: [RenderTree]

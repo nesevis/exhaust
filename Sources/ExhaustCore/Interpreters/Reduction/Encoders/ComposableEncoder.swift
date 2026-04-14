@@ -11,9 +11,7 @@ public protocol ComposableEncoder {
     /// Typed identifier for dominance pruning and logging.
     var name: EncoderName { get }
 
-    /// Estimates the number of probes this encoder will generate for the given
-    /// position range, or returns `nil` if the encoder has no applicable targets
-    /// and should be skipped entirely.
+    /// Estimates the number of probes this encoder will generate for the given position range, or returns `nil` if the encoder has no applicable targets and should be skipped entirely.
     func estimatedCost(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
