@@ -97,6 +97,9 @@ package struct BindMetadata {
 
     /// Index into the parent node's ``ChoiceGraphNode/children`` identifying the bound (controlled) child.
     public let boundChildIndex: Int
+
+    /// Structural path from the ``ChoiceTree`` root at graph-construction time to this bind. Used by ``ChoiceGraph/extractBoundSubtree(from:matchingPath:)`` to locate the matching bind in a post-mutation freshTree. The root bind has the empty path.
+    public let bindPath: BindPath
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.

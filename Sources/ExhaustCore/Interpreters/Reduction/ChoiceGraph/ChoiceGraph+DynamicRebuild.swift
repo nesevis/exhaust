@@ -62,7 +62,8 @@ package extension ChoiceGraph {
             startingOffset: boundRange.lowerBound,
             parent: bindNodeID,
             bindDepth: metadata.bindDepth + 1,
-            nodeIDOffset: nodes.count
+            nodeIDOffset: nodes.count,
+            parentPath: metadata.bindPath + [.bindBound]
         )
 
         // Append new nodes and edges.

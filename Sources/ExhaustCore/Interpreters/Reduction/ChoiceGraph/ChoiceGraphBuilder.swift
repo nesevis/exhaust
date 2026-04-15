@@ -27,7 +27,7 @@ struct ChoiceGraphBuilder {
     /// - Parameter tree: The generator's compositional structure. Produced by the materializer with `materializePicks` controlling whether inactive branches have full subtrees.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
         var builder = ChoiceGraphBuilder()
-        _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0)
+        _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0, path: [])
         return builder.assembleGraph()
     }
 
@@ -35,13 +35,16 @@ struct ChoiceGraphBuilder {
 
     /// Walks a ``ChoiceTree`` node, emitting graph nodes and edges.
     ///
+    /// The `path` parameter is the accumulated ``BindPath`` from the tree root down to the current walk position. Non-getSize ``ChoiceTree/bind(_:_:)`` nodes are stamped with this path as their ``BindMetadata/bindPath`` so that ``ChoiceGraph/extractBoundSubtree(from:matchingPath:)`` can later locate the same bind in a post-mutation freshTree even when sequence offsets have shifted.
+    ///
     /// - Returns: The number of ``ChoiceSequence`` entries consumed (mirrors flatten order).
     @discardableResult
     mutating func walk(
         _ tree: ChoiceTree,
         offset: Int,
         parent: Int?,
-        bindDepth: Int
+        bindDepth: Int,
+        path: BindPath
     ) -> Int {
         switch tree {
         case let .choice(value, metadata):
@@ -59,26 +62,26 @@ struct ChoiceGraphBuilder {
             return 0
 
         case let .sequence(_, elements, metadata):
-            return walkSequence(elements: elements, metadata: metadata, offset: offset, parent: parent, bindDepth: bindDepth)
+            return walkSequence(elements: elements, metadata: metadata, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
 
         case let .branch(_, _, _, _, choice):
             // Branch nodes are handled by pick-site detection in walkGroup.
             // If reached directly, walk the choice subtree.
-            return walk(choice, offset: offset, parent: parent, bindDepth: bindDepth)
+            return walk(choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
 
         case let .group(array, isOpaque):
-            return walkGroup(children: array, isOpaque: isOpaque, offset: offset, parent: parent, bindDepth: bindDepth)
+            return walkGroup(children: array, isOpaque: isOpaque, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
 
         case let .bind(inner, bound):
-            return walkBind(inner: inner, bound: bound, offset: offset, parent: parent, bindDepth: bindDepth)
+            return walkBind(inner: inner, bound: bound, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
 
         case let .resize(_, choices):
             // Resize is operational — skip the node, walk children as a group.
-            return walkGroupChildren(choices, offset: offset, parent: parent, bindDepth: bindDepth)
+            return walkGroupChildren(choices, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
 
         case let .selected(inner):
             // Unwrap and walk the inner tree.
-            return walk(inner, offset: offset, parent: parent, bindDepth: bindDepth)
+            return walk(inner, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
         }
     }
 
@@ -112,7 +115,8 @@ struct ChoiceGraphBuilder {
         metadata: ChoiceMetadata,
         offset: Int,
         parent: Int?,
-        bindDepth: Int
+        bindDepth: Int,
+        path: BindPath
     ) -> Int {
         let nodeID = emitNode(
             kind: .sequence(SequenceMetadata(
@@ -143,7 +147,8 @@ struct ChoiceGraphBuilder {
                 elements[elementIndex],
                 offset: elementStart,
                 parent: nodeID,
-                bindDepth: bindDepth
+                bindDepth: bindDepth,
+                path: path + [.sequenceChild(elementIndex)]
             )
             consumed += elementConsumed
             // The walk may have emitted one or more nodes; the first is the direct child.
@@ -177,7 +182,8 @@ struct ChoiceGraphBuilder {
         isOpaque: Bool,
         offset: Int,
         parent: Int?,
-        bindDepth: Int
+        bindDepth: Int,
+        path: BindPath
     ) -> Int {
         // Detect pick site: all children are .branch or .selected, with exactly one .selected(.branch(...)).
         if let pickResult = detectPickSite(array) {
@@ -186,7 +192,8 @@ struct ChoiceGraphBuilder {
                 selectedBranch: pickResult,
                 offset: offset,
                 parent: parent,
-                bindDepth: bindDepth
+                bindDepth: bindDepth,
+                path: path
             )
         }
 
@@ -212,7 +219,8 @@ struct ChoiceGraphBuilder {
                 array[childIndex],
                 offset: offset + consumed,
                 parent: nodeID,
-                bindDepth: bindDepth
+                bindDepth: bindDepth,
+                path: path + [.groupChild(childIndex)]
             )
             consumed += childConsumed
             if childStartID < nextNodeID {
@@ -238,7 +246,8 @@ struct ChoiceGraphBuilder {
         selectedBranch: PickSiteInfo,
         offset: Int,
         parent: Int?,
-        bindDepth: Int
+        bindDepth: Int,
+        path: BindPath
     ) -> Int {
         let nodeID = emitNode(
             kind: .pick(PickMetadata(
@@ -277,7 +286,8 @@ struct ChoiceGraphBuilder {
                     child,
                     offset: offset + consumed,
                     parent: nodeID,
-                    bindDepth: bindDepth
+                    bindDepth: bindDepth,
+                    path: path + [.pickBranch(selectedBranch.selectedID)]
                 )
                 consumed += childConsumed
                 if childStartID < nextNodeID {
@@ -322,14 +332,15 @@ struct ChoiceGraphBuilder {
         bound: ChoiceTree,
         offset: Int,
         parent: Int?,
-        bindDepth: Int
+        bindDepth: Int,
+        path: BindPath
     ) -> Int {
         if inner.isGetSize {
             // getSize-bind is transparent — flattens as group markers. Walk children directly.
             // getSize contributes 0 entries; bound content appears as-is.
             var consumed = 1 // group open
             // getSize is skipped (0 entries).
-            let boundConsumed = walk(bound, offset: offset + consumed, parent: parent, bindDepth: bindDepth)
+            let boundConsumed = walk(bound, offset: offset + consumed, parent: parent, bindDepth: bindDepth, path: path)
             consumed += boundConsumed
             consumed += 1 // group close
             return consumed
@@ -340,7 +351,8 @@ struct ChoiceGraphBuilder {
                 isStructurallyConstant: bound.containsBind == false && bound.containsPicks == false,
                 bindDepth: bindDepth,
                 innerChildIndex: 0,
-                boundChildIndex: 1
+                boundChildIndex: 1,
+                bindPath: path
             )),
             positionRange: nil,
             children: [],
@@ -353,11 +365,11 @@ struct ChoiceGraphBuilder {
         var consumed = 1 // bind open
 
         let innerStartID = nextNodeID
-        let innerConsumed = walk(inner, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth)
+        let innerConsumed = walk(inner, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth, path: path)
         consumed += innerConsumed
 
         let boundStartID = nextNodeID
-        let boundConsumed = walk(bound, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth + 1)
+        let boundConsumed = walk(bound, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth + 1, path: path + [.bindBound])
         consumed += boundConsumed
 
         consumed += 1 // bind close
@@ -390,11 +402,12 @@ struct ChoiceGraphBuilder {
         _ children: [ChoiceTree],
         offset: Int,
         parent: Int?,
-        bindDepth: Int
+        bindDepth: Int,
+        path: BindPath
     ) -> Int {
         var consumed = 1 // group open
-        for child in children {
-            consumed += walk(child, offset: offset + consumed, parent: parent, bindDepth: bindDepth)
+        for (index, child) in children.enumerated() {
+            consumed += walk(child, offset: offset + consumed, parent: parent, bindDepth: bindDepth, path: path + [.groupChild(index)])
         }
         consumed += 1 // group close
         return consumed

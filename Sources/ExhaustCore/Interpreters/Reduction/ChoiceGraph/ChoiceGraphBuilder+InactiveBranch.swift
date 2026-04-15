@@ -113,7 +113,8 @@ extension ChoiceGraphBuilder {
                         isStructurallyConstant: bound.containsBind == false && bound.containsPicks == false,
                         bindDepth: bindDepth,
                         innerChildIndex: 0,
-                        boundChildIndex: 1
+                        boundChildIndex: 1,
+                        bindPath: []
                     )),
                     positionRange: nil,
                     children: [],

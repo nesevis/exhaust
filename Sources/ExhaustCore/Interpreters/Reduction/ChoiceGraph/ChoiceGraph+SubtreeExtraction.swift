@@ -6,142 +6,103 @@
 // MARK: - Bound Subtree Extraction
 
 extension ChoiceGraph {
-    /// Walks `tree` mirroring ``ChoiceGraphBuilder`` offset arithmetic to find the bind node whose own `positionRange.lowerBound` equals `targetOffset`. Returns the bound child subtree of that bind, or nil if no matching bind is found.
+    /// Walks `tree` following the structural steps in `path` to locate a bind node, and returns that bind's bound child subtree.
     ///
-    /// Used by ``applyBindReshape(forLeaf:freshTree:into:)`` to extract the new bound subtree from the materializer's freshly produced tree, given the bind's known offset from the OLD graph. The position-based lookup works because a single bind-inner mutation shifts positions only inside the bound subtree — positions up to and including the bind's own offset are unchanged.
+    /// Used by ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` to extract the new bound subtree from the materializer's freshly produced tree, given the target bind's ``BindMetadata/bindPath`` from the pre-mutation graph. Path-based identification remains stable across upstream-induced structural divergence, whereas the prior offset-based lookup would silently match a different bind when the sequence layout shifted.
+    ///
+    /// Returns `nil` if the path does not resolve to a non-getSize bind inside `tree`. The caller falls back to a full graph rebuild in that case.
     static func extractBoundSubtree(
         from tree: ChoiceTree,
-        bindAtOffset targetOffset: Int
+        matchingPath path: BindPath
     ) -> ChoiceTree? {
-        var result: ChoiceTree?
-        _ = walkForBindExtraction(
-            tree: tree,
-            offset: 0,
-            target: targetOffset,
-            result: &result
-        )
-        return result
+        walkForPathMatch(tree: tree, remainingPath: path[...])
     }
 
-    /// Recursive walk used by ``extractBoundSubtree(from:bindAtOffset:)``. Returns the number of sequence positions consumed by `tree`, mirroring ``ChoiceGraphBuilder/walk(_:offset:parent:bindDepth:)`` exactly so that the offset arithmetic stays in sync.
-    private static func walkForBindExtraction(
+    /// Recursive walk used by ``extractBoundSubtree(from:matchingPath:)``. Returns the bound child subtree when `remainingPath` is fully consumed at a non-getSize bind, or nil on mismatch.
+    ///
+    /// Transparent variants (``ChoiceTree/branch``, ``ChoiceTree/selected``, getSize-inner ``ChoiceTree/bind``) descend without consuming a step. All other structural descents must match the next step in `remainingPath`.
+    private static func walkForPathMatch(
         tree: ChoiceTree,
-        offset: Int,
-        target: Int,
-        result: inout ChoiceTree?
-    ) -> Int {
-        if result != nil { return 0 }
-
+        remainingPath: ArraySlice<BindPathStep>
+    ) -> ChoiceTree? {
         switch tree {
-        case .choice:
-            return 1
-        case .just:
-            return 1
-        case .getSize:
-            return 0
+        case .choice, .just, .getSize:
+            // Terminals — cannot contain further binds.
+            return nil
+
         case let .sequence(_, elements, _):
-            var consumed = 1 // sequence open
-            for element in elements {
-                consumed += walkForBindExtraction(
-                    tree: element,
-                    offset: offset + consumed,
-                    target: target,
-                    result: &result
-                )
-                if result != nil { break }
-            }
-            consumed += 1 // sequence close
-            return consumed
-        case let .branch(_, _, _, _, choice):
-            return walkForBindExtraction(
-                tree: choice,
-                offset: offset,
-                target: target,
-                result: &result
+            guard let step = remainingPath.first,
+                  case let .sequenceChild(index) = step,
+                  elements.indices.contains(index)
+            else { return nil }
+            return walkForPathMatch(
+                tree: elements[index],
+                remainingPath: remainingPath.dropFirst()
             )
+
+        case let .branch(_, _, _, _, choice):
+            // Transparent wrapper — pass through without consuming a step.
+            return walkForPathMatch(tree: choice, remainingPath: remainingPath)
+
         case let .group(array, _):
             if isPickSite(array) {
-                // Pick site: 2 (group open + branch marker) + selected + 1 (close).
-                var consumed = 2
-                for element in array where element.isSelected {
-                    consumed += walkForBindExtraction(
-                        tree: element,
-                        offset: offset + consumed,
-                        target: target,
-                        result: &result
-                    )
-                    break
+                guard let step = remainingPath.first,
+                      case let .pickBranch(targetID) = step
+                else { return nil }
+                for element in array {
+                    // The selected element wraps the originally-picked branch.
+                    if case let .selected(inner) = element,
+                       case let .branch(id, _, _, _, _) = inner,
+                       id == targetID
+                    {
+                        return walkForPathMatch(
+                            tree: element,
+                            remainingPath: remainingPath.dropFirst()
+                        )
+                    }
                 }
-                consumed += 1
-                return consumed
+                return nil
             }
             // Regular zip group.
-            var consumed = 1 // group open
-            for child in array {
-                consumed += walkForBindExtraction(
-                    tree: child,
-                    offset: offset + consumed,
-                    target: target,
-                    result: &result
-                )
-                if result != nil { break }
-            }
-            consumed += 1 // group close
-            return consumed
+            guard let step = remainingPath.first,
+                  case let .groupChild(index) = step,
+                  array.indices.contains(index)
+            else { return nil }
+            return walkForPathMatch(
+                tree: array[index],
+                remainingPath: remainingPath.dropFirst()
+            )
+
         case let .bind(inner, bound):
             if inner.isGetSize {
-                // getSize-bind is transparent: 1 (group open) + bound + 1 (group close).
-                var consumed = 1
-                consumed += walkForBindExtraction(
-                    tree: bound,
-                    offset: offset + consumed,
-                    target: target,
-                    result: &result
-                )
-                consumed += 1
-                return consumed
+                // getSize-bind is transparent in the graph — pass through.
+                return walkForPathMatch(tree: bound, remainingPath: remainingPath)
             }
-            // Real bind: check if THIS bind is the target.
-            if offset == target {
-                result = bound
-                return 0
+            if remainingPath.isEmpty {
+                // This is the target bind — return its bound child.
+                return bound
             }
-            var consumed = 1 // bind open
-            consumed += walkForBindExtraction(
-                tree: inner,
-                offset: offset + consumed,
-                target: target,
-                result: &result
-            )
-            if result != nil { return consumed }
-            consumed += walkForBindExtraction(
+            guard let step = remainingPath.first,
+                  case .bindBound = step
+            else { return nil }
+            return walkForPathMatch(
                 tree: bound,
-                offset: offset + consumed,
-                target: target,
-                result: &result
+                remainingPath: remainingPath.dropFirst()
             )
-            consumed += 1 // bind close
-            return consumed
+
         case let .resize(_, choices):
-            var consumed = 1 // group open
-            for choice in choices {
-                consumed += walkForBindExtraction(
-                    tree: choice,
-                    offset: offset + consumed,
-                    target: target,
-                    result: &result
-                )
-                if result != nil { break }
-            }
-            consumed += 1 // group close
-            return consumed
-        case let .selected(inner):
-            return walkForBindExtraction(
-                tree: inner,
-                offset: offset,
-                target: target,
-                result: &result
+            guard let step = remainingPath.first,
+                  case let .groupChild(index) = step,
+                  choices.indices.contains(index)
+            else { return nil }
+            return walkForPathMatch(
+                tree: choices[index],
+                remainingPath: remainingPath.dropFirst()
             )
+
+        case let .selected(inner):
+            // Transparent wrapper — pass through without consuming a step.
+            return walkForPathMatch(tree: inner, remainingPath: remainingPath)
         }
     }
 

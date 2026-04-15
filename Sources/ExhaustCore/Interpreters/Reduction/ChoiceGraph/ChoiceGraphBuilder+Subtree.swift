@@ -27,18 +27,20 @@ extension ChoiceGraphBuilder {
     ///   - parent: The parent node ID in the existing graph. Stored on the subtree root after renumbering.
     ///   - bindDepth: The bind nesting depth at this position.
     ///   - nodeIDOffset: The offset added to every internal node ID so the splice does not collide with existing graph IDs.
+    ///   - parentPath: The ``BindPath`` prefix from the host graph's root to this subtree's insertion point. Every bind emitted inside the subtree will have its path computed as `parentPath + <local descent>` so the subtree's binds carry globally correct paths.
     static func buildSubtree(
         from tree: ChoiceTree,
         startingOffset: Int,
         parent: Int?,
         bindDepth: Int,
-        nodeIDOffset: Int
+        nodeIDOffset: Int,
+        parentPath: BindPath
     ) -> SubtreeResult {
         var builder = ChoiceGraphBuilder()
         // Walk with parent: nil so no internal node references the external
         // parent ID. The walk uses internal IDs starting from 0, which keeps
         // the builder's positional indexing into `nodes[nodeID]` correct.
-        _ = builder.walk(tree, offset: startingOffset, parent: nil, bindDepth: bindDepth)
+        _ = builder.walk(tree, offset: startingOffset, parent: nil, bindDepth: bindDepth, path: parentPath)
 
         // Compute dependency edges within the subtree using internal IDs.
         var subtreeDependencyEdges: [DependencyEdge] = []

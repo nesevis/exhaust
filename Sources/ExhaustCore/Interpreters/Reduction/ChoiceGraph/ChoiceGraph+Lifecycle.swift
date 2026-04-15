@@ -117,11 +117,11 @@ extension ChoiceGraph {
     /// Splices a rebuilt bound subtree into the graph in place after a bind-inner value change.
     ///
     /// 1. Locates the controlling bind node by walking from the leaf up the parent chain.
-    /// 2. Reads the bind's known offset from its existing ``ChoiceGraphNode/positionRange``.
-    /// 3. Walks `freshTree` to extract the new bound subtree at that offset.
+    /// 2. Reads the bind's ``BindMetadata/bindPath`` from its existing ``ChoiceGraphNode/kind``.
+    /// 3. Walks `freshTree` along that path to extract the new bound subtree.
     /// 4. Detects picks in the old or new subtree and falls back to full rebuild if found (Layer 4 does not yet maintain self-similarity edges incrementally).
     /// 5. Tombstones the old subtree's node IDs and edges referencing them.
-    /// 6. Walks the new subtree via ``ChoiceGraphBuilder/buildSubtree(from:startingOffset:parent:bindDepth:nodeIDOffset:)`` and appends the resulting nodes / edges.
+    /// 6. Walks the new subtree via ``ChoiceGraphBuilder/buildSubtree(from:startingOffset:parent:bindDepth:nodeIDOffset:parentPath:)`` and appends the resulting nodes / edges.
     /// 7. Patches the bind node's children to reference the new bound child.
     /// 8. Propagates the length delta to right siblings and ancestors via ``propagatePositionShift(after:delta:excluding:)``.
     /// 9. Refreshes the bind's ``BindMetadata/isStructurallyConstant`` flag from the new subtree.
@@ -144,7 +144,7 @@ extension ChoiceGraph {
             application.requiresFullRebuild = true
             return
         }
-        guard let bindRange = nodes[bindNodeID].positionRange else {
+        guard nodes[bindNodeID].positionRange != nil else {
             application.requiresFullRebuild = true
             return
         }
@@ -159,13 +159,10 @@ extension ChoiceGraph {
             return
         }
 
-        // Step 2/3: extract the new bound subtree from freshTree at the bind's
-        // known offset. The bind's lowerBound is unchanged for a single
-        // bind-inner mutation because positions before the bind are not
-        // affected by the bound subtree's reshape.
+        // Path-based bind identification stays correct when an upstream change shifts sequence positions. The prior offset-based lookup could silently match the wrong bind in divergent freshTrees — for example, symmetric recursive generators where sibling binds sit at near-identical offsets.
         guard let newBoundSubtree = Self.extractBoundSubtree(
             from: freshTree,
-            bindAtOffset: bindRange.lowerBound
+            matchingPath: bindMetadata.bindPath
         ) else {
             application.requiresFullRebuild = true
             return
@@ -210,7 +207,8 @@ extension ChoiceGraph {
             startingOffset: oldBoundRange.lowerBound,
             parent: bindNodeID,
             bindDepth: bindMetadata.bindDepth + 1,
-            nodeIDOffset: nodes.count
+            nodeIDOffset: nodes.count,
+            parentPath: bindMetadata.bindPath + [.bindBound]
         )
         let firstNewNodeID = rebuilt.nodes.first?.id
         for newNode in rebuilt.nodes {
@@ -334,7 +332,8 @@ extension ChoiceGraph {
                     isStructurallyConstant: newIsStructurallyConstant,
                     bindDepth: bindMetadata.bindDepth,
                     innerChildIndex: bindMetadata.innerChildIndex,
-                    boundChildIndex: bindMetadata.boundChildIndex
+                    boundChildIndex: bindMetadata.boundChildIndex,
+                    bindPath: bindMetadata.bindPath
                 )),
                 positionRange: nodes[bindNodeID].positionRange,
                 children: nodes[bindNodeID].children,
