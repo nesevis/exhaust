@@ -131,7 +131,7 @@ struct CalculatorShrinkingChallenge {
                 )
             let div = #gen(recurse(), recurse())
                 .mapped(
-                    forward: { lhs, rhs in Expr.div(rhs, lhs) },
+                    forward: { lhs, rhs in Expr.div(lhs, rhs) },
                     backward: { value in
                         switch value {
                         case let .add(lhs, rhs): (lhs, rhs)

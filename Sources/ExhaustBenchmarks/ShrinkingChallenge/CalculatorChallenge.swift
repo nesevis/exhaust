@@ -67,7 +67,7 @@ func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
         .mapped(forward: { Expr.value($0) }, backward: { $0.intValue ?? 0 })
 
     return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
-        let add = #gen(recurse(), leaf)
+        let add = #gen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in Expr.add(lhs, rhs) },
                 backward: { value in
@@ -79,13 +79,13 @@ func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
                     }
                 }
             )
-        let div = #gen(recurse(), leaf)
+        let div = #gen(recurse(), recurse())
             .mapped(
-                forward: { lhs, rhs in Expr.div(rhs, lhs) },
+                forward: { lhs, rhs in Expr.div(lhs, rhs) },
                 backward: { value in
                     switch value {
-                    case let .add(lhs, rhs): (rhs, lhs)
-                    case let .div(lhs, rhs): (rhs, lhs)
+                    case let .add(lhs, rhs): (lhs, rhs)
+                    case let .div(lhs, rhs): (lhs, rhs)
                     case .value:
                         (value, value)
                     }
