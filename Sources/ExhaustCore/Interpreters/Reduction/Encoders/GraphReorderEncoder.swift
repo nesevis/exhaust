@@ -111,16 +111,24 @@ private func naturalOrderPrecedes(
     return lhs.count < rhs.count
 }
 
-/// Returns `true` when every pair of keys has matching length and matching ``TypeTag`` at each position.
+/// Returns `true` when every pair of keys is compatible at every overlapping position.
 ///
-/// Two reasons to enforce exact tag equality rather than just category equality (unsigned/signed/floating): (1) ``ChoiceValue``'s `<` operator traps on mismatched categories, so the guard avoids a fatalError; (2) swapping values across different bit widths of the same category (for example, `Int16` and `Int32` slots) would reassign content to a slot whose bit-pattern range does not fit it, producing an invalid reordered candidate the materializer would reject or, worse, misinterpret.
+/// Compatibility means matching numeric category (unsigned, signed, or floating). Different bit widths within the same category are fine because ``ChoiceValue``'s `<` operator extracts to a category-wide type (`UInt64`, `Int64`, or `Double`) before comparing — only cross-category comparisons trap. Different array lengths are fine because ``naturalOrderPrecedes`` handles them via its trailing `lhs.count < rhs.count` tiebreaker, and the structural rearrangement that follows operates on whole sibling slices regardless of inner length.
 private func keysAreTypeCompatible(_ keys: [[ChoiceValue]]) -> Bool {
-    guard let first = keys.first else { return true }
-    for other in keys.dropFirst() {
-        guard first.count == other.count else { return false }
-        for (left, right) in zip(first, other) where left.tag != right.tag {
-            return false
+    guard let first = keys.first(where: { $0.isEmpty == false }) else { return true }
+    for other in keys where other.isEmpty == false {
+        let upper = min(first.count, other.count)
+        var i = 0
+        while i < upper {
+            if categoryRank(first[i].tag) != categoryRank(other[i].tag) { return false }
+            i += 1
         }
     }
     return true
+}
+
+private func categoryRank(_ tag: TypeTag) -> Int {
+    if tag.isFloatingPoint { return 2 }
+    if tag.isSigned { return 1 }
+    return 0
 }

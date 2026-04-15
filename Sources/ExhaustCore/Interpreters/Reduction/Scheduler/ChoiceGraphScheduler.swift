@@ -550,10 +550,9 @@ enum ChoiceGraphScheduler {
                 }
             }
 
-            // Staleness detection: after all sources exhausted, probe
-            // converged leaves at floor - 1 to detect stale convergence.
+            // Staleness detection: after all sources exhausted, probe converged leaves at `floor - 1` to detect stale convergence. ``confirmConvergence`` is a validator, not a search — when it proves a recorded floor was stale it clears the convergence record in place but does not mutate sequence, tree, or output. ``GraphValueEncoder`` re-enters the cleared leaf next cycle from its original state and runs its full bp binary search and cross-zero phase. No graph rebuild is needed: sequence and tree are unchanged, and the in-place clearing leaves every node's ``ChoiceGraphNode/positionRange`` and ``ChoiceGraphNode/children`` intact.
             if anyAccepted == false, allValuesConverged(in: sequence, graph: graph) {
-                let convergenceResult = try confirmConvergence(
+                _ = try confirmConvergence(
                     sequence: &sequence,
                     tree: &tree,
                     output: &output,
@@ -565,29 +564,6 @@ enum ChoiceGraphScheduler {
                     collectStats: collectStats,
                     isInstrumented: isInstrumented
                 )
-                if convergenceResult {
-                    anyAccepted = true
-                    // confirmConvergence updates the sequence but only the
-                    // convergence records on the graph; the graph's leaf
-                    // values are now stale. With the top-of-cycle rebuild
-                    // gone the carried-over graph would otherwise be out of
-                    // sync, so rebuild here to restore the invariant before
-                    // the next cycle.
-                    //
-                    // Layer 7a: ``confirmConvergence`` always uses
-                    // `materializePicks: false`, so the rebuilt graph is
-                    // unconditionally stripped. Set the flag and let the
-                    // lazy rematerialize check in the next cycle's
-                    // source-pulling iteration handle it on demand.
-                    stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
-                    stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
-                    let oldConvergence = extractAllConvergence(from: graph)
-                    graph = ChoiceGraph.build(from: tree)
-                    graphIsStripped = true
-                    transferConvergence(oldConvergence, to: graph)
-                    stats.graphStats.fullGraphRebuilds += 1
-                    sources = ScopeSourceBuilder.buildSources(from: graph)
-                }
             }
 
             // Cycle complete.

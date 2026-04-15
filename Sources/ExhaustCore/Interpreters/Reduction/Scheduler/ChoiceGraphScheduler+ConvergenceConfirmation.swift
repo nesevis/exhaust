@@ -94,14 +94,7 @@ extension ChoiceGraphScheduler {
                 filterObservations: &filterObservations,
                 precomputedHash: probeHash
             ) != nil {
-                // Validation only — we proved the recorded floor was stale,
-                // but we do NOT keep the probe's sequence. Perturbing the
-                // leaf to `bound - 1` here would shift valueSearch's restart
-                // point and skip its cross-zero phase, producing local minima
-                // (the seed 1987 ``value(-1)`` regression). Clear the
-                // convergence record so valueSearch re-enters this leaf next
-                // cycle from its original ``bound`` state and runs its full
-                // bp binary search + cross-zero phase.
+                // Validation only: discard the probe's sequence even though it succeeded. Perturbing the leaf to `bound - 1` here would shift the leaf's value out from under ``GraphValueEncoder``, bypassing its cross-zero phase and trapping the leaf at a non-canonical local minimum. Clearing the convergence record alone lets value search re-enter the leaf next cycle from the same starting state it converged on originally.
                 anyStale = true
                 acceptCount += 1
 
