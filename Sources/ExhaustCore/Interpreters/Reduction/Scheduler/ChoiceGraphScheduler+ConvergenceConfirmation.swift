@@ -85,7 +85,7 @@ extension ChoiceGraphScheduler {
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
-            if let result = try decoder.decodeAny(
+            if try decoder.decodeAny(
                 candidate: candidate,
                 gen: gen,
                 tree: tree,
@@ -93,20 +93,28 @@ extension ChoiceGraphScheduler {
                 property: property,
                 filterObservations: &filterObservations,
                 precomputedHash: probeHash
-            ) {
-                sequence = result.sequence
-                tree = result.tree
-                output = result.output
+            ) != nil {
+                // Validation only — we proved the recorded floor was stale,
+                // but we do NOT keep the probe's sequence. Perturbing the
+                // leaf to `bound - 1` here would shift valueSearch's restart
+                // point and skip its cross-zero phase, producing local minima
+                // (the seed 1987 ``value(-1)`` regression). Clear the
+                // convergence record so valueSearch re-enters this leaf next
+                // cycle from its original ``bound`` state and runs its full
+                // bp binary search + cross-zero phase.
                 anyStale = true
                 acceptCount += 1
 
-                // Clear the stale convergence record.
-                graph.recordConvergence(byNodeID: [nodeID: ConvergedOrigin(
-                    bound: probeValue,
-                    signal: .monotoneConvergence,
-                    configuration: origin.configuration,
-                    cycle: origin.cycle
-                )])
+                if case var .chooseBits(md) = graph.nodes[nodeID].kind {
+                    md.convergedOrigin = nil
+                    graph.nodes[nodeID] = ChoiceGraphNode(
+                        id: graph.nodes[nodeID].id,
+                        kind: .chooseBits(md),
+                        positionRange: graph.nodes[nodeID].positionRange,
+                        children: graph.nodes[nodeID].children,
+                        parent: graph.nodes[nodeID].parent
+                    )
+                }
 
                 if isInstrumented {
                     ExhaustLog.debug(
@@ -115,18 +123,10 @@ extension ChoiceGraphScheduler {
                         metadata: [
                             "position": "\(range.lowerBound)",
                             "old_floor": "\(origin.bound)",
-                            "new_floor": "\(probeValue)",
+                            "probe_succeeded_at": "\(probeValue)",
                         ]
                     )
                 }
-
-                // The accepted probe may have changed the sequence layout
-                // (for example, changing a recursive depth choice produces a
-                // different bind structure via guided materialization). The
-                // graph's position ranges are now stale — continuing to
-                // iterate would read positions from the old layout against
-                // the new sequence. Break and let the caller rebuild.
-                break
             } else {
                 rejectCache.insert(probeHash)
                 decoderRejectCount += 1
