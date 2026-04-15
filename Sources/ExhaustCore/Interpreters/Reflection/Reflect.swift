@@ -102,7 +102,7 @@ package enum Interpreters {
         case let .pick(choices):
             return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
 
-        case let .chooseBits(min, max, tag, isRangeExplicit):
+        case let .chooseBits(min, max, tag, isRangeExplicit, _):
             return try reflectChooseBitsOperation(
                 min: min,
                 max: max,

@@ -140,8 +140,7 @@ package extension Gen {
 
     /// Generates a random value within a range, using a ``SizeScaling`` distribution to control how tightly values cluster around an origin at small sizes.
     ///
-    /// For `.constant`, delegates directly to ``choose(in:type:)`` with no size interaction.
-    /// For all other scalings, the effective range is computed from the current size (1–100) using either linear or exponential interpolation in bit-pattern space.
+    /// The scaling strategy is erased to ``ChooseBitsScaling`` and attached directly to the emitted ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` operation. Generation interpreters consult the active generation size at sample time and narrow the effective sampling range relative to `range`. Reflection, analysis, and the reducer observe the declared range unchanged.
     ///
     /// - Parameters:
     ///   - range: The full range of values to generate from at size 100.
@@ -151,12 +150,63 @@ package extension Gen {
         in range: ClosedRange<Output>,
         scaling: SizeScaling<Output>
     ) -> ReflectiveGenerator<Output> {
-        switch scaling {
+        let erased: ChooseBitsScaling? = switch scaling {
         case .constant:
-            Gen.choose(in: range)
-        case .linear, .linearFrom, .exponential, .exponentialFrom:
-            Gen.getSize { Gen.chooseDerived(in: scaledRange(range, scaling: scaling, size: $0)) }
+            nil
+        case .linear:
+            .linear(originBits: nil)
+        case let .linearFrom(origin):
+            .linear(originBits: origin.bitPattern64)
+        case .exponential:
+            .exponential(originBits: nil)
+        case let .exponentialFrom(origin):
+            .exponential(originBits: origin.bitPattern64)
         }
+        return choose(
+            in: range,
+            type: Output.self,
+            isRangeExplicit: true,
+            scaling: erased
+        )
+    }
+
+    /// Computes the effective sampling range for a size-scaled chooseBits operation.
+    ///
+    /// Generation interpreters call this at sample time with the tag's declared bit-pattern range and the current size. The origin is resolved from the scaling (explicit `originBits` if present, otherwise ``TypeTag/simplestBitPattern``) and clamped into `min...max`; linear and exponential interpolation then narrow the range as with `scaledRange` on ``SizeScaling``.
+    @inline(__always)
+    static func applyScaling(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag,
+        scaling: ChooseBitsScaling,
+        size: UInt64
+    ) -> ClosedRange<UInt64> {
+        let fraction = Swift.min(Double(size) / 100.0, 1.0)
+        guard fraction < 1.0 else { return min ... max }
+
+        let origin: UInt64?
+        let isExponential: Bool
+        switch scaling {
+        case let .linear(o):
+            origin = o
+            isExponential = false
+        case let .exponential(o):
+            origin = o
+            isExponential = true
+        }
+
+        let originBits = Swift.min(Swift.max(origin ?? tag.simplestBitPattern, min), max)
+        let lowerDistance = scaledDistance(
+            originBits - min,
+            fraction: fraction,
+            isExponential: isExponential
+        )
+        let upperDistance = scaledDistance(
+            max - originBits,
+            fraction: fraction,
+            isExponential: isExponential
+        )
+        return (originBits - lowerDistance) ... (originBits + upperDistance)
     }
 
     /// Computes the effective range for a given size by interpolating from the origin toward the bounds using the specified scaling strategy.
@@ -233,7 +283,8 @@ package extension Gen {
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self,
-        isRangeExplicit: Bool
+        isRangeExplicit: Bool,
+        scaling: ChooseBitsScaling? = nil
     ) -> ReflectiveGenerator<Output> {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRange.lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRange.upperBound
@@ -242,7 +293,8 @@ package extension Gen {
             min: minBits,
             max: maxBits,
             tag: Output.tag,
-            isRangeExplicit: isRangeExplicit
+            isRangeExplicit: isRangeExplicit,
+            scaling: scaling
         )
         return .impure(operation: operation) { result in
             guard let convertible = result as? any BitPatternConvertible else {

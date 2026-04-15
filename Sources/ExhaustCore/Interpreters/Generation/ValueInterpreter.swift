@@ -158,10 +158,12 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     runContinuation: runContinuation
                 )
 
-            case let .chooseBits(min, max, _, _):
+            case let .chooseBits(min, max, tag, _, scaling):
                 return try handleChooseBits(
                     min: min,
                     max: max,
+                    tag: tag,
+                    scaling: scaling,
                     context: &context,
                     runContinuation: runContinuation
                 )
@@ -357,11 +359,35 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     private static func handleChooseBits<Output>(
         min: UInt64,
         max: UInt64,
+        tag: TypeTag,
+        scaling: ChooseBitsScaling?,
         context: inout GenerationContext,
         runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
-        let randomBits = context.prng.next(in: min ... max)
+        let effectiveRange: ClosedRange<UInt64>
+        if let scaling {
+            let size = consumeSize(&context)
+            effectiveRange = Gen.applyScaling(
+                min: min, max: max, tag: tag, scaling: scaling, size: size
+            )
+        } else {
+            effectiveRange = min ... max
+        }
+        let randomBits = context.prng.next(in: effectiveRange)
         return try runContinuation(randomBits, &context)
+    }
+
+    /// Reads the active generation size in precedence order: a one-shot `.resize` override, then the persistent `context.size` baseline, then the per-run scaled size cycle.
+    @inline(__always)
+    private static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
+        if let override = context.sizeOverride {
+            context.sizeOverride = nil
+            return override
+        }
+        if context.size > 0 {
+            return context.size
+        }
+        return GenerationContext.scaledSize(forRun: context.runs)
     }
 
     @inline(__always)

@@ -55,9 +55,14 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
         depth: Int
     ) -> String {
         switch operation {
-        case let .chooseBits(min, max, tag, isRangeExplicit):
+        case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
             let range = formatBitRange(min: min, max: max, tag: tag)
-            let suffix = isRangeExplicit ? "" : " [derived]"
+            var suffix = isRangeExplicit ? "" : " [derived]"
+            switch scaling {
+            case .none: break
+            case .some(.linear): suffix += " [linear]"
+            case .some(.exponential): suffix += " [exponential]"
+            }
             return "chooseBits(\(tag.description): \(range))\(suffix)"
 
         case let .pick(choices):

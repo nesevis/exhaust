@@ -171,7 +171,7 @@ package enum GeneratorTuning {
                     predicate: predicate
                 )
 
-            case let .chooseBits(lower, upper, tag, isRangeExplicit):
+            case let .chooseBits(lower, upper, tag, isRangeExplicit, scaling):
                 if insideSubdividedChooseBits {
                     return gen
                 }
@@ -180,6 +180,7 @@ package enum GeneratorTuning {
                     upper: upper,
                     tag: tag,
                     isRangeExplicit: isRangeExplicit,
+                    scaling: scaling,
                     continuation: continuation,
                     context: context,
                     predicate: predicate

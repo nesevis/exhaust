@@ -138,7 +138,14 @@ public enum ReflectiveOperation {
     ///   - max: Maximum bit pattern value (inclusive).
     ///   - tag: Type tag for proper interpretation of bit patterns.
     ///   - isRangeExplicit: Whether `min...max` came from an explicit, stable bound that reflection should preserve and validate.
-    case chooseBits(min: UInt64, max: UInt64, tag: TypeTag, isRangeExplicit: Bool)
+    ///   - scaling: Optional size-scaling strategy. When non-nil, generation interpreters consult the current size and narrow the effective sampling range relative to `min...max` before drawing. Reflection, analysis, and tree construction ignore this field — the declared range is authoritative for them.
+    case chooseBits(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag,
+        isRangeExplicit: Bool,
+        scaling: ChooseBitsScaling? = nil
+    )
 
     /// Stack-safe sequence generation for creating arrays and collections.
     ///

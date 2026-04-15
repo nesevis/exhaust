@@ -14,6 +14,16 @@
 ///
 /// The result intentionally omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata. The tree is the single source of truth.
 package enum Materializer {
+    /// Reads the active generation size for a materialization call. Reads the one-shot `.resize` override first, then falls back to `context.size` (the Materializer's persistent baseline, defaulting to 100).
+    @inline(__always)
+    static func consumeSize(_ context: inout Context) -> UInt64 {
+        if let override = context.sizeOverride {
+            context.sizeOverride = nil
+            return override
+        }
+        return context.size
+    }
+
     /// Controls how values are resolved at each choice point.
     public enum Mode {
         /// Replay all values from prefix. Reject out-of-range inner values, clamp bound values.
@@ -224,10 +234,11 @@ extension Materializer {
                 continuationFallback: continuationFallback
             )
 
-        case let .impure(.chooseBits(min, max, tag, isRangeExplicit), continuation):
+        case let .impure(.chooseBits(min, max, tag, isRangeExplicit, scaling), continuation):
             let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
             return try handleChooseBits(
                 min: min, max: max, tag: tag, isRangeExplicit: isRangeExplicit,
+                scaling: scaling,
                 continuation: continuation, inputValue: inputValue,
                 context: &context, calleeFallback: calleeFallback,
                 continuationFallback: continuationFallback
@@ -275,8 +286,7 @@ extension Materializer {
             // store a small size that produces tiny ranges, destroying values
             // via clamping.
             let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-            let size = context.sizeOverride ?? context.size
-            context.sizeOverride = nil
+            let size = consumeSize(&context)
             return try runContinuation(
                 result: size, calleeChoiceTree: .getSize(size),
                 continuation: continuation, inputValue: inputValue,

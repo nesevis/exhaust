@@ -414,7 +414,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                 // 2a. Check if length generator is a direct .chooseBits with range > 4
                 if case let .impure(
-                    .chooseBits(lower, upper, tag, isRangeExplicit),
+                    .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
                     lengthContinuation
                 ) = lengthGen {
                     let rangeSize = upper - lower + 1
@@ -431,7 +431,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
                                     min: subrange.lowerBound,
                                     max: subrange.upperBound,
                                     tag: tag,
-                                    isRangeExplicit: isRangeExplicit
+                                    isRangeExplicit: isRangeExplicit,
+                                    scaling: scaling
                                 ),
                                 continuation: lengthContinuation
                             )

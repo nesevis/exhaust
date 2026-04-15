@@ -311,6 +311,7 @@ extension GeneratorTuning {
         upper: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
+        scaling: ChooseBitsScaling?,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
         predicate: @escaping (Output) -> Bool
@@ -331,7 +332,8 @@ extension GeneratorTuning {
                     min: subrange.lowerBound,
                     max: subrange.upperBound,
                     tag: tag,
-                    isRangeExplicit: isRangeExplicit
+                    isRangeExplicit: isRangeExplicit,
+                    scaling: scaling
                 ),
                 continuation: { .pure($0) }
             )
@@ -371,7 +373,7 @@ extension GeneratorTuning {
         // (only if we haven't already subdivided)
         if !insideSubdividedChooseBits,
            case let .impure(
-               .chooseBits(lower, upper, tag, isRangeExplicit),
+               .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
                lengthContinuation
            ) = lengthGen
         {
@@ -392,7 +394,8 @@ extension GeneratorTuning {
                         min: subrange.lowerBound,
                         max: subrange.upperBound,
                         tag: tag,
-                        isRangeExplicit: isRangeExplicit
+                        isRangeExplicit: isRangeExplicit,
+                        scaling: scaling
                     ),
                     continuation: lengthContinuation
                 )
