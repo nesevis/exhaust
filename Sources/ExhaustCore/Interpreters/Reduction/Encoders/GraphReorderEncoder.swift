@@ -41,6 +41,9 @@ struct GraphReorderEncoder: GraphEncoder {
                 ChoiceSequence.siblingComparisonKey(from: currentSequence, range: $0)
             }
 
+            // ``ReorderingScopeQuery`` buckets siblings by outer-node ``ChoiceGraphNodeKind`` category. For container kinds (bind, zip, sequence, pick) the inner structure may diverge across siblings — for example, two recursive bind siblings where one took a base-case branch and the other took a non-base branch will flatten to different ``ChoiceValue`` type profiles. ``naturalOrderPrecedes`` traps on mismatched tag categories (unsigned vs signed vs floating), so skip any group whose keys are not pairwise type-compatible rather than attempting to sort them.
+            guard keysAreTypeCompatible(keys) else { continue }
+
             let sortedIndices = keys.indices.sorted { lhs, rhs in
                 naturalOrderPrecedes(keys[lhs], keys[rhs])
             }
@@ -106,4 +109,18 @@ private func naturalOrderPrecedes(
         if left > right { return false }
     }
     return lhs.count < rhs.count
+}
+
+/// Returns `true` when every pair of keys has matching length and matching ``TypeTag`` at each position.
+///
+/// Two reasons to enforce exact tag equality rather than just category equality (unsigned/signed/floating): (1) ``ChoiceValue``'s `<` operator traps on mismatched categories, so the guard avoids a fatalError; (2) swapping values across different bit widths of the same category (for example, `Int16` and `Int32` slots) would reassign content to a slot whose bit-pattern range does not fit it, producing an invalid reordered candidate the materializer would reject or, worse, misinterpret.
+private func keysAreTypeCompatible(_ keys: [[ChoiceValue]]) -> Bool {
+    guard let first = keys.first else { return true }
+    for other in keys.dropFirst() {
+        guard first.count == other.count else { return false }
+        for (left, right) in zip(first, other) where left.tag != right.tag {
+            return false
+        }
+    }
+    return true
 }
