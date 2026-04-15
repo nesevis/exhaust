@@ -31,6 +31,7 @@ struct CalculatorShrinkingChallenge {
             gen,
             .suppress(.issueReporting),
             .randomOnly,
+//            .replay(1526), // Pathological case
             .budget(.exorbitant),
             .logging(.debug, .keyValue)
         ) { expr in

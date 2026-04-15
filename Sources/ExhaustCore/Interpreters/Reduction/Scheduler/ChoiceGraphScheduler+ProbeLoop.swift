@@ -156,6 +156,7 @@ extension ChoiceGraphScheduler {
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
+            let preAcceptSequenceCount = sequence.count
             if let result = try decoder.decodeAny(
                 candidate: probe.candidate,
                 gen: gen,
@@ -204,9 +205,11 @@ extension ChoiceGraphScheduler {
                 } else {
                     application = graph.apply(probe.mutation, freshTree: tree)
                     if application.requiresFullRebuild {
-                        // ``ChoiceGraph/apply(_:freshTree:)`` bailed out and left the graph untouched, but the decoder may have produced a shorter freshSequence (for example, a guided materialization fallback that trimmed bind-inner content). The graph's ``ChoiceGraphNode/positionRange`` values are now stale relative to the post-decode ``sequence``. Calling ``GraphEncoder/refreshScope(graph:sequence:)`` against this stale graph would seed ``IntegerState/leafPositions`` with indices past the end of ``sequence``, producing an index-out-of-range crash on the next probe. Break out so the outer cycle in ``runCore`` rebuilds the graph before the next dispatch.
+                        // ``ChoiceGraph/apply(_:freshTree:)`` bailed out and left the graph untouched. Signal the outer cycle to rebuild before the next dispatch — but only break out of the probe loop when the decoder also reshaped the sequence length. The crash this guards against is ``IntegerState/leafPositions`` carrying indices past the end of a now-shorter ``sequence``; when length is unchanged, every tracked leaf position still references the same byte slot and the encoder can keep probing this leaf to convergence within the dispatch (avoiding ~22 cache-warm substitution probes plus a structural rebuild per binary-search step on bind-bound leaves).
                         anyRequiresRebuild = true
-                        break
+                        if sequence.count != preAcceptSequenceCount {
+                            break
+                        }
                     }
                 }
                 // A successful in-place reshape adds or removes graph

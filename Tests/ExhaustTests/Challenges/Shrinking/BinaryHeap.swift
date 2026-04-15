@@ -33,11 +33,11 @@ struct BinaryHeapShrinkingChallenge {
             let sorted = Self.toList(heap).sorted()
             return sorted == xs.sorted() && xs == xs.sorted()
         }
-
+        let boundGen = #gen(.uint64(in: 0 ... 20)).bind { Self.binaryHeapGen(depth: $0) }
         var report: ExhaustReport?
         let output = try #require(
             #exhaust(
-                Self.gen.unique(),
+                boundGen,
                 .suppress(.issueReporting),
                 .replay(1591),
                 .logging(.debug),
@@ -46,8 +46,10 @@ struct BinaryHeapShrinkingChallenge {
             )
         )
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 188)
-        #expect(rep.totalMaterializations == 173)
+        #expect(rep.propertyInvocations == 434)
+        #expect(rep.totalMaterializations == 429)
+        
+        print(rep.profilingSummary)
 
         let outputValues = Self.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
@@ -135,7 +137,7 @@ struct BinaryHeapShrinkingChallenge {
     /// Uses `bind` to constrain child values >= parent, so all generated heaps
     /// satisfy the invariant by construction.
     static func binaryHeapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
-        let maxVal = 100
+        let maxVal = Int.max
         let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
 
         guard depth > 0, min <= maxVal else {
@@ -162,7 +164,7 @@ struct BinaryHeapShrinkingChallenge {
         return #gen(.oneOf(weighted: (1, emptyGen), (5, nodeGen)))
     }
 
-    static let gen = binaryHeapGen(depth: 10)
+    static let gen = binaryHeapGen(depth: 20)
 }
 
 extension BinaryHeapShrinkingChallenge.Heap: CustomDebugStringConvertible {
