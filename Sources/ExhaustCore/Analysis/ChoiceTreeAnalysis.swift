@@ -61,7 +61,12 @@ package enum ChoiceTreeAnalysis {
         var bestTree: ChoiceTree?
 
         for seed in seeds {
-            // sizeOverride: 100 forces size-scaled generators to produce their full declared range. At size 100 ``Gen/scaledRange(_:scaling:size:)`` returns the declared range untouched, so parameter extraction sees user-specified bounds even though the inner chooseBits is emitted via `chooseDerived` (which carries `isRangeExplicit: false`).
+            // `sizeOverride: 100` ensures size-scaled sequences produce non-empty
+            // element subtrees during VACTI so that ``walkSequence`` can extract
+            // element parameters. The declared range itself is already stored
+            // directly on each `chooseBits` (with scaling attached as metadata), so
+            // the analyzer doesn't need a specific size for range visibility — just
+            // a size at which sequences produce enough elements to walk.
             var interpreter = ValueAndChoiceTreeInterpreter(
                 gen,
                 materializePicks: true,
@@ -181,21 +186,10 @@ package enum ChoiceTreeAnalysis {
             return walkGroup(children, parameters: &parameters)
 
         case let .bind(inner, bound):
-            // Special case: a bind whose inner is `.getSize` just indirects through
-            // the size parameter, which is fixed at generation time rather than a
-            // true user-visible choice. The bound subtree's parameters do not depend
-            // on specific user-provided choices — size-scaled generators only use the
-            // size value to narrow their declared range, which ``analyze(_:)`` has
-            // already forced to size 100 via `sizeOverride`. Walk `bound` normally so
-            // scaled choices are extracted as parameters.
-            if case .getSize = inner {
-                return walkTree(bound, parameters: &parameters)
-            }
-            // General bind: walk inner subtree normally; validate bound subtree
-            // without collecting parameters because bound parameters depend on the
-            // inner value — extracting them into covering arrays would produce
-            // invalid combinations. The bound subtree is preserved in the original
-            // tree for replay.
+            // Walk inner subtree normally; validate bound subtree without collecting
+            // parameters because bound parameters depend on the inner value —
+            // extracting them into covering arrays would produce invalid combinations.
+            // The bound subtree is preserved in the original tree for replay.
             guard walkTree(inner, parameters: &parameters) else { return false }
             return walkTreeValidateOnly(bound)
 
