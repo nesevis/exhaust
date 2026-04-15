@@ -95,7 +95,7 @@ struct UniquenessBenchmarkTests {
     }
 
     private static var boundedSumProblem: BenchmarkProblem<[Int16]> {
-        let gen: ReflectiveGenerator<[Int16]> = Gen.arrayOf(Gen.choose(in: Int16.min ... Int16.max, scaling: .linear), within: 0 ... 10)
+        let gen: ReflectiveGenerator<[Int16]> = Gen.arrayOf(Gen.choose(in: Int16.min ... Int16.max), within: 0 ... 10)
         return BenchmarkProblem(
             name: "BOUND-SUM",
             generator: gen,

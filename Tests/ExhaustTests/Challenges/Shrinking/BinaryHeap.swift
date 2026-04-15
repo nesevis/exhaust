@@ -46,8 +46,8 @@ struct BinaryHeapShrinkingChallenge {
             )
         )
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 434)
-        #expect(rep.totalMaterializations == 429)
+        #expect(rep.propertyInvocations == 356)
+        #expect(rep.totalMaterializations == 287)
         
         print(rep.profilingSummary)
 

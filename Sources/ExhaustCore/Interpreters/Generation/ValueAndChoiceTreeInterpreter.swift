@@ -24,7 +24,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         _ generator: ReflectiveGenerator<FinalOutput>,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
-        maxRuns: UInt64? = nil
+        maxRuns: UInt64? = nil,
+        sizeOverride: UInt64? = nil
     ) {
         self.generator = generator
         let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
@@ -32,7 +33,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             maxRuns: maxRuns ?? 100,
             baseSeed: prng.seed,
             isFixed: false,
-            size: 0,
+            size: sizeOverride ?? 0,
             prng: prng,
             materializePicks: materializePicks
         )
@@ -210,10 +211,16 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             // MARK: - GetSize
 
             case .getSize:
-                let size =
-                    context.sizeOverride
-                        ?? GenerationContext.scaledSize(forRun: context.runs)
-                context.sizeOverride = nil // getSize consumes the `sizeOverride`
+                // Precedence: one-shot `.resize` override > persistent init size > per-run scaled size.
+                // The persistent init size is used by ``ChoiceTreeAnalysis`` to force size 100, which makes size-scaled generators expose their full declared range for parameter extraction.
+                let size: UInt64 = if let override = context.sizeOverride {
+                    override
+                } else if context.size > 0 {
+                    context.size
+                } else {
+                    GenerationContext.scaledSize(forRun: context.runs)
+                }
+                context.sizeOverride = nil // getSize consumes the one-shot `sizeOverride`
                 return try runContinuation(
                     result: size,
                     calleeChoiceTree: .getSize(size),

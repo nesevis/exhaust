@@ -37,7 +37,7 @@ struct ExamineTests {
     @Test("Examine tracks filter observations")
     func filterObservations() {
         // ~50% validity rate — should pass without warnings
-        let gen = #gen(.int(in: 0 ... 100)).filter(.rejectionSampling) { $0 >= 50 }
+        let gen = #gen(.int(in: 0 ... 100, scaling: .constant)).filter(.rejectionSampling) { $0 >= 50 }
         let report = gen.validate(samples: 50, seed: 42)
         #expect(report.passed)
         #expect(report.filterObservations.count == 1)
@@ -48,9 +48,9 @@ struct ExamineTests {
     }
 
     @Test("Examine reports low filter validity rate")
-    func lowFilterValidityRate() {
+    func lowFilterValidityRate() throws {
         // ~1% validity rate (10 out of 1001) — should trigger warning
-        let gen = #gen(.int(in: 0 ... 1000)).filter(.rejectionSampling) { $0 < 10 }
+        let gen = #gen(.int(in: 0 ... 1000, scaling: .constant)).filter(.rejectionSampling) { $0 < 10 }
         var report: ValidationReport!
         withKnownIssue {
             report = gen.validate(samples: 50, seed: 99)
@@ -60,6 +60,7 @@ struct ExamineTests {
             return nil
         }
         #expect(lowValidityFailures.count == 1)
-        #expect(lowValidityFailures.first! < 0.05)
+        let first = try #require(lowValidityFailures.first)
+        #expect(first < 0.05)
     }
 }

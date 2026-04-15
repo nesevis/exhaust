@@ -91,7 +91,21 @@ package enum CoveringArrayReplay {
             return .group(newChildren)
 
         case let .bind(inner, bound):
-            // Substitute parameters in inner only; pass bound through unchanged.
+            // Mirrors ``ChoiceTreeAnalysis/walkTree``: when the bind's inner is
+            // `.getSize`, the bound subtree's parameters do not depend on a
+            // user-visible choice (size is fixed at 100 during analysis), so
+            // we substitute the replay values there.
+            if case .getSize = inner {
+                guard let newBound = substituteParameters(
+                    in: bound,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
+                    return nil
+                }
+                return .bind(inner: inner, bound: newBound)
+            }
             guard let newInner = substituteParameters(
                 in: inner,
                 row: row,

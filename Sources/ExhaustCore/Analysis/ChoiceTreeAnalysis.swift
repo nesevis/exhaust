@@ -61,11 +61,13 @@ package enum ChoiceTreeAnalysis {
         var bestTree: ChoiceTree?
 
         for seed in seeds {
+            // sizeOverride: 100 forces size-scaled generators to produce their full declared range. At size 100 ``Gen/scaledRange(_:scaling:size:)`` returns the declared range untouched, so parameter extraction sees user-specified bounds even though the inner chooseBits is emitted via `chooseDerived` (which carries `isRangeExplicit: false`).
             var interpreter = ValueAndChoiceTreeInterpreter(
                 gen,
                 materializePicks: true,
                 seed: seed,
-                maxRuns: 1
+                maxRuns: 1,
+                sizeOverride: 100
             )
 
             guard let (_, tree) = try? interpreter.next() else {
@@ -179,10 +181,21 @@ package enum ChoiceTreeAnalysis {
             return walkGroup(children, parameters: &parameters)
 
         case let .bind(inner, bound):
-            // Walk inner subtree normally; validate bound subtree without collecting
-            // parameters because bound parameters depend on the inner value —
-            // extracting them into covering arrays would produce invalid combinations.
-            // The bound subtree is preserved in the original tree for replay.
+            // Special case: a bind whose inner is `.getSize` just indirects through
+            // the size parameter, which is fixed at generation time rather than a
+            // true user-visible choice. The bound subtree's parameters do not depend
+            // on specific user-provided choices — size-scaled generators only use the
+            // size value to narrow their declared range, which ``analyze(_:)`` has
+            // already forced to size 100 via `sizeOverride`. Walk `bound` normally so
+            // scaled choices are extracted as parameters.
+            if case .getSize = inner {
+                return walkTree(bound, parameters: &parameters)
+            }
+            // General bind: walk inner subtree normally; validate bound subtree
+            // without collecting parameters because bound parameters depend on the
+            // inner value — extracting them into covering arrays would produce
+            // invalid combinations. The bound subtree is preserved in the original
+            // tree for replay.
             guard walkTree(inner, parameters: &parameters) else { return false }
             return walkTreeValidateOnly(bound)
 
@@ -256,7 +269,8 @@ package enum ChoiceTreeAnalysis {
         metadata: ChoiceMetadata,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
-        guard let range = metadata.validRange, metadata.isRangeExplicit else {
+        // `isRangeExplicit: false` is accepted because ``analyze(_:)`` runs VACTI with `sizeOverride: 100`, at which point the stored range from a size-scaled `chooseDerived` equals the user-declared range.
+        guard let range = metadata.validRange else {
             return false
         }
 
@@ -383,7 +397,8 @@ package enum ChoiceTreeAnalysis {
         metadata: ChoiceMetadata,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
-        guard let lengthRange = metadata.validRange, metadata.isRangeExplicit else {
+        // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
+        guard let lengthRange = metadata.validRange else {
             return false
         }
 
@@ -482,7 +497,8 @@ package enum ChoiceTreeAnalysis {
         elementIndex: Int,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
-        guard let range = metadata.validRange, metadata.isRangeExplicit else {
+        // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
+        guard let range = metadata.validRange else {
             return false
         }
 

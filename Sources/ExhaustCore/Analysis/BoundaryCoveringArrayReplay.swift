@@ -78,6 +78,20 @@ package enum BoundaryCoveringArrayReplay {
             return .group(newChildren)
 
         case let .bind(inner, bound):
+            // Mirrors ``ChoiceTreeAnalysis/walkTree``: when the bind's inner is
+            // `.getSize`, substitute into the bound subtree (where size-scaled
+            // chooseBits parameters live) rather than the inner subtree.
+            if case .getSize = inner {
+                guard let newBound = substituteParameters(
+                    in: bound,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
+                    return nil
+                }
+                return .bind(inner: inner, bound: newBound)
+            }
             guard let newInner = substituteParameters(
                 in: inner,
                 row: row,

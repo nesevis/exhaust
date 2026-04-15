@@ -22,11 +22,15 @@ struct BoundaryDomainAnalysisTests {
         #expect(values.count <= 6)
     }
 
-    @Test("Size-scaled rangeless int returns nil (getSize rejected)")
-    func rangelessIntReturnsNil() {
+    @Test("Size-scaled rangeless int is analyzable with full-type boundary values")
+    func rangelessIntProducesFullTypeBoundaries() {
         let gen = Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
-        let result = ChoiceTreeAnalysis.analyze(gen)
-        #expect(result == nil)
+        let profile = analyzeBoundary(gen)
+        #expect(profile != nil)
+        #expect(profile?.parameters.count == 1)
+        // The default scaling's declared range is the full type range, so boundary
+        // values cover Int.min, Int.min+1, 0, Int.max-1, Int.max (and 0's bit pattern).
+        #expect((profile?.parameters[0].values.count ?? 0) >= 4)
     }
 
     @Test("Int in 0...1000 produces boundary profile with 5 values")
@@ -91,11 +95,14 @@ struct BoundaryDomainAnalysisTests {
         }
     }
 
-    @Test("Int array with size-scaled length returns nil (getSize rejected)")
-    func sizeScaledArrayReturnsNil() {
+    @Test("Int array with size-scaled length is analyzable")
+    func sizeScaledArrayIsAnalyzable() {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10)
-        let result = ChoiceTreeAnalysis.analyze(gen)
-        #expect(result == nil)
+        let profile = analyzeBoundary(gen)
+        #expect(profile != nil)
+        // length param + up to 2 element params
+        #expect((profile?.parameters.count ?? 0) >= 2)
+        #expect((profile?.parameters.count ?? 0) <= 3)
     }
 
     @Test("Finite-domain generator returns finite result")
@@ -110,11 +117,14 @@ struct BoundaryDomainAnalysisTests {
         #expect(profile.parameters[1].domainSize == 2)
     }
 
-    @Test("Non-analyzable generator returns nil")
-    func nonAnalyzableReturnsNil() {
+    @Test("ASCII string generator is analyzable")
+    func asciiStringIsAnalyzable() {
+        // ASCII strings now analyze to a sequenceLength parameter plus up to two
+        // element parameters covering the 95 printable ASCII code points.
         let gen = asciiStringGen(length: 1 ... 5)
-        let result = ChoiceTreeAnalysis.analyze(gen)
-        #expect(result == nil)
+        let profile = analyzeBoundary(gen)
+        #expect(profile != nil)
+        #expect((profile?.parameters.count ?? 0) >= 2)
     }
 }
 
@@ -202,11 +212,15 @@ struct ChoiceTreeAnalysisTests {
         #expect(profile.parameters[0].values.count >= 4)
     }
 
-    @Test("Size-scaled generator returns nil")
-    func sizeScaledReturnsNil() {
+    @Test("Size-scaled generator is analyzable")
+    func sizeScaledIsAnalyzable() {
         let gen = Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
         let result = ChoiceTreeAnalysis.analyze(gen)
-        #expect(result == nil)
+        guard case let .boundary(profile) = result else {
+            Issue.record("Expected .boundary result for size-scaled full-range Int")
+            return
+        }
+        #expect(profile.parameters.count == 1)
     }
 
     @Test("Mixed finite and boundary returns .boundary")
@@ -252,11 +266,15 @@ struct ChoiceTreeAnalysisTests {
         }
     }
 
-    @Test("Sequence with size-scaled length returns nil")
-    func sizeScaledSequenceReturnsNil() {
+    @Test("Sequence with size-scaled length is analyzable")
+    func sizeScaledSequenceIsAnalyzable() {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10)
         let result = ChoiceTreeAnalysis.analyze(gen)
-        #expect(result == nil)
+        guard case let .boundary(profile) = result else {
+            Issue.record("Expected .boundary result for size-scaled sequence")
+            return
+        }
+        #expect(profile.parameters.count >= 2)
     }
 }
 
