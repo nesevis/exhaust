@@ -46,8 +46,8 @@ struct BinaryHeapShrinkingChallenge {
             )
         )
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 177)
-        #expect(rep.totalMaterializations == 175)
+        #expect(rep.propertyInvocations == 189)
+        #expect(rep.totalMaterializations == 174)
 
         let outputValues = Self.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.

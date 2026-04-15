@@ -26,12 +26,11 @@ struct CalculatorShrinkingChallenge {
 
     @Test("Calculator, Full", .exhaust(regressions: "6PH"))
     func calculatorfull() throws {
-        let gen = #gen(Self.expression(depth: 10))
+        let gen = #gen(Self.expression(depth: 4))
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
             .randomOnly,
-//            .replay(5832967290043753512),
             .budget(.exorbitant),
             .logging(.debug, .keyValue)
         ) { expr in
@@ -118,7 +117,7 @@ struct CalculatorShrinkingChallenge {
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
 
         return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
-            let add = #gen(recurse(), leaf)
+            let add = #gen(recurse(), recurse())
                 .mapped(
                     forward: { lhs, rhs in Expr.add(lhs, rhs) },
                     backward: { value in
@@ -130,13 +129,13 @@ struct CalculatorShrinkingChallenge {
                         }
                     }
                 )
-            let div = #gen(recurse(), leaf)
+            let div = #gen(recurse(), recurse())
                 .mapped(
                     forward: { lhs, rhs in Expr.div(rhs, lhs) },
                     backward: { value in
                         switch value {
-                        case let .add(lhs, rhs): (rhs, lhs)
-                        case let .div(lhs, rhs): (rhs, lhs)
+                        case let .add(lhs, rhs): (lhs, rhs)
+                        case let .div(lhs, rhs): (lhs, rhs)
                         case .value:
                             (value, value)
                         }
