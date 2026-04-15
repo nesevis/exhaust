@@ -23,7 +23,7 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.bool())
     /// ```
     static func bool() -> ReflectiveGenerator<Bool> {
-        Gen.choose(in: UInt8(0) ... 1)
+        Gen.choose(in: UInt8(0) ... 1, scaling: .constant)
             .mapped(
                 forward: { $0 == 1 },
                 backward: { $0 ? 1 : 0 }
