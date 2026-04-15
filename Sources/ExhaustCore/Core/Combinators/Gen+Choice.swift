@@ -160,6 +160,8 @@ package extension Gen {
     }
 
     /// Computes the effective range for a given size by interpolating from the origin toward the bounds using the specified scaling strategy.
+    ///
+    /// Bare `.linear` and `.exponential` anchor at the type's semantically simplest value (zero for signed and floating-point types; the lower bound for unsigned types), clamped to the given range. This keeps distributions centered on the natural zero even though scaling is performed in bit-pattern space.
     static func scaledRange<Output: BitPatternConvertible>(
         _ range: ClosedRange<Output>,
         scaling: SizeScaling<Output>,
@@ -178,13 +180,15 @@ package extension Gen {
         case .constant:
             return range
         case .linear:
-            originBits = lowerBits
+            originBits = ChoiceValue(range.lowerBound, tag: Output.tag)
+                .reductionTarget(in: lowerBits ... upperBits)
             isExponential = false
         case let .linearFrom(origin):
             originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
             isExponential = false
         case .exponential:
-            originBits = lowerBits
+            originBits = ChoiceValue(range.lowerBound, tag: Output.tag)
+                .reductionTarget(in: lowerBits ... upperBits)
             isExponential = true
         case let .exponentialFrom(origin):
             originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
@@ -209,7 +213,9 @@ package extension Gen {
 
     /// Scales a distance from origin to bound by the given fraction (0–1).
     ///
-    /// Follows Hedgehog's scaling approach: linear uses integer arithmetic with a `+1` adjustment to ensure non-trivial ranges at small sizes, and exponential uses `rounded()` instead of truncation.
+    /// Follows Hedgehog's scaling approach in real-valued arithmetic: linear is `(distance + 1) · fraction`, exponential is `(distance + 1)^fraction - 1`. The `+1` ensures non-trivial ranges at small sizes.
+    ///
+    /// - Note: Arithmetic is performed in `Double` to avoid overflow when `distance` is close to `UInt64.max / size`. Integer multiplication would wrap silently and collapse the effective range to zero at inconvenient sizes.
     static func scaledDistance(
         _ distance: UInt64,
         fraction: Double,
@@ -217,17 +223,13 @@ package extension Gen {
     ) -> UInt64 {
         guard distance > 0, fraction > 0 else { return 0 }
 
-        if isExponential {
-            // Hedgehog: round(pow(|n-z|+1, size/99) - 1), using size/100 since our size range is [0,100]
-            let result = pow(Double(distance) + 1.0, fraction) - 1.0
-            return min(UInt64(result.rounded()), distance)
-        } else {
-            // Hedgehog: (distance + signum) * size / 100 using integer arithmetic.
-            // The +1 (signum for positive distances) ensures non-trivial ranges at small sizes.
-            let rng = distance + 1
-            let size = UInt64((fraction * 100).rounded())
-            return min((rng &* size) / 100, distance)
-        }
+        let base = distance == .max ? Double(distance) : Double(distance) + 1.0
+        let scaled = isExponential
+            ? pow(base, fraction) - 1.0
+            : base * fraction
+        guard scaled > 0 else { return 0 }
+        if scaled >= Double(distance) { return distance }
+        return UInt64(scaled.rounded())
     }
 
     static func choose<Output: BitPatternConvertible>(
