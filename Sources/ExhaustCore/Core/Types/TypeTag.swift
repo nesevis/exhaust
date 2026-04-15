@@ -102,6 +102,29 @@ package extension TypeTag {
         type(of: makeConvertible(bitPattern64: 0)).bitPatternRange
     }
 
+    /// The bit pattern of this tag's semantically simplest value under the order-preserving encoding.
+    ///
+    /// Unsigned integers, raw bits, and character indices are encoded identically to their natural representation, so zero is `0`. Signed integers XOR the sign bit, mapping `0` to the midpoint of the bit-pattern range (for example, `Int16(0).bitPattern64 == 0x8000`). Floating-point types apply a Hedgehog-style sign-preserving transform that also maps positive zero to the midpoint of the bit-pattern range.
+    ///
+    /// This is the fast-path equivalent of `ChoiceValue(...).semanticSimplest.bitPattern64` and is used by ``Gen/scaledRange(_:scaling:size:)`` to anchor bare `.linear` and `.exponential` distributions without allocating a `ChoiceValue`.
+    @inline(__always)
+    var simplestBitPattern: UInt64 {
+        switch self {
+        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character:
+            0
+        case .int8:
+            1 << 7
+        case .int16:
+            1 << 15
+        case .int32, .float:
+            1 << 31
+        case .float16:
+            1 << 15
+        case .int, .int64, .date, .double:
+            1 << 63
+        }
+    }
+
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {
