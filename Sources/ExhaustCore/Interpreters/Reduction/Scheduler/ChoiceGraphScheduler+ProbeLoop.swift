@@ -204,8 +204,9 @@ extension ChoiceGraphScheduler {
                 } else {
                     application = graph.apply(probe.mutation, freshTree: tree)
                     if application.requiresFullRebuild {
+                        // ``ChoiceGraph/apply(_:freshTree:)`` bailed out and left the graph untouched, but the decoder may have produced a shorter freshSequence (for example, a guided materialization fallback that trimmed bind-inner content). The graph's ``ChoiceGraphNode/positionRange`` values are now stale relative to the post-decode ``sequence``. Calling ``GraphEncoder/refreshScope(graph:sequence:)`` against this stale graph would seed ``IntegerState/leafPositions`` with indices past the end of ``sequence``, producing an index-out-of-range crash on the next probe. Break out so the outer cycle in ``runCore`` rebuilds the graph before the next dispatch.
                         anyRequiresRebuild = true
-                        mutatedStructurally = true
+                        break
                     }
                 }
                 // A successful in-place reshape adds or removes graph

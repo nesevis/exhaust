@@ -24,14 +24,13 @@ struct CalculatorShrinkingChallenge {
      One of the possible difficulties that might come up is the shrinking of recursive expressions.
      */
 
-    @Test("Calculator, Full")
+    @Test("Calculator, Full", .exhaust(regressions: "6PH"))
     func calculatorfull() throws {
-        let gen = #gen(Self.expression(depth: 4))
+        let gen = #gen(Self.expression(depth: 10))
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
             .randomOnly,
-            .replay("23KHVTCX48J7V"),
 //            .replay(5832967290043753512),
             .budget(.exorbitant),
             .logging(.debug, .keyValue)
