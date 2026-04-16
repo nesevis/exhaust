@@ -266,7 +266,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - ChooseBits
 
-            case let .chooseBits(min, max, tag, isRangeExplicit):
+            case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
                 if derivativeContext.depth < 3, max >= min {
                     let rangeSize = (max - min) &+ 1
                     if rangeSize >= 1000 {
@@ -283,7 +283,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                     min: subrange.lowerBound,
                                     max: subrange.upperBound,
                                     tag: tag,
-                                    isRangeExplicit: isRangeExplicit
+                                    isRangeExplicit: isRangeExplicit,
+                                    scaling: scaling
                                 ),
                                 continuation: { .pure($0) }
                             )
@@ -311,7 +312,23 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         )
                     }
                 }
-                let randomBits = context.prng.next(in: min ... max)
+                let effectiveRange: ClosedRange<UInt64>
+                if let scaling {
+                    let size: UInt64 = if let override = context.sizeOverride {
+                        override
+                    } else if context.size > 0 {
+                        context.size
+                    } else {
+                        GenerationContext.scaledSize(forRun: context.runs)
+                    }
+                    context.sizeOverride = nil
+                    effectiveRange = Gen.applyScaling(
+                        min: min, max: max, tag: tag, scaling: scaling, size: size
+                    )
+                } else {
+                    effectiveRange = min ... max
+                }
+                let randomBits = context.prng.next(in: effectiveRange)
                 return try runContinuation(
                     result: randomBits,
                     continuation: continuation,

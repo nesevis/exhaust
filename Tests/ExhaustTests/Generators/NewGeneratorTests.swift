@@ -45,7 +45,7 @@ import Testing
 
         @Test("Shrinks toward threshold")
         func shrinksTowardThreshold() throws {
-            let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
+            let gen = #gen(.float16(in: Float16(0) ... Float16(100), scaling: .constant))
 
             let output = try #require(
                 #exhaust(gen, .suppress(.issueReporting)) { value in value < Float16(50) }

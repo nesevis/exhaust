@@ -62,7 +62,6 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             if value >= 50 {
@@ -78,7 +77,6 @@ import Testing
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50
@@ -93,7 +91,6 @@ import Testing
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50
@@ -106,7 +103,6 @@ import Testing
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             #expect(value < 50)
@@ -121,7 +117,6 @@ import Testing
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
             .replay(42),
-            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50
@@ -131,7 +126,6 @@ import Testing
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
             .replay(42),
-            .budget(.custom(coverage: 0, sampling: 50)),
             .randomOnly
         ) { value in
             value < 50

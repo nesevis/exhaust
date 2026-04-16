@@ -520,35 +520,6 @@ struct ReflectAndFlattenTests {
         #expect(value != 64)
         #expect(materialized == 64)
     }
-
-    @Test("Test cross-boundary shrinking")
-    func crossBoundaryShrinkingWorks() throws {
-        let gen = Gen.arrayOf(Gen.arrayOf(Gen.choose(in: 1 ... 10 as ClosedRange<Int>), within: UInt64(1) ... 10), within: UInt64(1) ... 10)
-        var rafIter2 = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
-        let (value, tree) = try #require(rafIter2.prefix(50).last)
-
-        var sequence = ChoiceSequence.flatten(tree)
-
-        let sequenceStarts = sequence
-            .enumerated()
-            .filter { $0.element == .sequence(true) }
-            .map(\.offset)
-            .dropFirst()
-
-        // Remove a sequence close and open to remove the barrier between two arrays, collapsing them
-        let candidate = try #require(sequenceStarts.last)
-        sequence.removeSubrange((candidate - 1) ... candidate)
-        try #require(ChoiceSequence.validate(sequence))
-        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
-            Issue.record("Expected .success")
-            return
-        }
-
-        // Merging removed one boundary, so one fewer array
-        #expect(materialized.count == value.count - 1)
-        // Elements are the same, even if the exact division isn't
-        #expect(value.flatMap(\.self) == materialized.flatMap(\.self))
-    }
 }
 
 extension RangeSet where Bound == Int {

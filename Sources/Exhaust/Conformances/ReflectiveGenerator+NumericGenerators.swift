@@ -26,8 +26,10 @@ import ExhaustCore
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
-                } else {
+                } else if range == -Float16.greatestFiniteMagnitude ... Float16.greatestFiniteMagnitude {
                     Gen.choose(in: range, scaling: Float16.defaultScaling)
+                } else {
+                    Gen.choose(in: range)
                 }
             } else {
                 Gen.choose(
@@ -55,8 +57,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude {
                 Gen.choose(in: range, scaling: Double.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(
@@ -81,8 +85,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude {
                 Gen.choose(in: range, scaling: Float.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(
@@ -136,8 +142,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == UInt8.min ... UInt8.max {
                 Gen.choose(in: range, scaling: UInt8.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: UInt8.min ... UInt8.max, scaling: scaling ?? UInt8.defaultScaling)
@@ -171,8 +179,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == UInt16.min ... UInt16.max {
                 Gen.choose(in: range, scaling: UInt16.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: UInt16.min ... UInt16.max, scaling: scaling ?? UInt16.defaultScaling)
@@ -206,8 +216,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == UInt32.min ... UInt32.max {
                 Gen.choose(in: range, scaling: UInt32.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: UInt32.min ... UInt32.max, scaling: scaling ?? UInt32.defaultScaling)
@@ -241,8 +253,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == UInt64.min ... UInt64.max {
                 Gen.choose(in: range, scaling: UInt64.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: scaling ?? UInt64.defaultScaling)
@@ -276,8 +290,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == UInt.min ... UInt.max {
                 Gen.choose(in: range, scaling: UInt.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: UInt.min ... UInt.max, scaling: scaling ?? UInt.defaultScaling)
@@ -315,8 +331,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == Int8.min ... Int8.max {
                 Gen.choose(in: range, scaling: Int8.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: Int8.min ... Int8.max, scaling: scaling ?? Int8.defaultScaling)
@@ -346,8 +364,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == Int16.min ... Int16.max {
                 Gen.choose(in: range, scaling: Int16.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: Int16.min ... Int16.max, scaling: scaling ?? Int16.defaultScaling)
@@ -377,8 +397,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == Int32.min ... Int32.max {
                 Gen.choose(in: range, scaling: Int32.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: Int32.min ... Int32.max, scaling: scaling ?? Int32.defaultScaling)
@@ -408,8 +430,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == Int64.min ... Int64.max {
                 Gen.choose(in: range, scaling: Int64.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: Int64.min ... Int64.max, scaling: scaling ?? Int64.defaultScaling)
@@ -436,8 +460,10 @@ public extension ReflectiveGenerator {
         if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
-            } else {
+            } else if range == Int.min ... Int.max {
                 Gen.choose(in: range, scaling: Int.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
         } else {
             Gen.choose(in: Int.min ... Int.max, scaling: scaling ?? Int.defaultScaling)

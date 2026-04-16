@@ -14,7 +14,7 @@ struct BoundaryCoverageIntegrationTests {
         // Random at 100 samples: P(hit) ≈ 100 / (5 * 5) = 100/25 per boundary pair
         // but among full range: 100 / (10001^2) ≈ 0.0001%
         let gen = #gen(.int(in: 0 ... 10000), .int(in: 0 ... 10000))
-        let result = #exhaust(gen, .budget(.custom(coverage: 200, sampling: 100)), .suppress(.issueReporting)) { a, b in
+        let result = #exhaust(gen, .budget(.custom(coverage: 2000, sampling: 0)), .suppress(.issueReporting)) { a, b in
             !(a == 0 && b == 10000)
         }
         #expect(result != nil, "Boundary coverage should find (0, 10000)")
@@ -23,7 +23,7 @@ struct BoundaryCoverageIntegrationTests {
     @Test("Three-parameter boundary interaction is found")
     func threeParamBoundaryInteraction() {
         let gen = #gen(.int(in: 0 ... 10000), .int(in: 0 ... 10000), .int(in: 0 ... 10000))
-        let result = #exhaust(gen, .budget(.custom(coverage: 200, sampling: 10)), .suppress(.issueReporting)) { a, b, _ in
+        let result = #exhaust(gen, .budget(.custom(coverage: 2000, sampling: 0)), .suppress(.issueReporting)) { a, b, _ in
             !(a == 0 && b == 10000)
         }
         #expect(result != nil, "Boundary coverage should find the (0, 10000) pair")

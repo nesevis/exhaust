@@ -59,6 +59,7 @@ extension Materializer {
         max: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
+        scaling: ChooseBitsScaling?,
         continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
@@ -111,7 +112,19 @@ extension Materializer {
             }
 
         case .generate:
-            randomBits = context.prng.next(in: min ... max)
+            // Fresh generation honors scaling; replay / guided / minimize operate
+            // on the declared range so they can reconstruct or target specific
+            // bit patterns without being re-narrowed.
+            let effective: ClosedRange<UInt64>
+            if let scaling {
+                let size = Materializer.consumeSize(&context)
+                effective = Gen.applyScaling(
+                    min: min, max: max, tag: tag, scaling: scaling, size: size
+                )
+            } else {
+                effective = min ... max
+            }
+            randomBits = context.prng.next(in: effective)
 
         case .minimize:
             let placeholder = ChoiceValue(min, tag: tag)
@@ -327,7 +340,7 @@ extension Materializer {
                 // Fast path: extract metadata directly from chooseBits length generators
                 // (the common case, for example `array(length: 0...10)`), avoiding a full
                 // generateRecursive + runContinuation round-trip.
-                if case let .impure(.chooseBits(min, max, _, isRangeExplicit), _) = lengthGen {
+                if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = lengthGen {
                     lengthMeta = ChoiceMetadata(
                         validRange: min ... max,
                         isRangeExplicit: isRangeExplicit

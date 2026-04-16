@@ -33,10 +33,10 @@ struct DifferenceShrinkingChallenge {
      */
     @Test("Difference must not be zero")
     func differenceTest1() {
-        let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+        let gen = #gen(.int(scaling: .constant)).array(length: 2)
 
         let property: @Sendable ([Int]) -> Bool = { arr in
-            arr[0] < 10 || arr[0] != arr[1]
+            return arr[0] < 10 || arr[0] != arr[1]
         }
 
         var report: ExhaustReport?
@@ -54,18 +54,22 @@ struct DifferenceShrinkingChallenge {
 
     @Test("Difference must not be small")
     func differenceTest2() {
-        let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+        let gen = #gen(.int()).array(length: 2)
 
         let property: @Sendable ([Int]) -> Bool = { arr in
-            let diff = abs(arr[0] - arr[1])
-            return arr[0] < 10 || diff < 1 || diff > 4
+            if arr[0] < 10 { return true }
+            let (result, overflow) = arr[0].subtractingReportingOverflow(arr[1])
+            if overflow || result == .min { return true }
+            let diff = abs(result)
+            return diff < 1 || diff > 4
         }
 
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .reflecting([700, 701]),
+            .budget(.custom(coverage: 0, sampling: 10_000)),
+//            .reflecting([700, 701]),
             .onReport { report = $0 },
             property: property
         )
@@ -76,16 +80,20 @@ struct DifferenceShrinkingChallenge {
 
     @Test("Difference must not be one")
     func differenceTest3() {
-        let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+        let gen = #gen(.int()).array(length: 2)
 
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
+            .budget(.exorbitant),
             .suppress(.issueReporting),
             .onReport { report = $0 }
         ) { arr in
-            let diff = abs(arr[0] - arr[1])
-            return arr[0] < 10 || diff != 1
+            if arr[0] < 10 { return true }
+            let (result, overflow) = arr[0].subtractingReportingOverflow(arr[1])
+            if overflow || result == .min { return true }
+            let diff = abs(result)
+            return diff != 1
         }
         if let report { print("[PROFILE] Difference3: \(report.profilingSummary)") }
         #expect(output == [10, 9])

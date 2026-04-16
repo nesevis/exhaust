@@ -61,11 +61,18 @@ package enum ChoiceTreeAnalysis {
         var bestTree: ChoiceTree?
 
         for seed in seeds {
+            // `sizeOverride: 100` ensures size-scaled sequences produce non-empty
+            // element subtrees during VACTI so that ``walkSequence`` can extract
+            // element parameters. The declared range itself is already stored
+            // directly on each `chooseBits` (with scaling attached as metadata), so
+            // the analyzer doesn't need a specific size for range visibility — just
+            // a size at which sequences produce enough elements to walk.
             var interpreter = ValueAndChoiceTreeInterpreter(
                 gen,
                 materializePicks: true,
                 seed: seed,
-                maxRuns: 1
+                maxRuns: 1,
+                sizeOverride: 100
             )
 
             guard let (_, tree) = try? interpreter.next() else {
@@ -256,7 +263,8 @@ package enum ChoiceTreeAnalysis {
         metadata: ChoiceMetadata,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
-        guard let range = metadata.validRange, metadata.isRangeExplicit else {
+        // `isRangeExplicit: false` is accepted because ``analyze(_:)`` runs VACTI with `sizeOverride: 100`, at which point the stored range from a size-scaled `chooseDerived` equals the user-declared range.
+        guard let range = metadata.validRange else {
             return false
         }
 
@@ -383,7 +391,8 @@ package enum ChoiceTreeAnalysis {
         metadata: ChoiceMetadata,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
-        guard let lengthRange = metadata.validRange, metadata.isRangeExplicit else {
+        // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
+        guard let lengthRange = metadata.validRange else {
             return false
         }
 
@@ -482,7 +491,8 @@ package enum ChoiceTreeAnalysis {
         elementIndex: Int,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
-        guard let range = metadata.validRange, metadata.isRangeExplicit else {
+        // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
+        guard let range = metadata.validRange else {
             return false
         }
 

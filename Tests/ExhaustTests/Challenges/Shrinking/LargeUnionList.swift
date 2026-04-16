@@ -112,7 +112,7 @@ struct LargeUnionListShrinkingChallenge {
         let lists = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
 
-        #expect(lists.count == 64)
+        #expect(lists.count == 72)
 
         for list in lists {
             let output = #exhaust(

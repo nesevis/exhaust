@@ -24,7 +24,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         _ generator: ReflectiveGenerator<FinalOutput>,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
-        maxRuns: UInt64? = nil
+        maxRuns: UInt64? = nil,
+        sizeOverride: UInt64? = nil
     ) {
         self.generator = generator
         let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
@@ -32,7 +33,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             maxRuns: maxRuns ?? 100,
             baseSeed: prng.seed,
             isFixed: false,
-            size: 0,
+            size: sizeOverride ?? 0,
             prng: prng,
             materializePicks: materializePicks
         )
@@ -163,12 +164,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             // MARK: - Choosebits
 
-            case let .chooseBits(min, max, tag, isRangeExplicit):
+            case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
                 return try handleChooseBits(
                     min: min,
                     max: max,
                     tag: tag,
                     isRangeExplicit: isRangeExplicit,
+                    scaling: scaling,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context
@@ -210,10 +212,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             // MARK: - GetSize
 
             case .getSize:
-                let size =
-                    context.sizeOverride
-                        ?? GenerationContext.scaledSize(forRun: context.runs)
-                context.sizeOverride = nil // getSize consumes the `sizeOverride`
+                let size = Self.consumeSize(&context)
                 return try runContinuation(
                     result: size,
                     calleeChoiceTree: .getSize(size),
@@ -516,13 +515,24 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         max: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
+        scaling: ChooseBitsScaling?,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
-        let randomBits = context.prng.next(in: min ... max)
+        let effectiveRange: ClosedRange<UInt64>
+        if let scaling {
+            let size = consumeSize(&context)
+            effectiveRange = Gen.applyScaling(
+                min: min, max: max, tag: tag, scaling: scaling, size: size
+            )
+        } else {
+            effectiveRange = min ... max
+        }
+        let randomBits = context.prng.next(in: effectiveRange)
         let choiceTree = ChoiceTree.choice(
             ChoiceValue(randomBits, tag: tag),
+            // The tree always records the declared range so reflection, analysis, and the reducer see user-authoritative bounds.
             .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         )
         return try runContinuation(
@@ -532,6 +542,19 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             inputValue: inputValue,
             context: &context
         )
+    }
+
+    /// Reads the active generation size in precedence order: a one-shot `.resize` override, then the persistent `context.size` baseline (set via the `sizeOverride` init arg — used by ``ChoiceTreeAnalysis`` to force size 100 so size-scaled sequences produce non-empty element subtrees during parameter extraction), then the per-run scaled size cycle.
+    @inline(__always)
+    private static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
+        if let override = context.sizeOverride {
+            context.sizeOverride = nil
+            return override
+        }
+        if context.size > 0 {
+            return context.size
+        }
+        return GenerationContext.scaledSize(forRun: context.runs)
     }
 
     @inline(__always)
