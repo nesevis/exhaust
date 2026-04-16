@@ -30,11 +30,18 @@ extension ChoiceGraph {
              .sequenceReordered:
             application.requiresFullRebuild = true
         }
-        #if DEBUG
-            if application.requiresFullRebuild == false {
-                assertLeafPositionsValid(in: ChoiceSequence(freshTree), label: "apply")
+        if application.requiresFullRebuild == false {
+            if let divergence = leafPositionsDivergence(in: ChoiceSequence(freshTree)) {
+                ExhaustLog.warning(
+                    category: .reducer,
+                    event: "graph_freshtree_divergence",
+                    metadata: [
+                        "detail": divergence,
+                    ]
+                )
+                application.requiresFullRebuild = true
             }
-        #endif
+        }
         return application
     }
 
@@ -173,6 +180,18 @@ extension ChoiceGraph {
         let oldBoundLength = oldBoundRange.count
         let newBoundLength = newBoundSubtree.flattenedEntryCount
         let lengthDelta = newBoundLength - oldBoundLength
+
+        ExhaustLog.debug(
+            category: .reducer,
+            event: "bind_reshape_extents",
+            metadata: [
+                "bind_node": "\(bindNodeID)",
+                "old_range": "\(oldBoundRange.lowerBound)...\(oldBoundRange.upperBound)",
+                "new_length": "\(newBoundLength)",
+                "delta": "\(lengthDelta)",
+                "leaf": "\(leafNodeID)",
+            ]
+        )
 
         // Step 5: tombstone the old bound subtree's node IDs and drop edges
         // referencing them. Tombstones (Layer 1) keep node IDs stable so
@@ -405,6 +424,7 @@ extension ChoiceGraph {
         excluding: Set<Int>
     ) {
         if delta == 0 { return }
+        var shiftedSummary: [String] = []
         for index in nodes.indices {
             if isTombstoned(index) { continue }
             if excluding.contains(index) { continue }
@@ -420,6 +440,9 @@ extension ChoiceGraph {
                 newRange = range.lowerBound ... (range.upperBound + delta)
             } else {
                 continue
+            }
+            if shiftedSummary.count < 16 {
+                shiftedSummary.append("\(node.id):\(range.lowerBound)...\(range.upperBound)→\(newRange.lowerBound)...\(newRange.upperBound)")
             }
 
             // Sequence nodes also store per-child extents that move with
@@ -453,6 +476,15 @@ extension ChoiceGraph {
                 parent: node.parent
             )
         }
+        ExhaustLog.debug(
+            category: .reducer,
+            event: "position_shift_complete",
+            metadata: [
+                "after": "\(insertionPoint)",
+                "delta": "\(delta)",
+                "sample": shiftedSummary.joined(separator: " "),
+            ]
+        )
     }
 }
 

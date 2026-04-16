@@ -229,27 +229,50 @@ package extension ChoiceGraph {
     ///
     /// - Parameter tree: The generator's compositional structure.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
-        let graph = ChoiceGraphBuilder.build(from: tree)
-        #if DEBUG
-            graph.assertLeafPositionsValid(in: ChoiceSequence(tree), label: "build")
-        #endif
-        return graph
+        ChoiceGraphBuilder.build(from: tree)
     }
 
-    #if DEBUG
-        /// Validates that every `chooseBits` node's position range points to a value entry in the sequence. Fires a fatal error with diagnostic context on the first mismatch.
-        func assertLeafPositionsValid(in sequence: ChoiceSequence, label: String) {
-            for node in nodes {
-                guard case .chooseBits = node.kind else { continue }
-                guard let range = node.positionRange else { continue }
-                let position = range.lowerBound
-                guard position < sequence.count else {
-                    fatalError("[\(label)] chooseBits node \(node.id) positionRange \(range) exceeds sequence length \(sequence.count)")
-                }
-                guard sequence[position].value != nil else {
-                    fatalError("[\(label)] chooseBits node \(node.id) at position \(position) points to non-value entry: \(sequence[position])")
-                }
+    /// Returns a diagnostic description if any `chooseBits` node's position range fails to point to a value entry in `sequence`, or `nil` if every leaf position is consistent.
+    ///
+    /// Used after an in-place mutation to detect graph/freshTree structural divergence: when the materializer reshapes the freshTree behind the encoder's back (e.g. low-fidelity PRNG fallback), the graph's stored positionRanges go stale relative to freshTree. The caller is expected to force a full rebuild on a non-`nil` return.
+    func leafPositionsDivergence(in sequence: ChoiceSequence) -> String? {
+        for node in nodes {
+            guard case .chooseBits = node.kind else { continue }
+            guard let range = node.positionRange else { continue }
+            let position = range.lowerBound
+            if position >= sequence.count {
+                return "chooseBits node \(node.id) positionRange \(range.lowerBound)...\(range.upperBound) exceeds sequence length \(sequence.count). Parents: \(parentChainSummary(of: node.id))"
+            }
+            if sequence[position].value == nil {
+                let neighborStart = Swift.max(0, position - 2)
+                let neighborEnd = Swift.min(sequence.count - 1, position + 2)
+                let neighbors = (neighborStart ... neighborEnd)
+                    .map { "[\($0)]=\(sequence[$0])" }
+                    .joined(separator: " ")
+                return """
+                chooseBits node \(node.id) at position \(position) points to non-value entry: \(sequence[position]). Full positionRange: \(range.lowerBound)...\(range.upperBound). Sequence (\(sequence.count) entries) neighbors: \(neighbors). Parents: \(parentChainSummary(of: node.id))
+                """
             }
         }
-    #endif
+        return nil
+    }
+
+    private func parentChainSummary(of nodeID: Int) -> String {
+        var chain: [String] = []
+        var current: Int? = nodeID
+        while let id = current, id < nodes.count, chain.count < 8 {
+            let kindLabel: String = switch nodes[id].kind {
+            case .chooseBits: "chooseBits"
+            case .pick: "pick"
+            case .bind: "bind"
+            case .zip: "zip"
+            case .sequence: "sequence"
+            case .just: "just"
+            }
+            let rangeLabel = nodes[id].positionRange.map { "\($0.lowerBound)...\($0.upperBound)" } ?? "nil"
+            chain.append("\(id):\(kindLabel)@\(rangeLabel)")
+            current = nodes[id].parent
+        }
+        return chain.joined(separator: " → ")
+    }
 }
