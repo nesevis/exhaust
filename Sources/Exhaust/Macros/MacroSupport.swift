@@ -171,17 +171,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     : nil
                 defer {
                     if let statsAccumulator {
-                        let jsonl = statsAccumulator.finalize()
-                        if jsonl.isEmpty == false {
+                        let lines = statsAccumulator.finalize()
+                        if lines.isEmpty == false {
+                            report.openPBTStatsLines = lines
                             let attachmentName = "\(function)-openpbtstats.jsonl"
                             switch TestContext.current {
                             #if canImport(Testing)
                                 case .swiftTesting:
-                                    Attachment.record(jsonl, named: attachmentName)
+                                    Attachment.record(lines.jsonlString(), named: attachmentName)
                             #endif
                             #if canImport(XCTest)
                                 case .xcTest:
-                                    let xctAttachment = XCTAttachment(data: Data(jsonl.utf8), uniformTypeIdentifier: "public.json")
+                                    let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
                                     xctAttachment.name = attachmentName
                                     XCTContext.runActivity(named: "OpenPBTStats") { activity in
                                         activity.add(xctAttachment)
@@ -503,6 +504,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         let testSeconds = Double(testEnd - testStart) / 1_000_000_000
                         var representation = ""
                         customDump(next, to: &representation)
+                        if let rejections = filterRejections, rejections > 0 {
+                            statsAccumulator.recordDiscards(count: rejections, phase: .random)
+                        }
                         statsAccumulator.record(
                             representation: representation,
                             passed: passed,
@@ -513,9 +517,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             filterAttempts: filterAttempts,
                             filterRejections: filterRejections
                         )
-                        if let rejections = filterRejections, rejections > 0 {
-                            statsAccumulator.recordDiscards(count: rejections, phase: .random)
-                        }
                     }
 
                     if passed == false {

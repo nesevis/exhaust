@@ -74,6 +74,11 @@ public struct ExhaustReport: Sendable {
     /// Graph structure and lifecycle statistics from the reduction phase. `nil` when the reduction phase did not run.
     public var graphStats: ChoiceGraphStats?
 
+    /// OpenPBTStats records captured during the run.
+    ///
+    /// Empty when ``ExhaustSettings/collectOpenPBTStats`` is disabled or the run produced no records. Populated whenever stats collection is enabled, independent of whether the host exposes Swift Testing or XCTest. When a test framework is available, the same records — encoded as JSONL via ``Swift/Sequence/jsonlString()`` — are also attached to the running test. For failing runs, the second-to-last element is the failing example and the last element is the reduced counterexample.
+    public var openPBTStatsLines: [OpenPBTStatsLine] = []
+
     /// One-line summary of per-phase invocations and acceptances aggregated across all cycles.
     public var phaseSummary: String {
         ""

@@ -15,13 +15,11 @@ struct OpenPBTStatsTests {
         accumulator.record(representation: "42", passed: true, tree: tree, phase: .coverage)
         accumulator.record(representation: "99", passed: false, tree: tree, phase: .random)
 
-        let jsonl = accumulator.finalize()
-        let lines = jsonl.components(separatedBy: "\n")
+        let lines = accumulator.finalize()
         #expect(lines.count == 2)
 
-        for line in lines {
-            let data = try #require(line.data(using: .utf8))
-            let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let encoded = try encodedLines(lines)
+        for json in encoded {
             #expect(json["type"] as? String == "test_case")
             #expect(json["property"] as? String == "testProperty()")
             #expect(json["run_start"] as? Double != nil)
@@ -38,17 +36,10 @@ struct OpenPBTStatsTests {
             #expect(features["complexity_median"] as? Double == 0.5)
         }
 
-        let firstLine = try #require(lines.first?.data(using: .utf8))
-        let first = try #require(try JSONSerialization.jsonObject(with: firstLine) as? [String: Any])
-        #expect(first["status"] as? String == "passed")
-        let firstFeatures = try #require(first["features"] as? [String: Any])
-        #expect(firstFeatures["phase"] as? String == "coverage")
-
-        let secondLine = try #require(lines.last?.data(using: .utf8))
-        let second = try #require(try JSONSerialization.jsonObject(with: secondLine) as? [String: Any])
-        #expect(second["status"] as? String == "failed")
-        let secondFeatures = try #require(second["features"] as? [String: Any])
-        #expect(secondFeatures["phase"] as? String == "random")
+        #expect(lines[0].status == "passed")
+        #expect(lines[0].features.phase == .coverage)
+        #expect(lines[1].status == "failed")
+        #expect(lines[1].features.phase == .random)
     }
 
     @Test("Gave-up lines have correct status and empty representation")
@@ -56,19 +47,15 @@ struct OpenPBTStatsTests {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "testProperty()")
         accumulator.recordDiscards(count: 3, phase: .random)
 
-        let jsonl = accumulator.finalize()
-        let lines = jsonl.components(separatedBy: "\n")
+        let lines = accumulator.finalize()
         #expect(lines.count == 3)
 
         for line in lines {
-            let data = try #require(line.data(using: .utf8))
-            let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-            #expect(json["type"] as? String == "test_case")
-            #expect(json["status"] as? String == "gave_up")
-            #expect(json["status_reason"] as? String == "filter rejection")
-            #expect(json["representation"] as? String == "")
-            let features = try #require(json["features"] as? [String: Any])
-            #expect(features["choice_count"] as? Int == 0)
+            #expect(line.type == "test_case")
+            #expect(line.status == "gave_up")
+            #expect(line.statusReason == "filter rejection")
+            #expect(line.representation == "")
+            #expect(line.features.choiceCount == 0)
         }
     }
 
@@ -89,12 +76,10 @@ struct OpenPBTStatsTests {
             filterRejections: 3
         )
 
-        let jsonl = accumulator.finalize()
-        let data = try #require(jsonl.data(using: .utf8))
-        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let features = try #require(json["features"] as? [String: Any])
-        #expect(features["filter_attempts"] as? Int == 10)
-        #expect(features["filter_rejections"] as? Int == 3)
+        let lines = accumulator.finalize()
+        #expect(lines.count == 1)
+        #expect(lines[0].features.filterAttempts == 10)
+        #expect(lines[0].features.filterRejections == 3)
     }
 
     @Test("Representation is passed through to JSON output")
@@ -109,10 +94,10 @@ struct OpenPBTStatsTests {
             phase: .coverage
         )
 
-        let jsonl = accumulator.finalize()
-        let data = try #require(jsonl.data(using: .utf8))
-        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let representation = try #require(json["representation"] as? String)
+        let lines = accumulator.finalize()
+        #expect(lines.count == 1)
+        let encoded = try #require(try encodedLines(lines).first)
+        let representation = try #require(encoded["representation"] as? String)
         #expect(representation.contains("name: \"hello\""))
         #expect(representation.contains("value: 42"))
     }
@@ -121,16 +106,13 @@ struct OpenPBTStatsTests {
     func zeroDiscards() {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "test()")
         accumulator.recordDiscards(count: 0, phase: .random)
-
-        let jsonl = accumulator.finalize()
-        #expect(jsonl.isEmpty)
+        #expect(accumulator.finalize().isEmpty)
     }
 
-    @Test("Empty accumulator produces empty string")
+    @Test("Empty accumulator produces no lines")
     func emptyAccumulator() {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "test()")
-        let jsonl = accumulator.finalize()
-        #expect(jsonl.isEmpty)
+        #expect(accumulator.finalize().isEmpty)
     }
 
     @Test("run_start is consistent across all lines")
@@ -141,17 +123,36 @@ struct OpenPBTStatsTests {
         accumulator.record(representation: "2", passed: true, tree: tree, phase: .random)
         accumulator.recordDiscards(count: 1, phase: .random)
 
-        let jsonl = accumulator.finalize()
-        let lines = jsonl.components(separatedBy: "\n")
+        let lines = accumulator.finalize()
         #expect(lines.count == 3)
 
-        var runStarts: Set<Double> = []
-        for line in lines {
-            let data = try #require(line.data(using: .utf8))
-            let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-            let runStart = try #require(json["run_start"] as? Double)
-            runStarts.insert(runStart)
-        }
+        let runStarts = Set(lines.map(\.runStart))
         #expect(runStarts.count == 1)
+    }
+
+    @Test("jsonlString joins records with newlines")
+    func jsonlStringFormat() throws {
+        let accumulator = OpenPBTStatsAccumulator(propertyName: "test()")
+        let tree = ChoiceTree.just
+        accumulator.record(representation: "1", passed: true, tree: tree, phase: .coverage)
+        accumulator.record(representation: "2", passed: true, tree: tree, phase: .random)
+
+        let jsonl = accumulator.finalize().jsonlString()
+        let rawLines = jsonl.components(separatedBy: "\n")
+        #expect(rawLines.count == 2)
+        for raw in rawLines {
+            let data = try #require(raw.data(using: .utf8))
+            _ = try JSONSerialization.jsonObject(with: data)
+        }
+    }
+}
+
+// MARK: - Helpers
+
+private func encodedLines(_ lines: [OpenPBTStatsLine]) throws -> [[String: Any]] {
+    let jsonl = lines.jsonlString()
+    return try jsonl.components(separatedBy: "\n").map { raw in
+        let data = try #require(raw.data(using: .utf8))
+        return try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 }
