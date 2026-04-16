@@ -319,7 +319,7 @@ extension GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        let rangeSize = upper - lower + 1
+        let rangeSize = (lower ... upper).saturatingCount
         let subrangeCount = min(4, Int(min(rangeSize, UInt64(Int.max))))
         let subranges = (lower ... upper).split(into: subrangeCount)
 
@@ -380,7 +380,7 @@ extension GeneratorTuning {
             context.depth += 1
             defer { context.depth -= 1 }
 
-            let rangeSize = upper - lower + 1
+            let rangeSize = (lower ... upper).saturatingCount
             let subrangeCount = min(4, Int(min(rangeSize, UInt64(Int.max))))
             let subranges = (lower ... upper).split(into: subrangeCount)
 

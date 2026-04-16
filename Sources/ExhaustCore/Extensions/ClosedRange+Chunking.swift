@@ -1,4 +1,13 @@
 package extension ClosedRange where Bound == UInt64 {
+    /// Count of values in the range, saturating at `UInt64.max` when the range spans `0...UInt64.max`.
+    ///
+    /// The naive expression `upperBound - lowerBound + 1` traps on the full-domain case because the true count is `2^64`, not representable as `UInt64`. Callers that only need an upper bound for clamping or thresholding should use this instead.
+    var saturatingCount: UInt64 {
+        let span = upperBound &- lowerBound
+        let (incremented, overflow) = span.addingReportingOverflow(1)
+        return overflow ? UInt64.max : incremented
+    }
+
     /// Splits the range into `chunks` roughly equal sub-ranges, distributing any remainder across the leading sub-ranges.
     func split(into chunks: Int) -> [ClosedRange<UInt64>] {
         guard chunks > 0 else { return [] }

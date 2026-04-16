@@ -417,7 +417,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
                     lengthContinuation
                 ) = lengthGen {
-                    let rangeSize = upper - lower + 1
+                    let rangeSize = (lower ... upper).saturatingCount
                     if rangeSize > 4 {
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
                         let subranges = (lower ... upper).split(into: subrangeCount)

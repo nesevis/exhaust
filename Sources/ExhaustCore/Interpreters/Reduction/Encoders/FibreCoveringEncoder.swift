@@ -157,7 +157,7 @@ package struct FibreCoveringEncoder: ComposableEncoder {
                   let validRange = value.validRange
             else { continue }
 
-            let domainSize = validRange.upperBound - validRange.lowerBound + 1
+            let domainSize = validRange.saturatingCount
             positions.append(ValuePosition(
                 index: index,
                 domainLower: validRange.lowerBound,

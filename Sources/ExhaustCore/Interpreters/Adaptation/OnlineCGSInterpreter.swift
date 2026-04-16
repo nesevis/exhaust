@@ -268,7 +268,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
                 if derivativeContext.depth < 3, max >= min {
-                    let rangeSize = (max - min) &+ 1
+                    let rangeSize = (min ... max).saturatingCount
                     if rangeSize >= 1000 {
                         // Synthesize a pick over subranges, matching GeneratorTuning.tuneChooseBits
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
