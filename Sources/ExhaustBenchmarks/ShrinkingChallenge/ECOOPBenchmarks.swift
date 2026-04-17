@@ -26,7 +26,7 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 4)), property: calculatorProperty,
+        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 5)), property: calculatorProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
