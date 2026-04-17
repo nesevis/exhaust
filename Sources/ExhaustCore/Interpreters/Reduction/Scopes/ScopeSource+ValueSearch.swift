@@ -13,18 +13,18 @@ struct MinimizationSource: ScopeSource {
     private var index = 0
 
     init(graph: ChoiceGraph) {
-        let innerChildToBind = ScopeQueryHelpers.buildInnerChildToBind(graph: graph)
+        let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
         var entries: [(scope: MinimizationScope, yield: TransformationYield)] = []
 
-        for scope in MinimizationScopeQuery.build(graph: graph, innerChildToBind: innerChildToBind) {
+        for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind) {
             let valueYield: Int = switch scope {
             case let .valueLeaves(integerScope):
                 integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
-                    max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerChildToBind: innerChildToBind))
+                    max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerDescendantToBind: innerDescendantToBind))
                 }
             case let .floatLeaves(floatScope):
                 floatScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
-                    max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerChildToBind: innerChildToBind))
+                    max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerDescendantToBind: innerDescendantToBind))
                 }
             case let .boundValue(fibreScope):
                 fibreScope.boundSubtreeSize
@@ -74,8 +74,8 @@ struct MinimizationSource: ScopeSource {
         )
     }
 
-    private static func computeValueYield(leafNodeID: Int, graph: ChoiceGraph, innerChildToBind: [Int: Int]) -> Int {
-        guard let bindNodeID = innerChildToBind[leafNodeID] else { return 0 }
+    private static func computeValueYield(leafNodeID: Int, graph: ChoiceGraph, innerDescendantToBind: [Int: Int]) -> Int {
+        guard let bindNodeID = innerDescendantToBind[leafNodeID] else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
         guard metadata.isStructurallyConstant == false else { return 0 }
         guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }

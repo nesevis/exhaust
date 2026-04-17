@@ -16,18 +16,18 @@ enum TransformationEnumerator {
     /// - Parameter graph: The current choice graph.
     /// - Returns: Sorted array of graph transformations, ready for the scheduler's priority queue.
     static func enumerate(from graph: ChoiceGraph) -> [GraphTransformation] {
-        let innerChildToBind = ScopeQueryHelpers.buildInnerChildToBind(graph: graph)
+        let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
         var transformations: [GraphTransformation] = []
 
         transformations.append(contentsOf: removalTransformations(from: graph))
         transformations.append(contentsOf: replacementTransformations(from: graph))
         transformations.append(contentsOf: minimizationTransformations(
             from: graph,
-            innerChildToBind: innerChildToBind
+            innerDescendantToBind: innerDescendantToBind
         ))
         transformations.append(contentsOf: exchangeTransformations(
             from: graph,
-            innerChildToBind: innerChildToBind
+            innerDescendantToBind: innerDescendantToBind
         ))
         transformations.append(contentsOf: permutationTransformations(from: graph))
 
@@ -185,18 +185,18 @@ enum TransformationEnumerator {
 
     private static func minimizationTransformations(
         from graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in MinimizationScopeQuery.build(graph: graph, innerChildToBind: innerChildToBind) {
+        for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind) {
             switch scope {
             case let .valueLeaves(integerScope):
                 let maxValueYield = integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
                     max(maxSoFar, computeValueYield(
                         leafNodeID: nodeID,
                         graph: graph,
-                        innerChildToBind: innerChildToBind
+                        innerDescendantToBind: innerDescendantToBind
                     ))
                 }
                 let maxRange = integerScope.leafNodeIDs.reduce(UInt64(1)) { maxSoFar, nodeID in
@@ -230,7 +230,7 @@ enum TransformationEnumerator {
                     max(maxSoFar, computeValueYield(
                         leafNodeID: nodeID,
                         graph: graph,
-                        innerChildToBind: innerChildToBind
+                        innerDescendantToBind: innerDescendantToBind
                     ))
                 }
                 result.append(GraphTransformation(
@@ -277,11 +277,11 @@ enum TransformationEnumerator {
 
     private static func exchangeTransformations(
         from graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
-        for scope in ExchangeScopeQuery.build(graph: graph, innerChildToBind: innerChildToBind) {
+        for scope in ExchangeScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind) {
             switch scope {
             case let .redistribution(redistScope):
                 // Slack: maximum magnitude transferred (source's distance to target).
@@ -415,9 +415,9 @@ enum TransformationEnumerator {
     private static func computeValueYield(
         leafNodeID: Int,
         graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> Int {
-        guard let bindNodeID = innerChildToBind[leafNodeID] else { return 0 }
+        guard let bindNodeID = innerDescendantToBind[leafNodeID] else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
         guard metadata.isStructurallyConstant == false else { return 0 }
         guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }

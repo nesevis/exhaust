@@ -7,7 +7,7 @@
 
 /// Static scope builder for exchange operations (redistribution and tandem lockstep reduction).
 ///
-/// Replaces the former `ChoiceGraph.exchangeScopes()` instance method. Callers that also need minimization scopes should build ``ScopeQueryHelpers/buildInnerChildToBind(graph:)`` once and pass it to both ``build(graph:innerChildToBind:)`` and ``MinimizationScopeQuery/build(graph:innerChildToBind:)``.
+/// Replaces the former `ChoiceGraph.exchangeScopes()` instance method. Callers that also need minimization scopes should build ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` once and pass it to both ``build(graph:innerDescendantToBind:)`` and ``MinimizationScopeQuery/build(graph:innerDescendantToBind:)``.
 enum ExchangeScopeQuery {
     /// Computes exchange scopes from type-compatibility edges, homogeneous group descriptors, and leaf groupings.
     ///
@@ -15,11 +15,11 @@ enum ExchangeScopeQuery {
     ///
     /// - Parameters:
     ///   - graph: The current choice graph.
-    ///   - innerChildToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerChildToBind(graph:)``. Pass a shared instance when also building minimization scopes so the same dictionary is reused across both families.
+    ///   - innerDescendantToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)``. Pass a shared instance when also building minimization scopes so the same dictionary is reused across both families.
     /// - Returns: Redistribution scope (if pairs exist) and tandem scope (if same-typed leaf groups with at least two members exist).
     static func build(
         graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> [ExchangeScope] {
         var scopes: [ExchangeScope] = []
 
@@ -29,7 +29,7 @@ enum ExchangeScopeQuery {
         var pairs: [RedistributionPair] = []
         pairs.append(contentsOf: homogeneousRedistributionPairs(
             graph: graph,
-            innerChildToBind: innerChildToBind
+            innerDescendantToBind: innerDescendantToBind
         ))
         for edge in graph.typeCompatibilityEdges {
             guard case let .chooseBits(metadataA) = graph.nodes[edge.nodeA].kind,
@@ -59,8 +59,8 @@ enum ExchangeScopeQuery {
             // A is earlier — A can be the source (zeroed), B receives.
             if positionA < positionB, distanceA > 0 {
                 pairs.append(RedistributionPair(
-                    source: ScopeQueryHelpers.makeLeafEntry(edge.nodeA, innerChildToBind: innerChildToBind),
-                    sink: ScopeQueryHelpers.makeLeafEntry(edge.nodeB, innerChildToBind: innerChildToBind),
+                    source: ScopeQueryHelpers.makeLeafEntry(edge.nodeA, innerDescendantToBind: innerDescendantToBind),
+                    sink: ScopeQueryHelpers.makeLeafEntry(edge.nodeB, innerDescendantToBind: innerDescendantToBind),
                     sourceTag: metadataA.typeTag,
                     sinkTag: metadataB.typeTag
                 ))
@@ -68,8 +68,8 @@ enum ExchangeScopeQuery {
             // B is earlier — B can be the source (zeroed), A receives.
             if positionB < positionA, distanceB > 0 {
                 pairs.append(RedistributionPair(
-                    source: ScopeQueryHelpers.makeLeafEntry(edge.nodeB, innerChildToBind: innerChildToBind),
-                    sink: ScopeQueryHelpers.makeLeafEntry(edge.nodeA, innerChildToBind: innerChildToBind),
+                    source: ScopeQueryHelpers.makeLeafEntry(edge.nodeB, innerDescendantToBind: innerDescendantToBind),
+                    sink: ScopeQueryHelpers.makeLeafEntry(edge.nodeA, innerDescendantToBind: innerDescendantToBind),
                     sourceTag: metadataB.typeTag,
                     sinkTag: metadataA.typeTag
                 ))
@@ -89,7 +89,7 @@ enum ExchangeScopeQuery {
         let tandemGroups = leafGroups.compactMap { tag, leafIDs -> TandemGroup? in
             guard leafIDs.count >= 2 else { return nil }
             let entries = leafIDs.map {
-                ScopeQueryHelpers.makeLeafEntry($0, innerChildToBind: innerChildToBind)
+                ScopeQueryHelpers.makeLeafEntry($0, innerDescendantToBind: innerDescendantToBind)
             }
             return TandemGroup(leaves: entries, typeTag: tag)
         }
@@ -100,11 +100,11 @@ enum ExchangeScopeQuery {
         return scopes
     }
 
-    /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerChildToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building minimization scopes so the index is computed once and shared.
+    /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building minimization scopes so the index is computed once and shared.
     static func build(graph: ChoiceGraph) -> [ExchangeScope] {
         build(
             graph: graph,
-            innerChildToBind: ScopeQueryHelpers.buildInnerChildToBind(graph: graph)
+            innerDescendantToBind: ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
         )
     }
 
@@ -117,7 +117,7 @@ enum ExchangeScopeQuery {
     /// - Complexity: O(C log C) per sequence (dominated by the distance sort), O(groups) for cross-zip pairing. No O(C^2) enumeration.
     private static func homogeneousRedistributionPairs(
         graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         var pairs: [RedistributionPair] = []
 
@@ -132,7 +132,7 @@ enum ExchangeScopeQuery {
                 childIDs: parentNode.children,
                 tag: tag,
                 graph: graph,
-                innerChildToBind: innerChildToBind
+                innerDescendantToBind: innerDescendantToBind
             )
             pairs.append(contentsOf: intraPairs)
         }
@@ -184,7 +184,7 @@ enum ExchangeScopeQuery {
                         sinkChildIDs: sinkGroup.children,
                         tag: groupA.tag,
                         graph: graph,
-                        innerChildToBind: innerChildToBind
+                        innerDescendantToBind: innerDescendantToBind
                     )
                     pairs.append(contentsOf: crossPairs)
                     indexB += 1
@@ -203,7 +203,7 @@ enum ExchangeScopeQuery {
         childIDs: [Int],
         tag: TypeTag,
         graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         // Collect leaves with position and distance.
         var leaves: [(nodeID: Int, position: Int, distance: UInt64)] = []
@@ -227,8 +227,8 @@ enum ExchangeScopeQuery {
             // Pair with the first later-position leaf.
             if index + 1 < leaves.count {
                 pairs.append(RedistributionPair(
-                    source: ScopeQueryHelpers.makeLeafEntry(leaves[index].nodeID, innerChildToBind: innerChildToBind),
-                    sink: ScopeQueryHelpers.makeLeafEntry(leaves[index + 1].nodeID, innerChildToBind: innerChildToBind),
+                    source: ScopeQueryHelpers.makeLeafEntry(leaves[index].nodeID, innerDescendantToBind: innerDescendantToBind),
+                    sink: ScopeQueryHelpers.makeLeafEntry(leaves[index + 1].nodeID, innerDescendantToBind: innerDescendantToBind),
                     sourceTag: tag,
                     sinkTag: tag
                 ))
@@ -245,7 +245,7 @@ enum ExchangeScopeQuery {
         sinkChildIDs: [Int],
         tag: TypeTag,
         graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         guard let firstSinkID = sinkChildIDs.first else { return [] }
         guard graph.nodes[firstSinkID].positionRange != nil else { return [] }
@@ -268,8 +268,8 @@ enum ExchangeScopeQuery {
 
         return sources.prefix(budget).map { source in
             RedistributionPair(
-                source: ScopeQueryHelpers.makeLeafEntry(source.nodeID, innerChildToBind: innerChildToBind),
-                sink: ScopeQueryHelpers.makeLeafEntry(firstSinkID, innerChildToBind: innerChildToBind),
+                source: ScopeQueryHelpers.makeLeafEntry(source.nodeID, innerDescendantToBind: innerDescendantToBind),
+                sink: ScopeQueryHelpers.makeLeafEntry(firstSinkID, innerDescendantToBind: innerDescendantToBind),
                 sourceTag: tag,
                 sinkTag: tag
             )

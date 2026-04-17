@@ -7,17 +7,17 @@
 
 /// Static scope builder for minimization operations.
 ///
-/// Replaces the former `ChoiceGraph.minimizationScopes()` instance method. The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeScopeQuery`` can share a single ``ScopeQueryHelpers/buildInnerChildToBind(graph:)`` allocation.
+/// Replaces the former `ChoiceGraph.minimizationScopes()` instance method. The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeScopeQuery`` can share a single ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` allocation.
 enum MinimizationScopeQuery {
     /// Computes minimization scopes: one integer scope, one float scope, and one bound value scope per non-constant reduction edge.
     ///
     /// - Parameters:
     ///   - graph: The current choice graph.
-    ///   - innerChildToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerChildToBind(graph:)``. Pass a shared instance when also building exchange scopes so the same dictionary is reused across both families.
+    ///   - innerDescendantToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)``. Pass a shared instance when also building exchange scopes so the same dictionary is reused across both families.
     /// - Returns: All minimization scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
     static func build(
         graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> [MinimizationScope] {
         var scopes: [MinimizationScope] = []
 
@@ -49,7 +49,7 @@ enum MinimizationScopeQuery {
                 let valueYield = computeValueYield(
                     leafNodeID: node.id,
                     graph: graph,
-                    innerChildToBind: innerChildToBind
+                    innerDescendantToBind: innerDescendantToBind
                 )
                 integerLeafNodeIDs.append(node.id)
                 integerValueYields[node.id] = valueYield
@@ -63,7 +63,7 @@ enum MinimizationScopeQuery {
 
         if integerLeafNodeIDs.isEmpty == false {
             let entries = integerLeafNodeIDs.map { nodeID in
-                ScopeQueryHelpers.makeLeafEntry(nodeID, innerChildToBind: innerChildToBind)
+                ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
             }
             scopes.append(.valueLeaves(ValueMinimizationScope(
                 leaves: entries,
@@ -73,41 +73,44 @@ enum MinimizationScopeQuery {
 
         if floatLeafNodeIDs.isEmpty == false {
             let entries = floatLeafNodeIDs.map { nodeID in
-                ScopeQueryHelpers.makeLeafEntry(nodeID, innerChildToBind: innerChildToBind)
+                ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
             }
             scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
 
-        // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage.
-        for node in graph.nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            let boundChildID = node.children[metadata.boundChildIndex]
-            guard graph.nodes[innerChildID].positionRange != nil else { continue }
+        // Bound value scope emission is currently disabled to measure the contribution of ``GraphComposedEncoder`` against the standard pipeline. The encoder code remains in place; only the scope query no longer feeds it. Restore by removing the early-`if false` guard. See the multi-leaf upstream investigation for context.
+        if false {
+            // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage.
+            for node in graph.nodes {
+                guard case let .bind(metadata) = node.kind else { continue }
+                guard node.positionRange != nil else { continue }
+                guard node.children.count >= 2 else { continue }
+                let innerChildID = node.children[metadata.innerChildIndex]
+                let boundChildID = node.children[metadata.boundChildIndex]
+                guard graph.nodes[innerChildID].positionRange != nil else { continue }
 
-            let downstreamNodeIDs = collectDescendantLeaves(
-                from: boundChildID,
-                graph: graph
-            )
-            let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
-            scopes.append(.boundValue(BoundValueScope(
-                bindNodeID: findParentBind(of: innerChildID, graph: graph) ?? innerChildID,
-                upstreamLeafNodeID: innerChildID,
-                downstreamNodeIDs: downstreamNodeIDs,
-                boundSubtreeSize: boundSubtreeSize
-            )))
+                let downstreamNodeIDs = collectDescendantLeaves(
+                    from: boundChildID,
+                    graph: graph
+                )
+                let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
+                scopes.append(.boundValue(BoundValueScope(
+                    bindNodeID: findParentBind(of: innerChildID, graph: graph) ?? innerChildID,
+                    upstreamLeafNodeID: innerChildID,
+                    downstreamNodeIDs: downstreamNodeIDs,
+                    boundSubtreeSize: boundSubtreeSize
+                )))
+            }
         }
 
         return scopes
     }
 
-    /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerChildToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building exchange scopes so the index is computed once and shared.
+    /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building exchange scopes so the index is computed once and shared.
     static func build(graph: ChoiceGraph) -> [MinimizationScope] {
         build(
             graph: graph,
-            innerChildToBind: ScopeQueryHelpers.buildInnerChildToBind(graph: graph)
+            innerDescendantToBind: ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
         )
     }
 
@@ -119,9 +122,9 @@ enum MinimizationScopeQuery {
     private static func computeValueYield(
         leafNodeID: Int,
         graph: ChoiceGraph,
-        innerChildToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int]
     ) -> Int {
-        guard let bindNodeID = innerChildToBind[leafNodeID] else { return 0 }
+        guard let bindNodeID = innerDescendantToBind[leafNodeID] else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
         guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }
         let boundChildID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
