@@ -5,11 +5,11 @@ import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
-let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
+let usePrecompiled = true
 
 
 let coreTarget: Target = usePrecompiled
-    ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
+    ? .binaryTarget(name: "ExhaustCore", url: "https://github.com/nesevis/exhaust/releases/download/v0.3.13/ExhaustCore.xcframework.zip", checksum: "4bd1c2586874c8b4f90f976ca5d14a429c55dc28be98833c5800f2332bb4d746")
     : .target(
         name: "ExhaustCore",
         dependencies: [],
