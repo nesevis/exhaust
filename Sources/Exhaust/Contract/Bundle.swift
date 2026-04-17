@@ -74,6 +74,13 @@ public final class Bundle<Element>: @unchecked Sendable {
         let wrappedIndex = index % elements.count
         return elements.remove(at: wrappedIndex)
     }
+    
+    /// Removes all values from the bundle where `predicate` returns `true`.
+    ///
+    /// Use this when bulk removal of specific elements is required.
+    public func remove(where predicate: (Element) -> Bool) {
+        elements = elements.filter(predicate)
+    }
 
     /// Removes all elements from the bundle.
     public func reset() {
