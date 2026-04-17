@@ -304,13 +304,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 let rendered = failure.render(
                                     format: logFormat
                                 )
-                                if suppressIssueReporting == false {
-                                    ExhaustLog.error(
-                                        category: .propertyTest,
-                                        event: "property_failed",
-                                        rendered
-                                    )
-                                }
                                 let reductionEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                                 logPhaseTimings(
                                     start: phaseTimingStart,
@@ -379,11 +372,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
                         let rendered = failure.render(format: logFormat)
                         if suppressIssueReporting == false {
-                            ExhaustLog.error(
-                                category: .propertyTest,
-                                event: "property_failed",
-                                rendered
-                            )
                             reportIssue(
                                 rendered,
                                 fileID: fileID,
@@ -551,13 +539,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                     propertyInvocations: propertyInvocationCount
                                 )
                                 let rendered = failure.render(format: logFormat)
-                                if suppressIssueReporting == false {
-                                    ExhaustLog.error(
-                                        category: .propertyTest,
-                                        event: "property_failed",
-                                        rendered
-                                    )
-                                }
                                 ExhaustLog.debug(
                                     category: .propertyTest,
                                     event: "reduced_blueprint",
@@ -632,11 +613,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         )
                         let rendered = failure.render(format: logFormat)
                         if suppressIssueReporting == false {
-                            ExhaustLog.error(
-                                category: .propertyTest,
-                                event: "property_failed",
-                                rendered
-                            )
                             reportIssue(
                                 rendered,
                                 fileID: fileID,
@@ -1196,11 +1172,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     propertyInvocations: nil
                 )
                 let rendered = failure.render(format: logFormat)
-                ExhaustLog.error(
-                    category: .propertyTest,
-                    event: "explore_property_failed",
-                    rendered
-                )
                 if !suppressIssueReporting {
                     reportIssue(
                         rendered,
@@ -1224,11 +1195,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     propertyInvocations: nil
                 )
                 let rendered = failure.render(format: logFormat)
-                ExhaustLog.error(
-                    category: .propertyTest,
-                    event: "explore_property_failed",
-                    rendered
-                )
                 if !suppressIssueReporting {
                     reportIssue(
                         rendered,
@@ -1379,11 +1345,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
-            ExhaustLog.error(
-                category: .propertyTest,
-                event: "reflecting_value_passes",
-                message
-            )
             if !suppressIssueReporting {
                 reportIssue(
                     message,
@@ -1399,11 +1360,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         guard let tree = try Interpreters.reflect(gen, with: value) else {
             let message = "reflecting: could not reflect value into choice tree"
-            ExhaustLog.error(
-                category: .propertyTest,
-                event: "reflecting_failed",
-                message
-            )
             if !suppressIssueReporting {
                 reportIssue(
                     message,
@@ -1447,11 +1403,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 propertyInvocations: propertyInvocationCount
             )
             let rendered = failure.render(format: ExhaustLog.configuration.format)
-            ExhaustLog.error(
-                category: .propertyTest,
-                event: "reflecting_reduced",
-                rendered
-            )
             let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
             let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
@@ -1497,11 +1448,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             propertyInvocations: propertyInvocationCount
         )
         let rendered = failure.render(format: ExhaustLog.configuration.format)
-        ExhaustLog.error(
-            category: .propertyTest,
-            event: "reflecting_unreduced",
-            rendered
-        )
         let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
         let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
