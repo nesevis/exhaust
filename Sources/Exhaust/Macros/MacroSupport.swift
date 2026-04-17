@@ -304,11 +304,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 let rendered = failure.render(
                                     format: logFormat
                                 )
-                                ExhaustLog.error(
-                                    category: .propertyTest,
-                                    event: "property_failed",
-                                    rendered
-                                )
+                                if suppressIssueReporting == false {
+                                    ExhaustLog.error(
+                                        category: .propertyTest,
+                                        event: "property_failed",
+                                        rendered
+                                    )
+                                }
                                 let reductionEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                                 logPhaseTimings(
                                     start: phaseTimingStart,
@@ -376,12 +378,12 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         )
                         failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
                         let rendered = failure.render(format: logFormat)
-                        ExhaustLog.error(
-                            category: .propertyTest,
-                            event: "property_failed",
-                            rendered
-                        )
-                        if !suppressIssueReporting {
+                        if suppressIssueReporting == false {
+                            ExhaustLog.error(
+                                category: .propertyTest,
+                                event: "property_failed",
+                                rendered
+                            )
                             reportIssue(
                                 rendered,
                                 fileID: fileID,
@@ -549,11 +551,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                     propertyInvocations: propertyInvocationCount
                                 )
                                 let rendered = failure.render(format: logFormat)
-                                ExhaustLog.error(
-                                    category: .propertyTest,
-                                    event: "property_failed",
-                                    rendered
-                                )
+                                if suppressIssueReporting == false {
+                                    ExhaustLog.error(
+                                        category: .propertyTest,
+                                        event: "property_failed",
+                                        rendered
+                                    )
+                                }
                                 ExhaustLog.debug(
                                     category: .propertyTest,
                                     event: "reduced_blueprint",
@@ -627,18 +631,20 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             propertyInvocations: propertyInvocationCount
                         )
                         let rendered = failure.render(format: logFormat)
-                        ExhaustLog.error(
-                            category: .propertyTest,
-                            event: "property_failed",
-                            rendered
-                        )
-                        reportIssue(
-                            rendered,
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
+                        if suppressIssueReporting == false {
+                            ExhaustLog.error(
+                                category: .propertyTest,
+                                event: "property_failed",
+                                rendered
+                            )
+                            reportIssue(
+                                rendered,
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column
+                            )
+                        }
                         report.setInvocations(
                             coverage: coverageIterations,
                             randomSampling: iterations,
