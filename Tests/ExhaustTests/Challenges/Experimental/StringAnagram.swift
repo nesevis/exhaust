@@ -44,7 +44,6 @@ struct StringAnagramChallenge {
 
         let property: @Sendable (String, String) -> Bool = { a, b in
             guard a != b, a.count == b.count else { return true }
-            print("\(a) \(b)")
             return a.sorted() != b.sorted()
         }
 
@@ -54,9 +53,8 @@ struct StringAnagramChallenge {
 
         let result = #exhaust(
             gen,
-            .suppress(.issueReporting),
             .reflecting(value),
-            .logging(.debug),
+            .suppress(.issueReporting),
             property: property
         )
         let output = try #require(result)
