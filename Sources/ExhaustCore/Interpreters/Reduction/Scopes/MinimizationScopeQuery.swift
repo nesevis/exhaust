@@ -78,29 +78,26 @@ enum MinimizationScopeQuery {
             scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
         }
 
-        // Bound value scope emission is currently disabled to measure the contribution of ``GraphComposedEncoder`` against the standard pipeline. The encoder code remains in place; only the scope query no longer feeds it. Restore by removing the early-`if false` guard. See the multi-leaf upstream investigation for context.
-        if false {
-            // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage.
-            for node in graph.nodes {
-                guard case let .bind(metadata) = node.kind else { continue }
-                guard node.positionRange != nil else { continue }
-                guard node.children.count >= 2 else { continue }
-                let innerChildID = node.children[metadata.innerChildIndex]
-                let boundChildID = node.children[metadata.boundChildIndex]
-                guard graph.nodes[innerChildID].positionRange != nil else { continue }
+        // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage. Dispatch is gated per-site by ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` in the scheduler, which rejects topology-divergent binds (Calculator's `.recursive`) before any probe runs.
+        for node in graph.nodes {
+            guard case let .bind(metadata) = node.kind else { continue }
+            guard node.positionRange != nil else { continue }
+            guard node.children.count >= 2 else { continue }
+            let innerChildID = node.children[metadata.innerChildIndex]
+            let boundChildID = node.children[metadata.boundChildIndex]
+            guard graph.nodes[innerChildID].positionRange != nil else { continue }
 
-                let downstreamNodeIDs = collectDescendantLeaves(
-                    from: boundChildID,
-                    graph: graph
-                )
-                let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
-                scopes.append(.boundValue(BoundValueScope(
-                    bindNodeID: findParentBind(of: innerChildID, graph: graph) ?? innerChildID,
-                    upstreamLeafNodeID: innerChildID,
-                    downstreamNodeIDs: downstreamNodeIDs,
-                    boundSubtreeSize: boundSubtreeSize
-                )))
-            }
+            let downstreamNodeIDs = collectDescendantLeaves(
+                from: boundChildID,
+                graph: graph
+            )
+            let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
+            scopes.append(.boundValue(BoundValueScope(
+                bindNodeID: findParentBind(of: innerChildID, graph: graph) ?? innerChildID,
+                upstreamLeafNodeID: innerChildID,
+                downstreamNodeIDs: downstreamNodeIDs,
+                boundSubtreeSize: boundSubtreeSize
+            )))
         }
 
         return scopes

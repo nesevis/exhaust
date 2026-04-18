@@ -339,12 +339,18 @@ extension ChoiceGraph {
             }
         }
 
-        // Step 9: refresh structural-constancy on the bind. The new subtree
-        // may have flipped from "constant" to "non-constant" or vice versa
-        // depending on whether it contains nested binds or picks.
+        // Step 9: refresh structural-constancy on the bind, and clear any
+        // cached ``BindMetadata/classification``. The new subtree may have
+        // flipped from "constant" to "non-constant" or vice versa depending on
+        // whether it contains nested binds or picks, and any previously-
+        // recorded classification reflects the pre-reshape subtree's shape —
+        // it must not be reused against a subtree that has been spliced out
+        // from under it. The bind node is rewritten whenever either signal has
+        // changed since the last refresh.
         let newIsStructurallyConstant = newBoundSubtree.containsBind == false
             && newBoundSubtree.containsPicks == false
-        if newIsStructurallyConstant != bindMetadata.isStructurallyConstant {
+        let hadClassification = bindMetadata.classification != nil || bindMetadata.downstreamFingerprint != nil
+        if newIsStructurallyConstant != bindMetadata.isStructurallyConstant || hadClassification {
             nodes[bindNodeID] = ChoiceGraphNode(
                 id: bindNodeID,
                 kind: .bind(BindMetadata(
@@ -352,7 +358,9 @@ extension ChoiceGraph {
                     bindDepth: bindMetadata.bindDepth,
                     innerChildIndex: bindMetadata.innerChildIndex,
                     boundChildIndex: bindMetadata.boundChildIndex,
-                    bindPath: bindMetadata.bindPath
+                    bindPath: bindMetadata.bindPath,
+                    classification: nil,
+                    downstreamFingerprint: nil
                 )),
                 positionRange: nodes[bindNodeID].positionRange,
                 children: nodes[bindNodeID].children,

@@ -280,6 +280,21 @@ enum ChoiceGraphScheduler {
                     if fruitlessDependentNodes.contains(fibreScope.bindNodeID) {
                         continue
                     }
+                    // Classification gate: lift at the upstream's range endpoints and record how the bound subtree responds. Binds whose topology diverges under upstream variation (Calculator's `.recursive`) cannot be minimised by binary-search-style dependent-node encoders — each upstream probe reshapes the downstream and wipes out accumulated reductions. Parked into ``fruitlessDependentNodes`` so subsequent pulls in this graph state also skip, and the verdict is cleared naturally on reshape or full rebuild.
+                    graph.classifyBind(
+                        at: fibreScope.bindNodeID,
+                        gen: erasedGen,
+                        baseSequence: sequence,
+                        fallbackTree: tree,
+                        upstreamLeafNodeID: fibreScope.upstreamLeafNodeID
+                    )
+                    if case let .bind(bindMetadata) = graph.nodes[fibreScope.bindNodeID].kind,
+                       let classification = bindMetadata.classification,
+                       classification.topology != .identical || classification.liftability != .both
+                    {
+                        fruitlessDependentNodes.insert(fibreScope.bindNodeID)
+                        continue
+                    }
                 }
 
                 // Per-encoder cycle budget: skip if the budget has been exhausted for this encoder.
