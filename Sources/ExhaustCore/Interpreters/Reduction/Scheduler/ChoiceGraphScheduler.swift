@@ -387,6 +387,7 @@ enum ChoiceGraphScheduler {
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     boundValueDispatchedThisCycle.insert(fibreScope.bindNodeID)
                 }
+                let sequenceLengthBeforeDispatch = sequence.count
                 let outcome = try runProbeLoop(
                     encoder: &encoder,
                     scope: scope,
@@ -402,6 +403,21 @@ enum ChoiceGraphScheduler {
                     isInstrumented: isInstrumented,
                     materializationBudget: encoderCycleBudget[pendingEncoderName]
                 )
+                if config.collectProbeLog {
+                    let yield = transformation.yield
+                    stats.probeLog.append(ProbeLogEntry(
+                        cycle: cycles,
+                        encoder: pendingEncoderName,
+                        predictedStructuralYield: yield.structural,
+                        predictedValueYield: yield.value,
+                        predictedSlackAdditive: yield.slack.additive,
+                        estimatedProbes: yield.estimatedProbes,
+                        probeCount: outcome.probeCount,
+                        acceptCount: outcome.acceptCount,
+                        sequenceLengthBefore: sequenceLengthBeforeDispatch,
+                        sequenceLengthAfter: sequence.count
+                    ))
+                }
 
                 // Harvest convergence from value encoders. The encoder's
                 // ``convergenceRecords`` is keyed by graph nodeID (so it
