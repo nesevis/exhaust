@@ -350,13 +350,14 @@ extension Materializer {
             )
 
         case let .impure(
-            .transform(.bind(forward, backward, inputType, outputType), inner),
+            .transform(.bind(fingerprint, forward, backward, inputType, outputType), inner),
             continuation
         ):
             let (calleeFallback, continuationFallback) =
                 decomposeNonGroupFallback(fallbackTree)
             return try handleTransform(
                 kind: .bind(
+                    fingerprint: fingerprint,
                     forward: forward, backward: backward,
                     inputType: inputType, outputType: outputType
                 ),

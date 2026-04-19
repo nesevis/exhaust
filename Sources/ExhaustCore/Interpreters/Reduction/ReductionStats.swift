@@ -30,6 +30,11 @@ public struct ReductionStats: Sendable {
     /// Graph structure and lifecycle statistics accumulated during reduction.
     public var graphStats: ChoiceGraphStats
 
+    // MARK: - Probe Log
+
+    /// Per-dispatch records of yield-based scope dispatches. Empty unless ``Interpreters/ReducerConfiguration/collectProbeLog`` is `true`. Populated only at the standard yield-merge dispatch site; bound value, low-shortcut, and convergence-confirmation dispatches are not recorded.
+    public var probeLog: [ProbeLogEntry] = []
+
     /// Creates an empty stats value.
     public init() {
         encoderProbes = [:]
@@ -39,5 +44,67 @@ public struct ReductionStats: Sendable {
         totalMaterializations = 0
         cycles = 0
         graphStats = ChoiceGraphStats()
+    }
+}
+
+// MARK: - Probe Log Entry
+
+/// One record per standard yield-merge dispatch from ``ChoiceGraphScheduler``.
+///
+/// Used to evaluate whether the scheduler's ``TransformationYield`` ranking is well-calibrated against realized acceptance. The yield components are decomposed into primitive fields so the entry stays public without leaking the package-internal yield type.
+public struct ProbeLogEntry: Sendable {
+    /// One-based cycle index in which the dispatch occurred.
+    public var cycle: Int
+
+    /// Encoder family selected for the dispatch.
+    public var encoder: EncoderName
+
+    /// Predicted structural yield (sequence positions removed). Higher is preferred.
+    public var predictedStructuralYield: Int
+
+    /// Predicted value yield (bound subtree size unlocked by minimization). Higher is preferred.
+    public var predictedValueYield: Int
+
+    /// Approximation slack additive component. Zero for exact reductions.
+    public var predictedSlackAdditive: Int
+
+    /// Estimated number of probes the encoder will need.
+    public var estimatedProbes: Int
+
+    /// Number of probes the encoder actually attempted in this dispatch.
+    public var probeCount: Int
+
+    /// Number of probes the decoder accepted in this dispatch.
+    public var acceptCount: Int
+
+    /// Sequence length immediately before the dispatch.
+    public var sequenceLengthBefore: Int
+
+    /// Sequence length immediately after the dispatch.
+    public var sequenceLengthAfter: Int
+
+    /// Creates a probe log entry.
+    public init(
+        cycle: Int,
+        encoder: EncoderName,
+        predictedStructuralYield: Int,
+        predictedValueYield: Int,
+        predictedSlackAdditive: Int,
+        estimatedProbes: Int,
+        probeCount: Int,
+        acceptCount: Int,
+        sequenceLengthBefore: Int,
+        sequenceLengthAfter: Int
+    ) {
+        self.cycle = cycle
+        self.encoder = encoder
+        self.predictedStructuralYield = predictedStructuralYield
+        self.predictedValueYield = predictedValueYield
+        self.predictedSlackAdditive = predictedSlackAdditive
+        self.estimatedProbes = estimatedProbes
+        self.probeCount = probeCount
+        self.acceptCount = acceptCount
+        self.sequenceLengthBefore = sequenceLengthBefore
+        self.sequenceLengthAfter = sequenceLengthAfter
     }
 }

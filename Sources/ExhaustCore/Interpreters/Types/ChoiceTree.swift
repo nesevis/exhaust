@@ -51,7 +51,9 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
     ///
     /// Produced by VACTI, reflection, and materialization for `.transform(.bind(...))` operations.
     /// In Phase 1, all reducer passes treat `.bind` like `.group([inner, bound])`.
-    indirect case bind(inner: ChoiceTree, bound: ChoiceTree)
+    ///
+    /// `fingerprint` is the source-location hash carried from the originating ``ReflectiveOperation/transform(kind:inner:)`` (`TransformKind.bind.fingerprint`). It survives every materialization round-trip and is read by ``ChoiceGraphBuilder`` to populate ``BindMetadata/fingerprint`` for the classification cache.
+    indirect case bind(fingerprint: UInt64, inner: ChoiceTree, bound: ChoiceTree)
 
     /// Wraps the selected branch in a ``group`` of ``branch`` nodes. Produced by reflection and VACTI, consumed by replay and materialization.
     indirect case selected(ChoiceTree)
@@ -81,7 +83,7 @@ package extension ChoiceTree {
                 // group open + children + group close
                 2 + array.reduce(0) { $0 + $1.flattenedEntryCount }
             }
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             // bind open + inner + bound + bind close
             2 + inner.flattenedEntryCount + bound.flattenedEntryCount
         case let .resize(_, choices):
@@ -129,7 +131,7 @@ package extension ChoiceTree {
     /// Binds whose inner tree is `.getSize` are structurally stable (the size parameter is fixed during reduction) and are excluded.
     var containsBind: Bool {
         switch self {
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             if inner.isGetSize {
                 return bound.containsBind
             }
@@ -177,7 +179,7 @@ package extension ChoiceTree {
             elements.contains(where: \.containsPicks)
         case let .group(array, _):
             array.contains(where: \.containsPicks)
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             inner.containsPicks || bound.containsPicks
         case let .resize(_, choices):
             choices.contains(where: \.containsPicks)
@@ -203,7 +205,7 @@ package extension ChoiceTree {
             return elements.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
         case let .group(array, _):
             return array.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             let innerComplexity = inner.pickComplexityHelper(pickDepth: pickDepth)
             let boundComplexity = bound.pickComplexityHelper(pickDepth: pickDepth)
             return max(innerComplexity, boundComplexity)
@@ -245,8 +247,8 @@ package extension ChoiceTree {
         case let .group(children, isOpaque: isOpaque):
             // For a group, recursively map over its children.
             return try .group(children.map { try $0.map(transform) }, isOpaque: isOpaque)
-        case let .bind(inner, bound):
-            return try .bind(inner: inner.map(transform), bound: bound.map(transform))
+        case let .bind(fingerprint, inner, bound):
+            return try .bind(fingerprint: fingerprint, inner: inner.map(transform), bound: bound.map(transform))
         case let .selected(child):
             // For a selected node, recursively map over the locked child.
             return try .selected(child.map(transform))
@@ -290,7 +292,7 @@ package extension ChoiceTree {
         case let .sequence(_, elements, _), let .group(elements, _):
             // For a sequence, recursively map over its elements.
             return elements.contains { $0.contains(predicate) }
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             return inner.contains(predicate) || bound.contains(predicate)
         case let .selected(child):
             // For a locked node, recursively map over the locked child.
@@ -353,7 +355,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             }
             return result
 
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             var result = prefix + connector + "bind"
             result += "\n" + inner.treeDescription(prefix: childPrefix, isLast: false)
             result += "\n" + bound.treeDescription(prefix: childPrefix, isLast: true)
@@ -394,7 +396,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             "\(weight),\(id): \(gen.elementDescription)"
         case let .group(array, _):
             "{" + array.map(\.elementDescription).joined() + "}"
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             "{" + inner.elementDescription + bound.elementDescription + "}"
         case let .selected(choiceTree):
             choiceTree.elementDescription
@@ -495,7 +497,7 @@ package extension ChoiceTree {
                 child.collectNormalizedScores(into: &scores)
             }
 
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             inner.collectNormalizedScores(into: &scores)
             bound.collectNormalizedScores(into: &scores)
 

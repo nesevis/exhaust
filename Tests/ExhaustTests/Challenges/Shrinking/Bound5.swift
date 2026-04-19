@@ -20,33 +20,17 @@ struct Bound5ShrinkingChallenge {
      The interesting thing about this example is the interdependence between separate parts of the sample data. A single list in the tuple will never break the invariant, but you need at least two lists together. This prevents most of trivial shrinking algorithms from getting close to a minimum example, which would look something like ([-32768], [-1], [], [], []).
      */
 
-    private static let gen: ReflectiveGenerator<Bound5> = {
-        let arr = #gen(.int16(scaling: .constant).array(length: 0 ... 10, scaling: .constant))
-            .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-        return #gen(arr, arr, arr, arr, arr) { a, b, c, d, e in
-            Bound5(a: a, b: b, c: c, d: d, e: e)
-        }
-    }()
-
-    private static let property: (Bound5) -> Bool = { b5 in
-        if b5.arr.isEmpty {
-            return true
-        }
-//        print("Attempt: \(b5)")
-        return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
-    }
-
     @Test("Bound5, Single")
     func bound5Single() {
         var report: ExhaustReport?
         let output = #exhaust(
-            Self.gen,
+            Bound5Fixture.gen,
             .randomOnly,
             .suppress(.issueReporting),
             .replay(16_799_307_796_119_368_455),
             .onReport { report = $0 },
             .logging(.debug),
-            property: Self.property
+            property: Bound5Fixture.property
         )
         if let report { print("[PROFILE] Bound5Single: \(report.profilingSummary)") }
 
@@ -56,7 +40,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 1")
     func bound5Pathological() {
-        let value: Bound5 = .init(
+        let value = Bound5Fixture.Tuple(
             a: [-18914, -2906, 9816],
             b: [7672, 16087, 24512],
             c: [-11812, -5368, 8526, -24292, 21020, 14344, -1893, -22885],
@@ -66,11 +50,11 @@ struct Bound5ShrinkingChallenge {
 
         var report: ExhaustReport?
         let output = #exhaust(
-            Self.gen,
+            Bound5Fixture.gen,
             .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 },
-            property: Self.property
+            property: Bound5Fixture.property
         )
         if let report { print("[PROFILE] Bound5Path1: \(report.profilingSummary)") }
 
@@ -80,7 +64,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 2")
     func bound5Pathological2() {
-        let value: Bound5 = .init(
+        let value = Bound5Fixture.Tuple(
             a: [-10709],
             b: [29251, 31661],
             c: [-18678],
@@ -90,11 +74,11 @@ struct Bound5ShrinkingChallenge {
 
         var report: ExhaustReport?
         let output = #exhaust(
-            Self.gen,
+            Bound5Fixture.gen,
             .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 },
-            property: Self.property
+            property: Bound5Fixture.property
         )
         if let report { print("[PROFILE] Bound5Path2: \(report.profilingSummary)") }
 
@@ -104,7 +88,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 3")
     func bound5Pathological3() throws {
-        let value: Bound5 = .init(
+        let value = Bound5Fixture.Tuple(
             a: [-11954, 25609, -21279],
             b: [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491],
             c: [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124],
@@ -113,12 +97,12 @@ struct Bound5ShrinkingChallenge {
         )
         var report: ExhaustReport?
         let output = #exhaust(
-            Self.gen,
+            Bound5Fixture.gen,
             .suppress(.issueReporting),
             .reflecting(value),
             .onReport { report = $0 },
             .logging(.debug, .keyValue),
-            property: Self.property
+            property: Bound5Fixture.property
         )
 
         let rep = try #require(report)
@@ -131,7 +115,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 4")
     func bound5Pathological4() {
-        let value: Bound5 = .init(
+        let value = Bound5Fixture.Tuple(
             a: [10607, 11752, -7272, -15733],
             b: [],
             c: [14063, -27312, 2705],
@@ -140,11 +124,11 @@ struct Bound5ShrinkingChallenge {
         )
         var report: ExhaustReport?
         let output = #exhaust(
-            Self.gen,
+            Bound5Fixture.gen,
             .suppress(.all),
             .reflecting(value),
             .onReport { report = $0 },
-            property: Self.property
+            property: Bound5Fixture.property
         )
         if let report { print("[PROFILE] Bound5Path4: \(report.profilingSummary)") }
 
@@ -155,11 +139,11 @@ struct Bound5ShrinkingChallenge {
     @Test("Bound5, pathological 5")
     func bound5Pathological5() {
         let output = #exhaust(
-            Self.gen,
+            Bound5Fixture.gen,
             .suppress(.issueReporting),
             .replay(12_394_678_611_125_950_626),
             .logging(.debug, .jsonl),
-            property: Self.property
+            property: Bound5Fixture.property
         )
 
         #expect(output?.arr.count == 2)
@@ -169,9 +153,9 @@ struct Bound5ShrinkingChallenge {
     @Test("Bound5, covering array time")
     func bound5CoveringArray() {
         let output = #exhaust(
-            Self.gen,
+            Bound5Fixture.gen,
             .suppress(.issueReporting),
-            property: Self.property
+            property: Bound5Fixture.property
         )
 
         #expect(output?.arr.count == 2)
@@ -180,15 +164,15 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, 52")
     func bound5Many() {
-        let bound5s = #example(Self.gen, count: 100, seed: 1337)
-            .filter { Self.property($0) == false }
+        let bound5s = #example(Bound5Fixture.gen, count: 100, seed: 1337)
+            .filter { Bound5Fixture.property($0) == false }
         for bound5 in bound5s {
             let output = #exhaust(
-                Self.gen,
+                Bound5Fixture.gen,
                 .suppress(.issueReporting),
                 .reflecting(bound5),
                 .randomOnly,
-                property: Self.property
+                property: Bound5Fixture.property
             )
 
             #expect(output?.arr.count == 2)
@@ -201,12 +185,10 @@ struct Bound5ShrinkingChallenge {
     /// This isn't exactly bound25 in that the property doesn't want all of them to be minimal, just that one is. It's here to test the BatchCrossSequenceRemovalSource
     @Test("Bound25!")
     func bound25() throws {
-        let gen = #gen(Self.gen, Self.gen, Self.gen, Self.gen, Self.gen)
-        let property: @Sendable (Bound5) -> Bool = { b5 in
-            if b5.arr.isEmpty {
-                return true
-            }
-            return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
+        let gen = #gen(Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen)
+        let property: @Sendable (Bound5Fixture.Tuple) -> Bool = { tuple in
+            if tuple.arr.isEmpty { return true }
+            return tuple.arr.dropFirst().reduce(tuple.arr[0], &+) < 5 * 256
         }
         var report: ExhaustReport?
         let output = #exhaust(
@@ -232,26 +214,5 @@ struct Bound5ShrinkingChallenge {
 
         #expect(arr.count == 2)
         #expect(arr.sorted() == [-32768, -1])
-    }
-
-    // MARK: - Types
-
-    struct Bound5: Equatable {
-        let a: [Int16]
-        let b: [Int16]
-        let c: [Int16]
-        let d: [Int16]
-        let e: [Int16]
-
-        let arr: [Int16]
-
-        init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
-            self.a = a
-            self.b = b
-            self.c = c
-            self.d = d
-            self.e = e
-            arr = a + b + c + d + e
-        }
     }
 }

@@ -22,6 +22,8 @@ extension ChoiceGraphScheduler {
         let treeIsStripped: Bool
         let probeCount: Int
         let acceptCount: Int
+        /// Probes that reached the decoder (probeCount minus cache hits). Cache hits are free hash lookups that should not count toward futility budgets.
+        let materializationCount: Int
     }
 
     // swiftlint:disable function_parameter_count
@@ -241,6 +243,16 @@ extension ChoiceGraphScheduler {
             } else {
                 rejectCache.insert(probeHash)
                 decoderRejectCount += 1
+                if isInstrumented {
+                    logReplacementProbeRejection(
+                        mutation: probe.mutation,
+                        encoder: encoder.name,
+                        graph: graph,
+                        baseSequenceCount: sequence.count,
+                        probeSequenceCount: probe.candidate.count,
+                        probeHash: probeHash
+                    )
+                }
             }
 
             if collectStats {
@@ -296,11 +308,71 @@ extension ChoiceGraphScheduler {
             requiresSourceRebuild: anyRequiresSourceRebuild,
             treeIsStripped: latestAcceptedTreeIsStripped,
             probeCount: probeCount,
-            acceptCount: acceptCount
+            acceptCount: acceptCount,
+            materializationCount: decoderRejectCount + acceptCount
         )
     }
 
     // swiftlint:enable function_parameter_count
+
+    /// Logs a `graph_probe_rejected` debug event for replacement probes rejected by the decoder. Skips other mutation kinds to keep the event stream focused on the substitution family where cross-layer splicing is suspect.
+    private static func logReplacementProbeRejection(
+        mutation: ProjectedMutation,
+        encoder: EncoderName,
+        graph: ChoiceGraph,
+        baseSequenceCount: Int,
+        probeSequenceCount: Int,
+        probeHash: UInt64
+    ) {
+        let kind: String
+        let subjectNodeIDs: [(label: String, id: Int)]
+        switch mutation {
+        case let .branchSelected(pickNodeID, newSelectedID):
+            kind = "branchSelected"
+            subjectNodeIDs = [
+                ("pick_node", pickNodeID),
+                ("new_selected_id", Int(newSelectedID)),
+            ]
+        case let .selfSimilarReplaced(targetNodeID, donorNodeID):
+            kind = "selfSimilarReplaced"
+            subjectNodeIDs = [
+                ("target_node", targetNodeID),
+                ("donor_node", donorNodeID),
+            ]
+        case let .descendantPromoted(ancestorPickNodeID, descendantPickNodeID):
+            kind = "descendantPromoted"
+            subjectNodeIDs = [
+                ("ancestor_node", ancestorPickNodeID),
+                ("descendant_node", descendantPickNodeID),
+            ]
+        case .leafValues, .sequenceElementsRemoved, .sequenceElementsMigrated,
+             .siblingsSwapped, .sequenceReordered:
+            return
+        }
+
+        var metadata: [String: String] = [
+            "encoder": encoder.rawValue,
+            "mutation": kind,
+            "base_seq_len": "\(baseSequenceCount)",
+            "probe_seq_len": "\(probeSequenceCount)",
+            "seq_len_delta": "\(probeSequenceCount - baseSequenceCount)",
+            "probe_hash": "\(probeHash)",
+        ]
+        for (label, id) in subjectNodeIDs {
+            metadata[label] = "\(id)"
+            if id >= 0, id < graph.nodes.count {
+                if let range = graph.nodes[id].positionRange {
+                    metadata["\(label)_range"] = "\(range.lowerBound)...\(range.upperBound)"
+                }
+            }
+        }
+
+        ExhaustLog.debug(
+            category: .reducer,
+            event: "graph_probe_rejected",
+            metadata: metadata
+        )
+    }
 }
 
 // MARK: - Pre-Started Adapter

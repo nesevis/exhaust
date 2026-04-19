@@ -115,7 +115,7 @@ enum ReplacementScopeQuery {
         case let .branch(_, _, _, _, choice): leafCount(in: choice)
         case let .group(children, _): children.reduce(0) { $0 + leafCount(in: $1) }
         case let .resize(_, choices): choices.reduce(0) { $0 + leafCount(in: $1) }
-        case let .bind(inner, bound): leafCount(in: inner) + leafCount(in: bound)
+        case let .bind(_, inner, bound): leafCount(in: inner) + leafCount(in: bound)
         case let .selected(inner): leafCount(in: inner)
         }
     }

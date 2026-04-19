@@ -7,7 +7,7 @@ indirect enum Expr: Equatable, CustomDebugStringConvertible, CustomStringConvert
     case add(Expr, Expr)
     case div(Expr, Expr)
 
-    var intValue: Int? {
+    var value: Int? {
         guard case let .value(value) = self else { return nil }
         return value
     }
@@ -34,16 +34,16 @@ enum EvalError: Error {
     case divisionByZero
 }
 
-func evalExpr(_ expr: Expr) throws -> Int {
+func eval(_ expr: Expr) throws -> Int {
     switch expr {
     case let .value(value):
         return value
     case let .add(lhs, rhs):
-        return try evalExpr(lhs) + evalExpr(rhs)
+        return try eval(lhs) &+ eval(rhs)
     case let .div(lhs, rhs):
-        let denominator = try evalExpr(rhs)
+        let denominator = try eval(rhs)
         guard denominator != 0 else { throw EvalError.divisionByZero }
-        return try evalExpr(lhs) / denominator
+        return try eval(lhs) / denominator
     }
 }
 
@@ -63,8 +63,8 @@ func containsLiteralDivisionByZero(_ expr: Expr) -> Bool {
 // MARK: - Generator
 
 func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
-    let leaf = #gen(.int(in: -10 ... 10))
-        .mapped(forward: { Expr.value($0) }, backward: { $0.intValue ?? 0 })
+    let leaf = #gen(.int())
+        .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
 
     return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
         let add = #gen(recurse(), recurse())
@@ -104,7 +104,7 @@ func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
 let calculatorProperty: @Sendable (Expr) -> Bool = { expr in
     guard containsLiteralDivisionByZero(expr) == false else { return true }
     do {
-        _ = try evalExpr(expr)
+        _ = try eval(expr)
         return true
     } catch {
         return false

@@ -90,7 +90,7 @@ package enum CoveringArrayReplay {
             }
             return .group(newChildren)
 
-        case let .bind(inner, bound):
+        case let .bind(fingerprint, inner, bound):
             // Substitute parameters in inner only; pass bound through unchanged.
             guard let newInner = substituteParameters(
                 in: inner,
@@ -100,7 +100,7 @@ package enum CoveringArrayReplay {
             ) else {
                 return nil
             }
-            return .bind(inner: newInner, bound: bound)
+            return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
         case let .selected(inner):
             guard let newInner = substituteParameters(

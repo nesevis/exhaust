@@ -81,6 +81,10 @@ func registerECOOPBenchmarks() {
         name: "Parser", gen: parserLangGen, property: parserProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, sizeMetric: parserSize
     )
+    registerECOOPPair(
+        name: "GraphColoring", gen: graphColoringGen, property: graphColoringProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
 }
 
 /// Registers a benchmark for a single challenge using the graph-based reducer.

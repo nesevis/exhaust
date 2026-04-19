@@ -98,6 +98,7 @@ struct ChoiceTreeVisualizationTests {
     @Test("Bind with getSize collapses to visible children")
     func bindWithGetSize() {
         let tree = ChoiceTree.bind(
+            fingerprint: 0,
             inner: .getSize(42),
             bound: .group([
                 .choice(.unsigned(5, .uint), meta100),

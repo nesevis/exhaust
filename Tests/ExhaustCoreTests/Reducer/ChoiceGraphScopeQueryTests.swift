@@ -303,4 +303,159 @@ struct ChoiceGraphScopeQueryTests {
         }
         #expect(hasCoveringAligned)
     }
+
+    // MARK: - Inner Descendant Index
+
+    @Test("Scalar bind-inner leaf is indexed to its bind")
+    func innerDescendantIndexScalar() {
+        let inner = ChoiceTree.choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
+        let graph = ChoiceGraph.build(from: tree)
+        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { return true } else { return false } }?.id
+        #expect(bindNodeID != nil)
+        guard let bindNodeID else { return }
+
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return }
+        let innerLeafID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
+        let boundLeafID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
+
+        #expect(index[innerLeafID] == bindNodeID)
+        #expect(index[boundLeafID] == nil)
+        #expect(ScopeQueryHelpers.isBindInner(innerLeafID, innerDescendantToBind: index))
+        #expect(ScopeQueryHelpers.isBindInner(boundLeafID, innerDescendantToBind: index) == false)
+    }
+
+    @Test("Multi-leaf bind-inner leaves are all indexed to the bind")
+    func innerDescendantIndexMultiLeafSequence() {
+        // Inner is a sequence of three leaves; bound is a single leaf.
+        let innerSequence = ChoiceTree.sequence(
+            length: 3,
+            elements: [
+                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            ],
+            .init(validRange: nil, isRangeExplicit: false)
+        )
+        let bound = ChoiceTree.choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
+        let graph = ChoiceGraph.build(from: tree)
+        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { return true } else { return false } }?.id
+        #expect(bindNodeID != nil)
+        guard let bindNodeID else { return }
+
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return }
+        let innerContainerID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
+        let boundLeafID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
+
+        // Collect chooseBits descendants of the inner sequence.
+        var innerLeafIDs: [Int] = []
+        var stack = [innerContainerID]
+        while let current = stack.popLast() {
+            let node = graph.nodes[current]
+            if case .chooseBits = node.kind {
+                innerLeafIDs.append(current)
+            }
+            stack.append(contentsOf: node.children)
+        }
+        #expect(innerLeafIDs.count == 3)
+
+        // Every inner-subtree leaf maps to the bind.
+        for leafID in innerLeafIDs {
+            #expect(index[leafID] == bindNodeID, "Inner leaf \(leafID) should map to bind \(bindNodeID)")
+            #expect(ScopeQueryHelpers.isBindInner(leafID, innerDescendantToBind: index))
+        }
+        // The container itself is not indexed (only chooseBits leaves are).
+        #expect(index[innerContainerID] == nil)
+        // The bound leaf is untouched.
+        #expect(index[boundLeafID] == nil)
+    }
+
+    @Test("Multi-leaf inner leaves receive reshape-on-accept marker")
+    func multiLeafInnerReshapeMarker() {
+        let innerSequence = ChoiceTree.sequence(
+            length: 2,
+            elements: [
+                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            ],
+            .init(validRange: nil, isRangeExplicit: false)
+        )
+        let bound = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
+        let graph = ChoiceGraph.build(from: tree)
+        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+
+        let scopes = MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: index)
+        guard case let .valueLeaves(integerScope) = scopes.first(where: { if case .valueLeaves = $0 { return true } else { return false } }) else {
+            Issue.record("Expected integer-leaves scope")
+            return
+        }
+
+        // Collect inner-descendant leaf IDs so we can check their entries.
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { return true } else { return false } }?.id
+        guard let bindNodeID, case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return }
+        let innerContainerID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
+        var innerLeafIDs: Set<Int> = []
+        var stack = [innerContainerID]
+        while let current = stack.popLast() {
+            let node = graph.nodes[current]
+            if case .chooseBits = node.kind {
+                innerLeafIDs.insert(current)
+            }
+            stack.append(contentsOf: node.children)
+        }
+
+        // Every inner-subtree leaf entry must carry the reshape marker.
+        for entry in integerScope.leaves where innerLeafIDs.contains(entry.nodeID) {
+            #expect(entry.mayReshapeOnAcceptance, "Inner leaf \(entry.nodeID) missing mayReshapeOnAcceptance")
+        }
+    }
+
+    @Test("Nested binds: descendants are claimed by the outermost enclosing bind")
+    func innerDescendantIndexNested() {
+        // outerBind.inner = (innerBind.inner = leafA, innerBind.bound = leafB) placed inside an outer bind.
+        // That would put leafA inside both innerBind.inner and outerBind.inner subtree.
+        let leafA = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let leafB = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let innerBind = ChoiceTree.bind(fingerprint: 0, inner: leafA, bound: leafB)
+        let leafOuterBound = ChoiceTree.choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let outerBind = ChoiceTree.bind(fingerprint: 0, inner: innerBind, bound: leafOuterBound)
+
+        let graph = ChoiceGraph.build(from: outerBind)
+        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+
+        // Identify the two bind nodes; outer appears first (lower ID).
+        let bindIDs = graph.nodes.compactMap { node -> Int? in
+            if case .bind = node.kind { return node.id }
+            return nil
+        }
+        #expect(bindIDs.count == 2)
+        guard bindIDs.count == 2 else { return }
+        let outerBindID = bindIDs[0]
+        let innerBindID = bindIDs[1]
+
+        // Find leafA — the sole chooseBits leaf inside the inner bind's inner subtree, which is also inside the outer bind's inner subtree.
+        guard case let .bind(outerMeta) = graph.nodes[outerBindID].kind,
+              case let .bind(innerMeta) = graph.nodes[innerBindID].kind else { return }
+        let innerBindInnerContainerID = graph.nodes[innerBindID].children[innerMeta.innerChildIndex]
+        // Since leafA is directly the inner bind's inner child, innerBindInnerContainerID IS leafA.
+        let leafAID = innerBindInnerContainerID
+
+        // Claim goes to the outer bind (outermost-wins): leafA is inside both inner and outer inner subtrees, outermost wins.
+        #expect(index[leafAID] == outerBindID)
+
+        // leafB (inner bind's bound) is NOT inside inner bind's inner subtree, but IS inside outer bind's inner subtree (everything under innerBind is, including its bound). So it is claimed by the outer bind.
+        let leafBID = graph.nodes[innerBindID].children[innerMeta.boundChildIndex]
+        #expect(index[leafBID] == outerBindID)
+
+        // The outer bind's bound leaf is not in any inner subtree.
+        let outerBoundID = graph.nodes[outerBindID].children[outerMeta.boundChildIndex]
+        #expect(index[outerBoundID] == nil)
+    }
 }

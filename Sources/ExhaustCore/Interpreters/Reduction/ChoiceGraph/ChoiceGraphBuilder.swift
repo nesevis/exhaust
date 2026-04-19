@@ -72,8 +72,16 @@ struct ChoiceGraphBuilder {
         case let .group(array, isOpaque):
             return walkGroup(children: array, isOpaque: isOpaque, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
 
-        case let .bind(inner, bound):
-            return walkBind(inner: inner, bound: bound, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
+        case let .bind(fingerprint, inner, bound):
+            return walkBind(
+                fingerprint: fingerprint,
+                inner: inner,
+                bound: bound,
+                offset: offset,
+                parent: parent,
+                bindDepth: bindDepth,
+                path: path
+            )
 
         case let .resize(_, choices):
             // Resize is operational — skip the node, walk children as a group.
@@ -328,6 +336,7 @@ struct ChoiceGraphBuilder {
     }
 
     private mutating func walkBind(
+        fingerprint: UInt64,
         inner: ChoiceTree,
         bound: ChoiceTree,
         offset: Int,
@@ -348,6 +357,7 @@ struct ChoiceGraphBuilder {
 
         let nodeID = emitNode(
             kind: .bind(BindMetadata(
+                fingerprint: fingerprint,
                 isStructurallyConstant: bound.containsBind == false && bound.containsPicks == false,
                 bindDepth: bindDepth,
                 innerChildIndex: 0,

@@ -154,3 +154,15 @@ public enum ExhaustSettings<Output> {
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
 }
+
+// MARK: - Debug Toggles
+
+private nonisolated(unsafe) var _probeLoggingEnabled = false
+
+extension ExhaustSettings {
+    /// Enables per-dispatch probe log collection in the reducer. Off by default because the log allocates per dispatch. Toggle for offline calibration analysis.
+    package static var probeLoggingEnabled: Bool {
+        get { _probeLoggingEnabled }
+        set { _probeLoggingEnabled = newValue }
+    }
+}

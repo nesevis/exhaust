@@ -544,7 +544,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         derivativeContext: derivativeContext
                     ) else { return nil }
                     result = try forward(innerValue)
-                case let .bind(forward, _, _, _):
+                case let .bind(_, forward, _, _, _):
                     guard let innerValue = try generateRecursive(
                         inner,
                         with: inputValue,

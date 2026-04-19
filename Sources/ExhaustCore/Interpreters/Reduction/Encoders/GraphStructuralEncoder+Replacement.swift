@@ -177,8 +177,9 @@ extension GraphStructuralEncoder {
                 newSize: newSize,
                 choices: choices.map { minimizingLeaves(in: $0) }
             )
-        case let .bind(inner, bound):
+        case let .bind(fingerprint, inner, bound):
             return .bind(
+                fingerprint: fingerprint,
                 inner: minimizingLeaves(in: inner),
                 bound: minimizingLeaves(in: bound)
             )

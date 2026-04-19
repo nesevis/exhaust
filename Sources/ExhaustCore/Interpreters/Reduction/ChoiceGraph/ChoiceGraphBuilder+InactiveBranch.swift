@@ -103,13 +103,14 @@ extension ChoiceGraphBuilder {
                 )
             }
 
-        case let .bind(inner, bound):
+        case let .bind(fingerprint, inner, bound):
             if inner.isGetSize {
                 // getSize-bind is transparent — walk bound directly.
                 walkInactiveBranch(bound, parent: parent, bindDepth: bindDepth)
             } else {
                 let nodeID = emitNode(
                     kind: .bind(BindMetadata(
+                        fingerprint: fingerprint,
                         isStructurallyConstant: bound.containsBind == false && bound.containsPicks == false,
                         bindDepth: bindDepth,
                         innerChildIndex: 0,

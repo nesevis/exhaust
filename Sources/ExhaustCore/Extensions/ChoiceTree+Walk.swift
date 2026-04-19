@@ -39,7 +39,7 @@ package extension ChoiceTree {
             []
         case let .group(elements, _):
             elements
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             [inner, bound]
         case let .sequence(_, elements, _):
             elements
@@ -61,9 +61,11 @@ package extension ChoiceTree {
             var copy = elements
             copy[index] = newChild
             return .group(copy)
-        case let .bind(inner, bound):
+        case let .bind(fingerprint, inner, bound):
             precondition(index < 2, "bind has exactly two children")
-            return index == 0 ? .bind(inner: newChild, bound: bound) : .bind(inner: inner, bound: newChild)
+            return index == 0
+                ? .bind(fingerprint: fingerprint, inner: newChild, bound: bound)
+                : .bind(fingerprint: fingerprint, inner: inner, bound: newChild)
         case let .sequence(length, elements, metadata):
             var copy = elements
             copy[index] = newChild

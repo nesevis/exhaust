@@ -86,6 +86,9 @@ package struct PickMetadata {
 
 /// Metadata for a ``ChoiceGraphNodeKind/bind(_:)`` dependency node.
 package struct BindMetadata {
+    /// Stable hash of the originating `.bind` source location, carried through from ``ReflectiveOperation/transform(kind:inner:)`` (via ``ChoiceTree/bind(fingerprint:inner:bound:)``) to identify this bind site across graph rebuilds. Used by ``ChoiceGraph/bindClassifications`` to cache the classification verdict — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds.
+    public let fingerprint: UInt64
+
     /// Whether the bound subtree contains no nested binds or picks, meaning the inner value controls ranges and counts but not tree shape.
     public let isStructurallyConstant: Bool
 
@@ -100,6 +103,72 @@ package struct BindMetadata {
 
     /// Structural path from the ``ChoiceTree`` root at graph-construction time to this bind. Used by ``ChoiceGraph/extractBoundSubtree(from:matchingPath:)`` to locate the matching bind in a post-mutation freshTree. The root bind has the empty path.
     public let bindPath: BindPath
+
+    /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``GraphComposedEncoder``) so unsuitable sites are skipped immediately rather than via emergent futility counting.
+    public var classification: BindClassification?
+
+    /// Topology hash of the bound subtree at classification time. Nil until classification runs. Intended as a future-facing staleness check: callers may re-hash the current bound subtree and compare against this value before trusting a cached ``classification``. Today, reshape clearing and full-graph-rebuild replacement already cover the common invalidation paths, so this field is defensive rather than load-bearing.
+    public var downstreamFingerprint: UInt64?
+
+    public init(
+        fingerprint: UInt64,
+        isStructurallyConstant: Bool,
+        bindDepth: Int,
+        innerChildIndex: Int,
+        boundChildIndex: Int,
+        bindPath: BindPath,
+        classification: BindClassification? = nil,
+        downstreamFingerprint: UInt64? = nil
+    ) {
+        self.fingerprint = fingerprint
+        self.isStructurallyConstant = isStructurallyConstant
+        self.bindDepth = bindDepth
+        self.innerChildIndex = innerChildIndex
+        self.boundChildIndex = boundChildIndex
+        self.bindPath = bindPath
+        self.classification = classification
+        self.downstreamFingerprint = downstreamFingerprint
+    }
+}
+
+// MARK: - Bind Classification
+
+/// Classifies a bind site by how its bound subtree responds to variation in the upstream value.
+///
+/// Produced by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Stored on ``BindMetadata/classification``. Read by expensive dependent-node encoders before dispatch.
+package struct BindClassification: Equatable, Hashable, Sendable {
+    /// Structural relationship between the bound subtrees lifted at the upstream range's low and high endpoints.
+    public let topology: BindTopology
+
+    /// Which of the two endpoint lifts succeeded.
+    public let liftability: BindLiftability
+
+    public init(topology: BindTopology, liftability: BindLiftability) {
+        self.topology = topology
+        self.liftability = liftability
+    }
+}
+
+/// Shape-stability verdict from the classifier's two lifts.
+package enum BindTopology: Equatable, Hashable, Sendable {
+    /// The two lifted bound subtrees have the same skeleton — same node kinds and child counts at matching positions. Leaf-level descriptor differences (tag, width, range) do not break this verdict; they are the signal expensive encoders such as ``GraphComposedEncoder`` converge on.
+    case identical
+    /// The two lifted bound subtrees disagree on node kind or child count at some non-leaf position. Binary-search-style dependent-node encoders cannot converge because each upstream probe reshapes the downstream topology.
+    case divergent
+    /// The classifier could not produce a comparison: singleton upstream domain, both lifts threw, or the walk could not be performed.
+    case unclassifiable
+}
+
+/// Reports which range endpoints the classifier was able to lift.
+package enum BindLiftability: Equatable, Hashable, Sendable {
+    /// Both endpoints materialized successfully.
+    case both
+    /// Only the low endpoint materialized.
+    case lowOnly
+    /// Only the high endpoint materialized.
+    case highOnly
+    /// Neither endpoint materialized.
+    case neither
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.

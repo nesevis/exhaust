@@ -13,7 +13,7 @@ import Testing
 
 @Suite("Bound5 Scaling Variants")
 struct Bound5ScalingVariant {
-    typealias Bound5 = Bound5ShrinkingChallenge.Bound5
+    typealias Bound5 = Bound5Fixture.Tuple
 
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func bound5(variant: ScalingVariant) {
@@ -57,16 +57,16 @@ struct Bound5ScalingVariant {
 
 @Suite("Binary Heap Scaling Variants")
 struct BinaryHeapScalingVariant {
-    typealias Heap = BinaryHeapShrinkingChallenge.Heap<Int>
+    typealias Heap = BinaryHeapFixture.Heap<Int>
 
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func binaryHeap(variant: ScalingVariant) throws {
         let scaling: SizeScaling<Int> = variant.scaling()
         let gen = Self.heapGen(depth: 6, scaling: scaling)
         let property: @Sendable (Heap) -> Bool = { heap in
-            guard BinaryHeapShrinkingChallenge.invariant(heap) else { return true }
-            let xs = BinaryHeapShrinkingChallenge.toSortedList(heap)
-            let sorted = BinaryHeapShrinkingChallenge.toList(heap).sorted()
+            guard BinaryHeapFixture.invariant(heap) else { return true }
+            let xs = BinaryHeapFixture.toSortedList(heap)
+            let sorted = BinaryHeapFixture.toList(heap).sorted()
             return sorted == xs.sorted() && xs == xs.sorted()
         }
 
@@ -81,7 +81,7 @@ struct BinaryHeapScalingVariant {
             )
         )
         if let report { print("[PROFILE] BinaryHeapScaling(\(variant)): \(report.profilingSummary)") }
-        let outputValues = BinaryHeapShrinkingChallenge.toList(output).sorted()
+        let outputValues = BinaryHeapFixture.toList(output).sorted()
         #expect(Set(outputValues) == [0, 1])
     }
 
@@ -122,7 +122,7 @@ struct BinaryHeapScalingVariant {
 
 @Suite("Calculator Scaling Variants")
 struct CalculatorScalingVariant {
-    typealias Expr = CalculatorShrinkingChallenge.Expr
+    typealias Expr = CalculatorFixture.Expr
 
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func calculator(variant: ScalingVariant) {
@@ -136,17 +136,7 @@ struct CalculatorScalingVariant {
             .reflecting(Expr.div(.value(5), .add(.value(3), .value(-3)))),
             .onReport { report = $0 }
         ) { expr in
-            guard CalculatorShrinkingChallenge.containsLiteralDivisionByZero(expr) == false else {
-                return true
-            }
-            do {
-                _ = try CalculatorShrinkingChallenge.eval(expr)
-                return true
-            } catch CalculatorShrinkingChallenge.EvalError.divisionByZero {
-                return false
-            } catch {
-                return false
-            }
+            CalculatorFixture.property(expr)
         }
         if let report { print("[PROFILE] CalculatorScaling(\(variant)): \(report.profilingSummary)") }
 

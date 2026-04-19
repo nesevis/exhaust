@@ -45,9 +45,19 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter transform: A function that takes the current value and produces a new computation.
     /// - Returns: A new computation representing the sequenced effects.
     /// - Throws: Rethrows any errors from the transform function
-    func _bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
-        Gen.liftF(.transform(
+    /// Reifies a `_bind` (FreerMonad-style chained continuation) as a `.transform(.bind(fingerprint:, ...))` operation that the reducer can see through.
+    ///
+    /// Renamed from `_bind` to avoid an overload-resolution conflict with ``FreerMonad/_bind(_:)``. When both methods had identical externally-visible signatures (one parameter), Swift correctly picked this constrained-extension version over the generic one. Adding defaulted parameters for `#fileID`/`#line`/`#column` changed the resolution preference, silently routing call sites to the unconstrained ``FreerMonad/_bind(_:)`` (which chains continuations natively without reifying as `.transform(.bind(...))`). Renaming to `_bindReified` eliminates the ambiguity entirely; the source-location defaults can stay because the rename guarantees there is no other `_bindReified` to compete with.
+    func _bindReified<NewValue>(
+        _ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) rethrows -> FreerMonad<Operation, NewValue> {
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        return Gen.liftF(.transform(
             kind: .bind(
+                fingerprint: fingerprint,
                 forward: { try transform($0 as! Value).erase() },
                 backward: nil,
                 inputType: Value.self,
@@ -77,10 +87,15 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that sequences the two computations with bidirectional support.
     func _bound<NewValue>(
         forward: @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
-        backward: @escaping (NewValue) throws -> Value
+        backward: @escaping (NewValue) throws -> Value,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        Gen.liftF(.transform(
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        return Gen.liftF(.transform(
             kind: .bind(
+                fingerprint: fingerprint,
                 forward: { try forward($0 as! Value).erase() },
                 backward: { try backward($0 as! NewValue) as Any },
                 inputType: Value.self,

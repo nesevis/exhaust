@@ -22,12 +22,11 @@ struct ReverseShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-
+            .collectOpenPBTStats,
             .replay(33_556_013_978_236_435),
             .logging(.debug, .keyValue),
             .onReport { report = $0 }
         ) { arr in
-            print("Attempt: \(arr)")
             return arr.elementsEqual(arr.reversed())
         }
         if let report { print("[PROFILE] Reverse: \(report.profilingSummary)") }

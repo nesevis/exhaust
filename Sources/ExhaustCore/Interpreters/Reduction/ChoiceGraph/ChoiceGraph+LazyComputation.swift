@@ -10,7 +10,7 @@ extension ChoiceGraph {
     ///
     /// Redistribution moves value mass between two leaves within a single decision context. Two structural cases qualify:
     ///
-    /// 1. **Sequence siblings** — chooseBits children of the same sequence parent. Only emitted for heterogeneous sequences (``SequenceMetadata/elementTypeTag`` is nil). Homogeneous sequences are handled by ``homogeneousRedistributionPairs(innerChildToBind:pairBudget:)`` in O(C log C) instead of O(C^2).
+    /// 1. **Sequence siblings** — chooseBits children of the same sequence parent. Only emitted for heterogeneous sequences (``SequenceMetadata/elementTypeTag`` is nil). Homogeneous sequences are handled by ``homogeneousRedistributionPairs(graph:innerDescendantToBind:)`` in O(C log C) instead of O(C^2).
     /// 2. **Zip cross-slot** — chooseBits descendants of *different* children of a common zip parent. Tuple slots are simultaneously chosen and the property frequently correlates their values; redistribution between them is the only way to shrink to a coupled extremum. Bound5's `d + e == -32769` constraint is the canonical example. Cross-slot pairs between two homogeneous sequences of the same type are also deferred to the homogeneous pair path.
     ///
     /// Cross-parent pairs whose lowest common ancestor is a sequence (the elements of a `[[Int]]` workload) are *not* generated. Sequence elements are independently chosen and the property treats them as independent decision contexts; cross-element redistribution produces no shrinking-meaningful candidates and balloons the edge count quadratically for high-fanout sequences.
