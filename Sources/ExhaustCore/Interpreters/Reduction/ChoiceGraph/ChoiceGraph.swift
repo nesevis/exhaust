@@ -44,6 +44,9 @@ package final class ChoiceGraph {
     /// Lifecycle statistics accumulated on this graph instance. Dynamic fields (``ChoiceGraphStats/dynamicRegionRebuilds``, ``ChoiceGraphStats/dynamicRegionNodesRebuilt``) are incremented by ``applyBindReshape(forLeaf:freshTree:into:)``; construction-time fields are zero until the scheduler calls ``ChoiceGraphStats/from(_:)`` and merges them into ``ReductionStats/graphStats``.
     var graphStats = ChoiceGraphStats()
 
+    /// Cached classification verdicts keyed by `BindMetadata.fingerprint`. Survives full graph rebuilds via ``build(from:inheriting:)`` because the fingerprint is derived from the originating `.bind` source location, which is stable for the program's lifetime — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds. Read by the scheduler before dispatching expensive dependent-node encoders so a previously-classified bind site does not re-pay the two materializations that ``classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` would otherwise run.
+    var bindClassifications: [UInt64: BindClassification] = [:]
+
     /// Returns true when `nodeID` has been removed from the graph but its array slot is retained. Used by every iteration site on ``ChoiceGraph`` to skip removed nodes.
     func isTombstoned(_ nodeID: Int) -> Bool {
         removedNodeIDs.contains(nodeID)
@@ -230,6 +233,22 @@ package extension ChoiceGraph {
     /// - Parameter tree: The generator's compositional structure.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
         ChoiceGraphBuilder.build(from: tree)
+    }
+
+    /// Builds a ``ChoiceGraph`` from a tree, inheriting an existing classification cache.
+    ///
+    /// Used after a structural rebuild when the scheduler wants to preserve previously-computed bind classifications across the rebuild. Cache keys are ``BindMetadata/fingerprint`` values (per-source-location hashes), so they remain valid for the rebuilt graph as long as the underlying generator has not changed — the same `.bind` source location always produces a bind node with the same fingerprint, regardless of where in the rebuilt graph it appears.
+    ///
+    /// - Parameters:
+    ///   - tree: The generator's compositional structure.
+    ///   - cachedClassifications: Map from `BindMetadata.fingerprint` to a previously-computed ``BindClassification``. Typically the previous graph's ``bindClassifications`` field.
+    static func build(
+        from tree: ChoiceTree,
+        inheriting cachedClassifications: [UInt64: BindClassification]
+    ) -> ChoiceGraph {
+        var graph = ChoiceGraphBuilder.build(from: tree)
+        graph.bindClassifications = cachedClassifications
+        return graph
     }
 
     /// Returns a diagnostic description if any `chooseBits` node's position range fails to point to a value entry in `sequence`, or `nil` if every leaf position is consistent.

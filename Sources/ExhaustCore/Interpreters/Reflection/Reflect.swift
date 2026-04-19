@@ -175,7 +175,7 @@ package enum Interpreters {
                     inputType: "\(inputType)",
                     outputType: "\(outputType)"
                 )
-            case let .bind(forward, backward, inputType, outputType):
+            case let .bind(fingerprint, forward, backward, inputType, outputType):
                 guard let backward else {
                     throw ReflectionError.forwardOnlyBind(
                         inputType: "\(inputType)",
@@ -200,7 +200,7 @@ package enum Interpreters {
                             : .group(boundResult.path)
                         return (
                             value: boundResult.value,
-                            path: [.bind(inner: innerTree, bound: boundTree)]
+                            path: [.bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)]
                         )
                     }
                 }

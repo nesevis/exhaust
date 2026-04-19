@@ -185,7 +185,7 @@ package enum ChoiceTreeAnalysis {
         case let .group(children, _):
             return walkGroup(children, parameters: &parameters)
 
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             // Walk inner subtree normally; validate bound subtree without collecting
             // parameters because bound parameters depend on the inner value —
             // extracting them into covering arrays would produce invalid combinations.
@@ -237,7 +237,7 @@ package enum ChoiceTreeAnalysis {
             true
         case let .group(children, _):
             children.allSatisfy { walkTreeValidateOnly($0) }
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
         case let .selected(inner):
             walkTreeValidateOnly(inner)

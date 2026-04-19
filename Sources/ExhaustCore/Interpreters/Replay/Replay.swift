@@ -132,10 +132,10 @@ extension Interpreters {
                     return nil
                 }
                 result = try forward(innerValue)
-            case let .bind(forward, _, _, _):
+            case let .bind(_, forward, _, _, _):
                 // VACTI produces .bind(inner:bound:) for bind.
                 // Scope inner replay to innerTree so its zip doesn't consume boundTree's choices.
-                if case let .bind(innerTree, boundTree) = choices.first {
+                if case let .bind(_, innerTree, boundTree) = choices.first {
                     choices.removeFirst()
                     var scopedChoices = [innerTree]
                     guard let innerValue = try replayWithChoicesHelper(
@@ -521,10 +521,10 @@ extension Interpreters {
                     return nil
                 }
                 result = try forward(innerValue)
-            case let .bind(forward, _, _, _):
+            case let .bind(_, forward, _, _, _):
                 // VACTI produces .bind(inner:bound:) for bind.
                 // Split the script so inner and bound each get their own tree.
-                if case let .bind(innerTree, boundTree) = script {
+                if case let .bind(_, innerTree, boundTree) = script {
                     guard let innerValue = try replayRecursive(
                         inner,
                         with: innerTree

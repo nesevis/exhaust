@@ -140,6 +140,7 @@ extension ChoiceGraph {
         bindNodeID: Int
     ) {
         let updatedMetadata = BindMetadata(
+            fingerprint: bindMetadata.fingerprint,
             isStructurallyConstant: bindMetadata.isStructurallyConstant,
             bindDepth: bindMetadata.bindDepth,
             innerChildIndex: bindMetadata.innerChildIndex,
@@ -156,6 +157,8 @@ extension ChoiceGraph {
             children: node.children,
             parent: node.parent
         )
+        // Mirror into the per-graph fingerprint-keyed cache so the verdict survives the next ``ChoiceGraph/build(from:inheriting:)``. The per-node `BindMetadata.classification` field is the in-instance authority; the cache is the across-instance one. Phase 2 keeps both stores updated for compatibility; later phases may demote the per-node field to a derived view populated from the cache at build time.
+        bindClassifications[bindMetadata.fingerprint] = verdict.classification
     }
 
     // MARK: - Endpoint Clamp
@@ -215,7 +218,7 @@ extension ChoiceGraph {
                 index += 1
             }
             return true
-        case let (.bind(lowInner, lowBound), .bind(highInner, highBound)):
+        case let (.bind(_, lowInner, lowBound), .bind(_, highInner, highBound)):
             return sameTopology(lowInner, highInner) && sameTopology(lowBound, highBound)
         case let (.group(lowArray, _), .group(highArray, _)):
             if lowArray.count != highArray.count { return false }
@@ -297,7 +300,7 @@ extension ChoiceGraph {
             for child in choices {
                 fold(child, into: &hash)
             }
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             fold(inner, into: &hash)
             fold(bound, into: &hash)
         case let .selected(inner):

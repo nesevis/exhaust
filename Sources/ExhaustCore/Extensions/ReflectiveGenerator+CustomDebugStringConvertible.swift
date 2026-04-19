@@ -163,7 +163,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             switch kind {
             case let .map(_, inputType, outputType):
                 kindDesc = "map: \(inputType) → \(outputType)"
-            case let .bind(_, backward, inputType, outputType):
+            case let .bind(_, _, backward, inputType, outputType):
                 let direction = backward != nil ? "bind↔" : "bind→"
                 kindDesc = "\(direction): \(inputType) → \(outputType)"
             case let .metamorphic(transforms, inputType):

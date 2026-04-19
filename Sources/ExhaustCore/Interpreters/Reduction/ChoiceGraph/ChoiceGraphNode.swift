@@ -86,6 +86,9 @@ package struct PickMetadata {
 
 /// Metadata for a ``ChoiceGraphNodeKind/bind(_:)`` dependency node.
 package struct BindMetadata {
+    /// Stable hash of the originating `.bind` source location, carried through from ``ReflectiveOperation/transform(kind:inner:)`` (via ``ChoiceTree/bind(fingerprint:inner:bound:)``) to identify this bind site across graph rebuilds. Used by ``ChoiceGraph/bindClassifications`` to cache the classification verdict — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds.
+    public let fingerprint: UInt64
+
     /// Whether the bound subtree contains no nested binds or picks, meaning the inner value controls ranges and counts but not tree shape.
     public let isStructurallyConstant: Bool
 
@@ -108,6 +111,7 @@ package struct BindMetadata {
     public var downstreamFingerprint: UInt64?
 
     public init(
+        fingerprint: UInt64,
         isStructurallyConstant: Bool,
         bindDepth: Int,
         innerChildIndex: Int,
@@ -116,6 +120,7 @@ package struct BindMetadata {
         classification: BindClassification? = nil,
         downstreamFingerprint: UInt64? = nil
     ) {
+        self.fingerprint = fingerprint
         self.isStructurallyConstant = isStructurallyConstant
         self.bindDepth = bindDepth
         self.innerChildIndex = innerChildIndex

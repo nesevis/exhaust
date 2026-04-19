@@ -184,7 +184,7 @@ package enum LightweightSampler {
                         return nil
                     }
                     result = try forward(innerValue)
-                case let .bind(forward, _, _, _):
+                case let .bind(_, forward, _, _, _):
                     guard let innerValue = try eval(
                         inner, with: inputValue, rng: &rng, size: size
                     ) else {

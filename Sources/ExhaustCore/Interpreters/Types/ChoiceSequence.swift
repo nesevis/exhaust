@@ -99,7 +99,7 @@ package extension ChoiceSequence {
                 }
                 output.append(.group(false))
             }
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             if inner.isGetSize {
                 // getSize-bound: structurally stable (size is fixed during reduction),
                 // so emit .group markers to let deletion encoders work through them.

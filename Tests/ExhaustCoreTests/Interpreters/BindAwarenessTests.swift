@@ -17,7 +17,7 @@ struct BindAwarenessTests {
     func bindTreeChildren() {
         let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         #expect(tree.children.count == 2)
         #expect(tree.children[0] == inner)
@@ -28,7 +28,7 @@ struct BindAwarenessTests {
     func bindTreeReplacingInner() {
         let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let newInner = ChoiceTree.choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let replaced = tree.replacingChild(at: 0, with: newInner)
@@ -41,7 +41,7 @@ struct BindAwarenessTests {
     func bindTreeReplacingBound() {
         let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let newBound = ChoiceTree.choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let replaced = tree.replacingChild(at: 1, with: newBound)
@@ -54,7 +54,7 @@ struct BindAwarenessTests {
     func bindTreeContainsPicks() {
         let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         #expect(tree.containsPicks == false)
     }
@@ -63,7 +63,7 @@ struct BindAwarenessTests {
     func bindDebugDescription() {
         let inner = ChoiceTree.just
         let bound = ChoiceTree.just
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         #expect(tree.debugDescription.contains("bind"))
     }
@@ -72,7 +72,7 @@ struct BindAwarenessTests {
     func bindElementDescription() {
         let inner = ChoiceTree.just
         let bound = ChoiceTree.just
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         #expect(tree.elementDescription.contains("{"))
         #expect(tree.elementDescription.contains("}"))
@@ -107,7 +107,7 @@ struct BindAwarenessTests {
     func bindTreeFlattens() {
         let inner = ChoiceTree.choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let flattened = ChoiceSequence.flatten(tree)
 
@@ -124,7 +124,7 @@ struct BindAwarenessTests {
     func flattenValidateBindTree() {
         let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let flattened = ChoiceSequence.flatten(tree)
         #expect(ChoiceSequence.validate(flattened))

@@ -361,12 +361,14 @@ public enum TransformKind {
     /// A dependent generator derived from the inner generator's output.
     ///
     /// - Parameters:
+    ///   - fingerprint: Stable hash of the bind's source location (`#fileID + #line + #column`), used to key the classification cache on ``ChoiceGraph``. Distinct call sites get distinct fingerprints; recursive instantiations of the same call site share one.
     ///   - forward: A function that takes the inner generator's output and returns a new generator.
     ///   - backward: Optional extraction function `(B) -> A` for reflection. When non-nil, enables
     ///     the reflector to decompose the output back through the bind. `nil` = forward-only.
     ///   - inputType: The metatype of the input, captured at the call site.
     ///   - outputType: The metatype of the output, captured at the call site.
     case bind(
+        fingerprint: UInt64,
         forward: (Any) throws -> ReflectiveGenerator<Any>,
         backward: ((Any) throws -> Any)?,
         inputType: Any.Type,

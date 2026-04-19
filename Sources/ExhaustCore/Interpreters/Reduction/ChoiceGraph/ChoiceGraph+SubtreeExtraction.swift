@@ -73,7 +73,7 @@ extension ChoiceGraph {
                 remainingPath: remainingPath.dropFirst()
             )
 
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             if inner.isGetSize {
                 // getSize-bind is transparent in the graph — pass through.
                 return walkForPathMatch(tree: bound, remainingPath: remainingPath)

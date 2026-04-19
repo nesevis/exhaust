@@ -42,7 +42,7 @@ struct ChoiceGraphTests {
     func singleBind() {
         let inner = ChoiceTree.choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let graph = ChoiceGraph.build(from: tree)
 
@@ -69,8 +69,8 @@ struct ChoiceGraphTests {
         let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valC = ChoiceTree.choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let innerBind = ChoiceTree.bind(inner: valB, bound: valC)
-        let outerBind = ChoiceTree.bind(inner: valA, bound: innerBind)
+        let innerBind = ChoiceTree.bind(fingerprint: 0, inner: valB, bound: valC)
+        let outerBind = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: innerBind)
 
         let graph = ChoiceGraph.build(from: outerBind)
 
@@ -150,7 +150,7 @@ struct ChoiceGraphTests {
     func getSizeBindTransparent() {
         let inner = ChoiceTree.getSize(100)
         let bound = ChoiceTree.choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let graph = ChoiceGraph.build(from: tree)
 
@@ -194,8 +194,8 @@ struct ChoiceGraphTests {
         let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valC = ChoiceTree.choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let innerBind = ChoiceTree.bind(inner: valB, bound: valC)
-        let outerBind = ChoiceTree.bind(inner: valA, bound: innerBind)
+        let innerBind = ChoiceTree.bind(fingerprint: 0, inner: valB, bound: valC)
+        let outerBind = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: innerBind)
 
         let graph = ChoiceGraph.build(from: outerBind)
 
@@ -274,8 +274,8 @@ struct ChoiceGraphTests {
         let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valC = ChoiceTree.choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let innerBind = ChoiceTree.bind(inner: valB, bound: valC)
-        let outerBind = ChoiceTree.bind(inner: valA, bound: innerBind)
+        let innerBind = ChoiceTree.bind(fingerprint: 0, inner: valB, bound: valC)
+        let outerBind = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: innerBind)
 
         let graph = ChoiceGraph.build(from: outerBind)
         let sequence = ChoiceSequence(outerBind)
@@ -305,7 +305,7 @@ struct ChoiceGraphTests {
         // A is inner (not in bound subtree), B is bound (in bound subtree).
         let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: valA, bound: valB)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: valB)
 
         let graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence(tree)

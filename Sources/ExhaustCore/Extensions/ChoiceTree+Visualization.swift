@@ -161,7 +161,7 @@ private enum TreeVisualization {
             }
             return collapseChain(RenderTree(symbol: nil, children: children))
 
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             let children = [inner, bound]
                 .filter(\.hasVisibleContent)
                 .map(buildRenderNode)
@@ -515,7 +515,7 @@ private extension ChoiceTree {
             children.contains(where: \.hasVisibleContent)
         case let .sequence(_, elements, _):
             elements.isEmpty || elements.contains(where: \.hasVisibleContent)
-        case let .bind(inner, bound):
+        case let .bind(_, inner, bound):
             inner.hasVisibleContent || bound.hasVisibleContent
         case let .resize(_, choices):
             choices.contains(where: \.hasVisibleContent)

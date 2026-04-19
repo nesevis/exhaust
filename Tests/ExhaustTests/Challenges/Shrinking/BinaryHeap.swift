@@ -36,8 +36,8 @@ struct BinaryHeapShrinkingChallenge {
         )
         let rep = try #require(report)
         // Temporarily commented while BoundValueScope is disabled and the inner-descendant rework is in progress. Restore once the multi-leaf inner fix lands and the counts stabilise.
-//        #expect(rep.propertyInvocations == 434)
-//        #expect(rep.totalMaterializations == 429)
+        #expect(rep.propertyInvocations == 306)
+        #expect(rep.totalMaterializations == 301)
 
         print(rep.profilingSummary)
 

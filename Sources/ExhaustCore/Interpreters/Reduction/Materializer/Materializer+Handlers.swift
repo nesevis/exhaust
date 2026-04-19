@@ -168,7 +168,7 @@ extension Materializer {
         // in a bind — unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?
         let branchChoiceTree: ChoiceTree?
-        let effectiveFallback: ChoiceTree? = if case let .bind(_, bound) = calleeFallback {
+        let effectiveFallback: ChoiceTree? = if case let .bind(_, _, bound) = calleeFallback {
             bound
         } else {
             calleeFallback
@@ -586,10 +586,10 @@ extension Materializer {
                 context: &context, continuationFallback: continuationFallback
             )
 
-        case let .bind(forward, _, _, _):
+        case let .bind(fingerprint, forward, _, _, _):
             let innerFallback: ChoiceTree?
             let boundFallback: ChoiceTree?
-            if let calleeFallback, case let .bind(inner: iFB, bound: bFB) = calleeFallback {
+            if let calleeFallback, case let .bind(_, iFB, bFB) = calleeFallback {
                 innerFallback = iFB
                 boundFallback = bFB
             } else {
@@ -616,7 +616,7 @@ extension Materializer {
                 guard let (boundValue, boundTree) = boundResult else { return nil }
                 return try runContinuation(
                     result: boundValue,
-                    calleeChoiceTree: .bind(inner: innerTree, bound: boundTree),
+                    calleeChoiceTree: .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree),
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )
@@ -646,7 +646,7 @@ extension Materializer {
                 guard let (boundValue, boundTree) = boundResult else { return nil }
                 return try runContinuation(
                     result: boundValue,
-                    calleeChoiceTree: .bind(inner: innerTree, bound: boundTree),
+                    calleeChoiceTree: .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree),
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )
@@ -659,7 +659,7 @@ extension Materializer {
                 guard let (boundValue, boundTree) = boundResult else { return nil }
                 return try runContinuation(
                     result: boundValue,
-                    calleeChoiceTree: .bind(inner: innerTree, bound: boundTree),
+                    calleeChoiceTree: .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree),
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )

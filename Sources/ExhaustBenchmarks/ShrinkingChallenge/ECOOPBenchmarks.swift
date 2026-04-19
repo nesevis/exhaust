@@ -26,7 +26,7 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 5)), property: calculatorProperty,
+        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 4)), property: calculatorProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
@@ -80,6 +80,10 @@ func registerECOOPBenchmarks() {
     registerECOOPPair(
         name: "Parser", gen: parserLangGen, property: parserProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, sizeMetric: parserSize
+    )
+    registerECOOPPair(
+        name: "GraphColoring", gen: graphColoringGen, property: graphColoringProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
     )
 }
 

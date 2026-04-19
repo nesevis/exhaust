@@ -101,7 +101,7 @@ struct ChoiceTreeNormalizedScoresTests {
             .unsigned(80, .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
         let scores = tree.normalizedScores()
         #expect(scores.count == 2)
         #expect(scores[0] == 0.25)

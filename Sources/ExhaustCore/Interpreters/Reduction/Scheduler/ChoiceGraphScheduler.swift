@@ -280,18 +280,30 @@ enum ChoiceGraphScheduler {
                     if fruitlessDependentNodes.contains(fibreScope.bindNodeID) {
                         continue
                     }
-                    // Classification gate: lift at the upstream's range endpoints and record how the bound subtree responds. Binds whose topology diverges under upstream variation (Calculator's `.recursive`) cannot be minimised by binary-search-style dependent-node encoders — each upstream probe reshapes the downstream and wipes out accumulated reductions. Parked into ``fruitlessDependentNodes`` so subsequent pulls in this graph state also skip, and the verdict is cleared naturally on reshape or full rebuild.
-                    graph.classifyBind(
-                        at: fibreScope.bindNodeID,
-                        gen: erasedGen,
-                        baseSequence: sequence,
-                        fallbackTree: tree,
-                        upstreamLeafNodeID: fibreScope.upstreamLeafNodeID
-                    )
-                    if case let .bind(bindMetadata) = graph.nodes[fibreScope.bindNodeID].kind,
-                       let classification = bindMetadata.classification,
-                       classification.topology != .identical || classification.liftability != .both
-                    {
+                    // Classification gate: lift at the upstream's range endpoints and record how the bound subtree responds. Binds whose topology diverges under upstream variation (Calculator's `.recursive`) cannot be minimised by binary-search-style dependent-node encoders — each upstream probe reshapes the downstream and wipes out accumulated reductions. Parked into ``fruitlessDependentNodes`` so subsequent pulls in this graph state also skip.
+                    //
+                    // Cache-first lookup: when the bind site has been classified previously (in this reduction or in a prior graph instance the cache was inherited from), reuse the verdict instead of paying the two materializations that ``classifyBind`` runs. The cache key is the bind operation's source-location fingerprint, which is invariant under graph rebuilds — same `.bind` call site, same closure shape, same verdict.
+                    guard case let .bind(bindMetadata) = graph.nodes[fibreScope.bindNodeID].kind else {
+                        continue
+                    }
+                    let classification: BindClassification
+                    if let cached = graph.bindClassifications[bindMetadata.fingerprint] {
+                        classification = cached
+                    } else {
+                        graph.classifyBind(
+                            at: fibreScope.bindNodeID,
+                            gen: erasedGen,
+                            baseSequence: sequence,
+                            fallbackTree: tree,
+                            upstreamLeafNodeID: fibreScope.upstreamLeafNodeID
+                        )
+                        guard case let .bind(updatedMetadata) = graph.nodes[fibreScope.bindNodeID].kind,
+                              let verdict = updatedMetadata.classification else {
+                            continue
+                        }
+                        classification = verdict
+                    }
+                    if classification.topology != .identical || classification.liftability != .both {
                         fruitlessDependentNodes.insert(fibreScope.bindNodeID)
                         continue
                     }
@@ -346,7 +358,8 @@ enum ChoiceGraphScheduler {
                     stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
                     stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
                     let oldConvergence = extractAllConvergence(from: graph)
-                    graph = ChoiceGraph.build(from: tree)
+                    let inheritedClassifications = graph.bindClassifications
+                    graph = ChoiceGraph.build(from: tree, inheriting: inheritedClassifications)
                     transferConvergence(oldConvergence, to: graph)
                     stats.graphStats.fullGraphRebuilds += 1
                     sources = ScopeSourceBuilder.buildSources(from: graph)
@@ -430,11 +443,15 @@ enum ChoiceGraphScheduler {
                     graph.recordConvergence(byNodeID: convergence)
                 }
 
-                // Update per-encoder history and cycle budget.
-                encoderEmits[pendingEncoderName, default: 0] += outcome.probeCount
+                // Update per-encoder history and cycle budget. Use materializationCount
+                // (decoder rejects + accepts) instead of probeCount so that cache hits —
+                // which are free hash lookups — don't inflate the futility emit counter or
+                // consume the cycle budget. This is consistent with the materializationBudget
+                // parameter passed to runProbeLoop, which already excludes cache hits.
+                encoderEmits[pendingEncoderName, default: 0] += outcome.materializationCount
                 encoderAccepts[pendingEncoderName, default: 0] += outcome.acceptCount
                 if var budget = encoderCycleBudget[pendingEncoderName] {
-                    budget -= outcome.probeCount
+                    budget -= outcome.materializationCount
                     encoderCycleBudget[pendingEncoderName] = budget
                 }
 
@@ -501,7 +518,8 @@ enum ChoiceGraphScheduler {
                         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
                         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
                         let oldConvergence = extractAllConvergence(from: graph)
-                        graph = ChoiceGraph.build(from: tree)
+                        let inheritedClassifications = graph.bindClassifications
+                        graph = ChoiceGraph.build(from: tree, inheriting: inheritedClassifications)
                         graphIsStripped = outcome.treeIsStripped
                         transferConvergence(oldConvergence, to: graph)
 

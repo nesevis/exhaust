@@ -457,7 +457,7 @@ extension GeneratorTuning {
                 // the actual length generator, then build the sequence
                 let subSeqGen: ReflectiveGenerator<Any> = try .impure(
                     operation: .sequence(
-                        length: subSizeGen._bind(getSizeContinuation),
+                        length: subSizeGen._bindReified(getSizeContinuation),
                         gen: elementGen
                     ),
                     continuation: { .pure($0) }

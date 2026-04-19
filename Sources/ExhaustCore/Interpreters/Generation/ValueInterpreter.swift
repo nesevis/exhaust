@@ -468,7 +468,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 return nil
             }
             result = try forward(innerValue)
-        case let .bind(forward, _, _, _):
+        case let .bind(_, forward, _, _, _):
             guard let innerValue = try generateRecursive(
                 inner, with: inputValue, context: &context
             ) else {

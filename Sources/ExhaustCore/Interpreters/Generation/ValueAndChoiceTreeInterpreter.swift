@@ -685,7 +685,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             }
             result = try forward(innerValue)
             resultTree = innerTree
-        case let .bind(forward, _, _, _):
+        case let .bind(fingerprint, forward, _, _, _):
             guard let (innerValue, innerTree) = try generateRecursive(
                 inner, with: inputValue, context: &context
             ) else {
@@ -701,7 +701,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 return nil
             }
             result = boundValue
-            resultTree = .bind(inner: innerTree, bound: boundTree)
+            resultTree = .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
         case let .metamorphic(transforms, _):
             let savedState = (context.prng.seed, context.prng.currentState)
             guard let (original, innerTree) = try generateRecursive(

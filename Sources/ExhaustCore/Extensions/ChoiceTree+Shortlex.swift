@@ -15,7 +15,7 @@ package extension ChoiceTree {
                 return meta
             }
             return ChoiceMetadata(validRange: nil)
-        case let .bind(_, bound):
+        case let .bind(_, _, bound):
             return bound.metadata
         default:
             return ChoiceMetadata(validRange: nil)

@@ -310,7 +310,7 @@ struct ChoiceGraphScopeQueryTests {
     func innerDescendantIndexScalar() {
         let inner = ChoiceTree.choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let bound = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
 
@@ -341,7 +341,7 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: nil, isRangeExplicit: false)
         )
         let bound = ChoiceTree.choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: innerSequence, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
 
@@ -387,7 +387,7 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: nil, isRangeExplicit: false)
         )
         let bound = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(inner: innerSequence, bound: bound)
+        let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
 
@@ -423,9 +423,9 @@ struct ChoiceGraphScopeQueryTests {
         // That would put leafA inside both innerBind.inner and outerBind.inner subtree.
         let leafA = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let leafB = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let innerBind = ChoiceTree.bind(inner: leafA, bound: leafB)
+        let innerBind = ChoiceTree.bind(fingerprint: 0, inner: leafA, bound: leafB)
         let leafOuterBound = ChoiceTree.choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let outerBind = ChoiceTree.bind(inner: innerBind, bound: leafOuterBound)
+        let outerBind = ChoiceTree.bind(fingerprint: 0, inner: innerBind, bound: leafOuterBound)
 
         let graph = ChoiceGraph.build(from: outerBind)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)

@@ -513,10 +513,15 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter transform: A function that takes the generated value and returns a new generator.
     /// - Returns: A generator that sequences the two computations.
     func bind<NewValue>(
-        _ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>
+        _ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        Gen.liftF(.transform(
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        return Gen.liftF(.transform(
             kind: .bind(
+                fingerprint: fingerprint,
                 forward: { try transform($0 as! Value).erase() },
                 backward: nil,
                 inputType: Value.self,
@@ -546,9 +551,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that sequences the two computations. with bidirectional support.
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
-        backward: @Sendable @escaping (NewValue) throws -> Value
+        backward: @Sendable @escaping (NewValue) throws -> Value,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        try _bound(forward: forward, backward: backward)
+        try _bound(forward: forward, backward: backward, fileID: fileID, line: line, column: column)
     }
 
     /// Chains this generator with a dependent generator, using a partial path for backward extraction.
@@ -568,8 +576,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that sequences the two computations. with bidirectional support.
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
-        backward: some PartialPath<NewValue, Value>
+        backward: some PartialPath<NewValue, Value>,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        try _bound(forward: forward, backward: { try backward.extract(from: $0)! })
+        try _bound(
+            forward: forward,
+            backward: { try backward.extract(from: $0)! },
+            fileID: fileID,
+            line: line,
+            column: column
+        )
     }
 }

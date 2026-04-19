@@ -13,7 +13,7 @@
 struct ScopeRejectionCache {
     private var rejectedHashes = Set<UInt64>()
 
-    /// Value-independent hash for replacement operations only. Keyed by (operation type, targeted node IDs) without leaf values. Replacement (branch pivot, self-similar substitution, descendant promotion) is genuinely value-independent — the encoder speculatively minimizes all leaves in the candidate branch, so the outcome depends on structural compatibility, not on current leaf values. Deletion and migration are excluded because their acceptance depends on leaf values: a deletion rejected when the element had value 5 may succeed after value search minimizes it to 0.
+    /// Value-independent hash for replacement operations only. Keyed by (operation type, targeted node IDs) without leaf values. Branch pivot is genuinely value-independent because the encoder speculatively minimizes all leaves via ``GraphStructuralEncoder/minimizingLeaves(in:)``. Self-similar substitution and descendant promotion copy donor entries verbatim, so they are technically value-dependent — but the coarse cache is cleared per-cycle via ``clearCoarse()``, which limits stale rejections to within a single cycle. Deletion and migration are excluded because their acceptance depends on leaf values: a deletion rejected when the element had value 5 may succeed after value search minimizes it to 0.
     private var coarseRejectedHashes = Set<UInt64>()
 
     /// Records a rejected structural transformation.

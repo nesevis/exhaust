@@ -354,6 +354,7 @@ extension ChoiceGraph {
             nodes[bindNodeID] = ChoiceGraphNode(
                 id: bindNodeID,
                 kind: .bind(BindMetadata(
+                    fingerprint: bindMetadata.fingerprint,
                     isStructurallyConstant: newIsStructurallyConstant,
                     bindDepth: bindMetadata.bindDepth,
                     innerChildIndex: bindMetadata.innerChildIndex,
