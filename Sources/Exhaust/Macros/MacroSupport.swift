@@ -162,7 +162,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 let samplingBudget = budget.samplingBudget
                 let coverageBudget = budget.coverageBudget
                 var reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-                reductionConfig.collectProbeLog = onReportClosure != nil
+                reductionConfig.collectProbeLog = ExhaustSettings<Output>.probeLoggingEnabled
 
                 var report = ExhaustReport()
                 defer { onReportClosure?(report) }
