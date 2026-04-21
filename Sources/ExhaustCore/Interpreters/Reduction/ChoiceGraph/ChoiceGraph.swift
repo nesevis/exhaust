@@ -259,7 +259,7 @@ package extension ChoiceGraph {
 
     /// Returns a diagnostic description if any `chooseBits` node's position range fails to point to a value entry in `sequence`, or `nil` if every leaf position is consistent.
     ///
-    /// Used after an in-place mutation to detect graph/freshTree structural divergence: when the materializer reshapes the freshTree behind the encoder's back (e.g. low-fidelity PRNG fallback), the graph's stored positionRanges go stale relative to freshTree. The caller is expected to force a full rebuild on a non-`nil` return.
+    /// Used after an in-place mutation to detect graph/freshTree structural divergence: when the materializer reshapes the freshTree behind the encoder's back (for example low-fidelity PRNG fallback), the graph's stored positionRanges go stale relative to freshTree. The caller is expected to force a full rebuild on a non-`nil` return.
     func leafPositionsDivergence(in sequence: ChoiceSequence) -> String? {
         for node in nodes {
             guard case .chooseBits = node.kind else { continue }

@@ -22,6 +22,7 @@ package struct DefaultSeedPool: SeedPool {
     private let useFitness: Bool
     private var lastSampledIndex: Int?
 
+    /// Creates a seed pool with the given capacity, fresh-generation ratio, and ranking mode.
     public init(
         capacity: Int = 256,
         generateRatio: Double = 0.2,
@@ -32,6 +33,7 @@ package struct DefaultSeedPool: SeedPool {
         self.useFitness = useFitness
     }
 
+    /// The number of seeds currently in the pool.
     public var count: Int {
         seeds.count
     }

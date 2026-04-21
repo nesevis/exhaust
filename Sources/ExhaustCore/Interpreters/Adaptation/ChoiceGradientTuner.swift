@@ -304,9 +304,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
     /// Niche-count fitness sharing: prevents the generator from overcommitting to the dominant choice at each pick site.
     ///
-    /// For each choice, `share_i = fitness_i / siteTotal` measures how much of the site's total fitness it accounts for. The niche count `1 + N × share_i` grows with dominance: a choice with 90% share among
-    /// 4 choices gets divisor 1 + 4×0.9 = 4.6, while a 10% choice gets
-    /// 1 + 4×0.1 = 1.4. Dividing raw fitness by the niche count compresses the ratio from 9:1 down to ~1.96:0.71 ≈ 2.7:1 — still favoring the winner, but giving the minority choice meaningful sampling probability.
+    /// For each choice, `share_i = fitness_i / siteTotal` measures how much of the site's total fitness it accounts for. The niche count `1 + N × share_i` grows with dominance: a choice with 90% share among 4 choices gets divisor 1 + 4×0.9 = 4.6, while a 10% choice gets 1 + 4×0.1 = 1.4. Dividing raw fitness by the niche count compresses the ratio from 9:1 down to ~1.96:0.71 ≈ 2.7:1 — still favoring the winner, but giving the minority choice meaningful sampling probability.
     private static func computeFitnessSharingWeights(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord]
@@ -396,8 +394,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         }
     }
 
-    /// Preprocessing pass that rewrites sequence operations by converting their length generators into picks over subranges. This makes the length decision
-    /// CGS-guidable at O(S × 4 × N_avg) cost instead of the O(N² × S) cost of per-element derivative composition.
+    /// Preprocessing pass that rewrites sequence operations by converting their length generators into picks over subranges. This makes the length decision CGS-guidable at O(S × 4 × N_avg) cost instead of the O(N² × S) cost of per-element derivative composition.
     private static func subdivideSequenceLengths<Output>(
         _ gen: ReflectiveGenerator<Output>,
         context: SubdivisionContext

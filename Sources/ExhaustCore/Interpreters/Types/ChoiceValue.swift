@@ -16,6 +16,7 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     /// A floating-point value. The `UInt64` represents its hashable bit pattern.
     case floating(Double, UInt64, TypeTag)
 
+    /// Creates a choice value from a ``BitPatternConvertible`` value and its type tag.
     public init(_ value: any BitPatternConvertible, tag: TypeTag) {
         switch tag {
         case .uint:

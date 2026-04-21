@@ -21,6 +21,7 @@ package struct ConvergedOrigin: Sendable {
     /// The cycle in which this observation was recorded. Staleness detection.
     public let cycle: Int
 
+    /// Creates a convergence record with the given warm-start bound, signal, configuration, and cycle.
     public init(
         bound: UInt64,
         signal: ConvergenceSignal,

@@ -6,13 +6,14 @@
 /// Two-tier novelty scoring for exploration.
 ///
 /// - Tier 1: branch-path fingerprints (structural novelty) — the vector of `(fingerprint, branchID)` pairs at each pick site, hashed to a `UInt64`.
-/// - Tier 2: full `ChoiceSequence` deduplication (value-level novelty).
+/// - Tier 2: full ``ChoiceSequence`` deduplication (value-level novelty).
 package struct NoveltyTracker {
     /// Tier 1: branch-path fingerprint hashes (structural novelty).
     private var seenBranchPaths: Set<UInt64> = []
     /// Tier 2: full sequence deduplication (value-level novelty).
     private var seenSequences: Set<ChoiceSequence> = []
 
+    /// Creates an empty novelty tracker with no prior observations.
     public init() {}
 
     /// Score a (tree, sequence) pair. Higher = more novel.

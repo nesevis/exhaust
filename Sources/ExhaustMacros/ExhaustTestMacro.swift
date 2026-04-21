@@ -3,8 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#exhaust(gen, .settings...) { ... }` into a call to
-/// `__ExhaustRuntime.__exhaust(...)` or `__ExhaustRuntime.__exhaustExpect(...)`.
+/// Expression macro that expands `#exhaust(gen, .settings...) { ... }` into a call to ``__ExhaustRuntime/__exhaust(...)`` or ``__ExhaustRuntime/__exhaustExpect(...)``.
 ///
 /// The macro inspects the trailing closure to determine the runtime function:
 /// - **Multi-statement closures** expand to `__exhaustExpect` (Void-returning, uses `withKnownIssue`).
@@ -377,8 +376,7 @@ private func expandExhaustFunctionReference(
 
 // MARK: - Async Property Macro
 
-/// Expression macro that expands `#exhaust(gen, .settings...) { value in await ... }` into a call to
-/// `__ExhaustRuntime.__exhaustAsync(...)` or `__ExhaustRuntime.__exhaustExpectAsync(...)`.
+/// Expression macro that expands `#exhaust(gen, .settings...) { value in await ... }` into a call to ``__ExhaustRuntime/__exhaustAsync(...)`` or ``__ExhaustRuntime/__exhaustExpectAsync(...)``.
 ///
 /// Identical to ``ExhaustTestMacro`` but emits the async runtime variants. Swift's overload resolution routes here when the trailing closure's type is `(T) async throws -> R`.
 public struct ExhaustAsyncTestMacro: ExpressionMacro {

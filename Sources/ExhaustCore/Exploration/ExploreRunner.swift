@@ -62,6 +62,7 @@ package struct ExploreRunner<Output>: ~Copyable {
         }
     }
 
+    /// The PRNG seed used for this exploration run.
     public var baseSeed: UInt64 {
         prng.seed
     }

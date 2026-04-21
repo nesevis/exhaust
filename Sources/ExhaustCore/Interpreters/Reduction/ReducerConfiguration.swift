@@ -9,6 +9,7 @@ package extension Interpreters {
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
 
+        /// Creates a configuration with the given stall budget.
         public init(
             maxStalls: Int
         ) {

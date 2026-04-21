@@ -15,7 +15,7 @@ package enum HillClimbResult<Output> {
 
 /// Hill climber inspired by Hypothesis's `Optimiser`.
 ///
-/// Single backward loop over all sequence entries (values + branches), using `ReductionMaterializer` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
+/// Single backward loop over all sequence entries (values + branches), using ``ReductionMaterializer`` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
 ///
 /// **Acceptance criterion** (from Hypothesis):
 /// - Score improvement → accept

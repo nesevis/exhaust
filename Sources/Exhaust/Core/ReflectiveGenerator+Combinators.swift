@@ -360,6 +360,15 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
+    /// ```swift
+    /// let exprGen: ReflectiveGenerator<Expr> = .recursive(
+    ///     base: #gen(.int(in: 0...99)).map { .literal($0) },
+    ///     depthRange: 0...4
+    /// ) { recurse, remaining in
+    ///     .oneOf(.just(.literal(0)), #gen(recurse(), recurse()).map { .add($0, $1) })
+    /// }
+    /// ```
+    ///
     /// - Parameters:
     ///   - base: Generator for the base case.
     ///   - depthRange: Range of depths to draw from (lower bound can be 0 for fully collapsible trees).

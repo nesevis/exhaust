@@ -16,6 +16,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     let generator: ReflectiveGenerator<Element>
     private var context: GenerationContext
 
+    /// Creates a value-only interpreter for the given generator with optional seed, run cap, and size override.
     public init(
         _ generator: ReflectiveGenerator<Element>,
         seed: UInt64? = nil,

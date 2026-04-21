@@ -10,10 +10,13 @@ public struct ChoiceGraphStats: Sendable {
     /// Total node count in the graph (all kinds, active and inactive).
     public var nodeCount: Int
 
-    /// Edge count per layer: dependency, containment, self-similarity, type-compatibility.
+    /// Number of dependency edges connecting nodes that share a data-flow relationship.
     public var dependencyEdgeCount: Int
+    /// Number of containment edges reflecting parent-child nesting in the choice tree.
     public var containmentEdgeCount: Int
+    /// Number of self-similarity edges linking structurally equivalent subtrees.
     public var selfSimilarityEdgeCount: Int
+    /// Number of type-compatibility edges between nodes sharing the same type tag.
     public var typeCompatibilityEdgeCount: Int
 
     /// Number of active (non-nil position range) nodes.

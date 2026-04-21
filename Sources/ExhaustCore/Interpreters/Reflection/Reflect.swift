@@ -436,6 +436,7 @@ package enum Interpreters {
         try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
     }
 
+    /// Errors thrown by the reflection interpreter when a value cannot be mapped back to its choice tree.
     public enum ReflectionError: LocalizedError, Equatable {
         case reflectedNil(type: String, resultType: String)
         case contramapWasWrongType

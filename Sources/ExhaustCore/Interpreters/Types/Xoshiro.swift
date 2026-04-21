@@ -5,10 +5,12 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
-/// The magical 3-in-1 PRNG
+/// Xoshiro256** pseudorandom number generator with jump and spawn support for parallel streams.
 package struct Xoshiro256: ~Copyable {
+    /// The four-element internal state tuple.
     public typealias StateType = (UInt64, UInt64, UInt64, UInt64)
 
+    /// The seed this generator was initialized with.
     public let seed: UInt64
     private var state: StateType
 
@@ -17,23 +19,25 @@ package struct Xoshiro256: ~Copyable {
         state
     }
 
-    /// Jump polynomial for 2^128 steps
+    /// Jump polynomial for 2^128 steps.
     private static let jumpPoly: [UInt64] = [
         0x180E_C6D3_3CFD_0ABA, 0xD5A6_1266_F0C9_392C,
         0xA958_2618_E03F_C9AA, 0x39AB_DC45_29B1_661C,
     ]
 
-    /// Long jump polynomial for 2^192 steps
+    /// Long jump polynomial for 2^192 steps.
     private static let longJumpPoly: [UInt64] = [
         0x76E1_5D3E_FEFD_CBBF, 0xC500_4E44_1C52_2FB3,
         0x7771_0069_854E_E241, 0x3910_9BB0_2ACB_E635,
     ]
 
+    /// Creates a generator seeded from the system random number generator.
     public init() {
         var rng = SystemRandomNumberGenerator()
         self.init(seed: rng.next())
     }
 
+    /// Creates a generator with the given seed, initializing internal state via SplitMix64.
     public init(seed: UInt64) {
         self.seed = seed
         // SplitMix64 guarantees we won't get all zeros
@@ -105,7 +109,7 @@ package struct Xoshiro256: ~Copyable {
         (x &<< k) | (x &>> (64 - k))
     }
 
-    /// Jump ahead 2^128 steps for parallel streams
+    /// Jumps ahead 2^128 steps for parallel streams.
     public mutating func jump() {
         var s0: UInt64 = 0
         var s1: UInt64 = 0
@@ -127,7 +131,7 @@ package struct Xoshiro256: ~Copyable {
         state = (s0, s1, s2, s3)
     }
 
-    /// Create an independent stream
+    /// Creates an independent stream by jumping forward a number of steps derived from the stream identifier.
     public func spawned(streamID: UInt64) -> Xoshiro256 {
         var newGen = Xoshiro256(seed: seed, state: state)
         // Use streamID to determine number of jumps
@@ -138,7 +142,7 @@ package struct Xoshiro256: ~Copyable {
     }
 }
 
-/// SplitMix64 for initial seeding of Xoshiro
+/// SplitMix64 generator used for initial seeding of ``Xoshiro256``.
 private struct SplitMix64 {
     private var state: UInt64
 

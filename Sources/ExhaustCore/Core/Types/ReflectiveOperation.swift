@@ -57,10 +57,14 @@ public enum ReflectiveOperation {
     public struct PickTuple {
         /// A stable hash of the choice's generator structure, used to match branches across separate generation runs.
         public let fingerprint: UInt64
+        /// Stable identifier for this choice across generation runs.
         public let id: UInt64
+        /// Probability mass for random selection during generation.
         public let weight: UInt64
+        /// The sub-generator to execute if this choice is selected.
         public let generator: ReflectiveGenerator<Any>
 
+        /// Creates a pick tuple with the given fingerprint, identifier, weight, and generator.
         public init(
             fingerprint: UInt64,
             id: UInt64,

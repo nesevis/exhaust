@@ -11,8 +11,7 @@ import Foundation
 
 /// Online Choice Gradient Sampling interpreter that generates values directly.
 ///
-/// Unlike the eager ``GeneratorTuning`` tuner (which pre-computes all pick weights in a single top-down pass), this interpreter implements the paper's **online, per-value** algorithm (Figure 3.3). At each `pick` encountered during generation, it computes
-/// "derivatives" (residual generators after choosing each branch), samples from each derivative to measure fitness, and selects based on those fitness scores.
+/// Unlike the eager ``GeneratorTuning`` tuner (which pre-computes all pick weights in a single top-down pass), this interpreter implements the paper's **online, per-value** algorithm (Figure 3.3). At each `pick` encountered during generation, it computes "derivatives" (residual generators after choosing each branch), samples from each derivative to measure fitness, and selects based on those fitness scores.
 ///
 /// This avoids diversity collapse on recursive generators because each derivative has already fixed all choices above it, making deeper sampling tractable.
 ///
@@ -28,8 +27,10 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public struct DerivativeContext {
         public private(set) var frames: [DerivativeFrame] = []
 
+        /// Creates an empty derivative context with no frames.
         public init() {}
 
+        /// The number of frames in this context.
         public var depth: Int {
             frames.count
         }
@@ -108,6 +109,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         var fitnessAccumulator: FitnessAccumulator?
     }
 
+    /// Creates an online CGS interpreter for the given generator and predicate, with optional derivative sampling count, seed, run cap, and fitness accumulator.
     public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,

@@ -100,7 +100,7 @@ extension UInt32: BitPatternConvertible {
     }
 }
 
-/// Implemented for bidirectionality
+/// Implemented for bidirectionality.
 extension UInt64: BitPatternConvertible {
     public static var tag: TypeTag {
         .uint64
@@ -261,7 +261,7 @@ extension Int: BitPatternConvertible {
         UInt64.min ... UInt64.max
     }
 
-    /// Maps Int to UInt64 using bit pattern conversion
+    /// Maps `Int` to `UInt64` using bit pattern conversion.
     public var bitPattern64: UInt64 {
         // Use bit pattern conversion which handles the full Int range safely
         UInt64(bitPattern: Int64(self)) ^ Self.signBitMask

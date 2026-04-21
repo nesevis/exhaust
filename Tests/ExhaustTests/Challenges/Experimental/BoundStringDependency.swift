@@ -10,9 +10,7 @@ import Testing
 
 @Suite("Experimental Challenge: Dependent String")
 struct DependentStringChallenge {
-    /**
-     The generator returned from `bound` is irrelevant to the property, which only tests for length
-     */
+    /// The generator returned from `bound` is irrelevant to the property, which only tests for length.
     @Test("Bound string dependency")
     func boundStringDependency() {
         let gen = #gen(.int(in: 0 ... 10)).bound(

@@ -10,6 +10,7 @@ package struct CoveringArrayRow: @unchecked Sendable {
     /// `values[i]` is a value index in `0..<parameters[i].domainSize`.
     public var values: [UInt64]
 
+    /// Creates a row with the given value indices.
     public init(values: [UInt64]) {
         self.values = values
     }

@@ -18,11 +18,13 @@ package struct LogarithmicSchedule: PowerSchedule {
     private let baseEnergy: Int
     private let maxEnergy: Int
 
+    /// Creates a schedule with the given base and maximum energy per seed.
     public init(baseEnergy: Int = 8, maxEnergy: Int = 64) {
         self.baseEnergy = baseEnergy
         self.maxEnergy = maxEnergy
     }
 
+    /// Returns the mutation energy for a seed, scaled by fitness or novelty and dampened by pool size.
     public func energy(
         for seed: Seed,
         poolSize: Int,

@@ -11,10 +11,8 @@ import Testing
 
 @Suite("Shrinking Challenge: Reverse")
 struct ReverseShrinkingChallenge {
-    /**
-     https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md
-     This tests the (wrong) property that reversing a list of integers results in the same list. It is a basic example to validate that a library can reliably normalize simple sample data.
-     */
+    /// https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md
+    /// This tests the (wrong) property that reversing a list of integers results in the same list. It is a basic example to validate that a library can reliably normalize simple sample data.
     @Test("Reverse, Full")
     func reverseFull() {
         let gen = #gen(.uint()).array(length: 1 ... 1000)

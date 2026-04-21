@@ -9,9 +9,13 @@ import Foundation
 package struct BoundaryParameter: @unchecked Sendable {
     // @unchecked Sendable: stores `BoundaryParameterKind`, which in its `.pick` case holds generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
+    /// Zero-based parameter index in the covering array model.
     public let index: Int
+    /// Synthetic boundary values as raw bit patterns.
     public let values: [UInt64]
+    /// Number of distinct values in this parameter's synthetic domain.
     public let domainSize: UInt64
+    /// The generator operation this parameter was derived from.
     public let kind: BoundaryParameterKind
 }
 
@@ -38,10 +42,12 @@ package enum BoundaryParameterKind: @unchecked Sendable {
 package struct BoundaryDomainProfile: @unchecked Sendable {
     // @unchecked Sendable: stores `[BoundaryParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
+    /// The boundary parameters extracted from the generator's choice tree.
     public let parameters: [BoundaryParameter]
-    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, `BoundaryCoveringArrayReplay.buildTree` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
+    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, ``BoundaryCoveringArrayReplay`` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
     public let originalTree: ChoiceTree?
 
+    /// Creates a profile with the given parameters and optional original tree template.
     public init(parameters: [BoundaryParameter], originalTree: ChoiceTree? = nil) {
         self.parameters = parameters
         self.originalTree = originalTree

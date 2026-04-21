@@ -304,6 +304,7 @@ package extension ChoiceTree {
 }
 
 extension ChoiceTree: CustomDebugStringConvertible {
+    /// Returns the debug description as an `NSString` for Xcode debugger quick-look support.
     public var prettyPrint: NSString {
         NSString(string: debugDescription)
     }
@@ -377,6 +378,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         }
     }
 
+    /// Returns a compact inline representation of this node's content for diagnostic output.
     public var elementDescription: String {
         switch self {
         case let .choice(choiceValue, _):
@@ -417,6 +419,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         }
     }
 
+    /// Returns the branch identifier if this node is a `.branch` (unwrapping `.selected` wrappers), or `nil` otherwise.
     public var branchId: UInt64? {
         if case let .branch(_, _, id, _, _) = unwrapped {
             return id
