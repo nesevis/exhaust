@@ -13,13 +13,13 @@ extension GraphRedistributionEncoder {
         var pairs: [(sourceIndex: Int, sinkIndex: Int, sourceTag: TypeTag, sinkTag: TypeTag, maxDelta: UInt64, mixedContext: MixedRedistributionContext?)] = []
 
         for pair in scope.pairs {
-            guard let sourceRange = graph.nodes[pair.sourceNodeID].positionRange,
-                  let sinkRange = graph.nodes[pair.sinkNodeID].positionRange
+            guard let sourceRange = graph.nodes[pair.source.nodeID].positionRange,
+                  let sinkRange = graph.nodes[pair.sink.nodeID].positionRange
             else {
                 continue
             }
-            guard case let .chooseBits(sourceMetadata) = graph.nodes[pair.sourceNodeID].kind,
-                  case let .chooseBits(sinkMetadata) = graph.nodes[pair.sinkNodeID].kind
+            guard case let .chooseBits(sourceMetadata) = graph.nodes[pair.source.nodeID].kind,
+                  case let .chooseBits(sinkMetadata) = graph.nodes[pair.sink.nodeID].kind
             else {
                 continue
             }

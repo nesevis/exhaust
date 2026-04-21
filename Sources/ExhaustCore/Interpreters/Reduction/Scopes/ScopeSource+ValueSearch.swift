@@ -19,12 +19,12 @@ struct MinimizationSource: ScopeSource {
         for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind) {
             let valueYield: Int = switch scope {
             case let .valueLeaves(integerScope):
-                integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
-                    max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerDescendantToBind: innerDescendantToBind))
+                integerScope.leaves.reduce(0) { maxSoFar, leaf in
+                    max(maxSoFar, Self.computeValueYield(leafNodeID: leaf.nodeID, graph: graph, innerDescendantToBind: innerDescendantToBind))
                 }
             case let .floatLeaves(floatScope):
-                floatScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
-                    max(maxSoFar, Self.computeValueYield(leafNodeID: nodeID, graph: graph, innerDescendantToBind: innerDescendantToBind))
+                floatScope.leaves.reduce(0) { maxSoFar, leaf in
+                    max(maxSoFar, Self.computeValueYield(leafNodeID: leaf.nodeID, graph: graph, innerDescendantToBind: innerDescendantToBind))
                 }
             case let .boundValue(fibreScope):
                 fibreScope.boundSubtreeSize
@@ -32,9 +32,9 @@ struct MinimizationSource: ScopeSource {
 
             let estimatedProbes: Int = switch scope {
             case let .valueLeaves(integerScope):
-                1 + integerScope.leafNodeIDs.count * 16
+                1 + integerScope.leaves.count * 16
             case let .floatLeaves(floatScope):
-                floatScope.leafNodeIDs.count * 15
+                floatScope.leaves.count * 15
             case let .boundValue(fibreScope):
                 15 * (fibreScope.downstreamNodeIDs.count == 1
                     ? 16
@@ -104,7 +104,7 @@ struct ExchangeSource: ScopeSource {
             case let .redistribution(redistScope):
                 estimatedProbes = min(24, redistScope.pairs.count)
                 let maxDistance = redistScope.pairs.reduce(0) { maxSoFar, pair in
-                    guard case let .chooseBits(metadata) = graph.nodes[pair.sourceNodeID].kind else {
+                    guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
                         return maxSoFar
                     }
                     let target = metadata.value.reductionTarget(in: metadata.validRange)

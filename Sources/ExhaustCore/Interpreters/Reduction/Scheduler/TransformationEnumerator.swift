@@ -192,22 +192,22 @@ enum TransformationEnumerator {
         for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind) {
             switch scope {
             case let .valueLeaves(integerScope):
-                let maxValueYield = integerScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
+                let maxValueYield = integerScope.leaves.reduce(0) { maxSoFar, leaf in
                     max(maxSoFar, computeValueYield(
-                        leafNodeID: nodeID,
+                        leafNodeID: leaf.nodeID,
                         graph: graph,
                         innerDescendantToBind: innerDescendantToBind
                     ))
                 }
-                let maxRange = integerScope.leafNodeIDs.reduce(UInt64(1)) { maxSoFar, nodeID in
-                    guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+                let maxRange = integerScope.leaves.reduce(UInt64(1)) { maxSoFar, leaf in
+                    guard case let .chooseBits(metadata) = graph.nodes[leaf.nodeID].kind else {
                         return maxSoFar
                     }
                     let rangeSize = (metadata.validRange?.upperBound ?? UInt64.max)
                         &- (metadata.validRange?.lowerBound ?? 0) &+ 1
                     return max(maxSoFar, rangeSize)
                 }
-                let leafCount = integerScope.leafNodeIDs.count
+                let leafCount = integerScope.leaves.count
                 let estimatedProbes = 1 + leafCount * ceilLog2(Int(min(maxRange, UInt64(Int.max))))
                 result.append(GraphTransformation(
                     operation: .minimize(scope),
@@ -226,9 +226,9 @@ enum TransformationEnumerator {
                 ))
 
             case let .floatLeaves(floatScope):
-                let maxValueYield = floatScope.leafNodeIDs.reduce(0) { maxSoFar, nodeID in
+                let maxValueYield = floatScope.leaves.reduce(0) { maxSoFar, leaf in
                     max(maxSoFar, computeValueYield(
-                        leafNodeID: nodeID,
+                        leafNodeID: leaf.nodeID,
                         graph: graph,
                         innerDescendantToBind: innerDescendantToBind
                     ))
@@ -239,7 +239,7 @@ enum TransformationEnumerator {
                         structural: 0,
                         value: maxValueYield,
                         slack: .exact,
-                        estimatedProbes: floatScope.leafNodeIDs.count * 15
+                        estimatedProbes: floatScope.leaves.count * 15
                     ),
                     precondition: .unconditional,
                     postcondition: TransformationPostcondition(
@@ -286,7 +286,7 @@ enum TransformationEnumerator {
             case let .redistribution(redistScope):
                 // Slack: maximum magnitude transferred (source's distance to target).
                 let maxSlack = redistScope.pairs.reduce(0) { maxSoFar, pair in
-                    guard case let .chooseBits(metadata) = graph.nodes[pair.sourceNodeID].kind else {
+                    guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
                         return maxSoFar
                     }
                     let target = metadata.value.reductionTarget(in: metadata.validRange)
@@ -303,7 +303,7 @@ enum TransformationEnumerator {
                 let antichainSet = Set(graph.deletionAntichain)
                 let maxEnablingYield = redistScope.pairs.reduce(0) { maxSoFar, pair in
                     let enabling = computeEnablingYield(
-                        sourceNodeID: pair.sourceNodeID,
+                        sourceNodeID: pair.source.nodeID,
                         antichainSet: antichainSet,
                         graph: graph
                     )
@@ -322,7 +322,7 @@ enum TransformationEnumerator {
                     postcondition: TransformationPostcondition(
                         isStructural: false,
                         invalidatesConvergence: redistScope.pairs.flatMap {
-                            [$0.sourceNodeID, $0.sinkNodeID]
+                            [$0.source.nodeID, $0.sink.nodeID]
                         },
                         enablesRemoval: []
                     )
@@ -331,8 +331,8 @@ enum TransformationEnumerator {
             case let .tandem(tandemScope):
                 let groupCount = tandemScope.groups.count
                 let maxDistance = tandemScope.groups.reduce(1) { maxSoFar, group in
-                    let groupMax = group.leafNodeIDs.reduce(UInt64(1)) { leafMax, nodeID in
-                        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+                    let groupMax = group.leaves.reduce(UInt64(1)) { leafMax, leaf in
+                        guard case let .chooseBits(metadata) = graph.nodes[leaf.nodeID].kind else {
                             return leafMax
                         }
                         let target = metadata.value.reductionTarget(in: metadata.validRange)
@@ -354,7 +354,7 @@ enum TransformationEnumerator {
                     precondition: .unconditional,
                     postcondition: TransformationPostcondition(
                         isStructural: false,
-                        invalidatesConvergence: tandemScope.groups.flatMap(\.leafNodeIDs),
+                        invalidatesConvergence: tandemScope.groups.flatMap { $0.leaves.map(\.nodeID) },
                         enablesRemoval: []
                     )
                 ))

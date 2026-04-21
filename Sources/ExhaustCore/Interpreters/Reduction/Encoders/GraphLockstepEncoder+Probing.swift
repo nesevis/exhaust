@@ -14,8 +14,8 @@ extension GraphLockstepEncoder {
 
         for group in scope.groups {
             var indices: [Int] = []
-            for nodeID in group.leafNodeIDs {
-                guard let range = graph.nodes[nodeID].positionRange else { continue }
+            for leaf in group.leaves {
+                guard let range = graph.nodes[leaf.nodeID].positionRange else { continue }
                 indices.append(range.lowerBound)
             }
             indices.sort()

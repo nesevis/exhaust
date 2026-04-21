@@ -111,7 +111,7 @@ struct ChoiceGraphScopeQueryTests {
         }
         #expect(integerScopes.count == 1)
         if case let .valueLeaves(scope) = integerScopes.first {
-            #expect(scope.leafNodeIDs.count == 2)
+            #expect(scope.leaves.count == 2)
             #expect(scope.batchZeroEligible)
         }
     }
