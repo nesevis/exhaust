@@ -9,9 +9,6 @@ package extension Interpreters {
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
 
-        /// When `true`, the scheduler appends one ``ProbeLogEntry`` per standard yield-merge dispatch to ``ReductionStats/probeLog``. Off by default because the log allocates per dispatch and is only useful for offline calibration analysis.
-        public var collectProbeLog: Bool = false
-
         public init(
             maxStalls: Int
         ) {
