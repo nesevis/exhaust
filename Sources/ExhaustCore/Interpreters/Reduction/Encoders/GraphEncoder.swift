@@ -73,6 +73,13 @@ protocol GraphEncoder {
     ///   - sequence: The live sequence after the structural mutation. Encoders that cache a baseline sequence in their state must replace it with this value, since their cached copy is from before the mutation.
     mutating func refreshScope(graph: ChoiceGraph, sequence: ChoiceSequence)
 
+    /// Whether every cached sequence position still addresses a value entry in the given sequence.
+    ///
+    /// The probe loop calls this after an acceptance whose ``ChangeApplication`` indicates a partial graph modification (value writes landed but bind reshape did not complete). When true, the encoder's cached leaf positions are still usable against the post-acceptance sequence and the probe loop can continue without a cycle break. When false, at least one cached position now addresses a structural marker or is out of bounds, and the loop must break to trigger a full rebuild.
+    ///
+    /// The default returns true, which is correct for encoders that do not cache per-leaf sequence indices (structural, swap, reorder, and similar single-shot encoders).
+    func hasValidPositions(in sequence: ChoiceSequence) -> Bool
+
     /// Convergence records accumulated during the probe loop.
     ///
     /// Each entry maps a graph **nodeID** to the ``ConvergedOrigin`` at which the search converged for that leaf. The scheduler harvests these after the probe loop and writes them to the graph via ``ChoiceGraph/recordConvergence(byNodeID:)``. NodeID keying (rather than sequence index) is required so the records survive in-pass position shifts triggered by ``refreshScope(graph:sequence:)``.
@@ -83,6 +90,11 @@ extension GraphEncoder {
     /// Default: encoders use the scheduler's hasBind-aware decoder selection.
     var requiresExactDecoder: Bool {
         false
+    }
+
+    /// Default: all cached positions are valid.
+    func hasValidPositions(in _: ChoiceSequence) -> Bool {
+        true
     }
 
     /// Default implementation returning no convergence records.
