@@ -47,6 +47,9 @@ package final class ChoiceGraph {
     /// Cached classification verdicts keyed by `BindMetadata.fingerprint`. Survives full graph rebuilds via ``build(from:inheriting:)`` because the fingerprint is derived from the originating `.bind` source location, which is stable for the program's lifetime — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds. Read by the scheduler before dispatching expensive dependent-node encoders so a previously-classified bind site does not re-pay the two materializations that ``classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` would otherwise run.
     var bindClassifications: [UInt64: BindClassification] = [:]
 
+    /// Last-observed upstream bit pattern and downstream topology fingerprint per bind site. Keyed by `BindMetadata.fingerprint`. Survives rebuilds so the scheduler can passively classify binds by comparing topology across natural upstream variation without materialisation probes.
+    var bindTopologyObservations: [UInt64: BindTopologyObservation] = [:]
+
     /// Returns true when `nodeID` has been removed from the graph but its array slot is retained. Used by every iteration site on ``ChoiceGraph`` to skip removed nodes.
     func isTombstoned(_ nodeID: Int) -> Bool {
         removedNodeIDs.contains(nodeID)
@@ -235,19 +238,22 @@ package extension ChoiceGraph {
         ChoiceGraphBuilder.build(from: tree)
     }
 
-    /// Builds a ``ChoiceGraph`` from a tree, inheriting an existing classification cache.
+    /// Builds a ``ChoiceGraph`` from a tree, inheriting classification and observation caches.
     ///
-    /// Used after a structural rebuild when the scheduler wants to preserve previously-computed bind classifications across the rebuild. Cache keys are ``BindMetadata/fingerprint`` values (per-source-location hashes), so they remain valid for the rebuilt graph as long as the underlying generator has not changed — the same `.bind` source location always produces a bind node with the same fingerprint, regardless of where in the rebuilt graph it appears.
+    /// Used after a structural rebuild when the scheduler wants to preserve previously-computed bind classifications and topology observations across the rebuild. Cache keys are ``BindMetadata/fingerprint`` values (per-source-location hashes), so they remain valid for the rebuilt graph as long as the underlying generator has not changed — the same `.bind` source location always produces a bind node with the same fingerprint, regardless of where in the rebuilt graph it appears.
     ///
     /// - Parameters:
     ///   - tree: The generator's compositional structure.
     ///   - cachedClassifications: Map from `BindMetadata.fingerprint` to a previously-computed ``BindClassification``. Typically the previous graph's ``bindClassifications`` field.
+    ///   - cachedObservations: Map from `BindMetadata.fingerprint` to the last-seen topology observation. Typically the previous graph's ``bindTopologyObservations`` field.
     static func build(
         from tree: ChoiceTree,
-        inheriting cachedClassifications: [UInt64: BindClassification]
+        inheriting cachedClassifications: [UInt64: BindClassification],
+        observations cachedObservations: [UInt64: BindTopologyObservation]
     ) -> ChoiceGraph {
-        var graph = ChoiceGraphBuilder.build(from: tree)
+        let graph = ChoiceGraphBuilder.build(from: tree)
         graph.bindClassifications = cachedClassifications
+        graph.bindTopologyObservations = cachedObservations
         return graph
     }
 

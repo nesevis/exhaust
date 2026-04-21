@@ -161,6 +161,63 @@ extension ChoiceGraph {
         bindClassifications[bindMetadata.fingerprint] = verdict.classification
     }
 
+    // MARK: - Passive Topology Observation
+
+    /// Observes bind topology from the current graph state and classifies binds whose upstream value has changed since the last observation.
+    ///
+    /// For each non-getSize bind node, reads the upstream leaf's current bit pattern from the graph and computes the bound subtree's topology fingerprint from `tree`. Compares against the stored ``BindTopologyObservation``:
+    /// - Upstream unchanged: updates the stored downstream fingerprint (structural ops may have changed it independently).
+    /// - Upstream changed, downstream fingerprint same: classifies as `.identical` — the bind produces the same shape for different upstream values.
+    /// - Upstream changed, downstream fingerprint different: classifies as `.divergent` — the bind reshapes under upstream variation.
+    ///
+    /// Call after each graph rebuild. Avoids the two materialisation probes that ``classifyBind`` requires by observing natural upstream variation across rebuild cycles.
+    func observeBindTopologies(tree: ChoiceTree) {
+        for (nodeID, node) in nodes.enumerated() {
+            guard isTombstoned(nodeID) == false else { continue }
+            guard case let .bind(metadata) = node.kind else { continue }
+            guard metadata.isStructurallyConstant == false else { continue }
+            if bindClassifications[metadata.fingerprint] != nil { continue }
+            guard node.children.count >= 2 else { continue }
+
+            let innerChildID = node.children[metadata.innerChildIndex]
+            guard innerChildID < nodes.count else { continue }
+            guard case let .chooseBits(leafMetadata) = nodes[innerChildID].kind else { continue }
+
+            let boundChildID = node.children[metadata.boundChildIndex]
+            guard boundChildID < nodes.count else { continue }
+
+            guard let boundSubtree = Self.extractBoundSubtree(
+                from: tree,
+                matchingPath: metadata.bindPath
+            ) else { continue }
+
+            let upstreamBitPattern = leafMetadata.value.bitPattern64
+            let downstreamFingerprint = Self.subtreeFingerprint(boundSubtree)
+
+            let newObservation = BindTopologyObservation(
+                upstreamBitPattern: upstreamBitPattern,
+                downstreamFingerprint: downstreamFingerprint
+            )
+
+            guard let previous = bindTopologyObservations[metadata.fingerprint] else {
+                bindTopologyObservations[metadata.fingerprint] = newObservation
+                continue
+            }
+
+            if previous.upstreamBitPattern == upstreamBitPattern {
+                bindTopologyObservations[metadata.fingerprint] = newObservation
+                continue
+            }
+
+            let topology: BindTopology = previous.downstreamFingerprint == downstreamFingerprint
+                ? .identical
+                : .divergent
+            let classification = BindClassification(topology: topology, liftability: .both)
+            bindClassifications[metadata.fingerprint] = classification
+            bindTopologyObservations.removeValue(forKey: metadata.fingerprint)
+        }
+    }
+
     // MARK: - Endpoint Clamp
 
     /// Clamps a leaf's valid bit-pattern range into a window centered on the type's semantic zero so that probing stays inside any reasonable consumer's distribution.

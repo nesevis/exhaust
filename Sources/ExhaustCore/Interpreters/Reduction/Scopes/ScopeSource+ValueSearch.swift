@@ -36,7 +36,9 @@ struct MinimizationSource: ScopeSource {
             case let .floatLeaves(floatScope):
                 floatScope.leafNodeIDs.count * 15
             case let .boundValue(fibreScope):
-                15 + min(128, fibreScope.boundSubtreeSize)
+                15 * (fibreScope.downstreamNodeIDs.count == 1
+                    ? 16
+                    : min(64, fibreScope.downstreamNodeIDs.count * 8))
             }
 
             entries.append((

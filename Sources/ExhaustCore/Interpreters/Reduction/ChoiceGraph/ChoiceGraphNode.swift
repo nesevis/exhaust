@@ -171,6 +171,15 @@ package enum BindLiftability: Equatable, Hashable, Sendable {
     case neither
 }
 
+/// Snapshot of a bind site's upstream value and downstream topology at a given graph state. Compared across graph rebuilds to passively classify binds without materialisation probes.
+package struct BindTopologyObservation: Equatable, Hashable, Sendable {
+    /// Bit pattern of the upstream (inner) leaf at observation time.
+    public let upstreamBitPattern: UInt64
+
+    /// Topology fingerprint of the bound subtree at observation time.
+    public let downstreamFingerprint: UInt64
+}
+
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.
 package struct ZipMetadata {
     /// When true, coverage analysis skips this subtree.
