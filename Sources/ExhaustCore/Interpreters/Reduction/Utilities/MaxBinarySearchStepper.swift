@@ -36,7 +36,8 @@ struct MaxBinarySearchStepper {
             converged = true
             return nil
         }
-        let mid = lo + (hi - lo + 1) / 2 // bias high
+        let span = hi - lo
+        let mid = lo + (span >> 1) + (span & 1) // high-biased midpoint, overflow-safe
         lastProbe = mid
         return mid
     }
@@ -66,7 +67,8 @@ struct MaxBinarySearchStepper {
             return nil
         }
 
-        let mid = lo + (hi - lo + 1) / 2 // bias high
+        let span = hi - lo
+        let mid = lo + (span >> 1) + (span & 1) // high-biased midpoint, overflow-safe
         lastProbe = mid
         return mid
     }
