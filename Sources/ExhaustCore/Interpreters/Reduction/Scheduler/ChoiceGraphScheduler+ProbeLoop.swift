@@ -73,7 +73,7 @@ extension ChoiceGraphScheduler {
             probeCount += 1
             lastAccepted = false
             // True when this probe's acceptance structurally mutated the graph (in-place reshape that added/removed nodes, or any change that forced ``ChangeApplication/requiresFullRebuild``). The encoder's
-            // ``IntegerState/leafPositions`` (and equivalent caches in float and exchange encoders) are built once at ``start(scope:)`` and are no longer valid against the live graph after such a mutation. The scheduler calls ``encoder.refreshScope`` at the bottom of the iteration when this is true so the encoder can re-derive its scope state in place against the post-mutation graph. See ExhaustDocs/graph-reducer-position-drift-bug.md.
+            // ``IntegerState/leafPositions`` (and equivalent caches in float and exchange encoders) are built once at ``start(scope:)`` and are no longer valid against the live graph after such a mutation. The scheduler calls ``encoder.refreshScope`` at the bottom of the iteration when this is true so the encoder can re-derive its scope state in place against the post-mutation graph.
             var mutatedStructurally = false
 
             let probeHash = ZobristHash.incrementalHash(
@@ -165,9 +165,15 @@ extension ChoiceGraphScheduler {
                 } else {
                     application = graph.apply(probe.mutation, freshTree: tree)
                     if application.requiresFullRebuild {
-                        // ``ChoiceGraph/apply(_:freshTree:)`` bailed out and left the graph untouched. Signal the outer cycle to rebuild before the next dispatch — but only break out of the probe loop when the decoder also reshaped the sequence length. The crash this guards against is ``IntegerState/leafPositions`` carrying indices past the end of a now-shorter ``sequence``; when length is unchanged, every tracked leaf position still references the same byte slot and the encoder can keep probing this leaf to convergence within the dispatch (avoiding ~22 cache-warm substitution probes plus a structural rebuild per binary-search step on bind-bound leaves).
                         anyRequiresRebuild = true
-                        if sequence.count != preAcceptSequenceCount {
+                        // Two cases:
+                        //
+                        // (a) Sequence length changed — the encoder's ``IntegerState/leafPositions`` carry indices past the end of the now-shorter sequence. Must break.
+                        //
+                        // (b) ``applyBindReshape`` bailed without modifying any nodes (no added/removed IDs). The graph is stale but ``mutatedStructurally`` stays false — ``refreshScope`` is never called, so the encoder's cached leaf positions address pre-mutation slots. Continuing lets the encoder write to stale indices, producing a position drift bug. Must break. When the reshape *succeeds* (non-empty added/removed IDs), the code below sets ``mutatedStructurally = true`` and calls ``refreshScope``, allowing the encoder to continue with updated state.
+                        let reshapeBailed = application.addedNodeIDs.isEmpty
+                            && application.removedNodeIDs.isEmpty
+                        if sequence.count != preAcceptSequenceCount || reshapeBailed {
                             break
                         }
                     }

@@ -242,7 +242,7 @@ struct GraphValueEncoder: GraphEncoder {
     mutating func refreshScope(graph: ChoiceGraph, sequence: ChoiceSequence) {
         // Re-derive the encoder's working set from the live graph after a structural mutation. The scheduler calls this between probe loop iterations whenever the most recent acceptance added or removed graph nodes (an in-place reshape via ``applyBindReshape``).
         // The cached ``IntegerState/leafPositions`` /
-        // ``FloatState/targets`` reference pre-mutation node IDs and sequence positions; without a refresh the next probe would write to a stale slot or invoke ``applyLeafValueWrite`` on a tombstoned node, producing the position drift bug documented in ExhaustDocs/graph-reducer-position-drift-bug.md.
+        // ``FloatState/targets`` reference pre-mutation node IDs and sequence positions; without a refresh the next probe would write to a stale slot or invoke ``applyLeafValueWrite`` on a tombstoned node, producing a position drift bug.
         //
         // Strategy: pull the canonical integer/float scope from
         // ``graph.minimizationScopes()`` against the live graph (which automatically picks up new leaves the splice created and drops tombstoned ones), filter out leaves we have already converged in this pass via ``convergenceStore``, and replace the per-mode state in place. Convergence records keyed by nodeID survive any number of refreshes; records for tombstoned IDs are dropped so they cannot leak across the boundary.
