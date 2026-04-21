@@ -166,14 +166,15 @@ extension ChoiceGraphScheduler {
                     application = graph.apply(probe.mutation, freshTree: tree)
                     if application.requiresFullRebuild {
                         anyRequiresRebuild = true
-                        // Two cases:
+                        // Two cases require an immediate break:
                         //
-                        // (a) Sequence length changed — the encoder's ``IntegerState/leafPositions`` carry indices past the end of the now-shorter sequence. Must break.
+                        // (a) Sequence length changed — the encoder's ``IntegerState/leafPositions`` carry indices past the end of the now-shorter sequence.
                         //
-                        // (b) ``applyBindReshape`` bailed without modifying any nodes (no added/removed IDs). The graph is stale but ``mutatedStructurally`` stays false — ``refreshScope`` is never called, so the encoder's cached leaf positions address pre-mutation slots. Continuing lets the encoder write to stale indices, producing a position drift bug. Must break. When the reshape *succeeds* (non-empty added/removed IDs), the code below sets ``mutatedStructurally = true`` and calls ``refreshScope``, allowing the encoder to continue with updated state.
-                        let reshapeBailed = application.addedNodeIDs.isEmpty
+                        // (b) ``applyBindReshape`` wrote the bind-inner leaf's new value via ``applyLeafValueWrite`` but then failed a guard before completing the structural splice. The graph now holds the new depth-selector value paired with the old bound subtree — a partially-modified state that ``refreshScope`` cannot repair because the graph's position ranges no longer correspond to the live sequence's layout. Continuing lets the encoder address entries that the structural change displaced, producing the divergence documented in ExhaustDocs/graph-reducer-position-drift-bug.md. Detected via non-empty ``touchedNodeIDs`` (the value write landed) with empty ``addedNodeIDs``/``removedNodeIDs`` (the splice did not). The multi-bind conservative fallback (``reshapeChanges.count > 1``) returns before any writes and is safe to continue — the graph is untouched, and the encoder's stale-position probes are simply rejected by the decoder.
+                        let graphPartiallyModified = application.touchedNodeIDs.isEmpty == false
+                            && application.addedNodeIDs.isEmpty
                             && application.removedNodeIDs.isEmpty
-                        if sequence.count != preAcceptSequenceCount || reshapeBailed {
+                        if sequence.count != preAcceptSequenceCount || graphPartiallyModified {
                             break
                         }
                     }
