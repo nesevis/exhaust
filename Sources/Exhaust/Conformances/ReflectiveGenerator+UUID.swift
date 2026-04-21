@@ -39,8 +39,7 @@ public extension ReflectiveGenerator {
 //   bits 61–0:  62 random bits
 //   Total: 62 random bits
 //
-// Generators produce only the random bits; fixed bits are inserted/stripped
-// in the forward/backward functions below.
+// Generators produce only the random bits; fixed bits are inserted/stripped in the forward/backward functions below.
 
 private extension ReflectiveGenerator {
     static func uuidFromHalves(_ high60: UInt64, _ low62: UInt64) -> UUID {

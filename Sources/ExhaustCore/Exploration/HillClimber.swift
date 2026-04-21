@@ -50,8 +50,7 @@ package enum HillClimber {
         var currentSequence = seed.sequence
         var probesUsed = 0
 
-        // Local PRNG for probe seeds — derived from the seed's own data
-        // so the external prng stream isn't perturbed by probe count.
+        // Local PRNG for probe seeds — derived from the seed's own data so the external prng stream isn't perturbed by probe count.
         let probePRNGSeed = GenerationContext.runSeed(
             base: seed.generation &+ UInt64(seed.sequence.count),
             runIndex: UInt64(bitPattern: Int64(seed.fitness.bitPattern))
@@ -163,8 +162,7 @@ package enum HillClimber {
                             currentSequence = sequence
                             currentBitPattern = newBitPattern
                             didAccept = true
-                            // Return false to stop findInteger — we've accepted and
-                            // need to restart the outer loop with the new sequence.
+                            // Return false to stop findInteger — we've accepted and need to restart the outer loop with the new sequence.
                             return false
                         }
                         return false

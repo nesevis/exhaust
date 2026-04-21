@@ -78,9 +78,7 @@ extension Materializer {
             if context.boundDepth > 0 || isRangeExplicit == false {
                 // Bound value or non-explicit range: clamp to fresh range.
                 // Bound ranges may shift when inner values change.
-                // Non-explicit ranges (from size scaling) are context-dependent —
-                // the generator may derive a narrower range than the original, so
-                // clamping is safer than rejecting.
+                // Non-explicit ranges (from size scaling) are context-dependent — the generator may derive a narrower range than the original, so clamping is safer than rejecting.
                 randomBits = Swift.min(Swift.max(bp, min), max)
             } else {
                 // Explicit-range inner value: reject if out of range.
@@ -89,8 +87,7 @@ extension Materializer {
                 }
                 randomBits = bp
             }
-            // Reuse original ChoiceValue when bits unchanged, avoiding
-            // tag.makeConvertible(bitPattern64:) reconstruction.
+            // Reuse original ChoiceValue when bits unchanged, avoiding tag.makeConvertible(bitPattern64:) reconstruction.
             if randomBits == bp {
                 reusedChoice = prefixValue.choice
             }
@@ -112,9 +109,7 @@ extension Materializer {
             }
 
         case .generate:
-            // Fresh generation honors scaling; replay / guided / minimize operate
-            // on the declared range so they can reconstruct or target specific
-            // bit patterns without being re-narrowed.
+            // Fresh generation honors scaling; replay / guided / minimize operate on the declared range so they can reconstruct or target specific bit patterns without being re-narrowed.
             let effective: ClosedRange<UInt64>
             if let scaling {
                 let size = Materializer.consumeSize(&context)
@@ -164,8 +159,7 @@ extension Materializer {
             branchIDIdx += 1
         }
 
-        // Extract fallback branch info. For Gen.recursive, the pick site is wrapped
-        // in a bind — unwrap to reach the group with branch alternatives.
+        // Extract fallback branch info. For Gen.recursive, the pick site is wrapped in a bind — unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?
         let branchChoiceTree: ChoiceTree?
         let effectiveFallback: ChoiceTree? = if case let .bind(_, _, bound) = calleeFallback {
@@ -254,11 +248,8 @@ extension Materializer {
                         id: choice.id, branchIDs: branchIDs, choice: contTree
                     )))
                 } else {
-                    // Non-selected branch: minimize to produce the shortlex-simplest
-                    // content. Values use reductionTarget (semantic zero when in range),
-                    // nested picks select the first branch, and sequence lengths minimize.
-                    // The PRNG is only a fallback for operations without minimize-specific
-                    // handling (filters, recursive unfolds).
+                    // Non-selected branch: minimize to produce the shortlex-simplest content. Values use reductionTarget (semantic zero when in range), nested picks select the first branch, and sequence lengths minimize.
+                    // The PRNG is only a fallback for operations without minimize-specific handling (filters, recursive unfolds).
                     var branchContext = Context(
                         cursor: Cursor.empty,
                         prng: Xoshiro256(seed: jumpSeed),
@@ -334,12 +325,9 @@ extension Materializer {
         if let seqInfo = context.cursor.tryConsumeSequenceOpen() {
             if seqInfo.isLengthExplicit, context.mode == .exact {
                 // Exact mode + explicit-length: the prefix is authoritative.
-                // The length value is not stored in the flattened sequence, so we
-                // can't consume it from the cursor. Use the prefix element count.
+                // The length value is not stored in the flattened sequence, so we can't consume it from the cursor. Use the prefix element count.
                 length = UInt64(seqInfo.elementCount)
-                // Fast path: extract metadata directly from chooseBits length generators
-                // (the common case, for example `array(length: 0...10)`), avoiding a full
-                // generateRecursive + runContinuation round-trip.
+                // Fast path: extract metadata directly from chooseBits length generators (the common case, for example `array(length: 0...10)`), avoiding a full generateRecursive + runContinuation round-trip.
                 if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = lengthGen {
                     lengthMeta = ChoiceMetadata(
                         validRange: min ... max,
@@ -360,12 +348,8 @@ extension Materializer {
                     context.mode = savedMode
                 }
             } else if seqInfo.isLengthExplicit {
-                // Guided/generate mode + explicit-length: use the prefix element
-                // count, clamped to the generator's valid range. For fixed-length
-                // generators (for example `exactly: 2`, range 2...2) this produces 2
-                // regardless of prefix. For variable-length generators (for example
-                // `length: 0...10`) this preserves the prefix count. Analogous to
-                // the fallback-length clamping at the cursor-suspended path below.
+                // Guided/generate mode + explicit-length: use the prefix element count, clamped to the generator's valid range. For fixed-length generators (for example `exactly: 2`, range 2...2) this produces 2 regardless of prefix. For variable-length generators (for example
+                // `length: 0...10`) this preserves the prefix count. Analogous to the fallback-length clamping at the cursor-suspended path below.
                 let prefixCount = UInt64(seqInfo.elementCount)
                 let erasedLengthGen = lengthGen.erase()
                 let savedMode = context.mode
@@ -487,16 +471,11 @@ extension Materializer {
 
         let canScope = fallbackChildren != nil
 
-        // Scope limits are computed arithmetically from the cursor's current
-        // position (which sits at the zip's group-open marker). Each child's
-        // scope starts at basePosition + 1 (past the group-open) plus the
-        // cumulative flattenedEntryCount of preceding children. This avoids
-        // the cursor-position-based calculation that drifted when skipGroups()
+        // Scope limits are computed arithmetically from the cursor's current position (which sits at the zip's group-open marker). Each child's scope starts at basePosition + 1 (past the group-open) plus the cumulative flattenedEntryCount of preceding children. This avoids the cursor-position-based calculation that drifted when skipGroups()
         // consumed a child's leading group(true) markers.
         var childScopeStart = context.cursor.position + 1 // past the zip group open
 
-        // Advance the cursor past transparent markers so it is ready for the
-        // first child's consume calls (tryConsumeBranch / tryConsumeValue).
+        // Advance the cursor past transparent markers so it is ready for the first child's consume calls (tryConsumeBranch / tryConsumeValue).
         if canScope { context.cursor.skipGroups() }
 
         // while-loop: avoiding zip/IteratorProtocol overhead in debug builds.
@@ -551,8 +530,7 @@ extension Materializer {
         guard let result = try generateRecursive(
             gen, with: inputValue, context: &context, fallbackTree: innerFallback
         ) else { return nil }
-        // Defensive clear — consumed by getSize, but guard
-        // against missing getSize.
+        // Defensive clear — consumed by getSize, but guard against missing getSize.
         context.sizeOverride = nil
         return try runContinuation(
             result: result.0,
@@ -622,21 +600,12 @@ extension Materializer {
                 )
 
             case .guided:
-                // getSize-binds are structurally stable: getSize produces zero
-                // ChoiceSequence entries and returns a fixed value during reduction.
-                // Their markers are `.group` (not `.bind`), so skip cursor
-                // suspension — skipBindBound() would scan for `.bind` markers
-                // and corrupt the cursor.
+                // getSize-binds are structurally stable: getSize produces zero ChoiceSequence entries and returns a fixed value during reduction.
+                // Their markers are `.group` (not `.bind`), so skip cursor suspension — skipBindBound() would scan for `.bind` markers and corrupt the cursor.
                 //
                 // For non-getSize binds, suspend only when the inner value changed.
-                // When unchanged, the bound structure is identical and prefix
-                // entries are valid — the cursor stays active so encoder
-                // modifications to bound content are honoured. Compare flattened
-                // ChoiceSequences (strips metadata, compares only values/branches/
-                // markers).
-                // No bind suspension: the cursor reads entries as-is. Cross-depth
-                // promotions have structurally compatible bound content; stale entries
-                // from value changes are caught by the property check.
+                // When unchanged, the bound structure is identical and prefix entries are valid — the cursor stays active so encoder modifications to bound content are honoured. Compare flattened ChoiceSequences (strips metadata, compares only values/branches/ markers).
+                // No bind suspension: the cursor reads entries as-is. Cross-depth promotions have structurally compatible bound content; stale entries from value changes are caught by the property check.
                 context.boundDepth += 1
                 let boundResult = try generateRecursive(
                     boundGen, with: inputValue, context: &context,

@@ -83,12 +83,7 @@ enum ChoiceGraphScheduler {
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
-        // Re-materialize the initial tree with `materializePicks: true` so
-        // non-selected branches at every pick site carry full minimized
-        // subtrees. The tree we receive came from reflection, which only
-        // includes the branch that actually produced the failing value; the
-        // graph's branch-pivot / promotion / descendant-promotion encoders
-        // need the alternative branches to have structure to pivot to.
+        // Re-materialize the initial tree with `materializePicks: true` so non-selected branches at every pick site carry full minimized subtrees. The tree we receive came from reflection, which only includes the branch that actually produced the failing value; the graph's branch-pivot / promotion / descendant-promotion encoders need the alternative branches to have structure to pivot to.
         // Ensures alternative branches have structure for pivoting.
         var sequence = ChoiceSequence.flatten(initialTree)
         var tree = initialTree
@@ -115,16 +110,9 @@ enum ChoiceGraphScheduler {
         var graph = ChoiceGraph.build(from: tree)
         graph.observeBindTopologies(tree: tree)
 
-        // Layer 7a lazy rematerialize: tracks whether the current graph
-        // was rebuilt from a stripped tree (one produced by a decoder
-        // call with `materializePicks: false`). When true, every pick
-        // node's ``PickMetadata/branchElements`` contains only the
-        // selected branch. The cycle loop's source-pulling iterations
-        // check this flag before dispatching a path-changing operation
-        // (one that reads inactive branches via
+        // Layer 7a lazy rematerialize: tracks whether the current graph was rebuilt from a stripped tree (one produced by a decoder call with `materializePicks: false`). When true, every pick node's ``PickMetadata/branchElements`` contains only the selected branch. The cycle loop's source-pulling iterations check this flag before dispatching a path-changing operation (one that reads inactive branches via
         // ``GraphReplacementEncoder``) and rematerialize on demand.
-        // False at scheduler entry because the initial tree was just
-        // re-materialized with `materializePicks: true` above.
+        // False at scheduler entry because the initial tree was just re-materialized with `materializePicks: true` above.
         var graphIsStripped = false
 
         if collectStats {
@@ -143,22 +131,10 @@ enum ChoiceGraphScheduler {
             )
         }
 
-        // Scope rejection cache: tracks rejected structural operations
-        // by position-scoped Zobrist hash. Naturally invalidates when
-        // targeted values change. Cleared on structural acceptance.
+        // Scope rejection cache: tracks rejected structural operations by position-scoped Zobrist hash. Naturally invalidates when targeted values change. Cleared on structural acceptance.
         var scopeRejectionCache = ScopeRejectionCache()
 
-        // Per-cycle blocklist for bound value dispatches. Each bound value
-        // composition runs a generator lift per upstream probe and a fibre
-        // search per lift, all expensive operations that don't benefit from
-        // the probe-level reject cache. After the first dispatch within a
-        // cycle, the upstream encoder has explored its full search space
-        // (up to ``GraphComposedEncoder/upstreamBudget``); re-dispatching
-        // after a structural acceptance just re-runs the same upstream
-        // exploration. The old reducer sidesteps this by
-        // running once per cycle as a separate phase. We mirror that here
-        // by tracking dispatched bind node IDs and skipping repeats until
-        // the next cycle, when the set is cleared.
+        // Per-cycle blocklist for bound value dispatches. Each bound value composition runs a generator lift per upstream probe and a fibre search per lift, all expensive operations that don't benefit from the probe-level reject cache. After the first dispatch within a cycle, the upstream encoder has explored its full search space (up to ``GraphComposedEncoder/upstreamBudget``); re-dispatching after a structural acceptance just re-runs the same upstream exploration. The old reducer sidesteps this by running once per cycle as a separate phase. We mirror that here by tracking dispatched bind node IDs and skipping repeats until the next cycle, when the set is cleared.
         var boundValueDispatchedThisCycle = Set<Int>()
 
         // Per-bind-node bound value stall counter. Incremented when a bound value dispatch produces zero accepts. Reset on any acceptance. Decays the upstream probe budget: `max(1, 15 >> stalls)` — 15, 7, 3, 1 over consecutive fruitless dispatches.
@@ -193,20 +169,11 @@ enum ChoiceGraphScheduler {
             }
             let sequenceBeforeCycle = sequence
 
-            // Partial Layer 5: the unconditional top-of-cycle rebuild has
-            // been removed. The graph carries over from the previous cycle
-            // already in sync with the live sequence and tree, because
-            // every accepted probe in the previous cycle was either:
+            // Partial Layer 5: the unconditional top-of-cycle rebuild has been removed. The graph carries over from the previous cycle already in sync with the live sequence and tree, because every accepted probe in the previous cycle was either:
             //  - A value-only fast-path application: ``ChoiceGraph/apply(_:freshTree:)``
             //    mutated the graph in place to match the new sequence.
-            //  - A bind-inner reshape, structural acceptance, or staleness
-            //    detection acceptance: the cycle loop's mid-cycle rebuild
-            //    path (or the staleness detection helper) immediately
-            //    rebuilt the graph from the new tree.
-            // The 1000-seed × 14-benchmark shadow run with a fatalError in
-            // place of the warning never triggered, confirming that the
-            // value-only fast path produces structurally identical results
-            // to a fresh rebuild on the entire ECOOP suite.
+            //  - A bind-inner reshape, structural acceptance, or staleness detection acceptance: the cycle loop's mid-cycle rebuild path (or the staleness detection helper) immediately rebuilt the graph from the new tree.
+            // The 1000-seed × 14-benchmark shadow run with a fatalError in place of the warning never triggered, confirming that the value-only fast path produces structurally identical results to a fresh rebuild on the entire ECOOP suite.
 
             // Build scope sources from the carried-over graph.
             var sources = ScopeSourceBuilder.buildSources(from: graph)
@@ -245,8 +212,7 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                // Skip structural scopes that were previously rejected
-                // with identical values at the targeted positions.
+                // Skip structural scopes that were previously rejected with identical values at the targeted positions.
                 if scopeRejectionCache.isRejected(
                     operation: transformation.operation,
                     sequence: sequence,
@@ -255,14 +221,9 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                // bound value scopes are deferred to stall cycles. Two skip rules
-                // protect against the cost of running the composition unnecessarily:
+                // bound value scopes are deferred to stall cycles. Two skip rules protect against the cost of running the composition unnecessarily:
                 //
-                // 1. Per-cycle de-duplication: each bound value composition runs an
-                //    upstream search whose internal state is recreated on every dispatch
-                //    and a generator lift per upstream probe — neither benefits from the
-                //    probe-level reject cache. After the first dispatch within a cycle
-                //    the second and third dispatches add little value at high cost.
+                // 1. Per-cycle de-duplication: each bound value composition runs an upstream search whose internal state is recreated on every dispatch and a generator lift per upstream probe — neither benefits from the probe-level reject cache. After the first dispatch within a cycle the second and third dispatches add little value at high cost.
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     if boundValueDispatchedThisCycle.contains(fibreScope.bindNodeID) {
                         continue
@@ -320,25 +281,11 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                // Layer 7a lazy rematerialize: a path-changing operation
-                // (only ``GraphOperation/replace``) reads inactive branches
-                // via ``PickMetadata/branchElements``. If the current graph
-                // was rebuilt from a stripped tree (``graphIsStripped``
-                // true), branchElements is incomplete and the encoder will
-                // silently fail. Re-materialize the sequence with
-                // `materializePicks: true`, rebuild the graph, refresh
-                // sources, and restart the iteration. The current
-                // transformation references node IDs from the stale graph
-                // and is discarded — the next iteration pulls a fresh
-                // transformation from the rebuilt sources.
+                // Layer 7a lazy rematerialize: a path-changing operation (only ``GraphOperation/replace``) reads inactive branches via ``PickMetadata/branchElements``. If the current graph was rebuilt from a stripped tree (``graphIsStripped``
+                // true), branchElements is incomplete and the encoder will silently fail. Re-materialize the sequence with
+                // `materializePicks: true`, rebuild the graph, refresh sources, and restart the iteration. The current transformation references node IDs from the stale graph and is discarded — the next iteration pulls a fresh transformation from the rebuilt sources.
                 //
-                // Non-path-changing operations (minimize, exchange, remove,
-                // permute, migrate) do not read branchElements and run
-                // safely against a stripped graph, so they bypass this
-                // check entirely. The result is that we only pay the
-                // rematerialize cost on cycles that actually exercise
-                // branch pivot / descendant promotion / self-similar
-                // replacement, instead of defensively on every rebuild.
+                // Non-path-changing operations (minimize, exchange, remove, permute, migrate) do not read branchElements and run safely against a stripped graph, so they bypass this check entirely. The result is that we only pay the rematerialize cost on cycles that actually exercise branch pivot / descendant promotion / self-similar replacement, instead of defensively on every rebuild.
                 if graphIsStripped, transformation.operation.isPathChanging {
                     if case let .success(_, fullTree, _) = Materializer.materializeAny(
                         erasedGen,
@@ -377,9 +324,7 @@ enum ChoiceGraphScheduler {
                     warmStartRecords: warmStarts
                 )
 
-                // Select encoder and run. bound value scopes route through the
-                // generic ``GraphComposedEncoder`` primitive constructed at this call
-                // site (where Output and gen are in scope) rather than the non-generic
+                // Select encoder and run. bound value scopes route through the generic ``GraphComposedEncoder`` primitive constructed at this call site (where Output and gen are in scope) rather than the non-generic
                 // ``selectEncoder(for:)`` switch.
                 var encoder: any GraphEncoder
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
@@ -394,9 +339,7 @@ enum ChoiceGraphScheduler {
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
                 }
-                // Mark the bound value edge as dispatched for this cycle so the
-                // per-cycle skip above blocks repeat dispatches after any
-                // structural acceptance triggers a source rebuild.
+                // Mark the bound value edge as dispatched for this cycle so the per-cycle skip above blocks repeat dispatches after any structural acceptance triggers a source rebuild.
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     boundValueDispatchedThisCycle.insert(fibreScope.bindNodeID)
                 }
@@ -417,21 +360,14 @@ enum ChoiceGraphScheduler {
                 )
 
                 // Harvest convergence from value encoders. The encoder's
-                // ``convergenceRecords`` is keyed by graph nodeID (so it
-                // survives in-pass position shifts triggered by
-                // ``GraphEncoder/refreshScope(graph:sequence:)``); the
-                // graph writes them through the matching nodeID-keyed
-                // overload to skip the O(N) per-record positional walk.
+                // ``convergenceRecords`` is keyed by graph nodeID (so it survives in-pass position shifts triggered by
+                // ``GraphEncoder/refreshScope(graph:sequence:)``); the graph writes them through the matching nodeID-keyed overload to skip the O(N) per-record positional walk.
                 let convergence = encoder.convergenceRecords
                 if convergence.isEmpty == false {
                     graph.recordConvergence(byNodeID: convergence)
                 }
 
-                // Update per-encoder history and cycle budget. Use materializationCount
-                // (decoder rejects + accepts) instead of probeCount so that cache hits —
-                // which are free hash lookups — don't inflate the futility emit counter or
-                // consume the cycle budget. This is consistent with the materializationBudget
-                // parameter passed to runProbeLoop, which already excludes cache hits.
+                // Update per-encoder history and cycle budget. Use materializationCount (decoder rejects + accepts) instead of probeCount so that cache hits — which are free hash lookups — don't inflate the futility emit counter or consume the cycle budget. This is consistent with the materializationBudget parameter passed to runProbeLoop, which already excludes cache hits.
                 encoderEmits[pendingEncoderName, default: 0] += outcome.materializationCount
                 encoderAccepts[pendingEncoderName, default: 0] += outcome.acceptCount
                 if var budget = encoderCycleBudget[pendingEncoderName] {
@@ -452,14 +388,8 @@ enum ChoiceGraphScheduler {
                 if outcome.accepted {
                     anyAccepted = true
 
-                    // Force a full graph rebuild after every accepted bound value composition
-                    // dispatch. The composition's repeated bind reshapes accumulate
-                    // partial-rebuild state on the live graph that the shadow check has
-                    // observed diverging from a fresh build (`graph_apply_shadow_mismatch`),
-                    // and which causes downstream encoders to crash on stale leaf positions.
-                    // Until the in-place reshape path is fixed for chained applications,
-                    // the safe option is to rebuild the graph from the live tree after the
-                    // composition exits.
+                    // Force a full graph rebuild after every accepted bound value composition dispatch. The composition's repeated bind reshapes accumulate partial-rebuild state on the live graph that the shadow check has observed diverging from a fresh build (`graph_apply_shadow_mismatch`), and which causes downstream encoders to crash on stale leaf positions.
+                    // Until the in-place reshape path is fixed for chained applications, the safe option is to rebuild the graph from the live tree after the composition exits.
                     let isBoundValue = switch transformation.operation {
                     case .minimize(.boundValue):
                         true
@@ -468,26 +398,12 @@ enum ChoiceGraphScheduler {
                     }
 
                     if outcome.requiresRebuild || isBoundValue {
-                        // Apply bailed out for at least one accepted probe
-                        // (multi-bind reshape, structural mutation, and so on).
-                        // Rebuild the graph from the live tree, refresh
-                        // sources, and clear the scope rejection cache.
+                        // Apply bailed out for at least one accepted probe (multi-bind reshape, structural mutation, and so on).
+                        // Rebuild the graph from the live tree, refresh sources, and clear the scope rejection cache.
                         //
                         // Layer 7a: do NOT defensively rematerialize here.
-                        // If the latest accepted probe stripped the tree,
-                        // the rebuilt graph has incomplete branchElements
-                        // — that is recorded via ``graphIsStripped`` and
-                        // handled lazily by the rematerialize check at
-                        // the top of the source-pulling iteration, only
-                        // when a path-changing operation is about to
-                        // dispatch. This avoids paying the materialize
-                        // cost on cycles where branch pivot never fires.
-                        // For bound value rebuilds, the upstream bind-inner changed value,
-                        // so any convergence floors recorded for downstream leaves under
-                        // the old upstream value are now stale — the failure threshold
-                        // in n-space may have shifted. Save the bound subtree's position
-                        // range before the rebuild so we can clear those floors after
-                        // transferConvergence has run.
+                        // If the latest accepted probe stripped the tree, the rebuilt graph has incomplete branchElements — that is recorded via ``graphIsStripped`` and handled lazily by the rematerialize check at the top of the source-pulling iteration, only when a path-changing operation is about to dispatch. This avoids paying the materialize cost on cycles where branch pivot never fires.
+                        // For bound value rebuilds, the upstream bind-inner changed value, so any convergence floors recorded for downstream leaves under the old upstream value are now stale — the failure threshold in n-space may have shifted. Save the bound subtree's position range before the rebuild so we can clear those floors after transferConvergence has run.
                         var boundPositionRange: ClosedRange<Int>? = nil
                         if isBoundValue,
                            case let .minimize(.boundValue(fs)) = transformation.operation,
@@ -547,23 +463,10 @@ enum ChoiceGraphScheduler {
                             )
                         }
                     } else if outcome.requiresSourceRebuild {
-                        // Layer 4 in-place reshape: graph is already in sync
-                        // via apply, but the existing sources captured the
-                        // old node set and miss any new leaves the splice
-                        // added. Rebuild sources from the (already up-to-date)
+                        // Layer 4 in-place reshape: graph is already in sync via apply, but the existing sources captured the old node set and miss any new leaves the splice added. Rebuild sources from the (already up-to-date)
                         // graph.
                         //
-                        // Do NOT clear the scope rejection cache. The cache
-                        // is keyed by Zobrist hashes that incorporate the
-                        // sequence positions of the targeted nodes. After a
-                        // reshape, positions shift by the length delta — the
-                        // *same* logical operation on the *same* logical
-                        // leaves now hashes to a *different* value. Old cache
-                        // entries don't collide with new probes; they sit as
-                        // harmless orphans. Clearing the cache wastes the
-                        // accumulated rejections from earlier in the same
-                        // cycle and forces the encoder to re-decode probes
-                        // it already tried.
+                        // Do NOT clear the scope rejection cache. The cache is keyed by Zobrist hashes that incorporate the sequence positions of the targeted nodes. After a reshape, positions shift by the length delta — the *same* logical operation on the *same* logical leaves now hashes to a *different* value. Old cache entries don't collide with new probes; they sit as harmless orphans. Clearing the cache wastes the accumulated rejections from earlier in the same cycle and forces the encoder to re-decode probes it already tried.
                         sources = ScopeSourceBuilder.buildSources(from: graph)
 
                         if isInstrumented {

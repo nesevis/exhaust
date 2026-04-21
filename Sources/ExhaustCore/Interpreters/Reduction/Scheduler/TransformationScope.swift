@@ -151,7 +151,7 @@ struct DescendantPromotionScope {
 
 /// Defines the scope of a value minimization operation.
 ///
-/// Minimization drives leaf values toward their semantic simplest without changing graph structure. 
+/// Minimization drives leaf values toward their semantic simplest without changing graph structure.
 enum MinimizationScope {
     /// Search chooseBits leaf values toward their reduction targets.
     case valueLeaves(ValueMinimizationScope)

@@ -58,18 +58,13 @@ extension ChoiceGraph {
         let reshapeChanges = changes.filter(\.mayReshape)
         let valueOnlyChanges = changes.filter { $0.mayReshape == false }
 
-        // Multi-bind reshape conservative fallback. Layer 4 handles a single
-        // bind-inner change per acceptance; multiple require dependency-ordered
-        // processing because the second bind's tree path may have shifted by
-        // the time the first bind's subtree was rebuilt.
+        // Multi-bind reshape conservative fallback. Layer 4 handles a single bind-inner change per acceptance; multiple require dependency-ordered processing because the second bind's tree path may have shifted by the time the first bind's subtree was rebuilt.
         if reshapeChanges.count > 1 {
             application.requiresFullRebuild = true
             return
         }
 
-        // Apply value-only changes first. These are the same fast path the
-        // pre-Layer-4 implementation used: rewrite leaf metadata in place,
-        // drop type-compatibility and source/sink caches at the end.
+        // Apply value-only changes first. These are the same fast path the pre-Layer-4 implementation used: rewrite leaf metadata in place, drop type-compatibility and source/sink caches at the end.
         for change in valueOnlyChanges {
             applyLeafValueWrite(change, into: &application)
         }
@@ -87,10 +82,7 @@ extension ChoiceGraph {
             }
         }
 
-        // Leaf values changed → type-compatibility and source/sink caches
-        // depend on values and must drop. Topological order and reachability
-        // are invalidated separately by ``applyBindReshape`` when the bind
-        // subtree is rebuilt; pure value-only mutations leave them intact.
+        // Leaf values changed → type-compatibility and source/sink caches depend on values and must drop. Topological order and reachability are invalidated separately by ``applyBindReshape`` when the bind subtree is rebuilt; pure value-only mutations leave them intact.
         invalidateDerivedEdges()
     }
 
@@ -175,8 +167,7 @@ extension ChoiceGraph {
             return
         }
 
-        // Compute length delta from the OLD bound subtree's stored extent
-        // versus the NEW bound subtree's flattened entry count.
+        // Compute length delta from the OLD bound subtree's stored extent versus the NEW bound subtree's flattened entry count.
         let oldBoundLength = oldBoundRange.count
         let newBoundLength = newBoundSubtree.flattenedEntryCount
         let lengthDelta = newBoundLength - oldBoundLength
@@ -193,13 +184,8 @@ extension ChoiceGraph {
             ]
         )
 
-        // Step 5: tombstone the old bound subtree's node IDs and drop edges
-        // referencing them. Tombstones (Layer 1) keep node IDs stable so
-        // existing scopes that captured node IDs at construction time stay
-        // referencing valid entries. Nil-ing the position range makes every
-        // iteration site that filters on `positionRange != nil` (including
-        // ``structuralFingerprint``, ``leafNodes``, ``leafPositions``, the
-        // type-compatibility computation, and the source-sink computation)
+        // Step 5: tombstone the old bound subtree's node IDs and drop edges referencing them. Tombstones (Layer 1) keep node IDs stable so existing scopes that captured node IDs at construction time stay referencing valid entries. Nil-ing the position range makes every iteration site that filters on `positionRange != nil` (including
+        // ``structuralFingerprint``, ``leafNodes``, ``leafPositions``, the type-compatibility computation, and the source-sink computation)
         // treat them as inactive uniformly.
         let oldBoundNodeIDs = collectSubtreeNodeIDs(rootID: oldBoundChildID)
         for nodeID in oldBoundNodeIDs {
@@ -215,9 +201,7 @@ extension ChoiceGraph {
         }
         containmentEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
         dependencyEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
-        // Self-similarity groups are rebuilt from scratch by
-        // recomputeSelfSimilarityGroups() below — no incremental
-        // removal needed.
+        // Self-similarity groups are rebuilt from scratch by recomputeSelfSimilarityGroups() below — no incremental removal needed.
         application.removedNodeIDs.formUnion(oldBoundNodeIDs)
 
         // Step 6: walk the new bound subtree.
@@ -239,12 +223,8 @@ extension ChoiceGraph {
         graphStats.dynamicRegionRebuilds += 1
         graphStats.dynamicRegionNodesRebuilt += rebuilt.nodes.count
 
-        // Step 7: patch the bind node's children to reference the new bound
-        // child, and add the containment edge from the bind to the new
-        // bound child. ``ChoiceGraphBuilder/buildSubtree`` walks with
-        // `parent: nil` and renumbers internally, which means it does NOT
-        // emit the containment edge from the external bind to the subtree
-        // root. The caller (this method) is responsible for adding it.
+        // Step 7: patch the bind node's children to reference the new bound child, and add the containment edge from the bind to the new bound child. ``ChoiceGraphBuilder/buildSubtree`` walks with
+        // `parent: nil` and renumbers internally, which means it does NOT emit the containment edge from the external bind to the subtree root. The caller (this method) is responsible for adding it.
         if let firstNewNodeID {
             var updatedChildren = nodes[bindNodeID].children
             updatedChildren[bindMetadata.boundChildIndex] = firstNewNodeID
@@ -261,45 +241,20 @@ extension ChoiceGraph {
             ))
         }
 
-        // Step 8: propagate the length delta to right siblings and ancestors,
-        // then resync chooseBits leaf values from the live tree for any leaf
-        // propagation moved.
+        // Step 8: propagate the length delta to right siblings and ancestors, then resync chooseBits leaf values from the live tree for any leaf propagation moved.
         //
-        // ``propagatePositionShift`` only moves ``positionRange``; it leaves
-        // each propagated leaf's ``ChooseBitsMetadata/value`` untouched. The
-        // value was set when the leaf was created (either by an original
+        // ``propagatePositionShift`` only moves ``positionRange``; it leaves each propagated leaf's ``ChooseBitsMetadata/value`` untouched. The value was set when the leaf was created (either by an original
         // ``ChoiceGraphBuilder/build(from:)`` walk or by an earlier
-        // ``buildSubtree`` splice) from the freshTree of *that* moment. After
-        // the current reshape, the live tree's content at the leaf's *new*
-        // position can be different from what the leaf's value field still
-        // holds — the materializer in guided decode mode walks the new tree
-        // with the candidate as a prefix, and the values it produces at
-        // shifted positions don't necessarily match what the candidate's same
-        // numerical position contained. Without this resync, every active
-        // leaf right of ``insertionPoint`` (and not in the rebuilt region) is
-        // a position drift candidate: its stored value diverges from the
-        // sequence content at its new ``positionRange.lowerBound``. The
+        // ``buildSubtree`` splice) from the freshTree of *that* moment. After the current reshape, the live tree's content at the leaf's *new* position can be different from what the leaf's value field still holds — the materializer in guided decode mode walks the new tree with the candidate as a prefix, and the values it produces at shifted positions don't necessarily match what the candidate's same numerical position contained. Without this resync, every active leaf right of ``insertionPoint`` (and not in the rebuilt region) is a position drift candidate: its stored value diverges from the sequence content at its new ``positionRange.lowerBound``. The
         // ``graph_sequence_drift`` probe in ``ChoiceGraphScheduler/runProbeLoop``
         // catches this exact divergence; this pass eliminates the cause.
         //
-        // The resync is gated on ``lengthDelta != 0``: when delta is zero, no
-        // positions shifted, no leaf can have a stale value relative to its
-        // (unchanged) position, and the entire flatten + walk is skipped.
-        // Most bind-inner mutations leave the bound subtree's flattened
-        // length unchanged (changing a leaf's value within its type does not
-        // add or remove sequence entries), so this gate is the common case.
+        // The resync is gated on ``lengthDelta != 0``: when delta is zero, no positions shifted, no leaf can have a stale value relative to its (unchanged) position, and the entire flatten + walk is skipped.
+        // Most bind-inner mutations leave the bound subtree's flattened length unchanged (changing a leaf's value within its type does not add or remove sequence entries), so this gate is the common case.
         //
-        // When the resync does run, only leaves whose new position lies
-        // strictly past ``newBoundUpper`` need to be checked: those are
-        // exactly the propagated leaves. Leaves in the new bound region are
-        // already in ``application.addedNodeIDs`` and skipped; leaves in the
-        // unchanged prefix sit at positions ≤ the bind's lowerBound and were
-        // never touched by propagation, so their values and positions both
-        // still match ``freshTree``.
+        // When the resync does run, only leaves whose new position lies strictly past ``newBoundUpper`` need to be checked: those are exactly the propagated leaves. Leaves in the new bound region are already in ``application.addedNodeIDs`` and skipped; leaves in the unchanged prefix sit at positions ≤ the bind's lowerBound and were never touched by propagation, so their values and positions both still match ``freshTree``.
         //
-        // - Complexity: zero when delta is zero. Otherwise O(*L*) leaves +
-        //   one ``ChoiceSequence(freshTree)`` flatten, where the per-leaf
-        //   inner work is gated on ``range.lowerBound > newBoundUpper``.
+        // - Complexity: zero when delta is zero. Otherwise O(*L*) leaves + one ``ChoiceSequence(freshTree)`` flatten, where the per-leaf inner work is gated on ``range.lowerBound > newBoundUpper``.
         if lengthDelta != 0 {
             propagatePositionShift(
                 after: oldBoundRange.upperBound,
@@ -315,9 +270,7 @@ extension ChoiceGraph {
                 if application.addedNodeIDs.contains(index) { continue }
                 guard case let .chooseBits(metadata) = nodes[index].kind else { continue }
                 guard let range = nodes[index].positionRange else { continue }
-                // Only propagated leaves (now strictly past the new bound's
-                // last position) can hold a stale value relative to the
-                // post-mutation tree.
+                // Only propagated leaves (now strictly past the new bound's last position) can hold a stale value relative to the post-mutation tree.
                 guard range.lowerBound > newBoundUpper else { continue }
                 guard range.lowerBound < freshSequence.count else { continue }
                 guard let entry = freshSequence[range.lowerBound].value else { continue }
@@ -339,14 +292,7 @@ extension ChoiceGraph {
             }
         }
 
-        // Step 9: refresh structural-constancy on the bind, and clear any
-        // cached ``BindMetadata/classification``. The new subtree may have
-        // flipped from "constant" to "non-constant" or vice versa depending on
-        // whether it contains nested binds or picks, and any previously-
-        // recorded classification reflects the pre-reshape subtree's shape —
-        // it must not be reused against a subtree that has been spliced out
-        // from under it. The bind node is rewritten whenever either signal has
-        // changed since the last refresh.
+        // Step 9: refresh structural-constancy on the bind, and clear any cached ``BindMetadata/classification``. The new subtree may have flipped from "constant" to "non-constant" or vice versa depending on whether it contains nested binds or picks, and any previously- recorded classification reflects the pre-reshape subtree's shape — it must not be reused against a subtree that has been spliced out from under it. The bind node is rewritten whenever either signal has changed since the last refresh.
         let newIsStructurallyConstant = newBoundSubtree.containsBind == false
             && newBoundSubtree.containsPicks == false
         let hadClassification = bindMetadata.classification != nil || bindMetadata.downstreamFingerprint != nil
@@ -369,20 +315,11 @@ extension ChoiceGraph {
             )
         }
 
-        // Step 10: recompute self-similarity edges from scratch. The splice
-        // may have removed picks from the old subtree and added picks in the
-        // new subtree; the existing edge set is now incomplete (no edges to
-        // new picks, may have edges to picks that no longer have valid IDs
-        // — actually those were dropped above). Recomputing is O(picks²)
-        // where pick count is in the dozens, so much cheaper than a full
-        // graph rebuild.
+        // Step 10: recompute self-similarity edges from scratch. The splice may have removed picks from the old subtree and added picks in the new subtree; the existing edge set is now incomplete (no edges to new picks, may have edges to picks that no longer have valid IDs — actually those were dropped above). Recomputing is O(picks²)
+        // where pick count is in the dozens, so much cheaper than a full graph rebuild.
         recomputeSelfSimilarityGroups()
 
-        // Step 11: invalidate caches. Topological order and reachability
-        // depend on dependency edges (which we just modified). Type-compat
-        // and source/sink depend on leaf values (the value-only path
-        // already calls ``invalidateDerivedEdges``; calling it twice is
-        // idempotent).
+        // Step 11: invalidate caches. Topological order and reachability depend on dependency edges (which we just modified). Type-compat and source/sink depend on leaf values (the value-only path already calls ``invalidateDerivedEdges``; calling it twice is idempotent).
         invalidateTopologicalCaches()
         invalidateDerivedEdges()
 
@@ -454,8 +391,7 @@ extension ChoiceGraph {
                 shiftedSummary.append("\(node.id):\(range.lowerBound)...\(range.upperBound)→\(newRange.lowerBound)...\(newRange.upperBound)")
             }
 
-            // Sequence nodes also store per-child extents that move with
-            // the same shift rule.
+            // Sequence nodes also store per-child extents that move with the same shift rule.
             let updatedKind: ChoiceGraphNodeKind
             if case let .sequence(seqMetadata) = node.kind {
                 let shiftedChildRanges = seqMetadata.childPositionRanges.map { childRange -> ClosedRange<Int> in

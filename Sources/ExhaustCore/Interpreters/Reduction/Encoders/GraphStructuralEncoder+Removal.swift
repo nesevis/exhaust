@@ -36,8 +36,7 @@ extension GraphStructuralEncoder {
             )
 
         case .coveringAligned:
-            // Covering aligned removal is handled by the multi-shot path
-            // in ``GraphStructuralEncoder/nextCoveringAlignedProbe()``.
+            // Covering aligned removal is handled by the multi-shot path in ``GraphStructuralEncoder/nextCoveringAlignedProbe()``.
             return nil
         }
     }

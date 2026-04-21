@@ -1,5 +1,4 @@
-// Result type returned by `#exhaust` on failure, carrying the reduced
-// command sequence, a human-readable execution trace, and the SUT state.
+// Result type returned by `#exhaust` on failure, carrying the reduced command sequence, a human-readable execution trace, and the SUT state.
 
 /// The result of a failed contract property test.
 ///

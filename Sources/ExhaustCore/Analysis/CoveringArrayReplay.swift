@@ -114,9 +114,7 @@ package enum CoveringArrayReplay {
             return .selected(newInner)
 
         case .sequence:
-            // Sequences produce boundary parameters (sequenceLength/sequenceElement),
-            // not finite parameters. If we reach here, the sequence is not behind a
-            // bind — pass through unchanged as it shouldn't consume finite parameters.
+            // Sequences produce boundary parameters (sequenceLength/sequenceElement), not finite parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume finite parameters.
             return tree
 
         case let .branch(fingerprint, weight, id, branchIDs, choice):

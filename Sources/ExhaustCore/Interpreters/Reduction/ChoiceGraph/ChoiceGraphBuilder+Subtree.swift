@@ -37,9 +37,7 @@ extension ChoiceGraphBuilder {
         parentPath: BindPath
     ) -> SubtreeResult {
         var builder = ChoiceGraphBuilder()
-        // Walk with parent: nil so no internal node references the external
-        // parent ID. The walk uses internal IDs starting from 0, which keeps
-        // the builder's positional indexing into `nodes[nodeID]` correct.
+        // Walk with parent: nil so no internal node references the external parent ID. The walk uses internal IDs starting from 0, which keeps the builder's positional indexing into `nodes[nodeID]` correct.
         _ = builder.walk(tree, offset: startingOffset, parent: nil, bindDepth: bindDepth, path: parentPath)
 
         // Compute dependency edges within the subtree using internal IDs.
@@ -66,10 +64,7 @@ extension ChoiceGraphBuilder {
             }
         }
 
-        // Renumber every internal ID by adding `nodeIDOffset`. The subtree
-        // root (the first emitted node) has its parent set to the supplied
-        // external `parent` — every other node's parent is a local subtree
-        // ID and gets shifted.
+        // Renumber every internal ID by adding `nodeIDOffset`. The subtree root (the first emitted node) has its parent set to the supplied external `parent` — every other node's parent is a local subtree ID and gets shifted.
         let renumberedNodes: [ChoiceGraphNode] = builder.nodes.enumerated().map { index, node in
             let renumberedParent: Int? = if index == 0 {
                 parent

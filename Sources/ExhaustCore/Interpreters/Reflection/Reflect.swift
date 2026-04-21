@@ -205,9 +205,7 @@ package enum Interpreters {
                     }
                 }
             case .metamorphic:
-                // The contramap backward already extracted the original Value from the
-                // output tuple. Reflect on inner with that value — the transforms are
-                // deterministic and will be re-derived on the forward pass.
+                // The contramap backward already extracted the original Value from the output tuple. Reflect on inner with that value — the transforms are deterministic and will be re-derived on the forward pass.
                 return try reflectRecursive(inner, onFinalOutput: finalOutput)
             }
         }
@@ -282,10 +280,8 @@ package enum Interpreters {
             }
         }
 
-        // Only mark the first matching branch as `.selected` — a pick site
-        // should have exactly one selected branch, matching VACTI's output.
-        // When multiple branches can produce the same value (non-injective
-        // generators), reflection picks the first match deterministically.
+        // Only mark the first matching branch as `.selected` — a pick site should have exactly one selected branch, matching VACTI's output.
+        // When multiple branches can produce the same value (non-injective generators), reflection picks the first match deterministically.
         var hasSelected = false
         let mappedBranches = results.map {
             let branch = ChoiceTree.branch(

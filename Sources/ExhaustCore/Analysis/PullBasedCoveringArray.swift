@@ -6,59 +6,30 @@
 // MARK: - Academic Provenance
 
 //
-// This file implements the "density method" — a one-test-at-a-time greedy
-// covering array generator — from:
+// This file implements the "density method" — a one-test-at-a-time greedy covering array generator — from:
 //
-//   Bryce, R.C. & Colbourn, C.J. (2009). "A density-based greedy algorithm
-//   for higher strength covering arrays." Softw. Test. Verif. Reliab.,
-//   19(1), 37–53. DOI: 10.1002/stvr.393
+//   Bryce, R.C. & Colbourn, C.J. (2009). "A density-based greedy algorithm for higher strength covering arrays." Softw. Test. Verif. Reliab., 19(1), 37–53. DOI: 10.1002/stvr.393
 //
-// The paper defines a four-layer framework for greedy covering array
-// construction: (1) test suite repetitions, (2) multiple candidates per row,
-// (3) factor ordering, and (4) level selection via density. Exhaust
-// instantiates this framework with the following choices:
+// The paper defines a four-layer framework for greedy covering array construction: (1) test suite repetitions, (2) multiple candidates per row, (3) factor ordering, and (4) level selection via density. Exhaust instantiates this framework with the following choices:
 //
-// Layer 1 — Repetitions: 1 (deterministic, no randomness). The paper shows
-//   that more repetitions reduce array size, but Exhaust stops on first
-//   property failure so minimizing total array size is secondary to fast
-//   time-to-first-row.
+// Layer 1 — Repetitions: 1 (deterministic, no randomness). The paper shows that more repetitions reduce array size, but Exhaust stops on first property failure so minimizing total array size is secondary to fast time-to-first-row.
 //
-// Layer 2 — Multiple candidates: 1 candidate per row. The paper's Table V
-//   shows 10 candidates can reduce array size by ~5–10%, but at 10x the
-//   per-row cost. Not worthwhile for early-stop property-based testing.
+// Layer 2 — Multiple candidates: 1 candidate per row. The paper's Table V shows 10 candidates can reduce array size by ~5–10%, but at 10x the per-row cost. Not worthwhile for early-stop property-based testing.
 //
-// Layer 3 — Factor ordering: Fixed left-to-right after sorting parameters
-//   by domain size ascending (smallest first). This is a static heuristic,
-//   not the paper's density-driven ordering. The paper finds density-based
-//   ordering produces modestly smaller arrays, but the effect diminishes
-//   with unrestricted density (Section 3, p. 47).
+// Layer 3 — Factor ordering: Fixed left-to-right after sorting parameters by domain size ascending (smallest first). This is a static heuristic, not the paper's density-driven ordering. The paper finds density-based ordering produces modestly smaller arrays, but the effect diminishes with unrestricted density (Section 3, p. 47).
 //
 // Layer 4 — Level selection: Unrestricted density (Section 2, Theorem 2.2).
-//   For completing slices (all other factors fixed), the contribution is
-//   exact: 1 if the tuple is uncovered, 0 otherwise. For non-completing
-//   slices (some factors still free), the contribution is the count of
-//   compatible uncovered tuples divided by the product of unfilled domain
-//   sizes — matching the paper's 1/|V_f| weighting. This preserves the
-//   O(log k) row-count guarantee from Theorem 2.2.
+//   For completing slices (all other factors fixed), the contribution is exact: 1 if the tuple is uncovered, 0 otherwise. For non-completing slices (some factors still free), the contribution is the count of compatible uncovered tuples divided by the product of unfilled domain sizes — matching the paper's 1/|V_f| weighting. This preserves the O(log k) row-count guarantee from Theorem 2.2.
 //
-// The slicesByCompletingColumn optimization (only evaluate completing slices
-// at each column) is augmented with partialSlicesByColumn for non-completing
-// slices. The completing evaluation is the 0-restricted case; the partial
-// evaluation adds the unrestricted density signal from free factors.
+// The slicesByCompletingColumn optimization (only evaluate completing slices at each column) is augmented with partialSlicesByColumn for non-completing slices. The completing evaluation is the 0-restricted case; the partial evaluation adds the unrestricted density signal from free factors.
 //
 // What Exhaust does NOT implement from the paper:
-//   - Best (t-1)-tuple seeding (Section 3): fixing the first t-1 factors to
-//     the values of the most common uncovered (t-1)-tuple before density fill.
-//   - Density-driven factor ordering (Section 3): choosing the factor with
-//     highest factor density at each step instead of a fixed left-to-right order.
+//   - Best (t-1)-tuple seeding (Section 3): fixing the first t-1 factors to the values of the most common uncovered (t-1)-tuple before density fill.
+//   - Density-driven factor ordering (Section 3): choosing the factor with highest factor density at each step instead of a fixed left-to-right order.
 //   - Multiple candidates or repetitions (Layers 1–2).
-//   - Seeding from an existing array (Section 4, p. 52): pre-marking tuples
-//     from a seed array (for example, an orthogonal array) before generating
-//     additional rows.
+//   - Seeding from an existing array (Section 4, p. 52): pre-marking tuples from a seed array (for example, an orthogonal array) before generating additional rows.
 //
-// These omissions are deliberate: Exhaust's use case is property-based testing
-// where the first failure matters more than the total array size, and
-// determinism (no random tie-breaking) is required for reproducibility.
+// These omissions are deliberate: Exhaust's use case is property-based testing where the first failure matters more than the total array size, and determinism (no random tie-breaking) is required for reproducibility.
 
 // MARK: - Pull-Based Bit Vector
 

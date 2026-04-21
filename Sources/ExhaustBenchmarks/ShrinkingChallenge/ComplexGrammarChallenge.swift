@@ -1,14 +1,10 @@
 // MARK: - Complex Grammar Benchmark
 
 //
-// A larger recursive expression grammar than CalculatorChallenge, intended as a
-// stress test for the graph reducer at the workload size where partial rebuilds
-// were designed to pay off (100–500 node candidates during reduction).
+// A larger recursive expression grammar than CalculatorChallenge, intended as a stress test for the graph reducer at the workload size where partial rebuilds were designed to pay off (100–500 node candidates during reduction).
 //
 // Grammar: Lit | Add | Sub | Mul | Div | If | Call (variadic args)
-// Property: trees with at least N operators must not contain a literal Div by
-// zero. The artificial size floor is what keeps the counterexamples large enough
-// to exercise the early shrink cycles where the rebuild tax should hurt.
+// Property: trees with at least N operators must not contain a literal Div by zero. The artificial size floor is what keeps the counterexamples large enough to exercise the early shrink cycles where the rebuild tax should hurt.
 
 import Exhaust
 

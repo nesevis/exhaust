@@ -28,10 +28,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             parentToElements[parentID, default: []].append(nodeID)
         }
 
-        // For each independent sequence parent, gather ALL deletable elements
-        // (not just antichain members — the antichain tells us which sequences
-        // are independent, but within each sequence we want to remove as many
-        // elements as the length constraint permits).
+        // For each independent sequence parent, gather ALL deletable elements (not just antichain members — the antichain tells us which sequences are independent, but within each sequence we want to remove as many elements as the length constraint permits).
         var entries: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)] = []
         for (parentID, _) in parentToElements.sorted(by: { $0.key < $1.key }) {
             guard case let .sequence(metadata) = graph.nodes[parentID].kind else { continue }
@@ -39,8 +36,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             let deletable = metadata.elementCount - minLength
             guard deletable > 0 else { continue }
 
-            // Collect children ordered by position, take the last `deletable` elements
-            // (tail-anchored removal is the default for batch deletion).
+            // Collect children ordered by position, take the last `deletable` elements (tail-anchored removal is the default for batch deletion).
             let allChildren = graph.nodes[parentID].children
             var childrenWithPosition: [(nodeID: Int, lowerBound: Int)] = []
             for childID in allChildren {
@@ -125,8 +121,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
                 }
                 // count == 1: single sequence rejected, drop it (existing sources handle it).
             }
-            // If accepted, the structural mutation triggers a full source rebuild
-            // from the scheduler, so no further action needed here.
+            // If accepted, the structural mutation triggers a full source rebuild from the scheduler, so no further action needed here.
         }
 
         guard let range = pendingRanges.popLast() else {

@@ -365,9 +365,7 @@ package enum DSTTransitions {
             transitions.append(Int64(transition.timeIntervalSinceReferenceDate))
 
             // Include the start and end of the transition day in this timezone.
-            // DST bugs often manifest at the opposite edge of the transition day
-            // (for example, the 25th hour of a fall-back day, or midnight that doesn't
-            // exist on a spring-forward-at-midnight day).
+            // DST bugs often manifest at the opposite edge of the transition day (for example, the 25th hour of a fall-back day, or midnight that doesn't exist on a spring-forward-at-midnight day).
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = zone
             let startOfDay = calendar.startOfDay(for: transition)

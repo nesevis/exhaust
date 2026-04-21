@@ -149,8 +149,7 @@ extension TransformationPrecondition {
         in graph: ChoiceGraph
     ) -> Bool {
         // Find bind nodes where this leaf (or an ancestor) is the inner child.
-        // Walk up the containment tree from the leaf, checking each bind-inner
-        // ancestor for convergence.
+        // Walk up the containment tree from the leaf, checking each bind-inner ancestor for convergence.
         var currentNodeID = leafNodeID
         while let parentID = graph.nodes[currentNodeID].parent {
             let parentNode = graph.nodes[parentID]
@@ -158,8 +157,7 @@ extension TransformationPrecondition {
                parentNode.children.count >= 2
             {
                 let innerChildID = parentNode.children[metadata.innerChildIndex]
-                // If the current node is in the bound subtree (not the inner),
-                // check that the inner child has converged.
+                // If the current node is in the bound subtree (not the inner), check that the inner child has converged.
                 let boundChildID = parentNode.children[metadata.boundChildIndex]
                 if let boundRange = graph.nodes[boundChildID].positionRange,
                    let leafRange = graph.nodes[leafNodeID].positionRange,

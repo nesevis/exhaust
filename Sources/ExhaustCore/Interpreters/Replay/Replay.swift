@@ -27,12 +27,10 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Output>,
         using choiceTree: ChoiceTree
     ) throws -> Output? {
-        // Start the recursive process. The helper returns the value and any *unconsumed*
-        // parts of the tree. A successful top-level replay should consume the entire tree.
+        // Start the recursive process. The helper returns the value and any *unconsumed* parts of the tree. A successful top-level replay should consume the entire tree.
         try replayRecursive(gen, with: choiceTree)
 
-        // We can add a check here to ensure no parts of the tree were left over,
-        // but the recursive logic should handle this correctly.
+        // We can add a check here to ensure no parts of the tree were left over, but the recursive logic should handle this correctly.
     }
 
     // MARK: - Private Recursive Replay Engine
@@ -304,8 +302,7 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout [ChoiceTree]
     ) throws -> Output? {
-        // Unwrap a single non-branch group wrapper that encloses per-lane
-        // subtrees (produced by reflect's reflectZipOperation).
+        // Unwrap a single non-branch group wrapper that encloses per-lane subtrees (produced by reflect's reflectZipOperation).
         if choices.count == 1,
            case let .group(children, _) = choices[0],
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
@@ -313,9 +310,7 @@ extension Interpreters {
             choices = children
         }
 
-        // Each generator consumes its lane. If the next choice is a
-        // non-branch group, it's a per-lane subtree — unwrap it so the
-        // generator consumes from within. Otherwise consume directly.
+        // Each generator consumes its lane. If the next choice is a non-branch group, it's a per-lane subtree — unwrap it so the generator consumes from within. Otherwise consume directly.
         var subResults = [Any]()
         for gen in generators {
             guard choices.isEmpty == false else { return nil }
@@ -419,8 +414,7 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Output>,
         with script: ChoiceTree
     ) throws -> Output? {
-        // Handle group scripts by distributing choices to the generator
-        // Groups containing branches represent `picks` and are handled together
+        // Handle group scripts by distributing choices to the generator Groups containing branches represent `picks` and are handled together
         if case let .group(choices, _) = script {
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
                 return try replayWithChoices(gen, choices: choices)
@@ -432,19 +426,16 @@ extension Interpreters {
         switch gen {
         case let .pure(value):
             // Base case: The generator is done. Return the final value.
-            // Any remaining script would indicate a mismatch, but the logic
-            // for the calling operation handles passing the correct sub-tree.
+            // Any remaining script would indicate a mismatch, but the logic for the calling operation handles passing the correct sub-tree.
             return value
 
         case let .impure(operation, continuation):
             // This helper simplifies calling the continuation with a result.
             let runContinuation = { (result: Any) -> Output? in
                 // The crucial difference: we are NOT passing the script down.
-                // The continuation represents the rest of the generator, which
-                // will be handled by the next level of the .impure case.
+                // The continuation represents the rest of the generator, which will be handled by the next level of the .impure case.
                 let nextGen = try continuation(result)
-                // We replay the rest of the generator with the *same* script,
-                // as the operation itself doesn't consume the whole tree.
+                // We replay the rest of the generator with the *same* script, as the operation itself doesn't consume the whole tree.
                 return try self.replayRecursive(nextGen, with: script)
             }
 
@@ -709,8 +700,7 @@ extension Interpreters {
             return nil
         }
 
-        // 1:1 mapping: each generator gets its own subtree. Works for both
-        // VACTI (structured groups) and flat (simple choice nodes).
+        // 1:1 mapping: each generator gets its own subtree. Works for both VACTI (structured groups) and flat (simple choice nodes).
         if children.count == generators.count {
             var subResults = [Any]()
             var didSucceed = true
@@ -726,8 +716,7 @@ extension Interpreters {
             }
         }
 
-        // Flat sequential consumption (reflected trees where children
-        // count differs from generators count).
+        // Flat sequential consumption (reflected trees where children count differs from generators count).
         var remaining = children
         var subResults = [Any]()
         for gen in generators {

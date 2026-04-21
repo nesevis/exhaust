@@ -101,8 +101,7 @@ package extension ChoiceSequence {
             }
         case let .bind(_, inner, bound):
             if inner.isGetSize {
-                // getSize-bound: structurally stable (size is fixed during reduction),
-                // so emit .group markers to let deletion encoders work through them.
+                // getSize-bound: structurally stable (size is fixed during reduction), so emit .group markers to let deletion encoders work through them.
                 output.append(.group(true))
                 flatten(inner, includingAllBranches: includingAllBranches, into: &output)
                 flatten(bound, includingAllBranches: includingAllBranches, into: &output)

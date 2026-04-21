@@ -9,23 +9,17 @@
 ///
 /// Six kinds correspond to the structural cases that produce or compose values. Operational cases (`contramap`, `prune`, `getSize`, `resize`, `filter`, `classify`, `unique`) and forward-only transforms (`.map`, `.metamorphic`) are not represented — they are interpreter concerns. `just` is a visible constant leaf so that constant elements inside sequences are reachable by the removal encoder.
 ///
-/// ## chooseBits
-/// Leaf node producing a single value. Carries ``TypeTag``, valid range, and the current ``ChoiceValue`` from the ``ChoiceSequence``. Addressable unit for value redistribution.
+/// ## chooseBits Leaf node producing a single value. Carries ``TypeTag``, valid range, and the current ``ChoiceValue`` from the ``ChoiceSequence``. Addressable unit for value redistribution.
 ///
-/// ## pick
-/// Branch selector with one containment edge per possible branch. The active branch has a populated subtree from the current counterexample. Inactive branches have full structural information (from `materializePicks`) but nil position ranges — they are atomic pivot/promotion targets, not reducible within. Pick nodes are the source of self-similarity edges.
+/// ## pick Branch selector with one containment edge per possible branch. The active branch has a populated subtree from the current counterexample. Inactive branches have full structural information (from `materializePicks`) but nil position ranges — they are atomic pivot/promotion targets, not reducible within. Pick nodes are the source of self-similarity edges.
 ///
-/// ## bind
-/// Dependency node with two children: inner (value-producing) and bound (structure depends on inner). The bound subtree is a dynamic region rebuilt when the inner value changes (unless structurally constant).
+/// ## bind Dependency node with two children: inner (value-producing) and bound (structure depends on inner). The bound subtree is a dynamic region rebuilt when the inner value changes (unless structurally constant).
 ///
-/// ## zip
-/// Parallel composition. Children are structurally independent — no ordering constraint. Defines the independence structure for antichain computation.
+/// ## zip Parallel composition. Children are structurally independent — no ordering constraint. Defines the independence structure for antichain computation.
 ///
-/// ## sequence
-/// Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materializer derives actual length from element count, not from the length generator's output.
+/// ## sequence Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materializer derives actual length from element count, not from the length generator's output.
 ///
-/// ## just
-/// Constant leaf with no value choices — corresponds to `.pure` in the Freer Monad. Position range covers its single sequence entry. No metadata needed. Treated like `chooseBits` for dependency-edge purposes (no edges) but excluded from leaf-position and value-minimisation passes.
+/// ## just Constant leaf with no value choices — corresponds to `.pure` in the Freer Monad. Position range covers its single sequence entry. No metadata needed. Treated like `chooseBits` for dependency-edge purposes (no edges) but excluded from leaf-position and value-minimisation passes.
 package enum ChoiceGraphNodeKind {
     /// Leaf value with type, range, and current value.
     case chooseBits(ChooseBitsMetadata)

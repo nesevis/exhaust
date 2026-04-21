@@ -62,12 +62,7 @@ package enum ChoiceTreeAnalysis {
         var bestTree: ChoiceTree?
 
         for seed in seeds {
-            // `sizeOverride: 100` ensures size-scaled sequences produce non-empty
-            // element subtrees during VACTI so that ``walkSequence`` can extract
-            // element parameters. The declared range itself is already stored
-            // directly on each `chooseBits` (with scaling attached as metadata), so
-            // the analyzer doesn't need a specific size for range visibility — just
-            // a size at which sequences produce enough elements to walk.
+            // `sizeOverride: 100` ensures size-scaled sequences produce non-empty element subtrees during VACTI so that ``walkSequence`` can extract element parameters. The declared range itself is already stored directly on each `chooseBits` (with scaling attached as metadata), so the analyzer doesn't need a specific size for range visibility — just a size at which sequences produce enough elements to walk.
             var interpreter = ValueAndChoiceTreeInterpreter(
                 gen,
                 materializePicks: true,
@@ -161,10 +156,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Tree Walk
 
     //
-    // Dispatches on ChoiceTree node type. Returns false if the node
-    // is unanalyzable (getSize, resize, bare branch). For groups,
-    // detects pick patterns (group containing a .selected child) and
-    // routes to walkPick; otherwise recurses into children.
+    // Dispatches on ChoiceTree node type. Returns false if the node is unanalyzable (getSize, resize, bare branch). For groups, detects pick patterns (group containing a .selected child) and routes to walkPick; otherwise recurses into children.
 
     /// Recursively walks a ``ChoiceTree``, extracting independent parameters into `parameters`.
     ///
@@ -187,9 +179,7 @@ package enum ChoiceTreeAnalysis {
             return walkGroup(children, parameters: &parameters)
 
         case let .bind(_, inner, bound):
-            // Walk inner subtree normally; validate bound subtree without collecting
-            // parameters because bound parameters depend on the inner value —
-            // extracting them into covering arrays would produce invalid combinations.
+            // Walk inner subtree normally; validate bound subtree without collecting parameters because bound parameters depend on the inner value — extracting them into covering arrays would produce invalid combinations.
             // The bound subtree is preserved in the original tree for replay.
             guard walkTree(inner, parameters: &parameters) else { return false }
             return walkTreeValidateOnly(bound)
@@ -206,13 +196,11 @@ package enum ChoiceTreeAnalysis {
             )
 
         case .getSize:
-            // getSize reads the current size parameter — a fixed value during
-            // any given generation run. Not a choice point.
+            // getSize reads the current size parameter — a fixed value during any given generation run. Not a choice point.
             return true
 
         case let .resize(_, children):
-            // resize changes the size context for its subtree. The children
-            // contain concrete choices that can be walked normally.
+            // resize changes the size context for its subtree. The children contain concrete choices that can be walked normally.
             for child in children {
                 guard walkTree(child, parameters: &parameters) else { return false }
             }
@@ -227,8 +215,7 @@ package enum ChoiceTreeAnalysis {
 
     //
     // Walks a subtree to check for unanalyzable nodes (getSize, resize)
-    // without extracting any parameters. Used for bound subtrees in bind
-    // nodes where the structure must be valid but parameters are opaque.
+    // without extracting any parameters. Used for bound subtrees in bind nodes where the structure must be valid but parameters are opaque.
 
     private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
         switch tree {
@@ -252,12 +239,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Choice
 
     //
-    // Processes a single numeric choice node. Requires explicit range
-    // metadata (non-explicit ranges come from size scaling and are not
-    // analyzable). Computes domain size via subtractingReportingOverflow
-    // to handle full-range UInt64. Small domains (< 256) enumerate all
-    // values; large domains delegate to BoundaryDomainAnalysis for
-    // synthetic boundary values.
+    // Processes a single numeric choice node. Requires explicit range metadata (non-explicit ranges come from size scaling and are not analyzable). Computes domain size via subtractingReportingOverflow to handle full-range UInt64. Small domains (< 256) enumerate all values; large domains delegate to BoundaryDomainAnalysis for synthetic boundary values.
 
     private static func walkChoice(
         value: ChoiceValue,
@@ -300,21 +282,12 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Group / Pick
 
     //
-    // A group is classified as a pick when it contains at least one
-    // .selected child and all children are .selected or .branch — the
-    // pattern VACTI produces with materializePicks = true.
+    // A group is classified as a pick when it contains at least one .selected child and all children are .selected or .branch — the pattern VACTI produces with materializePicks = true.
     //
-    // Pick analysis requires: ≤ 256 branches, and each branch's
-    // sub-tree must contain no additional parameters (walkTree on the
-    // branch's choice tree must produce zero parameters). This ensures
-    // the pick is a simple multi-way selection, not a nested generator
-    // tree.
+    // Pick analysis requires: ≤ 256 branches, and each branch's sub-tree must contain no additional parameters (walkTree on the branch's choice tree must produce zero parameters). This ensures the pick is a simple multi-way selection, not a nested generator tree.
     //
-    // Synthetic PickTuples are created with .pure(()) generators because
-    // the original branch generators are not available from the ChoiceTree.
-    // The fingerprint, weight, id, and branchIDs metadata is preserved for
-    // replay compatibility — CoveringArrayReplay uses these to reconstruct
-    // the branch selection.
+    // Synthetic PickTuples are created with .pure(()) generators because the original branch generators are not available from the ChoiceTree.
+    // The fingerprint, weight, id, and branchIDs metadata is preserved for replay compatibility — CoveringArrayReplay uses these to reconstruct the branch selection.
 
     private static func walkGroup(
         _ children: [ChoiceTree],
@@ -379,12 +352,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Sequence
 
     //
-    // Extracts a length parameter and up to two element parameters from
-    // a sequence node. The length parameter tests {0, 1, 2} (intersected
-    // with the declared length range). Element analysis is capped at two
-    // slots to keep the total parameter count tractable — a 4-element
-    // sequence would add 1 length + 4×N element parameters, making covering
-    // array generation prohibitively expensive.
+    // Extracts a length parameter and up to two element parameters from a sequence node. The length parameter tests {0, 1, 2} (intersected with the declared length range). Element analysis is capped at two slots to keep the total parameter count tractable — a 4-element sequence would add 1 length + 4×N element parameters, making covering array generation prohibitively expensive.
 
     private static func walkSequence(
         length _: UInt64,
@@ -428,15 +396,10 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Element Walk
 
     //
-    // Same as walkTree but for elements within a sequence. Rejects
-    // nested sequences, getSize, resize, and bare branches — these
-    // are not supported inside sequence elements. Picks within elements
-    // are supported and route to the shared walkPick logic.
+    // Same as walkTree but for elements within a sequence. Rejects nested sequences, getSize, resize, and bare branches — these are not supported inside sequence elements. Picks within elements are supported and route to the shared walkPick logic.
     //
-    // walkElementChoice differs from walkChoice only in the parameter
-    // kind: large-domain elements use .sequenceElement (with elementIndex)
-    // instead of .chooseBits, so that BoundaryCoveringArrayReplay can
-    // reconstruct the sequence structure during replay.
+    // walkElementChoice differs from walkChoice only in the parameter kind: large-domain elements use .sequenceElement (with elementIndex)
+    // instead of .chooseBits, so that BoundaryCoveringArrayReplay can reconstruct the sequence structure during replay.
 
     private static func walkElementTree(
         _ tree: ChoiceTree,

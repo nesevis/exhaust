@@ -61,8 +61,7 @@ struct MaxInterpolationSearchStepper {
                 return nil
             }
             lo = next
-            // Reset divisor on acceptance — the "boundary near hi" prior
-            // is confirmed by the acceptance.
+            // Reset divisor on acceptance — the "boundary near hi" prior is confirmed by the acceptance.
             divisor = Self.initialDivisor
         } else {
             guard lastProbe > lo else {

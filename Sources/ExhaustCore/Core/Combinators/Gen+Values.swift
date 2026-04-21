@@ -20,8 +20,7 @@ package extension Gen {
     /// - **`Gen.just`**: Always succeeds during reflection regardless of target value
     /// - **`Gen.exact`**: Only succeeds during reflection if target value exactly matches the constant
     ///
-    /// **Forward pass (generation):** Always produces the constant value
-    /// **Backward pass (reflection):** Fails if the target value doesn't match exactly
+    /// **Forward pass (generation):** Always produces the constant value **Backward pass (reflection):** Fails if the target value doesn't match exactly
     ///
     /// This validation behavior makes `Gen.exact` essential for property-based testing where you need to verify that generated structures contain specific expected values.
     ///

@@ -117,13 +117,7 @@ private func graphColoringTryColor(
 
 /// Multi-basin shrinking property with three local minima.
 ///
-/// SUT: a buggy Brooks's-theorem-style upper bound claiming χ(G) ≤ Δ(G),
-/// dropping the `+1` correction term. Brooks's theorem actually says
-/// χ(G) ≤ Δ(G) + 1, with equality reached by complete graphs `K_n` and odd
-/// cycles `C_(2k+1)`. The filter (`chromatic ≥ 3`) excludes trivial bipartite
-/// cases, so surviving counterexamples sit in one of three basins: K_3,
-/// K_4, or C_5. A single-axis reducer cannot bridge these basins; K_4 → K_3
-/// requires coordinated vertex + edge removals.
+/// SUT: a buggy Brooks's-theorem-style upper bound claiming χ(G) ≤ Δ(G), dropping the `+1` correction term. Brooks's theorem actually says χ(G) ≤ Δ(G) + 1, with equality reached by complete graphs `K_n` and odd cycles `C_(2k+1)`. The filter (`chromatic ≥ 3`) excludes trivial bipartite cases, so surviving counterexamples sit in one of three basins: K_3, K_4, or C_5. A single-axis reducer cannot bridge these basins; K_4 → K_3 requires coordinated vertex + edge removals.
 let graphColoringProperty: @Sendable (GraphColoringGraph) -> Bool = { graph in
     guard graph.edges.isEmpty == false else { return true }
     guard graph.distinctVertices.count >= 3 else { return true }

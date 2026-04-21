@@ -35,8 +35,7 @@ struct GraphReorderEncoder: GraphEncoder {
             groupIndex += 1
             let ranges = group.ranges
 
-            // Re-extract keys from the current sequence so subsequent groups
-            // see the arrangement settled by earlier accepted reorderings.
+            // Re-extract keys from the current sequence so subsequent groups see the arrangement settled by earlier accepted reorderings.
             let keys = ranges.map {
                 ChoiceSequence.siblingComparisonKey(from: currentSequence, range: $0)
             }

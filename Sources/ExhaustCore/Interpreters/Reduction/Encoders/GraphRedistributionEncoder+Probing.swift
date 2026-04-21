@@ -33,8 +33,7 @@ extension GraphRedistributionEncoder {
                 || sinkMetadata.typeTag.isFloatingPoint
 
             if needsMixedMath {
-                // Build a rational-arithmetic context. Handles same-tag float
-                // pairs and any cross-type combination.
+                // Build a rational-arithmetic context. Handles same-tag float pairs and any cross-type combination.
                 guard let context = Self.makeMixedRedistributionContext(
                     sourceChoice: sourceMetadata.value,
                     sinkChoice: sinkMetadata.value,
@@ -100,9 +99,7 @@ extension GraphRedistributionEncoder {
         }
         pairs = sortedIndices.map { pairs[$0] }
 
-        // Cap the working set to limited subset of pairs. After sorting, the prefix is the highest-yield slice; the
-        // tail is the long stretch of low-distance pairs whose acceptance rate
-        // is near zero on workloads with many type-compatible leaves.
+        // Cap the working set to limited subset of pairs. After sorting, the prefix is the highest-yield slice; the tail is the long stretch of low-distance pairs whose acceptance rate is near zero on workloads with many type-compatible leaves.
         if pairs.count > Self.maxPairsPerScope {
             pairs.removeLast(pairs.count - Self.maxPairsPerScope)
         }
@@ -125,8 +122,7 @@ extension GraphRedistributionEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.pairIndex < state.pairs.count {
-            // Skip pairs not in the active set (on subsequent passes,
-            // only re-evaluate pairs that had accepted probes).
+            // Skip pairs not in the active set (on subsequent passes, only re-evaluate pairs that had accepted probes).
             if let active = state.activePairIndices,
                active.contains(state.pairIndex) == false
             {
@@ -137,8 +133,7 @@ extension GraphRedistributionEncoder {
             let pair = state.pairs[state.pairIndex]
 
             if state.stepper == nil {
-                // Recompute maxDelta from the CURRENT sequence — prior pair
-                // acceptances may have changed the source's value.
+                // Recompute maxDelta from the CURRENT sequence — prior pair acceptances may have changed the source's value.
                 let (currentMax, freshContext) = currentMaxDelta(
                     sourceIndex: pair.sourceIndex,
                     sinkIndex: pair.sinkIndex,
@@ -238,10 +233,7 @@ extension GraphRedistributionEncoder {
             state.triedFullDelta = false
         }
 
-        // All pairs exhausted. If any were accepted this pass and we
-        // haven't hit the pass cap, reset for another pass — but only
-        // re-evaluate the pairs that made progress. This avoids wasting
-        // O(pairs × log(maxDelta)) probes on pairs that can't redistribute.
+        // All pairs exhausted. If any were accepted this pass and we haven't hit the pass cap, reset for another pass — but only re-evaluate the pairs that made progress. This avoids wasting O(pairs × log(maxDelta)) probes on pairs that can't redistribute.
         state.passCount += 1
         if state.acceptedPairIndices.isEmpty == false, state.passCount < Self.maxPasses {
             state.activePairIndices = state.acceptedPairIndices
@@ -334,33 +326,14 @@ extension GraphRedistributionEncoder {
 
         // Same-tag integer path.
         //
-        // The gate is on the sink, not the source. The source moves toward
-        // its own reduction target — a contraction inside `[min(currentBP,
-        // targetBP), max(currentBP, targetBP)]` — so its new bp never leaves
-        // the source's own valid range regardless of whether that range is
-        // narrow or full-width. The sink is the side that can escape its
-        // valid range as it absorbs the opposing delta, so the sink is the
-        // side that determines which sub-path we take.
+        // The gate is on the sink, not the source. The source moves toward its own reduction target — a contraction inside `[min(currentBP, targetBP), max(currentBP, targetBP)]` — so its new bp never leaves the source's own valid range regardless of whether that range is narrow or full-width. The sink is the side that can escape its valid range as it absorbs the opposing delta, so the sink is the side that determines which sub-path we take.
         //
-        // When the sink's declared domain equals the natural type width, we
-        // use bit-pattern modular arithmetic with a width-aware mask. This
-        // matches the wrapping arithmetic (`&+`/`&-`) the property under test
-        // likely uses for the same type and lets redistribution reach
-        // boundary counterexamples like `(Int16.min, -1)` that semantic-space
-        // arithmetic would reject as overflow. See
-        // `bound5-redistribution-wraparound-diagnosis.md` for the motivating
-        // trace.
+        // When the sink's declared domain equals the natural type width, we use bit-pattern modular arithmetic with a width-aware mask. This matches the wrapping arithmetic (`&+`/`&-`) the property under test likely uses for the same type and lets redistribution reach boundary counterexamples like `(Int16.min, -1)` that semantic-space arithmetic would reject as overflow. See
+        // `bound5-redistribution-wraparound-diagnosis.md` for the motivating trace.
         //
-        // When the sink carries an explicit narrow range, we still operate
-        // in UInt64 bit-pattern space (signed types are biased via the
-        // `signBitMask` XOR in their `BitPatternConvertible` conformance, so
-        // additive arithmetic in biased space matches semantic arithmetic),
-        // but we use overflow-checked operations and reject — rather than
-        // wrap — any candidate that lands outside the sink's `validRange` or
-        // the type's natural bounds. See
-        // `graph-exchange-semantic-cast-removal.md` for the rationale and
-        // for the discussion of the latent bugs in the previous
-        // semantic-Int64 implementation that this rewrite addresses.
+        // When the sink carries an explicit narrow range, we still operate in UInt64 bit-pattern space (signed types are biased via the
+        // `signBitMask` XOR in their `BitPatternConvertible` conformance, so additive arithmetic in biased space matches semantic arithmetic), but we use overflow-checked operations and reject — rather than wrap — any candidate that lands outside the sink's `validRange` or the type's natural bounds. See
+        // `graph-exchange-semantic-cast-removal.md` for the rationale and for the discussion of the latent bugs in the previous semantic-Int64 implementation that this rewrite addresses.
         let sourceBitPattern = sourceValue.choice.bitPattern64
         let sinkBitPattern = sinkValue.choice.bitPattern64
         let targetBitPattern = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
@@ -383,15 +356,12 @@ extension GraphRedistributionEncoder {
             return candidate
         }
 
-        // Narrow-sink fallback: UInt64 bit-pattern arithmetic with explicit
-        // bounds enforcement.
+        // Narrow-sink fallback: UInt64 bit-pattern arithmetic with explicit bounds enforcement.
         let newSourceBitPattern: UInt64
         let newSinkBitPattern: UInt64
         if sourceBitPattern > targetBitPattern {
             // Source moves down (toward target), sink moves up.
-            // The encoder bounds delta to `currentMaxDelta`'s `distance =
-            // sourceBitPattern - targetBitPattern`, and `targetBitPattern >= 0`, so this subtraction
-            // cannot underflow. Defensive guard against stale state.
+            // The encoder bounds delta to `currentMaxDelta`'s `distance = sourceBitPattern - targetBitPattern`, and `targetBitPattern >= 0`, so this subtraction cannot underflow. Defensive guard against stale state.
             guard sourceBitPattern >= delta else { return nil }
             newSourceBitPattern = sourceBitPattern - delta
             let (sinkSum, sinkOverflow) = sinkBitPattern.addingReportingOverflow(delta)
@@ -406,20 +376,14 @@ extension GraphRedistributionEncoder {
             newSinkBitPattern = sinkBitPattern - delta
         }
 
-        // Enforce natural type bounds. Replaces the per-tag range checks
-        // that the deleted `bitPattern(fromSemantic:tag:)` helper used to
-        // do — `tag.bitPatternRange` is the same set, so this is a
-        // structural simplification, not a behavior change.
+        // Enforce natural type bounds. Replaces the per-tag range checks that the deleted `bitPattern(fromSemantic:tag:)` helper used to do — `tag.bitPatternRange` is the same set, so this is a structural simplification, not a behavior change.
         guard sourceTag.bitPatternRange.contains(newSourceBitPattern),
               sinkValue.choice.tag.bitPatternRange.contains(newSinkBitPattern)
         else {
             return nil
         }
 
-        // Enforce explicit `validRange`. The mixed/rational path already
-        // does this for cross-type and float pairs; the previous
-        // semantic-Int64 narrow-sink path was missing this check, which
-        // let candidates escape the user's declared domain.
+        // Enforce explicit `validRange`. The mixed/rational path already does this for cross-type and float pairs; the previous semantic-Int64 narrow-sink path was missing this check, which let candidates escape the user's declared domain.
         if sourceValue.isRangeExplicit,
            let range = sourceValue.validRange,
            range.contains(newSourceBitPattern) == false

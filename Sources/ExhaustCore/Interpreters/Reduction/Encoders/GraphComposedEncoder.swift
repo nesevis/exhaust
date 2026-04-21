@@ -149,8 +149,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
         guard hasInner else { return nil }
         guard let candidate = inner.nextProbe(lastAccepted: lastAccepted) else { return nil }
         // The composition's ``GraphComposedEncoder/wrap(downstreamProbe:upstreamProbe:)``
-        // replaces this mutation with the upstream's reshape mutation, so we report an
-        // empty leafValues here as a placeholder — the candidate is what matters.
+        // replaces this mutation with the upstream's reshape mutation, so we report an empty leafValues here as a placeholder — the candidate is what matters.
         return EncoderProbe(candidate: candidate, mutation: .leafValues([]))
     }
 }
@@ -244,10 +243,7 @@ struct GraphComposedEncoder: GraphEncoder {
             downstreamActive = false
         }
 
-        // Advance upstream until we find one whose lift produces at least one downstream probe,
-        // or until the upstream budget is exhausted. The budget caps the number of upstream probes
-        // that contributed to a *valid* lift — failed lifts (`lift` returns nil) do not count
-        // because they incur no downstream materialisation cost.
+        // Advance upstream until we find one whose lift produces at least one downstream probe, or until the upstream budget is exhausted. The budget caps the number of upstream probes that contributed to a *valid* lift — failed lifts (`lift` returns nil) do not count because they incur no downstream materialisation cost.
         guard let parent = parentScope else { return nil }
         while upstreamProbesUsed < upstreamBudget {
             guard let upstreamProbe = upstream.nextProbe(lastAccepted: false) else { return nil }

@@ -298,8 +298,7 @@ enum TransformationEnumerator {
                     return max(maxSoFar, distance)
                 }
 
-                // Enabling yield: walk up containment from each source to find
-                // removal candidates in the deletion antichain.
+                // Enabling yield: walk up containment from each source to find removal candidates in the deletion antichain.
                 let antichainSet = Set(graph.deletionAntichain)
                 let maxEnablingYield = redistScope.pairs.reduce(0) { maxSoFar, pair in
                     let enabling = computeEnablingYield(

@@ -171,8 +171,7 @@ private func registerECOOPChallenge<Output>(
             }
             let reduceStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             // Use the *CollectingStats variants so we can pull
-            // `stats.totalMaterializations` for the report. The reduced
-            // tuple has the same shape as the plain `*Reduce` return.
+            // `stats.totalMaterializations` for the report. The reduced tuple has the same shape as the plain `*Reduce` return.
             let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
                 gen: gen,
                 tree: tree,

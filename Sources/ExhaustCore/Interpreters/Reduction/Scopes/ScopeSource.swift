@@ -62,10 +62,7 @@ enum ScopeSourceBuilder {
         }
 
         // Migration — move elements between antichain-independent sequences.
-        // Runs before per-element deletion: migrating all elements out of a
-        // source sequence and removing it is more powerful than deleting
-        // individual elements, and its low per-element yield would otherwise
-        // be starved by the stall budget.
+        // Runs before per-element deletion: migrating all elements out of a source sequence and removing it is more powerful than deleting individual elements, and its low per-element yield would otherwise be starved by the stall budget.
         let migrationSource = MigrationSource(graph: graph)
         if migrationSource.peekYield != nil {
             sources.append(migrationSource)

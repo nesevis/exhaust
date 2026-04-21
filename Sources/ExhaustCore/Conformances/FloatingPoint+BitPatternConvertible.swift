@@ -26,8 +26,7 @@
         public init(bitPattern64: UInt64) {
             let bitPattern16 = UInt16(clamping: bitPattern64)
             let rawBitPattern: UInt16
-                // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear
-                // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
+                // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
                 = if bitPattern16 & Self.signBitMask == 0
             {
                 // This was a negative number: flip all bits back
@@ -75,8 +74,7 @@ extension Float: BitPatternConvertible {
     public init(bitPattern64: UInt64) {
         let bitPattern32 = UInt32(bitPattern64)
         let rawBitPattern: UInt32
-            // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear
-            // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
+            // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
             = if bitPattern32 & Self.signBitMask == 0
         {
             // This was a negative number: flip all bits back
@@ -122,8 +120,7 @@ extension Double: BitPatternConvertible {
     /// Creates a `Double` from a `UInt64` with ordering-preserving encoding.
     public init(bitPattern64: UInt64) {
         let rawBitPattern: UInt64
-            // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear
-            // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
+            // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
             = if bitPattern64 & Self.signBitMask == 0
         {
             // This was a negative number: flip all bits back

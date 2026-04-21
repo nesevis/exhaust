@@ -26,9 +26,7 @@ import ExhaustCore
 /// }
 /// ```
 public final class Bundle<Element>: @unchecked Sendable {
-    // @unchecked Sendable: Bundle is only accessed sequentially within a single
-    // contract execution. Concurrent access across threads is not supported
-    // and would require external synchronization.
+    // @unchecked Sendable: Bundle is only accessed sequentially within a single contract execution. Concurrent access across threads is not supported and would require external synchronization.
 
     private var elements: [Element] = []
 

@@ -110,9 +110,7 @@ package enum BoundaryCoveringArrayReplay {
             let newLength = lengthParam.values[Int(lengthValueIndex)]
 
             // Substitute element parameters, stopping at newLength.
-            // When used with per-length sub-array profiles, the profile only contains
-            // element parameters accessible at this length, so paramIndex stays aligned
-            // with subsequent non-sequence parameters.
+            // When used with per-length sub-array profiles, the profile only contains element parameters accessible at this length, so paramIndex stays aligned with subsequent non-sequence parameters.
             var newElements: [ChoiceTree] = []
             for (elementIndex, element) in elements.enumerated() {
                 guard UInt64(elementIndex) < newLength else { break }

@@ -3,9 +3,6 @@
 // `@Contract` synthesizes protocol conformance from annotated structs.
 // `#exhaust(Spec.self, commandLimit: N)` runs a contract property test at the call site.
 //
-// The contract testing model draws on Hillel Wayne's work connecting
-// contracts (preconditions, postconditions, invariants) with property-based
-// testing. See: https://www.hillelwayne.com/post/pbt-contracts/
 import ExhaustCore
 
 /// Marks a struct as a contract specification, synthesizing protocol conformance, a command enum, and a command generator.

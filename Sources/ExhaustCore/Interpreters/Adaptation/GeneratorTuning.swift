@@ -95,8 +95,7 @@ package enum GeneratorTuning {
         var samples = min(maxSamples, minPerChoice * maxComplexity)
 
         // Cap tuning budget relative to planned generation volume.
-        // Tuning cost should not dwarf generation time — for small runs
-        // we only need directionally correct weights, not precise ones.
+        // Tuning cost should not dwarf generation time — for small runs we only need directionally correct weights, not precise ones.
         // Convergence detection handles the rest.
         if let maxRuns {
             samples = min(samples, max(convergenceMinSamples, maxRuns / 5))

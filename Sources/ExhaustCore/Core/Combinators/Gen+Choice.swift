@@ -20,8 +20,7 @@ package extension Gen {
     ) -> ReflectiveGenerator<Output> {
         precondition(choices.isEmpty == false, "At least one choice must be provided")
         // The nested generators must all have the same Output type.
-        // We erase it to `Any` for the operation, but the `liftF` call
-        // ensures the final monad has the correct `Output` type.
+        // We erase it to `Any` for the operation, but the `liftF` call ensures the final monad has the correct `Output` type.
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
 
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
@@ -93,10 +92,7 @@ package extension Gen {
     static func choose<C: Collection>(
         from collection: C
     ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable, C.Index == Int {
-        // Use Gen.contramap directly rather than .mapped because the backward
-        // closure throws and .mapped propagates that via rethrows (from FreerMonad.bind),
-        // which would force this function to be marked throws — even though the throw
-        // only happens at reflection time, never during construction.
+        // Use Gen.contramap directly rather than .mapped because the backward closure throws and .mapped propagates that via rethrows (from FreerMonad.bind), which would force this function to be marked throws — even though the throw only happens at reflection time, never during construction.
         let count = collection.count
         return Gen.contramap(
             { (element: C.Element) throws -> Int in

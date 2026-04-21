@@ -1,8 +1,6 @@
 // OpenPBTStats format types and accumulator for per-example JSONL export.
 //
-// Implements the OpenPBTStats standard for integration with the Tyche visualization
-// tool (github.com/tyche-pbt/tyche-extension). Each test example produces one JSON
-// line with status, complexity features, and a string representation.
+// Implements the OpenPBTStats standard for integration with the Tyche visualization tool (github.com/tyche-pbt/tyche-extension). Each test example produces one JSON line with status, complexity features, and a string representation.
 //
 // Schema reference: observability-tools/src/datatypes.ts in tyche-extension.
 import Foundation

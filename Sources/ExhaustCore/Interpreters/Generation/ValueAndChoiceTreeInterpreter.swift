@@ -128,8 +128,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         // Size override only affects the first call, not all subsequent ones
         switch gen {
         case let .pure(value):
-            // The ChoiceTree value will be discarded from the caller if it's coming
-            // from .chooseBits
+            // The ChoiceTree value will be discarded from the caller if it's coming from .chooseBits
             return (value, .just)
 
         case let .impure(operation, continuation):

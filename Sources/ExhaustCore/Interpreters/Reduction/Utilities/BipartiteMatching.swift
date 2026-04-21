@@ -7,20 +7,11 @@
 
 //
 // Hopcroft-Karp maximum bipartite matching: Hopcroft & Karp, "An n^(5/2)
-// Algorithm for Maximum Matchings in Bipartite Graphs" (SIAM J. Computing,
-// 1973). O(E sqrt(V)) worst case.
+// Algorithm for Maximum Matchings in Bipartite Graphs" (SIAM J. Computing, 1973). O(E sqrt(V)) worst case.
 //
-// Konig's theorem (minimum vertex cover = maximum matching in bipartite
-// graphs): Konig, "Graphen und Matrizen" (Mathematikai es Fizikai Lapok,
-// 1931). The constructive proof via alternating-path reachability from free
-// nodes is from the standard textbook treatment (Lovasz & Plummer,
-// "Matching Theory", 1986, Chapter 1).
+// Konig's theorem (minimum vertex cover = maximum matching in bipartite graphs): Konig, "Graphen und Matrizen" (Mathematikai es Fizikai Lapok, 1931). The constructive proof via alternating-path reachability from free nodes is from the standard textbook treatment (Lovasz & Plummer, "Matching Theory", 1986, Chapter 1).
 //
-// Dilworth's theorem (maximum antichain = minimum chain cover = n - maximum
-// matching on the reachability bipartite graph): Dilworth, "A Decomposition
-// Theorem for Partially Ordered Sets" (Annals of Mathematics, 1950). The
-// reduction to bipartite matching is from Mirsky, "A Dual of Dilworth's
-// Decomposition Theorem" (American Mathematical Monthly, 1971).
+// Dilworth's theorem (maximum antichain = minimum chain cover = n - maximum matching on the reachability bipartite graph): Dilworth, "A Decomposition Theorem for Partially Ordered Sets" (Annals of Mathematics, 1950). The reduction to bipartite matching is from Mirsky, "A Dual of Dilworth's Decomposition Theorem" (American Mathematical Monthly, 1971).
 //
 
 // MARK: - Bipartite Matching
@@ -179,8 +170,7 @@ enum BipartiteMatching {
             }
         }
 
-        // Konig's theorem: minimum vertex cover =
-        //   left nodes NOT in the alternating-reachable set (matched left nodes not reachable)
+        // Konig's theorem: minimum vertex cover = left nodes NOT in the alternating-reachable set (matched left nodes not reachable)
         //   + right nodes IN the alternating-reachable set
         var leftCover = Set<Int>()
         for left in 0 ..< leftCount where visitedLeft.contains(left) == false {
@@ -211,8 +201,7 @@ enum BipartiteMatching {
         reachability: [Int: Set<Int>]
     ) -> [Int] {
         // Build the bipartite adjacency: left node u has edge to right node v if u < v.
-        // Sort each adjacency list to ensure deterministic matching across runs
-        // (Set iteration order is non-deterministic in Swift).
+        // Sort each adjacency list to ensure deterministic matching across runs (Set iteration order is non-deterministic in Swift).
         var adjacency = [[Int]](repeating: [], count: nodeCount)
         for source in 0 ..< nodeCount {
             guard let reachable = reachability[source] else { continue }

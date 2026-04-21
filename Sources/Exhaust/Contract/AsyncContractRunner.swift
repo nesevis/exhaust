@@ -1,9 +1,6 @@
 // Runtime execution engine for async contract property tests.
 //
-// Bridges async spec execution to the synchronous core (Freer Monad, ChoiceTree,
-// reduction) by dispatching the entire sync pipeline onto a non-cooperative GCD
-// thread where semaphore-blocking is safe. This avoids deadlocking the
-// cooperative thread pool per Massicotte's guidance.
+// Bridges async spec execution to the synchronous core (Freer Monad, ChoiceTree, reduction) by dispatching the entire sync pipeline onto a non-cooperative GCD thread where semaphore-blocking is safe. This avoids deadlocking the cooperative thread pool per Massicotte's guidance.
 import ExhaustCore
 import Foundation
 import IssueReporting

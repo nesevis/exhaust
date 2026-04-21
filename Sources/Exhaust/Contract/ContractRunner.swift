@@ -360,8 +360,7 @@ func estimateCommandLimit(
     let branchCount = pickChoices.count
 
     // Pre-analyze branch argument domains to estimate the per-position domain size.
-    // Use sequenceLength=10 as initial estimate for threshold computation;
-    // the threshold is under a sqrt so it is not very sensitive to this value.
+    // Use sequenceLength=10 as initial estimate for threshold computation; the threshold is under a sqrt so it is not very sensitive to this value.
     let threshold = SequenceCoveringArray.computeThreshold(
         budget: coverageBudget,
         sequenceLength: 10,
@@ -388,15 +387,13 @@ func estimateCommandLimit(
 
     // Budget ceiling: at t=2, covering array rows ≈ d² × ln(L).
     // Solving for L: L = e^(B / d²).
-    // For small domains this is huge (budget is not the bottleneck);
-    // for large domains it can be < 2.
+    // For small domains this is huge (budget is not the bottleneck); for large domains it can be < 2.
     let d = Double(min(domainSize, UInt64(Int.max)))
     let d2 = max(d * d, 1.0)
     let ratio = Double(coverageBudget) / d2
     let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 1000)) : 2
 
-    // Exploration floor: enough for each command type to appear several times,
-    // ensuring the random phase can reach meaningful state depths.
+    // Exploration floor: enough for each command type to appear several times, ensuring the random phase can reach meaningful state depths.
     let explorationFloor = max(branchCount * 3, 6)
 
     let limit = max(explorationFloor, budgetCeiling)
@@ -453,8 +450,7 @@ func runSCACoverage<Command>(
         return nil
     }
 
-    // Cap interaction strength based on sequence length. Higher strength gives better
-    // coverage but the number of covering array rows grows with C(sequenceLength, t).
+    // Cap interaction strength based on sequence length. Higher strength gives better coverage but the number of covering array rows grows with C(sequenceLength, t).
     // Short sequences can afford high strength; long sequences fall back to pairwise.
     let strengthCap = switch sequenceLength {
     case ...6: 6
@@ -508,8 +504,7 @@ func runSCACoverage<Command>(
 
         iterations += 1
         if property(value) == false {
-            // Reflect to get a structurally correct tree with materialized picks,
-            // since coverage-built trees lack unselected branches needed by reducer strategies.
+            // Reflect to get a structurally correct tree with materialized picks, since coverage-built trees lack unselected branches needed by reducer strategies.
             let reduceTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
             if let (_, reducedValue) = try? Interpreters.choiceGraphReduce(

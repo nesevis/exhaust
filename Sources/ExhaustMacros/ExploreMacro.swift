@@ -19,8 +19,7 @@ public struct ExploreMacro: ExpressionMacro {
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
-            // Trailing closure path — capture source code
-            // Args: gen, settings..., scorer: scoreFn
+            // Trailing closure path — capture source code Args: gen, settings..., scorer: scoreFn
             guard !args.isEmpty else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),

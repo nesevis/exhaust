@@ -44,8 +44,7 @@ package extension ChoiceGraph {
             bindInnerInfo[innerChildID] = metadata.bindDepth
         }
 
-        // Build adjacency list once in O(D) instead of filtering all
-        // edges per node in O(topo × D).
+        // Build adjacency list once in O(D) instead of filtering all edges per node in O(topo × D).
         var adjacency: [Int: [Int]] = [:]
         for edge in dependencyEdges {
             guard bindInnerNodeIDs.contains(edge.source) else { continue }
@@ -100,10 +99,7 @@ package extension ChoiceGraph {
             idToIndex[nodeID] = index
         }
 
-        // Build reachability restricted to the candidate set via on-demand
-        // DFS from each candidate. O(K · (V + E)) where K is the candidate
-        // count — much cheaper than the former O(V · E) eager transitive
-        // closure when K << V.
+        // Build reachability restricted to the candidate set via on-demand DFS from each candidate. O(K · (V + E)) where K is the candidate count — much cheaper than the former O(V · E) eager transitive closure when K << V.
         let candidateIDSet = Set(candidateIDs)
         var adjacency = [[Int]](repeating: [], count: candidateCount)
         for (sourceIndex, sourceID) in candidateIDs.enumerated() {

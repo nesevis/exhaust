@@ -21,12 +21,8 @@ extension ChoiceGraphScheduler {
         gen: ReflectiveGenerator<Any>,
         upstreamBudget: Int = 15
     ) -> any GraphEncoder {
-        // Synthesise the upstream scope: a one-leaf integer minimization on the
-        // bind-inner. ``mayReshapeOnAcceptance`` is false here because the
-        // composition synthesises the reshape change in ``GraphComposedEncoder/wrap``
-        // when wrapping each downstream probe — the upstream encoder produces a
-        // pure value-only mutation and the composition flips ``mayReshape`` on
-        // its way out.
+        // Synthesise the upstream scope: a one-leaf integer minimization on the bind-inner. ``mayReshapeOnAcceptance`` is false here because the composition synthesises the reshape change in ``GraphComposedEncoder/wrap``
+        // when wrapping each downstream probe — the upstream encoder produces a pure value-only mutation and the composition flips ``mayReshape`` on its way out.
         let upstreamLeafEntry = LeafEntry(
             nodeID: fibreScope.upstreamLeafNodeID,
             mayReshapeOnAcceptance: false
@@ -50,17 +46,10 @@ extension ChoiceGraphScheduler {
             graph: scope.graph,
             warmStartRecords: [:]
         )
-        // Upstream: pure binary search over the bind-inner leaf, no inline linear
-        // scan or cross-zero phases. ``GraphValueEncoder``'s extra phases
-        // are wasted in a bound value context — every upstream probe spawns one lift
-        // and a full downstream search, so the standalone encoder's recovery
-        // strategies multiply the cost without finding more failures.
+        // Upstream: pure binary search over the bind-inner leaf, no inline linear scan or cross-zero phases. ``GraphValueEncoder``'s extra phases are wasted in a bound value context — every upstream probe spawns one lift and a full downstream search, so the standalone encoder's recovery strategies multiply the cost without finding more failures.
         //
         // Downstream: choose encoder based on fibre dimensionality.
-        // Single-leaf fibres use binary search — the covering encoder requires ≥ 2 parameters
-        // for pairwise covering and falls through with zero probes for large single-parameter
-        // domains. Binary search converges in O(log domain) steps and correctly handles the
-        // cross-zero phase for signed types, finding the minimum failing value directly.
+        // Single-leaf fibres use binary search — the covering encoder requires ≥ 2 parameters for pairwise covering and falls through with zero probes for large single-parameter domains. Binary search converges in O(log domain) steps and correctly handles the cross-zero phase for signed types, finding the minimum failing value directly.
         // Multi-leaf fibres use FibreCoveringEncoder to discover failures across combinations.
         let downstreamEncoder: any GraphEncoder = fibreScope.downstreamNodeIDs.count == 1
             ? GraphBinarySearchEncoder()
@@ -107,12 +96,7 @@ extension ChoiceGraphScheduler {
                 : nil
         }
 
-        // 1. Materialise through the generator to get the new fibre. Use guided mode
-        //    so that downstream coordinates outside the new range get re-resolved from
-        //    the fallback tree (or PRNG when the fallback has no info) instead of
-        //    being rejected. The upstream candidate carries the *previous* downstream
-        //    values, which are typically out-of-range for the new upstream value
-        //    (Coupling: dropping `n` from 2 to 1 makes the array element value `2`
+        // 1. Materialise through the generator to get the new fibre. Use guided mode so that downstream coordinates outside the new range get re-resolved from the fallback tree (or PRNG when the fallback has no info) instead of being rejected. The upstream candidate carries the *previous* downstream values, which are typically out-of-range for the new upstream value (Coupling: dropping `n` from 2 to 1 makes the array element value `2`
         //    out-of-range for the new `int(in: 0...1)` element generator). Mirrors
         //    ``ReductionState/compositionDescriptors``'s lift configuration.
         guard case let .success(_, freshTree, _) = Materializer.materializeAny(
@@ -135,9 +119,7 @@ extension ChoiceGraphScheduler {
             return nil
         }
 
-        // 2. Build a reshape change from the upstream's mutation. The upstream
-        //    encoder reports a value-only LeafChange (mayReshape: false); we lift
-        //    it to mayReshape: true so applyBindReshape rebuilds the bound subtree.
+        // 2. Build a reshape change from the upstream's mutation. The upstream encoder reports a value-only LeafChange (mayReshape: false); we lift it to mayReshape: true so applyBindReshape rebuilds the bound subtree.
         guard case let .leafValues(upstreamChanges) = upstreamProbe.mutation,
               let upstreamChange = upstreamChanges.first
         else {
@@ -149,21 +131,16 @@ extension ChoiceGraphScheduler {
             mayReshape: true
         )
 
-        // 3. Copy the parent graph and apply the reshape on the copy. COW means
-        //    only the bind subtree region is duplicated; the rest of the graph
-        //    stays shared with the parent.
+        // 3. Copy the parent graph and apply the reshape on the copy. COW means only the bind subtree region is duplicated; the rest of the graph stays shared with the parent.
         let copy = parent.graph.copy()
         let application = copy.apply(.leafValues([reshapeChange]), freshTree: freshTree)
 
-        // 4. Fall back to a full rebuild if applyBindReshape bailed (multi-pick,
-        //    structural mismatch, missing metadata). Same fallback the live accept
-        //    path uses; we just absorb it in the lift instead.
+        // 4. Fall back to a full rebuild if applyBindReshape bailed (multi-pick, structural mismatch, missing metadata). Same fallback the live accept path uses; we just absorb it in the lift instead.
         let liftedGraph: ChoiceGraph = application.requiresFullRebuild
             ? ChoiceGraph.build(from: freshTree)
             : copy
 
-        // 5. Find the bound child of the target bind in the lifted graph, then
-        //    collect its descendant leaves as the downstream search range.
+        // 5. Find the bound child of the target bind in the lifted graph, then collect its descendant leaves as the downstream search range.
         guard fibreScope.bindNodeID < liftedGraph.nodes.count,
               case let .bind(metadata) = liftedGraph.nodes[fibreScope.bindNodeID].kind,
               liftedGraph.nodes[fibreScope.bindNodeID].children.count > metadata.boundChildIndex
@@ -181,8 +158,7 @@ extension ChoiceGraphScheduler {
         }
         guard downstreamLeaves.isEmpty == false else { return nil }
 
-        // 6. Build the downstream scope as a plain integer-leaves minimization on
-        //    the lifted graph. The downstream encoder doesn't know it's downstream.
+        // 6. Build the downstream scope as a plain integer-leaves minimization on the lifted graph. The downstream encoder doesn't know it's downstream.
         let liftedSequence = ChoiceSequence(freshTree)
         if isInstrumented {
             ExhaustLog.debug(

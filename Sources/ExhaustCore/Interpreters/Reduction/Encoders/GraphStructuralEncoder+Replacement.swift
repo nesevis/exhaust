@@ -277,9 +277,7 @@ extension GraphStructuralEncoder {
             guard zipMask.isEmpty else { continue }
             let mask = branchMasks[pickMeta.selectedID]
 
-            // Determine wrapping: if the innermost pick's parent is a ._bound bind,
-            // skip expansion — the ._bound already handles depth-crossing via its
-            // depth selector. Adding expansion markers would double-wrap.
+            // Determine wrapping: if the innermost pick's parent is a ._bound bind, skip expansion — the ._bound already handles depth-crossing via its depth selector. Adding expansion markers would double-wrap.
             let wrapping = wrappingForInnermostPick(pickID: pickID, fingerprint: fingerprint, pickMetadata: pickMetadata, graph: graph)
             guard let wrapping else { continue }
 

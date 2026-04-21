@@ -28,8 +28,7 @@ package enum ChoiceTreeHandlers {
         case .rejectionSampling:
             return gen
         case .choiceGradientSampling, .auto:
-            // CGS with fitness sharing is faster than probe-tuning at all run
-            // counts for pick-heavy generators (3x on AVL, 2x on BST).
+            // CGS with fitness sharing is faster than probe-tuning at all run counts for pick-heavy generators (3x on AVL, 2x on BST).
             let tuned = try? ChoiceGradientTuner<Any>.tune(
                 gen,
                 predicate: predicate,

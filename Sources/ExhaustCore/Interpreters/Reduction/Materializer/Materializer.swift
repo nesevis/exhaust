@@ -100,8 +100,7 @@ package enum Materializer {
         switch mode {
         case .exact:
             seed = precomputedSeed ?? ZobristHash.hash(of: prefix)
-            // In exact mode, the fallback tree is used for `.getSize` extraction only,
-            // not for value fallback (all values come from the prefix).
+            // In exact mode, the fallback tree is used for `.getSize` extraction only, not for value fallback (all values come from the prefix).
             resolvedFallbackTree = fallbackTree
             maximizeBoundRegionIndices = nil
         case let .guided(s, fb, indices):
@@ -115,8 +114,7 @@ package enum Materializer {
             prng: Xoshiro256(seed: seed),
             mode: mode.internalMode,
             // Use max size (100) so size-scaled generators produce their full range.
-            // Size 1 (scaledSize(forRun: 0)) would produce tiny ranges that reject
-            // or clamp valid values from larger-size generations.
+            // Size 1 (scaledSize(forRun: 0)) would produce tiny ranges that reject or clamp valid values from larger-size generations.
             size: 100,
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
             materializePicks: materializePicks,
@@ -279,12 +277,7 @@ extension Materializer {
             )
 
         case let .impure(.getSize, continuation):
-            // Always use context.size (default 100 = max). At max size, all
-            // size-scaled generators produce their full range, so no valid
-            // prefix value is ever outside the derived range. Using the
-            // fallback tree's `.getSize` is unreliable — reflected trees may
-            // store a small size that produces tiny ranges, destroying values
-            // via clamping.
+            // Always use context.size (default 100 = max). At max size, all size-scaled generators produce their full range, so no valid prefix value is ever outside the derived range. Using the fallback tree's `.getSize` is unreliable — reflected trees may store a small size that produces tiny ranges, destroying values via clamping.
             let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
             let size = consumeSize(&context)
             return try runContinuation(

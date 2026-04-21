@@ -208,8 +208,7 @@ package extension Gen {
             // Max length with size as percentage of total space/count
             let maxLength = min(((count * Int(size)) / 100) + 2, count)
 
-            // Convert collection to array of indices for easier manipulation
-            // Surely there's a better way? 😬
+            // Convert collection to array of indices for easier manipulation Surely there's a better way? 😬
             let indices = ContiguousArray(collection.indices)
             guard !indices.isEmpty else {
                 return .pure(collection[collection.startIndex ..< collection.startIndex])
@@ -284,8 +283,7 @@ package extension Gen {
 
         return Gen.contramap(
             { (element: AnyCollection.Element) -> Int in
-                // Find the first index where this element appears
-                // This is best-effort since elements might recur
+                // Find the first index where this element appears This is best-effort since elements might recur
                 if let element = element as? any Equatable {
                     if let (index, _) = dict.first(where: { element.isEqualToAny($0.value) }) {
                         return index

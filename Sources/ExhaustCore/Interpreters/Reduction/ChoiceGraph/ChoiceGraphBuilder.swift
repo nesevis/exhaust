@@ -392,8 +392,7 @@ struct ChoiceGraphBuilder {
             childIDs.append(boundStartID)
         }
 
-        // Dependency edges are computed in the post-walk assembly pass from bind
-        // node metadata (innerChildIndex → bound subtree structural nodes).
+        // Dependency edges are computed in the post-walk assembly pass from bind node metadata (innerChildIndex → bound subtree structural nodes).
 
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
@@ -507,8 +506,7 @@ struct ChoiceGraphBuilder {
     private func assembleGraph() -> ChoiceGraph {
         // Post-walk: compute dependency edges from bind node metadata.
         // Every bind has a fundamental dependency: inner child → bound child.
-        // Additionally, the inner child depends on any structural (bind/pick) nodes
-        // nested within the bound subtree.
+        // Additionally, the inner child depends on any structural (bind/pick) nodes nested within the bound subtree.
         var allDependencyEdges = dependencyEdges
         for node in nodes {
             guard case let .bind(metadata) = node.kind else { continue }
@@ -548,10 +546,7 @@ struct ChoiceGraphBuilder {
             selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
         }
 
-        // Topological order and dependency adjacency are computed lazily on
-        // first access. The builder no longer eagerly computes them — keeping
-        // the computation close to the cache slot lets Layer 4's partial-rebuild
-        // path invalidate and recompute through the same code path.
+        // Topological order and dependency adjacency are computed lazily on first access. The builder no longer eagerly computes them — keeping the computation close to the cache slot lets Layer 4's partial-rebuild path invalidate and recompute through the same code path.
         return ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,

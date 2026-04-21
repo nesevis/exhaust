@@ -15,10 +15,7 @@ enum ReplacementScopeQuery {
     static func build(graph: ChoiceGraph) -> [ReplacementScope] {
         var scopes: [ReplacementScope] = []
 
-        // Self-similar substitution: for each group of picks with the same
-        // fingerprint, generate one scope per ordered pair where the
-        // target is larger than the donor (positive size delta), plus one
-        // scope per zero-delta pair.
+        // Self-similar substitution: for each group of picks with the same fingerprint, generate one scope per ordered pair where the target is larger than the donor (positive size delta), plus one scope per zero-delta pair.
         for (_, group) in graph.selfSimilarityGroups {
             guard group.count >= 2 else { continue }
             var indexA = 0
@@ -79,8 +76,7 @@ enum ReplacementScopeQuery {
             }
         }
 
-        // Descendant promotion: for each pick node, check group members
-        // that are containment descendants with a smaller subtree.
+        // Descendant promotion: for each pick node, check group members that are containment descendants with a smaller subtree.
         for node in graph.nodes {
             guard case let .pick(ancestorMetadata) = node.kind else { continue }
             guard let ancestorRange = node.positionRange else { continue }

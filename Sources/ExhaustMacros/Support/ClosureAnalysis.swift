@@ -1,7 +1,6 @@
 // Closure analysis for #gen macro — detects struct/class initializer calls and extracts argument labels for automatic backward mapping synthesis.
 //
-// Adapted from Swift Testing's ConditionArgumentParsing.swift approach for
-// analyzing closure bodies at the syntax level.
+// Adapted from Swift Testing's ConditionArgumentParsing.swift approach for analyzing closure bodies at the syntax level.
 //
 // Licensed under Apache License v2.0 with Runtime Library Exception.
 // See https://swift.org/LICENSE.txt for license information.
@@ -49,10 +48,7 @@ struct BidirectionalResult {
 /// The analysis succeeds (returns `.bidirectional`) when:
 /// 1. The closure has explicitly named parameters or uses shorthand `$0`, `$1`, and so on.
 /// 2. The body is a single expression (or single return statement)
-/// 3. That expression is a function/initializer call
-/// 4. All arguments are labeled
-/// 5. Each argument is a simple reference to a closure parameter
-/// 6. There is a 1:1 correspondence between parameters and arguments
+/// 3. That expression is a function/initializer call 4. All arguments are labeled 5. Each argument is a simple reference to a closure parameter 6. There is a 1:1 correspondence between parameters and arguments
 func analyzeClosureForBidirectional(
     _ closure: ClosureExprSyntax,
     generatorCount: Int
@@ -135,8 +131,7 @@ private func analyzeShorthandClosure(
         return .forwardOnly(.forwardOnlyShorthandParams)
     }
 
-    // Unlabeled arguments can't be extracted via Mirror (which uses property names),
-    // unless this is an enum case (which uses pattern matching instead).
+    // Unlabeled arguments can't be extracted via Mirror (which uses property names), unless this is an enum case (which uses pattern matching instead).
     if caseName == nil, originalArgumentLabels.contains(where: { $0 == nil }) {
         if generatorCount == 1 {
             return .scalarConversion
@@ -182,8 +177,7 @@ private func analyzeFunctionCall(
         let originalLabel = argument.label?.text
         originalArgumentLabels.append(originalLabel)
         // Labeled arguments use their label (struct properties).
-        // Unlabeled arguments fall back to positional Mirror labels
-        // (`.0`, `.1`, …) which Mirror uses for enum associated values.
+        // Unlabeled arguments fall back to positional Mirror labels (`.0`, `.1`, …) which Mirror uses for enum associated values.
         labels.append(originalLabel ?? ".\(index)")
 
         guard let declRef = argument.expression.as(DeclReferenceExprSyntax.self) else {
@@ -203,8 +197,7 @@ private func analyzeFunctionCall(
         return .forwardOnly(.forwardOnlyParamMismatch)
     }
 
-    // Unlabeled arguments can't be extracted via Mirror (which uses property names),
-    // unless this is an enum case (which uses pattern matching instead).
+    // Unlabeled arguments can't be extracted via Mirror (which uses property names), unless this is an enum case (which uses pattern matching instead).
     if caseName == nil, originalArgumentLabels.contains(where: { $0 == nil }) {
         if generatorCount == 1 {
             return .scalarConversion

@@ -52,23 +52,17 @@ extension ChoiceGraphScheduler {
         var anyRequiresRebuild = false
         var anyRequiresSourceRebuild = false
         // Layer 7a: tracks whether the *latest* accepted probe used
-        // `materializePicks: false`. The cycle loop reads it from the
-        // outcome to decide whether the carried `tree` needs re-materializing
-        // before any subsequent ``ChoiceGraph/build(from:)`` call. Only the
-        // latest acceptance matters because each accepted probe overwrites
-        // the tree state.
+        // `materializePicks: false`. The cycle loop reads it from the outcome to decide whether the carried `tree` needs re-materializing before any subsequent ``ChoiceGraph/build(from:)`` call. Only the latest acceptance matters because each accepted probe overwrites the tree state.
         var latestAcceptedTreeIsStripped = false
         var probeCount = 0
         var acceptCount = 0
-        // Per-encoder rejection breakdown. Cache hits cost zero materializations;
-        // decoder rejections cost one materialization each. Aggregated into
+        // Per-encoder rejection breakdown. Cache hits cost zero materializations; decoder rejections cost one materialization each. Aggregated into
         // `stats.encoderProbesAccepted` and so on at the end of the loop.
         var cacheHitCount = 0
         var decoderRejectCount = 0
         var materializationsRemaining = materializationBudget
         let baseHash = ZobristHash.hash(of: sequence)
-        // Bind status is structural — value-only mutations within the probe
-        // loop cannot add or remove bind markers. Hoisted to avoid an O(N)
+        // Bind status is structural — value-only mutations within the probe loop cannot add or remove bind markers. Hoisted to avoid an O(N)
         // scan on every probe iteration.
         let hasBind = sequence.contains { entry in
             if case .bind = entry { return true }
@@ -78,16 +72,8 @@ extension ChoiceGraphScheduler {
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             probeCount += 1
             lastAccepted = false
-            // True when this probe's acceptance structurally mutated the graph
-            // (in-place reshape that added/removed nodes, or any change that
-            // forced ``ChangeApplication/requiresFullRebuild``). The encoder's
-            // ``IntegerState/leafPositions`` (and equivalent caches in float
-            // and exchange encoders) are built once at ``start(scope:)`` and
-            // are no longer valid against the live graph after such a
-            // mutation. The scheduler calls ``encoder.refreshScope`` at the
-            // bottom of the iteration when this is true so the encoder can
-            // re-derive its scope state in place against the post-mutation
-            // graph. See ExhaustDocs/graph-reducer-position-drift-bug.md.
+            // True when this probe's acceptance structurally mutated the graph (in-place reshape that added/removed nodes, or any change that forced ``ChangeApplication/requiresFullRebuild``). The encoder's
+            // ``IntegerState/leafPositions`` (and equivalent caches in float and exchange encoders) are built once at ``start(scope:)`` and are no longer valid against the live graph after such a mutation. The scheduler calls ``encoder.refreshScope`` at the bottom of the iteration when this is true so the encoder can re-derive its scope state in place against the post-mutation graph. See ExhaustDocs/graph-reducer-position-drift-bug.md.
             var mutatedStructurally = false
 
             let probeHash = ZobristHash.incrementalHash(
@@ -106,38 +92,24 @@ extension ChoiceGraphScheduler {
                 materializationsRemaining = remaining - 1
             }
 
-            // Layer 6 + Layer 7a: probes whose mutation does not change
-            // which branch is selected at any pick site can skip
-            // `materializePicks: true`. The graph's structural skeleton —
-            // including non-selected pick branches — persists across
-            // cycles via the in-place reshape path, so the decoder no
-            // longer needs to re-materialize inactive branches on every
-            // probe.
+            // Layer 6 + Layer 7a: probes whose mutation does not change which branch is selected at any pick site can skip
+            // `materializePicks: true`. The graph's structural skeleton — including non-selected pick branches — persists across cycles via the in-place reshape path, so the decoder no longer needs to re-materialize inactive branches on every probe.
             //
             // Layer 6 covers value-only ``ProjectedMutation/leafValues(_:)``
             // with no reshape leaves. Layer 7a extends the same check to
             // ``ProjectedMutation/sequenceElementsRemoved(seqNodeID:removedNodeIDs:)``,
-            // ``ProjectedMutation/sequenceElementsMigrated(sourceSeqID:receiverSeqID:movedNodeIDs:insertionOffset:)``,
-            // and ``ProjectedMutation/siblingsSwapped(parentNodeID:idA:idB:)``
-            // — none of these change branch selections, so any branch
-            // pivot encoder dispatched on the next cycle still finds its
-            // alternative branches in ``PickMetadata/branchElements``,
-            // which is captured at graph construction time.
+            // ``ProjectedMutation/sequenceElementsMigrated(sourceSeqID:receiverSeqID:movedNodeIDs:insertionOffset:)``, and ``ProjectedMutation/siblingsSwapped(parentNodeID:idA:idB:)``
+            // — none of these change branch selections, so any branch pivot encoder dispatched on the next cycle still finds its alternative branches in ``PickMetadata/branchElements``, which is captured at graph construction time.
             //
             // Pivoting mutations (``ProjectedMutation/branchSelected(pickNodeID:newSelectedID:)``,
             // ``ProjectedMutation/selfSimilarReplaced(targetNodeID:donorNodeID:)``,
             // ``ProjectedMutation/descendantPromoted(ancestorPickNodeID:descendantPickNodeID:)``)
             // and reshape leafValues keep `materializePicks: true`
-            // because the resulting tree feeds the splice path or future
-            // branch pivots that need the inactive subtree content.
+            // because the resulting tree feeds the splice path or future branch pivots that need the inactive subtree content.
             //
             // Safety: when an accepted probe sets ``ChangeApplication/requiresFullRebuild``
-            // true (which every Layer 7a structural case does until Layer 7
-            // implements them in ``ChoiceGraph/apply(_:freshTree:)``), the
-            // cycle loop's rebuild path at the call site re-materializes
-            // the sequence with `materializePicks: true` before calling
-            // ``ChoiceGraph/build(from:)``, so the rebuilt graph never
-            // sees a stripped tree.
+            // true (which every Layer 7a structural case does until Layer 7 implements them in ``ChoiceGraph/apply(_:freshTree:)``), the cycle loop's rebuild path at the call site re-materializes the sequence with `materializePicks: true` before calling
+            // ``ChoiceGraph/build(from:)``, so the rebuilt graph never sees a stripped tree.
             let picksUnchanged = switch probe.mutation {
             case let .leafValues(changes):
                 changes.contains(where: \.mayReshape) == false
@@ -147,10 +119,7 @@ extension ChoiceGraphScheduler {
                 false
             }
             let materializePicks = picksUnchanged == false
-            // Composed encoders (bound value) emit post-lift candidates whose
-            // bound subtree differs from the parent ``tree``. Guided decoding
-            // would substitute stale fallback content; force the exact decoder
-            // when the encoder requests it.
+            // Composed encoders (bound value) emit post-lift candidates whose bound subtree differs from the parent ``tree``. Guided decoding would substitute stale fallback content; force the exact decoder when the encoder requests it.
             let preferExact = encoder.requiresExactDecoder || hasBind == false
             let decoder: SequenceDecoder = preferExact
                 ? .exact(materializePicks: materializePicks)
@@ -174,35 +143,24 @@ extension ChoiceGraphScheduler {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
-                // Track whether the latest accepted probe stripped the
-                // tree. The cycle loop reads this via ``ProbeLoopOutcome/treeIsStripped``
+                // Track whether the latest accepted probe stripped the tree. The cycle loop reads this via ``ProbeLoopOutcome/treeIsStripped``
                 // to decide whether to re-materialize before any rebuild.
                 latestAcceptedTreeIsStripped = picksUnchanged
 
-                // Composed encoders (``GraphComposedEncoder``) skip the
-                // in-place ``ChoiceGraph/apply(_:freshTree:)`` path entirely.
+                // Composed encoders (``GraphComposedEncoder``) skip the in-place ``ChoiceGraph/apply(_:freshTree:)`` path entirely.
                 // The dispatch site forces a full ``ChoiceGraph/build(from:)``
                 // rebuild after every bound value pass anyway (see the
                 // `isBoundValue || outcome.requiresRebuild` branch in
-                // ``runCore``), which discards any in-place mutations the
-                // probe loop would have made. Calling ``applyBindReshape``
-                // on every accepted probe is pure waste — for BinaryHeap
-                // that was 250K applyBindReshape calls per 1000-seed run,
-                // each tombstoning the old bound subtree and splicing the
-                // new one, only to be thrown away seconds later by the
-                // post-pass rebuild.
+                // ``runCore``), which discards any in-place mutations the probe loop would have made. Calling ``applyBindReshape``
+                // on every accepted probe is pure waste — for BinaryHeap that was 250K applyBindReshape calls per 1000-seed run, each tombstoning the old bound subtree and splicing the new one, only to be thrown away seconds later by the post-pass rebuild.
                 //
-                // Standard encoders still take the in-place fast path so
-                // value-only acceptances don't pay the rebuild cost.
+                // Standard encoders still take the in-place fast path so value-only acceptances don't pay the rebuild cost.
                 let application: ChangeApplication
                 if encoder.requiresExactDecoder {
                     application = ChangeApplication()
                     anyRequiresRebuild = true
                     // Signal structural mutation so refreshScope is called below.
-                    // Encoders with requiresExactDecoder (bound value compositions) skip
-                    // graph.apply, so requiresFullRebuild is never set on the
-                    // ChangeApplication — but their cached state is equally stale after
-                    // an acceptance and needs the same reset treatment.
+                    // Encoders with requiresExactDecoder (bound value compositions) skip graph.apply, so requiresFullRebuild is never set on the ChangeApplication — but their cached state is equally stale after an acceptance and needs the same reset treatment.
                     mutatedStructurally = true
                 } else {
                     application = graph.apply(probe.mutation, freshTree: tree)
@@ -214,12 +172,7 @@ extension ChoiceGraphScheduler {
                         }
                     }
                 }
-                // A successful in-place reshape adds or removes graph
-                // nodes — the graph stays consistent via apply, but the
-                // existing scope sources captured the old node set at
-                // construction time and miss the new ones. Signal the
-                // cycle loop to rebuild sources without rebuilding the
-                // graph itself.
+                // A successful in-place reshape adds or removes graph nodes — the graph stays consistent via apply, but the existing scope sources captured the old node set at construction time and miss the new ones. Signal the cycle loop to rebuild sources without rebuilding the graph itself.
                 if application.addedNodeIDs.isEmpty == false
                     || application.removedNodeIDs.isEmpty == false
                 {
@@ -259,22 +212,10 @@ extension ChoiceGraphScheduler {
                 stats.totalMaterializations += 1
             }
 
-            // Refresh the encoder's scope on structural mutation. The
-            // encoder's cached state (for example, ``IntegerState/leafPositions``)
-            // was built at ``start(scope:)`` against the pre-mutation
-            // graph and cannot be safely re-used after a reshape
-            // tombstones leaves and splices in new nodes. Continuing to
-            // iterate without a refresh would let the encoder address
-            // ``state.sequence`` at stale indices and silently corrupt
-            // either the live sequence or the new spliced leaves' values,
-            // producing the position drift bug documented in
-            // ExhaustDocs/graph-reducer-position-drift-bug.md. Calling
-            // ``refreshScope`` lets the encoder re-derive its scope state
-            // from the live graph in place — preserving in-pass
-            // convergence records keyed by nodeID, picking up new leaves
-            // the splice created, and dropping tombstoned ones — without
-            // paying the full source-rebuild + dispatch overhead the
-            // earlier `break`-out fix imposed.
+            // Refresh the encoder's scope on structural mutation. The encoder's cached state (for example, ``IntegerState/leafPositions``)
+            // was built at ``start(scope:)`` against the pre-mutation graph and cannot be safely re-used after a reshape tombstones leaves and splices in new nodes. Continuing to iterate without a refresh would let the encoder address
+            // ``state.sequence`` at stale indices and silently corrupt either the live sequence or the new spliced leaves' values, producing the position drift bug documented in ExhaustDocs/graph-reducer-position-drift-bug.md. Calling
+            // ``refreshScope`` lets the encoder re-derive its scope state from the live graph in place — preserving in-pass convergence records keyed by nodeID, picking up new leaves the splice created, and dropping tombstoned ones — without paying the full source-rebuild + dispatch overhead the earlier `break`-out fix imposed.
             if mutatedStructurally {
                 encoder.refreshScope(graph: graph, sequence: sequence)
             }

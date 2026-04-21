@@ -50,9 +50,7 @@ enum ExchangeScopeQuery {
             // Skip if both are already at target.
             guard distanceA > 0 || distanceB > 0 else { continue }
 
-            // The source must be at an earlier position than the receiver
-            // so that zeroing the source produces a shortlex-smaller candidate
-            // (the first pairwise difference favors the candidate).
+            // The source must be at an earlier position than the receiver so that zeroing the source produces a shortlex-smaller candidate (the first pairwise difference favors the candidate).
             let positionA = graph.nodes[edge.nodeA].positionRange?.lowerBound ?? Int.max
             let positionB = graph.nodes[edge.nodeB].positionRange?.lowerBound ?? Int.max
 
@@ -121,8 +119,7 @@ enum ExchangeScopeQuery {
     ) -> [RedistributionPair] {
         var pairs: [RedistributionPair] = []
 
-        // Intra-sequence: each homogeneous sequence produces source-sink
-        // pairs among its own leaves.
+        // Intra-sequence: each homogeneous sequence produces source-sink pairs among its own leaves.
         for parentNode in graph.nodes {
             guard parentNode.positionRange != nil else { continue }
             guard case let .sequence(seqMetadata) = parentNode.kind else { continue }
@@ -137,10 +134,7 @@ enum ExchangeScopeQuery {
             pairs.append(contentsOf: intraPairs)
         }
 
-        // Cross-zip: for each zip, find pairs of homogeneous sequence
-        // children with matching type tags. Generate cross-group
-        // source-sink pairs where the source comes from the
-        // earlier-positioned group.
+        // Cross-zip: for each zip, find pairs of homogeneous sequence children with matching type tags. Generate cross-group source-sink pairs where the source comes from the earlier-positioned group.
         for zipNode in graph.nodes {
             guard case .zip = zipNode.kind else { continue }
             guard zipNode.positionRange != nil else { continue }
@@ -173,8 +167,7 @@ enum ExchangeScopeQuery {
                         continue
                     }
 
-                    // The earlier-positioned group provides sources,
-                    // the later group provides sinks.
+                    // The earlier-positioned group provides sources, the later group provides sinks.
                     let (sourceGroup, sinkGroup) = groupA.minPosition < groupB.minPosition
                         ? (groupA, groupB)
                         : (groupB, groupA)

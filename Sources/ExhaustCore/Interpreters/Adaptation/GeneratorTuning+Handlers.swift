@@ -34,8 +34,7 @@ extension GeneratorTuning {
         let choiceCount = choices.count
         let maxSamples = context.maxSamplesPerSite
 
-        // Per-choice state: independent RNG stream (stored as seed+state tuples
-        // since ~Copyable Xoshiro256 can't be stored in Array), accumulators, cache
+        // Per-choice state: independent RNG stream (stored as seed+state tuples since ~Copyable Xoshiro256 can't be stored in Array), accumulators, cache
         var choiceRngStates: [(seed: UInt64, state: Xoshiro256.StateType)] =
             (0 ..< choiceCount).map {
                 let rng = context.rng.spawned(streamID: UInt64($0))
@@ -52,8 +51,7 @@ extension GeneratorTuning {
         // Trivial single-choice picks converge immediately after minimum samples
         let isTrivial = choiceCount <= 1
 
-        // Scale minimum samples with depth — deep sites shouldn't be forced
-        // to the full 40-sample floor when their cap is already low.
+        // Scale minimum samples with depth — deep sites shouldn't be forced to the full 40-sample floor when their cap is already low.
         let effectiveMinSamples = min(convergenceMinSamples, maxSamples)
 
         while totalSampled < maxSamples {
@@ -68,9 +66,7 @@ extension GeneratorTuning {
                 for _ in totalSampled ..< batchEnd {
                     // Advance RNG to ensure each sample sees a unique state.
                     // Without this, choices with trivial generators (for example .just)
-                    // leave the RNG frozen — the entire predicate chain may
-                    // consist of .pure unwrapping that consumes no randomness,
-                    // making all samples identical.
+                    // leave the RNG frozen — the entire predicate chain may consist of .pure unwrapping that consumes no randomness, making all samples identical.
                     _ = rng.next()
 
                     guard let innerValue = try ValueInterpreter<Any>.generate(
@@ -110,10 +106,7 @@ extension GeneratorTuning {
             // All checks below require the minimum sample floor
             guard totalSampled >= effectiveMinSamples else { continue }
 
-            // Unambiguous early exit: if one choice has ≥80% success rate and
-            // another has 0%, the signal is clear — stop without waiting for
-            // the second convergence check (which needs one more batch to see
-            // the shift stabilize).
+            // Unambiguous early exit: if one choice has ≥80% success rate and another has 0%, the signal is clear — stop without waiting for the second convergence check (which needs one more batch to see the shift stabilize).
             if !isTrivial {
                 let hasZero = successCounts.contains(0)
                 let maxRate = Double(successCounts.max()!) / Double(totalSampled)
@@ -186,16 +179,13 @@ extension GeneratorTuning {
         var tunedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         tunedChoices.reserveCapacity(choiceCount)
 
-        // Only skip dominated branches if at least one branch has positive
-        // successes. When all branches scored 0, the all-zero fallback will
-        // restore weight 1, so those branches need tuned inner generators.
+        // Only skip dominated branches if at least one branch has positive successes. When all branches scored 0, the all-zero fallback will restore weight 1, so those branches need tuned inner generators.
         let hasAnySuccess = successCounts.contains(where: { $0 > 0 })
 
         for choiceIdx in 0 ..< choiceCount {
             let choice = choices[choiceIdx]
 
-            // Skip recursive tuning for dominated branches — their weight
-            // will be 0 and they won't be selected during generation.
+            // Skip recursive tuning for dominated branches — their weight will be 0 and they won't be selected during generation.
             if hasAnySuccess, successCounts[choiceIdx] == 0 {
                 tunedChoices.append(ReflectiveOperation.PickTuple(
                     fingerprint: choice.fingerprint,
@@ -206,8 +196,7 @@ extension GeneratorTuning {
                 continue
             }
 
-            // The composed predicate checks the cache from Phase 1 first,
-            // falling back to full continuation evaluation on cache miss.
+            // The composed predicate checks the cache from Phase 1 first, falling back to full continuation evaluation on cache miss.
             var composedRng = Xoshiro256(
                 seed: choiceRngStates[choiceIdx].seed,
                 state: choiceRngStates[choiceIdx].state
@@ -239,15 +228,8 @@ extension GeneratorTuning {
                 predicate: composedPredicate
             )
 
-            // Specification entropy weighting: reward branches that produce
-            // diverse valid outputs, not just frequent ones.  We estimate
-            // Shannon entropy from the empirical frequency distribution of
-            // valid outputs.  This is strictly more informative than the
-            // previous distinct-count heuristic: two branches may each produce
-            // 10 distinct outputs, but if one concentrates 90% of mass on a
-            // single value the entropy will be low, correctly down-weighting it.
-            // The +1 offset ensures branches with a single valid output still
-            // receive weight proportional to their success count.
+            // Specification entropy weighting: reward branches that produce diverse valid outputs, not just frequent ones.  We estimate Shannon entropy from the empirical frequency distribution of valid outputs.  This is strictly more informative than the previous distinct-count heuristic: two branches may each produce 10 distinct outputs, but if one concentrates 90% of mass on a single value the entropy will be low, correctly down-weighting it.
+            // The +1 offset ensures branches with a single valid output still receive weight proportional to their success count.
             let frequencies = outputFrequencies[choiceIdx]
             let totalObservations = frequencies.values.reduce(UInt64(0), +)
             let entropy: Double
@@ -270,10 +252,7 @@ extension GeneratorTuning {
             ))
         }
 
-        // Weight floor: bound each choice's selection probability to at least
-        // weightFloorFraction. This prevents extreme ratios from compounding
-        // multiplicatively across depth (for example 0.9^5 leaf bias at every level
-        // would collapse h5 BST probability to 0.00001%).
+        // Weight floor: bound each choice's selection probability to at least weightFloorFraction. This prevents extreme ratios from compounding multiplicatively across depth (for example 0.9^5 leaf bias at every level would collapse h5 BST probability to 0.00001%).
         let totalWeight = tunedChoices.reduce(UInt64(0)) { $0 + $1.weight }
         if totalWeight > 0 {
             let floor = max(UInt64(1), UInt64(Double(totalWeight) * weightFloorFraction))
@@ -369,8 +348,7 @@ extension GeneratorTuning {
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        // Try to subdivide the length generator if it's a chooseBits
-        // (only if we haven't already subdivided)
+        // Try to subdivide the length generator if it's a chooseBits (only if we haven't already subdivided)
         if !insideSubdividedChooseBits,
            case let .impure(
                .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
@@ -427,8 +405,7 @@ extension GeneratorTuning {
             )
         }
 
-        // If the length generator uses getSize + bind (the common pattern),
-        // try to look one level deeper (only if we haven't already subdivided)
+        // If the length generator uses getSize + bind (the common pattern), try to look one level deeper (only if we haven't already subdivided)
         if !insideSubdividedChooseBits,
            case let .impure(.getSize, getSizeContinuation) = lengthGen
         {
@@ -453,8 +430,7 @@ extension GeneratorTuning {
                     continuation: { .pure($0 as! UInt64) }
                 )
 
-                // Feed the size into the original getSize continuation to produce
-                // the actual length generator, then build the sequence
+                // Feed the size into the original getSize continuation to produce the actual length generator, then build the sequence
                 let subSeqGen: ReflectiveGenerator<Any> = try .impure(
                     operation: .sequence(
                         length: subSizeGen._bindReified(getSizeContinuation),
@@ -486,9 +462,7 @@ extension GeneratorTuning {
 
         // Fallback: tune element generator with composed predicate
         let composedElementPredicate: (Any) -> Bool = { _ in
-            // We can't meaningfully compose through the sequence continuation
-            // without knowing the full array context, so return true to keep
-            // all element branches available for reduction
+            // We can't meaningfully compose through the sequence continuation without knowing the full array context, so return true to keep all element branches available for reduction
             true
         }
 

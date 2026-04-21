@@ -1,8 +1,6 @@
 // Encapsulates the structured coverage phase of a property test.
 //
-// Analyzes the generator, then pulls rows from the density algorithm
-// (PullBasedCoveringArrayGenerator) one at a time, testing each against the
-// property. Stops on first failure or budget.
+// Analyzes the generator, then pulls rows from the density algorithm (PullBasedCoveringArrayGenerator) one at a time, testing each against the property. Stops on first failure or budget.
 import ExhaustCore
 
 /// Runs the structured coverage phase of a property test, exhausting the generator's finite or boundary domain before the random phase.

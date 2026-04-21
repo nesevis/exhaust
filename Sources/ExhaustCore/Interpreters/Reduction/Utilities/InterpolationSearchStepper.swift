@@ -58,8 +58,7 @@ struct InterpolationSearchStepper {
         if lastAccepted {
             bestAccepted = lastProbe
             hi = lastProbe
-            // Reset divisor on acceptance — the "boundary near lo" prior
-            // is confirmed by the acceptance.
+            // Reset divisor on acceptance — the "boundary near lo" prior is confirmed by the acceptance.
             divisor = Self.initialDivisor
         } else {
             lo = lastProbe + 1
@@ -91,12 +90,9 @@ struct InterpolationSearchStepper {
         }
         // Interpolation phase: biased toward lo.
         // Use full-width arithmetic to avoid overflow:
-        //   probe = lo + range / divisor
-        // For power-of-two divisors this is just a shift, but
-        // dividingFullWidth keeps the door open for non-power-of-two K.
+        //   probe = lo + range / divisor For power-of-two divisors this is just a shift, but dividingFullWidth keeps the door open for non-power-of-two K.
         let step = range / divisor
-        // Guard against step == 0 (divisor > range, shouldn't happen
-        // given the binaryThreshold gate, but be safe).
+        // Guard against step == 0 (divisor > range, shouldn't happen given the binaryThreshold gate, but be safe).
         if step == 0 {
             return lo + range / 2
         }

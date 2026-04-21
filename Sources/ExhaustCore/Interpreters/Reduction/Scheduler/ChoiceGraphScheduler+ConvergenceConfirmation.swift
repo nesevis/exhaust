@@ -33,9 +33,7 @@ extension ChoiceGraphScheduler {
             }
         }
 
-        // Bind status is structural — convergence probes are value-only and
-        // cannot add or remove bind markers. Hoisted to avoid an O(N) scan
-        // on every converged leaf.
+        // Bind status is structural — convergence probes are value-only and cannot add or remove bind markers. Hoisted to avoid an O(N) scan on every converged leaf.
         let hasBind = sequence.contains { entry in
             if case .bind = entry { return true }
             return false
@@ -46,10 +44,7 @@ extension ChoiceGraphScheduler {
             guard let origin = metadata.convergedOrigin else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
 
-            // Probe floor - 1 in bit-pattern space. The minimization
-            // encoder searches in bit-pattern space (directional), so
-            // convergence bounds are bit patterns and floor - 1 is the
-            // next adjacent value in the same search direction.
+            // Probe floor - 1 in bit-pattern space. The minimization encoder searches in bit-pattern space (directional), so convergence bounds are bit patterns and floor - 1 is the next adjacent value in the same search direction.
             let minBound: UInt64 = metadata.validRange?.lowerBound ?? 0
             guard origin.bound > minBound else { continue }
 
@@ -71,14 +66,9 @@ extension ChoiceGraphScheduler {
                 continue
             }
 
-            // Convergence confirmation rewrites a single converged leaf's
-            // bit pattern at `floor - 1` and re-runs the materializer.
-            // By construction this is a pure value-only probe — no bind
-            // reshape, no structural pivot — so `materializePicks: false`
-            // is safe and avoids the per-probe cost of re-materializing
-            // non-selected pick branches. The lazy rematerialize check
-            // in the cycle loop covers any path-changing operation that
-            // needs full branch metadata after a stale acceptance.
+            // Convergence confirmation rewrites a single converged leaf's bit pattern at `floor - 1` and re-runs the materializer.
+            // By construction this is a pure value-only probe — no bind reshape, no structural pivot — so `materializePicks: false`
+            // is safe and avoids the per-probe cost of re-materializing non-selected pick branches. The lazy rematerialize check in the cycle loop covers any path-changing operation that needs full branch metadata after a stale acceptance.
             let decoder: SequenceDecoder = hasBind
                 ? .guided(fallbackTree: tree, materializePicks: false)
                 : .exact(materializePicks: false)

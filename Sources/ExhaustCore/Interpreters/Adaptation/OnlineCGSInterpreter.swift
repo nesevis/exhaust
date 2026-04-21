@@ -359,10 +359,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
                 var results: [Any] = []
                 results.reserveCapacity(Int(length))
-                // Skip derivative evaluation for element-level picks: without
-                // .sequenceElement frames, derivatives can't compose through the
-                // sequence boundary (element values would hit the predicate with
-                // wrong types). Depth >= 4 triggers handlePick's fast path.
+                // Skip derivative evaluation for element-level picks: without .sequenceElement frames, derivatives can't compose through the sequence boundary (element values would hit the predicate with wrong types). Depth >= 4 triggers handlePick's fast path.
                 var elementDerivativeContext = DerivativeContext()
                 for _ in 0 ..< 4 {
                     elementDerivativeContext.push(.bind(continuation: { .pure($0) }))
@@ -694,8 +691,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         derivativeContext: DerivativeContext
     ) throws -> Output? {
         // Fast path: single choice or deep pick — skip derivative evaluation.
-        // Without .sequenceElement frames, derivative context cannot compose through
-        // sequence boundaries, so deep picks must fall back to weighted selection.
+        // Without .sequenceElement frames, derivative context cannot compose through sequence boundaries, so deep picks must fall back to weighted selection.
         let effectiveSampleCount = Swift.max(2, sampleCount >> derivativeContext.depth)
         if choices.count == 1 || derivativeContext.depth >= 4 {
             guard let selectedChoice = WeightedPickSelection.draw(
@@ -731,15 +727,10 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             )
         }
 
-        // 0. Vocabulary elimination: skip derivative evaluation for choices
-        // that are historically dead (0 fitness after ≥30 observations).
-        // Once a choice is rejected enough times, remove it from the proposal
-        // distribution to avoid wasting derivative evaluations on known-dead
-        // branches.
+        // 0. Vocabulary elimination: skip derivative evaluation for choices that are historically dead (0 fitness after ≥30 observations).
+        // Once a choice is rejected enough times, remove it from the proposal distribution to avoid wasting derivative evaluations on known-dead branches.
         //
-        // Adapted from the adaptive rejection sampling vocabulary elimination
-        // in: Lipkin et al., "Fast Controlled Generation from Language Models
-        // with Adaptive Weighted Rejection Sampling", COLM 2025.
+        // Adapted from the adaptive rejection sampling vocabulary elimination in: Lipkin et al., "Fast Controlled Generation from Language Models with Adaptive Weighted Rejection Sampling", COLM 2025.
         // arXiv:2504.05410
         let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
         let choiceCount = choices.count
@@ -785,8 +776,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // 1. Compute fitness via interleaved derivative sampling
         //
         // Build derivatives only for live choices, then sample in rounds.
-        // This allows adaptive stopping when the relative ranking is decided,
-        // rather than exhausting the full budget per choice independently.
+        // This allows adaptive stopping when the relative ranking is decided, rather than exhausting the full budget per choice independently.
         var derivatives = ContiguousArray<ReflectiveGenerator<FinalOutput>>()
         derivatives.reserveCapacity(liveChoiceIndices.count)
         for i in liveChoiceIndices {
@@ -840,8 +830,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             }
         }
 
-        // 1b. Record fitness data for live choices only (dead choices are
-        // not evaluated and should not accumulate phantom observations)
+        // 1b. Record fitness data for live choices only (dead choices are not evaluated and should not accumulate phantom observations)
         if let accumulator = cgsState.fitnessAccumulator {
             for choiceIdx in liveChoiceIndices {
                 let choice = choices[choiceIdx]
@@ -854,8 +843,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             }
         }
 
-        // 2. Build weighted choices — dead choices get weight 0,
-        // live choices with all-zero fitness fall back to equal weights
+        // 2. Build weighted choices — dead choices get weight 0, live choices with all-zero fitness fall back to equal weights
         let allLiveZero = liveChoiceIndices.allSatisfy { fitnesses[$0] == 0 }
         var weightedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         weightedChoices.reserveCapacity(choices.count)

@@ -18,10 +18,7 @@ extension GraphValueEncoder {
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
-            // Skip leaves the encoder has already converged in the current
-            // pass. Used by ``refreshScope(graph:sequence:)`` to avoid
-            // re-driving leaves whose binary search has already finished
-            // when the live graph yields a new full scope.
+            // Skip leaves the encoder has already converged in the current pass. Used by ``refreshScope(graph:sequence:)`` to avoid re-driving leaves whose binary search has already finished when the live graph yields a new full scope.
             if preservingConvergence[nodeID] != nil { continue }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
@@ -41,17 +38,7 @@ extension GraphValueEncoder {
         }
 
         // Phase selection. ``armBatchZero`` is `true` for the initial
-        // ``start(scope:)`` call (the trivial all-targets shortcut is
-        // worth one probe at pass start) and `false` for refresh calls
-        // from ``refreshScope(graph:sequence:)``. Re-arming batch-zero on
-        // every refresh wastes one full materialisation per accepted
-        // reshape: at refresh time we already know batch-zero was
-        // infeasible at pass start (otherwise the per-leaf search wouldn't
-        // be running), and the new leaves the splice added rarely flip
-        // that. The waste was the dominant cost on BinaryHeap (~30k
-        // refresh-induced batchZero probes per 1000-seed run, each
-        // rejected because all-zero is a valid heap and the failing
-        // predicate requires non-heap shape).
+        // ``start(scope:)`` call (the trivial all-targets shortcut is worth one probe at pass start) and `false` for refresh calls from ``refreshScope(graph:sequence:)``. Re-arming batch-zero on every refresh wastes one full materialisation per accepted reshape: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the new leaves the splice added rarely flip that. The waste was the dominant cost on BinaryHeap (~30k refresh-induced batchZero probes per 1000-seed run, each rejected because all-zero is a valid heap and the failing predicate requires non-heap shape).
         let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible) ? .batchZero : .perLeaf
 
         mode = .valueLeaves(IntegerState(
@@ -90,9 +77,7 @@ extension GraphValueEncoder {
                     .withBitPattern(leaf.targetBitPattern)
             }
             if candidate.shortLexPrecedes(state.sequence) {
-                // Emit the batch-zero probe. If accepted, batchBisect will
-                // see lastAccepted=true and converge all leaves. If rejected,
-                // batchBisect will begin joint interpolation search.
+                // Emit the batch-zero probe. If accepted, batchBisect will see lastAccepted=true and converge all leaves. If rejected, batchBisect will begin joint interpolation search.
                 if state.leafPositions.count >= 4 {
                     state.phase = .batchBisect
                     state.bisection = BisectionState(
@@ -274,10 +259,7 @@ extension GraphValueEncoder {
                 continue
             }
 
-            // Cross-zero phase takes priority when active — it was armed by a
-            // prior iteration of this loop after binary search converged, and
-            // the current `lastAccepted` is feedback for the last cross-zero
-            // probe (if any).
+            // Cross-zero phase takes priority when active — it was armed by a prior iteration of this loop after binary search converged, and the current `lastAccepted` is feedback for the last cross-zero probe (if any).
             if state.crossZero != nil {
                 if let candidate = nextCrossZeroProbe(
                     state: &state,
@@ -300,12 +282,8 @@ extension GraphValueEncoder {
                 ) {
                     return candidate
                 }
-                // Scan exhausted — record convergence, then try cross-zero
-                // before advancing to the next leaf. Linear scan probes only
-                // `[targetBitPattern, bestAccepted)` which for signed types is one
-                // side of zero; cross-zero walks shortlex keys from 0 upward
-                // and reaches values on the opposite side that linear scan
-                // cannot. They are complementary.
+                // Scan exhausted — record convergence, then try cross-zero before advancing to the next leaf. Linear scan probes only
+                // `[targetBitPattern, bestAccepted)` which for signed types is one side of zero; cross-zero walks shortlex keys from 0 upward and reaches values on the opposite side that linear scan cannot. They are complementary.
                 finishLinearScan(state: &state)
                 if tryEnterCrossZero(state: &state) {
                     continue
@@ -351,15 +329,12 @@ extension GraphValueEncoder {
                 return candidate
             }
 
-            // Binary search converged. If scan was set up, loop back
-            // to drain it.
+            // Binary search converged. If scan was set up, loop back to drain it.
             if state.scanValues != nil {
                 continue
             }
 
-            // Try to enter the cross-zero phase for signed types. If
-            // successful, the next iteration of this loop will emit the
-            // first cross-zero probe with fresh state (no stale feedback).
+            // Try to enter the cross-zero phase for signed types. If successful, the next iteration of this loop will emit the first cross-zero probe with fresh state (no stale feedback).
             if tryEnterCrossZero(state: &state) {
                 continue
             }
@@ -395,12 +370,7 @@ extension GraphValueEncoder {
                 return nil
             }
 
-            // Warm-start: if a prior cycle converged this leaf with the
-            // same encoder configuration, narrow the search bounds to
-            // skip the already-explored region. The bound is validated
-            // against the current search range — if redistribution moved
-            // the leaf past its prior floor, the warm-start is stale and
-            // the full range is searched.
+            // Warm-start: if a prior cycle converged this leaf with the same encoder configuration, narrow the search bounds to skip the already-explored region. The bound is validated against the current search range — if redistribution moved the leaf past its prior floor, the warm-start is stale and the full range is searched.
             let warmStart = state.warmStartRecords[leaf.nodeID]
             let validWarmStart: ConvergedOrigin? = warmStart.flatMap { ws in
                 guard ws.configuration == .binarySearchSemanticSimplest else { return nil }
@@ -483,8 +453,7 @@ extension GraphValueEncoder {
                     cycle: 0
                 )
             } else if remaining > 0, remaining <= Self.linearScanThreshold {
-                // Non-monotone gap: binary search couldn't reach the target
-                // but the gap is small enough to scan exhaustively.
+                // Non-monotone gap: binary search couldn't reach the target but the gap is small enough to scan exhaustively.
                 convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .nonMonotoneGap(remainingRange: Int(remaining)),
@@ -587,31 +556,16 @@ extension GraphValueEncoder {
         let currentKey = currentEntry.choice.shortlexKey
         guard currentKey > 0 else { return false }
 
-        // Micro-opt 1: skip cross-zero when `value(0)` is outside an explicit
-        // valid range. Every cross-zero probe walks shortlex keys near zero,
-        // and if zero itself is out of range the walk's near neighbors are
-        // almost certainly out too — the materializer will reject every probe
-        // we emit. For generators like `int(in: 1...1000)` this saves the full
-        // budget of wasted probes per leaf.
+        // Micro-opt 1: skip cross-zero when `value(0)` is outside an explicit valid range. Every cross-zero probe walks shortlex keys near zero, and if zero itself is out of range the walk's near neighbors are almost certainly out too — the materializer will reject every probe we emit. For generators like `int(in: 1...1000)` this saves the full budget of wasted probes per leaf.
         //
         // The zero bit pattern is computed via `semanticSimplest.bitPattern64`
-        // rather than `makeConvertible(bitPattern64: 0)`: for signed types the
-        // XOR sign-magnitude encoding maps bit pattern 0 to the most negative
-        // value, so `makeConvertible(bitPattern64: 0)` would return `Int.min`,
-        // not semantic zero.
+        // rather than `makeConvertible(bitPattern64: 0)`: for signed types the XOR sign-magnitude encoding maps bit pattern 0 to the most negative value, so `makeConvertible(bitPattern64: 0)` would return `Int.min`, not semantic zero.
         if currentEntry.isRangeExplicit, let range = currentEntry.validRange {
             let zeroBitPattern = currentEntry.choice.semanticSimplest.bitPattern64
             if range.contains(zeroBitPattern) == false {
                 return false
             }
-            // Micro-opt 2: skip cross-zero when the leaf's current value pins
-            // the valid range's boundary. Binary search has already exhausted
-            // everything between the boundary and the reduction target; the
-            // remaining "simpler" candidates cross-zero would try are all in
-            // that already-rejected region. The property has demonstrated
-            // that this exact boundary value is required. Saves the full
-            // budget of wasted probes per pinned leaf (for example, Bound5's
-            // leaves at `Int16.min`).
+            // Micro-opt 2: skip cross-zero when the leaf's current value pins the valid range's boundary. Binary search has already exhausted everything between the boundary and the reduction target; the remaining "simpler" candidates cross-zero would try are all in that already-rejected region. The property has demonstrated that this exact boundary value is required. Saves the full budget of wasted probes per pinned leaf (for example, Bound5's leaves at `Int16.min`).
             let currentBitPattern = currentEntry.choice.bitPattern64
             if currentBitPattern == range.lowerBound || currentBitPattern == range.upperBound {
                 return false
@@ -619,8 +573,7 @@ extension GraphValueEncoder {
         }
 
         // Adaptive budget: ⌈log₂(currentKey + 1)⌉ + 4, clamped to [4, 16].
-        // Small keys get one probe per key below them (fully exhaustive),
-        // large keys get the simplest 16 shortlex keys (0..15).
+        // Small keys get one probe per key below them (fully exhaustive), large keys get the simplest 16 shortlex keys (0..15).
         let bitLength = UInt64(64 - currentKey.leadingZeroBitCount)
         let budget = min(bitLength + 4, 16)
         let endKey = min(currentKey, budget)
@@ -652,10 +605,7 @@ extension GraphValueEncoder {
         if let acceptedKey = crossZero.lastEmittedKey {
             crossZero.lastEmittedKey = nil
             if lastAccepted {
-                // Acceptance — nextIntegerProbe has already advanced
-                // state.sequence to the accepted candidate. Record the
-                // convergence at the new bit pattern so the next cycle's
-                // binary search can warm-start from here, then exit.
+                // Acceptance — nextIntegerProbe has already advanced state.sequence to the accepted candidate. Record the convergence at the new bit pattern so the next cycle's binary search can warm-start from here, then exit.
                 let leaf = state.leafPositions[state.leafIndex]
                 let acceptedChoice = ChoiceValue.fromShortlexKey(
                     acceptedKey,
@@ -680,8 +630,7 @@ extension GraphValueEncoder {
 
             let probeChoice = ChoiceValue.fromShortlexKey(probeKey, tag: crossZero.tag)
 
-            // Range validation: when the range is explicitly user-declared,
-            // a probe outside it would be rejected by the materializer.
+            // Range validation: when the range is explicitly user-declared, a probe outside it would be rejected by the materializer.
             // Skip rather than waste a property call.
             if crossZero.isRangeExplicit,
                probeChoice.fits(in: crossZero.validRange) == false

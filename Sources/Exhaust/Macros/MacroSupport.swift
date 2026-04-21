@@ -269,8 +269,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 "kind": kind,
                             ]
                         )
-                        // Reflect to get a structurally correct tree with materialized picks,
-                        // since coverage-built trees lack unselected branches needed by reducer strategies.
+                        // Reflect to get a structurally correct tree with materialized picks, since coverage-built trees lack unselected branches needed by reducer strategies.
                         let reductionTree = (try? Interpreters.reflect(gen, with: value)) ?? tree
                         var propertyInvocationCount = 0
                         let countingProperty: (Output) -> Bool = { value in
@@ -681,8 +680,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Wraps a throwing `Void`-returning closure into `(Output) -> Bool` via try/catch.
     ///
-    /// The detection closure has `#expect` rewritten to `#require` by the macro,
-    /// so assertion failures throw and are caught here. No `withKnownIssue` needed.
+    /// The detection closure has `#expect` rewritten to `#require` by the macro, so assertion failures throw and are caught here. No `withKnownIssue` needed.
     private static func wrapDetectionProperty<Output>(
         _ detection: @escaping @Sendable (Output) throws -> Void
     ) -> @Sendable (Output) -> Bool {
@@ -698,8 +696,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Runs a property test with a `Void`-returning property that uses `#expect`/`#require` for assertions.
     ///
-    /// Wraps the property into a `Bool`-returning form via `withKnownIssue`, delegates to the existing pipeline,
-    /// then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
+    /// Wraps the property into a `Bool`-returning form via `withKnownIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
     @discardableResult
     public static func __exhaustExpect<Output>( // swiftlint:disable:this function_body_length function_parameter_count
         _ gen: ReflectiveGenerator<Output>,
@@ -737,8 +734,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             withoutActuallyEscaping(detection) { detection in
                 let boolProperty = wrapDetectionProperty(detection)
 
-                // Wrap the entire pipeline in withKnownIssue to suppress #require issues
-                // from the detection closure during coverage/sampling/reduction.
+                // Wrap the entire pipeline in withKnownIssue to suppress #require issues from the detection closure during coverage/sampling/reduction.
                 // The final re-run (outside this scope) produces the user-facing #expect output.
                 nonisolated(unsafe) var pipelineResult: Output?
                 nonisolated(unsafe) var capturedSeed: UInt64?

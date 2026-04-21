@@ -46,10 +46,7 @@ struct MigrationSource: ScopeSource {
                 else { continue }
 
                 // Collect source's element node IDs and full extents.
-                // Use the sequence's stored child extents so transparent
-                // wrapper markers (getSize-bind, transform-bind) move with
-                // their value entries — otherwise migration leaves orphan
-                // markers and the materializer rejects the candidate.
+                // Use the sequence's stored child extents so transparent wrapper markers (getSize-bind, transform-bind) move with their value entries — otherwise migration leaves orphan markers and the materializer rejects the candidate.
                 let sourceNode = graph.nodes[source.nodeID]
                 guard case let .sequence(sourceMetadata) = sourceNode.kind else { continue }
                 guard sourceMetadata.childPositionRanges.count == sourceNode.children.count else { continue }
@@ -129,9 +126,7 @@ struct MigrationSource: ScopeSource {
                 estimatedProbes: 1
             ),
             precondition: {
-                // When migration empties the source entirely and the source's
-                // parent is a sequence, the constraint is on the parent's
-                // ability to lose a child, not the source's own element count.
+                // When migration empties the source entirely and the source's parent is a sequence, the constraint is on the parent's ability to lose a child, not the source's own element count.
                 if let parentSeqID = entry.sourceParentSeqID {
                     return .all([
                         .sequenceLengthAboveMinimum(sequenceNodeID: parentSeqID),

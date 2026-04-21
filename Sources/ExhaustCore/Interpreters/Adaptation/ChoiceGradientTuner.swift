@@ -16,8 +16,7 @@ import Foundation
 /// Runs the generator through ``OnlineCGSInterpreter`` for a fixed number of warmup passes, collecting per-site, per-choice fitness data into a ``FitnessAccumulator``.
 /// Unlike probe-based tuning which samples each site independently, CGS conditions on upstream choices via ``DerivativeContext``, producing better weights for recursive generators where the validity of a subtree depends on ancestors.
 ///
-/// The warmup is the only expensive phase. All subsequent generation uses the cheap ``ValueAndChoiceTreeInterpreter`` with the baked weights — same quality signal,
-/// ~100x cheaper per sample.
+/// The warmup is the only expensive phase. All subsequent generation uses the cheap ``ValueAndChoiceTreeInterpreter`` with the baked weights — same quality signal, ~100x cheaper per sample.
 ///
 /// ## Stage 2: Fitness-shared weight baking
 ///
@@ -72,32 +71,19 @@ package enum ChoiceGradientTuner<FinalOutput> {
         seed: UInt64? = nil,
         weightingStrategy: WeightingStrategy = .fitnessSharing
     ) throws -> ReflectiveGenerator<FinalOutput> {
-        // Stage 0: Preprocess — subdivide sequence lengths into picks over subranges
-        // so CGS can guide length decisions (chooseBits sites are opaque to CGS).
-        // We bake into the *original* generator to preserve structural compatibility
-        // with choice trees (needed for filter replay and reduction).
+        // Stage 0: Preprocess — subdivide sequence lengths into picks over subranges so CGS can guide length decisions (chooseBits sites are opaque to CGS).
+        // We bake into the *original* generator to preserve structural compatibility with choice trees (needed for filter replay and reduction).
         let subdivisionContext = SubdivisionContext()
         let subdivided = try subdivideSequenceLengths(generator, context: subdivisionContext)
 
-        // Stage 1: Online CGS warmup — the only expensive phase. Runs the
-        // subdivided generator through OnlineCGSInterpreter in batches,
-        // collecting per-site, per-choice fitness data conditioned on upstream
-        // choices. Values are discarded; only the accumulated fitness data matters.
+        // Stage 1: Online CGS warmup — the only expensive phase. Runs the subdivided generator through OnlineCGSInterpreter in batches, collecting per-site, per-choice fitness data conditioned on upstream choices. Values are discarded; only the accumulated fitness data matters.
         //
-        // SMC-style interleaved resampling: after each batch (once past the
-        // minimum warmup), intermediate weights are baked from accumulated
-        // fitness and fed into the next batch's interpreter. Deep picks (depth
-        // >= 4), which fall back to static generator weights, benefit from
-        // progressively improved proposals rather than staying uniform.
+        // SMC-style interleaved resampling: after each batch (once past the minimum warmup), intermediate weights are baked from accumulated fitness and fed into the next batch's interpreter. Deep picks (depth >= 4), which fall back to static generator weights, benefit from progressively improved proposals rather than staying uniform.
         //
-        // Convergence detection (ψ-based early stopping): after each batch,
-        // check if per-site weight shares have stabilized. When the maximum
-        // absolute shift drops below 5%, further runs won't meaningfully
-        // change the baked weights — stop early to save warmup cost.
+        // Convergence detection (ψ-based early stopping): after each batch, check if per-site weight shares have stabilized. When the maximum absolute shift drops below 5%, further runs won't meaningfully change the baked weights — stop early to save warmup cost.
         //
         // Adapted from the ψ₀ probability-mass tracking in:
-        //   Lipkin et al., "Fast Controlled Generation from Language Models
-        //   with Adaptive Weighted Rejection Sampling", COLM 2025.
+        //   Lipkin et al., "Fast Controlled Generation from Language Models with Adaptive Weighted Rejection Sampling", COLM 2025.
         //   arXiv:2504.05410
         let accumulator = FitnessAccumulator()
         let resamplingBatchSize: UInt64 = 20
@@ -129,17 +115,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
             }
         }
 
-        // Stage 2: Weight baking — convert accumulated fitness into static pick
-        // weights using the chosen strategy. The default .fitnessSharing discounts
-        // dominant choices via niche-count sharing so the generator doesn't lock
-        // onto a narrow cluster. Synthesized subdivision pick IDs won't match
-        // original picks (harmless); element-level data carries over correctly.
+        // Stage 2: Weight baking — convert accumulated fitness into static pick weights using the chosen strategy. The default .fitnessSharing discounts dominant choices via niche-count sharing so the generator doesn't lock onto a narrow cluster. Synthesized subdivision pick IDs won't match original picks (harmless); element-level data carries over correctly.
         let baked = bakeWeights(generator, from: accumulator, strategy: weightingStrategy)
 
-        // Stage 3: Adaptive smoothing — per-site entropy analysis identifies
-        // bottleneck sites (where one choice dominates) and applies higher
-        // temperature there to prevent chokepoints, while leaving well-distributed
-        // sites alone to preserve the tuned distribution.
+        // Stage 3: Adaptive smoothing — per-site entropy analysis identifies bottleneck sites (where one choice dominates) and applies higher temperature there to prevent chokepoints, while leaving well-distributed sites alone to preserve the tuned distribution.
         return AdaptiveSmoothing.smooth(baked, baseTemperature: 2.0, maxTemperature: 8.0)
     }
 
