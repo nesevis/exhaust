@@ -163,7 +163,7 @@ extension GraphRedistributionEncoder {
         switch original {
         case let .floating(_, _, tag):
             let value = Double(numerator) / Double(denominator)
-            return floatingChoice(from: value, tag: tag)
+            return tag.floatingChoice(from: value)
         case let .signed(_, _, tag):
             let denom = Int64(denominator)
             guard denom > 0, numerator % denom == 0 else { return nil }
@@ -215,25 +215,6 @@ extension GraphRedistributionEncoder {
         let (product, overflow) = reducedLHS.multipliedReportingOverflow(by: rhs)
         guard overflow == false else { return nil }
         return product
-    }
-
-    private static func floatingChoice(from value: Double, tag: TypeTag) -> ChoiceValue? {
-        switch tag {
-        case .double:
-            guard value.isFinite else { return nil }
-            return ChoiceValue(value, tag: .double)
-        case .float:
-            let narrowed = Float(value)
-            guard narrowed.isFinite else { return nil }
-            return ChoiceValue(narrowed, tag: .float)
-        case .float16:
-            let encoded = Float16Emulation.encodedBitPattern(from: value)
-            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
-            guard reconstructed.isFinite else { return nil }
-            return .floating(reconstructed, encoded, .float16)
-        default:
-            return nil
-        }
     }
 
     private static func isIntegerTag(_ tag: TypeTag) -> Bool {

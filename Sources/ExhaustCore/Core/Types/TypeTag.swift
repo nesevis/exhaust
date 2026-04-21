@@ -125,6 +125,28 @@ package extension TypeTag {
         }
     }
 
+    /// Creates a ``ChoiceValue`` by narrowing a `Double` to this tag's floating-point type.
+    ///
+    /// Returns `nil` if the tag is not a floating-point type, or if the narrowed result is non-finite and `allowNonFinite` is `false`.
+    func floatingChoice(from value: Double, allowNonFinite: Bool = false) -> ChoiceValue? {
+        switch self {
+        case .double:
+            guard allowNonFinite || value.isFinite else { return nil }
+            return ChoiceValue(value, tag: .double)
+        case .float:
+            let narrowed = Float(value)
+            guard allowNonFinite || narrowed.isFinite else { return nil }
+            return ChoiceValue(narrowed, tag: .float)
+        case .float16:
+            let encoded = Float16Emulation.encodedBitPattern(from: value)
+            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
+            guard allowNonFinite || reconstructed.isFinite else { return nil }
+            return .floating(reconstructed, encoded, .float16)
+        default:
+            return nil
+        }
+    }
+
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {

@@ -188,9 +188,8 @@ extension GraphLockstepEncoder {
                 guard case let .floating(currentFloat, _, _) = value.choice else { return nil }
                 let signedDelta = plan.searchUpward ? Double(delta) : -Double(delta)
                 let candidateFloat = currentFloat + signedDelta
-                guard let floatChoice = Self.lockstepFloatingChoice(
-                    from: candidateFloat,
-                    tag: plan.tag
+                guard let floatChoice = plan.tag.floatingChoice(
+                    from: candidateFloat
                 ) else { return nil }
                 newChoice = floatChoice
             } else {
@@ -238,22 +237,4 @@ extension GraphLockstepEncoder {
         return candidate
     }
 
-    static func lockstepFloatingChoice(from value: Double, tag: TypeTag) -> ChoiceValue? {
-        switch tag {
-        case .double:
-            guard value.isFinite else { return nil }
-            return ChoiceValue(value, tag: .double)
-        case .float:
-            let narrowed = Float(value)
-            guard narrowed.isFinite else { return nil }
-            return ChoiceValue(narrowed, tag: .float)
-        case .float16:
-            let encoded = Float16Emulation.encodedBitPattern(from: value)
-            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
-            guard reconstructed.isFinite else { return nil }
-            return .floating(reconstructed, encoded, .float16)
-        default:
-            return nil
-        }
-    }
 }

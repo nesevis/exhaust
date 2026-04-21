@@ -122,9 +122,8 @@ extension GraphValueEncoder {
         }
 
         for special in FloatReduction.specialValues(for: target.typeTag) {
-            guard let candidateChoice = floatingChoice(
+            guard let candidateChoice = target.typeTag.floatingChoice(
                 from: special,
-                tag: target.typeTag,
                 allowNonFinite: true
             ) else { continue }
             let bp = candidateChoice.bitPattern64
@@ -153,7 +152,7 @@ extension GraphValueEncoder {
             for truncated in [scaled.rounded(.down), scaled.rounded(.up)] {
                 let candidateValue = truncated / scale
                 guard candidateValue.isFinite,
-                      let candidateChoice = floatingChoice(from: candidateValue, tag: target.typeTag)
+                      let candidateChoice = target.typeTag.floatingChoice(from: candidateValue)
                 else { continue }
                 let bp = candidateChoice.bitPattern64
                 guard bp != target.currentBitPattern,
@@ -312,7 +311,7 @@ extension GraphValueEncoder {
             ? state.binarySearchCurrentInt + signedDelta
             : state.binarySearchCurrentInt - signedDelta
         let candidateDouble = Double(candidateInt)
-        guard let candidateChoice = floatingChoice(from: candidateDouble, tag: target.typeTag) else {
+        guard let candidateChoice = target.typeTag.floatingChoice(from: candidateDouble) else {
             return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: false)
         }
 
@@ -347,7 +346,7 @@ extension GraphValueEncoder {
             ? state.binarySearchCurrentInt + signedDelta
             : state.binarySearchCurrentInt - signedDelta
         let candidateDouble = Double(candidateInt)
-        guard let candidateChoice = floatingChoice(from: candidateDouble, tag: target.typeTag) else {
+        guard let candidateChoice = target.typeTag.floatingChoice(from: candidateDouble) else {
             return
         }
         let candidateEntry = ChoiceSequenceValue.value(.init(
@@ -409,7 +408,7 @@ extension GraphValueEncoder {
         }
 
         let candidateValue = Double(candidateNumerator) / Double(state.ratioDenominator)
-        guard let candidateChoice = floatingChoice(from: candidateValue, tag: target.typeTag) else {
+        guard let candidateChoice = target.typeTag.floatingChoice(from: candidateValue) else {
             return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: false)
         }
 
@@ -446,7 +445,7 @@ extension GraphValueEncoder {
         let scaledNumerator = candidateInteger * state.ratioDenominator
         let candidateNumerator = scaledNumerator + state.ratioRemainder
         let candidateValue = Double(candidateNumerator) / Double(state.ratioDenominator)
-        guard let candidateChoice = floatingChoice(from: candidateValue, tag: target.typeTag) else {
+        guard let candidateChoice = target.typeTag.floatingChoice(from: candidateValue) else {
             return
         }
         let candidateEntry = ChoiceSequenceValue.value(.init(
@@ -523,29 +522,6 @@ extension GraphValueEncoder {
     }
 
     // MARK: - Float Helpers
-
-    func floatingChoice(
-        from value: Double,
-        tag: TypeTag,
-        allowNonFinite: Bool = false
-    ) -> ChoiceValue? {
-        switch tag {
-        case .double:
-            guard allowNonFinite || value.isFinite else { return nil }
-            return ChoiceValue(value, tag: .double)
-        case .float:
-            let narrowed = Float(value)
-            guard allowNonFinite || narrowed.isFinite else { return nil }
-            return ChoiceValue(narrowed, tag: .float)
-        case .float16:
-            let encoded = Float16Emulation.encodedBitPattern(from: value)
-            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
-            guard allowNonFinite || reconstructed.isFinite else { return nil }
-            return .floating(reconstructed, encoded, .float16)
-        default:
-            return nil
-        }
-    }
 
     func makeFloatChoice(bitPattern: UInt64, tag: TypeTag) -> ChoiceValue? {
         ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)

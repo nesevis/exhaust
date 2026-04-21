@@ -82,23 +82,9 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         case let .unsigned(_, tag):
             return .unsigned(0, tag)
         case let .signed(_, _, tag):
-            let zeroBitPattern: UInt64 = switch tag {
-            case .int8: Int8(0).bitPattern64
-            case .int16: Int16(0).bitPattern64
-            case .int32: Int32(0).bitPattern64
-            case .int64, .date: Int64(0).bitPattern64
-            case .int: Int(0).bitPattern64
-            default: fatalError("Unexpected tag \(tag) for signed ChoiceValue")
-            }
-            return .signed(0, zeroBitPattern, tag)
+            return .signed(0, tag.simplestBitPattern, tag)
         case let .floating(_, _, tag):
-            let zeroBitPattern: UInt64 = switch tag {
-            case .float: Float(0).bitPattern64
-            case .float16: Float16Emulation.encodedBitPattern(from: 0.0)
-            case .double: Double(0).bitPattern64
-            default: fatalError("Unexpected tag \(tag) for floating ChoiceValue")
-            }
-            return .floating(0.0, zeroBitPattern, tag)
+            return .floating(0.0, tag.simplestBitPattern, tag)
         }
     }
 
