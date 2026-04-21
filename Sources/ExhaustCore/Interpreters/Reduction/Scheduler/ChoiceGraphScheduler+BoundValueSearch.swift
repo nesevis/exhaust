@@ -8,7 +8,7 @@
 extension ChoiceGraphScheduler {
     /// Builds a ``GraphComposedEncoder`` for a bound value scope.
     ///
-    /// The upstream encoder is a ``GraphValueEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``BoundValueScope/upstreamLeafNodeID``. The downstream encoder is another ``GraphValueEncoder`` started by the lift closure on the lifted graph's bound-subtree leaves. The lift materializes each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
+    /// The upstream encoder is a ``GraphBinarySearchEncoder`` operating on a synthesised one-leaf integer scope targeting the fibre's ``BoundValueScope/upstreamLeafNodeID``. The downstream encoder is a ``GraphBinarySearchEncoder`` for single-leaf fibres or a ``GraphFibreCoveringEncoder`` for multi-leaf fibres, started by the lift closure on the lifted graph's bound-subtree leaves. The lift materializes each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
     ///
     /// - Parameters:
     ///   - fibreScope: The bound value scope from the source pipeline.
@@ -55,10 +55,7 @@ extension ChoiceGraphScheduler {
         // are wasted in a bound value context — every upstream probe spawns one lift
         // and a full downstream search, so the standalone encoder's recovery
         // strategies multiply the cost without finding more failures.
-        let upstreamEncoder = PreStartedAdapter(
-            inner: GraphBinarySearchEncoder(),
-            scope: upstreamScope
-        )
+        //
         // Downstream: choose encoder based on fibre dimensionality.
         // Single-leaf fibres use binary search — the covering encoder requires ≥ 2 parameters
         // for pairwise covering and falls through with zero probes for large single-parameter
@@ -80,7 +77,8 @@ extension ChoiceGraphScheduler {
 
         return GraphComposedEncoder(
             name: .composed,
-            upstream: upstreamEncoder,
+            upstream: GraphBinarySearchEncoder(),
+            upstreamScope: upstreamScope,
             downstream: downstreamEncoder,
             upstreamBudget: upstreamBudget,
             lift: lift

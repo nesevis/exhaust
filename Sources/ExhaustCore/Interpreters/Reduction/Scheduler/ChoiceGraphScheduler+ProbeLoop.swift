@@ -375,37 +375,3 @@ extension ChoiceGraphScheduler {
     }
 }
 
-// MARK: - Pre-Started Adapter
-
-/// Wraps a ``GraphEncoder`` so its ``GraphEncoder/start(scope:)`` always uses a pre-supplied scope instead of the one passed by the caller.
-///
-/// Used by ``ChoiceGraphScheduler/makeBoundValueComposition(fibreScope:scope:gen:upstreamBudget:)`` so that the upstream encoder of a ``GraphComposedEncoder`` operates on a synthesised one-leaf integer scope rather than the bound value scope the composition was started with. The composition's ``GraphComposedEncoder/start(scope:)`` will pass the original parent scope to its upstream; the adapter swaps it for the synthesised one before forwarding to the inner encoder.
-struct PreStartedAdapter: GraphEncoder {
-    var name: EncoderName {
-        inner.name
-    }
-
-    var requiresExactDecoder: Bool {
-        inner.requiresExactDecoder
-    }
-
-    private var inner: any GraphEncoder
-    private let scope: TransformationScope
-
-    init(inner: any GraphEncoder, scope: TransformationScope) {
-        self.inner = inner
-        self.scope = scope
-    }
-
-    mutating func start(scope _: TransformationScope) {
-        inner.start(scope: scope)
-    }
-
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
-        inner.nextProbe(lastAccepted: lastAccepted)
-    }
-
-    var convergenceRecords: [Int: ConvergedOrigin] {
-        inner.convergenceRecords
-    }
-}

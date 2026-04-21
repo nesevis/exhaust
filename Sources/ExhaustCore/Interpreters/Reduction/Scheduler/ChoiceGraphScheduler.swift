@@ -11,7 +11,7 @@
 ///
 /// The scheduler is split across several files for readability:
 /// - This file: entry points, the cycle loop (``runCore(gen:initialTree:initialOutput:config:collectStats:property:)``), source/encoder selection.
-/// - `ChoiceGraphScheduler+ProbeLoop.swift`: per-encoder probe loop and the ``PreStartedAdapter``.
+/// - `ChoiceGraphScheduler+ProbeLoop.swift`: per-encoder probe loop.
 /// - `ChoiceGraphScheduler+BoundValueSearch.swift`: bound value composition construction and lift.
 /// - `ChoiceGraphScheduler+Convergence.swift`: warm-start extraction and convergence transfer across rebuilds.
 /// - `ChoiceGraphScheduler+ConvergenceConfirmation.swift`: convergence confirmation at end of stalled cycles.

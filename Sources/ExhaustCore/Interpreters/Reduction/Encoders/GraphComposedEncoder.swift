@@ -159,7 +159,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
 
 /// Composes two ``GraphEncoder``s through a lift closure that translates an upstream probe into a downstream ``TransformationScope``.
 ///
-/// Categorically a bound value composition of two ``GraphEncoder`` arrows. The upstream encoder operates on the original scope and produces probes; the lift closure runs the upstream candidate through the generator (or any other transform) and constructs a fresh scope for the downstream encoder; the downstream encoder operates on that scope and produces probes which the composition wraps and re-emits with the upstream's mutation attached.
+/// The upstream and downstream encoders operate on separate scopes. The upstream scope is fixed at construction time; the lift closure produces a fresh downstream scope for each upstream probe. When the scheduler calls ``start(scope:)``, the composition stores that scope as the parent context for the lift but does not forward it to the upstream encoder.
 ///
 /// ## Iteration Semantics
 ///
@@ -190,22 +190,24 @@ struct GraphComposedEncoder: GraphEncoder {
     private let lift: (EncoderProbe, TransformationScope) -> TransformationScope?
     private let upstreamBudget: Int
 
-    private var originalScope: TransformationScope?
+    private var parentScope: TransformationScope?
     private var currentUpstreamProbe: EncoderProbe?
     private var downstreamActive = false
     private var upstreamProbesUsed = 0
 
-    /// Creates a composition.
+    /// Creates a composition and starts the upstream encoder on `upstreamScope`.
     ///
     /// - Parameters:
     ///   - name: Encoder name reported to the scheduler for stats and logging.
-    ///   - upstream: Encoder driving the outer iteration. Receives the original scope passed to ``start(scope:)``.
-    ///   - downstream: Encoder driving the inner iteration. Receives the lifted scope per upstream probe.
+    ///   - upstream: Encoder driving the outer iteration. Started immediately on `upstreamScope`.
+    ///   - upstreamScope: The scope the upstream encoder searches over. Fixed for the lifetime of this composition.
+    ///   - downstream: Encoder driving the inner iteration. Receives a fresh lifted scope per upstream probe.
     ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialisation) plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
     ///   - lift: Closure that materializes the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialization fails).
     init(
         name: EncoderName,
         upstream: any GraphEncoder,
+        upstreamScope: TransformationScope,
         downstream: any GraphEncoder,
         upstreamBudget: Int = 15,
         lift: @escaping (EncoderProbe, TransformationScope) -> TransformationScope?
@@ -215,6 +217,7 @@ struct GraphComposedEncoder: GraphEncoder {
         self.downstream = downstream
         self.upstreamBudget = upstreamBudget
         self.lift = lift
+        self.upstream.start(scope: upstreamScope)
     }
 
     /// Convergence records from the upstream encoder.
@@ -225,11 +228,10 @@ struct GraphComposedEncoder: GraphEncoder {
     }
 
     mutating func start(scope: TransformationScope) {
-        originalScope = scope
+        parentScope = scope
         currentUpstreamProbe = nil
         downstreamActive = false
         upstreamProbesUsed = 0
-        upstream.start(scope: scope)
     }
 
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
@@ -246,7 +248,7 @@ struct GraphComposedEncoder: GraphEncoder {
         // or until the upstream budget is exhausted. The budget caps the number of upstream probes
         // that contributed to a *valid* lift — failed lifts (`lift` returns nil) do not count
         // because they incur no downstream materialisation cost.
-        guard let parent = originalScope else { return nil }
+        guard let parent = parentScope else { return nil }
         while upstreamProbesUsed < upstreamBudget {
             guard let upstreamProbe = upstream.nextProbe(lastAccepted: false) else { return nil }
             guard let downstreamScope = lift(upstreamProbe, parent) else { continue }
@@ -266,7 +268,7 @@ struct GraphComposedEncoder: GraphEncoder {
     ///
     /// The composition caches the pre-dispatch scope, the in-flight upstream probe, and the downstream iterator. After any accepted probe triggers a reshape or full rebuild, all three are stale — the upstream binary search was calibrated to the old sequence, the lifted downstream scope was built from the old tree, and continuing would emit probes that may not shortlex-precede the new live sequence. Resetting to idle aborts the current pass; the scheduler re-dispatches a fresh composition next cycle.
     mutating func refreshScope(graph _: ChoiceGraph, sequence _: ChoiceSequence) {
-        originalScope = nil
+        parentScope = nil
         currentUpstreamProbe = nil
         downstreamActive = false
         upstreamProbesUsed = 0
