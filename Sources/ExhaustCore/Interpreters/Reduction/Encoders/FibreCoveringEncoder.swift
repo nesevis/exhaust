@@ -49,10 +49,12 @@ package struct FibreCoveringEncoder: ComposableEncoder {
         let isRangeExplicit: Bool
     }
 
+    /// Creates an encoder with no pre-built state.
     public init() {}
 
     // MARK: - ComposableEncoder
 
+    /// Estimates the number of probes needed to cover the fibre within the given position range.
     public func estimatedCost(
         sequence: ChoiceSequence,
         tree _: ChoiceTree,

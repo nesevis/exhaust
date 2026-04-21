@@ -28,6 +28,7 @@ public struct OpenPBTStatsFeatures: Codable, Sendable {
     /// Filter predicate evaluations that returned false.
     public let filterRejections: Int?
 
+    /// Creates a features record with the given generation phase and complexity metrics.
     public init(
         phase: OpenPBTStatsPhase,
         choiceCount: Int,
@@ -54,16 +55,26 @@ public struct OpenPBTStatsFeatures: Codable, Sendable {
 /// - `coverage`: `null` (Exhaust does not provide per-example line coverage).
 /// - `metadata`: `null` (reserved for future use).
 public struct OpenPBTStatsLine: Sendable {
+    /// Record type, always `"test_case"`.
     public let type: String
+    /// Epoch timestamp when the test run started.
     public let runStart: Double
+    /// Name of the property under test.
     public let property: String
+    /// Outcome status: `"passed"`, `"failed"`, or `"gave_up"`.
     public let status: String
+    /// Human-readable reason for the status, empty when not applicable.
     public let statusReason: String
+    /// String representation of the generated test example.
     public let representation: String
+    /// Complexity and phase features for this example.
     public let features: OpenPBTStatsFeatures
+    /// How this example was produced, for example `"reduced"`.
     public let howGenerated: String?
+    /// Per-phase timing in seconds, keyed by phase name.
     public let timing: [String: Double]?
 
+    /// Creates a stats line with all required and optional fields.
     public init(
         type: String,
         runStart: Double,

@@ -8,20 +8,29 @@
 /// Collects per-site, per-choice fitness data during tuning runs.
 /// Reference semantics so the accumulator is shared across recursive calls.
 package final class FitnessAccumulator {
+    /// Identifies a specific choice at a specific pick site.
     public struct SiteChoiceKey: Hashable {
+        /// The pick site's fingerprint.
         public let fingerprint: UInt64
+        /// The branch identifier within the pick site.
         public let choiceID: UInt64
     }
 
+    /// Accumulated fitness statistics for a single site-choice pair.
     public struct FitnessRecord {
+        /// Sum of fitness values observed for this choice.
         public var totalFitness: UInt64 = 0
+        /// Number of observations recorded for this choice.
         public var observationCount: UInt64 = 0
     }
 
+    /// All accumulated records, keyed by site-choice pair.
     public private(set) var records: [SiteChoiceKey: FitnessRecord] = [:]
 
+    /// Creates an empty accumulator.
     public init() {}
 
+    /// Records a fitness observation for the given site and choice.
     public func record(fingerprint: UInt64, choiceID: UInt64, fitness: UInt64, observations: UInt64) {
         let key = SiteChoiceKey(fingerprint: fingerprint, choiceID: choiceID)
         records[key, default: FitnessRecord()].totalFitness += fitness

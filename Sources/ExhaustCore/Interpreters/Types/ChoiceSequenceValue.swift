@@ -27,6 +27,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``GuidedMaterializer``).
     case just
 
+    /// Extracts the numeric ``Value`` payload from a ``value`` or ``reduced`` entry, returning `nil` for structural markers.
     @inline(__always)
     public var value: Value? {
         switch self {
@@ -41,6 +42,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     // MARK: - Shortlex
 
+    /// Compares two entries in shortlex order, where structural markers sort by open/close and values sort by ``Value/shortLexCompare(_:)``.
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
         case (.group(false), .group(true)),
@@ -65,6 +67,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
     }
 
+    /// Returns a single-character abbreviation for compact sequence printing.
     public var shortString: String {
         switch self {
         case .just:
@@ -95,11 +98,14 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     /// A branch marker storing the selected branch identifier and all valid identifiers for a pick site.
     public struct Branch: Hashable, Equatable, Sendable {
+        /// The selected branch identifier for this pick site.
         public let id: UInt64
+        /// All valid branch identifiers at this pick site.
         public let validIDs: [UInt64]
         /// Identifies the pick site. Used by the guided cursor to match branch entries to the correct pick operation when cursor positions drift due to bind re-derivation.
         public let fingerprint: UInt64
 
+        /// Creates a branch marker with the given selection, valid identifiers, and pick-site fingerprint.
         public init(id: UInt64, validIDs: [UInt64], fingerprint: UInt64 = 0) {
             self.id = id
             self.validIDs = validIDs
@@ -109,10 +115,14 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     /// A numeric value entry carrying the ``ChoiceValue``, its valid range, and whether the range was explicitly specified.
     public struct Value: Hashable, Sendable {
+        /// The tagged numeric value.
         public let choice: ChoiceValue
+        /// The valid bit-pattern range for this choice, or `nil` if unbounded.
         public let validRange: ClosedRange<UInt64>?
+        /// Whether ``validRange`` was explicitly declared by the user rather than derived from size scaling.
         public let isRangeExplicit: Bool
 
+        /// Creates a value entry with the given choice, optional valid range, and explicitness flag.
         public init(
             choice: ChoiceValue,
             validRange: ClosedRange<UInt64>?,
@@ -123,6 +133,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             self.isRangeExplicit = isRangeExplicit
         }
 
+        /// Compares two values in shortlex order by their shortlex keys, with bit-pattern tiebreaking.
         public func shortLexCompare(_ other: Value) -> ShortlexOrder {
             let lhs = choice.shortlexKey
             let rhs = other.choice.shortlexKey

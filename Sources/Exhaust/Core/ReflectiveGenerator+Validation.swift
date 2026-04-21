@@ -6,11 +6,17 @@ import IssueReporting
 
 /// A report summarizing the results of generator validation.
 public struct ValidationReport: Sendable, CustomStringConvertible {
+    /// Number of samples requested for the validation run.
     public let sampleCount: Int
+    /// Number of values the generator actually produced.
     public let valuesGenerated: Int
+    /// Number of values that survived reflection round-trip without change.
     public let reflectionRoundTripSuccesses: Int
+    /// Number of values that replayed deterministically from their choice tree.
     public let replayDeterminismSuccesses: Int
+    /// Number of distinct choice sequences observed across all generated values.
     public let uniqueChoiceSequences: Int
+    /// All validation failures detected during the run.
     public let failures: [ValidationFailure]
     /// Total wall-clock time for the validation run, in seconds.
     public let elapsedTime: Double

@@ -2,8 +2,7 @@ import Exhaust
 
 // MARK: - Types
 
-/// Edge between two distinct vertex labels, stored with the smaller label first
-/// so equal (canonical) edges compare equal regardless of construction order.
+/// Edge between two distinct vertex labels, stored with the smaller label first so equal (canonical) edges compare equal regardless of construction order.
 struct GraphColoringEdge: Hashable, Comparable, CustomStringConvertible {
     let lower: Int
     let upper: Int
@@ -17,8 +16,7 @@ struct GraphColoringEdge: Hashable, Comparable, CustomStringConvertible {
     var description: String { "(\(lower)-\(upper))" }
 }
 
-/// Multi-leaf bind-inner challenge output: a vertex label list plus a
-/// deduplicated edge list referencing those labels.
+/// Multi-leaf bind-inner challenge output: a vertex label list plus a deduplicated edge list referencing those labels.
 struct GraphColoringGraph: CustomStringConvertible {
     let vertices: [Int]
     let edges: [GraphColoringEdge]
@@ -30,12 +28,7 @@ struct GraphColoringGraph: CustomStringConvertible {
 
 // MARK: - Generator
 
-/// Multi-leaf bind-inner generator. The inner is a list of vertex labels
-/// (5...20 distinct integers in `0...50`). The bound subtree generates edges
-/// as index-pairs into that list — the edges' domain depends on the vertex
-/// count, so the upstream and downstream are structurally coupled. A non-bind
-/// rewrite using `.filter` would collapse to near-zero yield because random
-/// `Int` pairs almost never reference vertices in the chosen vertex list.
+/// Multi-leaf bind-inner generator. The inner is a list of vertex labels (5 to 20 distinct integers in `0...50`). The bound subtree generates edges as index-pairs into that list — the edges' domain depends on the vertex count, so the upstream and downstream are structurally coupled. A non-bind rewrite using `.filter` would collapse to near-zero yield because random `Int` pairs almost never reference vertices in the chosen vertex list.
 let graphColoringGen: ReflectiveGenerator<GraphColoringGraph> = {
     let verticesGen = #gen(.int(in: 0 ... 50, scaling: .constant).array(length: 5 ... 20, scaling: .constant))
     return verticesGen.bind { (vertices: [Int]) -> ReflectiveGenerator<GraphColoringGraph> in
@@ -79,9 +72,7 @@ private func graphColoringMaxDegree(_ graph: GraphColoringGraph) -> Int {
 
 /// Brute-force chromatic number via backtracking `k`-coloring.
 ///
-/// Tries `k = 1 ... |V|` in ascending order, returning the first `k` that
-/// admits a proper coloring. Small graph sizes make this exhaustive search
-/// tractable; the benchmark caps vertex counts well below the factorial wall.
+/// Tries `k = 1 ... |V|` in ascending order, returning the first `k` that admits a proper coloring. Small graph sizes make this exhaustive search tractable; the benchmark caps vertex counts well below the factorial wall.
 private func graphColoringChromaticNumber(_ graph: GraphColoringGraph) -> Int {
     let vertices = graph.distinctVertices
     if vertices.isEmpty { return 0 }

@@ -90,12 +90,15 @@ package extension ChoiceTree {
 package struct ChoiceTreeWalker: IteratorProtocol, Sequence {
     /// A single item produced by ``ChoiceTreeWalker``, pairing a node with its path from the root.
     public struct Element {
+        /// The path from the root to this node.
         public let fingerprint: Fingerprint
+        /// The choice tree node at this position.
         public let node: ChoiceTree
     }
 
     private var stack: [(Fingerprint, ChoiceTree)]
 
+    /// Creates a walker starting from the root of the given tree.
     public init(_ tree: ChoiceTree) {
         stack = [(.root, tree)]
     }

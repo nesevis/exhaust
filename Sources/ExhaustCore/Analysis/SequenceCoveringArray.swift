@@ -445,9 +445,13 @@ package enum BranchArgProfile {
 ///
 /// Each slot covers `[flatOffset, flatOffset + contribution)` in the flat domain. Used by ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)`` to decompose a flat index into branch selection + argument values.
 package struct SCADomainSlot {
+    /// Zero-based index of the branch this slot covers.
     public let branchIndex: Int
+    /// Starting offset of this slot in the flat domain.
     public let flatOffset: UInt64
+    /// Number of flat domain indices this slot covers.
     public let contribution: UInt64
+    /// Argument decomposition profile for the branch.
     public let argProfile: BranchArgProfile
 }
 
@@ -455,7 +459,10 @@ package struct SCADomainSlot {
 ///
 /// Shared between ``SequenceCoveringArray/buildProfile(sequenceLength:pickChoices:branchProfiles:)`` and ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)``.
 package struct SCADomainMapping {
+    /// Ordered slots mapping flat domain ranges to branches.
     public let slots: [SCADomainSlot]
+    /// Total number of flat domain indices across all slots.
     public let totalDomainSize: UInt64
+    /// The pick choices this mapping was built from.
     public let pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
 }

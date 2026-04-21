@@ -113,6 +113,7 @@ enum ChoiceGraphScheduler {
         var rejectCache = Set<UInt64>()
 
         var graph = ChoiceGraph.build(from: tree)
+        graph.observeBindTopologies(tree: tree)
 
         // Layer 7a lazy rematerialize: tracks whether the current graph
         // was rebuilt from a stripped tree (one produced by a decoder
@@ -228,7 +229,7 @@ enum ChoiceGraphScheduler {
             // Pull from highest-yield source until all exhausted.
             while true {
                 // Find the source with the highest peekYield.
-                guard let sourceIndex = highestYieldSourceIndex(sources) else {
+                guard let sourceIndex = Self.highestYieldSourceIndex(sources) else {
                     break
                 }
 
@@ -262,13 +263,6 @@ enum ChoiceGraphScheduler {
                 //    and a generator lift per upstream probe — neither benefits from the
                 //    probe-level reject cache. After the first dispatch within a cycle
                 //    the second and third dispatches add little value at high cost.
-                //
-                // 2. Stall-cycle gating: if any non-bound-value encoder has already accepted
-                //    progress in this cycle, the bound value composition is redundant — the
-                //    cheaper encoders are still finding improvements and the next cycle
-                //    will re-evaluate. Bound value search only fires in cycles where the cheap
-                //    encoders couldn't make progress — bound value search is the
-                //    explicit fallback after cheaper encoders exhaust.
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     if boundValueDispatchedThisCycle.contains(fibreScope.bindNodeID) {
                         continue
@@ -359,7 +353,13 @@ enum ChoiceGraphScheduler {
                     stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
                     let oldConvergence = extractAllConvergence(from: graph)
                     let inheritedClassifications = graph.bindClassifications
-                    graph = ChoiceGraph.build(from: tree, inheriting: inheritedClassifications)
+                    let inheritedObservations = graph.bindTopologyObservations
+                    graph = ChoiceGraph.build(
+                        from: tree,
+                        inheriting: inheritedClassifications,
+                        observations: inheritedObservations
+                    )
+                    graph.observeBindTopologies(tree: tree)
                     transferConvergence(oldConvergence, to: graph)
                     stats.graphStats.fullGraphRebuilds += 1
                     sources = ScopeSourceBuilder.buildSources(from: graph)
@@ -400,7 +400,6 @@ enum ChoiceGraphScheduler {
                 if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
                     boundValueDispatchedThisCycle.insert(fibreScope.bindNodeID)
                 }
-                let sequenceLengthBeforeDispatch = sequence.count
                 let outcome = try runProbeLoop(
                     encoder: &encoder,
                     scope: scope,
@@ -416,21 +415,6 @@ enum ChoiceGraphScheduler {
                     isInstrumented: isInstrumented,
                     materializationBudget: encoderCycleBudget[pendingEncoderName]
                 )
-                if config.collectProbeLog {
-                    let yield = transformation.yield
-                    stats.probeLog.append(ProbeLogEntry(
-                        cycle: cycles,
-                        encoder: pendingEncoderName,
-                        predictedStructuralYield: yield.structural,
-                        predictedValueYield: yield.value,
-                        predictedSlackAdditive: yield.slack.additive,
-                        estimatedProbes: yield.estimatedProbes,
-                        probeCount: outcome.probeCount,
-                        acceptCount: outcome.acceptCount,
-                        sequenceLengthBefore: sequenceLengthBeforeDispatch,
-                        sequenceLengthAfter: sequence.count
-                    ))
-                }
 
                 // Harvest convergence from value encoders. The encoder's
                 // ``convergenceRecords`` is keyed by graph nodeID (so it
@@ -519,7 +503,13 @@ enum ChoiceGraphScheduler {
                         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
                         let oldConvergence = extractAllConvergence(from: graph)
                         let inheritedClassifications = graph.bindClassifications
-                        graph = ChoiceGraph.build(from: tree, inheriting: inheritedClassifications)
+                        let inheritedObservations = graph.bindTopologyObservations
+                        graph = ChoiceGraph.build(
+                            from: tree,
+                            inheriting: inheritedClassifications,
+                            observations: inheritedObservations
+                        )
+                        graph.observeBindTopologies(tree: tree)
                         graphIsStripped = outcome.treeIsStripped
                         transferConvergence(oldConvergence, to: graph)
 
@@ -711,7 +701,9 @@ enum ChoiceGraphScheduler {
     // MARK: - Source Selection
 
     /// Returns the index of the source with the highest peekYield, or nil if all are exhausted.
-    private static func highestYieldSourceIndex(_ sources: [any ScopeSource]) -> Int? {
+    private static func highestYieldSourceIndex(
+        _ sources: [any ScopeSource]
+    ) -> Int? {
         var bestIndex: Int?
         var bestYield: TransformationYield?
         for (index, source) in sources.enumerated() {

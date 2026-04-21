@@ -34,7 +34,7 @@ package extension ChoiceValue {
         }
     }
 
-    /// Constructs a `ChoiceValue` from a shortlex key, reversing `shortlexKey`.
+    /// Constructs a ``ChoiceValue`` from a shortlex key, reversing `shortlexKey`.
     ///
     /// - For signed integers: zigzag decodes the key back to a signed value.
     /// - For unsigned integers and floats: the key equals the bit pattern.

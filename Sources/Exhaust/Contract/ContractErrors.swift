@@ -4,6 +4,7 @@
 ///
 /// Thrown by ``skip()`` inside `@Command` methods when the current model state does not support the command. The contract runner catches this and skips the step.
 public struct ContractSkip: Error, Sendable {
+    /// Creates a new skip signal.
     public init() {}
 }
 
@@ -14,6 +15,7 @@ public struct ContractCheckFailure: Error, Sendable {
     /// A description of the failed check, if available.
     public let message: String?
 
+    /// Creates a check failure with an optional diagnostic message.
     public init(message: String? = nil) {
         self.message = message
     }

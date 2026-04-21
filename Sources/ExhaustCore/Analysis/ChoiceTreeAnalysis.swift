@@ -36,6 +36,7 @@
 ///
 /// - SeeAlso: ``PullBasedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
 package enum ChoiceTreeAnalysis {
+    /// The outcome of analyzing a generator's choice tree structure.
     public enum AnalysisResult {
         /// All parameters have at most 256 values. Eligible for exhaustive enumeration or t-way covering.
         case finite(FiniteDomainProfile)

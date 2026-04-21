@@ -211,7 +211,7 @@ package extension Gen {
 
     /// Computes the effective range for a given size by interpolating from the origin toward the bounds using the specified scaling strategy.
     ///
-    /// Bare `.linear` and `.exponential` anchor at the type's semantically simplest value (zero for signed and floating-point types; the lower bound for unsigned types), clamped to the given range via ``TypeTag/simplestBitPattern``. This keeps distributions centered on the natural zero even though scaling is performed in bit-pattern space, and it avoids `ChoiceValue` construction on the materialization hot path.
+    /// Bare `.linear` and `.exponential` anchor at the type's semantically simplest value (zero for signed and floating-point types; the lower bound for unsigned types), clamped to the given range via ``TypeTag/simplestBitPattern``. This keeps distributions centered on the natural zero even though scaling is performed in bit-pattern space, and it avoids ``ChoiceValue`` construction on the materialization hot path.
     static func scaledRange<Output: BitPatternConvertible>(
         _ range: ClosedRange<Output>,
         scaling: SizeScaling<Output>,

@@ -7,6 +7,7 @@
 
 import Foundation
 
+/// A type-erased accessor that extracts a ``Value`` from a ``Root`` instance.
 public protocol PartialPath<Root, Value> {
     associatedtype Root
     associatedtype Value
@@ -29,6 +30,7 @@ extension KeyPath: PartialPath {
     }
 }
 
+/// Errors thrown during partial path extraction.
 public enum PartialPathError: LocalizedError {
     case wrongRootType(expected: String, actual: String)
 }

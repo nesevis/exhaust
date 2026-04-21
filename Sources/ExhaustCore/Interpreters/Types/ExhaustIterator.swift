@@ -5,7 +5,7 @@
 
 /// A `~Copyable`-compatible replacement for `IteratorProtocol`.
 ///
-/// Standard `IteratorProtocol` requires `Copyable`, which prevents types containing `~Copyable` fields (like `Xoshiro256`) from conforming.
+/// Standard `IteratorProtocol` requires `Copyable`, which prevents types containing `~Copyable` fields (like ``Xoshiro256``) from conforming.
 package protocol ExhaustIterator<Element>: ~Copyable {
     associatedtype Element
     mutating func next() throws -> Element?

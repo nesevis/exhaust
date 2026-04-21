@@ -12,6 +12,7 @@ package struct ChoiceMetadata: Hashable, Equatable, Sendable {
     /// Whether the range was explicitly specified by the user (for example `.array(length: 1...5)`) rather than derived from size scaling.
     public let isRangeExplicit: Bool
 
+    /// Creates metadata with the given valid range and explicitness flag.
     public init(validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool = false) {
         self.validRange = validRange
         self.isRangeExplicit = isRangeExplicit

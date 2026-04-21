@@ -20,6 +20,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     let generator: ReflectiveGenerator<FinalOutput>
     private(set) var context: GenerationContext
 
+    /// Creates an interpreter for the given generator with optional pick materialization, seed, run cap, and size override.
     public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         materializePicks: Bool = false,
@@ -47,6 +48,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         )
     }
 
+    /// The PRNG seed used for this interpreter's generation runs.
     public var baseSeed: UInt64 {
         context.baseSeed
     }

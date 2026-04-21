@@ -110,6 +110,7 @@ package struct BindMetadata {
     /// Topology hash of the bound subtree at classification time. Nil until classification runs. Intended as a future-facing staleness check: callers may re-hash the current bound subtree and compare against this value before trusting a cached ``classification``. Today, reshape clearing and full-graph-rebuild replacement already cover the common invalidation paths, so this field is defensive rather than load-bearing.
     public var downstreamFingerprint: UInt64?
 
+    /// Creates bind metadata with the given structural properties and optional cached classification.
     public init(
         fingerprint: UInt64,
         isStructurallyConstant: Bool,
@@ -143,6 +144,7 @@ package struct BindClassification: Equatable, Hashable, Sendable {
     /// Which of the two endpoint lifts succeeded.
     public let liftability: BindLiftability
 
+    /// Creates a classification with the given topology and liftability verdicts.
     public init(topology: BindTopology, liftability: BindLiftability) {
         self.topology = topology
         self.liftability = liftability
@@ -169,6 +171,15 @@ package enum BindLiftability: Equatable, Hashable, Sendable {
     case highOnly
     /// Neither endpoint materialized.
     case neither
+}
+
+/// Snapshot of a bind site's upstream value and downstream topology at a given graph state. Compared across graph rebuilds to passively classify binds without materialisation probes.
+package struct BindTopologyObservation: Equatable, Hashable, Sendable {
+    /// Bit pattern of the upstream (inner) leaf at observation time.
+    public let upstreamBitPattern: UInt64
+
+    /// Topology fingerprint of the bound subtree at observation time.
+    public let downstreamFingerprint: UInt64
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.

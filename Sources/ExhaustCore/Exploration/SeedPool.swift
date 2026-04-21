@@ -18,6 +18,7 @@ package struct Seed {
     /// Which explore iteration discovered this seed.
     public let generation: UInt64
 
+    /// Creates a seed with the given sequence, tree, novelty score, fitness, and discovery generation.
     public init(
         sequence: ChoiceSequence,
         tree: ChoiceTree,

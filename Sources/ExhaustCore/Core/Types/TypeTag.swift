@@ -106,7 +106,7 @@ package extension TypeTag {
     ///
     /// Unsigned integers, raw bits, and character indices are encoded identically to their natural representation, so zero is `0`. Signed integers XOR the sign bit, mapping `0` to the midpoint of the bit-pattern range (for example, `Int16(0).bitPattern64 == 0x8000`). Floating-point types apply a Hedgehog-style sign-preserving transform that also maps positive zero to the midpoint of the bit-pattern range.
     ///
-    /// This is the fast-path equivalent of `ChoiceValue(...).semanticSimplest.bitPattern64` and is used by ``Gen/scaledRange(_:scaling:size:)`` to anchor bare `.linear` and `.exponential` distributions without allocating a `ChoiceValue`.
+    /// This is the fast-path equivalent of ``ChoiceValue/semanticSimplest``.`bitPattern64` and is used by ``Gen/scaledRange(_:scaling:size:)`` to anchor bare `.linear` and `.exponential` distributions without allocating a ``ChoiceValue``.
     @inline(__always)
     var simplestBitPattern: UInt64 {
         switch self {

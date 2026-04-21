@@ -3,7 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that transforms `#gen(gen1, gen2, ...) { params in Body(...) }` into a `ReflectiveGenerator` with automatic backward mapping when possible.
+/// Expression macro that transforms `#gen(gen1, gen2, ...) { params in Body(...) }` into a ``ReflectiveGenerator`` with automatic backward mapping when possible.
 ///
 /// When the closure body is a struct or class initializer call with labeled arguments that map 1:1 to the closure parameters, the macro synthesizes a Mirror-based backward mapping, producing a fully bidirectional generator.
 ///
