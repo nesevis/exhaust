@@ -1106,26 +1106,24 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     public static func __explore<Output>(
         _ gen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
-        scorer: @Sendable @escaping (Output) -> Double,
+        directions: [(String, @Sendable (Output) -> Bool)],
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column,
         property: @Sendable @escaping (Output) -> Bool
-    ) -> Output? {
-        var samplingBudget: UInt64 = 10000
+    ) -> ExploreReport<Output> {
+        var budget: ExploreBudget = .expedient
         var seed: UInt64?
         var suppressIssueReporting = false
         var suppressLogs = false
-        var poolCapacity = 256
-        var generateRatio = 0.2
         var logLevel: LogLevel = .error
         var logFormat: LogFormat = .keyValue
         for setting in settings {
             switch setting {
-            case let .samplingBudget(n):
-                samplingBudget = n
+            case let .budget(exploreBudget):
+                budget = exploreBudget
             case let .replay(replaySeed):
                 seed = replaySeed.resolve()
                 if seed == nil {
@@ -1136,7 +1134,17 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         line: line,
                         column: column
                     )
-                    return nil
+                    return ExploreReport(
+                        result: nil,
+                        seed: 0,
+                        directionCoverage: [],
+                        coOccurrence: CoOccurrenceMatrix(directionCount: 0),
+                        counterexampleDirections: [],
+                        propertyInvocations: 0,
+                        warmupSamples: 0,
+                        totalMilliseconds: 0,
+                        termination: .budgetExhausted
+                    )
                 }
             case let .suppress(option):
                 switch option {
@@ -1148,10 +1156,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     suppressIssueReporting = true
                     suppressLogs = true
                 }
-            case let .poolCapacity(n):
-                poolCapacity = n
-            case let .generateRatio(r):
-                generateRatio = r
             case let .logging(level, format):
                 logLevel = level
                 logFormat = format
@@ -1159,82 +1163,26 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
 
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
-            var runner = ExploreRunner(
-                gen: gen,
-                property: property,
-                samplingBudget: samplingBudget,
-                poolCapacity: poolCapacity,
-                generateRatio: generateRatio,
-                seed: seed,
-                scorer: scorer
+            // TODO: Replace with ClassificationExploreRunner orchestration
+            _ = budget
+            _ = seed
+            _ = directions
+            _ = gen
+            _ = property
+            _ = suppressIssueReporting
+
+            return ExploreReport(
+                result: nil,
+                seed: seed ?? 0,
+                directionCoverage: [],
+                coOccurrence: CoOccurrenceMatrix(directionCount: directions.count),
+                counterexampleDirections: [],
+                propertyInvocations: 0,
+                warmupSamples: 0,
+                totalMilliseconds: 0,
+                termination: .budgetExhausted
             )
-            let actualSeed = runner.baseSeed
-
-            let result = runner.run()
-
-            switch result {
-            case let .failure(counterexample, reducedSequence, original, iteration):
-                let failure = PropertyTestFailure(
-                    counterexample: counterexample,
-                    original: original,
-                    sourceCode: sourceCode,
-                    seed: actualSeed,
-                    iteration: Int(iteration),
-                    samplingBudget: samplingBudget,
-                    blueprint: reducedSequence.shortString,
-                    propertyInvocations: nil
-                )
-                let rendered = failure.render(format: logFormat)
-                if !suppressIssueReporting {
-                    reportIssue(
-                        rendered,
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column
-                    )
-                }
-                return counterexample
-
-            case let .unreducedFailure(counterexample, iteration):
-                let failure = PropertyTestFailure(
-                    counterexample: counterexample,
-                    original: nil as Output?,
-                    sourceCode: sourceCode,
-                    seed: actualSeed,
-                    iteration: Int(iteration),
-                    samplingBudget: samplingBudget,
-                    blueprint: nil,
-                    propertyInvocations: nil
-                )
-                let rendered = failure.render(format: logFormat)
-                if !suppressIssueReporting {
-                    reportIssue(
-                        rendered,
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column
-                    )
-                }
-                return counterexample
-
-            case let .passed(iterations, poolSize):
-                var passMetadata = [
-                    "iterations": "\(iterations)",
-                    "poolSize": "\(poolSize)",
-                ]
-                if let sourceCode {
-                    passMetadata["source"] = sourceCode
-                }
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "explore_property_passed",
-                    metadata: passMetadata
-                )
-                return nil
-            }
-        } // withConfiguration
+        }
     }
 
     // MARK: - Example

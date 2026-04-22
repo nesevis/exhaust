@@ -70,7 +70,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
         warmupRuns: UInt64 = 400,
         sampleCount: UInt64 = 20,
         seed: UInt64? = nil,
-        weightingStrategy: WeightingStrategy = .fitnessSharing
+        weightingStrategy: WeightingStrategy = .fitnessSharing,
+        subdivisionThresholds: CGSSubdivisionThresholds = .default
     ) throws -> ReflectiveGenerator<FinalOutput> {
         // Stage 0: Preprocess — subdivide sequence lengths into picks over subranges so CGS can guide length decisions (chooseBits sites are opaque to CGS).
         // We bake into the *original* generator to preserve structural compatibility with choice trees (needed for filter replay and reduction).
@@ -103,7 +104,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 sampleCount: sampleCount,
                 seed: batchSeed,
                 maxRuns: runsThisBatch,
-                fitnessAccumulator: accumulator
+                fitnessAccumulator: accumulator,
+                subdivisionThresholds: subdivisionThresholds
             )
             while try iterator.next() != nil {}
 
