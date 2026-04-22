@@ -462,7 +462,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         for (_, observation) in generator.filterObservations where observation.attempts >= 20 {
                             if observation.validityRate < 0.02, let location = observation.sourceLocation {
                                 reportIssue(
-                                    "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts — generation is spending most of its budget on rejection. Consider widening the input range or relaxing the predicate.",
+                                    "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
                                     severity: .warning,
                                     fileID: location.fileID,
                                     filePath: location.filePath,

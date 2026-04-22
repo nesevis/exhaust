@@ -106,7 +106,7 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
         case let .forwardOnlyTransform(inputType, outputType, _):
             "Reflection blocked by bind (\(inputType) → \(outputType)). This will prevent replay and reduction of externally created values of \(outputType)."
         case let .lowFilterValidityRate(fingerprint, rate, attempts):
-            "Filter \(String(format: "%08X", fingerprint & 0xFFFF_FFFF)): validity rate \(String(format: "%.1f", rate * 100))% over \(attempts) attempts — generation is spending most of its budget on rejection. Consider widening the input range or relaxing the predicate."
+            "Filter \(String(format: "%08X", fingerprint & 0xFFFF_FFFF)): validity rate \(String(format: "%.1f", rate * 100))% over \(attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate."
         }
     }
 }
