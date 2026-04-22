@@ -364,6 +364,69 @@ struct DateBoundaryValueTests {
         #expect(values.contains(epochStep.bitPattern64))
     }
 
+    @Test("Gregorian adoption date appears when range spans 1582")
+    func gregorianAdoption() {
+        let gregorianAdoption: Int64 = -13_197_600_000
+        let lower = gregorianAdoption - 86400 * 30
+        let interval: Int64 = 1
+        let numSteps: Int64 = 86400 * 60
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+        )
+
+        let adoptionStep = (gregorianAdoption - lower) / interval
+        #expect(values.contains(adoptionStep.bitPattern64))
+    }
+
+    @Test("Both sides of Gregorian gap appear at fine intervals")
+    func gregorianGapBothSidesAtFineInterval() {
+        let gregorianAdoption: Int64 = -13_197_600_000
+        let lastJulianDay: Int64 = -13_197_686_400
+        let lower = lastJulianDay - 86400 * 7
+        let interval: Int64 = 3600 // 1 hour — too fine for ±1 to bridge the 86400s gap
+        let numSteps: Int64 = (86400 * 21) / interval
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+        )
+
+        let adoptionStep = (gregorianAdoption - lower) / interval
+        let julianStep = (lastJulianDay - lower) / interval
+        #expect(values.contains(adoptionStep.bitPattern64), "Gregorian adoption (Oct 15) missing")
+        #expect(values.contains(julianStep.bitPattern64), "Last Julian day (Oct 4) missing")
+    }
+
+    @Test("Only one side of Gregorian gap needed at coarse intervals")
+    func gregorianGapOneSideAtCoarseInterval() {
+        let gregorianAdoption: Int64 = -13_197_600_000
+        let lastJulianDay: Int64 = -13_197_686_400
+        let lower = lastJulianDay - 86400 * 30
+        let interval: Int64 = 86400 // 1 day — ±1 neighbor bridges the 86400s gap
+        let numSteps: Int64 = 90 // 90 days
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+        )
+
+        let adoptionStep = (gregorianAdoption - lower) / interval
+        #expect(values.contains(adoptionStep.bitPattern64), "Gregorian adoption (Oct 15) missing")
+
+        // At daily intervals, Oct 4 is exactly ±1 step from Oct 15, so it appears
+        // as a neighbor — no separate entry needed. Verify both steps are covered.
+        let julianStep = (lastJulianDay - lower) / interval
+        #expect(
+            values.contains(julianStep.bitPattern64),
+            "Last Julian day should be reachable as ±1 neighbor at daily interval"
+        )
+    }
+
     @Test("Epochs outside range are excluded")
     func epochsOutsideRange() {
         // Range entirely in 2024 — Unix epoch (1970) and Y2038 should not appear

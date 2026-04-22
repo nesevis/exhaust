@@ -281,7 +281,21 @@ package enum BoundaryDomainAnalysis {
             insertWithNeighbors(epoch)
         }
 
-        // 5. Calendar boundaries (first and last within range, with neighbors)
+        // 5. Gregorian calendar adoption gap (1582-10-15)
+        // Foundation collapses Oct 5–14: Oct 4 and Oct 15 are 86400s apart. Include both sides when steps are too fine to bridge the gap.
+        // See: casualprogrammer.com/blog/2026/03-27-old-dates-in-apple-sdks.html
+        let gregorianAdoption: Int64 = -13_197_600_000
+        if gregorianAdoption >= lowerSeconds, gregorianAdoption <= upperSeconds {
+            insertWithNeighbors(gregorianAdoption)
+            if intervalSeconds < 86400 {
+                let lastJulianDay: Int64 = -13_197_686_400
+                if lastJulianDay >= lowerSeconds {
+                    insertWithNeighbors(lastJulianDay)
+                }
+            }
+        }
+
+        // 6. Calendar boundaries (first and last within range, with neighbors)
         let secondsPerDay: Int64 = 86400
         let secondsPerMonth: Int64 = 2_592_000 // 30 days
         let secondsPerYear: Int64 = 31_536_000 // 365 days
@@ -318,7 +332,7 @@ package enum BoundaryDomainAnalysis {
             }
         }
 
-        // 6. DST transition times for the specified timezone (converted to steps, with neighbors)
+        // 7. DST transition times for the specified timezone (converted to steps, with neighbors)
         let transitions = DSTTransitions.inRange(
             lower: lowerSeconds,
             upper: upperSeconds,
