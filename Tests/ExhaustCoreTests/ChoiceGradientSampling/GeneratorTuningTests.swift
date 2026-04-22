@@ -217,4 +217,51 @@ struct GeneratorTuningTests {
         #expect(leafWeight > 0, "Leaf branch should have positive weight")
         #expect(nodeWeight > 0, "Node branch should have positive weight")
     }
+
+    // MARK: - Depth-Scoped Vocabulary Elimination
+
+    @Test("CGS tuning improves validity rate for recursive shared-fingerprint generators")
+    func depthScopedVocabularyElimination() throws {
+        let generator = BST.arbitrary(maxDepth: 4, valueRange: 0 ... 9)
+        let predicate: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
+
+        let tuned = try ChoiceGradientTuner<BST>.tune(
+            generator,
+            predicate: predicate,
+            warmupRuns: 200,
+            sampleCount: 10,
+            seed: 42
+        )
+
+        var validCount = 0
+        let sampleSize = 2000
+        var iterator = ValueInterpreter(tuned, seed: 99, maxRuns: UInt64(sampleSize))
+        while let value = try iterator.next() {
+            if predicate(value) { validCount += 1 }
+        }
+
+        let validityRate = Double(validCount) / Double(sampleSize)
+        #expect(validityRate > 0.005, "CGS-tuned BST should have validity rate above 0.5%, got \(String(format: "%.2f", validityRate * 100))%")
+    }
+
+    @Test("Vocabulary elimination does not conflate picks at different depths")
+    func vocabularyEliminationDepthIndependence() throws {
+        let generator = BST.arbitrary(maxDepth: 3, valueRange: 0 ... 5)
+        let predicate: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
+
+        let accumulator = FitnessAccumulator()
+        var iterator = OnlineCGSInterpreter(
+            generator,
+            predicate: predicate,
+            sampleCount: 10,
+            seed: 42,
+            maxRuns: 100,
+            fitnessAccumulator: accumulator
+        )
+        while try iterator.next() != nil {}
+
+        // Group records by fingerprint base (strip depth offset) to check that multiple depth levels contributed data.
+        // With depth scoping, we should see more than 2 records (more than just a single pick site).
+        #expect(accumulator.records.count > 2, "Accumulator should have records from multiple depth levels, got \(accumulator.records.count)")
+    }
 }

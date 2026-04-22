@@ -735,11 +735,14 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
         let choiceCount = choices.count
         let minDeadObservations: UInt64 = 30
+        // Recursive generators (BST, AVL) reuse the same source-level pick at every depth, producing identical fingerprints. Without depth scoping, vocabulary elimination at the root (where "leaf" is always dead) would kill "leaf" at inner depths too — but inner depths NEED leaves for validity.
+        let depthOffset = UInt64(derivativeContext.depth) &* 0x9E37_79B9_7F4A_7C15
 
         let liveChoiceIndices = liveIndices(
             for: choices,
             records: cgsState.fitnessAccumulator?.records,
-            minDeadObservations: minDeadObservations
+            minDeadObservations: minDeadObservations,
+            fingerprintOffset: depthOffset
         )
 
         // Single live choice after elimination — skip derivative evaluation
@@ -835,7 +838,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             for choiceIdx in liveChoiceIndices {
                 let choice = choices[choiceIdx]
                 accumulator.record(
-                    fingerprint: choice.fingerprint,
+                    fingerprint: choice.fingerprint &+ depthOffset,
                     choiceID: choice.id,
                     fitness: fitnesses[choiceIdx],
                     observations: completedRounds
@@ -906,7 +909,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     private static func liveIndices(
         for choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord]?,
-        minDeadObservations: UInt64
+        minDeadObservations: UInt64,
+        fingerprintOffset: UInt64 = 0
     ) -> ContiguousArray<Int> {
         guard let records else {
             return ContiguousArray(0 ..< choices.count)
@@ -914,7 +918,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         var live = ContiguousArray<Int>()
         live.reserveCapacity(choices.count)
         for (i, choice) in choices.enumerated() {
-            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
+            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint &+ fingerprintOffset, choiceID: choice.id)
             if let record = records[key],
                record.observationCount >= minDeadObservations,
                record.totalFitness == 0
