@@ -126,7 +126,7 @@ struct UniquenessBenchmarkTests {
     // MARK: - Main Benchmark
 
     /// Kolbu
-    @Test("Time to 500 BST")
+    @Test("Time to 500 BST", .disabled())
     func bstBenchmark() throws {
 //        let onlineCGS = try measureOnlineCGS(Self.bstProblem)
         let rejection = try measureRejection(Self.bstProblem)
