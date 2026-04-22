@@ -24,15 +24,11 @@
 /// - `.chooseBits`: domain size exceeds 256 — synthesizes boundary values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific boundary sets.
 /// - `.sequenceLength`: sequence node — tests lengths {0, 1, 2} (intersection with the declared length range). Capped at 2 elements to keep parameter count tractable.
 /// - `.sequenceElement`: element within a sequence — boundary values for the element's range, tagged with its position index.
-/// - `.pick`: multi-way branch — values are branch indices. Only analyzable if the branch count is 256 or fewer and all branches are parameter-free (no nested choices).
+/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer and all branches are structurally valid. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
 ///
-/// ## Analyzability Constraints
+/// ## Analyzability
 ///
-/// The ``analyze(_:)`` method returns `nil` when:
-/// - The generator uses `getSize` or `resize` (size-scaled generation is not analyzable).
-/// - A branch within a pick contains nested choices (parameters inside branches).
-/// - No explicit range metadata exists on a choice node (non-explicit ranges come from size scaling).
-/// - Zero parameters are extracted.
+/// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted — that is, the generator is purely deterministic (for example `Gen.just(value)`).
 ///
 /// - SeeAlso: ``PullBasedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
 package enum ChoiceTreeAnalysis {
@@ -284,7 +280,7 @@ package enum ChoiceTreeAnalysis {
     //
     // A group is classified as a pick when it contains at least one .selected child and all children are .selected or .branch — the pattern VACTI produces with materializePicks = true.
     //
-    // Pick analysis requires: ≤ 256 branches, and each branch's sub-tree must contain no additional parameters (walkTree on the branch's choice tree must produce zero parameters). This ensures the pick is a simple multi-way selection, not a nested generator tree.
+    // Pick analysis requires ≤ 256 branches and structurally valid subtrees. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
     //
     // Synthetic PickTuples are created with .pure(()) generators because the original branch generators are not available from the ChoiceTree.
     // The fingerprint, weight, id, and branchIDs metadata is preserved for replay compatibility — CoveringArrayReplay uses these to reconstruct the branch selection.
@@ -321,9 +317,7 @@ package enum ChoiceTreeAnalysis {
         for child in children {
             let unwrapped = child.unwrapped
             guard case let .branch(_, _, _, _, choice) = unwrapped else { return false }
-            var subParams: [BoundaryParameter] = []
-            guard walkTree(choice, parameters: &subParams) else { return false }
-            guard subParams.isEmpty else { return false }
+            guard walkTreeValidateOnly(choice) else { return false }
         }
 
         // Create synthetic PickTuples from branch metadata for replay compatibility
@@ -365,11 +359,11 @@ package enum ChoiceTreeAnalysis {
             return false
         }
 
-        var lengthValues: [UInt64] = []
-        for l: UInt64 in [0, 1, 2] where lengthRange.contains(l) {
-            lengthValues.append(l)
-        }
-        if lengthValues.isEmpty { return false }
+        let lower = lengthRange.lowerBound
+        let upper = lengthRange.upperBound
+        var lengthValues: [UInt64] = [lower, upper]
+        if lower + 1 <= upper { lengthValues.append(lower + 1) }
+        lengthValues.sort()
 
         let lengthParam = BoundaryParameter(
             index: parameters.count,

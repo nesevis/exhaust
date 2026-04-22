@@ -22,6 +22,34 @@ public enum FilterType: Equatable, Hashable, CaseIterable {
     case choiceGradientSampling
 }
 
+// MARK: - Filter Source Location
+
+/// Source location captured at a ``ReflectiveGenerator/filter(_:_:fileID:filePath:line:column:)`` call site.
+///
+/// Stored alongside filter observations so that runtime warnings can point to the `.filter(...)` line rather than the `#exhaust` macro site.
+public struct FilterSourceLocation: Sendable {
+    /// The `#fileID` of the filter call site.
+    public let fileID: StaticString
+    /// The `#filePath` of the filter call site.
+    public let filePath: StaticString
+    /// The `#line` of the filter call site.
+    public let line: UInt
+    /// The `#column` of the filter call site.
+    public let column: UInt
+
+    public init(
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) {
+        self.fileID = fileID
+        self.filePath = filePath
+        self.line = line
+        self.column = column
+    }
+}
+
 // MARK: - Filter Observation
 
 /// Per-fingerprint filter predicate observation counts.
@@ -33,6 +61,9 @@ public struct FilterObservation: Sendable {
 
     /// Number of times the filter predicate returned true.
     public var passes: Int = 0
+
+    /// Source location of the `.filter(...)` call that created this observation.
+    public var sourceLocation: FilterSourceLocation?
 
     /// Fraction of attempts that passed, or zero if no attempts were recorded.
     public var validityRate: Double {

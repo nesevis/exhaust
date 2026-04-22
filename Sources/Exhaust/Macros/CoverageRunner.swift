@@ -155,18 +155,17 @@ package enum CoverageRunner {
     ) -> RowResult<Output>? {
         guard let tree = profile.buildTree(from: row) else { return nil }
 
-        let prefix = ChoiceSequence(tree)
         let mode = Materializer.Mode.guided(
             seed: UInt64(rowIndex),
             fallbackTree: nil
         )
         switch Materializer.materialize(
-            gen, prefix: prefix, mode: mode
+            gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
         ) {
         case let .success(value, freshTree, _):
             let passed = property(value)
             return RowResult(value: value, tree: freshTree, passed: passed)
-        case .rejected(_), .failed:
+        case .rejected, .failed:
             return nil
         }
     }

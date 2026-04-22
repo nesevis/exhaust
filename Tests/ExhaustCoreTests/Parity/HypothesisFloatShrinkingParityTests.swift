@@ -107,7 +107,8 @@ struct HypothesisFloatShrinkingParityTests {
                     predicate: { value in
                         let v = value as! Double
                         return v > lower && v < upper && v.rounded(.towardZero) != v
-                    }
+                    },
+                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                 ),
                 continuation: { .pure($0 as! Double) }
             )

@@ -145,7 +145,7 @@ package enum LightweightSampler {
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
-            case let .filter(gen, _, _, predicate):
+            case let .filter(gen, _, _, predicate, _):
                 var attempts: UInt64 = 0
                 while attempts < 500 {
                     guard let result = try eval(

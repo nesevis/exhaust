@@ -235,7 +235,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             // MARK: - Filter
 
-            case let .filter(gen, fingerprint, filterType, predicate):
+            case let .filter(gen, fingerprint, filterType, predicate, sourceLocation):
                 let filteredGen = ChoiceTreeHandlers.resolveFilterGenerator(
                     gen: gen,
                     fingerprint: fingerprint,
@@ -256,7 +256,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
                     let passed = predicate(result)
                     if context.filterObservations[fingerprint] == nil {
-                        context.filterObservations[fingerprint] = FilterObservation()
+                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
                     }
                     context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
                     if passed {

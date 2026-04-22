@@ -196,17 +196,25 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func filter(
         _ type: FilterType = .auto,
         _ predicate: @Sendable @escaping (Value) -> Bool,
-        fileID: String = #fileID,
-        line: UInt = #line
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Value> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+        let fingerprint = fileID.description.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
             operation: .filter(
                 gen: erase(),
                 fingerprint: fingerprint,
                 filterType: type,
-                predicate: { value in predicate(value as! Value) }
+                predicate: { value in predicate(value as! Value) },
+                sourceLocation: FilterSourceLocation(
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
             ),
             continuation: { .pure($0 as! Value) }
         )

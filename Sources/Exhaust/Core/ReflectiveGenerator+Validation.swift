@@ -106,7 +106,7 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
         case let .forwardOnlyTransform(inputType, outputType, _):
             "Reflection blocked by bind (\(inputType) → \(outputType)). This will prevent replay and reduction of externally created values of \(outputType)."
         case let .lowFilterValidityRate(fingerprint, rate, attempts):
-            "Filter \(String(format: "%08X", fingerprint & 0xFFFF_FFFF)): validity rate \(String(format: "%.1f", rate * 100))% over \(attempts) attempts — generation is spending most of its budget on rejection. Consider widening the input range or relaxing the predicate."
+            "Filter \(String(format: "%08X", fingerprint & 0xFFFF_FFFF)): validity rate \(String(format: "%.1f", rate * 100))% over \(attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate."
         }
     }
 }
@@ -356,13 +356,34 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
 
         for failure in report.failures {
-            reportIssue(
-                "\(failure)",
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
+            switch failure {
+            case let .lowFilterValidityRate(fingerprint, _, _):
+                if let location = report.filterObservations[fingerprint]?.sourceLocation {
+                    reportIssue(
+                        "\(failure)",
+                        fileID: location.fileID,
+                        filePath: location.filePath,
+                        line: location.line,
+                        column: location.column
+                    )
+                } else {
+                    reportIssue(
+                        "\(failure)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                }
+            default:
+                reportIssue(
+                    "\(failure)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            }
         }
 
         return report

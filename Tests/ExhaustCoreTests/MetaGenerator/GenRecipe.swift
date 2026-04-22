@@ -396,7 +396,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> ReflectiveGene
     case let .filtered(inner, predicate):
         let innerGen = buildGenerator(from: inner)
         return ReflectiveGenerator<Any>.impure(
-            operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }),
+            operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
             continuation: { .pure($0) }
         )
 

@@ -57,7 +57,7 @@ struct ReplacementChallenge {
         var result = [initial]
         var running = initial
         for multiplier in multipliers {
-            running *= multiplier
+            running &*= multiplier
             result.append(running)
         }
         return result

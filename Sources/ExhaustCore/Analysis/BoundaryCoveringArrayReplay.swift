@@ -109,20 +109,25 @@ package enum BoundaryCoveringArrayReplay {
             guard Int(lengthValueIndex) < lengthParam.values.count else { return nil }
             let newLength = lengthParam.values[Int(lengthValueIndex)]
 
-            // Substitute element parameters, stopping at newLength.
-            // When used with per-length sub-array profiles, the profile only contains element parameters accessible at this length, so paramIndex stays aligned with subsequent non-sequence parameters.
+            // Substitute element parameters for analyzed slots only. The analysis caps element extraction at 2 slots; elements beyond that are passed through unchanged so the materializer fills them from PRNG.
+            let lengthRange = metadata.validRange ?? (0 ... UInt64.max)
+            let analyzedSlots = min(2, Int(lengthRange.upperBound), elements.count)
             var newElements: [ChoiceTree] = []
             for (elementIndex, element) in elements.enumerated() {
                 guard UInt64(elementIndex) < newLength else { break }
-                guard let newElement = substituteParameters(
-                    in: element,
-                    row: row,
-                    profile: profile,
-                    paramIndex: &paramIndex
-                ) else {
-                    return nil
+                if elementIndex < analyzedSlots {
+                    guard let newElement = substituteParameters(
+                        in: element,
+                        row: row,
+                        profile: profile,
+                        paramIndex: &paramIndex
+                    ) else {
+                        return nil
+                    }
+                    newElements.append(newElement)
+                } else {
+                    newElements.append(element)
                 }
-                newElements.append(newElement)
             }
 
             return .sequence(length: newLength, elements: newElements, metadata)

@@ -279,11 +279,13 @@ public enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this filter condition (for optimization caching).
     ///   - filterType: Strategy to use for satisfying the predicate.
     ///   - predicate: Validity condition that generated values must satisfy.
+    ///   - sourceLocation: Source location of the `.filter(...)` call site, for diagnostic warnings.
     case filter(
         gen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
         filterType: FilterType,
-        predicate: (Any) -> Bool
+        predicate: (Any) -> Bool,
+        sourceLocation: FilterSourceLocation
     )
 
     /// Categorizes generated values for statistical analysis and test coverage reporting.

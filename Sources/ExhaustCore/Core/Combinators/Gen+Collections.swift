@@ -227,7 +227,11 @@ package extension Gen {
                     predicate: { value in
                         let (length, startIndexPos) = value as! (Int, Int)
                         return startIndexPos + length <= count
-                    }
+                    },
+                    sourceLocation: FilterSourceLocation(
+                        fileID: #fileID, filePath: #filePath,
+                        line: #line, column: #column
+                    )
                 ),
                 continuation: { .pure($0 as! (Int, Int)) }
             )

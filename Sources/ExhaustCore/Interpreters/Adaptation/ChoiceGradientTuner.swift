@@ -63,6 +63,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         case ucb(explorationConstant: Double)
     }
 
+
     public static func tune(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
@@ -126,7 +127,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
     private static func bakeWeights<Output>(
         _ gen: ReflectiveGenerator<Output>,
         from accumulator: FitnessAccumulator,
-        strategy: WeightingStrategy
+        strategy: WeightingStrategy,
+        depth: Int = 0
     ) -> ReflectiveGenerator<Output> {
         switch gen {
         case .pure:
@@ -137,16 +139,18 @@ package enum ChoiceGradientTuner<FinalOutput> {
             case let .pick(choices):
                 var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
                 baked.reserveCapacity(choices.count)
+                let depthOffset = UInt64(depth) &* 0x9E37_79B9_7F4A_7C15
 
                 // Precompute for strategies that need cross-choice context
                 let precomputedWeights: ContiguousArray<UInt64>? = switch strategy {
                 case .fitnessSharing:
-                    computeFitnessSharingWeights(choices: choices, records: accumulator.records)
+                    computeFitnessSharingWeights(choices: choices, records: accumulator.records, fingerprintOffset: depthOffset)
                 case let .ucb(explorationConstant):
                     computeUCBWeights(
                         choices: choices,
                         records: accumulator.records,
-                        explorationConstant: explorationConstant
+                        explorationConstant: explorationConstant,
+                        fingerprintOffset: depthOffset
                     )
                 default:
                     nil
@@ -158,7 +162,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         weight = precomputed[index]
                     } else {
                         let key = FitnessAccumulator.SiteChoiceKey(
-                            fingerprint: choice.fingerprint,
+                            fingerprint: choice.fingerprint &+ depthOffset,
                             choiceID: choice.id
                         )
                         if let record = accumulator.records[key] {
@@ -166,13 +170,11 @@ package enum ChoiceGradientTuner<FinalOutput> {
                             case .totalFitness:
                                 weight = record.totalFitness
                             case .validityRate:
-                                // Scale rate to integer: (fitness / observations) * 10000
                                 let rate = record.observationCount > 0
                                     ? Double(record.totalFitness) / Double(record.observationCount)
                                     : 0
                                 weight = UInt64(rate * 10000)
                             case .fitnessSharing, .ucb:
-                                // Handled by precomputedWeights above
                                 weight = choice.weight
                             }
                         } else {
@@ -186,7 +188,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         generator: bakeWeights(
                             choice.generator,
                             from: accumulator,
-                            strategy: strategy
+                            strategy: strategy,
+                            depth: depth + 1
                         )
                     ))
                 }
@@ -194,15 +197,15 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
             case let .zip(generators, _):
                 let bakedGens = ContiguousArray(generators.map {
-                    bakeWeights($0, from: accumulator, strategy: strategy)
+                    bakeWeights($0, from: accumulator, strategy: strategy, depth: depth + 1)
                 })
                 return .impure(operation: .zip(bakedGens), continuation: continuation)
 
             case let .sequence(lengthGen, elementGen):
                 return .impure(
                     operation: .sequence(
-                        length: bakeWeights(lengthGen, from: accumulator, strategy: strategy),
-                        gen: bakeWeights(elementGen, from: accumulator, strategy: strategy)
+                        length: bakeWeights(lengthGen, from: accumulator, strategy: strategy, depth: depth),
+                        gen: bakeWeights(elementGen, from: accumulator, strategy: strategy, depth: depth)
                     ),
                     continuation: continuation
                 )
@@ -211,7 +214,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 return .impure(
                     operation: .contramap(
                         transform: transform,
-                        next: bakeWeights(next, from: accumulator, strategy: strategy)
+                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
                     ),
                     continuation: continuation
                 )
@@ -219,7 +222,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
             case let .prune(next):
                 return .impure(
                     operation: .prune(
-                        next: bakeWeights(next, from: accumulator, strategy: strategy)
+                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
                     ),
                     continuation: continuation
                 )
@@ -228,18 +231,19 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 return .impure(
                     operation: .resize(
                         newSize: newSize,
-                        next: bakeWeights(next, from: accumulator, strategy: strategy)
+                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
                     ),
                     continuation: continuation
                 )
 
-            case let .filter(subGen, fingerprint, filterType, predicate):
+            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
                 return .impure(
                     operation: .filter(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy),
+                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
                         fingerprint: fingerprint,
                         filterType: filterType,
-                        predicate: predicate
+                        predicate: predicate,
+                        sourceLocation: sourceLocation
                     ),
                     continuation: continuation
                 )
@@ -247,7 +251,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
             case let .classify(subGen, fingerprint, classifiers):
                 return .impure(
                     operation: .classify(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy),
+                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
                         fingerprint: fingerprint,
                         classifiers: classifiers
                     ),
@@ -257,7 +261,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
             case let .unique(subGen, fingerprint, keyExtractor):
                 return .impure(
                     operation: .unique(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy),
+                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
                         fingerprint: fingerprint,
                         keyExtractor: keyExtractor
                     ),
@@ -268,7 +272,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 return .impure(
                     operation: .transform(
                         kind: kind,
-                        inner: bakeWeights(inner, from: accumulator, strategy: strategy)
+                        inner: bakeWeights(inner, from: accumulator, strategy: strategy, depth: depth)
                     ),
                     continuation: continuation
                 )
@@ -286,7 +290,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
     /// For each choice, `share_i = fitness_i / siteTotal` measures how much of the site's total fitness it accounts for. The niche count `1 + N × share_i` grows with dominance: a choice with 90% share among 4 choices gets divisor 1 + 4×0.9 = 4.6, while a 10% choice gets 1 + 4×0.1 = 1.4. Dividing raw fitness by the niche count compresses the ratio from 9:1 down to ~1.96:0.71 ≈ 2.7:1 — still favoring the winner, but giving the minority choice meaningful sampling probability.
     private static func computeFitnessSharingWeights(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord]
+        records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord],
+        fingerprintOffset: UInt64 = 0
     ) -> ContiguousArray<UInt64> {
         let count = choices.count
         var rawFitnesses = ContiguousArray<Double>()
@@ -295,7 +300,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         // Pass 1: gather raw fitnesses and site total
         var siteTotal: Double = 0
         for choice in choices {
-            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
+            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint &+ fingerprintOffset, choiceID: choice.id)
             let fitness = records[key].map { Double($0.totalFitness) } ?? 0
             rawFitnesses.append(fitness)
             siteTotal += fitness
@@ -322,7 +327,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
     private static func computeUCBWeights(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord],
-        explorationConstant: Double
+        explorationConstant: Double,
+        fingerprintOffset: UInt64 = 0
     ) -> ContiguousArray<UInt64> {
         let count = choices.count
 
@@ -331,7 +337,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         var fitnessRecords = ContiguousArray<FitnessAccumulator.FitnessRecord?>()
         fitnessRecords.reserveCapacity(count)
         for choice in choices {
-            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint, choiceID: choice.id)
+            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint &+ fingerprintOffset, choiceID: choice.id)
             let record = records[key]
             fitnessRecords.append(record)
             totalSiteObservations += record?.observationCount ?? 0
@@ -526,13 +532,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation
                 )
 
-            case let .filter(subGen, fingerprint, filterType, predicate):
+            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
                 return try .impure(
                     operation: .filter(
                         gen: subdivideSequenceLengths(subGen, context: context),
                         fingerprint: fingerprint,
                         filterType: filterType,
-                        predicate: predicate
+                        predicate: predicate,
+                        sourceLocation: sourceLocation
                     ),
                     continuation: continuation
                 )
