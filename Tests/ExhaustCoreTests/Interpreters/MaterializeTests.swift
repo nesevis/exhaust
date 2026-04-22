@@ -161,7 +161,7 @@ struct MaterializeTests {
 
         let baseFilterGen = Gen.choose(in: UInt64(0) ... 100)
         let filterGen: ReflectiveGenerator<UInt64> = .impure(
-            operation: .filter(gen: baseFilterGen.erase(), fingerprint: 0, filterType: .auto, predicate: { ($0 as! UInt64) % 2 == 0 }),
+            operation: .filter(gen: baseFilterGen.erase(), fingerprint: 0, filterType: .auto, predicate: { ($0 as! UInt64) % 2 == 0 }, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
             continuation: { .pure($0 as! UInt64) }
         )
         var filterIter = ValueInterpreter(filterGen, seed: 42, maxRuns: 200)

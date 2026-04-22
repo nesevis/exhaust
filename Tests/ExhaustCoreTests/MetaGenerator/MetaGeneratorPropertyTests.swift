@@ -227,7 +227,7 @@ struct MetaGeneratorPropertyTests {
                 }
 
                 let filteredGen: ReflectiveGenerator<Any> = .impure(
-                    operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }),
+                    operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
                     continuation: { .pure($0) }
                 )
 

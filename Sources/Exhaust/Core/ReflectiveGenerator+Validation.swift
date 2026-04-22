@@ -356,13 +356,34 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
 
         for failure in report.failures {
-            reportIssue(
-                "\(failure)",
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
+            switch failure {
+            case let .lowFilterValidityRate(fingerprint, _, _):
+                if let location = report.filterObservations[fingerprint]?.sourceLocation {
+                    reportIssue(
+                        "\(failure)",
+                        fileID: location.fileID,
+                        filePath: location.filePath,
+                        line: location.line,
+                        column: location.column
+                    )
+                } else {
+                    reportIssue(
+                        "\(failure)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                }
+            default:
+                reportIssue(
+                    "\(failure)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            }
         }
 
         return report

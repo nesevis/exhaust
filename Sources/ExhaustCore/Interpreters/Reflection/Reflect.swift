@@ -141,7 +141,7 @@ package enum Interpreters {
         case let .zip(generators, _):
             return try reflectZipOperation(generators: generators, finalOutput: finalOutput)
 
-        case let .filter(gen, _, _, _):
+        case let .filter(gen, _, _, _, _):
             return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
 
         case let .classify(gen, _, _):

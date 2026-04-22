@@ -295,13 +295,13 @@ extension Materializer {
                 continuationFallback: continuationFallback
             )
 
-        case let .impure(.filter(gen, fingerprint, _, predicate), continuation):
+        case let .impure(.filter(gen, fingerprint, _, predicate, sourceLocation), continuation):
             let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
             guard let (result, tree) = try generateRecursive(
                 gen, with: inputValue, context: &context, fallbackTree: calleeFallback
             ) else { return nil }
             let passed = predicate(result)
-            context.filterObservations[fingerprint, default: FilterObservation()]
+            context.filterObservations[fingerprint, default: FilterObservation(sourceLocation: sourceLocation)]
                 .recordAttempt(passed: passed)
             guard passed else { return nil }
             return try runContinuation(

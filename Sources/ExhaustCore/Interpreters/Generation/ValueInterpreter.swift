@@ -203,7 +203,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     runContinuation: runContinuation
                 )
 
-            case let .filter(gen, fingerprint, filterType, predicate):
+            case let .filter(gen, fingerprint, filterType, predicate, _):
                 let tunedGen = ChoiceTreeHandlers.resolveFilterGenerator(
                     gen: gen,
                     fingerprint: fingerprint,

@@ -63,6 +63,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         case ucb(explorationConstant: Double)
     }
 
+
     public static func tune(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
@@ -233,13 +234,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation
                 )
 
-            case let .filter(subGen, fingerprint, filterType, predicate):
+            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
                 return .impure(
                     operation: .filter(
                         gen: bakeWeights(subGen, from: accumulator, strategy: strategy),
                         fingerprint: fingerprint,
                         filterType: filterType,
-                        predicate: predicate
+                        predicate: predicate,
+                        sourceLocation: sourceLocation
                     ),
                     continuation: continuation
                 )
@@ -526,13 +528,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation
                 )
 
-            case let .filter(subGen, fingerprint, filterType, predicate):
+            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
                 return try .impure(
                     operation: .filter(
                         gen: subdivideSequenceLengths(subGen, context: context),
                         fingerprint: fingerprint,
                         filterType: filterType,
-                        predicate: predicate
+                        predicate: predicate,
+                        sourceLocation: sourceLocation
                     ),
                     continuation: continuation
                 )

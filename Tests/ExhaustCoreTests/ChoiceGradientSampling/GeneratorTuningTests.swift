@@ -17,7 +17,7 @@ struct GeneratorTuningTests {
     func filterAdaptation() throws {
         let innerGen = Gen.choose(in: 1 ... 1000)
         let gen: ReflectiveGenerator<Int> = .impure(
-            operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { ($0 as! Int) < 200 }),
+            operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { ($0 as! Int) < 200 }, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
             continuation: { .pure($0 as! Int) }
         )
 
@@ -30,7 +30,7 @@ struct GeneratorTuningTests {
         )
 
         // Verify that the tuned generator structure contains a filter with an tuned inner gen
-        guard case let .impure(.filter(tunedInner, _, _, _), _) = tuned else {
+        guard case let .impure(.filter(tunedInner, _, _, _, _), _) = tuned else {
             Issue.record("Expected tuned generator to be a filter")
             return
         }

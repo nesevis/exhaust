@@ -462,7 +462,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Filter
 
-            case let .filter(gen, fingerprint, filterType, filterPredicate):
+            case let .filter(gen, fingerprint, filterType, filterPredicate, _):
                 let tunedGen = ChoiceTreeHandlers.resolveFilterGenerator(
                     gen: gen,
                     fingerprint: fingerprint,

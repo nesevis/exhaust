@@ -599,6 +599,7 @@ extension GeneratorTuning {
         fingerprint: UInt64,
         filterType: FilterType,
         filterPredicate: @escaping (Any) -> Bool,
+        sourceLocation: FilterSourceLocation,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext
     ) throws -> ReflectiveGenerator<Output> {
@@ -608,7 +609,8 @@ extension GeneratorTuning {
                     gen: subGen,
                     fingerprint: fingerprint,
                     filterType: filterType,
-                    predicate: filterPredicate
+                    predicate: filterPredicate,
+                    sourceLocation: sourceLocation
                 ),
                 continuation: continuation
             )
@@ -627,7 +629,8 @@ extension GeneratorTuning {
                 gen: tunedInner,
                 fingerprint: fingerprint,
                 filterType: filterType,
-                predicate: filterPredicate
+                predicate: filterPredicate,
+                sourceLocation: sourceLocation
             ),
             continuation: continuation
         )

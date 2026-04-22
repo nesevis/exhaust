@@ -152,7 +152,7 @@ package enum AdaptiveSmoothing {
             )
             return .resize(newSize: newSize, next: smoothedNext)
 
-        case let .filter(gen, fingerprint, filterType, predicate):
+        case let .filter(gen, fingerprint, filterType, predicate, sourceLocation):
             let smoothedGen = smoothGenerator(
                 gen,
                 epsilon: epsilon,
@@ -163,7 +163,8 @@ package enum AdaptiveSmoothing {
                 gen: smoothedGen,
                 fingerprint: fingerprint,
                 filterType: filterType,
-                predicate: predicate
+                predicate: predicate,
+                sourceLocation: sourceLocation
             )
 
         case let .classify(gen, fingerprint, classifiers):
