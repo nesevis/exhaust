@@ -10,6 +10,7 @@ struct DedupePropertyTests {
         #exhaust(
             generator,
             .logging(.debug),
+            .suppress(.issueReporting),
 //            .randomOnly,
             .budget(.exorbitant),
             .reflecting([3, 7, 7, 0, 7, 1, 1, 4])

@@ -101,7 +101,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             var useRandomOnly = false
             var visualize = false
             var onReportClosure: ((ExhaustReport) -> Void)?
-            var onOriginalCounterexample: (@Sendable (Output) -> Void)?
             var collectOpenPBTStats = false
             var logLevel: LogLevel = .error
             var logFormat: LogFormat = .keyValue
@@ -145,8 +144,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 case let .logging(level, format):
                     logLevel = level
                     logFormat = format
-                case let ._onOriginalCounterexample(closure):
-                    onOriginalCounterexample = closure
                 }
             }
 
@@ -273,7 +270,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 "kind": kind,
                             ]
                         )
-                        onOriginalCounterexample?(value)
                         // Reflect to get a structurally correct tree with materialized picks, since coverage-built trees lack unselected branches needed by reducer strategies.
                         let reductionTree = (try? Interpreters.reflect(gen, with: value)) ?? tree
                         var propertyInvocationCount = 0
@@ -308,6 +304,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 let rendered = failure.render(
                                     format: logFormat
                                 )
+                                report.renderedFailure = rendered
                                 let reductionEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                                 logPhaseTimings(
                                     start: phaseTimingStart,
@@ -531,7 +528,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     }
 
                     if passed == false {
-                        onOriginalCounterexample?(next)
                         generationPhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                         var propertyInvocationCount = 0
                         let countingProperty: (Output) -> Bool = { value in
@@ -561,6 +557,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                     propertyInvocations: propertyInvocationCount
                                 )
                                 let rendered = failure.render(format: logFormat)
+                                report.renderedFailure = rendered
                                 ExhaustLog.debug(
                                     category: .propertyTest,
                                     event: "reduced_blueprint",
@@ -634,6 +631,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             propertyInvocations: propertyInvocationCount
                         )
                         let rendered = failure.render(format: logFormat)
+                        report.renderedFailure = rendered
                         if suppressIssueReporting == false {
                             reportIssue(
                                 rendered,
@@ -761,7 +759,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 // The final re-run (outside this scope) produces the user-facing #expect output.
                 nonisolated(unsafe) var pipelineResult: Output?
                 nonisolated(unsafe) var capturedSeed: UInt64?
-                nonisolated(unsafe) var capturedOriginal: Output?
+                nonisolated(unsafe) var capturedRenderedFailure: String?
                 try? withKnownIssue(isIntermittent: true) {
                     // Replay regression seeds from the trait before the normal pipeline.
                     #if canImport(Testing)
@@ -819,13 +817,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         }
                     #endif
 
-                    // Capture the actual seed and original counterexample from the Bool pipeline.
+                    // Capture seed and rendered failure from the Bool pipeline.
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
                     augmentedSettings.append(.onReport { report in
                         capturedSeed = report.seed
-                    })
-                    augmentedSettings.append(._onOriginalCounterexample { original in
-                        capturedOriginal = original
+                        capturedRenderedFailure = report.renderedFailure
                     })
 
                     // Delegate to the Bool pipeline with suppressed issue reporting.
@@ -851,51 +847,20 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return false
                 }
                 if suppressIssueReporting == false {
-                    // For reflection, the original is the value from the settings (the callback isn't called by __reduceReflected).
-                    var original: Output? = capturedOriginal
-                    let usedReflection = settings.contains { setting in
-                        if case .reflecting = setting { return true }
-                        return false
-                    }
-                    if original == nil {
-                        for setting in settings {
-                            if case let .reflecting(value) = setting {
-                                original = value
-                                break
-                            }
-                        }
+                    if let rendered = capturedRenderedFailure {
+                        reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                     }
 
-                    // Emit the reduced counterexample and reduction diff, attributed to the #exhaust call site.
-                    var failure = PropertyTestFailure(
-                        counterexample: counterexample,
-                        original: original,
-                        sourceCode: sourceCode,
-                        seed: capturedSeed,
-                        iteration: 1,
-                        samplingBudget: 1,
-                        blueprint: nil,
-                        propertyInvocations: nil
-                    )
-                    if capturedSeed == nil {
-                        failure.replayHint = usedReflection
-                            ? "No replay seed — counterexample found via reflection."
-                            : "No replay seed — found via systematic combinatorial coverage."
-                    }
-                    let rendered = failure.render(format: logFormat)
-                    reportIssue(
-                        rendered,
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column
-                    )
-
-                    // Final re-run without withKnownIssue — #expect failures record naturally with reduced values.
+                    // Re-run without withKnownIssue so #expect failures record with reduced values.
                     do {
                         try property(counterexample)
                     } catch {
                         // Error propagates to Swift Testing naturally.
+                    }
+
+                    if let seed = capturedSeed {
+                        let encoded = CrockfordBase32.encode(seed)
+                        print("exhaust:\(function):replay:\(encoded)")
                     }
                 }
 
@@ -1008,7 +973,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             // Capture pipeline output across the GCD boundary.
             nonisolated(unsafe) var pipelineResult: Output?
             nonisolated(unsafe) var capturedSeed: UInt64?
-            nonisolated(unsafe) var capturedOriginal: Output?
+            nonisolated(unsafe) var capturedRenderedFailure: String?
 
             // Dispatch the sync core (with withKnownIssue wrapping) onto a GCD thread.
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -1068,13 +1033,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             }
                         #endif
 
-                        // Capture the actual seed and original counterexample from the Bool pipeline.
+                        // Capture seed and rendered failure from the Bool pipeline.
                         var augmentedSettings = settings + [.suppress(.issueReporting)]
                         augmentedSettings.append(.onReport { report in
                             capturedSeed = report.seed
-                        })
-                        augmentedSettings.append(._onOriginalCounterexample { original in
-                            capturedOriginal = original
+                            capturedRenderedFailure = report.renderedFailure
                         })
 
                         // Delegate to the Bool pipeline with suppressed issue reporting.
@@ -1103,51 +1066,20 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 return false
             }
             if suppressIssueReporting == false {
-                // For reflection, the original is the value from the settings (the callback isn't called by __reduceReflected).
-                var original: Output? = capturedOriginal
-                let usedReflection = settings.contains { setting in
-                    if case .reflecting = setting { return true }
-                    return false
-                }
-                if original == nil {
-                    for setting in settings {
-                        if case let .reflecting(value) = setting {
-                            original = value
-                            break
-                        }
-                    }
+                if let rendered = capturedRenderedFailure {
+                    reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                 }
 
-                // Emit the reduced counterexample and reduction diff, attributed to the #exhaust call site.
-                var failure = PropertyTestFailure(
-                    counterexample: counterexample,
-                    original: original,
-                    sourceCode: sourceCode,
-                    seed: capturedSeed,
-                    iteration: 1,
-                    samplingBudget: 1,
-                    blueprint: nil,
-                    propertyInvocations: nil
-                )
-                if capturedSeed == nil {
-                    failure.replayHint = usedReflection
-                        ? "No replay seed — counterexample found via reflection."
-                        : "No replay seed — found via systematic combinatorial coverage."
-                }
-                let rendered = failure.render(format: logFormat)
-                reportIssue(
-                    rendered,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-
-                // Final re-run in the async context — #expect failures record naturally with reduced values.
+                // Re-run in async context so #expect failures record with reduced values.
                 do {
                     try await property(counterexample)
                 } catch {
                     // Error propagates to Swift Testing naturally.
+                }
+
+                if let seed = capturedSeed {
+                    let encoded = CrockfordBase32.encode(seed)
+                    print("exhaust:\(function):replay:\(encoded)")
                 }
             }
 
@@ -1666,7 +1598,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         report.applyReductionStats(reduceResult.stats)
 
         if let (reducedSequence, reducedValue) = reduceResult.reduced {
-            let failure = PropertyTestFailure(
+            var failure = PropertyTestFailure(
                 counterexample: reducedValue,
                 original: value,
                 sourceCode: sourceCode,
@@ -1676,7 +1608,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 blueprint: reducedSequence.shortString,
                 propertyInvocations: propertyInvocationCount
             )
+            failure.replayHint = "No replay seed — counterexample found via reflection."
             let rendered = failure.render(format: ExhaustLog.configuration.format)
+            report.renderedFailure = rendered
             let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
             let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
@@ -1711,7 +1645,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
 
         // Reflection succeeded but reduction could not improve — return original
-        let failure = PropertyTestFailure(
+        var failure = PropertyTestFailure(
             counterexample: value,
             original: nil as Output?,
             sourceCode: sourceCode,
@@ -1721,7 +1655,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             blueprint: nil,
             propertyInvocations: propertyInvocationCount
         )
+        failure.replayHint = "No replay seed — counterexample found via reflection."
         let rendered = failure.render(format: ExhaustLog.configuration.format)
+        report.renderedFailure = rendered
         let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
         let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000

@@ -153,8 +153,5 @@ public enum ExhaustSettings<Output> {
     /// #exhaust(gen, .logging(.debug)) { value in ... }
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
-
-    /// Internal: captures the original (pre-reduction) counterexample for `__exhaustExpect` rendering.
-    case _onOriginalCounterexample(@Sendable (Output) -> Void)
 }
 
