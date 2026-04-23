@@ -1163,24 +1163,85 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
 
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
-            // TODO: Replace with ClassificationExploreRunner orchestration
-            _ = budget
-            _ = seed
-            _ = directions
-            _ = gen
-            _ = property
-            _ = suppressIssueReporting
+            var runner = ClassificationExploreRunner(
+                gen: gen,
+                property: property,
+                directions: directions.map { (name: $0.0, predicate: $0.1) },
+                hitsPerDirection: budget.hitsPerDirection,
+                maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
+                seed: seed
+            )
+            let result = runner.run()
+
+            let directionCoverage = result.directionCoverage.map { entry in
+                DirectionCoverage(
+                    name: entry.name,
+                    hits: entry.hits,
+                    tuningPassSamples: entry.tuningPassSamples,
+                    tuningPassPasses: entry.tuningPassPasses,
+                    tuningPassFailures: entry.tuningPassFailures,
+                    warmupHits: entry.warmupHits,
+                    isCovered: entry.isCovered,
+                    warmupRuleOfThreeBound: entry.warmupRuleOfThreeBound,
+                    tuningPassRuleOfThreeBound: entry.tuningPassRuleOfThreeBound
+                )
+            }
+
+            let termination: ExploreTermination = switch result.termination {
+            case .propertyFailed: .propertyFailed
+            case .coverageAchieved: .coverageAchieved
+            case .budgetExhausted: .budgetExhausted
+            }
+
+            if let counterexample = result.counterexample {
+                let failure = PropertyTestFailure(
+                    counterexample: counterexample,
+                    original: result.original,
+                    sourceCode: sourceCode,
+                    seed: result.seed,
+                    iteration: result.propertyInvocations,
+                    samplingBudget: UInt64(directions.count * budget.maxAttemptsPerDirection),
+                    blueprint: result.reducedSequence?.shortString,
+                    propertyInvocations: result.propertyInvocations
+                )
+                let rendered = failure.render(format: logFormat)
+                if suppressIssueReporting == false {
+                    reportIssue(
+                        rendered,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                }
+            } else {
+                var passMetadata = [
+                    "invocations": "\(result.propertyInvocations)",
+                    "warmup_samples": "\(result.warmupSamples)",
+                    "seed": "\(result.seed)",
+                ]
+                if let sourceCode {
+                    passMetadata["source"] = sourceCode
+                }
+                let coveredCount = directionCoverage.filter(\.isCovered).count
+                passMetadata["coverage"] = "\(coveredCount)/\(directions.count)"
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "explore_property_passed",
+                    metadata: passMetadata
+                )
+            }
 
             return ExploreReport(
-                result: nil,
-                seed: seed ?? 0,
-                directionCoverage: [],
-                coOccurrence: CoOccurrenceMatrix(directionCount: directions.count),
-                counterexampleDirections: [],
-                propertyInvocations: 0,
-                warmupSamples: 0,
-                totalMilliseconds: 0,
-                termination: .budgetExhausted
+                result: result.counterexample,
+                seed: result.seed,
+                directionCoverage: directionCoverage,
+                coOccurrence: result.coOccurrence,
+                counterexampleDirections: result.counterexampleDirections,
+                propertyInvocations: result.propertyInvocations,
+                warmupSamples: result.warmupSamples,
+                totalMilliseconds: result.totalMilliseconds,
+                termination: termination
             )
         }
     }
