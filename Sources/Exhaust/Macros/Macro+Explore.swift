@@ -25,11 +25,22 @@
 /// - Returns: An ``ExploreReport`` containing the counterexample (if any), per-direction coverage, and cross-direction diagnostics.
 import ExhaustCore
 
+/// Synchronous `#explore` with a Bool-returning or Void/#expect property closure.
 @freestanding(expression)
 @discardableResult
-public macro explore<GeneratedValue>(
+public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
-    directions: [(String, @Sendable (GeneratedValue) -> Bool)],
-    property: (GeneratedValue) throws -> Bool
+    directions: [(String, (GeneratedValue) -> Bool)],
+    property: (GeneratedValue) throws -> PropertyResult
 ) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")
+
+/// Async `#explore` with an async Bool-returning or Void/#expect property closure. Must be called with `await`.
+@freestanding(expression)
+@discardableResult
+public macro explore<GeneratedValue, PropertyResult>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
+    _ settings: ExploreSettings...,
+    directions: [(String, (GeneratedValue) -> Bool)],
+    property: (GeneratedValue) async throws -> PropertyResult
+) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreAsyncMacro")

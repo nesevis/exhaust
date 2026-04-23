@@ -1247,6 +1247,201 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
     }
 
+    // MARK: - Explore (Expect)
+
+    /// Runs a classification-aware property test with a Void/#expect/#require closure. Runtime target of `#explore` with assertion closures.
+    @discardableResult
+    public static func __exploreExpect<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        settings: [ExploreSettings],
+        directions: [(String, @Sendable (Output) -> Bool)],
+        sourceCode: String?,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @Sendable (Output) throws -> Void,
+        detection: @Sendable (Output) throws -> Void
+    ) -> ExploreReport<Output> {
+        withoutActuallyEscaping(detection) { detection in
+            let boolProperty = wrapDetectionProperty(detection)
+
+            nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
+            try? withKnownIssue(isIntermittent: true) {
+                pipelineResult = __explore(
+                    gen,
+                    settings: settings + [.suppress(.issueReporting)],
+                    directions: directions,
+                    sourceCode: sourceCode,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    property: boolProperty
+                )
+            }
+
+            guard let report = pipelineResult else {
+                return __explore(
+                    gen,
+                    settings: settings,
+                    directions: directions,
+                    sourceCode: sourceCode,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    property: { _ in true }
+                )
+            }
+
+            if let counterexample = report.result {
+                let suppressIssueReporting = settings.contains { setting in
+                    if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                    return false
+                }
+                if suppressIssueReporting == false {
+                    do {
+                        try property(counterexample)
+                    } catch {}
+
+                    let encoded = CrockfordBase32.encode(report.seed)
+                    reportIssue(
+                        "Reproduce: .replay(\"\(encoded)\")",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                }
+            }
+
+            return report
+        }
+    }
+
+    // MARK: - Explore (Async)
+
+    /// Runs a classification-aware property test with an async Bool-returning closure.
+    @discardableResult
+    public static func __exploreAsync<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        settings: [ExploreSettings],
+        directions: [(String, @Sendable (Output) -> Bool)],
+        sourceCode: String?,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @escaping @Sendable (Output) async throws -> Bool
+    ) async -> ExploreReport<Output> {
+        let syncProperty: @Sendable (Output) -> Bool = { value in
+            let valueBox = SendableBox(value)
+            let resultBox = SendableBox(false)
+            let semaphore = DispatchSemaphore(value: 0)
+            Task { @Sendable in
+                resultBox.value = await (try? property(valueBox.value)) ?? false
+                semaphore.signal()
+            }
+            semaphore.wait()
+            return resultBox.value
+        }
+
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                let result = __explore(
+                    gen,
+                    settings: settings,
+                    directions: directions,
+                    sourceCode: sourceCode,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    property: syncProperty
+                )
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
+    // MARK: - Explore (Async Expect)
+
+    /// Runs a classification-aware property test with an async Void/#expect/#require closure.
+    @discardableResult
+    public static func __exploreExpectAsync<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        settings: [ExploreSettings],
+        directions: [(String, @Sendable (Output) -> Bool)],
+        sourceCode: String?,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @escaping @Sendable (Output) async throws -> Void,
+        detection: @escaping @Sendable (Output) throws -> Void
+    ) async -> ExploreReport<Output> {
+        let boolProperty = wrapDetectionProperty(detection)
+
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
+                try? withKnownIssue(isIntermittent: true) {
+                    pipelineResult = __explore(
+                        gen,
+                        settings: settings + [.suppress(.issueReporting)],
+                        directions: directions,
+                        sourceCode: sourceCode,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                        property: boolProperty
+                    )
+                }
+
+                guard let report = pipelineResult else {
+                    let emptyReport = __explore(
+                        gen,
+                        settings: settings,
+                        directions: directions,
+                        sourceCode: sourceCode,
+                        property: { _ in true }
+                    )
+                    continuation.resume(returning: emptyReport)
+                    return
+                }
+
+                if let counterexample = report.result {
+                    let suppressIssueReporting = settings.contains { setting in
+                        if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                        return false
+                    }
+                    if suppressIssueReporting == false {
+                        let valueBox = SendableBox(counterexample)
+                        let semaphore = DispatchSemaphore(value: 0)
+                        Task { @Sendable in
+                            try? await property(valueBox.value)
+                            semaphore.signal()
+                        }
+                        semaphore.wait()
+
+                        let encoded = CrockfordBase32.encode(report.seed)
+                        reportIssue(
+                            "Reproduce: .replay(\"\(encoded)\")",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                    }
+                }
+
+                continuation.resume(returning: report)
+            }
+        }
+    }
+
     // MARK: - Example
 
     /// Generates a single value from a generator. Runtime target of `#example` expansion.
