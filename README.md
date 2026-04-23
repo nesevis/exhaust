@@ -16,9 +16,10 @@ Exhaust is a property-based testing library for Swift. Instead of writing indivi
 - **Contract testing** — generate random sequences of commands against a stateful system and verify that invariants hold after every step.
 - **Inspectable generators** — generators are data structures, not opaque closures. The library runs them forward to generate, backward to decompose, and replays them for deterministic reproduction.
 
-Exhaust works in two modes:
+Exhaust works in three modes:
 
 - **Property tests** — generate values and check that a rule holds: `#exhaust(generator) { value in Bool }`.
+- **Directed exploration** — declare semantic regions of the input space and guarantee each one is covered: `#explore(generator, directions: [...]) { value in Bool }`.
 - **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self, commandLimit: 20)`.
 
 ```swift
@@ -72,6 +73,7 @@ Exhaust found a five-element counterexample and reduced it to two elements — t
 - [Filters and Classification](#filters-and-classification)
 - [Validating Generators](#validating-generators)
 - [Contract Testing](#contract-testing)
+- [Directed Exploration](#directed-exploration)
 - [How It Works](#how-it-works)
 - [Requirements](#requirements)
 
@@ -101,6 +103,7 @@ Then add it as a dependency of your test target:
 | `#gen(...)` | Build a generator from primitives, with automatic bidirectional mapping |
 | `#exhaust(gen) { ... }` | Test a property and report a minimal counterexample on failure |
 | `#exhaust(Spec.self, ...)` | Run a contract test against a stateful system |
+| `#explore(gen, directions:) { ... }` | Test a property with per-direction coverage guarantees |
 | `#example(gen)` | Generate values outside of tests — for prototyping and snapshots |
 | `#examine(gen)` | Validate that a generator round-trips correctly through reflection and replay |
 
@@ -557,6 +560,50 @@ Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.r
 | Setting | Default | Effect |
 |---|---|---|
 | `commandLimit:` | (required) | Maximum number of commands per test iteration. |
+
+## Directed Exploration
+
+Most property tests are built to pass. `#exhaust` gives you confidence that the property holds across the generator's structural boundaries, but it can't guarantee that your specific semantic concerns were covered. A test that passes 1000 iterations might never have generated a value in the region you care about.
+
+`#explore` lets you declare the questions you want the test to answer — named directions over the output space — and guarantees each one receives a minimum number of samples:
+
+```swift
+@Test func balanceCheckerCoversEdgeCases() {
+    let gen = #gen(
+        .int(in: -100 ... 100), .int(in: -100 ... 100),
+        .int(in: -100 ... 100), .int(in: -100 ... 100)
+    )
+
+    let report = #explore(gen,
+        directions: [
+            ("all positive",     { t in t.0 >= 0 && t.1 >= 0 && t.2 >= 0 && t.3 >= 0 }),
+            ("dips below zero",  { t in /* running sum goes negative */ ... }),
+            ("large values",     { t in abs(t.0) > 80 || abs(t.1) > 80 }),
+        ]
+    ) { value in
+        validateBalance(value)
+    }
+}
+```
+
+For each direction, `#explore` tunes the generator via Choice Gradient Sampling to steer toward that region, draws K samples, and classifies every sample against every direction. The result is an `ExploreReport` containing:
+
+- **Per-direction coverage** — how many samples matched each direction, with separate counts for the untuned warm-up and each direction's tuning pass.
+- **Direction attribution** — if the property fails, the counterexample's report shows which directions it belonged to, so you know which behavioral region the bug lives in. Reduction preserves the matched directions — the reduced counterexample stays in the same behavioral region as the original failure, so attribution remains accurate after shrinking.
+- **Co-occurrence matrix** — pairwise overlap counts between directions, revealing which directions are independent and which are entangled.
+
+`#exhaust` asks *does the property hold across the generator's structural edges?* `#explore` asks *have the specific regions I declared actually been visited?* Use `#exhaust` for structural coverage, `#explore` for semantic coverage, or both when you want both guarantees.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `.budget(.expedient)` | default | 30 hits per direction, 300 max attempts per direction. |
+| `.budget(.expensive)` | — | 100 hits per direction, 1000 max attempts per direction. |
+| `.budget(.exorbitant)` | — | 300 hits per direction, 3000 max attempts per direction. |
+| `.budget(.custom(...))` | — | Explicit values for hit target and attempt budget. |
+| `.replay(seed)` | — | Deterministic reproduction. |
+
+> [!Note]
+> `#explore` is more expensive than `#exhaust`. The total attempt budget is the per-direction budget multiplied by the number of declared directions — five directions at `.expedient` means 1,500 total attempts, plus CGS tuning overhead per direction. Start with `.expedient` and increase the budget only for directions that need stronger bounds.
 
 ## How It Works
 

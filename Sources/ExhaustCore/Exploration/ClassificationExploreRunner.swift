@@ -1,5 +1,13 @@
 import Foundation
 
+// MARK: - Academic Provenance
+//
+// The design synthesizes three traditions. Ostrand and Balcer's Category-Partition Method (CACM 1988) introduced systematic partitioning of the input space into named categories and choices; each direction here corresponds to one of their category–choice pairs. Claessen and Hughes's QuickCheck classify/cover (ICFP 2000) added post-hoc distribution reporting over random samples but cannot steer the sampler — coverage is observed, not guaranteed. This runner closes the gap: per-direction CGS tuning produces a stratum-specific distribution for each direction, guaranteeing K hits per stratum rather than reporting whatever the generator happened to produce.
+//
+// The detection-probability advantage of partition-style testing under rate uncertainty is an instance of Gutjahr's theorem (IEEE TSE 25(5), 1999), the testing-adapted analogue of Cochran's variance-reduction bound from survey sampling. Rule-of-three bounds on per-direction failure rates follow Hanley and Lippman-Hand (JAMA 249(13), 1983). CGS tuning uses the online derivative-sampling algorithm from Goldstein (Ch. 3, Fig 3.3) with offline weight baking from Tjoa et al. (OOPSLA2, 2025).
+//
+// Direction-preserving reduction composes cleanly with the choice-sequence reducer because the reducer is greedy under shortlex order against an arbitrary predicate — no `valid t ==>` guards that weaken shrinks (contrast Hughes, "How to Specify It!", TFP 2019).
+
 /// Classification-aware exploration runner that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
 /// Implements the three-stage orchestration: warm-up (untuned sampling for ordering signal), per-direction tuning passes (most-hit-first, with cross-direction classification and budget pooling), and direction-preserving reduction on failure.
