@@ -22,7 +22,7 @@
 /// Five ``BoundaryParameterKind`` cases:
 /// - `.finiteChooseBits`: domain size is 256 or smaller — enumerates all values.
 /// - `.chooseBits`: domain size exceeds 256 — synthesizes boundary values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific boundary sets.
-/// - `.sequenceLength`: sequence node — tests lengths {0, 1, 2} (intersection with the declared length range). Capped at 2 elements to keep parameter count tractable.
+/// - `.sequenceLength`: sequence node — tests lengths {0, 1, 2, lowerBound} filtered to the declared length range. Capped at 2 elements to keep parameter count tractable.
 /// - `.sequenceElement`: element within a sequence — boundary values for the element's range, tagged with its position index.
 /// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer and all branches are structurally valid. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
 ///
@@ -346,7 +346,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Sequence
 
     //
-    // Extracts a length parameter and up to two element parameters from a sequence node. The length parameter tests {0, 1, 2} (intersected with the declared length range). Element analysis is capped at two slots to keep the total parameter count tractable — a 4-element sequence would add 1 length + 4×N element parameters, making covering array generation prohibitively expensive.
+    // Extracts a length parameter and up to two element parameters from a sequence node. The length parameter tests {0, 1, 2, lowerBound} filtered to the declared length range. Element analysis is capped at two slots to keep the total parameter count tractable — a 4-element sequence would add 1 length + 4×N element parameters, making covering array generation prohibitively expensive.
 
     private static func walkSequence(
         length _: UInt64,
@@ -359,11 +359,9 @@ package enum ChoiceTreeAnalysis {
             return false
         }
 
-        let lower = lengthRange.lowerBound
-        let upper = lengthRange.upperBound
-        var lengthValues: [UInt64] = [lower, upper]
-        if lower + 1 <= upper { lengthValues.append(lower + 1) }
-        lengthValues.sort()
+        let lengthValues = Set([0, 1, 2, lengthRange.lowerBound])
+            .filter { lengthRange.contains($0) }
+            .sorted()
 
         let lengthParam = BoundaryParameter(
             index: parameters.count,

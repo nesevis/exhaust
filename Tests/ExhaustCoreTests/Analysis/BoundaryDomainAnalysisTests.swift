@@ -83,12 +83,10 @@ struct BoundaryDomainAnalysisTests {
         #expect(profile!.parameters.count >= 2)
         #expect(profile!.parameters.count <= 3)
 
-        // Check length parameter — boundary values are {lower, lower+1, upper}
+        // Check length parameter — boundary values are {0, 1, 2, lowerBound} filtered to the declared range
         if let lengthParam = profile?.parameters[0] {
             if case .sequenceLength = lengthParam.kind {
-                #expect(lengthParam.values.contains(0))
-                #expect(lengthParam.values.contains(1))
-                #expect(lengthParam.values.contains(10))
+                #expect(lengthParam.values == [0, 1, 2])
             } else {
                 Issue.record("Expected sequenceLength parameter")
             }
