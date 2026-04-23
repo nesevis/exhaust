@@ -351,6 +351,11 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - Sequence
 
             case let .sequence(lengthGen, elementGen):
+                // Skip derivative evaluation for both length and element picks: without sequence-aware frames, derivatives can't compose through the sequence boundary (the length produces UInt64, elements produce individual values, neither is FinalOutput). Depth >= 4 triggers handlePick's fast path.
+                var sequenceDerivativeContext = DerivativeContext()
+                for _ in 0 ..< 4 {
+                    sequenceDerivativeContext.push(.bind(continuation: { .pure($0) }))
+                }
                 guard let length = try generateRecursive(
                     lengthGen,
                     with: inputValue,
@@ -358,18 +363,13 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext
+                    derivativeContext: sequenceDerivativeContext
                 ) else {
                     return nil
                 }
 
                 var results: [Any] = []
                 results.reserveCapacity(Int(length))
-                // Skip derivative evaluation for element-level picks: without .sequenceElement frames, derivatives can't compose through the sequence boundary (element values would hit the predicate with wrong types). Depth >= 4 triggers handlePick's fast path.
-                var elementDerivativeContext = DerivativeContext()
-                for _ in 0 ..< 4 {
-                    elementDerivativeContext.push(.bind(continuation: { .pure($0) }))
-                }
                 let didSucceed = try SequenceExecutionKernel.run(count: length) {
                     guard let result = try generateRecursive(
                         elementGen,
@@ -378,7 +378,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: elementDerivativeContext
+                        derivativeContext: sequenceDerivativeContext
                     ) else {
                         return false
                     }
