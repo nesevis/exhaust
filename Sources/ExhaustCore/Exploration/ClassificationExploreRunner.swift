@@ -96,8 +96,9 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
             if property(value) == false {
                 let reduced = reduce(value: value, tree: tree, matchingDirections: matching)
+                let reducedDirections = classify(reduced.counterexample)
                 return assembleResult(
-                    state: state, failure: reduced, matchingDirections: matching,
+                    state: state, failure: reduced, matchingDirections: reducedDirections,
                     startTime: startTime, termination: .propertyFailed
                 )
             }
@@ -221,9 +222,10 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             if propertyHolds == false {
                 let untunedTree = try? Interpreters.reflect(gen, with: value)
                 let reduced = reduce(value: value, tree: untunedTree, matchingDirections: matching)
+                let reducedDirections = classify(reduced.counterexample)
                 state.remainingPool += passBudget - passSamplesDrawn
                 return assembleResult(
-                    state: state, failure: reduced, matchingDirections: matching,
+                    state: state, failure: reduced, matchingDirections: reducedDirections,
                     startTime: startTime, termination: .propertyFailed
                 )
             }

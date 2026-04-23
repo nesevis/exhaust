@@ -30,6 +30,6 @@ import ExhaustCore
 public macro explore<GeneratedValue>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
-    directions: [(String, (GeneratedValue) -> Bool)],
+    directions: [(String, @Sendable (GeneratedValue) -> Bool)],
     property: (GeneratedValue) throws -> Bool
 ) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")

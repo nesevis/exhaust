@@ -257,6 +257,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                     switch coverageResult {
                     case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
+                        coverageIterations = iteration
                         ExhaustLog.notice(
                             category: .propertyTest,
                             event: "coverage_failure",
@@ -1100,8 +1101,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     // MARK: - Explore
 
-    /// Runs a feedback-guided property test with hill-climbing mutation.
-    /// This is the runtime target of the `#explore` macro expansion.
+    /// Runs a classification-aware property test with per-direction CGS tuning. Runtime target of `#explore`.
     @discardableResult
     public static func __explore<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -1194,17 +1194,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             }
 
             if let counterexample = result.counterexample {
-                let failure = PropertyTestFailure(
+                let matchedDirections = result.counterexampleDirections.map { index in
+                    (index: index, name: directionCoverage[index].name)
+                }
+                let failure = ExploreFailure(
                     counterexample: counterexample,
                     original: result.original,
-                    sourceCode: sourceCode,
                     seed: result.seed,
-                    iteration: result.propertyInvocations,
-                    samplingBudget: UInt64(directions.count * budget.maxAttemptsPerDirection),
-                    blueprint: result.reducedSequence?.shortString,
-                    propertyInvocations: result.propertyInvocations
+                    propertyInvocations: result.propertyInvocations,
+                    totalBudget: directions.count * budget.maxAttemptsPerDirection,
+                    matchedDirections: matchedDirections
                 )
-                let rendered = failure.render(format: logFormat)
+                let rendered = failure.render()
                 if suppressIssueReporting == false {
                     reportIssue(
                         rendered,
