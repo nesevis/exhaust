@@ -74,6 +74,31 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     }._bind { zipResult in
                         try continuation(zipResult)
                     }
+
+                case let .sequenceElement(index, completed, totalCount, elementGen, continuation):
+                    let capturedIndex = index
+                    let capturedCompleted = completed
+                    let capturedElementGen = elementGen
+                    let capturedTotalCount = totalCount
+                    current = try current._bind { elementResult -> ReflectiveGenerator<Any> in
+                        var gens = ContiguousArray<ReflectiveGenerator<Any>>()
+                        gens.reserveCapacity(capturedTotalCount)
+                        for j in 0 ..< capturedTotalCount {
+                            if j < capturedIndex {
+                                gens.append(.pure(capturedCompleted[j]))
+                            } else if j == capturedIndex {
+                                gens.append(.pure(elementResult))
+                            } else {
+                                gens.append(capturedElementGen)
+                            }
+                        }
+                        return ReflectiveGenerator<Any>.impure(
+                            operation: .zip(gens),
+                            continuation: { .pure($0) }
+                        )
+                    }._bind { arrayResult in
+                        try continuation(arrayResult)
+                    }
                 }
             }
             return current._map { $0 as! FinalOutput }
@@ -92,6 +117,15 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             index: Int,
             completed: [Any],
             allGenerators: ContiguousArray<ReflectiveGenerator<Any>>,
+            continuation: (Any) throws -> ReflectiveGenerator<Any>
+        )
+
+        /// A sequence element: the target site is inside element `index` of a sequence of `totalCount` elements. `completed` holds already-generated values for earlier elements, `elementGen` is the generator for remaining elements, and `continuation` is the downstream bind that receives the assembled array.
+        case sequenceElement(
+            index: Int,
+            completed: [Any],
+            totalCount: Int,
+            elementGen: ReflectiveGenerator<Any>,
             continuation: (Any) throws -> ReflectiveGenerator<Any>
         )
     }
@@ -351,10 +385,10 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - Sequence
 
             case let .sequence(lengthGen, elementGen):
-                // Skip derivative evaluation for both length and element picks: without sequence-aware frames, derivatives can't compose through the sequence boundary (the length produces UInt64, elements produce individual values, neither is FinalOutput). Depth >= 4 triggers handlePick's fast path.
-                var sequenceDerivativeContext = DerivativeContext()
+                // Length generator: skip derivative evaluation — the length produces UInt64, not FinalOutput, so derivatives can't compose through. Depth >= 4 triggers handlePick's fast path.
+                var lengthDerivativeContext = DerivativeContext()
                 for _ in 0 ..< 4 {
-                    sequenceDerivativeContext.push(.bind(continuation: { .pure($0) }))
+                    lengthDerivativeContext.push(.bind(continuation: { .pure($0) }))
                 }
                 guard let length = try generateRecursive(
                     lengthGen,
@@ -363,14 +397,24 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: sequenceDerivativeContext
+                    derivativeContext: lengthDerivativeContext
                 ) else {
                     return nil
                 }
 
+                let elementCount = Int(length)
                 var results: [Any] = []
-                results.reserveCapacity(Int(length))
+                results.reserveCapacity(elementCount)
                 let didSucceed = try SequenceExecutionKernel.run(count: length) {
+                    var elementContext = derivativeContext
+                    elementContext.push(.sequenceElement(
+                        index: results.count,
+                        completed: results,
+                        totalCount: elementCount,
+                        elementGen: elementGen,
+                        continuation: { try continuation($0).erase() }
+                    ))
+
                     guard let result = try generateRecursive(
                         elementGen,
                         with: inputValue,
@@ -378,7 +422,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: sequenceDerivativeContext
+                        derivativeContext: elementContext
                     ) else {
                         return false
                     }
