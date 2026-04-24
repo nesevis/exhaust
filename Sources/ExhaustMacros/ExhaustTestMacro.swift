@@ -6,7 +6,7 @@ import SwiftSyntaxMacros
 /// Expression macro that expands `#exhaust(gen, .settings...) { ... }` into a call to ``__ExhaustRuntime/__exhaust(...)`` or ``__ExhaustRuntime/__exhaustExpect(...)``.
 ///
 /// The macro inspects the trailing closure to determine the runtime function:
-/// - **Multi-statement closures** expand to `__exhaustExpect` (Void-returning, uses `withKnownIssue`).
+/// - **Multi-statement closures** expand to `__exhaustExpect` (Void-returning, uses `withExpectedIssue`).
 /// - **Single-expression closures containing `#expect` or `#require`** expand to `__exhaustExpect`.
 /// - **All other single-expression closures** expand to `__exhaust` (Bool-returning predicate).
 ///

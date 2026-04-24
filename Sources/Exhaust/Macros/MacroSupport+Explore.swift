@@ -6,16 +6,6 @@ import IssueReporting
 
 #if canImport(Testing)
     @_weakLinked import Testing
-#else
-    private struct _NoopIssue {}
-
-    private func withKnownIssue(
-        isIntermittent _: Bool = false,
-        _ body: () throws -> Void,
-        matching _: @escaping @Sendable (_NoopIssue) -> Bool = { _ in true }
-    ) rethrows {
-        try body()
-    }
 #endif
 
 extension __ExhaustRuntime {
@@ -187,7 +177,7 @@ extension __ExhaustRuntime {
             let boolProperty = wrapDetectionProperty(detection)
 
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
-            try? withKnownIssue(isIntermittent: true) {
+            withExpectedIssue(isIntermittent: true) {
                 pipelineResult = __explore(
                     gen,
                     settings: settings + [.suppress(.issueReporting)],
@@ -292,7 +282,7 @@ extension __ExhaustRuntime {
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
                 nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
-                try? withKnownIssue(isIntermittent: true) {
+                withExpectedIssue(isIntermittent: true) {
                     pipelineResult = __explore(
                         gen,
                         settings: settings + [.suppress(.issueReporting)],

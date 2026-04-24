@@ -6,7 +6,7 @@ import SwiftSyntaxMacros
 /// Expression macro that expands `#explore(gen, .settings..., directions: [...]) { ... }` into a call to `__ExhaustRuntime.__explore(...)` or `__ExhaustRuntime.__exploreExpect(...)`.
 ///
 /// The macro inspects the trailing closure to determine the runtime function:
-/// - **Multi-statement closures** expand to `__exploreExpect` (Void-returning, uses `withKnownIssue`).
+/// - **Multi-statement closures** expand to `__exploreExpect` (Void-returning, uses `withExpectedIssue`).
 /// - **Single-expression closures containing `#expect` or `#require`** expand to `__exploreExpect`.
 /// - **All other single-expression closures** expand to `__explore` (Bool-returning predicate).
 ///

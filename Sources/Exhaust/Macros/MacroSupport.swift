@@ -14,19 +14,6 @@ import IssueReporting
 
 #if canImport(Testing)
     @_weakLinked import Testing
-#else
-    /// Noop shim — withKnownIssue just runs the body.
-    /// The matching closure is never called, so #expect failures go undetected.
-    /// Only thrown errors (from #require or manual throws) signal failure.
-    private struct _NoopIssue {}
-
-    private func withKnownIssue(
-        isIntermittent _: Bool = false,
-        _ body: () throws -> Void,
-        matching _: @escaping @Sendable (_NoopIssue) -> Bool = { _ in true }
-    ) rethrows {
-        try body()
-    }
 #endif
 
 /// Runtime support namespace for `#exhaust`, `#explore`, and `#examine` macro expansions.
@@ -373,7 +360,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Runs a property test with a `Void`-returning property that uses `#expect`/`#require` for assertions.
     ///
-    /// Wraps the property into a `Bool`-returning form via `withKnownIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
+    /// Wraps the property into a `Bool`-returning form via `withExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
     @discardableResult
     public static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
         _ gen: ReflectiveGenerator<Output>,
@@ -411,12 +398,12 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             withoutActuallyEscaping(detection) { detection in
                 let boolProperty = wrapDetectionProperty(detection)
 
-                // Wrap the entire pipeline in withKnownIssue to suppress #require issues from the detection closure during coverage/sampling/reduction.
-                // The final re-run (outside this scope) produces the user-facing #expect output.
+                // Suppress assertion issues during coverage/sampling/reduction.
+                // The final re-run (outside this scope) produces the user-facing assertion output.
                 nonisolated(unsafe) var pipelineResult: Output?
                 nonisolated(unsafe) var capturedSeed: UInt64?
                 nonisolated(unsafe) var capturedRenderedFailure: String?
-                try? withKnownIssue(isIntermittent: true) {
+                withExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
                             gen: gen, settings: settings, sourceCode: sourceCode,
@@ -448,7 +435,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         function: function,
                         property: boolProperty
                     )
-                } // withKnownIssue — all #require issues from the detection closure are now suppressed.
+                }
 
                 guard let counterexample = pipelineResult else { return nil }
 
@@ -463,7 +450,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                     }
 
-                    // Re-run without withKnownIssue so #expect failures record with reduced values.
+                    // Re-run without suppression so #expect failures record with reduced values.
                     do {
                         try property(counterexample)
                     } catch {
@@ -547,7 +534,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             nonisolated(unsafe) var capturedRenderedFailure: String?
 
             await dispatchToGCD {
-                try? withKnownIssue(isIntermittent: true) {
+                withExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
                             gen: gen, settings: settings, sourceCode: sourceCode,

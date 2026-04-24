@@ -58,7 +58,7 @@ import ExhaustCore
 /// }
 /// ```
 ///
-/// The `Void` path detects `#expect` failures automatically (including inside helper functions) using `withKnownIssue`. After reduction, the property is re-run one final time without suppression so `#expect` failures record with the reduced values. The only Exhaust artifact is the replay seed.
+/// The `Void` path detects `#expect` failures automatically (including inside helper functions) using `withExpectedIssue`. After reduction, the property is re-run one final time without suppression so `#expect` failures record with the reduced values. The only Exhaust artifact is the replay seed.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
