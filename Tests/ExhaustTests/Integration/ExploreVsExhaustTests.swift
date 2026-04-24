@@ -1,72 +1,93 @@
-//
-//  ExploreVsExhaustTests.swift
-//  ExhaustTests
-//
-
 import Testing
 @testable import Exhaust
 
-@Suite("Explore vs Exhaust")
-struct ExploreVsExhaustTests {
-    // MARK: - #exhaust baseline
-
-    @Test("#exhaust finds a valid BST with height exactly 5", .disabled("Stack overflow"))
-    func exhaustFindsHeight5BST() throws {
-        let gen = BST.arbitraryRecursive(valueRange: 0 ... 18)
-            .unique()
-            .filter { $0.isValidBST() }
-
-        let result = #exhaust(
+@Suite("Explore macro integration")
+struct ExploreMacroIntegrationTests {
+    @Test("#explore covers common directions")
+    func coversCommonDirections() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
             gen,
-            .budget(.expensive),
-            .replay(577_118_919_570_660_442),
-            .suppress(.issueReporting)
-        ) { bst in
-            !(bst.height == 5)
+            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .suppress(.all),
+            directions: [
+                ("low", { $0 < 50 }),
+                ("high", { $0 >= 50 }),
+            ]
+        ) { value in
+            value >= 0
         }
-        let bst = try #require(result)
-        #expect(bst.height == 5)
-        #expect(bst.isValidBST())
+        #expect(report.result == nil)
+        #expect(report.termination == .coverageAchieved)
+        for entry in report.directionCoverage {
+            #expect(entry.isCovered)
+        }
     }
 
-    // MARK: - Hill-climbing #explore
-
-    @Test("#explore with scorer finds deep valid BSTs")
-    func exploreWithScorerFindsDeepBSTs() throws {
-        let gen = BST.arbitrary(maxDepth: 5, valueRange: 1 ... 18)
-            .filter { $0.isValidBST() }
-            .unique()
-
-        // Composite scorer: reward height
-        // Height alone doesn't guide toward valid BSTs — most tall trees violate ordering.
-        let result = #explore(
+    @Test("#explore finds and reduces a counterexample")
+    func findsCounterexample() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
             gen,
-            .samplingBudget(200_000),
-            .replay(15_190_352_305_301_843_617),
-            .suppress(.issueReporting),
-            scorer: { Double($0.height) }
-        ) { bst in
-            !(bst.height >= 5)
+            .budget(.custom(hitsPerDirection: 30, maxAttemptsPerDirection: 500)),
+            .suppress(.all),
+            directions: [
+                ("any", { _ in true }),
+            ]
+        ) { value in
+            value < 50
         }
-
-        let bst = try #require(result)
-        #expect(bst.height >= 5)
-        #expect(bst.isValidBST())
+        #expect(report.result != nil)
+        #expect(report.termination == .propertyFailed)
+        if let counterexample = report.result {
+            #expect(counterexample >= 50)
+        }
     }
 
-    // MARK: - Basic #explore
+    @Test("#explore report exposes co-occurrence data")
+    func coOccurrenceExposed() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .suppress(.all),
+            directions: [
+                ("positive", { $0 > 0 }),
+                ("above 30", { $0 > 30 }),
+            ]
+        ) { _ in
+            true
+        }
+        #expect(report.coOccurrence.directionCount == 2)
+        #expect(report.coOccurrence.totalSampleCount > 0)
+    }
 
-    @Test("#explore with scorer works for simple search")
-    func exploreWithScorerWorks() {
-        let gen = #gen(.int(in: 0 ... 1000))
-        let result = #explore(gen, .samplingBudget(500), .suppress(.issueReporting),
-                              scorer: { Double($0) })
-        { value in
-            value < 500
+    @Test("#explore with replay produces deterministic results")
+    func deterministicWithReplay() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report1 = #explore(
+            gen,
+            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .replay(42),
+            .suppress(.all),
+            directions: [
+                ("low", { $0 < 50 }),
+            ]
+        ) { _ in
+            true
         }
-        #expect(result != nil)
-        if let ce = result {
-            #expect(ce >= 500)
+        let report2 = #explore(
+            gen,
+            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .replay(42),
+            .suppress(.all),
+            directions: [
+                ("low", { $0 < 50 }),
+            ]
+        ) { _ in
+            true
         }
+        #expect(report1.propertyInvocations == report2.propertyInvocations)
+        #expect(report1.seed == report2.seed)
     }
 }

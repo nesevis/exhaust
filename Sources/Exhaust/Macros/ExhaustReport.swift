@@ -7,6 +7,9 @@ public struct ExhaustReport: Sendable {
     /// The PRNG seed used for random sampling, if any.
     public var seed: UInt64?
 
+    /// The rendered failure message from the Bool pipeline, stored for `__exhaustExpect` to emit.
+    package var renderedFailure: String?
+
     /// Time spent in the structured coverage phase, in milliseconds.
     public var coverageMilliseconds: Double = 0
 

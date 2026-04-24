@@ -150,7 +150,7 @@ private func containsReturnWithValueRecursive(_ node: Syntax) -> Bool {
 /// - `let x = try #require(optional)` → `let x = try __ExhaustRuntime.__detectRequire(optional)`
 ///
 /// Does not recurse into nested closures.
-private func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
+func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
     let rewriter = DetectionRewriter(viewMode: .sourceAccurate)
     return rewriter.rewrite(closure).cast(ClosureExprSyntax.self)
 }
@@ -158,7 +158,7 @@ private func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExpr
 /// Rewrites `#expect`/`#require` calls in the property closure to include explicit `sourceLocation:` parameters.
 ///
 /// In a macro expansion, `#_sourceLocation` resolves to the expansion site (the `#exhaust` line), not the original assertion line. This rewriter uses `MacroExpansionContext.location(of:)` to get each assertion's original source location and injects it as an explicit argument.
-private final class SourceLocationRewriter: SyntaxRewriter {
+final class SourceLocationRewriter: SyntaxRewriter {
     let context: any MacroExpansionContext
     private var closureDepth = 0
 
@@ -286,7 +286,7 @@ private func expandExhaust(
 
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
-    if runtimeFunction == "__exhaustExpect" {
+    if runtimeFunction == "__exhaustExpect" || runtimeFunction == "__exhaustExpectAsync" {
         // Void path: pass both the original closure (for final re-run with #expect)
         // and a detection closure (with #expect → __detectRequire, for pipeline via try/catch).
         //
@@ -296,11 +296,19 @@ private func expandExhaust(
         let propertyWithLocations = sourceLocationRewriter.rewrite(trailingClosure).cast(ClosureExprSyntax.self)
 
         // Detection closure: #expect/#require → __detectRequire (silent, no Issue.record).
-        let detectionClosure = rewriteExpectToRequire(trailingClosure)
+        // Strip `async` — the detection closure is always synchronous.
+        var detectionClosure = rewriteExpectToRequire(trailingClosure)
+        if let sig = detectionClosure.signature,
+           let effects = sig.effectSpecifiers,
+           effects.asyncSpecifier != nil
+        {
+            let strippedEffects = effects.with(\.asyncSpecifier, nil)
+            detectionClosure = detectionClosure.with(\.signature, sig.with(\.effectSpecifiers, strippedEffects))
+        }
         let detectionText = detectionClosure.description
 
         return """
-        __ExhaustRuntime.__exhaustExpect(
+        __ExhaustRuntime.\(raw: runtimeFunction)(
             \(raw: generatorExpr),
             settings: \(raw: settingsArray),
             sourceCode: "\(raw: sourceCode)",

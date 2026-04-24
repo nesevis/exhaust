@@ -25,7 +25,7 @@ package enum BoundaryParameterKind: @unchecked Sendable {
     /// A chooseBits with a range too large for finite-domain analysis. Values are boundary representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
     case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
 
-    /// A sequence length, capped at 2 for the boundary model. Values are: {0, 1, 2} (or subset if range is smaller)
+    /// A sequence length. Values are {0, 1, 2, lowerBound} filtered to the declared length range.
     case sequenceLength(lengthRange: ClosedRange<UInt64>)
 
     /// An element within a boundary-modeled sequence. Same boundary values as chooseBits for the element generator.

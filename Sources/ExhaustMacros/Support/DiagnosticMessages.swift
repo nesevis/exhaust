@@ -12,10 +12,9 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exhaustMissingGenerator = "#exhaust requires a generator as its first argument"
     case exploreMissingProperty = "#explore requires a property (trailing closure or 'property:' argument)"
     case exploreMissingGenerator = "#explore requires a generator as its first argument"
-    case exploreMissingScorer = "#explore requires a 'scorer:' argument"
+    case exploreMissingDirections = "#explore requires a 'directions:' argument"
     case exampleMissingGenerator = "#example requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
-    case exploreUnderDevelopment = "#explore is under active development and its API may change without notice"
     case exhaustContractMissingSpec = "#exhaust requires a spec type argument"
 
     var message: String {
@@ -33,15 +32,14 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
              .forwardOnlyNotFunctionCall,
              .forwardOnlyUnlabeledArguments,
              .forwardOnlyComplexArguments,
-             .forwardOnlyParamMismatch,
-             .exploreUnderDevelopment:
+             .forwardOnlyParamMismatch:
             .warning
         case .noGeneratorArguments,
              .exhaustMissingProperty,
              .exhaustMissingGenerator,
              .exploreMissingProperty,
              .exploreMissingGenerator,
-             .exploreMissingScorer,
+             .exploreMissingDirections,
              .exampleMissingGenerator,
              .examineMissingGenerator,
              .exhaustContractMissingSpec:

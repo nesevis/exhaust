@@ -10,6 +10,7 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         ExampleMacro.self,
         ExamineMacro.self,
         ExploreMacro.self,
+        ExploreAsyncMacro.self,
         ExhaustContractMacro.self,
         ExhaustAsyncContractMacro.self,
         ContractDeclarationMacro.self,

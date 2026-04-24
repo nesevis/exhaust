@@ -74,6 +74,31 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     }._bind { zipResult in
                         try continuation(zipResult)
                     }
+
+                case let .sequenceElement(index, completed, totalCount, elementGen, continuation):
+                    let capturedIndex = index
+                    let capturedCompleted = completed
+                    let capturedElementGen = elementGen
+                    let capturedTotalCount = totalCount
+                    current = try current._bind { elementResult -> ReflectiveGenerator<Any> in
+                        var gens = ContiguousArray<ReflectiveGenerator<Any>>()
+                        gens.reserveCapacity(capturedTotalCount)
+                        for j in 0 ..< capturedTotalCount {
+                            if j < capturedIndex {
+                                gens.append(.pure(capturedCompleted[j]))
+                            } else if j == capturedIndex {
+                                gens.append(.pure(elementResult))
+                            } else {
+                                gens.append(capturedElementGen)
+                            }
+                        }
+                        return ReflectiveGenerator<Any>.impure(
+                            operation: .zip(gens),
+                            continuation: { .pure($0) }
+                        )
+                    }._bind { arrayResult in
+                        try continuation(arrayResult)
+                    }
                 }
             }
             return current._map { $0 as! FinalOutput }
@@ -94,6 +119,15 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             allGenerators: ContiguousArray<ReflectiveGenerator<Any>>,
             continuation: (Any) throws -> ReflectiveGenerator<Any>
         )
+
+        /// A sequence element: the target site is inside element `index` of a sequence of `totalCount` elements. `completed` holds already-generated values for earlier elements, `elementGen` is the generator for remaining elements, and `continuation` is the downstream bind that receives the assembled array.
+        case sequenceElement(
+            index: Int,
+            completed: [Any],
+            totalCount: Int,
+            elementGen: ReflectiveGenerator<Any>,
+            continuation: (Any) throws -> ReflectiveGenerator<Any>
+        )
     }
 
     let generator: ReflectiveGenerator<FinalOutput>
@@ -107,16 +141,18 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     private struct CGSState: ~Copyable {
         var samplingPRNG: Xoshiro256
         var fitnessAccumulator: FitnessAccumulator?
+        var subdivisionThresholds: CGSSubdivisionThresholds
     }
 
-    /// Creates an online CGS interpreter for the given generator and predicate, with optional derivative sampling count, seed, run cap, and fitness accumulator.
+    /// Creates an online CGS interpreter for the given generator and predicate, with optional derivative sampling count, seed, run cap, fitness accumulator, and subdivision thresholds.
     public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64 = 50,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
-        fitnessAccumulator: FitnessAccumulator? = nil
+        fitnessAccumulator: FitnessAccumulator? = nil,
+        subdivisionThresholds: CGSSubdivisionThresholds = .default
     ) {
         self.generator = generator
         self.predicate = predicate
@@ -130,7 +166,11 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         }
         var samplingPRNG = Xoshiro256(seed: baseSeed)
         samplingPRNG.jump()
-        cgsState = CGSState(samplingPRNG: samplingPRNG, fitnessAccumulator: fitnessAccumulator)
+        cgsState = CGSState(
+            samplingPRNG: samplingPRNG,
+            fitnessAccumulator: fitnessAccumulator,
+            subdivisionThresholds: subdivisionThresholds
+        )
         context = .init(
             maxRuns: maxRuns ?? 100,
             baseSeed: baseSeed,
@@ -269,9 +309,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - ChooseBits
 
             case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
-                if derivativeContext.depth < 3, max >= min {
+                if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth, max >= min {
                     let rangeSize = (min ... max).saturatingCount
-                    if rangeSize >= 1000 {
+                    if rangeSize >= cgsState.subdivisionThresholds.minimumRangeSize {
                         // Synthesize a pick over subranges, matching GeneratorTuning.tuneChooseBits
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
                         let subranges = (min ... max).split(into: subrangeCount)
@@ -345,6 +385,11 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - Sequence
 
             case let .sequence(lengthGen, elementGen):
+                // Length generator: skip derivative evaluation — the length produces UInt64, not FinalOutput, so derivatives can't compose through. Depth >= 4 triggers handlePick's fast path.
+                var lengthDerivativeContext = DerivativeContext()
+                for _ in 0 ..< 4 {
+                    lengthDerivativeContext.push(.bind(continuation: { .pure($0) }))
+                }
                 guard let length = try generateRecursive(
                     lengthGen,
                     with: inputValue,
@@ -352,19 +397,24 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext
+                    derivativeContext: lengthDerivativeContext
                 ) else {
                     return nil
                 }
 
+                let elementCount = Int(length)
                 var results: [Any] = []
-                results.reserveCapacity(Int(length))
-                // Skip derivative evaluation for element-level picks: without .sequenceElement frames, derivatives can't compose through the sequence boundary (element values would hit the predicate with wrong types). Depth >= 4 triggers handlePick's fast path.
-                var elementDerivativeContext = DerivativeContext()
-                for _ in 0 ..< 4 {
-                    elementDerivativeContext.push(.bind(continuation: { .pure($0) }))
-                }
+                results.reserveCapacity(elementCount)
                 let didSucceed = try SequenceExecutionKernel.run(count: length) {
+                    var elementContext = derivativeContext
+                    elementContext.push(.sequenceElement(
+                        index: results.count,
+                        completed: results,
+                        totalCount: elementCount,
+                        elementGen: elementGen,
+                        continuation: { try continuation($0).erase() }
+                    ))
+
                     guard let result = try generateRecursive(
                         elementGen,
                         with: inputValue,
@@ -372,7 +422,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: elementDerivativeContext
+                        derivativeContext: elementContext
                     ) else {
                         return false
                     }

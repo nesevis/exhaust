@@ -16,9 +16,10 @@ Exhaust is a property-based testing library for Swift. Instead of writing indivi
 - **Contract testing** — generate random sequences of commands against a stateful system and verify that invariants hold after every step.
 - **Inspectable generators** — generators are data structures, not opaque closures. The library runs them forward to generate, backward to decompose, and replays them for deterministic reproduction.
 
-Exhaust works in two modes:
+Exhaust works in three modes:
 
 - **Property tests** — generate values and check that a rule holds: `#exhaust(generator) { value in Bool }`.
+- **Directed exploration** — declare semantic regions of the input space and guarantee each one is covered: `#explore(generator, directions: [...]) { value in Bool }`.
 - **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self, commandLimit: 20)`.
 
 ```swift
@@ -72,6 +73,7 @@ Exhaust found a five-element counterexample and reduced it to two elements — t
 - [Filters and Classification](#filters-and-classification)
 - [Validating Generators](#validating-generators)
 - [Contract Testing](#contract-testing)
+- [Directed Exploration](#directed-exploration)
 - [How It Works](#how-it-works)
 - [Requirements](#requirements)
 
@@ -101,12 +103,13 @@ Then add it as a dependency of your test target:
 | `#gen(...)` | Build a generator from primitives, with automatic bidirectional mapping |
 | `#exhaust(gen) { ... }` | Test a property and report a minimal counterexample on failure |
 | `#exhaust(Spec.self, ...)` | Run a contract test against a stateful system |
+| `#explore(gen, directions:) { ... }` | Test a property with per-direction coverage guarantees |
 | `#example(gen)` | Generate values outside of tests — for prototyping and snapshots |
 | `#examine(gen)` | Validate that a generator round-trips correctly through reflection and replay |
 
 ## Building Generators
 
-The `#gen` macro is the entry point for building generators. It wraps built-in primitives into reflective generators that Exhaust can inspect, replay, and reduce:
+You build generators with the `#gen` macro. Exhaust wraps built-in primitives into reflective generators it can inspect, replay, and reduce:
 
 ```swift
 // Primitives
@@ -127,7 +130,7 @@ let direction = #gen(.oneOf(.just("north"), .just("south"), .just("east"), .just
 
 ## Composing Generators
 
-Real code doesn't test integers in isolation — you need structured values. The `#gen` macro composes multiple generators and attempts to automatically synthesize a bidirectional mapping:
+Real code doesn't test integers in isolation — you need structured values. Exhaust composes multiple generators and attempts to automatically synthesise a bidirectional mapping:
 
 ```swift
 struct Person: Equatable {
@@ -191,7 +194,7 @@ let gen = #gen(.int().array(length: 0...100))
 
 The original value is always at tuple position zero, followed by the transformed copies. Transforms can return different types — for example `{ $0.count }` alongside `{ $0.sorted() }` produces a tuple of `(original, Int, [Int])`.
 
-Each transform receives its own independently generated copy — identical in value but independent in identity. This means transforms can call mutating methods or hold references without affecting each other, which makes `metamorph` safe for reference types and in-place algorithms. When a failure is found, Exhaust reduces the original value and all transformed copies follow automatically.
+Each transform receives its own independently generated copy — identical in value but separate objects, safe to mutate independently. This means transforms can call mutating methods or hold references without affecting each other, which makes `metamorph` safe for reference types and in-place algorithms. When a failure is found, Exhaust reduces the original value and all transformed copies follow automatically.
 
 ## Running Properties
 
@@ -203,9 +206,11 @@ Each transform receives its own independently generated copy — identical in va
 }
 ```
 
-Testing happens in two phases. First, structured coverage analyzes the generator's domain and systematically tests boundary values and parameter interactions — this catches the edge cases that random sampling would need thousands of iterations to find. Then random sampling explores the remaining space. If the generator's total domain fits within the coverage budget, Exhaust performs exhaustive enumeration and skips the random phase entirely.
+Testing happens in two phases. First, Exhaust analyses the generator's domain and systematically tests boundary values and parameter interactions — this catches edge cases that random sampling would need thousands of iterations to find. Then it explores the remaining space with random sampling.
 
-Configure behavior with settings:
+If the generator's total domain fits within the coverage budget, Exhaust performs exhaustive enumeration and skips the random phase entirely.
+
+Configure behaviour with settings:
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -236,7 +241,7 @@ Instead of returning a `Bool`, you can write Swift Testing assertions directly i
 }
 ```
 
-When the closure contains `#expect`, `#require`, or multiple statements, `#exhaust` automatically switches to a mode that treats any assertion failure or thrown error as a counterexample. During reduction, assertion failures are suppressed so that test output stays clean. Once the minimal counterexample is found, the closure runs one final time with native `#expect`/`#require` reporting, so the failure message you see in the test log describes the reduced value.
+When the closure contains `#expect`, `#require`, or multiple statements, Exhaust automatically treats any assertion failure or thrown error as a counterexample. During reduction, assertion failures are suppressed so that test output stays clean. Once the minimal counterexample is found, the closure runs one final time with native `#expect`/`#require` reporting, so the failure message you see in the test log describes the reduced value.
 
 `#require` works for optional unwrapping:
 
@@ -259,7 +264,7 @@ You can also throw errors directly — any thrown error counts as a failure:
 }
 ```
 
-`#exhaust` supports four closure shapes:
+The `#exhaust` macro supports four closure shapes:
 
 ```swift
 // Predicate — return true if the property holds
@@ -285,7 +290,7 @@ await #exhaust(gen) { value in
 }
 ```
 
-`#exhaust` decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path, everything else uses the assertion path.
+Exhaust decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path, everything else uses the assertion path.
 
 > [!Tip]
 > The property closure may be called thousands of times during coverage, sampling, and reduction. Keep it as fast as possible — avoid disk I/O, network calls, and expensive setup. If your system under test requires heavyweight initialization, do it once outside the closure and pass it in.
@@ -312,7 +317,7 @@ The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats
 }
 ```
 
-Each line records the example's pass/fail status, a `customDump` representation, and automatically derived complexity features from the choice tree — no manual event annotations required. Filter rejections from CGS or rejection sampling are surfaced as `gave_up` entries.
+Each line records the example's pass/fail status, a `customDump` representation, and complexity features derived automatically from the choice tree. Filter rejections from CGS or rejection sampling are surfaced as `gave_up` entries.
 
 The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAttachment` when running under XCTest. Contract tests support `.collectOpenPBTStats` through `ContractSettings`.
 
@@ -357,7 +362,7 @@ let celsius = #gen(.double(in: -273.15...1000.0))
     )
 ```
 
-The `#gen` macro uses `mapped` automatically when it can synthesize a backward mapping — for structs it extracts properties by label, and for enum cases it uses pattern matching. For custom transformations where Exhaust can't infer the reverse, provide it explicitly.
+Exhaust uses `mapped` automatically when it can synthesise a backward mapping — for structs it extracts properties by label, and for enum cases it uses pattern matching. For custom transformations where Exhaust can't infer the reverse, provide it explicitly.
 
 `bound` is the bidirectional equivalent of `.bind` (`.flatMap`). The `backward` function is a comap: given the final output, it extracts the inner value that was used to select the dependent generator. This enables reflection through the bind — without it, Exhaust can generate and reduce but cannot reflect a concrete value backward through the dependency.
 
@@ -392,7 +397,9 @@ let evenGen = #gen(.int().filter { $0 % 2 == 0 })
 
 Most property-based testing frameworks implement filters as rejection sampling: generate a value, test the predicate, throw it away and retry if it fails. This works when the valid region is large, but becomes impractical when valid values are sparse (balanced trees, well-formed inputs, values satisfying multiple constraints).
 
-Exhaust takes a different approach by default. Because generators are inspectable data structures, it can analyze the generator's branching points and measure how often each branch leads to a value that satisfies the predicate. It then reweights the branches to favor valid outputs before generation begins — a technique called Choice Gradient Sampling (CGS). The result is that filtered generators produce valid values efficiently even when the acceptance rate under rejection sampling would be vanishingly small.
+Exhaust takes a different approach. Because generators are inspectable data structures, Exhaust can analyse the generator's branching points and measure how often each branch leads to a value that satisfies the predicate. It then reweights the branches to favour valid outputs before generation begins — a technique called Choice Gradient Sampling (CGS).
+
+The result is that filtered generators produce valid values efficiently even when the acceptance rate under rejection sampling would be vanishingly small.
 
 You can select the strategy explicitly:
 
@@ -404,7 +411,7 @@ let balanced = bstGen.filter { $0.isBalanced }
 let small = #gen(.int().filter(.rejectionSampling) { $0 < 10 })
 ```
 
-| Strategy | Behavior |
+| Strategy | Behaviour |
 |---|---|
 | `.auto` | Default. Currently selects `.choiceGradientSampling`. |
 | `.rejectionSampling` | Generate-and-discard. Simple and predictable, but slow when valid values are sparse. |
@@ -435,7 +442,7 @@ A subtle bug in a generator — a backward mapping that doesn't round-trip, or a
 
 ## Contract Testing
 
-Property tests verify pure functions, but much of real-world code is stateful — databases, caches, network sessions, UI controllers. Contract testing generates random sequences of operations against a stateful system and checks that invariants hold after every step. When something breaks, Exhaust reduces the trace to the shortest command sequence that reproduces the failure.
+Property tests verify pure functions, but much of real-world code is stateful — databases, caches, network sessions, UI controllers. Exhaust generates random sequences of operations against a stateful system and checks that invariants hold after every step. When something breaks, Exhaust reduces the trace to the shortest command sequence that reproduces the failure.
 
 Define your system under test, the commands that operate on it, and the rules it must obey:
 
@@ -558,11 +565,55 @@ Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.r
 |---|---|---|
 | `commandLimit:` | (required) | Maximum number of commands per test iteration. |
 
+## Directed Exploration
+
+Most property tests are built to pass. Exhaust gives you confidence that the property holds across the generator's structural boundaries, but it can't guarantee that your specific semantic concerns were covered. A test that passes across hundreds of iterations might never have generated a value in the region you care about.
+
+Directed exploration lets you declare the questions you want the test to answer — named directions over the output space — and guarantees each one receives a minimum number of samples:
+
+```swift
+@Test func balanceCheckerCoversEdgeCases() {
+    let gen = #gen(
+        .int(in: -100 ... 100), .int(in: -100 ... 100),
+        .int(in: -100 ... 100), .int(in: -100 ... 100)
+    )
+
+    let report = #explore(gen,
+        directions: [
+            ("all positive",     { t in t.0 >= 0 && t.1 >= 0 && t.2 >= 0 && t.3 >= 0 }),
+            ("dips below zero",  { t in /* running sum goes negative */ ... }),
+            ("large values",     { t in abs(t.0) > 80 || abs(t.1) > 80 }),
+        ]
+    ) { value in
+        validateBalance(value)
+    }
+}
+```
+
+For each direction, Exhaust tunes the generator via Choice Gradient Sampling to steer toward that region, draws K samples, and classifies every sample against every direction. The result is an `ExploreReport` containing:
+
+- **Per-direction coverage** — how many samples matched each direction, with separate counts for the untuned warm-up and each direction's tuning pass.
+- **Direction attribution** — if the property fails, the counterexample's report shows which directions it belonged to, so you know which behavioural region the bug lives in. Reduction preserves the matched directions — the reduced counterexample stays in the same behavioural region as the original failure, so attribution remains accurate after reduction.
+- **Co-occurrence matrix** — pairwise overlap counts between directions, revealing which directions are independent and which are entangled.
+
+`#exhaust` asks *does the property hold across the generator's structural edges?* `#explore` asks *have the specific regions I declared actually been visited?* Use `#exhaust` for structural coverage, `#explore` for semantic coverage, or both when you want both guarantees.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `.budget(.expedient)` | default | 30 hits per direction, 300 max attempts per direction. |
+| `.budget(.expensive)` | — | 100 hits per direction, 1000 max attempts per direction. |
+| `.budget(.exorbitant)` | — | 300 hits per direction, 3000 max attempts per direction. |
+| `.budget(.custom(...))` | — | Explicit values for hit target and attempt budget. |
+| `.replay(seed)` | — | Deterministic reproduction. |
+
+> [!Note]
+> `#explore` is more expensive than `#exhaust`. The total attempt budget is the per-direction budget multiplied by the number of declared directions — five directions at `.expedient` means 1,500 total attempts, plus CGS tuning overhead per direction. Start with `.expedient` and increase the budget only for directions that need stronger bounds.
+
 ## How It Works
 
-Generators in Exhaust are inspectable data structures, not opaque closures. This is the key design decision that powers everything else — structured coverage, automatic reduction, reflection, and deterministic replay all fall out of being able to inspect and manipulate generator structure.
+Generators in Exhaust are inspectable data structures, not opaque closures. Structured coverage, automatic reduction, reflection, and deterministic replay all fall out of being able to inspect and manipulate generator structure.
 
-The framework supports three execution modes:
+Exhaust supports three execution modes:
 
 - **Generation (forward)** — the generator is interpreted to produce a value, recording every choice made along the way. This is the normal path during test execution.
 - **Reflection (backward)** — given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what powers `.reflecting` and automatic reduction without custom reduction functions.

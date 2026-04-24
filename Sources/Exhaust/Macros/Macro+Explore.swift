@@ -1,31 +1,46 @@
-/// Runs a feedback-guided property test on a generator, using directed hill climbing to search toward high-scoring regions of the input space.
+/// Runs a classification-aware property test that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
-/// Unlike ``#exhaust(_:_:property:)``, which samples the input space uniformly, `#explore` maintains a seed pool and mutates inputs toward regions where the scorer function returns higher values, making it effective for finding edge cases in monotone properties.
+/// Given a list of named directions (predicate-labeled regions of the output space), `#explore` tunes the generator per direction, draws K samples per direction, and reports per-direction coverage alongside cross-direction overlap and diagnostic findings.
 ///
 /// Pass the property as a trailing closure to capture source location for better failure messages:
 ///
 /// ```swift
-/// let counterexample = #explore(personGen, .samplingBudget(10_000),
-///     scorer: { Double($0.age) }
-/// ) { person in
-///     person.age >= 0
+/// let report = #explore(crossingGen, .budget(.expensive),
+///     directions: [
+///         ("northward", { $0.from > 0 && $0.to < 0 }),
+///         ("southward", { $0.from < 0 && $0.to > 0 }),
+///     ]
+/// ) { value in
+///     flightController.updatePosition(value)
+///     #expect(flightController.heading.isValid)
 /// }
 /// ```
 ///
 /// Or pass a function reference when source capture is not needed:
 ///
 /// ```swift
-/// let counterexample = #explore(personGen, .replay(42), scorer: scoreFn, property: isValid)
+/// let report = #explore(crossingGen, directions: directions, property: isValid)
 /// ```
 ///
-/// - Returns: The reduced counterexample if the property fails, or `nil` if all iterations pass.
+/// - Returns: An ``ExploreReport`` containing the counterexample (if any), per-direction coverage, and cross-direction diagnostics.
 import ExhaustCore
 
+/// Synchronous `#explore` with a Bool-returning or Void/#expect property closure.
 @freestanding(expression)
 @discardableResult
-public macro explore<GeneratedValue>(
+public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
-    scorer: (GeneratedValue) -> Double,
-    property: (GeneratedValue) throws -> Bool
-) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")
+    directions: [(String, (GeneratedValue) -> Bool)],
+    property: (GeneratedValue) throws -> PropertyResult
+) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")
+
+/// Async `#explore` with an async Bool-returning or Void/#expect property closure. Must be called with `await`.
+@freestanding(expression)
+@discardableResult
+public macro explore<GeneratedValue, PropertyResult>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
+    _ settings: ExploreSettings...,
+    directions: [(String, (GeneratedValue) -> Bool)],
+    property: (GeneratedValue) async throws -> PropertyResult
+) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreAsyncMacro")
