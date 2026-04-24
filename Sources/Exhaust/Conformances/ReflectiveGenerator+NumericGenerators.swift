@@ -5,7 +5,9 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
-import CoreGraphics
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
 import ExhaustCore
 
 // MARK: - Floating-point generators
@@ -107,24 +109,26 @@ public extension ReflectiveGenerator {
         float(in: Float(range.lowerBound) ... Float(range.upperBound), scaling: scaling)
     }
 
-    /// Generates arbitrary `CGFloat` values within the given range.
-    ///
-    /// Delegates to the `Double` generator — on 64-bit Apple platforms `CGFloat` is a typealias for `Double`.
-    ///
-    /// ```swift
-    /// let gen = #gen(.cgfloat(in: 0.0...320.0))
-    /// ```
-    static func cgfloat(
-        in range: ClosedRange<CGFloat>? = nil,
-        scaling: SizeScaling<Double>? = nil
-    ) -> ReflectiveGenerator<CGFloat> {
-        let doubleRange = range.map { Double($0.lowerBound) ... Double($0.upperBound) }
-        return ReflectiveGenerator<Double>.double(in: doubleRange, scaling: scaling)
-            .mapped(
-                forward: { CGFloat($0) },
-                backward: { Double($0) }
-            )
-    }
+    #if canImport(CoreGraphics)
+        /// Generates arbitrary `CGFloat` values within the given range.
+        ///
+        /// Delegates to the `Double` generator — on 64-bit Apple platforms `CGFloat` is a typealias for `Double`.
+        ///
+        /// ```swift
+        /// let gen = #gen(.cgfloat(in: 0.0...320.0))
+        /// ```
+        static func cgfloat(
+            in range: ClosedRange<CGFloat>? = nil,
+            scaling: SizeScaling<Double>? = nil
+        ) -> ReflectiveGenerator<CGFloat> {
+            let doubleRange = range.map { Double($0.lowerBound) ... Double($0.upperBound) }
+            return ReflectiveGenerator<Double>.double(in: doubleRange, scaling: scaling)
+                .mapped(
+                    forward: { CGFloat($0) },
+                    backward: { Double($0) }
+                )
+        }
+    #endif
 }
 
 // MARK: - Unsigned integer generators

@@ -474,7 +474,7 @@ private func runReflectableBenchmark<Output>(
             invocationCount += 1
             return property(candidate)
         }
-        let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let startTime = monotonicNanoseconds()
         let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
@@ -482,7 +482,7 @@ private func runReflectableBenchmark<Output>(
             config: config,
             property: countingProperty
         )
-        let endTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let endTime = monotonicNanoseconds()
         let output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
@@ -510,7 +510,7 @@ private func runNonReflectableBenchmark<Output>(
             invocationCount += 1
             return property(candidate)
         }
-        let startTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let startTime = monotonicNanoseconds()
         let result = try? Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
@@ -518,7 +518,7 @@ private func runNonReflectableBenchmark<Output>(
             config: config,
             property: countingProperty
         )
-        let endTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let endTime = monotonicNanoseconds()
         let output = result?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)

@@ -55,7 +55,7 @@ public enum ExploreBudget: Sendable {
 }
 
 /// Configuration options for `#explore` classification-aware property tests, passed as variadic arguments to control test behavior.
-public enum ExploreSettings {
+public enum ExploreSettings: Sendable {
     /// Controls per-direction hit targets and attempt budgets. Defaults to `.expedient` (30 hits per direction, 300 max attempts per direction).
     case budget(ExploreBudget)
 

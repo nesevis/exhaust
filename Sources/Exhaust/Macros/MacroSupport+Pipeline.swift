@@ -1,7 +1,6 @@
 // Pipeline phases for `__exhaust`: coverage, sampling, shared reduction, and async/detection bridge helpers.
 
 import CustomDump
-import Darwin
 import ExhaustCore
 import Foundation
 import IssueReporting
@@ -154,7 +153,7 @@ extension __ExhaustRuntime {
         coverageIterations: Int,
         report: inout ExhaustReport
     ) -> Output? {
-        let generationPhaseStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let generationPhaseStart = monotonicNanoseconds()
         var iterations = 0
         var generator = ValueAndChoiceTreeInterpreter(
             context.gen,
@@ -188,9 +187,9 @@ extension __ExhaustRuntime {
             if context.statsAccumulator != nil {
                 previousFilterObservations = generator.filterObservations
             }
-            let generateStart = context.statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
+            let generateStart = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
             guard let (next, tree) = try generator.next() else { break }
-            let generateEnd = context.statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
+            let generateEnd = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
             iterations += 1
 
             var filterAttempts: Int?
@@ -210,9 +209,9 @@ extension __ExhaustRuntime {
                 }
             }
 
-            let testStart = context.statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
+            let testStart = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
             let passed = context.property(next)
-            let testEnd = context.statsAccumulator != nil ? clock_gettime_nsec_np(CLOCK_UPTIME_RAW) : 0
+            let testEnd = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
 
             if let statsAccumulator = context.statsAccumulator {
                 let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
@@ -235,7 +234,7 @@ extension __ExhaustRuntime {
             }
 
             if passed == false {
-                report.generationMilliseconds = Double(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - generationPhaseStart) / 1_000_000
+                report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
                 let result = reduceAndReport(
                     context: context,
                     value: next,
@@ -294,7 +293,7 @@ extension __ExhaustRuntime {
             propertyInvocationCount += 1
             return context.property(value)
         }
-        let reductionStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let reductionStart = monotonicNanoseconds()
         do {
             var reducerConfig = context.reductionConfig
             reducerConfig.visualize = context.visualize
@@ -306,7 +305,7 @@ extension __ExhaustRuntime {
                 property: countingProperty
             )
             report.applyReductionStats(reduceResult.stats)
-            report.reductionMilliseconds = Double(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - reductionStart) / 1_000_000
+            report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
             if let (reducedSequence, reducedValue) = reduceResult.reduced {
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
@@ -439,7 +438,7 @@ extension __ExhaustRuntime {
         property: @Sendable (Output) -> Bool,
         report: inout ExhaustReport
     ) throws -> Output? {
-        let reflectStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let reflectStart = monotonicNanoseconds()
 
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
@@ -471,7 +470,7 @@ extension __ExhaustRuntime {
             return nil
         }
 
-        let reflectionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let reflectionEnd = monotonicNanoseconds()
 
         var propertyInvocationCount = 0
         let countingProperty: (Output) -> Bool = { value in
@@ -503,7 +502,7 @@ extension __ExhaustRuntime {
             failure.replayHint = "No replay seed — counterexample found via reflection."
             let rendered = failure.render(format: ExhaustLog.configuration.format)
             report.renderedFailure = rendered
-            let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            let reductionEnd = monotonicNanoseconds()
             let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
             let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
             let totalMs = Double(reductionEnd - reflectStart) / 1_000_000
@@ -550,7 +549,7 @@ extension __ExhaustRuntime {
         failure.replayHint = "No replay seed — counterexample found via reflection."
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         report.renderedFailure = rendered
-        let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let reductionEnd = monotonicNanoseconds()
         let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
         let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
         let totalMs = Double(reductionEnd - reflectStart) / 1_000_000

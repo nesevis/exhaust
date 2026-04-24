@@ -7,6 +7,17 @@ import PackageDescription
 
 let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
 
+#if os(macOS)
+    let swiftLintPlugins: [Target.PluginUsage] = [
+        .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
+    ]
+    let swiftLintDependency: [Package.Dependency] = [
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1"),
+    ]
+#else
+    let swiftLintPlugins: [Target.PluginUsage] = []
+    let swiftLintDependency: [Package.Dependency] = []
+#endif
 
 let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
@@ -16,9 +27,7 @@ let coreTarget: Target = usePrecompiled
         swiftSettings: [
             .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
         ],
-        plugins: [
-            .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
-        ]
+        plugins: swiftLintPlugins
       )
 
 let package = Package(
@@ -43,13 +52,12 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "1.0.0"),
-    ],
+    ] + swiftLintDependency,
     targets: [
         coreTarget,
         .target(
@@ -64,9 +72,7 @@ let package = Package(
             swiftSettings: usePrecompiled
                 ? [.unsafeFlags(["-Xfrontend", "-experimental-package-interface-load"])]
                 : [],
-            plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
-            ]
+            plugins: swiftLintPlugins
         ),
         .macro(
             name: "ExhaustMacros",
@@ -81,9 +87,7 @@ let package = Package(
         .testTarget(
             name: "ExhaustTests",
             dependencies: ["Exhaust", "ExhaustCore"],
-            plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
-            ]
+            plugins: swiftLintPlugins
         ),
         .testTarget(
             name: "ExhaustMacrosTests",
@@ -103,9 +107,7 @@ let package = Package(
             swiftSettings: [
                 .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
             ],
-            plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
-            ],
+            plugins: swiftLintPlugins,
         ),
     ]
 )
@@ -118,9 +120,7 @@ if usePrecompiled == false {
         .testTarget(
             name: "ExhaustCoreTests",
             dependencies: ["ExhaustCore"],
-            plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
-            ]
+            plugins: swiftLintPlugins
         )
     )
 }

@@ -24,7 +24,7 @@ You have a function and you want to test it, so you write something like this:
 }
 ```
 
-Three tests, three hand-picked inputs, three assertions — all in service of the same claim: *mySort produces its output in ascending order*. Each test is a single example of that claim, exercising it from a different angle: a jumbled array, a reverse-sorted one, an array with duplicates. The test names announce the claim and the assertions supply instances. The more examples you add, the more confident you get that the implicit claim holds.
+Three tests, all in service of the same claim: *mySort produces its output in ascending order*. Each test is a single example of that claim, exercising it from a different angle: a jumbled array, a reverse-sorted one, an array with duplicates. The test names announce the claim and the assertions supply instances. The more examples you add, the more confident you get that the implicit claim holds.
 
 Fine as far as it goes. These tests catch regressions, document intent, and run in milliseconds — everything you want from unit tests. But they share a quiet weakness: every assertion is a hand-picked input that you thought of. The bugs you find are the bugs you imagined, and the bugs you didn't imagine (`sort` panicking on a ten-thousand-element array, mishandling negative numbers, returning the wrong thing for an empty or singleton array) sit in your code unfound until production hits the cases you missed.
 

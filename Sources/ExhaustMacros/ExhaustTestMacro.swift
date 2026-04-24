@@ -204,7 +204,7 @@ final class SourceLocationRewriter: SyntaxRewriter {
                 "Testing.SourceLocation(fileID: \(fileIDLocation.file), filePath: \(location.file), line: \(location.line), column: \(location.column))" as ExprSyntax
             )
         )
-        arguments = LabeledExprListSyntax(arguments + [sourceLocationArg])
+        arguments = arguments + [sourceLocationArg]
 
         return ExprSyntax(node.with(\.arguments, arguments))
     }
@@ -280,9 +280,9 @@ private func expandExhaust(
     let settingsExprs = args.dropFirst().map(\.expression.trimmedDescription)
 
     let sourceCode = trailingClosure.statements.trimmedDescription
-        .replacingOccurrences(of: "\\", with: "\\\\")
-        .replacingOccurrences(of: "\"", with: "\\\"")
-        .replacingOccurrences(of: "\n", with: "\\n")
+        .replacing("\\", with: "\\\\")
+        .replacing("\"", with: "\\\"")
+        .replacing("\n", with: "\\n")
 
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
