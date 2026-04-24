@@ -24,7 +24,7 @@ You have a function and you want to test it, so you write something like this:
 }
 ```
 
-Three tests, three hand-picked inputs, three assertions — all in service of the same claim: *mySort produces its output in ascending order*. Each test is a single example of that claim, exercising it from a different angle: a jumbled array, a reverse-sorted one, an array with duplicates. The test names announce the claim and the assertions supply instances. The more examples you add, the more confident you get that the implicit claim holds.
+Three tests, all in service of the same claim: *mySort produces its output in ascending order*. Each test is a single example of that claim, exercising it from a different angle: a jumbled array, a reverse-sorted one, an array with duplicates. The test names announce the claim and the assertions supply instances. The more examples you add, the more confident you get that the implicit claim holds.
 
 Fine as far as it goes. These tests catch regressions, document intent, and run in milliseconds — everything you want from unit tests. But they share a quiet weakness: every assertion is a hand-picked input that you thought of. The bugs you find are the bugs you imagined, and the bugs you didn't imagine (`sort` panicking on a ten-thousand-element array, mishandling negative numbers, returning the wrong thing for an empty or singleton array) sit in your code unfound until production hits the cases you missed.
 
@@ -46,9 +46,7 @@ let user = #example(userGenerator)
 #expect(process(user).isValid)
 ```
 
-Your test now runs against a generated user each time rather than a hand-crafted fixture. Strictly speaking that makes it a property test, just one with a sample size of 1. After all, your assertion is being checked against a generated input instead of a hand-picked one. If you would like determinism you can also specify a `seed` to ensure the generated value is always the same, or a `count` to generate more than one.
-
-`#example` generates values at size 50 on Exhaust's 0-to-100 complexity scale — deliberately middle-of-the-road. Collections come out with a handful of elements rather than empty or maximal, numeric fields sit well away from either boundary, and structured types are populated without going to extremes. That's the right shape for a fixture replacement.
+Your test now runs against a generated user each time rather than a hand-crafted fixture. Strictly speaking that makes it a property test, just one with a sample size of 1. After all, your assertion is being checked against a generated input instead of a hand-picked one. If you would like determinism you can also specify a `seed` to ensure the generated value is always the same, or a `count` to generate more than one. `#example` generates values at size 50 on Exhaust's 0-to-100 complexity scale — deliberately middle-of-the-road.
 
 You're not yet getting everything Exhaust offers this way: just one input per run instead of hundreds, and if the test fails you'll see the whole random value that triggered it rather than a minimal counterexample. Those benefits come with the next step up, when you move the assertion inside an `#exhaust` call.
 

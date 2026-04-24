@@ -3,7 +3,6 @@
 // The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`)
 // to signal that this is macro infrastructure, not public API.
 import CustomDump
-import Darwin
 import ExhaustCore
 import Foundation
 import IssueReporting
@@ -161,7 +160,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 case .swiftTesting:
                                     Attachment.record(lines.jsonlString(), named: attachmentName)
                             #endif
-                            #if canImport(XCTest)
+                            #if canImport(ObjectiveC)
                                 case .xcTest:
                                     let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
                                     xctAttachment.name = attachmentName
@@ -214,7 +213,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     }
                 }
 
-                let phaseTimingStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                let phaseTimingStart = monotonicNanoseconds()
                 var coverageIterations = 0
                 if useRandomOnly {
                     ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
@@ -228,12 +227,12 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     )
                     switch outcome {
                     case let .counterexample(value):
-                        let coverageEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                        let coverageEnd = monotonicNanoseconds()
                         report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.coverageMilliseconds
                         return value
                     case let .exhaustivePass(iterations):
-                        let coverageEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                        let coverageEnd = monotonicNanoseconds()
                         report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.coverageMilliseconds
                         report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
@@ -242,7 +241,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         coverageIterations = iterations
                     }
                 }
-                let coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                let coveragePhaseEndTime = monotonicNanoseconds()
 
                 let samplingResult = runSamplingPhase(
                     context: context,
@@ -251,7 +250,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     report: &report
                 )
 
-                let endTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                let endTime = monotonicNanoseconds()
                 report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
                 report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
 
@@ -534,8 +533,12 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             nonisolated(unsafe) var capturedRenderedFailure: String?
 
             await dispatchToGCD {
-                withExpectedIssue(isIntermittent: true) {
-                    #if canImport(Testing)
+                // withExpectedIssue cannot be used inside dispatchToGCD because
+                // Test.current is nil on the GCD thread, causing TestContext to
+                // misdetect as .xcTest. Use withKnownIssue directly since the
+                // async path is always in a Swift Testing context.
+                #if canImport(Testing)
+                    try? withKnownIssue(isIntermittent: true) {
                         if let regression = replayRegressionSeeds(
                             gen: gen, settings: settings, sourceCode: sourceCode,
                             fileID: fileID, filePath: filePath, line: line, column: column,
@@ -545,8 +548,26 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             capturedSeed = regression.seed
                             return
                         }
-                    #endif
 
+                        var augmentedSettings = settings + [.suppress(.issueReporting)]
+                        augmentedSettings.append(.onReport { report in
+                            capturedSeed = report.seed
+                            capturedRenderedFailure = report.renderedFailure
+                        })
+
+                        pipelineResult = __exhaust(
+                            gen,
+                            settings: augmentedSettings,
+                            sourceCode: sourceCode,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            function: function,
+                            property: syncDetection
+                        )
+                    }
+                #else
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
                     augmentedSettings.append(.onReport { report in
                         capturedSeed = report.seed
@@ -564,7 +585,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         function: function,
                         property: syncDetection
                     )
-                }
+                #endif
             }
 
             guard let counterexample = pipelineResult else { return nil }

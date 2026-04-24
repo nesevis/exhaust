@@ -282,7 +282,25 @@ extension __ExhaustRuntime {
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
                 nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
-                withExpectedIssue(isIntermittent: true) {
+                // withExpectedIssue cannot be used on a GCD thread because
+                // Test.current is nil, causing TestContext to misdetect as
+                // .xcTest. Use withKnownIssue directly since the async path
+                // is always in a Swift Testing context.
+                #if canImport(Testing)
+                    withKnownIssue(isIntermittent: true) {
+                        pipelineResult = __explore(
+                            gen,
+                            settings: settings + [.suppress(.issueReporting)],
+                            directions: directions,
+                            sourceCode: sourceCode,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            property: boolProperty
+                        )
+                    }
+                #else
                     pipelineResult = __explore(
                         gen,
                         settings: settings + [.suppress(.issueReporting)],
@@ -294,7 +312,7 @@ extension __ExhaustRuntime {
                         column: column,
                         property: boolProperty
                     )
-                }
+                #endif
 
                 guard let report = pipelineResult else {
                     let emptyReport = __explore(

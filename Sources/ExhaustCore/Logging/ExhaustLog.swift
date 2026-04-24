@@ -6,7 +6,10 @@
 //
 
 import Foundation
-import OSLog
+
+#if canImport(OSLog)
+    import OSLog
+#endif
 
 /// Log verbosity level for Exhaust test runs.
 public enum LogLevel: Int, CaseIterable, Comparable, Sendable {
@@ -22,20 +25,22 @@ public enum LogLevel: Int, CaseIterable, Comparable, Sendable {
         lhs.rawValue < rhs.rawValue
     }
 
-    package var osLogType: OSLogType {
-        switch self {
-        case .trace, .debug:
-            .debug
-        case .info:
-            .info
-        case .notice, .warning:
-            .default
-        case .error:
-            .error
-        case .critical:
-            .fault
+    #if canImport(OSLog)
+        package var osLogType: OSLogType {
+            switch self {
+            case .trace, .debug:
+                .debug
+            case .info:
+                .info
+            case .notice, .warning:
+                .default
+            case .error:
+                .error
+            case .critical:
+                .fault
+            }
         }
-    }
+    #endif
 }
 
 /// Log output format for Exhaust test runs.
@@ -270,8 +275,11 @@ package enum ExhaustLog {
             line: line,
             format: configuration.format
         )
+#if canImport(OSLog)
+        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
+#else
         print(rendered)
-//        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
+#endif
     }
 
     private static let subsystem = "com.exhaust"
@@ -291,39 +299,41 @@ package enum ExhaustLog {
         try await $_configuration.withValue(configuration) { try await body() }
     }
 
-    private static let coreLogger = Logger(subsystem: subsystem, category: Category.core.rawValue)
-    private static let extensionsLogger = Logger(
-        subsystem: subsystem,
-        category: Category.extensions.rawValue
-    )
-    private static let generationLogger = Logger(
-        subsystem: subsystem,
-        category: Category.generation.rawValue
-    )
-    private static let replayLogger = Logger(
-        subsystem: subsystem,
-        category: Category.replay.rawValue
-    )
-    private static let reflectionLogger = Logger(
-        subsystem: subsystem,
-        category: Category.reflection.rawValue
-    )
-    private static let materializeLogger = Logger(
-        subsystem: subsystem,
-        category: Category.materialize.rawValue
-    )
-    private static let reducerLogger = Logger(
-        subsystem: subsystem,
-        category: Category.reducer.rawValue
-    )
-    private static let adaptationLogger = Logger(
-        subsystem: subsystem,
-        category: Category.adaptation.rawValue
-    )
-    private static let propertyTestLogger = Logger(
-        subsystem: subsystem,
-        category: Category.propertyTest.rawValue
-    )
+    #if canImport(OSLog)
+        private static let coreLogger = Logger(subsystem: subsystem, category: Category.core.rawValue)
+        private static let extensionsLogger = Logger(
+            subsystem: subsystem,
+            category: Category.extensions.rawValue
+        )
+        private static let generationLogger = Logger(
+            subsystem: subsystem,
+            category: Category.generation.rawValue
+        )
+        private static let replayLogger = Logger(
+            subsystem: subsystem,
+            category: Category.replay.rawValue
+        )
+        private static let reflectionLogger = Logger(
+            subsystem: subsystem,
+            category: Category.reflection.rawValue
+        )
+        private static let materializeLogger = Logger(
+            subsystem: subsystem,
+            category: Category.materialize.rawValue
+        )
+        private static let reducerLogger = Logger(
+            subsystem: subsystem,
+            category: Category.reducer.rawValue
+        )
+        private static let adaptationLogger = Logger(
+            subsystem: subsystem,
+            category: Category.adaptation.rawValue
+        )
+        private static let propertyTestLogger = Logger(
+            subsystem: subsystem,
+            category: Category.propertyTest.rawValue
+        )
+    #endif
 
     @inline(__always)
     private static func shouldLog(
@@ -338,28 +348,30 @@ package enum ExhaustLog {
         return level >= minimum
     }
 
-    private static func logger(for category: Category) -> Logger {
-        switch category {
-        case .core:
-            coreLogger
-        case .extensions:
-            extensionsLogger
-        case .generation:
-            generationLogger
-        case .replay:
-            replayLogger
-        case .reflection:
-            reflectionLogger
-        case .materialize:
-            materializeLogger
-        case .reducer:
-            reducerLogger
-        case .adaptation:
-            adaptationLogger
-        case .propertyTest:
-            propertyTestLogger
+    #if canImport(OSLog)
+        private static func logger(for category: Category) -> Logger {
+            switch category {
+            case .core:
+                coreLogger
+            case .extensions:
+                extensionsLogger
+            case .generation:
+                generationLogger
+            case .replay:
+                replayLogger
+            case .reflection:
+                reflectionLogger
+            case .materialize:
+                materializeLogger
+            case .reducer:
+                reducerLogger
+            case .adaptation:
+                adaptationLogger
+            case .propertyTest:
+                propertyTestLogger
+            }
         }
-    }
+    #endif
 
     private static func render(
         level: LogLevel,

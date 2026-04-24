@@ -112,6 +112,8 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         let covBudget = coverageBudget
         let replaySeed = seed
         let randomOnly = useRandomOnly
+        let capturedLogLevel = logLevel
+        let capturedLogFormat = logFormat
 
         // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
         typealias SearchResult = ([Spec.Command], ContractFailureInfo<Spec.Command>)
@@ -147,8 +149,8 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                             seed: replaySeed,
                             suppressIssueReporting: true,
                             useRandomOnly: randomOnly || skipGenericCoverage,
-                            logLevel: logLevel,
-                            logFormat: logFormat
+                            logLevel: capturedLogLevel,
+                            logFormat: capturedLogFormat
                         ),
                         sourceCode: nil,
                         fileID: fileID,

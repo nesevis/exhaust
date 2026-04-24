@@ -95,9 +95,9 @@ private func expandExplore(
         .map(\.expression.trimmedDescription)
 
     let sourceCode = trailingClosure.statements.trimmedDescription
-        .replacingOccurrences(of: "\\", with: "\\\\")
-        .replacingOccurrences(of: "\"", with: "\\\"")
-        .replacingOccurrences(of: "\n", with: "\\n")
+        .replacing("\\", with: "\\\\")
+        .replacing("\"", with: "\\\"")
+        .replacing("\n", with: "\\n")
 
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 

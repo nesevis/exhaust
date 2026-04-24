@@ -75,7 +75,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         if let sutProp = sutProps.first, let sutType = sutProp.type {
             decls.append("typealias SystemUnderTest = \(raw: sutType)")
             decls.append("var systemUnderTest: SystemUnderTest { \(raw: sutProp.name) }")
-        } else if let sutProp = sutProps.first {
+        } else if sutProps.first != nil {
             // No type available — use Never as a placeholder and emit a note.
             // The compiler will produce a type mismatch if the user accesses .systemUnderTest, which is better than a confusing "could not infer" error.
             context.diagnose(Diagnostic(

@@ -145,7 +145,7 @@ private func registerECOOPChallenge<Output>(
         for i in 0 ..< seedCount {
             let seed = baseSeed &+ UInt64(i)
 
-            let genStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            let genStart = monotonicNanoseconds()
             var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: maxGenerationRuns)
             var failingValue: Output?
             var failingTree: ChoiceTree?
@@ -160,7 +160,7 @@ private func registerECOOPChallenge<Output>(
                     }
                 }
             } catch {}
-            let genEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            let genEnd = monotonicNanoseconds()
             guard let value = failingValue, let tree = failingTree else { continue }
             let generationMs = Double(genEnd - genStart) / 1_000_000.0
 
@@ -169,7 +169,7 @@ private func registerECOOPChallenge<Output>(
                 invocationCount += 1
                 return property(candidate)
             }
-            let reduceStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            let reduceStart = monotonicNanoseconds()
             // Use the *CollectingStats variants so we can pull
             // `stats.totalMaterializations` for the report. The reduced tuple has the same shape as the plain `*Reduce` return.
             let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
@@ -179,7 +179,7 @@ private func registerECOOPChallenge<Output>(
                 config: config,
                 property: countingProperty
             )
-            let reduceEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            let reduceEnd = monotonicNanoseconds()
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
             let output = reduceResult?.reduced?.1 ?? value

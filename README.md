@@ -1,7 +1,7 @@
 # Exhaust
 
 [![Swift 6.2+](https://img.shields.io/badge/Swift-6.2%2B-orange)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%2015%20%7C%20iOS%2018%20%7C%20Mac%20Catalyst%2018%20%7C%20tvOS%2018%20%7C%20visionOS%202%20%7C%20watchOS%2011-blue)](https://developer.apple.com)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%2015%20%7C%20iOS%2018%20%7C%20Mac%20Catalyst%2018%20%7C%20tvOS%2018%20%7C%20visionOS%202%20%7C%20watchOS%2011%20%7C%20Linux-blue)](https://developer.apple.com)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
 > [!Note]
