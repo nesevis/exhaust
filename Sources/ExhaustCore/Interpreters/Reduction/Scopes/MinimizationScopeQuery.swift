@@ -61,21 +61,49 @@ enum MinimizationScopeQuery {
             (integerValueYields[nodeA] ?? 0) > (integerValueYields[nodeB] ?? 0)
         }
 
+        // Partition integer leaves into bind-inner and independent scopes. Bind-inner leaves require guided materialization (their value changes reshape bound subtrees); independent leaves use exact materialization. Mixing them in one scope forces guided mode for all leaves in batch phases.
         if integerLeafNodeIDs.isEmpty == false {
-            let entries = integerLeafNodeIDs.map { nodeID in
-                ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
+            var bindInnerEntries: [LeafEntry] = []
+            var independentEntries: [LeafEntry] = []
+            for nodeID in integerLeafNodeIDs {
+                let entry = ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
+                if entry.mayReshapeOnAcceptance {
+                    bindInnerEntries.append(entry)
+                } else {
+                    independentEntries.append(entry)
+                }
             }
-            scopes.append(.valueLeaves(ValueMinimizationScope(
-                leaves: entries,
-                batchZeroEligible: entries.count > 1
-            )))
+            if independentEntries.isEmpty == false {
+                scopes.append(.valueLeaves(ValueMinimizationScope(
+                    leaves: independentEntries,
+                    batchZeroEligible: independentEntries.count > 1
+                )))
+            }
+            if bindInnerEntries.isEmpty == false {
+                scopes.append(.valueLeaves(ValueMinimizationScope(
+                    leaves: bindInnerEntries,
+                    batchZeroEligible: bindInnerEntries.count > 1
+                )))
+            }
         }
 
         if floatLeafNodeIDs.isEmpty == false {
-            let entries = floatLeafNodeIDs.map { nodeID in
-                ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
+            var bindInnerFloats: [LeafEntry] = []
+            var independentFloats: [LeafEntry] = []
+            for nodeID in floatLeafNodeIDs {
+                let entry = ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
+                if entry.mayReshapeOnAcceptance {
+                    bindInnerFloats.append(entry)
+                } else {
+                    independentFloats.append(entry)
+                }
             }
-            scopes.append(.floatLeaves(FloatMinimizationScope(leaves: entries)))
+            if independentFloats.isEmpty == false {
+                scopes.append(.floatLeaves(FloatMinimizationScope(leaves: independentFloats)))
+            }
+            if bindInnerFloats.isEmpty == false {
+                scopes.append(.floatLeaves(FloatMinimizationScope(leaves: bindInnerFloats)))
+            }
         }
 
         // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage. Dispatch is gated per-site by ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` in the scheduler, which rejects topology-divergent binds (Calculator's `.recursive`) before any probe runs.

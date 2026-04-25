@@ -533,10 +533,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             nonisolated(unsafe) var capturedRenderedFailure: String?
 
             await dispatchToGCD {
-                // withExpectedIssue cannot be used inside dispatchToGCD because
-                // Test.current is nil on the GCD thread, causing TestContext to
-                // misdetect as .xcTest. Use withKnownIssue directly since the
-                // async path is always in a Swift Testing context.
+                // withExpectedIssue cannot be used inside dispatchToGCD because Test.current is nil on the GCD thread, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
                 #if canImport(Testing)
                     try? withKnownIssue(isIntermittent: true) {
                         if let regression = replayRegressionSeeds(

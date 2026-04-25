@@ -120,7 +120,15 @@ extension ChoiceGraphScheduler {
             }
             let materializePicks = picksUnchanged == false
             // Composed encoders (bound value) emit post-lift candidates whose bound subtree differs from the parent ``tree``. Guided decoding would substitute stale fallback content; force the exact decoder when the encoder requests it.
-            let preferExact = encoder.requiresExactDecoder || hasBind == false
+            //
+            // Per-probe bind awareness: for leafValues mutations where no leaf is a bind-inner (mayReshape false on all changes), the modification cannot reshape any bind region. Exact mode is safe even when the sequence contains binds elsewhere.
+            let probeCanReshapeBind = switch probe.mutation {
+            case let .leafValues(changes):
+                changes.contains(where: \.mayReshape)
+            default:
+                hasBind
+            }
+            let preferExact = encoder.requiresExactDecoder || probeCanReshapeBind == false
             let decoder: SequenceDecoder = preferExact
                 ? .exact(materializePicks: materializePicks)
                 : .guided(fallbackTree: tree, materializePicks: materializePicks)

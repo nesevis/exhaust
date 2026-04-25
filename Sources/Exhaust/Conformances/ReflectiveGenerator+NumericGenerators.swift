@@ -129,7 +129,7 @@ public extension ReflectiveGenerator {
                 )
         }
 
-        /// Convenience overload accepting `ClosedRange<Double>` (for example `0.0...320.0`).
+        /// Generates arbitrary `CGFloat` values within the given `Double` range.
         static func cgfloat(
             in range: ClosedRange<Double>,
             scaling: SizeScaling<Double>? = nil

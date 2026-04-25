@@ -1,15 +1,15 @@
 import ExhaustCore
 
-/// The result of one step in an ``ReflectiveGenerator/unfold(seed:maxDepth:step:)`` loop.
+/// Represents the result of one step in an ``ReflectiveGenerator/unfold(seed:maxDepth:step:)`` loop.
 public enum UnfoldStep<State, Value> {
-    /// Produce the final output and stop iterating.
+    /// Produces the final output and stops iterating.
     case done(Value)
-    /// Continue with the given state for the next iteration.
+    /// Continues with the given state for the next iteration.
     case recurse(State)
 }
 
 public extension ReflectiveGenerator {
-    /// Creates a generator that iteratively unfolds state into a value.
+    /// Generates values by iteratively transforming state from a seed.
     ///
     /// Starting from an initial state produced by `seed`, the generator repeatedly calls `step` to either produce the final value (`.done`) or continue with new state (`.recurse`). The `remaining` parameter counts down from `maxDepth` to zero; `step` must return `.done` when `remaining` is zero.
     ///
@@ -27,7 +27,7 @@ public extension ReflectiveGenerator {
     /// }
     /// ```
     ///
-    /// Each iteration uses a forward-only bind, so the reducer can minimize choice sequences and search bound values but reflection is not supported.
+    /// - Note: Each iteration uses a forward-only bind, so the reducer can minimize choice sequences and search bound values but reflection is not supported.
     ///
     /// - Parameters:
     ///   - seed: Generator for the initial state.

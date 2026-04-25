@@ -58,7 +58,7 @@ public extension ReflectiveGenerator {
         Gen.pick(choices: choices.map { ($0.0, $0.1) }, fileID: fileID, line: line, column: column)
     }
 
-    /// Creates a generator that randomly selects from an array of generators with equal weight.
+    /// Selects from an array of generators with equal weight.
     ///
     /// ```swift
     /// let gens: [ReflectiveGenerator<Int>] = [.int(in: 0...5), .int(in: 100...105)]
@@ -73,7 +73,7 @@ public extension ReflectiveGenerator {
         Gen.pick(choices: generators.map { (1, $0) }, fileID: fileID, line: line, column: column)
     }
 
-    /// Creates a generator that randomly selects from an array of weighted generators.
+    /// Selects from an array of weighted generators.
     ///
     /// ```swift
     /// let choices: [(Int, ReflectiveGenerator<Int>)] = [(1, .just(0)), (5, .int(in: 1...100))]
