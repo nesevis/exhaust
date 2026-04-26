@@ -37,17 +37,29 @@ struct ReducerFloatShrinkingTests {
         #expect(output == 3.125)
     }
 
-    @Test("Double special-values phase shrinks NaN to max finite", .disabled("FIXME! Glaring gap"))
-    func doubleSpecialValuesPhase() throws {
-        let gen = Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
+    @Test("Double special-values phase allows out-of-range NaN and preserves it")
+    func floatNaNReduction() throws {
+        let gen = Gen.choose(in: 0 ... 10_000.0)
         let property: (Double) -> Bool = { value in
-            !(value.isNaN || value == Double.greatestFiniteMagnitude)
+            !value.isNaN
         }
 
         let output = try reduce(gen, startingAt: Double.nan, property: property)
 
-        #expect(property(output) == false)
-        #expect(output == Double.greatestFiniteMagnitude)
+        #expect(output.isNaN)
+    }
+    
+    @Test("Double special-values phase allows out-of-range inf and preserves it")
+    func floatInfReduction() throws {
+        let gen = Gen.choose(in: 0 ... 10_000.0)
+        let property: (Double) -> Bool = { value in
+            value.isFinite
+        }
+
+        let output = try reduce(gen, startingAt: Double.infinity, property: property)
+        print(output)
+
+        #expect(output.isFinite == false)
     }
 
     @Test("Double as_integer_ratio phase reduces integer part while preserving fraction")

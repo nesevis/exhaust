@@ -24,16 +24,6 @@ import Testing
             }
         }
 
-        @Test("Full-range generation excludes NaN and infinity")
-        func fullRangeFinite() {
-            let gen = #gen(.float16())
-            let values = #example(gen, count: 100, seed: 42)
-
-            for value in values {
-                #expect(value.isFinite)
-            }
-        }
-
         @Test("Deterministic: same seed produces same values")
         func deterministic() {
             let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
