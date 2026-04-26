@@ -320,10 +320,21 @@ package enum Interpreters {
 
         let bitPattern = convertibleValue.bitPattern64
         if isRangeExplicit, (min ... max).contains(bitPattern) == false {
-            throw ReflectionError.inputWasOutOfGeneratorRange(
-                String(describing: convertibleValue),
-                min ... max
-            )
+            // Float types: allow NaN/infinity through so boundary coverage counterexamples are reflectable, but enforce the range for finite values.
+            if tag.isFloatingPoint {
+                let numericValue = tag.numericDoubleValue(forBitPattern: bitPattern)
+                if numericValue.isFinite {
+                    throw ReflectionError.inputWasOutOfGeneratorRange(
+                        String(describing: convertibleValue),
+                        min ... max
+                    )
+                }
+            } else {
+                throw ReflectionError.inputWasOutOfGeneratorRange(
+                    String(describing: convertibleValue),
+                    min ... max
+                )
+            }
         }
 
         let reflectedRange = isRangeExplicit

@@ -27,3 +27,16 @@ public enum SizeScaling<Bound: Sendable>: Sendable {
     /// Exponential interpolation from an explicit origin toward both bounds.
     case exponentialFrom(origin: Bound)
 }
+
+package extension SizeScaling where Bound: BitPatternConvertible {
+    /// Erases this typed scaling into the type-erased ``ChooseBitsScaling`` stored on ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)``.
+    var erased: ChooseBitsScaling? {
+        switch self {
+        case .constant: nil
+        case .linear: .linear(originBits: nil)
+        case let .linearFrom(origin): .linear(originBits: origin.bitPattern64)
+        case .exponential: .exponential(originBits: nil)
+        case let .exponentialFrom(origin): .exponential(originBits: origin.bitPattern64)
+        }
+    }
+}

@@ -26,20 +26,20 @@ import ExhaustCore
             scaling: SizeScaling<Float16>? = nil
         ) -> ReflectiveGenerator<Float16> {
             if let range {
-                if let scaling {
+                return if let scaling {
                     Gen.choose(in: range, scaling: scaling)
                 } else if range == -Float16.greatestFiniteMagnitude ... Float16.greatestFiniteMagnitude {
                     Gen.choose(in: range, scaling: Float16.defaultScaling)
                 } else {
                     Gen.choose(in: range)
                 }
-            } else {
-                Gen.choose(
-                    in: -Float16.greatestFiniteMagnitude
-                        ... Float16.greatestFiniteMagnitude,
-                    scaling: scaling ?? Float16.defaultScaling
-                )
             }
+            return Gen.choose(
+                in: nil as ClosedRange<Float16>?,
+                type: Float16.self,
+                isRangeExplicit: false,
+                scaling: (scaling ?? Float16.defaultScaling).erased
+            )
         }
     }
 #endif
@@ -57,20 +57,20 @@ public extension ReflectiveGenerator {
         scaling: SizeScaling<Double>? = nil
     ) -> ReflectiveGenerator<Double> {
         if let range {
-            if let scaling {
+            return if let scaling {
                 Gen.choose(in: range, scaling: scaling)
             } else if range == -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude {
                 Gen.choose(in: range, scaling: Double.defaultScaling)
             } else {
                 Gen.choose(in: range)
             }
-        } else {
-            Gen.choose(
-                in: -Double.greatestFiniteMagnitude
-                    ... Double.greatestFiniteMagnitude,
-                scaling: scaling ?? Double.defaultScaling
-            )
         }
+        return Gen.choose(
+            in: nil as ClosedRange<Double>?,
+            type: Double.self,
+            isRangeExplicit: false,
+            scaling: (scaling ?? Double.defaultScaling).erased
+        )
     }
 
     /// Generates arbitrary `Float` values within the given range.
@@ -85,20 +85,20 @@ public extension ReflectiveGenerator {
         scaling: SizeScaling<Float>? = nil
     ) -> ReflectiveGenerator<Float> {
         if let range {
-            if let scaling {
+            return if let scaling {
                 Gen.choose(in: range, scaling: scaling)
             } else if range == -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude {
                 Gen.choose(in: range, scaling: Float.defaultScaling)
             } else {
                 Gen.choose(in: range)
             }
-        } else {
-            Gen.choose(
-                in: -Float.greatestFiniteMagnitude
-                    ... Float.greatestFiniteMagnitude,
-                scaling: scaling ?? Float.defaultScaling
-            )
         }
+        return Gen.choose(
+            in: nil as ClosedRange<Float>?,
+            type: Float.self,
+            isRangeExplicit: false,
+            scaling: (scaling ?? Float.defaultScaling).erased
+        )
     }
 
     /// Convenience overload accepting `ClosedRange<Double>` (for example `0.0...1.0`).

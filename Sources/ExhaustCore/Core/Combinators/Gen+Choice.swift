@@ -146,29 +146,19 @@ package extension Gen {
         in range: ClosedRange<Output>,
         scaling: SizeScaling<Output>
     ) -> ReflectiveGenerator<Output> {
-        let erased: ChooseBitsScaling? = switch scaling {
-        case .constant:
-            nil
-        case .linear:
-            .linear(originBits: nil)
-        case let .linearFrom(origin):
-            .linear(originBits: origin.bitPattern64)
-        case .exponential:
-            .exponential(originBits: nil)
-        case let .exponentialFrom(origin):
-            .exponential(originBits: origin.bitPattern64)
-        }
-        return choose(
+        choose(
             in: range,
             type: Output.self,
             isRangeExplicit: true,
-            scaling: erased
+            scaling: scaling.erased
         )
     }
 
     /// Computes the effective sampling range for a size-scaled chooseBits operation.
     ///
-    /// Generation interpreters call this at sample time with the tag's declared bit-pattern range and the current size. The origin is resolved from the scaling (explicit `originBits` if present, otherwise ``TypeTag/simplestBitPattern``) and clamped into `min...max`; linear and exponential interpolation then narrow the range as with `scaledRange` on ``SizeScaling``.
+    /// Generation interpreters call this at sample time with the tag's declared bit-pattern range and the current size. The origin is resolved from the scaling (explicit `originBits` if present, otherwise ``TypeTag/simplestBitPattern``) and clamped into `min...max`.
+    ///
+    /// For floating-point tags, scaling operates in numeric space so that a fraction of 0.1 on `0.0...10000.0` produces `0.0...1000.0`, not a sliver of subnormals. For integer tags, scaling operates in bit-pattern space as before.
     @inline(__always)
     static func applyScaling(
         min: UInt64,
@@ -191,6 +181,14 @@ package extension Gen {
             isExponential = true
         }
 
+        if tag.isFloatingPoint {
+            return applyFloatingPointScaling(
+                min: min, max: max, tag: tag,
+                originBits: origin, fraction: fraction,
+                isExponential: isExponential
+            )
+        }
+
         let originBits = Swift.min(Swift.max(origin ?? tag.simplestBitPattern, min), max)
         let lowerDistance = scaledDistance(
             originBits - min,
@@ -203,6 +201,42 @@ package extension Gen {
             isExponential: isExponential
         )
         return (originBits - lowerDistance) ... (originBits + upperDistance)
+    }
+
+    /// Floating-point scaling that operates in numeric space rather than bit-pattern space.
+    ///
+    /// This avoids the problem where bit-pattern-space scaling concentrates the effective range in subnormals, because the bit-pattern distance between 0.0 and 1e-300 is nearly the same as between 1e-300 and 1e+308.
+    private static func applyFloatingPointScaling(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag,
+        originBits: UInt64?,
+        fraction: Double,
+        isExponential: Bool
+    ) -> ClosedRange<UInt64> {
+        var numericMin = tag.numericDoubleValue(forBitPattern: min)
+        var numericMax = tag.numericDoubleValue(forBitPattern: max)
+        if numericMin.isNaN || numericMin.isInfinite { numericMin = -Double.greatestFiniteMagnitude }
+        if numericMax.isNaN || numericMax.isInfinite { numericMax = Double.greatestFiniteMagnitude }
+        let resolvedOriginBits = Swift.min(Swift.max(originBits ?? tag.simplestBitPattern, min), max)
+        let numericOrigin = tag.numericDoubleValue(forBitPattern: resolvedOriginBits)
+
+        let lowerSpan = numericOrigin - numericMin
+        let upperSpan = numericMax - numericOrigin
+
+        let scaledLower: Double
+        let scaledUpper: Double
+        if isExponential {
+            scaledLower = lowerSpan > 0 ? pow(lowerSpan, fraction) : 0
+            scaledUpper = upperSpan > 0 ? pow(upperSpan, fraction) : 0
+        } else {
+            scaledLower = lowerSpan * fraction
+            scaledUpper = upperSpan * fraction
+        }
+
+        let effectiveLower = numericOrigin - scaledLower
+        let effectiveUpper = numericOrigin + scaledUpper
+        return tag.floatingBitPattern(from: effectiveLower) ... tag.floatingBitPattern(from: effectiveUpper)
     }
 
     /// Computes the effective range for a given size by interpolating from the origin toward the bounds using the specified scaling strategy.

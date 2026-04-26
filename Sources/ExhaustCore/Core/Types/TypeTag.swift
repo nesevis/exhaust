@@ -147,6 +147,64 @@ package extension TypeTag {
         }
     }
 
+    /// Decodes an order-preserving bit pattern to its numeric `Double` value for this tag's floating-point type.
+    ///
+    /// For `.float` and `.float16`, narrows through the intermediate type so the encoding round-trips correctly.
+    func numericDoubleValue(forBitPattern bitPattern: UInt64) -> Double {
+        switch self {
+        case .double: Double(bitPattern64: bitPattern)
+        case .float: Double(Float(bitPattern64: bitPattern))
+        case .float16: Float16Emulation.doubleValue(fromEncoded: bitPattern)
+        default: fatalError("numericDoubleValue requires a floating-point tag, got \(self)")
+        }
+    }
+
+    /// Encodes a `Double` value as an order-preserving bit pattern for this tag's floating-point type.
+    ///
+    /// For `.float` and `.float16`, narrows to the intermediate type first so precision matches the tag's width.
+    func floatingBitPattern(from value: Double) -> UInt64 {
+        switch self {
+        case .double: value.bitPattern64
+        case .float: Float(value).bitPattern64
+        case .float16: Float16Emulation.encodedBitPattern(from: value)
+        default: fatalError("floatingBitPattern requires a floating-point tag, got \(self)")
+        }
+    }
+
+    /// Remaps a uniformly-drawn bit pattern into a numerically-uniform floating-point bit pattern within the given range.
+    ///
+    /// `chooseBits` draws a uniform `UInt64` in `[range.lowerBound, range.upperBound]`. For floating-point types, uniform bit patterns concentrate samples near zero because IEEE 754 has exponentially more representable values near zero than far from it. This method redistributes the drawn bits so the resulting float is uniformly distributed across the *numeric* range instead.
+    ///
+    /// The drawn value's position within the bit-pattern range is used as a linear interpolation fraction, which is then applied to the numeric range and encoded back to a bit pattern.
+    ///
+    /// Inspired by Hypothesis's `make_float_clamper` (`hypothesis-python/src/hypothesis/internal/floats.py`), which uses `min_value + range_size * (mantissa / mantissa_mask)` to achieve uniform numeric coverage within bounded float ranges.
+    ///
+    /// - Parameters:
+    ///   - rawBits: A uniformly-drawn `UInt64` within `range`.
+    ///   - range: The order-preserving bit-pattern range from the `chooseBits` operation.
+    /// - Returns: A bit pattern whose decoded float is uniformly distributed in `[numericLower, numericUpper]`.
+    func linearlyDistributed(rawBits: UInt64, in range: ClosedRange<UInt64>) -> UInt64 {
+        let width = range.upperBound &- range.lowerBound
+        guard width > 0 else { return rawBits }
+        var lower = numericDoubleValue(forBitPattern: range.lowerBound)
+        var upper = numericDoubleValue(forBitPattern: range.upperBound)
+        if lower.isNaN || lower.isInfinite { lower = -Double.greatestFiniteMagnitude }
+        if upper.isNaN || upper.isInfinite { upper = Double.greatestFiniteMagnitude }
+        // When the numeric endpoints are equal (for example ±0.0), the lerp collapses to a single point. Fall back to raw bits so bit-pattern-level distinctions are preserved.
+        guard lower != upper else { return rawBits }
+        let fraction = Double(rawBits &- range.lowerBound) / Double(width)
+        let value = lower * (1.0 - fraction) + upper * fraction
+        return floatingBitPattern(from: value)
+    }
+
+    /// Clamps a bit pattern into `[min, max]`, except for floating-point NaN/infinity which pass through unclamped so the reducer can see and reduce non-finite boundary values.
+    @inline(__always)
+    func clampBits(_ bitPattern: UInt64, min: UInt64, max: UInt64) -> UInt64 {
+        let clamped = Swift.min(Swift.max(bitPattern, min), max)
+        if clamped != bitPattern, isFloatingPoint { return bitPattern }
+        return clamped
+    }
+
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {

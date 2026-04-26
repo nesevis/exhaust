@@ -530,10 +530,12 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         } else {
             effectiveRange = min ... max
         }
-        let randomBits = context.prng.next(in: effectiveRange)
+        let rawBits = context.prng.next(in: effectiveRange)
+        let randomBits = tag.isFloatingPoint
+            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+            : rawBits
         let choiceTree = ChoiceTree.choice(
             ChoiceValue(randomBits, tag: tag),
-            // The tree always records the declared range so reflection, analysis, and the reducer see user-authoritative bounds.
             .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         )
         return try runContinuation(

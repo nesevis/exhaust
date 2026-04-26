@@ -100,9 +100,7 @@ package extension ChoiceValue {
 
         var best: (key: UInt64, bitPattern: UInt64)?
         func consider(_ bitPattern: UInt64) {
-            guard let value = floatingValue(for: bitPattern, tag: tag) else {
-                return
-            }
+            let value = tag.numericDoubleValue(forBitPattern: bitPattern)
             let key = FloatShortlex.shortlexKey(for: value)
             if let currentBest = best, currentBest.key <= key {
                 return
@@ -113,11 +111,9 @@ package extension ChoiceValue {
         consider(range.lowerBound)
         consider(range.upperBound)
 
-        if let lower = floatingValue(for: range.lowerBound, tag: tag),
-           let upper = floatingValue(for: range.upperBound, tag: tag),
-           lower.isFinite,
-           upper.isFinite
-        {
+        let lower = tag.numericDoubleValue(forBitPattern: range.lowerBound)
+        let upper = tag.numericDoubleValue(forBitPattern: range.upperBound)
+        if lower.isFinite, upper.isFinite {
             // Hypothesis-style ordering prefers simple non-negative integers when available.
             let simpleUpper = FloatShortlex.simpleIntegerUpperBound
 
@@ -125,10 +121,8 @@ package extension ChoiceValue {
             let positiveUpper = min(simpleUpper, upper)
             if positiveLower <= positiveUpper {
                 let integerCandidate = positiveLower.rounded(.up)
-                if integerCandidate <= positiveUpper,
-                   let bitPattern = floatingBitPattern(for: integerCandidate, tag: tag)
-                {
-                    consider(bitPattern)
+                if integerCandidate <= positiveUpper {
+                    consider(tag.floatingBitPattern(from: integerCandidate))
                 }
             }
 
@@ -136,10 +130,8 @@ package extension ChoiceValue {
             let negativeUpper = min(0.0, upper)
             if negativeLower <= negativeUpper {
                 let integerCandidate = negativeUpper.rounded(.down)
-                if integerCandidate >= negativeLower,
-                   let bitPattern = floatingBitPattern(for: integerCandidate, tag: tag)
-                {
-                    consider(bitPattern)
+                if integerCandidate >= negativeLower {
+                    consider(tag.floatingBitPattern(from: integerCandidate))
                 }
             }
         }
@@ -147,31 +139,7 @@ package extension ChoiceValue {
         return best?.bitPattern
     }
 
-    private func floatingValue(
-        for bitPattern: UInt64,
-        tag: TypeTag
-    ) -> Double? {
-        switch tag {
-        case .double: Double(Double(bitPattern64: bitPattern))
-        case .float: Double(Float(bitPattern64: bitPattern))
-        case .float16: Float16Emulation.doubleValue(fromEncoded: bitPattern)
-        default: nil
-        }
-    }
-
-    private func floatingBitPattern(
-        for value: Double,
-        tag: TypeTag
-    ) -> UInt64? {
-        switch tag {
-        case .double: Double(value).bitPattern64
-        case .float: Float(value).bitPattern64
-        case .float16: Float16Emulation.encodedBitPattern(from: value)
-        default: nil
-        }
-    }
-
-    private func fits(in range: ClosedRange<UInt64>?, bitPattern: UInt64) -> Bool {
+    func fits(in range: ClosedRange<UInt64>?, bitPattern: UInt64) -> Bool {
         guard let range else { return true }
         return range.contains(bitPattern)
     }

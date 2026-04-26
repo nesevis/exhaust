@@ -374,7 +374,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         } else {
             effectiveRange = min ... max
         }
-        let randomBits = context.prng.next(in: effectiveRange)
+        let rawBits = context.prng.next(in: effectiveRange)
+        let randomBits = tag.isFloatingPoint
+            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+            : rawBits
         return try runContinuation(randomBits, &context)
     }
 
