@@ -62,9 +62,9 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
 
     let item = onlyStatement.item
 
-    // Control flow statements are not value-returning expressions — Void path.
+    // Control flow statements that contain `return <value>` are Bool-returning (for example, a do/catch that returns true/false on each path).
     if isControlFlowStatement(Syntax(item)) {
-        return true
+        return containsReturnWithValueRecursive(Syntax(item)) == false
     }
 
     // #expect(...) or #require(...)
