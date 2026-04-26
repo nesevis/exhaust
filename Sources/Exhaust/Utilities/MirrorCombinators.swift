@@ -21,7 +21,12 @@ public extension __ExhaustRuntime {
         forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
-            { _mirrorExtract($0, label: label) },
+            { (output: Output) throws -> Any in
+                guard let value = _mirrorExtract(output, label: label) else {
+                    throw Interpreters.ReflectionError.contramapWasWrongType
+                }
+                return value
+            },
             generator._map(forward)
         )
     }
@@ -92,8 +97,11 @@ public extension __ExhaustRuntime {
             return forward((repeat next((each T).self)))
         }
 
-        let backwardToArray: (NewOutput) -> [Any] = { output in
-            _mirrorExtractAll(output, labels: labels)
+        let backwardToArray: (NewOutput) throws -> [Any] = { output in
+            guard let values = _mirrorExtractAll(output, labels: labels) else {
+                throw Interpreters.ReflectionError.contramapWasWrongType
+            }
+            return values
         }
 
         return Gen.contramap(backwardToArray, impure._map(forwardFromArray))
