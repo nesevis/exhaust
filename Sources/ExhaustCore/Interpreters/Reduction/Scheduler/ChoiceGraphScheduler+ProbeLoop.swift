@@ -121,14 +121,14 @@ extension ChoiceGraphScheduler {
             let materializePicks = picksUnchanged == false
             // Composed encoders (bound value) emit post-lift candidates whose bound subtree differs from the parent ``tree``. Guided decoding would substitute stale fallback content; force the exact decoder when the encoder requests it.
             //
-            // Per-probe bind awareness: for leafValues mutations where no leaf is a bind-inner (mayReshape false on all changes), the modification cannot reshape any bind region. Exact mode is safe even when the sequence contains binds elsewhere.
-            let probeCanReshapeBind = switch probe.mutation {
+            // Per-probe bind awareness: independent-scope probes (no mayReshape changes) cannot reshape any bind region, so exact mode is safe and avoids guided materialization's fidelity noise. Bind-inner probes (mayReshape true) use guided mode for fallback context during bound subtree reconstruction.
+            let probeCanReshape = switch probe.mutation {
             case let .leafValues(changes):
                 changes.contains(where: \.mayReshape)
             default:
                 hasBind
             }
-            let preferExact = encoder.requiresExactDecoder || probeCanReshapeBind == false
+            let preferExact = encoder.requiresExactDecoder || probeCanReshape == false
             let decoder: SequenceDecoder = preferExact
                 ? .exact(materializePicks: materializePicks)
                 : .guided(fallbackTree: tree, materializePicks: materializePicks)
@@ -174,18 +174,7 @@ extension ChoiceGraphScheduler {
                     application = graph.apply(probe.mutation, freshTree: tree)
                     if application.requiresFullRebuild {
                         anyRequiresRebuild = true
-                        // Must break when sequence length changed — the encoder's cached positions carry indices past the end of the now-shorter sequence. Must also break when ``applyBindReshape`` partially modified the graph (value writes landed but the structural splice did not) AND those partial writes displaced entries that the encoder's cached positions address. The position check via ``hasValidPositions(in:)`` lets the encoder continue when the structural change only affected a different region of the sequence, avoiding unnecessary rebuild cycles in deep recursive generators where single-bind reshape guard failures are frequent but rarely invalidate the encoder's active leaf set.
-                        if sequence.count != preAcceptSequenceCount {
-                            break
-                        }
-                        let graphPartiallyModified = application.touchedNodeIDs.isEmpty == false
-                            && application.addedNodeIDs.isEmpty
-                            && application.removedNodeIDs.isEmpty
-                        if graphPartiallyModified
-                            && encoder.hasValidPositions(in: sequence) == false
-                        {
-                            break
-                        }
+                        break
                     }
                 }
                 // A successful in-place reshape adds or removes graph nodes — the graph stays consistent via apply, but the existing scope sources captured the old node set at construction time and miss the new ones. Signal the cycle loop to rebuild sources without rebuilding the graph itself.

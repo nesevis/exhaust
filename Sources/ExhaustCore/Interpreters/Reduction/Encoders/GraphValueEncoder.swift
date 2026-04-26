@@ -314,6 +314,23 @@ struct GraphValueEncoder: GraphEncoder {
         }
     }
 
+    /// Writes a partial convergence record for the current in-progress leaf if the stepper has a best-accepted bound.
+    ///
+    /// Called by the probe loop before harvesting convergence records when the loop breaks early (for example, due to a graph rebuild). Without this, the stepper's progress is lost and binary search restarts from the warm-start bound on the next dispatch.
+    mutating func flushPartialConvergence() {
+        guard case let .valueLeaves(state) = mode else { return }
+        guard state.leafIndex < state.leafPositions.count else { return }
+        let leaf = state.leafPositions[state.leafIndex]
+        guard convergenceStore[leaf.nodeID] == nil else { return }
+        guard let bestAccepted = state.stepper?.bestAccepted else { return }
+        convergenceStore[leaf.nodeID] = ConvergedOrigin(
+            bound: bestAccepted,
+            signal: .monotoneConvergence,
+            configuration: .binarySearchSemanticSimplest,
+            cycle: 0
+        )
+    }
+
     mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
         case .idle:

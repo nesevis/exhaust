@@ -84,6 +84,11 @@ protocol GraphEncoder {
     ///
     /// Each entry maps a graph **nodeID** to the ``ConvergedOrigin`` at which the search converged for that leaf. The scheduler harvests these after the probe loop and writes them to the graph via ``ChoiceGraph/recordConvergence(byNodeID:)``. NodeID keying (rather than sequence index) is required so the records survive in-pass position shifts triggered by ``refreshScope(graph:sequence:)``.
     var convergenceRecords: [Int: ConvergedOrigin] { get }
+
+    /// Writes partial convergence records for any in-progress search that was interrupted by a probe loop break.
+    ///
+    /// The scheduler calls this before harvesting ``convergenceRecords`` so that the stepper's best-accepted bound survives the graph rebuild and narrows the search range on the next dispatch via warm start.
+    mutating func flushPartialConvergence()
 }
 
 extension GraphEncoder {
@@ -91,6 +96,9 @@ extension GraphEncoder {
     var requiresExactDecoder: Bool {
         false
     }
+
+    /// Default: no partial convergence to flush.
+    mutating func flushPartialConvergence() {}
 
     /// Default: all cached positions are valid.
     func hasValidPositions(in _: ChoiceSequence) -> Bool {

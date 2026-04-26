@@ -359,6 +359,9 @@ enum ChoiceGraphScheduler {
                     materializationBudget: encoderCycleBudget[pendingEncoderName]
                 )
 
+                // Flush any in-progress stepper bounds so they survive the graph rebuild as warm-start data.
+                encoder.flushPartialConvergence()
+
                 // Harvest convergence from value encoders. The encoder's
                 // ``convergenceRecords`` is keyed by graph nodeID (so it survives in-pass position shifts triggered by
                 // ``GraphEncoder/refreshScope(graph:sequence:)``); the graph writes them through the matching nodeID-keyed overload to skip the O(N) per-record positional walk.
