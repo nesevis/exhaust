@@ -115,8 +115,8 @@ package enum BoundaryDomainAnalysis {
         8239, // Narrow no-break space: visually identical to a space but fails equality and trim checks
         65279, // BOM: invisible at file start, zero-width no-break space elsewhere
         65533, // Replacement character: injected on invalid decode, corrupts serialization round-trips
-        127995, // Emoji skin tone modifier: combines with preceding emoji to form a single grapheme cluster
-        128078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
+        127_995, // Emoji skin tone modifier: combines with preceding emoji to form a single grapheme cluster
+        128_078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
     ]
 
     /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
@@ -243,7 +243,7 @@ package enum BoundaryDomainAnalysis {
                     Float16.infinity,
                     -Float16.infinity,
                 ]
-            values.formUnion(floats.map(\.bitPattern64))
+                values.formUnion(floats.map(\.bitPattern64))
             #endif
         default:
             break
@@ -308,7 +308,6 @@ package enum BoundaryDomainAnalysis {
         }
 
         let upperSeconds = lowerSeconds + maxStep * intervalSeconds
-        let rangeSeconds = upperSeconds - lowerSeconds
 
         var values = Set<UInt64>()
 
@@ -368,41 +367,14 @@ package enum BoundaryDomainAnalysis {
             }
         }
 
-        // 6. Calendar boundaries (first and last within range, with neighbors)
-        let secondsPerDay: Int64 = 86400
-        let secondsPerMonth: Int64 = 2_592_000 // 30 days
-        let secondsPerYear: Int64 = 31_536_000 // 365 days
-
-        for unitSeconds in [secondsPerDay, secondsPerMonth, secondsPerYear] {
-            guard unitSeconds <= rangeSeconds else { continue }
-
-            // First calendar boundary at or after lowerSeconds
-            let firstBoundary: Int64
-            if lowerSeconds >= 0 {
-                firstBoundary = ((lowerSeconds + unitSeconds - 1) / unitSeconds) * unitSeconds
-            } else {
-                let divided = lowerSeconds / unitSeconds
-                let remainder = lowerSeconds - divided * unitSeconds
-                firstBoundary = remainder == 0 ? lowerSeconds : (divided + 1) * unitSeconds
-            }
-
-            if firstBoundary <= upperSeconds {
-                insertWithNeighbors(firstBoundary)
-            }
-
-            // Last calendar boundary at or before upperSeconds
-            let lastBoundary: Int64
-            if upperSeconds >= 0 {
-                lastBoundary = (upperSeconds / unitSeconds) * unitSeconds
-            } else {
-                let divided = upperSeconds / unitSeconds
-                let remainder = upperSeconds - divided * unitSeconds
-                lastBoundary = remainder == 0 ? upperSeconds : (divided - 1) * unitSeconds
-            }
-
-            if lastBoundary >= lowerSeconds, lastBoundary != firstBoundary {
-                insertWithNeighbors(lastBoundary)
-            }
+        // 6. Calendar boundaries (first and last month/year start within range, plus leap days)
+        let calendarBoundaries = CalendarBoundaries.inRange(
+            lower: lowerSeconds,
+            upper: upperSeconds,
+            timeZoneID: timeZoneID
+        )
+        for boundary in calendarBoundaries {
+            insertWithNeighbors(boundary)
         }
 
         // 7. DST transition times for the specified timezone (converted to steps, with neighbors)
@@ -464,5 +436,98 @@ package enum DSTTransitions {
             }
         }
         return transitions
+    }
+}
+
+// MARK: - Calendar Boundary Computation
+
+/// Computes real month starts, year starts, and leap day boundaries within a date range.
+package enum CalendarBoundaries {
+    /// Returns seconds-since-reference-date for the first and last month start, year start, and any Feb 29 within [lower, upper].
+    public static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
+        let zone = TimeZone(identifier: timeZoneID) ?? .gmt
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+
+        let startDate = Date(timeIntervalSinceReferenceDate: TimeInterval(lower))
+        let endDate = Date(timeIntervalSinceReferenceDate: TimeInterval(upper))
+
+        var results = [Int64]()
+
+        // Month starts: first and last within range
+        if let firstMonth = calendar.nextDate(after: startDate, matching: DateComponents(day: 1), matchingPolicy: .nextTime),
+           firstMonth <= endDate
+        {
+            results.append(Int64(firstMonth.timeIntervalSinceReferenceDate))
+
+            var cursor = firstMonth
+            var lastMonth = firstMonth
+            while let next = calendar.date(byAdding: .month, value: 1, to: cursor),
+                  next <= endDate
+            {
+                lastMonth = next
+                cursor = next
+            }
+            if lastMonth != firstMonth {
+                results.append(Int64(lastMonth.timeIntervalSinceReferenceDate))
+            }
+        }
+
+        // Year starts: first and last within range
+        if let firstYear = calendar.nextDate(after: startDate, matching: DateComponents(month: 1, day: 1), matchingPolicy: .nextTime),
+           firstYear <= endDate
+        {
+            results.append(Int64(firstYear.timeIntervalSinceReferenceDate))
+
+            var cursor = firstYear
+            var lastYear = firstYear
+            while let next = calendar.date(byAdding: .year, value: 1, to: cursor),
+                  next <= endDate
+            {
+                lastYear = next
+                cursor = next
+            }
+            if lastYear != firstYear {
+                results.append(Int64(lastYear.timeIntervalSinceReferenceDate))
+            }
+        }
+
+        // End-of-month rollover: last second of the month before the last month start (where day 31 → day 1 happens)
+        if let lastMonth = results.last(where: { $0 > lower }),
+           let lastMonthDate = Optional(Date(timeIntervalSinceReferenceDate: TimeInterval(lastMonth))),
+           let endOfPreviousMonth = calendar.date(byAdding: .second, value: -1, to: lastMonthDate)
+        {
+            let seconds = Int64(endOfPreviousMonth.timeIntervalSinceReferenceDate)
+            if seconds >= lower {
+                results.append(seconds)
+            }
+        }
+
+        // Local midnight: start of the day nearest the range midpoint in the configured timezone
+        let midSeconds = lower + (upper - lower) / 2
+        let midDate = Date(timeIntervalSinceReferenceDate: TimeInterval(midSeconds))
+        let midnight = calendar.startOfDay(for: midDate)
+        let midnightSeconds = Int64(midnight.timeIntervalSinceReferenceDate)
+        if midnightSeconds >= lower, midnightSeconds <= upper {
+            results.append(midnightSeconds)
+        }
+
+        // Leap day (Feb 29): last occurrence within range
+        let endYear = calendar.component(.year, from: endDate)
+        var leapYear = endYear
+        while leapYear % 4 != 0 || (leapYear % 100 == 0 && leapYear % 400 != 0) {
+            leapYear -= 1
+        }
+        if leapYear >= calendar.component(.year, from: startDate) {
+            let components = DateComponents(year: leapYear, month: 2, day: 29)
+            if let leapDay = calendar.date(from: components) {
+                let seconds = Int64(leapDay.timeIntervalSinceReferenceDate)
+                if seconds >= lower, seconds <= upper {
+                    results.append(seconds)
+                }
+            }
+        }
+
+        return results
     }
 }
