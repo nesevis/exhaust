@@ -6,7 +6,7 @@
 //
 
 /// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
-public enum TypeTag: Equatable, Hashable, Sendable {
+public enum TypeTag: Sendable {
     /// Platform-width unsigned integer (`UInt`).
     case uint
     /// 64-bit unsigned integer.
@@ -37,8 +37,8 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Boundary analysis produces only all-low / all-high values.
     case bits
-    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as `UInt32`. The bit pattern is an index, not a Unicode code point.
-    case character
+    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as `UInt32`. The bit pattern is an index, not a Unicode code point. The associated boundary indices are pre-computed by ``ScalarRangeSet`` during construction and used by ``BoundaryDomainAnalysis`` for coverage analysis.
+    case character(boundaryIndices: [UInt64])
 
     /// Creates a type tag by matching the metatype of the given value against known numeric types.
     public init<T>(type: T) {
@@ -232,6 +232,51 @@ package extension TypeTag {
     }
 }
 
+extension TypeTag: Equatable {
+    public static func == (lhs: TypeTag, rhs: TypeTag) -> Bool {
+        switch (lhs, rhs) {
+        case (.uint, .uint), (.uint64, .uint64), (.uint32, .uint32),
+            (.uint16, .uint16), (.uint8, .uint8),
+            (.int, .int), (.int64, .int64), (.int32, .int32),
+            (.int16, .int16), (.int8, .int8),
+            (.double, .double), (.float, .float), (.float16, .float16),
+            (.bits, .bits), (.character, .character):
+            true
+        case let (.date(lhsLower, lhsInterval, lhsTZ), .date(rhsLower, rhsInterval, rhsTZ)):
+            lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ
+        default:
+            false
+        }
+    }
+}
+
+extension TypeTag: Hashable {
+    public func hash(into hasher: inout Hasher) {
+        switch self {
+        case .uint: hasher.combine(0)
+        case .uint64: hasher.combine(1)
+        case .uint32: hasher.combine(2)
+        case .uint16: hasher.combine(3)
+        case .uint8: hasher.combine(4)
+        case .int: hasher.combine(5)
+        case .int64: hasher.combine(6)
+        case .int32: hasher.combine(7)
+        case .int16: hasher.combine(8)
+        case .int8: hasher.combine(9)
+        case .double: hasher.combine(10)
+        case .float: hasher.combine(11)
+        case .float16: hasher.combine(12)
+        case let .date(lower, interval, tzID):
+            hasher.combine(13)
+            hasher.combine(lower)
+            hasher.combine(interval)
+            hasher.combine(tzID)
+        case .bits: hasher.combine(14)
+        case .character: hasher.combine(15)
+        }
+    }
+}
+
 extension TypeTag: CustomStringConvertible {
     public var description: String {
         switch self {
@@ -252,5 +297,13 @@ extension TypeTag: CustomStringConvertible {
         case .bits: "Bits"
         case .character: "Character"
         }
+    }
+}
+
+package extension TypeTag {
+    /// Whether this tag represents a character index type.
+    var isCharacter: Bool {
+        if case .character = self { return true }
+        return false
     }
 }

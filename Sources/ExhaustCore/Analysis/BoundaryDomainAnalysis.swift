@@ -79,6 +79,23 @@ extension BoundaryDomainProfile: CoverageProfile {
 
 /// Boundary value selection functions used by ``ChoiceTreeAnalysis``.
 package enum BoundaryDomainAnalysis {
+    /// Unicode scalar values that are prone to causing problems in string-processing code.
+    ///
+    /// ``ScalarRangeSet`` converts these to flat indices during construction so that ``computeBoundaryValues(min:max:tag:)`` receives pre-computed, index-space boundary values via the ``TypeTag/character(boundaryIndices:)`` tag.
+    public static let interestingCharacterScalars: [UInt32] = [
+        768, // Combining grave accent
+        6158, // Mongolian vowel separator
+        8205, // Zero-width joiner — glues emoji sequences
+        8232, // Line separator — breaks JSON/JS string literals
+        8238, // Right-to-left override — bidirectional control
+        8239, // Narrow no-break space — looks like a space but is not
+        65279, // BOM / zero-width no-break space
+        65287, // Full-width apostrophe
+        127995, // Emoji skin tone modifier — changes preceding emoji when adjacent
+        128078, // Thumbs down — combines with skin tone modifier
+        917504, // Tag character, invisible, marked as valid
+    ]
+
     /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
     public static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
@@ -94,6 +111,10 @@ package enum BoundaryDomainAnalysis {
             )
         case .bits:
             [min, max]
+        case let .character(boundaryIndices):
+            (Set([min, max]).union(boundaryIndices))
+                .filter { $0 >= min && $0 <= max }
+                .sorted()
         default:
             computeIntegerBoundaryValues(min: min, max: max, tag: tag)
         }
@@ -144,33 +165,51 @@ package enum BoundaryDomainAnalysis {
         var values = Set<UInt64>()
         switch tag {
         case .double:
-            for c: Double in [
-                -Double.greatestFiniteMagnitude, -1.0, -Double.leastNonzeroMagnitude,
-                -0.0, 0.0, Double.leastNonzeroMagnitude,
-                1.0, Double.greatestFiniteMagnitude,
-                Double.nan, Double.infinity, -Double.infinity,
-            ] {
-                values.insert(c.bitPattern64)
-            }
+            let doubles = [
+                -Double.greatestFiniteMagnitude,
+                -1.0,
+                -Double.leastNonzeroMagnitude,
+                -0.0,
+                0.0,
+                Double.leastNonzeroMagnitude,
+                1.0,
+                Double.greatestFiniteMagnitude,
+                Double.nan,
+                Double.infinity,
+                -Double.infinity,
+            ]
+            values.formUnion(doubles.map(\.bitPattern64))
         case .float:
-            for c: Float in [
-                -Float.greatestFiniteMagnitude, -1.0, -Float.leastNonzeroMagnitude,
-                -0.0, 0.0, Float.leastNonzeroMagnitude,
-                1.0, Float.greatestFiniteMagnitude,
-                Float.nan, Float.infinity, -Float.infinity,
-            ] {
-                values.insert(c.bitPattern64)
-            }
+            let floats = [
+                -Float.greatestFiniteMagnitude,
+                -1.0,
+                -Float.leastNonzeroMagnitude,
+                -0.0,
+                0.0,
+                Float.leastNonzeroMagnitude,
+                1.0,
+                Float.greatestFiniteMagnitude,
+                Float.nan,
+                Float.infinity,
+                -Float.infinity,
+            ]
+            values.formUnion(floats.map(\.bitPattern64))
         case .float16:
             #if arch(arm64) || arch(arm64_32)
-                for c: Float16 in [
-                    -Float16.greatestFiniteMagnitude, -1.0, -Float16.leastNonzeroMagnitude,
-                    -0.0, 0.0, Float16.leastNonzeroMagnitude,
-                    1.0, Float16.greatestFiniteMagnitude,
-                    Float16.nan, Float16.infinity, -Float16.infinity,
-                ] {
-                    values.insert(c.bitPattern64)
-                }
+                let floats = [
+                    -Float16.greatestFiniteMagnitude,
+                    -1.0,
+                    -Float16.leastNonzeroMagnitude,
+                    -0.0,
+                    0.0,
+                    Float16.leastNonzeroMagnitude,
+                    1.0,
+                    Float16.greatestFiniteMagnitude,
+                    Float16.nan,
+                    Float16.infinity,
+                    -Float16.infinity,
+                ]
+            values.formUnion(floats.map(\.bitPattern64))
             #endif
         default:
             break

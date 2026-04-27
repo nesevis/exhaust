@@ -32,7 +32,7 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         case .bits:
             self = .unsigned(value.bitPattern64, .bits)
         case .character:
-            self = .unsigned(value.bitPattern64, .character)
+            self = .unsigned(value.bitPattern64, tag)
         case .int:
             self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, .int)
         case .int64:
