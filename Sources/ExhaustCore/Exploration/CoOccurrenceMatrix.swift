@@ -16,8 +16,8 @@ public struct CoOccurrenceMatrix: Sendable {
     /// Creates a zero-filled matrix for the given number of directions.
     public init(directionCount: Int) {
         self.directionCount = directionCount
-        self.cells = Array(repeating: 0, count: directionCount * directionCount)
-        self.unmatchedCount = 0
+        cells = Array(repeating: 0, count: directionCount * directionCount)
+        unmatchedCount = 0
     }
 
     /// Returns the count for the pair (i, j).
@@ -101,10 +101,8 @@ public struct CoOccurrenceMatrix: Sendable {
         var results: [(directionA: Int, directionB: Int, ruleOfThreeUpperBound: Double)] = []
 
         for indexA in 0 ..< directionCount {
-            for indexB in (indexA + 1) ..< directionCount {
-                if cells[indexA * directionCount + indexB] == 0 {
-                    results.append((indexA, indexB, 3.0 / Double(totalWarmupSamples)))
-                }
+            for indexB in (indexA + 1) ..< directionCount where cells[indexA * directionCount + indexB] == 0 {
+                results.append((indexA, indexB, 3.0 / Double(totalWarmupSamples)))
             }
         }
 

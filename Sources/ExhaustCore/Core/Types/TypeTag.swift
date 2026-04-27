@@ -236,11 +236,11 @@ extension TypeTag: Equatable {
     public static func == (lhs: TypeTag, rhs: TypeTag) -> Bool {
         switch (lhs, rhs) {
         case (.uint, .uint), (.uint64, .uint64), (.uint32, .uint32),
-            (.uint16, .uint16), (.uint8, .uint8),
-            (.int, .int), (.int64, .int64), (.int32, .int32),
-            (.int16, .int16), (.int8, .int8),
-            (.double, .double), (.float, .float), (.float16, .float16),
-            (.bits, .bits), (.character, .character):
+             (.uint16, .uint16), (.uint8, .uint8),
+             (.int, .int), (.int64, .int64), (.int32, .int32),
+             (.int16, .int16), (.int8, .int8),
+             (.double, .double), (.float, .float), (.float16, .float16),
+             (.bits, .bits), (.character, .character):
             true
         case let (.date(lhsLower, lhsInterval, lhsTZ), .date(rhsLower, rhsInterval, rhsTZ)):
             lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ

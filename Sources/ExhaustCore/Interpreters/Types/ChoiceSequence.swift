@@ -171,7 +171,7 @@ package extension ChoiceSequence {
         }
         return keys
     }
-    
+
     // MARK: - Shortlex
 
     func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
@@ -196,8 +196,12 @@ package extension ChoiceSequence {
         var selfIdx = 0
         var otherIdx = 0
         while selfIdx < count, otherIdx < other.count {
-            while selfIdx < count, self[selfIdx].value == nil { selfIdx += 1 }
-            while otherIdx < other.count, other[otherIdx].value == nil { otherIdx += 1 }
+            while selfIdx < count, self[selfIdx].value == nil {
+                selfIdx += 1
+            }
+            while otherIdx < other.count, other[otherIdx].value == nil {
+                otherIdx += 1
+            }
             guard selfIdx < count, otherIdx < other.count else { break }
             switch self[selfIdx].value!.shortLexCompare(other[otherIdx].value!) {
             case .lt: return true

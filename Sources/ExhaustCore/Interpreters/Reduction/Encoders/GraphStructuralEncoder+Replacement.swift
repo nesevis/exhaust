@@ -251,7 +251,7 @@ extension GraphStructuralEncoder {
     /// Two-phase approach: first builds a per-branch recursive-slot mask from non-innermost picks (where the mask is directly observable as pick vs non-pick children), then applies those masks at innermost picks to identify base case positions and determine whether each needs pick wrapping (direct recursion) or bind wrapping (`Gen.recursive`).
     private static func depthZeroLeafExpansions(
         donorNodeID: Int,
-        donorRangeStart: Int,
+        donorRangeStart _: Int,
         fingerprint: UInt64,
         pickMetadata: PickMetadata,
         graph: ChoiceGraph
@@ -401,10 +401,11 @@ extension GraphStructuralEncoder {
                 for (index, childID) in node.children.enumerated() {
                     if let mask, mask.contains(index) == false { continue }
                     let child = graph.nodes[childID]
-                    let parentIsPick: Bool = if let parentID = child.parent,
-                        case let .pick(parentMeta) = graph.nodes[parentID].kind,
-                        parentMeta.fingerprint == fingerprint
-                    { true } else { false }
+                    let parentIsPick: Bool = child.parent.map { parentID in
+                        if case let .pick(parentMeta) = graph.nodes[parentID].kind,
+                           parentMeta.fingerprint == fingerprint { return true }
+                        return false
+                    } ?? false
                     if parentIsPick == false, let range = child.positionRange {
                         expansions[range.lowerBound] = wrapping
                     }

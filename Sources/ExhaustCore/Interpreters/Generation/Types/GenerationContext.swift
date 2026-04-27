@@ -93,8 +93,8 @@ package struct GenerationContext: ~Copyable {
 
     // MARK: - Per-run seed derivation (SplitMix64 mixing)
 
-    /// Derives a deterministic per-run seed from a base seed and run index using SplitMix64 mixing.
     // FIXME: Xoshiro features this
+    /// Derives a deterministic per-run seed from a base seed and run index using SplitMix64 mixing.
     public static func runSeed(base: UInt64, runIndex: UInt64) -> UInt64 {
         var z = base &+ runIndex &* 0x9E37_79B9_7F4A_7C15
         z = (z ^ (z &>> 30)) &* 0xBF58_476D_1CE4_E5B9

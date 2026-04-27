@@ -25,7 +25,7 @@ struct CalculatorShrinkingChallenge {
      */
 
     @Test("Calculator, Full")
-    func calculatorfull() throws {
+    func calculatorfull() {
         let gen = #gen(CalculatorFixture.expression(depth: 5))
         let result = #exhaust(
             gen,

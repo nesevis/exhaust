@@ -1,6 +1,7 @@
 import Foundation
 
 // MARK: - Academic Provenance
+
 //
 // The design synthesizes three traditions. Ostrand and Balcer's Category-Partition Method (CACM 1988) introduced systematic partitioning of the input space into named categories and choices; each direction here corresponds to one of their category–choice pairs. Claessen and Hughes's QuickCheck classify/cover (ICFP 2000) added post-hoc distribution reporting over random samples but cannot steer the sampler — coverage is observed, not guaranteed. This runner closes the gap: per-direction CGS tuning produces a stratum-specific distribution for each direction, guaranteeing K hits per stratum rather than reporting whatever the generator happened to produce.
 //
@@ -246,13 +247,9 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
     // MARK: - Classification
 
     private func classify(_ value: Output) -> [Int] {
-        var matching = [Int]()
-        for (index, direction) in directions.enumerated() {
-            if direction.predicate(value) {
-                matching.append(index)
-            }
-        }
-        return matching
+        directions.enumerated()
+            .filter { $0.element.predicate(value) }
+            .map(\.offset)
     }
 
     // MARK: - Reduction
@@ -266,21 +263,16 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             return ReducedFailure(counterexample: value, original: value, reducedSequence: nil)
         }
 
-        let reductionPredicate: (Output) -> Bool
-        if matchingDirections.isEmpty {
-            reductionPredicate = { [property] output in
+        let reductionPredicate: (Output) -> Bool = matchingDirections.isEmpty
+            ? { [property] output in
                 property(output) == false
             }
-        } else {
-            reductionPredicate = { [property, directions] output in
-                for directionIndex in matchingDirections {
-                    if directions[directionIndex].predicate(output) == false {
-                        return false
-                    }
+            : { [property, directions] output in
+                for directionIndex in matchingDirections where directions[directionIndex].predicate(output) == false {
+                    return false
                 }
                 return property(output) == false
             }
-        }
 
         do {
             if let (reducedSequence, reducedValue) = try Interpreters.choiceGraphReduce(

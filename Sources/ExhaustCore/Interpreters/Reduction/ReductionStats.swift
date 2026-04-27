@@ -41,4 +41,3 @@ public struct ReductionStats: Sendable {
         graphStats = ChoiceGraphStats()
     }
 }
-

@@ -5,7 +5,7 @@ import Testing
 struct DedupePropertyTests {
     @Test("Dedupe preserves all distinct elements")
     func dedupePreservesDistinctElements() {
-        let generator = #gen(.int().array(length: 0...20))
+        let generator = #gen(.int().array(length: 0 ... 20))
 
         #exhaust(
             generator,
@@ -30,5 +30,4 @@ func dedupe<Element: Equatable>(_ array: [Element]) -> [Element] {
             deduped.append(element)
         }
     }
-    
 }

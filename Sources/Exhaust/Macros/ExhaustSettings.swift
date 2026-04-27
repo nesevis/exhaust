@@ -154,4 +154,3 @@ public enum ExhaustSettings<Output> {
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
 }
-

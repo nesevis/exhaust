@@ -266,7 +266,6 @@ enum TransformationEnumerator {
                         enablesRemoval: []
                     )
                 ))
-
             }
         }
 

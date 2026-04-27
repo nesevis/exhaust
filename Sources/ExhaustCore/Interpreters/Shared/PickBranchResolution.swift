@@ -47,5 +47,4 @@ package enum PickBranchResolution {
         }
         return branches
     }
-
 }

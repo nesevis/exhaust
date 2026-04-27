@@ -420,18 +420,13 @@ private enum TreeVisualization {
             let isLeftmost = col == leftmost
             let isRightmost = col == rightmost
 
-            let char: Character = if isChild, isParent {
-                "┼"
-            } else if isLeftmost, isChild {
-                "╰"
-            } else if isRightmost, isChild {
-                "╯"
-            } else if isChild {
-                "┴"
-            } else if isParent {
-                "┬"
-            } else {
-                "─"
+            let char: Character = switch (isChild, isParent, isLeftmost, isRightmost) {
+            case (true, true, _, _): "┼"
+            case (true, _, true, _): "╰"
+            case (true, _, _, true): "╯"
+            case (true, _, _, _): "┴"
+            case (_, true, _, _): "┬"
+            default: "─"
             }
 
             placeChar(&grid, row: barRow, col: col, char: char, width: spec.width)

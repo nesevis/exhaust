@@ -8,10 +8,10 @@ public enum EncoderName: String, Hashable, Sendable {
 
     /// Drives each integer value toward its semantic simplest form (typically zero). Starts with batch zeroing, then per-leaf search that progresses through interpolation, binary, and linear phases as the remaining range narrows. A cross-zero phase for signed types walks shortlex key space downward. Tracks convergence floors to avoid re-searching settled values.
     case valueSearch
-    
+
     /// Drives floating-point values toward zero using the IEEE 754 bit pattern ordering. Uses the same interpolation → binary → linear progression as integer search, applied to the exponent and significand independently. Handles special values (NaN, infinity, subnormals) and searches toward both positive and negative zero.
     case floatSearch
-    
+
     /// Joint search over a bind-inner value and the parameters it controls. Composes an upstream search on the controlling value with a downstream search on the dependent subtree. Each upstream candidate triggers a full downstream exploration, so this encoder is deferred to stall cycles where cheaper encoders have failed.
     case boundValueSearch
 

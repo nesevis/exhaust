@@ -1,5 +1,5 @@
 //
-//  FiniteDomainAnalysis.swift
+//  FiniteDomainProfile.swift
 //  Exhaust
 //
 

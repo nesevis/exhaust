@@ -8,12 +8,12 @@ import IssueReporting
     @_weakLinked import Testing
 #endif
 
-extension __ExhaustRuntime {
+public extension __ExhaustRuntime {
     // MARK: - Explore (Bool)
 
     /// Runs a classification-aware property test with per-direction CGS tuning. Runtime target of `#explore`.
     @discardableResult
-    public static func __explore<Output>(
+    static func __explore<Output>(
         _ gen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
@@ -161,7 +161,7 @@ extension __ExhaustRuntime {
 
     /// Runs a classification-aware property test with a Void/#expect/#require closure.
     @discardableResult
-    public static func __exploreExpect<Output>(
+    static func __exploreExpect<Output>(
         _ gen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
@@ -234,7 +234,7 @@ extension __ExhaustRuntime {
 
     /// Runs a classification-aware property test with an async Bool-returning closure.
     @discardableResult
-    public static func __exploreAsync<Output>(
+    static func __exploreAsync<Output>(
         _ gen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
@@ -265,7 +265,7 @@ extension __ExhaustRuntime {
 
     /// Runs a classification-aware property test with an async Void/#expect/#require closure.
     @discardableResult
-    public static func __exploreExpectAsync<Output>(
+    static func __exploreExpectAsync<Output>(
         _ gen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],

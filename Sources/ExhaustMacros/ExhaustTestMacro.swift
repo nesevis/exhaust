@@ -204,7 +204,7 @@ final class SourceLocationRewriter: SyntaxRewriter {
                 "Testing.SourceLocation(fileID: \(fileIDLocation.file), filePath: \(location.file), line: \(location.line), column: \(location.column))" as ExprSyntax
             )
         )
-        arguments = arguments + [sourceLocationArg]
+        arguments += [sourceLocationArg]
 
         return ExprSyntax(node.with(\.arguments, arguments))
     }

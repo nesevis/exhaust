@@ -63,16 +63,23 @@ struct GraphColoringChallenge {
             lower = min(a, b)
             upper = max(a, b)
         }
+
         static func < (lhs: Edge, rhs: Edge) -> Bool {
             lhs.lower != rhs.lower ? lhs.lower < rhs.lower : lhs.upper < rhs.upper
         }
-        var description: String { "(\(lower)-\(upper))" }
+
+        var description: String {
+            "(\(lower)-\(upper))"
+        }
     }
 
     struct Graph: CustomStringConvertible {
         let vertices: [Int]
         let edges: [Edge]
-        var distinctVertices: [Int] { Array(Set(vertices)).sorted() }
+        var distinctVertices: [Int] {
+            Array(Set(vertices)).sorted()
+        }
+
         var description: String {
             "Graph(V=\(distinctVertices), E=\(edges.sorted()))"
         }
@@ -175,15 +182,15 @@ struct GraphColoringChallenge {
     /// failing starts even when they don't match a named topology. `sizeN6` and
     /// beyond only appear when the generator widens past the 5-vertex cap.
     enum Topology: String {
-        case triangleExact          // 3 vertices, 3 edges (already K_3)
-        case triangleSuperGraph     // contains a triangle plus extras on 3 or 4 vertices
-        case pentagonExact          // 5 vertices, 5 edges, 2-regular (C_5)
-        case pentagonSuperGraph     // 5 vertices containing C_5
-        case k4Exact                // 4 vertices, 6 edges (complete)
+        case triangleExact // 3 vertices, 3 edges (already K_3)
+        case triangleSuperGraph // contains a triangle plus extras on 3 or 4 vertices
+        case pentagonExact // 5 vertices, 5 edges, 2-regular (C_5)
+        case pentagonSuperGraph // 5 vertices containing C_5
+        case k4Exact // 4 vertices, 6 edges (complete)
         case size6
         case size7
         case size8
-        case sizeLarge              // 9 or more distinct vertices
+        case sizeLarge // 9 or more distinct vertices
     }
 
     static func classify(_ graph: Graph) -> Topology {
@@ -321,7 +328,7 @@ struct GraphColoringChallenge {
         }
     }
 
-    private func printMetric<Value: BinaryInteger>(_ label: String, values: [Value]) {
+    private func printMetric(_ label: String, values: [some BinaryInteger]) {
         guard values.isEmpty == false else { return }
         let mean = Double(values.reduce(0, +)) / Double(values.count)
         let sorted = values.sorted()
@@ -338,7 +345,7 @@ struct GraphColoringChallenge {
     }
 
     @Test("Graph coloring shrinks to a canonical CE class")
-    func graphColoringRandomSeed() throws {
+    func graphColoringRandomSeed() {
         var report: ExhaustReport?
         let result = #exhaust(
             Self.gen,
@@ -349,11 +356,11 @@ struct GraphColoringChallenge {
             property: Self.property
         )
 //        let value = try #require(result)
-        
+
         guard let value = result else {
             return
         }
-        
+
         if let report {
             print("[PROFILE] GraphColoring: \(report.profilingSummary)")
         }
@@ -365,7 +372,7 @@ struct GraphColoringChallenge {
         // Categorise the result by topology.
         let n = value.distinctVertices.count
         let e = value.edges.count
-        let category: String = switch (n, e) {
+        let category = switch (n, e) {
         case (3, 3): "K_3 (triangle)"
         case (5, 5): "C_5 (5-cycle)"
         case (4, 6): "K_4"

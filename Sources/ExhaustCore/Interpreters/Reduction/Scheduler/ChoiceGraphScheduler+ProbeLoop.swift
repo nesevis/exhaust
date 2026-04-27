@@ -135,7 +135,6 @@ extension ChoiceGraphScheduler {
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
-            let preAcceptSequenceCount = sequence.count
             if let result = try decoder.decodeAny(
                 candidate: probe.candidate,
                 gen: gen,
@@ -320,4 +319,3 @@ extension ChoiceGraphScheduler {
         )
     }
 }
-

@@ -16,7 +16,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter bounds: Generator for the range bound values.
     /// - Returns: A generator producing closed ranges where lower bound is at most the upper bound.
-    static func closedRange<Bound: Comparable>(
+    static func closedRange<Bound: Comparable & Sendable>(
         _ bounds: ReflectiveGenerator<Bound>
     ) -> ReflectiveGenerator<ClosedRange<Bound>> where Value == ClosedRange<Bound> {
         Gen.zip(bounds, bounds).mapped(
@@ -39,7 +39,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter bounds: Generator for the range bound values.
     /// - Returns: A generator producing ranges where lower bound is at most the upper bound.
-    static func range<Bound: Comparable>(
+    static func range<Bound: Comparable & Sendable>(
         _ bounds: ReflectiveGenerator<Bound>
     ) -> ReflectiveGenerator<Range<Bound>> where Value == Range<Bound> {
         Gen.zip(bounds, bounds).mapped(

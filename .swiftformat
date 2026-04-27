@@ -37,7 +37,7 @@
 
 # rules
 
---disable noForceUnwrapInTests
+--disable noForceUnwrapInTests,conditionalAssignment
 --enable isEmpty
 # --enable noGuardInTests
 --enable preferFinalClasses

@@ -80,11 +80,11 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     public var semanticSimplest: ChoiceValue {
         switch self {
         case let .unsigned(_, tag):
-            return .unsigned(0, tag)
+            .unsigned(0, tag)
         case let .signed(_, _, tag):
-            return .signed(0, tag.simplestBitPattern, tag)
+            .signed(0, tag.simplestBitPattern, tag)
         case let .floating(_, _, tag):
-            return .floating(0.0, tag.simplestBitPattern, tag)
+            .floating(0.0, tag.simplestBitPattern, tag)
         }
     }
 

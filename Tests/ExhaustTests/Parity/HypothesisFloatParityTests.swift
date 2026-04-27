@@ -87,7 +87,7 @@ import Testing
 // MARK: - Range and subnormal parity tests
 
 @Suite("Hypothesis Float Range/Subnormal Parity")
-struct HypothesisFloatRangeAndSubnormalParityTests {
+struct FloatRangeAndSubnormalParityTests {
     @Test("Generated doubles stay in very large finite ranges")
     func doublesAreInRangeForLargeBounds() {
         // Adjustment relative to `test_floats_are_in_range`:

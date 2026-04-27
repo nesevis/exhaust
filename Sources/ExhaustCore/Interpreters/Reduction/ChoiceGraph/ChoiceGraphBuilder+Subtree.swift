@@ -66,11 +66,9 @@ extension ChoiceGraphBuilder {
 
         // Renumber every internal ID by adding `nodeIDOffset`. The subtree root (the first emitted node) has its parent set to the supplied external `parent` — every other node's parent is a local subtree ID and gets shifted.
         let renumberedNodes: [ChoiceGraphNode] = builder.nodes.enumerated().map { index, node in
-            let renumberedParent: Int? = if index == 0 {
-                parent
-            } else {
-                node.parent.map { $0 + nodeIDOffset }
-            }
+            let renumberedParent: Int? = index == 0
+                ? parent
+                : node.parent.map { $0 + nodeIDOffset }
             return ChoiceGraphNode(
                 id: node.id + nodeIDOffset,
                 kind: node.kind,

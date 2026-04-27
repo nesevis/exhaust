@@ -69,14 +69,11 @@ package enum LightweightSampler {
                 )
 
             case let .chooseBits(min, max, tag, _, scaling):
-                let effective: ClosedRange<UInt64>
-                if let scaling {
-                    effective = Gen.applyScaling(
-                        min: min, max: max, tag: tag, scaling: scaling, size: size
+                let effective: ClosedRange<UInt64> = scaling.map {
+                    Gen.applyScaling(
+                        min: min, max: max, tag: tag, scaling: $0, size: size
                     )
-                } else {
-                    effective = min ... max
-                }
+                } ?? (min ... max)
                 let bits = rng.next(in: effective)
                 return try cont(
                     bits, continuation,

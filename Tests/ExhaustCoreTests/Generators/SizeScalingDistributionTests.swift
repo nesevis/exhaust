@@ -18,7 +18,7 @@ struct SizeScalingDistributionTests {
     // MARK: - Signed integers anchor at zero
 
     @Test("Int linear at small size clusters symmetrically around zero")
-    func intLinearCentersOnZero() throws {
+    func intLinearCentersOnZero() {
         let samples = sample(
             Gen.resize(30, Gen.choose(in: Int.min ... Int.max, scaling: .linear)),
             count: 400,
@@ -40,7 +40,7 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Int exponential at small size is tighter than linear")
-    func intExponentialTighterThanLinear() throws {
+    func intExponentialTighterThanLinear() {
         let linearSamples = sample(
             Gen.resize(20, Gen.choose(in: Int.min ... Int.max, scaling: .linear)),
             count: 400,
@@ -62,13 +62,13 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Int linear at size 100 spans the full range")
-    func intLinearReachesFullRangeAtSize100() throws {
+    func intLinearReachesFullRangeAtSize100() {
         let samples = sample(
             Gen.resize(100, Gen.choose(in: Int.min ... Int.max, scaling: .linear)),
             count: 400,
             seed: 3
         )
-        let negativeRatio = Double(samples.filter { $0 < 0 }.count) / Double(samples.count)
+        let negativeRatio = Double(samples.count(where: { $0 < 0 })) / Double(samples.count)
         #expect(negativeRatio > 0.35 && negativeRatio < 0.65, "Expected balanced signs at size 100, got \(negativeRatio)")
 
         let largePositive = samples.contains { $0 > Int.max / 2 }
@@ -80,14 +80,14 @@ struct SizeScalingDistributionTests {
     // MARK: - Floats anchor at zero
 
     @Test("Double linear at small size clusters symmetrically around zero")
-    func doubleLinearCentersOnZero() throws {
+    func doubleLinearCentersOnZero() {
         let range = -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude
         let samples = sample(
             Gen.resize(25, Gen.choose(in: range, scaling: .linear)),
             count: 400,
             seed: 4
         )
-        let finiteSamples = samples.filter { $0.isFinite }
+        let finiteSamples = samples.filter(\.isFinite)
         let (negatives, positives) = signCountsDouble(finiteSamples)
 
         #expect(negatives > samples.count / 4, "Expected substantial negatives, got \(negatives)")
@@ -103,7 +103,7 @@ struct SizeScalingDistributionTests {
     // MARK: - Unsigned integers anchor at the lower bound
 
     @Test("UInt64 linear at small size stays near the lower bound")
-    func uint64LinearAnchorsAtLowerBound() throws {
+    func uint64LinearAnchorsAtLowerBound() {
         let samples = sample(
             Gen.resize(10, Gen.choose(in: UInt64.min ... UInt64.max, scaling: .linear)),
             count: 400,
@@ -119,7 +119,7 @@ struct SizeScalingDistributionTests {
     // MARK: - Ranges entirely above or below zero
 
     @Test("Linear on range above zero grows upward from lower bound")
-    func linearOnPositiveRangeGrowsUpward() throws {
+    func linearOnPositiveRangeGrowsUpward() {
         let range: ClosedRange<Int> = 100 ... 1_000_000
         let samples = sample(
             Gen.resize(10, Gen.choose(in: range, scaling: .linear)),
@@ -135,7 +135,7 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Linear on range below zero grows downward from upper bound")
-    func linearOnNegativeRangeGrowsDownward() throws {
+    func linearOnNegativeRangeGrowsDownward() {
         let range: ClosedRange<Int> = -1_000_000 ... -100
         let samples = sample(
             Gen.resize(10, Gen.choose(in: range, scaling: .linear)),
@@ -153,7 +153,7 @@ struct SizeScalingDistributionTests {
     // MARK: - Regression: scaledDistance overflow
 
     @Test("Linear effective range does not collapse at any size from 1 to 100")
-    func linearNoEvenSizeCollapse() throws {
+    func linearNoEvenSizeCollapse() {
         for size in UInt64(1) ... 100 {
             let effectiveRange = Gen.scaledRange(
                 Int.min ... Int.max,
@@ -170,7 +170,7 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Exponential effective range does not collapse at any size from 1 to 100")
-    func exponentialNoEvenSizeCollapse() throws {
+    func exponentialNoEvenSizeCollapse() {
         for size in UInt64(1) ... 100 {
             let effectiveRange = Gen.scaledRange(
                 Int.min ... Int.max,
@@ -187,7 +187,7 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Linear effective range grows monotonically on signed types")
-    func linearEffectiveRangeGrowsMonotonically() throws {
+    func linearEffectiveRangeGrowsMonotonically() {
         var previousWidth: UInt64 = 0
         for size in stride(from: UInt64(5), through: 100, by: 5) {
             let effectiveRange = Gen.scaledRange(

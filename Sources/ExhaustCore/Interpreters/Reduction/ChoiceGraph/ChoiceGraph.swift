@@ -286,7 +286,7 @@ package extension ChoiceGraph {
         var chain: [String] = []
         var current: Int? = nodeID
         while let id = current, id < nodes.count, chain.count < 8 {
-            let kindLabel: String = switch nodes[id].kind {
+            let kindLabel = switch nodes[id].kind {
             case .chooseBits: "chooseBits"
             case .pick: "pick"
             case .bind: "bind"

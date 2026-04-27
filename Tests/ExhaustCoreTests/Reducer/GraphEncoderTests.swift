@@ -270,7 +270,7 @@ struct GraphEncoderTests {
         var encoder = GraphValueEncoder()
         encoder.start(scope: scope)
 
-        while let _ = encoder.nextProbe(lastAccepted: false) {}
+        while encoder.nextProbe(lastAccepted: false) != nil {}
 
         #expect(encoder.convergenceRecords.isEmpty == false)
     }

@@ -275,11 +275,11 @@ package enum ExhaustLog {
             line: line,
             format: configuration.format
         )
-#if canImport(OSLog)
-        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
-#else
-        print(rendered)
-#endif
+        #if canImport(OSLog)
+            logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
+        #else
+            print(rendered)
+        #endif
     }
 
     private static let subsystem = "com.exhaust"

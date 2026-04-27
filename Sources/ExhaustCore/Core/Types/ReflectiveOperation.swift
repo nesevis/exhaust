@@ -1,3 +1,19 @@
+// MARK: - Academic Provenance
+//
+// Based on the `R b a` effect type (Goldstein §4.3, Fig 4.2). The dissertation defines six primitive operations; Exhaust maps them as follows:
+//
+//   Dissertation      Exhaust
+//   ─────────────     ─────────────
+//   Pick            → pick
+//   Lmap            → contramap
+//   Prune           → prune
+//   ChooseInteger   → chooseBits (divergence: Exhaust uses sized bit-width
+//                     selection with TypeTag, not arbitrary integer ranges)
+//   GetSize         → getSize
+//   Resize          → resize
+//
+// The remaining seven cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`, `transform`.
+
 /// The primitive operations that enable bidirectional property-based testing.
 ///
 /// ReflectiveOperation defines the fundamental operations that make reflective generators bidirectional.
@@ -33,21 +49,6 @@
 ///
 /// - SeeAlso: ``ReflectiveGenerator``, ``Gen``, ``Interpreters``
 public enum ReflectiveOperation {
-// MARK: - Academic Provenance
-//
-// Based on the `R b a` effect type (Goldstein §4.3, Fig 4.2). The dissertation defines six primitive operations; Exhaust maps them as follows:
-//
-//   Dissertation      Exhaust
-//   ─────────────     ─────────────
-//   Pick            → pick
-//   Lmap            → contramap
-//   Prune           → prune
-//   ChooseInteger   → chooseBits (divergence: Exhaust uses sized bit-width
-//                     selection with TypeTag, not arbitrary integer ranges)
-//   GetSize         → getSize
-//   Resize          → resize
-//
-// The remaining seven cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`, `transform`.
     /// A weighted choice option for the `pick` operation.
     ///
     /// Each choice combines the elements needed for bidirectional generation:

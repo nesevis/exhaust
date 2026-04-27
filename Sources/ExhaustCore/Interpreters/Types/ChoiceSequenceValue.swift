@@ -48,22 +48,22 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         case (.group(false), .group(true)),
              (.sequence(false, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)),
              (.bind(false), .bind(true)):
-            return .lt
+            .lt
         case (.group(true), .group(false)),
              (.sequence(true, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)),
              (.bind(true), .bind(false)):
-            return .gt
+            .gt
         case (.just, .value), (.just, .reduced):
-            return .lt
+            .lt
         case (.value, .just), (.reduced, .just):
-            return .gt
+            .gt
         case let (.value(a), .value(b)),
              let (.reduced(a), .reduced(b)),
              let (.value(a), .reduced(b)),
              let (.reduced(a), .value(b)):
-            return a.shortLexCompare(b)
+            a.shortLexCompare(b)
         default:
-            return .eq
+            .eq
         }
     }
 

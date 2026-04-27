@@ -65,8 +65,7 @@ package enum Interpreters {
             )
 
             // 2. For each successful intermediate result...
-            return try intermediateResults.flatMap {
-                (intermediateValue: Any, partialPath: [ChoiceTree]) in
+            return try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
                 let nextGen = try continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -242,11 +241,7 @@ package enum Interpreters {
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchIDs = choices.map(\.id)
         let fingerprint = choices[0].fingerprint
-        let results = try choices.flatMap {
-            choice -> [(
-                value: Any, fingerprint: UInt64, weight: UInt64,
-                id: UInt64, isPicked: Bool, path: ChoiceTree
-            )] in
+        let results = try choices.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {
                 let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
                 let value = reflectionPaths.firstNonNil(\.value)

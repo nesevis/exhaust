@@ -1,5 +1,5 @@
 //
-//  Calculator.swift
+//  CalculatorFixture.swift
 //  ExhaustTests
 //
 //  Shared fixture for the ECOOP shrinking challenge "Calculator":
@@ -33,7 +33,9 @@ enum CalculatorFixture {
             }
         }
 
-        var description: String { debugDescription }
+        var description: String {
+            debugDescription
+        }
     }
 
     enum EvalError: Error {

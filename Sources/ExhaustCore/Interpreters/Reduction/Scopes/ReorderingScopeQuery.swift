@@ -97,7 +97,8 @@ enum ReorderingScopeQuery {
         for siblingRange in childRanges {
             for innerRange in bindInnerRanges {
                 if innerRange.lowerBound <= siblingRange.lowerBound,
-                   siblingRange.upperBound <= innerRange.upperBound {
+                   siblingRange.upperBound <= innerRange.upperBound
+                {
                     return false
                 }
             }

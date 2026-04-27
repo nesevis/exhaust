@@ -317,7 +317,7 @@ struct ChoiceGraphTests {
                 let value = sequence[position].value!.choice
                 switch value {
                 case .unsigned(10, _): #expect(inBound == false) // inner
-                case .unsigned(20, _): #expect(inBound == true)  // bound
+                case .unsigned(20, _): #expect(inBound == true) // bound
                 default: break
                 }
             default:

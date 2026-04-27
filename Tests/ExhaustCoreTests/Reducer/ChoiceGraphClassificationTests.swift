@@ -250,8 +250,8 @@ private func makeDivergentGen() -> ReflectiveGenerator<Int> {
     )
 }
 
-private func generateTree<Output>(
-    from gen: ReflectiveGenerator<Output>,
+private func generateTree(
+    from gen: ReflectiveGenerator<some Any>,
     seed: UInt64
 ) throws -> ChoiceTree {
     var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)

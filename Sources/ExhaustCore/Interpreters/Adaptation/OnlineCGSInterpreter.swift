@@ -7,8 +7,6 @@
 
 import Foundation
 
-// swiftlint:disable function_parameter_count
-
 /// Online Choice Gradient Sampling interpreter that generates values directly.
 ///
 /// Unlike the eager ``GeneratorTuning`` tuner (which pre-computes all pick weights in a single top-down pass), this interpreter implements the paper's **online, per-value** algorithm (Figure 3.3). At each `pick` encountered during generation, it computes "derivatives" (residual generators after choosing each branch), samples from each derivative to measure fitness, and selects based on those fitness scores.
@@ -356,12 +354,10 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 }
                 let effectiveRange: ClosedRange<UInt64>
                 if let scaling {
-                    let size: UInt64 = if let override = context.sizeOverride {
-                        override
-                    } else if context.size > 0 {
-                        context.size
-                    } else {
-                        GenerationContext.scaledSize(forRun: context.runs)
+                    let size: UInt64 = switch context.sizeOverride {
+                    case let override?: override
+                    case nil where context.size > 0: context.size
+                    case nil: GenerationContext.scaledSize(forRun: context.runs)
                     }
                     context.sizeOverride = nil
                     effectiveRange = Gen.applyScaling(

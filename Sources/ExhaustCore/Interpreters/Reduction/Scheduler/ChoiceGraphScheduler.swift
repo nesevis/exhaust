@@ -253,7 +253,8 @@ enum ChoiceGraphScheduler {
                             upstreamLeafNodeID: fibreScope.upstreamLeafNodeID
                         )
                         guard case let .bind(updatedMetadata) = graph.nodes[fibreScope.bindNodeID].kind,
-                              let verdict = updatedMetadata.classification else {
+                              let verdict = updatedMetadata.classification
+                        else {
                             continue
                         }
                         classification = verdict
@@ -407,7 +408,7 @@ enum ChoiceGraphScheduler {
                         // Layer 7a: do NOT defensively rematerialize here.
                         // If the latest accepted probe stripped the tree, the rebuilt graph has incomplete branchElements — that is recorded via ``graphIsStripped`` and handled lazily by the rematerialize check at the top of the source-pulling iteration, only when a path-changing operation is about to dispatch. This avoids paying the materialize cost on cycles where branch pivot never fires.
                         // For bound value rebuilds, the upstream bind-inner changed value, so any convergence floors recorded for downstream leaves under the old upstream value are now stale — the failure threshold in n-space may have shifted. Save the bound subtree's position range before the rebuild so we can clear those floors after transferConvergence has run.
-                        var boundPositionRange: ClosedRange<Int>? = nil
+                        var boundPositionRange: ClosedRange<Int>?
                         if isBoundValue,
                            case let .minimize(.boundValue(fs)) = transformation.operation,
                            fs.bindNodeID < graph.nodes.count,

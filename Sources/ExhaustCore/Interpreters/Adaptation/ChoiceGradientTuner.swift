@@ -63,7 +63,6 @@ package enum ChoiceGradientTuner<FinalOutput> {
         case ucb(explorationConstant: Double)
     }
 
-
     public static func tune(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,

@@ -57,7 +57,7 @@ public extension ReflectiveGenerator {
                                 guard remaining > 0 else {
                                     preconditionFailure(
                                         "step returned .recurse at remaining=0; "
-                                        + "step must return .done when remaining is 0"
+                                            + "step must return .done when remaining is 0"
                                     )
                                 }
                                 return loop(

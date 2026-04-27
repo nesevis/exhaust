@@ -72,7 +72,7 @@ struct CircularQueueContract {
 
     @Command(weight: 3)
     mutating func get() throws {
-        guard !queue.isEmpty else { throw skip() } // swiftlint:disable:this empty_count
+        guard !queue.isEmpty else { throw skip() }
         let expectedValue = expected.removeFirst()
         let actual = queue.get()
         try check(actual == expectedValue, "get must return elements in FIFO order")

@@ -10,17 +10,24 @@ struct GraphColoringEdge: Hashable, Comparable, CustomStringConvertible {
         lower = min(a, b)
         upper = max(a, b)
     }
+
     static func < (lhs: GraphColoringEdge, rhs: GraphColoringEdge) -> Bool {
         lhs.lower != rhs.lower ? lhs.lower < rhs.lower : lhs.upper < rhs.upper
     }
-    var description: String { "(\(lower)-\(upper))" }
+
+    var description: String {
+        "(\(lower)-\(upper))"
+    }
 }
 
 /// Multi-leaf bind-inner challenge output: a vertex label list plus a deduplicated edge list referencing those labels.
 struct GraphColoringGraph: CustomStringConvertible {
     let vertices: [Int]
     let edges: [GraphColoringEdge]
-    var distinctVertices: [Int] { Array(Set(vertices)).sorted() }
+    var distinctVertices: [Int] {
+        Array(Set(vertices)).sorted()
+    }
+
     var description: String {
         "Graph(V=\(distinctVertices), E=\(edges.sorted()))"
     }

@@ -217,14 +217,14 @@ struct GraphValueEncoder: GraphEncoder {
     func hasValidPositions(in sequence: ChoiceSequence) -> Bool {
         switch mode {
         case .idle:
-            return true
+            true
         case let .valueLeaves(state):
-            return state.leafPositions.allSatisfy { leaf in
+            state.leafPositions.allSatisfy { leaf in
                 leaf.sequenceIndex < sequence.count
                     && sequence[leaf.sequenceIndex].value != nil
             }
         case let .floatLeaves(state):
-            return state.targets.allSatisfy { target in
+            state.targets.allSatisfy { target in
                 target.sequenceIndex < sequence.count
                     && sequence[target.sequenceIndex].value != nil
             }

@@ -41,7 +41,7 @@ extension ChoiceGraph {
     }
 
     private func computeClassification(
-        bindNodeID: Int,
+        bindNodeID _: Int,
         bindMetadata: BindMetadata,
         upstreamLeafNodeID: Int,
         gen: ReflectiveGenerator<Any>,
@@ -229,7 +229,7 @@ extension ChoiceGraph {
         range: ClosedRange<UInt64>,
         typeTag: TypeTag
     ) -> (low: UInt64, high: UInt64)? {
-        let windowRadius: UInt64 = 10_000
+        let windowRadius: UInt64 = 10000
         let clampLow: UInt64
         let clampHigh: UInt64
         if typeTag.isSigned {
@@ -306,11 +306,11 @@ extension ChoiceGraph {
     private static func unwrapTransparent(_ tree: ChoiceTree) -> ChoiceTree {
         switch tree {
         case let .branch(_, _, _, _, choice):
-            return unwrapTransparent(choice)
+            unwrapTransparent(choice)
         case let .selected(inner):
-            return unwrapTransparent(inner)
+            unwrapTransparent(inner)
         default:
-            return tree
+            tree
         }
     }
 
@@ -324,17 +324,16 @@ extension ChoiceGraph {
     }
 
     private static func fold(_ tree: ChoiceTree, into hash: inout UInt64) {
-        let marker: UInt64
-        switch tree {
-        case .choice: marker = 1
-        case .just: marker = 2
-        case .getSize: marker = 3
-        case .sequence: marker = 4
-        case .branch: marker = 5
-        case .group: marker = 6
-        case .resize: marker = 7
-        case .bind: marker = 8
-        case .selected: marker = 9
+        let marker: UInt64 = switch tree {
+        case .choice: 1
+        case .just: 2
+        case .getSize: 3
+        case .sequence: 4
+        case .branch: 5
+        case .group: 6
+        case .resize: 7
+        case .bind: 8
+        case .selected: 9
         }
         hash = (hash ^ marker) &* 1_099_511_628_211
         switch tree {

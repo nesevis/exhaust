@@ -6,7 +6,7 @@
 //  https://github.com/mc-imperial/hypothesis-ecoop-2020-artifact/tree/master/smartcheck-benchmarks/evaluations/parser
 //
 
-// swiftlint:disable file_length type_body_length
+// swiftlint:disable file_length type_body_length nesting
 
 import Foundation
 @testable import Exhaust
@@ -24,14 +24,18 @@ enum ParserFixture {
         let modules: [Mod]
         let funcs: [Func]
 
-        var debugDescription: String { "Lang(\(modules), \(funcs))" }
+        var debugDescription: String {
+            "Lang(\(modules), \(funcs))"
+        }
     }
 
     struct Mod: Equatable, Codable, CustomDebugStringConvertible {
         let imports: [Var]
         let exports: [Var]
 
-        var debugDescription: String { "Mod(\(imports), \(exports))" }
+        var debugDescription: String {
+            "Mod(\(imports), \(exports))"
+        }
     }
 
     struct Func: Equatable, Codable, CustomDebugStringConvertible {
@@ -39,7 +43,9 @@ enum ParserFixture {
         let args: [Exp]
         let body: [Stmt]
 
-        var debugDescription: String { "Func(\(name), \(args), \(body))" }
+        var debugDescription: String {
+            "Func(\(name), \(args), \(body))"
+        }
     }
 
     enum Stmt: Equatable, Codable, CustomDebugStringConvertible {
@@ -180,7 +186,9 @@ enum ParserFixture {
     struct Var: Equatable, Codable, CustomDebugStringConvertible {
         let name: String
 
-        var debugDescription: String { name }
+        var debugDescription: String {
+            name
+        }
     }
 
     // MARK: - Property
@@ -386,4 +394,4 @@ enum ParserFixture {
     }
 }
 
-// swiftlint:enable file_length type_body_length
+// swiftlint:enable file_length type_body_length nesting

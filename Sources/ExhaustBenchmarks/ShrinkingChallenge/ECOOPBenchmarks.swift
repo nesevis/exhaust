@@ -76,7 +76,7 @@ func registerECOOPBenchmarks() {
         name: "Replacement", gen: replacementGen, property: replacementProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
-    
+
     registerECOOPPair(
         name: "Parser", gen: parserLangGen, property: parserProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, sizeMetric: parserSize

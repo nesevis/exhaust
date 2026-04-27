@@ -179,7 +179,6 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
 ///
 /// Only the upstream encoder's convergence records are exposed to the scheduler. The downstream encoder cold-starts on each upstream probe via ``GraphEncoder/start(scope:)``, so any convergence it accumulates is fibre-local and not transferable to the live graph.
 ///
-
 struct GraphComposedEncoder: GraphEncoder {
     let name: EncoderName
     let requiresExactDecoder: Bool = true

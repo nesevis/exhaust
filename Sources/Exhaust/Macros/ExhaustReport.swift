@@ -90,12 +90,9 @@ public struct ExhaustReport: Sendable {
     /// One-line summary of profiling data for the reduction planning decision tree.
     public var profilingSummary: String {
         let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
-        let graphLabel: String
-        if let graphStats {
-            graphLabel = " graph=\(graphStats.nodeCount)n/\(graphStats.fullGraphRebuilds)r/\(graphStats.dynamicRegionRebuilds)dr"
-        } else {
-            graphLabel = ""
-        }
+        let graphLabel = graphStats.map {
+            " graph=\($0.nodeCount)n/\($0.fullGraphRebuilds)r/\($0.dynamicRegionRebuilds)dr"
+        } ?? ""
         let activeEncoders = encoderProbes.keys.sorted { encoderProbes[$0, default: 0] > encoderProbes[$1, default: 0] }
         let encoderLabel = activeEncoders.isEmpty ? "" : " " + activeEncoders.map { name in
             let emitted = encoderProbes[name] ?? 0

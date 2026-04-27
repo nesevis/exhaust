@@ -24,6 +24,7 @@ disabled_rules:
   - force_unwrapping
   - opening_brace
   - sorted_imports
+  - function_parameter_count
 
 opt_in_rules:
   - empty_count

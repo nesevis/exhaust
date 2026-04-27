@@ -10,7 +10,7 @@ extension ChoiceGraphScheduler {
     static func confirmConvergence(
         sequence: inout ChoiceSequence,
         tree: inout ChoiceTree,
-        output: inout Any,
+        output _: inout Any,
         graph: ChoiceGraph,
         gen: ReflectiveGenerator<Any>,
         property: @escaping (Any) -> Bool,

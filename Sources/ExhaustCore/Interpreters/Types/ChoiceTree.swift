@@ -450,11 +450,9 @@ package struct ComplexityFeatures: Sendable {
         guard scores.isEmpty == false else { return nil }
         let sorted = scores.sorted()
         let count = sorted.count
-        let medianValue: Double = if count % 2 == 0 {
-            (sorted[count / 2 - 1] + sorted[count / 2]) / 2.0
-        } else {
-            sorted[count / 2]
-        }
+        let medianValue: Double = count % 2 == 0
+            ? (sorted[count / 2 - 1] + sorted[count / 2]) / 2.0
+            : sorted[count / 2]
         return ComplexityFeatures(
             choiceCount: count,
             min: sorted[0],

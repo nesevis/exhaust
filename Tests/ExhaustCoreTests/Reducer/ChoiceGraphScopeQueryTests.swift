@@ -314,7 +314,7 @@ struct ChoiceGraphScopeQueryTests {
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
 
-        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { return true } else { return false } }?.id
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
         #expect(bindNodeID != nil)
         guard let bindNodeID else { return }
 
@@ -345,7 +345,7 @@ struct ChoiceGraphScopeQueryTests {
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
 
-        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { return true } else { return false } }?.id
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
         #expect(bindNodeID != nil)
         guard let bindNodeID else { return }
 
@@ -392,13 +392,13 @@ struct ChoiceGraphScopeQueryTests {
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
 
         let scopes = MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: index)
-        guard case let .valueLeaves(integerScope) = scopes.first(where: { if case .valueLeaves = $0 { return true } else { return false } }) else {
+        guard case let .valueLeaves(integerScope) = scopes.first(where: { if case .valueLeaves = $0 { true } else { false } }) else {
             Issue.record("Expected integer-leaves scope")
             return
         }
 
         // Collect inner-descendant leaf IDs so we can check their entries.
-        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { return true } else { return false } }?.id
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
         guard let bindNodeID, case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return }
         let innerContainerID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
         var innerLeafIDs: Set<Int> = []

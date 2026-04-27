@@ -5,8 +5,6 @@
 //  Created by Chris Kolbu on 25/3/2026.
 //
 
-// swiftlint:disable function_parameter_count
-
 // MARK: - Operation Handlers
 
 extension Materializer {
@@ -166,10 +164,9 @@ extension Materializer {
         // Extract fallback branch info. For Gen.recursive, the pick site is wrapped in a bind — unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?
         let branchChoiceTree: ChoiceTree?
-        let effectiveFallback: ChoiceTree? = if case let .bind(_, _, bound) = calleeFallback {
-            bound
-        } else {
-            calleeFallback
+        let effectiveFallback: ChoiceTree? = switch calleeFallback {
+        case let .bind(_, _, bound): bound
+        default: calleeFallback
         }
         if let effectiveFallback,
            case let .group(children, _) = effectiveFallback,
@@ -418,10 +415,8 @@ extension Materializer {
         var elementIndex = 0
         var remaining = length
         while remaining > 0 {
-            let elFB: ChoiceTree? = if let fbs = elementFallbacks, elementIndex < fbs.count {
-                fbs[elementIndex]
-            } else {
-                nil
+            let elFB: ChoiceTree? = elementFallbacks.flatMap { fbs in
+                elementIndex < fbs.count ? fbs[elementIndex] : nil
             }
             guard let (result, element) = try generateRecursive(
                 elementGen, with: inputValue, context: &context, fallbackTree: elFB
@@ -459,13 +454,11 @@ extension Materializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
-        let fallbackChildren: [ChoiceTree]? = if let calleeFallback,
-                                                 case let .group(children, _) = calleeFallback,
-                                                 children.count == generators.count
-        {
-            children
-        } else {
-            nil
+        let fallbackChildren: [ChoiceTree]? = calleeFallback.flatMap { fallback -> [ChoiceTree]? in
+            guard case let .group(children, _) = fallback,
+                  children.count == generators.count
+            else { return nil }
+            return children
         }
 
         var results = [Any]()
@@ -522,13 +515,11 @@ extension Materializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
-        let innerFallback: ChoiceTree? = if let calleeFallback,
-                                            case let .resize(_, choices) = calleeFallback,
-                                            let inner = choices.first
-        {
-            inner
-        } else {
-            nil
+        let innerFallback: ChoiceTree? = calleeFallback.flatMap { fallback -> ChoiceTree? in
+            guard case let .resize(_, choices) = fallback,
+                  let inner = choices.first
+            else { return nil }
+            return inner
         }
         context.sizeOverride = newSize
         guard let result = try generateRecursive(

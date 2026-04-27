@@ -5,11 +5,11 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     // MARK: - Pipeline Context
 
     /// Bundles parameters shared across coverage, sampling, and reduction phases.
-    package struct PipelineContext<Output> {
+    struct PipelineContext<Output> {
         let gen: ReflectiveGenerator<Output>
         let property: @Sendable (Output) -> Bool
         let samplingBudget: UInt64
@@ -25,13 +25,13 @@ extension __ExhaustRuntime {
         let statsAccumulator: OpenPBTStatsAccumulator?
     }
 
-    package enum CoverageOutcome<Output> {
+    enum CoverageOutcome<Output> {
         case counterexample(Output)
         case exhaustivePass(iterations: Int)
         case proceed(coverageIterations: Int)
     }
 
-    package enum ReduceOutcome<Output> {
+    enum ReduceOutcome<Output> {
         case reduced(Output)
         case unreduced(Output)
         case reductionError
@@ -39,7 +39,7 @@ extension __ExhaustRuntime {
 
     // MARK: - Coverage Phase
 
-    package static func runCoveragePhase<Output>(
+    static func runCoveragePhase<Output>(
         context: PipelineContext<Output>,
         coverageBudget: UInt64,
         report: inout ExhaustReport
@@ -148,7 +148,7 @@ extension __ExhaustRuntime {
 
     // MARK: - Sampling Phase
 
-    package static func runSamplingPhase<Output>( // swiftlint:disable:this function_body_length
+    static func runSamplingPhase<Output>( // swiftlint:disable:this function_body_length
         context: PipelineContext<Output>,
         seed: UInt64?,
         coverageIterations: Int,
@@ -279,7 +279,7 @@ extension __ExhaustRuntime {
 
     // MARK: - Shared Reduction
 
-    package static func reduceAndReport<Output>( // swiftlint:disable:this function_parameter_count
+    static func reduceAndReport<Output>( // swiftlint:disable:this function_parameter_count
         context: PipelineContext<Output>,
         value: Output,
         tree: ChoiceTree,
@@ -402,7 +402,7 @@ extension __ExhaustRuntime {
 
     // MARK: - Phase Timing
 
-    package static func logPhaseTimings(
+    static func logPhaseTimings(
         start: UInt64,
         coverageEnd: UInt64,
         generationEnd: UInt64,
@@ -427,7 +427,7 @@ extension __ExhaustRuntime {
     // MARK: - Reflecting
 
     // swiftlint:disable:next function_parameter_count
-    package static func __reduceReflected<Output>(
+    static func __reduceReflected<Output>(
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
         reductionConfig: Interpreters.ReducerConfiguration,
@@ -588,7 +588,7 @@ extension __ExhaustRuntime {
     // MARK: - Detection and Async Bridges
 
     /// Wraps a throwing `Void`-returning closure into `(Output) -> Bool` via try/catch.
-    package static func wrapDetectionProperty<Output>(
+    static func wrapDetectionProperty<Output>(
         _ detection: @escaping @Sendable (Output) throws -> Void
     ) -> @Sendable (Output) -> Bool {
         { value in
@@ -602,7 +602,7 @@ extension __ExhaustRuntime {
     }
 
     /// Bridges an async Bool-returning property to a synchronous one via `Task` + `DispatchSemaphore`.
-    package static func bridgeAsyncProperty<Output>(
+    static func bridgeAsyncProperty<Output>(
         _ property: @escaping @Sendable (Output) async throws -> Bool
     ) -> @Sendable (Output) -> Bool {
         { value in
@@ -619,7 +619,7 @@ extension __ExhaustRuntime {
     }
 
     /// Bridges an async Void-returning detection closure to a synchronous Bool via `Task` + `DispatchSemaphore`.
-    package static func bridgeAsyncDetection<Output>(
+    static func bridgeAsyncDetection<Output>(
         _ detection: @escaping @Sendable (Output) async throws -> Void
     ) -> @Sendable (Output) -> Bool {
         { value in
@@ -640,7 +640,7 @@ extension __ExhaustRuntime {
     }
 
     /// Dispatches a synchronous closure onto a GCD thread and returns the result asynchronously.
-    package static func dispatchToGCD<Result>(
+    static func dispatchToGCD<Result>(
         _ work: @escaping () -> Result
     ) async -> Result {
         nonisolated(unsafe) let unsafeWork = work

@@ -522,5 +522,4 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         }
         return try runContinuation(result, &context)
     }
-
 }

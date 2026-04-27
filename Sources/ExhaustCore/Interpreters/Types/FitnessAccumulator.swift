@@ -70,10 +70,9 @@ package final class FitnessAccumulator {
         guard let previous = previousSiteShares, !currentShares.isEmpty else { return false }
 
         for (fingerprint, shares) in currentShares {
-            // New site not in previous snapshot — not converged
             guard let prevShares = previous[fingerprint] else { return false }
-            for (choiceID, share) in shares {
-                if abs(share - (prevShares[choiceID] ?? 0)) > threshold { return false }
+            for (choiceID, share) in shares where abs(share - (prevShares[choiceID] ?? 0)) > threshold {
+                return false
             }
         }
         return true

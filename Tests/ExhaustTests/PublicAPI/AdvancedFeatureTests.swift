@@ -71,11 +71,11 @@ struct AdvancedFeatureTests {
 
         @Test("Nested lensed properties")
         func nestedLensedProperties() {
-            struct Outer: Equatable {
+            struct Outer: Equatable { // swiftlint:disable:this nesting
                 let inners: [Inner]
                 let id: UInt
             }
-            struct Inner: Equatable {
+            struct Inner: Equatable { // swiftlint:disable:this nesting
                 let id: UInt
             }
 

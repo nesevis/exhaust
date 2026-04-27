@@ -39,7 +39,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Double special-values phase allows out-of-range NaN and preserves it")
     func floatNaNReduction() throws {
-        let gen = Gen.choose(in: 0 ... 10_000.0)
+        let gen = Gen.choose(in: 0 ... 10000.0)
         let property: (Double) -> Bool = { value in
             !value.isNaN
         }
@@ -48,10 +48,10 @@ struct ReducerFloatShrinkingTests {
 
         #expect(output.isNaN)
     }
-    
+
     @Test("Double special-values phase allows out-of-range inf and preserves it")
     func floatInfReduction() throws {
-        let gen = Gen.choose(in: 0 ... 10_000.0)
+        let gen = Gen.choose(in: 0 ... 10000.0)
         let property: (Double) -> Bool = { value in
             value.isFinite
         }

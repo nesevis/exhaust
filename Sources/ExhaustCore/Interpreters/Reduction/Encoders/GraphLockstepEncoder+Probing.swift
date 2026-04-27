@@ -236,5 +236,4 @@ extension GraphLockstepEncoder {
         guard hasDifference, firstDifferenceOrder == .lt else { return nil }
         return candidate
     }
-
 }

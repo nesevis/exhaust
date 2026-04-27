@@ -211,4 +211,3 @@ struct GraphTransformation {
     /// Predicted graph state changes on acceptance.
     let postcondition: TransformationPostcondition
 }
-

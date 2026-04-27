@@ -118,25 +118,25 @@ extension OpenPBTStatsLine: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            type: try container.decode(String.self, forKey: .type),
-            runStart: try container.decode(Double.self, forKey: .runStart),
-            property: try container.decode(String.self, forKey: .property),
-            status: try container.decode(String.self, forKey: .status),
-            statusReason: try container.decode(String.self, forKey: .statusReason),
-            representation: try container.decode(String.self, forKey: .representation),
-            features: try container.decode(OpenPBTStatsFeatures.self, forKey: .features),
-            howGenerated: try container.decodeIfPresent(String.self, forKey: .howGenerated),
-            timing: try container.decodeIfPresent([String: Double].self, forKey: .timing)
+        try self.init(
+            type: container.decode(String.self, forKey: .type),
+            runStart: container.decode(Double.self, forKey: .runStart),
+            property: container.decode(String.self, forKey: .property),
+            status: container.decode(String.self, forKey: .status),
+            statusReason: container.decode(String.self, forKey: .statusReason),
+            representation: container.decode(String.self, forKey: .representation),
+            features: container.decode(OpenPBTStatsFeatures.self, forKey: .features),
+            howGenerated: container.decodeIfPresent(String.self, forKey: .howGenerated),
+            timing: container.decodeIfPresent([String: Double].self, forKey: .timing)
         )
     }
 }
 
-extension Sequence where Element == OpenPBTStatsLine {
+public extension Sequence<OpenPBTStatsLine> {
     /// Encodes each record as a JSON object and joins them with newlines to form a JSONL document.
     ///
     /// Records that fail to encode are skipped. Intended for attaching to test outputs consumed by the Tyche visualization extension.
-    public func jsonlString() -> String {
+    func jsonlString() -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         encoder.keyEncodingStrategy = .convertToSnakeCase

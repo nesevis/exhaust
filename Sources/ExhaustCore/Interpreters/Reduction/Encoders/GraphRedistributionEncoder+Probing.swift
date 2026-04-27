@@ -55,11 +55,9 @@ extension GraphRedistributionEncoder {
 
             // Same-tag integer pair: bit-pattern arithmetic.
             let sourceTarget = sourceMetadata.value.reductionTarget(in: sourceMetadata.validRange)
-            let maxDelta: UInt64 = if sourceMetadata.value.bitPattern64 > sourceTarget {
-                sourceMetadata.value.bitPattern64 - sourceTarget
-            } else {
-                sourceTarget - sourceMetadata.value.bitPattern64
-            }
+            let maxDelta: UInt64 = sourceMetadata.value.bitPattern64 > sourceTarget
+                ? sourceMetadata.value.bitPattern64 - sourceTarget
+                : sourceTarget - sourceMetadata.value.bitPattern64
             guard maxDelta > 0 else { continue }
 
             pairs.append((
@@ -88,13 +86,13 @@ extension GraphRedistributionEncoder {
         let sortedIndices = pairs.indices.sorted { lhs, rhs in
             switch (fullDeltaCandidates[lhs], fullDeltaCandidates[rhs]) {
             case let (.some(lhsCandidate), .some(rhsCandidate)):
-                return lhsCandidate.shortLexPrecedes(rhsCandidate)
+                lhsCandidate.shortLexPrecedes(rhsCandidate)
             case (.some, .none):
-                return true
+                true
             case (.none, .some):
-                return false
+                false
             case (.none, .none):
-                return pairs[lhs].maxDelta > pairs[rhs].maxDelta
+                pairs[lhs].maxDelta > pairs[rhs].maxDelta
             }
         }
         pairs = sortedIndices.map { pairs[$0] }

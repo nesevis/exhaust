@@ -1,5 +1,5 @@
-import Exhaust
 import Benchmark
+import Exhaust
 
 // MARK: - Configuration
 

@@ -1,5 +1,3 @@
-// swiftlint:disable file_length function_body_length force_try
-
 import Benchmark
 import Exhaust
 import ExhaustCore
@@ -330,9 +328,9 @@ private func registerParser() {
     let gen = parserLangGen
     let property = parserProperty
 
-    let failingValues = generateFailingValues(gen: gen, property: property, name: "Parser")
-    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
-    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
+//    let failingValues = generateFailingValues(gen: gen, property: property, name: "Parser")
+//    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
+//    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed, matching the methodology from MacIver & Donaldson Figure 13.
     benchmark("Parser ECOOP (adaptive)") {
@@ -685,5 +683,3 @@ private func printChallengeReport(
         }
     }
 }
-
-// swiftlint:enable file_length function_body_length force_try

@@ -66,14 +66,13 @@ struct MigrationSource: ScopeSource {
 
                 // Determine whether this is a full migration (all source elements moved).
                 let isFullMigration = elementNodeIDs.count == sourceNode.children.count
-                let sourceParentSeqID: Int? = if isFullMigration,
-                                                 let parentID = sourceNode.parent,
-                                                 case .sequence = graph.nodes[parentID].kind
-                {
-                    parentID
-                } else {
-                    nil
-                }
+                let sourceParentSeqID: Int? = {
+                    guard isFullMigration,
+                          let parentID = sourceNode.parent,
+                          case .sequence = graph.nodes[parentID].kind
+                    else { return nil }
+                    return parentID
+                }()
 
                 // Start with moving ALL elements (most drastic).
                 entries.append((

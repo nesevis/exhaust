@@ -184,16 +184,15 @@ private struct ParameterOrdering {
     let inversePermutation: ContiguousArray<Int>
 
     init(domainSizes: ContiguousArray<UInt16>) {
+        // swiftlint:disable:next unused_enumerated
         let indexed = domainSizes.enumerated().sorted { $0.element < $1.element }
         var reordered = ContiguousArray<UInt16>()
         var inverse = ContiguousArray<Int>()
         reordered.reserveCapacity(domainSizes.count)
         inverse.reserveCapacity(domainSizes.count)
-        var index = 0
-        while index < indexed.count {
-            reordered.append(indexed[index].element)
-            inverse.append(indexed[index].offset)
-            index &+= 1
+        for entry in indexed {
+            reordered.append(entry.element)
+            inverse.append(entry.offset)
         }
         reorderedDomainSizes = reordered
         inversePermutation = inverse

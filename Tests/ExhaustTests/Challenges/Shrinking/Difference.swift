@@ -34,7 +34,7 @@ struct DifferenceShrinkingChallenge {
         let gen = #gen(.int(scaling: .constant)).array(length: 2)
 
         let property: @Sendable ([Int]) -> Bool = { arr in
-            return arr[0] < 10 || arr[0] != arr[1]
+            arr[0] < 10 || arr[0] != arr[1]
         }
 
         var report: ExhaustReport?
@@ -66,7 +66,7 @@ struct DifferenceShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 10_000)),
+            .budget(.custom(coverage: 0, sampling: 10000)),
 //            .reflecting([700, 701]),
             .onReport { report = $0 },
             property: property

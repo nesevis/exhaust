@@ -191,8 +191,8 @@ package enum BoundaryCoveringArrayReplay {
 
             switch param.kind {
             case let .chooseBits(range, tag),
-                let .finiteChooseBits(range, tag),
-                let .sequenceElement(_, range, tag):
+                 let .finiteChooseBits(range, tag),
+                 let .sequenceElement(_, range, tag):
                 guard let tree = buildChooseBitsTree(
                     param: param,
                     valueIndex: valueIndex,
@@ -348,10 +348,8 @@ package enum BoundaryCoveringArrayReplay {
         for compositeIndex: UInt64,
         in slots: [SequenceLengthSlot]
     ) -> SequenceLengthSlot? {
-        for slot in slots.reversed() {
-            if compositeIndex >= slot.flatOffset {
-                return slot
-            }
+        for slot in slots.reversed() where compositeIndex >= slot.flatOffset {
+            return slot
         }
         return nil
     }
@@ -361,7 +359,7 @@ package enum BoundaryCoveringArrayReplay {
         _ localIndex: UInt64,
         activeSlotParams: [[BoundaryParameter]]
     ) -> [UInt64] {
-        let flatParams = activeSlotParams.flatMap { $0 }
+        let flatParams = activeSlotParams.flatMap(\.self)
         guard flatParams.isEmpty == false else { return [] }
         var indices = [UInt64](repeating: 0, count: flatParams.count)
         var remainder = localIndex

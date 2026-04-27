@@ -22,9 +22,9 @@ struct OpenPBTStatsTests {
         for json in encoded {
             #expect(json["type"] as? String == "test_case")
             #expect(json["property"] as? String == "testProperty()")
-            #expect(json["run_start"] as? Double != nil)
-            #expect(json["status_reason"] as? String != nil)
-            #expect(json["representation"] as? String != nil)
+            #expect(json["run_start"] is Double)
+            #expect(json["status_reason"] is String)
+            #expect(json["representation"] is String)
             #expect(json.keys.contains("coverage"))
             #expect(json["coverage"] is NSNull)
             #expect(json.keys.contains("metadata"))
@@ -43,7 +43,7 @@ struct OpenPBTStatsTests {
     }
 
     @Test("Gave-up lines have correct status and empty representation")
-    func gaveUpLines() throws {
+    func gaveUpLines() {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "testProperty()")
         accumulator.recordDiscards(count: 3, phase: .random)
 
@@ -60,7 +60,7 @@ struct OpenPBTStatsTests {
     }
 
     @Test("Filter observations appear as features")
-    func filterFeatures() throws {
+    func filterFeatures() {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "testProperty()")
         let tree = ChoiceTree.choice(
             .unsigned(50, .uint64),
@@ -116,7 +116,7 @@ struct OpenPBTStatsTests {
     }
 
     @Test("run_start is consistent across all lines")
-    func consistentRunStart() throws {
+    func consistentRunStart() {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "test()")
         let tree = ChoiceTree.just
         accumulator.record(representation: "1", passed: true, tree: tree, phase: .coverage)

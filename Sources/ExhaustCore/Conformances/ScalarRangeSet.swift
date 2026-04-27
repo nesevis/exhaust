@@ -1,5 +1,5 @@
 //
-//  CharacterSet+Ranges.swift
+//  ScalarRangeSet.swift
 //  Exhaust
 //
 
@@ -47,7 +47,7 @@ package struct ScalarRangeSet: Sendable {
             cumulative.append(total)
             total += range.count
         }
-        
+
         let boundaryIndices = BoundaryDomainAnalysis.interestingCharacterScalars
             .compactMap { candidate -> UInt64? in
                 guard rangeSet.contains(candidate) else {
@@ -63,8 +63,8 @@ package struct ScalarRangeSet: Sendable {
 
         self.rangeSet = rangeSet
         self.bottomCodepoint = bottomCodepoint
-        self.scalarCount = bottomCodepoint != nil ? total + 1 : total
-        self.cumulativeCounts = cumulative
+        scalarCount = bottomCodepoint != nil ? total + 1 : total
+        cumulativeCounts = cumulative
         self.rangesArray = rangesArray
         self.boundaryIndices = boundaryIndices
     }

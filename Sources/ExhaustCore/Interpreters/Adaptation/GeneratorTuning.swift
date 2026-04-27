@@ -129,11 +129,7 @@ package enum GeneratorTuning {
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        let rng = if let seed {
-            Xoshiro256(seed: seed)
-        } else {
-            Xoshiro256()
-        }
+        let rng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         let context = TuningContext(
             baseSampleCount: samples,
             maxSize: maxSize,
@@ -274,10 +270,6 @@ package enum GeneratorTuning {
         }
     }
 
-    // MARK: - Weight Smoothing
-
-    /// Applies Laplace smoothing and temperature scaling to pick weights in a tuned generator.
-    ///
     // MARK: - Adaptive Smoothing
 
     /// Applies per-site temperature scaling based on entropy analysis.

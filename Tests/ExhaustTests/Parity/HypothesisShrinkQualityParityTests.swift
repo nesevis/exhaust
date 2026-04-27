@@ -260,7 +260,7 @@ struct HypothesisShrinkQualityParityTests {
 
 #if arch(arm64) || arch(arm64_32)
     @Suite("Hypothesis Shrink Quality Parity — Float16")
-    struct ShrinkQualityFloat16ParityTests { // swiftlint:disable:this type_name
+    struct ShrinkQualityFloat16ParityTests {
         private func reduce<Output>(
             _ gen: ReflectiveGenerator<Output>,
             startingAt value: Output,

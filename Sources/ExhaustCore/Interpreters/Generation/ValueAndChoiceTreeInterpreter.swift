@@ -7,8 +7,6 @@
 
 import Foundation
 
-// swiftlint:disable function_parameter_count
-
 // MARK: - Academic Provenance
 
 // Combines the `generate` and `randomness` interpretations: G⟦·⟧ + R⟦·⟧ (Goldstein §3.3.3).

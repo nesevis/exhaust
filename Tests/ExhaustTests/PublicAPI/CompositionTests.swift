@@ -220,7 +220,7 @@ struct CompositionTests {
     struct ZipTests {
         @Test("Test zip implicit lensing composes with mapped")
         func bizipIsReplayable2() {
-            struct Thing: Equatable {
+            struct Thing: Equatable { // swiftlint:disable:this nesting
                 let a: Int
                 let b: String
                 let c: Bool

@@ -51,7 +51,7 @@ package extension ClosedRange where Bound == UInt64 {
 
             result.append(start ... end)
             guard end < upperBound else { break }
-            start = end + 1  // Safe: end < upperBound guarantees end + 1 <= upperBound.
+            start = end + 1 // Safe: end < upperBound guarantees end + 1 <= upperBound.
         }
 
         return result
