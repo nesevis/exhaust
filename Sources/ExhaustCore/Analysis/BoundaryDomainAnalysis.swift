@@ -104,6 +104,7 @@ package enum BoundaryDomainAnalysis {
     ///
     /// ``ScalarRangeSet`` converts these to flat indices during construction so that ``computeBoundaryValues(min:max:tag:)`` receives pre-computed, index-space boundary values via the ``TypeTag/character(boundaryIndices:)`` tag.
     public static let interestingCharacterScalars: [UInt32] = [
+        0, // Null: truncates C-interop strings, invisible in output
         34, // Double quote: delimiter in JSON, SQL, HTML attributes, CSV, and shell commands
         92, // Backslash: escape character in JSON, regex, file paths, shell commands, and string literals
         768, // Combining grave accent: merges with preceding character into a single grapheme cluster
@@ -113,6 +114,7 @@ package enum BoundaryDomainAnalysis {
         8238, // Right-to-left override: reverses display order of subsequent characters
         8239, // Narrow no-break space: visually identical to a space but fails equality and trim checks
         65279, // BOM: invisible at file start, zero-width no-break space elsewhere
+        65533, // Replacement character: injected on invalid decode, corrupts serialization round-trips
         127995, // Emoji skin tone modifier: combines with preceding emoji to form a single grapheme cluster
         128078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
     ]
@@ -188,11 +190,15 @@ package enum BoundaryDomainAnalysis {
             let doubles = [
                 -Double.greatestFiniteMagnitude,
                 -1.0,
+                -Double.leastNormalMagnitude,
                 -Double.leastNonzeroMagnitude,
                 -0.0,
                 0.0,
                 Double.leastNonzeroMagnitude,
+                Double.leastNormalMagnitude,
+                Double.ulpOfOne,
                 1.0,
+                1.0.nextUp,
                 Double.greatestFiniteMagnitude,
                 Double.nan,
                 Double.infinity,
@@ -203,11 +209,15 @@ package enum BoundaryDomainAnalysis {
             let floats = [
                 -Float.greatestFiniteMagnitude,
                 -1.0,
+                -Float.leastNormalMagnitude,
                 -Float.leastNonzeroMagnitude,
                 -0.0,
                 0.0,
                 Float.leastNonzeroMagnitude,
+                Float.leastNormalMagnitude,
+                Float.ulpOfOne,
                 1.0,
+                Float(1.0).nextUp,
                 Float.greatestFiniteMagnitude,
                 Float.nan,
                 Float.infinity,
@@ -218,12 +228,16 @@ package enum BoundaryDomainAnalysis {
             #if arch(arm64) || arch(arm64_32)
                 let floats = [
                     -Float16.greatestFiniteMagnitude,
-                    -1.0,
+                    -Float16(1.0),
+                    -Float16.leastNormalMagnitude,
                     -Float16.leastNonzeroMagnitude,
-                    -0.0,
-                    0.0,
+                    -Float16(0.0),
+                    Float16(0.0),
                     Float16.leastNonzeroMagnitude,
-                    1.0,
+                    Float16.leastNormalMagnitude,
+                    Float16.ulpOfOne,
+                    Float16(1.0),
+                    Float16(1.0).nextUp,
                     Float16.greatestFiniteMagnitude,
                     Float16.nan,
                     Float16.infinity,
