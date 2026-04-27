@@ -8,7 +8,7 @@ struct PropertyTestFailure<Output> {
     let sourceCode: String?
     let seed: UInt64?
     let iteration: Int
-    let samplingBudget: UInt64
+    let phaseBudget: UInt64
     /// The ``ChoiceSequence`` short-string representation.
     let blueprint: String?
     let propertyInvocations: Int?
@@ -36,9 +36,9 @@ struct PropertyTestFailure<Output> {
 
         if let seed {
             let encodedSeed = CrockfordBase32.encode(seed)
-            lines.append("Property failed (iteration \(iteration)/\(samplingBudget), seed \(encodedSeed))")
+            lines.append("Property failed (iteration \(iteration)/\(phaseBudget), seed \(encodedSeed))")
         } else {
-            lines.append("Property failed (iteration \(iteration)/\(samplingBudget))")
+            lines.append("Property failed (iteration \(iteration)/\(phaseBudget))")
         }
 
         lines.append("")
@@ -105,7 +105,7 @@ struct PropertyTestFailure<Output> {
             event: "property_failed",
             seed: encodedSeed,
             iteration: iteration,
-            samplingBudget: samplingBudget,
+            phaseBudget: phaseBudget,
             counterexample: transparent ? nil : counterexampleDump,
             original: originalDump,
             propertyInvocations: propertyInvocations,
@@ -130,7 +130,7 @@ private struct JSONLLogLine: Encodable {
     let event: String
     let seed: String?
     let iteration: Int
-    let samplingBudget: UInt64
+    let phaseBudget: UInt64
     let counterexample: String?
     let original: String?
     let propertyInvocations: Int?

@@ -19,11 +19,11 @@
 ///
 /// ## Parameter Classification
 ///
-/// Five ``BoundaryParameterKind`` cases:
+/// Six ``BoundaryParameterKind`` cases:
 /// - `.finiteChooseBits`: domain size is 256 or smaller — enumerates all values.
 /// - `.chooseBits`: domain size exceeds 256 — synthesizes boundary values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific boundary sets.
-/// - `.sequenceLength`: sequence node — tests lengths {0, 1, 2, lowerBound} filtered to the declared length range. Capped at 2 elements to keep parameter count tractable.
-/// - `.sequenceElement`: element within a sequence — boundary values for the element's range, tagged with its position index.
+/// - `.compositeSequence`: a single parameter encoding all valid `(length, [element boundary values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element boundary combinations. Element analysis is capped at two slots.
+/// - `.sequenceLength`, `.sequenceElement`: legacy cases used by the ``SequenceCoveringArray`` pipeline. Not produced by ``walkSequence``.
 /// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer and all branches are structurally valid. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
 ///
 /// ## Analyzability
@@ -50,10 +50,15 @@ package enum ChoiceTreeAnalysis {
 
     /// Analyzes a generator by running it through VACTI and walking the resulting ChoiceTree.
     ///
-    /// Returns `.finite` if all parameters have small domains (≤256 values), `.boundary` if some parameters need boundary value synthesis, or `nil` if the generator is not analyzable (for example, uses getSize/resize).
+    /// Returns `.finite` if all parameters have small domains (≤256 values), `.boundary` if some parameters need boundary value synthesis, or `nil` if zero parameters are extracted (the generator is purely deterministic).
     ///
     /// Tries multiple seeds to maximize element coverage for sequences.
-    public static func analyze(_ gen: ReflectiveGenerator<some Any>) -> AnalysisResult? {
+    ///
+    /// - Parameter expandSequencePairs: When `true`, sequence boundary models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``CoverageRunner`` uses this to retry with a smaller domain when the full model exceeds the coverage budget.
+    public static func analyze(
+        _ gen: ReflectiveGenerator<some Any>,
+        expandSequencePairs: Bool = true
+    ) -> AnalysisResult? {
         var bestParameters: [BoundaryParameter]?
         var bestTree: ChoiceTree?
 
@@ -72,7 +77,7 @@ package enum ChoiceTreeAnalysis {
             }
 
             var parameters: [BoundaryParameter] = []
-            guard walkTree(tree, parameters: &parameters) else {
+            guard walkTree(tree, expandSequencePairs: expandSequencePairs, parameters: &parameters) else {
                 return nil
             }
 
@@ -81,16 +86,13 @@ package enum ChoiceTreeAnalysis {
                 bestTree = tree
             }
 
-            // FIXME: Harsh syntax, rewrite
-            // If we have no sequences, or all sequences produced enough elements, stop early
             let hasIncompleteSequence = parameters.contains { param in
-                if case .sequenceLength = param.kind { return true }
-                return false
-            } && !parameters.contains { param in
-                if case .sequenceElement(elementIndex: 1, _, _) = param.kind { return true }
+                if case let .compositeSequence(_, elementSlotParams, _) = param.kind {
+                    return elementSlotParams.count < 2
+                }
                 return false
             }
-            if !hasIncompleteSequence { break }
+            if hasIncompleteSequence == false { break }
         }
 
         guard let parameters = bestParameters, !parameters.isEmpty else {
@@ -100,7 +102,7 @@ package enum ChoiceTreeAnalysis {
             switch param.kind {
             case .finiteChooseBits, .pick:
                 true
-            case .chooseBits, .sequenceLength, .sequenceElement:
+            case .chooseBits, .sequenceLength, .sequenceElement, .compositeSequence:
                 false
             }
         }
@@ -152,13 +154,14 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Tree Walk
 
     //
-    // Dispatches on ChoiceTree node type. Returns false if the node is unanalyzable (getSize, resize, bare branch). For groups, detects pick patterns (group containing a .selected child) and routes to walkPick; otherwise recurses into children.
+    // Dispatches on ChoiceTree node type. getSize and resize pass through transparently. Returns false only for bare .branch nodes (which never appear in practice — they are always inside pick-pattern groups).
 
     /// Recursively walks a ``ChoiceTree``, extracting independent parameters into `parameters`.
     ///
-    /// For `.choice` nodes, delegates to `walkChoice`. For `.group` nodes, detects pick patterns (a group containing a `.selected` child) and routes to `walkPick`; otherwise recurses into children. Returns `false` if the tree contains structure that cannot be analyzed (getSize, resize, bare branch).
+    /// For `.choice` nodes, delegates to `walkChoice`. For `.group` nodes, detects pick patterns (a group containing a `.selected` child) and routes to `walkPick`; otherwise recurses into children. Returns `false` only for bare `.branch` nodes.
     private static func walkTree(
         _ tree: ChoiceTree,
+        expandSequencePairs: Bool,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
         switch tree {
@@ -172,22 +175,23 @@ package enum ChoiceTreeAnalysis {
             return true
 
         case let .group(children, _):
-            return walkGroup(children, parameters: &parameters)
+            return walkGroup(children, expandSequencePairs: expandSequencePairs, parameters: &parameters)
 
         case let .bind(_, inner, bound):
             // Walk inner subtree normally; validate bound subtree without collecting parameters because bound parameters depend on the inner value — extracting them into covering arrays would produce invalid combinations.
             // The bound subtree is preserved in the original tree for replay.
-            guard walkTree(inner, parameters: &parameters) else { return false }
+            guard walkTree(inner, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
             return walkTreeValidateOnly(bound)
 
         case let .selected(inner):
-            return walkTree(inner, parameters: &parameters)
+            return walkTree(inner, expandSequencePairs: expandSequencePairs, parameters: &parameters)
 
         case let .sequence(length, elements, metadata):
             return walkSequence(
                 length: length,
                 elements: elements,
                 metadata: metadata,
+                expandSequencePairs: expandSequencePairs,
                 parameters: &parameters
             )
 
@@ -198,7 +202,7 @@ package enum ChoiceTreeAnalysis {
         case let .resize(_, children):
             // resize changes the size context for its subtree. The children contain concrete choices that can be walked normally.
             for child in children {
-                guard walkTree(child, parameters: &parameters) else { return false }
+                guard walkTree(child, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
             }
             return true
 
@@ -210,8 +214,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Validation-Only Walk
 
     //
-    // Walks a subtree to check for unanalyzable nodes (getSize, resize)
-    // without extracting any parameters. Used for bound subtrees in bind nodes where the structure must be valid but parameters are opaque.
+    // Walks a subtree without extracting parameters. Used for bound subtrees in bind nodes where the structure must be valid but parameters are opaque. Always returns true — no node type is rejected in validation-only mode.
 
     private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
         switch tree {
@@ -287,6 +290,7 @@ package enum ChoiceTreeAnalysis {
 
     private static func walkGroup(
         _ children: [ChoiceTree],
+        expandSequencePairs: Bool,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
         if isPick(children) {
@@ -294,7 +298,7 @@ package enum ChoiceTreeAnalysis {
         }
 
         for child in children {
-            guard walkTree(child, parameters: &parameters) else { return false }
+            guard walkTree(child, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
         }
         return true
     }
@@ -346,52 +350,88 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Sequence
 
     //
-    // Extracts a length parameter and up to two element parameters from a sequence node. The length parameter tests {0, 1, 2, lowerBound} filtered to the declared length range. Element analysis is capped at two slots to keep the total parameter count tractable — a 4-element sequence would add 1 length + 4×N element parameters, making covering array generation prohibitively expensive.
+    // Builds a single composite parameter encoding all valid (length, [element boundary values]) configurations. The domain enumerates empty (if allowed), single-element, and optionally two-element boundary combinations. Element analysis is capped at two slots.
 
     private static func walkSequence(
         length _: UInt64,
         elements: [ChoiceTree],
         metadata: ChoiceMetadata,
+        expandSequencePairs: Bool,
         parameters: inout [BoundaryParameter]
     ) -> Bool {
-        // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
         guard let lengthRange = metadata.validRange else {
             return false
         }
 
-        let lengthValues = Set([0, 1, 2, lengthRange.lowerBound])
-            .filter { lengthRange.contains($0) }
-            .sorted()
-
-        let lengthParam = BoundaryParameter(
-            index: parameters.count,
-            values: lengthValues,
-            domainSize: UInt64(lengthValues.count),
-            kind: .sequenceLength(lengthRange: lengthRange)
-        )
-        parameters.append(lengthParam)
-
         let maxElementSlots = min(2, Int(lengthRange.upperBound), elements.count)
+        var elementSlotParams: [[BoundaryParameter]] = []
         for elementIndex in 0 ..< maxElementSlots {
+            var slotParams: [BoundaryParameter] = []
             guard walkElementTree(
                 elements[elementIndex],
                 elementIndex: elementIndex,
-                parameters: &parameters
+                parameters: &slotParams
             ) else {
                 return false
             }
+            elementSlotParams.append(slotParams)
         }
 
+        let maxAnalyzedLength: UInt64 = expandSequencePairs && elementSlotParams.count >= 2 ? 2 : min(1, UInt64(maxElementSlots))
+        let lengthValues = Set([0, 1, 2, lengthRange.lowerBound])
+            .filter { $0 <= maxAnalyzedLength && lengthRange.contains($0) }
+            .sorted()
+
+        var slots: [SequenceLengthSlot] = []
+        var offset: UInt64 = 0
+
+        for length in lengthValues {
+            let activeCount = min(Int(length), elementSlotParams.count)
+            let contribution: UInt64
+            if activeCount == 0 {
+                contribution = 1
+            } else {
+                contribution = elementSlotParams.prefix(activeCount)
+                    .reduce(UInt64(1)) { accumulator, slotParams in
+                        slotParams.reduce(accumulator) { inner, param in
+                            let (product, overflow) = inner.multipliedReportingOverflow(by: param.domainSize)
+                            return overflow ? .max : product
+                        }
+                    }
+            }
+
+            slots.append(SequenceLengthSlot(
+                length: length,
+                flatOffset: offset,
+                contribution: contribution,
+                activeElementCount: activeCount
+            ))
+
+            let (sum, overflow) = offset.addingReportingOverflow(contribution)
+            offset = overflow ? .max : sum
+        }
+
+        let compositeSize = offset
+        let param = BoundaryParameter(
+            index: parameters.count,
+            values: Array(0 ..< compositeSize),
+            domainSize: compositeSize,
+            kind: .compositeSequence(
+                lengthRange: lengthRange,
+                elementSlotParams: elementSlotParams,
+                lengthSlots: slots
+            )
+        )
+        parameters.append(param)
         return true
     }
 
     // MARK: - Element Walk
 
     //
-    // Same as walkTree but for elements within a sequence. Rejects nested sequences, getSize, resize, and bare branches — these are not supported inside sequence elements. Picks within elements are supported and route to the shared walkPick logic.
+    // Same as walkTree but for elements within a sequence. Rejects nested sequences and bare branches. Picks within elements are supported and route to the shared walkPick logic.
     //
-    // walkElementChoice differs from walkChoice only in the parameter kind: large-domain elements use .sequenceElement (with elementIndex)
-    // instead of .chooseBits, so that BoundaryCoveringArrayReplay can reconstruct the sequence structure during replay.
+    // walkElementChoice differs from walkChoice only in the parameter kind: large-domain elements use .sequenceElement (with elementIndex) instead of .chooseBits. These element parameters are collected into per-slot arrays and embedded in the parent `.compositeSequence` parameter.
 
     private static func walkElementTree(
         _ tree: ChoiceTree,

@@ -77,6 +77,7 @@ extension __ExhaustRuntime {
                 tree: reductionTree,
                 seed: nil,
                 iteration: iteration,
+                phaseBudget: coverageBudget,
                 coverageIterations: iteration,
                 randomSamplingIterations: 0,
                 replayHint: "No replay seed — found via systematic combinatorial coverage.",
@@ -241,6 +242,7 @@ extension __ExhaustRuntime {
                     tree: tree,
                     seed: actualSeed,
                     iteration: iterations,
+                    phaseBudget: context.samplingBudget,
                     coverageIterations: coverageIterations,
                     randomSamplingIterations: iterations,
                     replayHint: nil,
@@ -283,6 +285,7 @@ extension __ExhaustRuntime {
         tree: ChoiceTree,
         seed: UInt64?,
         iteration: Int,
+        phaseBudget: UInt64,
         coverageIterations: Int,
         randomSamplingIterations: Int,
         replayHint: String?,
@@ -313,7 +316,7 @@ extension __ExhaustRuntime {
                     sourceCode: context.sourceCode,
                     seed: seed,
                     iteration: iteration,
-                    samplingBudget: context.samplingBudget,
+                    phaseBudget: phaseBudget,
                     blueprint: reducedSequence.shortString,
                     propertyInvocations: propertyInvocationCount
                 )
@@ -373,7 +376,7 @@ extension __ExhaustRuntime {
             sourceCode: context.sourceCode,
             seed: seed,
             iteration: iteration,
-            samplingBudget: context.samplingBudget,
+            phaseBudget: phaseBudget,
             blueprint: nil,
             propertyInvocations: propertyInvocationCount
         )
@@ -495,7 +498,7 @@ extension __ExhaustRuntime {
                 sourceCode: sourceCode,
                 seed: nil,
                 iteration: 1,
-                samplingBudget: 1,
+                phaseBudget: 1,
                 blueprint: reducedSequence.shortString,
                 propertyInvocations: propertyInvocationCount
             )
@@ -542,7 +545,7 @@ extension __ExhaustRuntime {
             sourceCode: sourceCode,
             seed: nil,
             iteration: 1,
-            samplingBudget: 1,
+            phaseBudget: 1,
             blueprint: nil,
             propertyInvocations: propertyInvocationCount
         )

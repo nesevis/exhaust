@@ -151,7 +151,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator
     let operation = ReflectiveOperation.chooseBits(
         min: 0,
         max: UInt64(srs.scalarCount - 1),
-        tag: .character,
+        tag: .character(boundaryIndices: srs.boundaryIndices),
         isRangeExplicit: true
     )
     let innerGen = ReflectiveGenerator<Character>.impure(operation: operation) { result in

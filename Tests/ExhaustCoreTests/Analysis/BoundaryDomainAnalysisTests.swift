@@ -79,17 +79,14 @@ struct BoundaryDomainAnalysisTests {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10, scaling: .constant)
         let profile = analyzeBoundary(gen)
         #expect(profile != nil)
-        // length param + up to 2 element params
-        #expect(profile!.parameters.count >= 2)
-        #expect(profile!.parameters.count <= 3)
-
-        // Check length parameter — boundary values are {0, 1, 2, lowerBound} filtered to the declared range
-        if let lengthParam = profile?.parameters[0] {
-            if case .sequenceLength = lengthParam.kind {
-                #expect(lengthParam.values == [0, 1, 2])
-            } else {
-                Issue.record("Expected sequenceLength parameter")
-            }
+        #expect(profile!.parameters.count == 1)
+        if case let .compositeSequence(_, elementSlotParams, lengthSlots) = profile!.parameters[0].kind {
+            #expect(lengthSlots.contains { $0.length == 0 })
+            #expect(lengthSlots.contains { $0.length == 1 })
+            #expect(lengthSlots.contains { $0.length == 2 })
+            #expect(elementSlotParams.count <= 2)
+        } else {
+            Issue.record("Expected compositeSequence parameter")
         }
     }
 
@@ -98,9 +95,7 @@ struct BoundaryDomainAnalysisTests {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10)
         let profile = analyzeBoundary(gen)
         #expect(profile != nil)
-        // length param + up to 2 element params
-        #expect((profile?.parameters.count ?? 0) >= 2)
-        #expect((profile?.parameters.count ?? 0) <= 3)
+        #expect(profile!.parameters.count == 1)
     }
 
     @Test("Finite-domain generator returns finite result")
@@ -117,12 +112,10 @@ struct BoundaryDomainAnalysisTests {
 
     @Test("ASCII string generator is analyzable")
     func asciiStringIsAnalyzable() {
-        // ASCII strings now analyze to a sequenceLength parameter plus up to two
-        // element parameters covering the 95 printable ASCII code points.
         let gen = asciiStringGen(length: 1 ... 5)
         let profile = analyzeBoundary(gen)
         #expect(profile != nil)
-        #expect((profile?.parameters.count ?? 0) >= 2)
+        #expect(profile!.parameters.count == 1)
     }
 }
 
@@ -272,7 +265,7 @@ struct ChoiceTreeAnalysisTests {
             Issue.record("Expected .boundary result for size-scaled sequence")
             return
         }
-        #expect(profile.parameters.count >= 2)
+        #expect(profile.parameters.count >= 1)
     }
 }
 

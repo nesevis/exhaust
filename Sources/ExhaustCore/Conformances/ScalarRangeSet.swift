@@ -32,12 +32,14 @@ package struct ScalarRangeSet: Sendable {
     /// When non-nil, index 0 maps to this scalar and all range-derived indices are offset by 1.
     public let bottomCodepoint: Unicode.Scalar?
 
+    /// Pre-computed flat indices for ``BoundaryDomainAnalysis/interestingCharacterScalars`` that are present in this range set. Passed to ``TypeTag/character(boundaryIndices:)`` so boundary analysis receives correct index-space values.
+    public let boundaryIndices: [UInt64]
+
     /// Creates a ``ScalarRangeSet`` from a `RangeSet<UInt32>`, optionally pinning index zero to `bottomCodepoint` so the reducer converges toward that scalar.
     public init(_ rangeSet: RangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
         precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty RangeSet")
-        self.rangeSet = rangeSet
-        self.bottomCodepoint = bottomCodepoint
-        rangesArray = Array(rangeSet.ranges)
+
+        let rangesArray = Array(rangeSet.ranges)
         var cumulative: [Int] = []
         cumulative.reserveCapacity(rangesArray.count)
         var total = 0
@@ -45,9 +47,26 @@ package struct ScalarRangeSet: Sendable {
             cumulative.append(total)
             total += range.count
         }
-        let rangeTotal = total
-        scalarCount = bottomCodepoint != nil ? rangeTotal + 1 : rangeTotal
-        cumulativeCounts = cumulative
+        
+        let boundaryIndices = BoundaryDomainAnalysis.interestingCharacterScalars
+            .compactMap { candidate -> UInt64? in
+                guard rangeSet.contains(candidate) else {
+                    return nil
+                }
+                let rangeIndex = Self.naturalIndex(
+                    of: candidate,
+                    ranges: rangesArray,
+                    cumulativeCounts: cumulative
+                )
+                return UInt64(bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex)
+            }
+
+        self.rangeSet = rangeSet
+        self.bottomCodepoint = bottomCodepoint
+        self.scalarCount = bottomCodepoint != nil ? total + 1 : total
+        self.cumulativeCounts = cumulative
+        self.rangesArray = rangesArray
+        self.boundaryIndices = boundaryIndices
     }
 
     /// Maps a flat index in `0..<scalarCount` to the corresponding `Unicode.Scalar`.
