@@ -28,4 +28,13 @@ struct BoundaryCoverageIntegrationTests {
         }
         #expect(result != nil, "Boundary coverage should find the (0, 10000) pair")
     }
+
+    @Test("String boundary coverage finds supplementary plane character")
+    func stringBoundaryFindsSupplementaryPlaneCharacter() {
+        let gen = #gen(.string(length: 1 ... 5))
+        let result = #exhaust(gen, .budget(.custom(coverage: 2000, sampling: 0)), .suppress(.issueReporting), .logging(.debug)) { str in
+            str.count == str.utf16.count
+        }
+        #expect(result != nil, "Boundary coverage should find a string where count != utf16.count")
+    }
 }
