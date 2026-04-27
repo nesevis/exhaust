@@ -104,17 +104,17 @@ package enum BoundaryDomainAnalysis {
     ///
     /// ``ScalarRangeSet`` converts these to flat indices during construction so that ``computeBoundaryValues(min:max:tag:)`` receives pre-computed, index-space boundary values via the ``TypeTag/character(boundaryIndices:)`` tag.
     public static let interestingCharacterScalars: [UInt32] = [
-        768, // Combining grave accent
-        6158, // Mongolian vowel separator
-        8205, // Zero-width joiner — glues emoji sequences
-        8232, // Line separator — breaks JSON/JS string literals
-        8238, // Right-to-left override — bidirectional control
-        8239, // Narrow no-break space — looks like a space but is not
-        65279, // BOM / zero-width no-break space
-        65287, // Full-width apostrophe
-        127995, // Emoji skin tone modifier — changes preceding emoji when adjacent
-        128078, // Thumbs down — combines with skin tone modifier
-        917504, // Tag character, invisible, marked as valid
+        34, // Double quote: delimiter in JSON, SQL, HTML attributes, CSV, and shell commands
+        92, // Backslash: escape character in JSON, regex, file paths, shell commands, and string literals
+        768, // Combining grave accent: merges with preceding character into a single grapheme cluster
+        6158, // Mongolian vowel separator: reclassified from space (Zs) to format (Cf) in Unicode 6.3
+        8205, // Zero-width joiner: glues adjacent emoji into a single grapheme cluster
+        8232, // Line separator: acts as a newline but is not matched by \n
+        8238, // Right-to-left override: reverses display order of subsequent characters
+        8239, // Narrow no-break space: visually identical to a space but fails equality and trim checks
+        65279, // BOM: invisible at file start, zero-width no-break space elsewhere
+        127995, // Emoji skin tone modifier: combines with preceding emoji to form a single grapheme cluster
+        128078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
     ]
 
     /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
