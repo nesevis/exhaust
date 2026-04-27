@@ -100,16 +100,42 @@ package enum BoundaryCoveringArrayReplay {
             return .selected(newInner)
 
         case let .sequence(_, elements, metadata):
-            // Consume length parameter
             guard paramIndex < profile.parameters.count else { return nil }
-            let lengthParam = profile.parameters[paramIndex]
-            let lengthValueIndex = row.values[paramIndex]
+            let param = profile.parameters[paramIndex]
+            let compositeIndex = row.values[paramIndex]
             paramIndex += 1
 
-            guard Int(lengthValueIndex) < lengthParam.values.count else { return nil }
-            let newLength = lengthParam.values[Int(lengthValueIndex)]
+            if case let .compositeSequence(_, elementSlotParams, lengthSlots) = param.kind {
+                guard let slot = findLengthSlot(for: compositeIndex, in: lengthSlots) else {
+                    return nil
+                }
+                let elementValues = decomposeCompositeIndex(
+                    compositeIndex - slot.flatOffset,
+                    activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
+                )
+                var newElements: [ChoiceTree] = []
+                var flatIdx = 0
+                for (elementIndex, element) in elements.enumerated() {
+                    guard UInt64(elementIndex) < slot.length else { break }
+                    if elementIndex < slot.activeElementCount {
+                        let slotParams = elementSlotParams[elementIndex]
+                        let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
+                        let subProfile = BoundaryDomainProfile(parameters: slotParams)
+                        guard let newElement = Self.buildTree(row: subRow, profile: subProfile) else {
+                            return nil
+                        }
+                        newElements.append(newElement)
+                        flatIdx += slotParams.count
+                    } else {
+                        newElements.append(element)
+                    }
+                }
+                return .sequence(length: slot.length, elements: newElements, metadata)
+            }
 
-            // Substitute element parameters for analyzed slots only. The analysis caps element extraction at 2 slots; elements beyond that are passed through unchanged so the materializer fills them from PRNG.
+            // Legacy: separate length + element parameters
+            guard Int(compositeIndex) < param.values.count else { return nil }
+            let newLength = param.values[Int(compositeIndex)]
             let lengthRange = metadata.validRange ?? (0 ... UInt64.max)
             let analyzedSlots = min(2, Int(lengthRange.upperBound), elements.count)
             var newElements: [ChoiceTree] = []
@@ -129,7 +155,6 @@ package enum BoundaryCoveringArrayReplay {
                     newElements.append(element)
                 }
             }
-
             return .sequence(length: newLength, elements: newElements, metadata)
 
         case let .branch(fingerprint, weight, id, branchIDs, choice):
@@ -165,7 +190,9 @@ package enum BoundaryCoveringArrayReplay {
             let valueIndex = row.values[i]
 
             switch param.kind {
-            case let .chooseBits(range, tag), let .finiteChooseBits(range, tag):
+            case let .chooseBits(range, tag),
+                let .finiteChooseBits(range, tag),
+                let .sequenceElement(_, range, tag):
                 guard let tree = buildChooseBitsTree(
                     param: param,
                     valueIndex: valueIndex,
@@ -186,8 +213,33 @@ package enum BoundaryCoveringArrayReplay {
                 trees.append(tree)
                 i += 1 + consumed
 
-            case .sequenceElement:
-                return nil
+            case let .compositeSequence(lengthRange, elementSlotParams, lengthSlots):
+                guard let slot = findLengthSlot(for: valueIndex, in: lengthSlots) else {
+                    return nil
+                }
+                let elementValues = decomposeCompositeIndex(
+                    valueIndex - slot.flatOffset,
+                    activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
+                )
+                var elementTrees: [ChoiceTree] = []
+                var flatIdx = 0
+                for elemIdx in 0 ..< Int(slot.length) {
+                    if elemIdx < slot.activeElementCount {
+                        let slotParams = elementSlotParams[elemIdx]
+                        let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
+                        let subProfile = BoundaryDomainProfile(parameters: slotParams)
+                        guard let elemTree = Self.buildTree(row: subRow, profile: subProfile) else {
+                            return nil
+                        }
+                        elementTrees.append(elemTree)
+                        flatIdx += slotParams.count
+                    } else {
+                        elementTrees.append(.just)
+                    }
+                }
+                let seqMetadata = ChoiceMetadata(validRange: lengthRange, isRangeExplicit: true)
+                trees.append(.sequence(length: slot.length, elements: elementTrees, seqMetadata))
+                i += 1
 
             case let .pick(choices):
                 guard let tree = buildPickTree(
@@ -289,6 +341,38 @@ package enum BoundaryCoveringArrayReplay {
         return .group([.selected(branch)])
     }
 
+    // MARK: - Composite Sequence Helpers
+
+    /// Finds the length slot containing the given composite index via linear scan. Slots are sorted by `flatOffset`; there are at most four (lengths 0, 1, 2, lowerBound).
+    private static func findLengthSlot(
+        for compositeIndex: UInt64,
+        in slots: [SequenceLengthSlot]
+    ) -> SequenceLengthSlot? {
+        for slot in slots.reversed() {
+            if compositeIndex >= slot.flatOffset {
+                return slot
+            }
+        }
+        return nil
+    }
+
+    /// Decomposes a local index within a length slot into per-parameter value indices via mixed-radix arithmetic.
+    private static func decomposeCompositeIndex(
+        _ localIndex: UInt64,
+        activeSlotParams: [[BoundaryParameter]]
+    ) -> [UInt64] {
+        let flatParams = activeSlotParams.flatMap { $0 }
+        guard flatParams.isEmpty == false else { return [] }
+        var indices = [UInt64](repeating: 0, count: flatParams.count)
+        var remainder = localIndex
+        for idx in (0 ..< flatParams.count).reversed() {
+            let domain = flatParams[idx].domainSize
+            indices[idx] = remainder % domain
+            remainder /= domain
+        }
+        return indices
+    }
+
     private static func buildSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
         switch gen {
         case .pure:
@@ -317,9 +401,7 @@ extension BoundaryParameter {
             tag
         case let .sequenceElement(_, _, tag):
             tag
-        case .sequenceLength:
-            .uint64
-        case .pick:
+        case .sequenceLength, .pick, .compositeSequence:
             .uint64
         }
     }

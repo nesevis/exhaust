@@ -25,10 +25,10 @@ package enum BoundaryParameterKind: @unchecked Sendable {
     /// A chooseBits with a range too large for finite-domain analysis. Values are boundary representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
     case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
 
-    /// A sequence length. Values are {0, 1, 2, lowerBound} filtered to the declared length range.
+    /// A sequence length (legacy). Used by the ``SequenceCoveringArray`` pipeline. Modern sequences use `.compositeSequence`. Values are {0, 1, 2, lowerBound} filtered to the declared length range.
     case sequenceLength(lengthRange: ClosedRange<UInt64>)
 
-    /// An element within a boundary-modeled sequence. Same boundary values as chooseBits for the element generator.
+    /// An element within a boundary-modeled sequence (legacy). Used by the ``SequenceCoveringArray`` pipeline and internally within `.compositeSequence` element slot parameters. Same boundary values as chooseBits for the element generator.
     case sequenceElement(elementIndex: Int, range: ClosedRange<UInt64>, tag: TypeTag)
 
     /// A pick between branches (same as finite-domain pick).
@@ -36,6 +36,27 @@ package enum BoundaryParameterKind: @unchecked Sendable {
 
     /// A chooseBits that was already small enough for finite-domain, kept as-is.
     case finiteChooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
+
+    /// A composite sequence parameter encoding `(length, [element values])` tuples into a single flat domain.
+    ///
+    /// The domain enumerates all valid configurations: empty (if allowed), single-element, and optionally two-element boundary combinations. During replay, the composite index is decomposed via ``SequenceLengthSlot`` lookup and mixed-radix arithmetic back into a length and per-element boundary value indices.
+    case compositeSequence(
+        lengthRange: ClosedRange<UInt64>,
+        elementSlotParams: [[BoundaryParameter]],
+        lengthSlots: [SequenceLengthSlot]
+    )
+}
+
+/// Maps a range of flat composite indices to a specific sequence length and its element parameters.
+package struct SequenceLengthSlot: Sendable {
+    /// The sequence length this slot represents.
+    public let length: UInt64
+    /// Starting offset of this slot in the composite domain.
+    public let flatOffset: UInt64
+    /// Number of composite indices this slot covers. Equals the product of element domain sizes for this length, or one for length zero.
+    public let contribution: UInt64
+    /// Number of analyzed element slots active at this length.
+    public let activeElementCount: Int
 }
 
 /// Result of boundary analysis — a synthetic finite domain suitable for covering array generation.
@@ -112,9 +133,8 @@ package enum BoundaryDomainAnalysis {
         case .bits:
             [min, max]
         case let .character(boundaryIndices):
-            (Set([min, max]).union(boundaryIndices))
-                .filter { $0 >= min && $0 <= max }
-                .sorted()
+            // The boundary indices correspond to `interestingCharacterScalars`, but in flat array index space. They are clamped to min/max during construction
+            boundaryIndices
         default:
             computeIntegerBoundaryValues(min: min, max: max, tag: tag)
         }

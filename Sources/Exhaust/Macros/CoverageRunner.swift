@@ -31,8 +31,16 @@ package enum CoverageRunner {
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
-        guard let analysis = ChoiceTreeAnalysis.analyze(gen) else {
+        guard var analysis = ChoiceTreeAnalysis.analyze(gen) else {
             return .notApplicable
+        }
+
+        if case let .boundary(boundaryProfile) = analysis,
+           boundaryProfile.totalSpace > coverageBudget
+        {
+            if let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false) {
+                analysis = smaller
+            }
         }
 
         let profile: any CoverageProfile
@@ -43,7 +51,6 @@ package enum CoverageRunner {
         case let .finite(finiteProfile):
             profile = finiteProfile
             kind = "finite"
-            // Exhaustive when the full space fits within budget and no binds.
             isExhaustiveCandidate = finiteProfile.totalSpace <= coverageBudget
                 && finiteProfile.originalTree?.containsBind == false
 
