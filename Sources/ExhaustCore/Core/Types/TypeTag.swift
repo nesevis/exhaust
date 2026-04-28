@@ -272,7 +272,9 @@ extension TypeTag: Hashable {
             hasher.combine(interval)
             hasher.combine(tzID)
         case .bits: hasher.combine(14)
-        case .character: hasher.combine(15)
+        case let .character(boundaryIndices):
+            hasher.combine(15)
+            hasher.combine(boundaryIndices)
         }
     }
 }

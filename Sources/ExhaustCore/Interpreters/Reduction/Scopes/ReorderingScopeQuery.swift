@@ -11,7 +11,7 @@
 enum ReorderingScopeQuery {
     /// Builds a reordering scope from the graph's sequence and zip nodes, or `nil` if no eligible groups exist.
     ///
-    /// For each sequence and zip node the builder groups direct children by ``kindCategory(_:)`` and emits one ``ReorderableGroup`` per kind-category bucket that has two or more members and passes the bind-inner containment check.
+    /// For each sequence and zip node the builder groups direct children by ``siblingGroupKey(_:)`` and emits one ``ReorderableGroup`` per bucket that has two or more members and passes the bind-inner containment check.
     ///
     /// The bind-inner exclusion uses a containment test (sibling ⊆ bind-inner range), not overlap. A bind block whose own length chooseBits sits inside it overlaps the bind-inner range but is not contained by it — moving the complete block carries inner and bound together, which is safe. Only a sibling whose range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child) must be excluded.
     ///
@@ -47,14 +47,12 @@ enum ReorderingScopeQuery {
 
             let depth = nodeDepth(nodeID: node.id, graph: graph)
 
-            // Group children by kind category — one group per kind with >= 2 members.
-            var byCategory: [Int: [(range: ClosedRange<Int>, kind: ChoiceGraphNodeKind)]] = [:]
+            var byCategory: [SiblingGroupKey: [ClosedRange<Int>]] = [:]
             for (range, kind) in zip(childRanges, childKinds) {
-                byCategory[kindCategory(kind), default: []].append((range, kind))
+                byCategory[siblingGroupKey(kind), default: []].append(range)
             }
 
-            for (_, children) in byCategory where children.count >= 2 {
-                let ranges = children.map(\.range)
+            for (_, ranges) in byCategory where ranges.count >= 2 {
                 guard noBindInnerContainment(ranges, bindInnerRanges: bindInnerRanges) else { continue }
                 groups.append(ReorderableGroup(depth: depth, ranges: ranges))
             }
@@ -106,20 +104,28 @@ enum ReorderingScopeQuery {
         return true
     }
 
-    /// Maps a ``ChoiceGraphNodeKind`` to a category integer for same-kind sibling comparison.
+    private enum SiblingGroupKey: Hashable {
+        case chooseBits(typeTag: TypeTag, constraintRange: ClosedRange<UInt64>?)
+        case just
+        case bind
+        case zip
+        case sequence(lengthConstraint: ClosedRange<UInt64>?)
+        case pick
+    }
+
+    /// Maps a ``ChoiceGraphNodeKind`` to a grouping key for same-kind sibling comparison.
     ///
-    /// `chooseBits` nodes are split by type family (unsigned/signed/floating) so that only siblings with comparable ``ChoiceValue`` types are grouped. `just` nodes are constant leaves with no value contribution and form their own category. Structural nodes (`bind`, `zip`, `sequence`, `pick`) each occupy a distinct category.
-    private static func kindCategory(_ kind: ChoiceGraphNodeKind) -> Int {
+    /// `chooseBits` nodes are split by ``TypeTag`` so that only siblings with the same type are grouped. Constraint ranges ensure siblings with different valid ranges are not grouped — reordering between different ranges would produce out-of-range values.
+    private static func siblingGroupKey(_ kind: ChoiceGraphNodeKind) -> SiblingGroupKey {
         switch kind {
         case let .chooseBits(metadata):
-            if metadata.typeTag.isFloatingPoint { return 2 }
-            if metadata.typeTag.isSigned { return 1 }
-            return 0
-        case .just: return 3
-        case .bind: return 4
-        case .zip: return 5
-        case .sequence: return 6
-        case .pick: return 7
+            .chooseBits(typeTag: metadata.typeTag, constraintRange: metadata.validRange)
+        case .just: .just
+        case .bind: .bind
+        case .zip: .zip
+        case let .sequence(metadata):
+            .sequence(lengthConstraint: metadata.lengthConstraint)
+        case .pick: .pick
         }
     }
 
