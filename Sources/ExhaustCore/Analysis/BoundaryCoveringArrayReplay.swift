@@ -330,12 +330,11 @@ package enum BoundaryCoveringArrayReplay {
             return nil
         }
 
-        let branchIDs = choices.map(\.id)
         let branch = ChoiceTree.branch(
             fingerprint: chosen.fingerprint,
             weight: chosen.weight,
             id: chosen.id,
-            branchIDs: branchIDs,
+            branchIDs: chosen.branches,
             choice: subTree
         )
         return .group([.selected(branch)])

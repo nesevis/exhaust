@@ -129,12 +129,14 @@ struct SCADomainBuildTreeTests {
 // MARK: - Helpers
 
 private func makeParameterFreeChoices(count: Int) -> ContiguousArray<ReflectiveOperation.PickTuple> {
+    let branches: ClosedRange<UInt64> = 0 ... UInt64(count - 1)
     var choices = ContiguousArray<ReflectiveOperation.PickTuple>()
     for i in 0 ..< count {
         choices.append(ReflectiveOperation.PickTuple(
             fingerprint: UInt64(i),
             id: UInt64(i),
             weight: 1,
+            branches: branches,
             generator: .pure(())
         ))
     }
@@ -144,12 +146,15 @@ private func makeParameterFreeChoices(count: Int) -> ContiguousArray<ReflectiveO
 private func makeParameterizedChoices() -> ContiguousArray<ReflectiveOperation.PickTuple> {
     // Branch 0: parameter-free
     // Branch 1: has a chooseBits parameter (Gen.choose(in: 0...4))
+    let branches: ClosedRange<UInt64> = 0 ... 1
     let paramFree = ReflectiveOperation.PickTuple(
         fingerprint: 0, id: 0, weight: 1,
+        branches: branches,
         generator: .pure(())
     )
     let parameterized = ReflectiveOperation.PickTuple(
         fingerprint: 1, id: 1, weight: 1,
+        branches: branches,
         generator: Gen.choose(in: 0 ... 4).erase()
     )
     return [paramFree, parameterized]

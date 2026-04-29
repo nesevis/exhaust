@@ -66,7 +66,7 @@ package struct PickMetadata {
     public let fingerprint: UInt64
 
     /// All valid branch identifiers at this site.
-    public let branchIDs: [UInt64]
+    public let branchIDs: ClosedRange<UInt64>
 
     /// Currently selected branch identifier.
     public let selectedID: UInt64

@@ -239,7 +239,7 @@ package enum Interpreters {
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
-        let branchIDs = choices.map(\.id)
+        let branchIDs = choices[0].branches
         let fingerprint = choices[0].fingerprint
         let results = try choices.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {

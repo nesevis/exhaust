@@ -89,6 +89,7 @@ package enum AdaptiveSmoothing {
                     fingerprint: choice.fingerprint,
                     id: choice.id,
                     weight: max(1, UInt64(raw[i] / rawTotal * 10000)),
+                    branches: choice.branches,
                     generator: smoothGenerator(
                         choice.generator,
                         epsilon: epsilon,

@@ -153,13 +153,7 @@ extension Materializer {
     ) throws -> (Any, ChoiceTree)? {
         // Always consume a jump seed from the PRNG stream (VACTI pattern).
         let jumpSeed = context.prng.next()
-        var branchIDs = [UInt64]()
-        branchIDs.reserveCapacity(choices.count)
-        var branchIDIdx = 0
-        while branchIDIdx < choices.count {
-            branchIDs.append(choices[branchIDIdx].id)
-            branchIDIdx += 1
-        }
+        let branchIDs = choices[0].branches
 
         // Extract fallback branch info. For Gen.recursive, the pick site is wrapped in a bind — unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?

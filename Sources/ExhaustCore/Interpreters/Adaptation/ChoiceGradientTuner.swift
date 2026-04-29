@@ -190,6 +190,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         fingerprint: choice.fingerprint,
                         id: choice.id,
                         weight: Swift.max(1, weight),
+                        branches: choice.branches,
                         generator: bakeWeights(
                             choice.generator,
                             from: accumulator,
@@ -411,10 +412,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
                         let subranges = (lower ... upper).split(into: subrangeCount)
 
+                        let firstID = context.makeID()
+                        let lastID = firstID + UInt64(subranges.count - 1)
+                        let branchRange = firstID ... lastID
+
                         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                         subrangeChoices.reserveCapacity(subranges.count)
 
-                        for subrange in subranges {
+                        for (index, subrange) in subranges.enumerated() {
                             let subLengthGen: ReflectiveGenerator<UInt64> = .impure(
                                 operation: .chooseBits(
                                     min: subrange.lowerBound,
@@ -433,8 +438,9 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                             subrangeChoices.append(ReflectiveOperation.PickTuple(
                                 fingerprint: context.makeID(),
-                                id: context.makeID(),
+                                id: firstID + UInt64(index),
                                 weight: 1,
+                                branches: branchRange,
                                 generator: subSeqGen
                             ))
                         }
@@ -453,10 +459,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         into: Swift.min(4, Int(context.maxSize + 1))
                     )
 
+                    let firstID = context.makeID()
+                    let lastID = firstID + UInt64(subranges.count - 1)
+                    let branchRange = firstID ... lastID
+
                     var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                     subrangeChoices.reserveCapacity(subranges.count)
 
-                    for subrange in subranges {
+                    for (index, subrange) in subranges.enumerated() {
                         let subSizeGen: ReflectiveGenerator<UInt64> = .impure(
                             operation: .chooseBits(
                                 min: subrange.lowerBound,
@@ -477,8 +487,9 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                         subrangeChoices.append(ReflectiveOperation.PickTuple(
                             fingerprint: context.makeID(),
-                            id: context.makeID(),
+                            id: firstID + UInt64(index),
                             weight: 1,
+                            branches: branchRange,
                             generator: subSeqGen
                         ))
                     }
@@ -504,6 +515,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         fingerprint: choice.fingerprint,
                         id: choice.id,
                         weight: choice.weight,
+                        branches: choice.branches,
                         generator: subdivideForCGS(choice.generator, context: context, thresholds: thresholds)
                     ))
                 }
@@ -605,6 +617,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         fingerprint: choice.fingerprint,
                         id: choice.id,
                         weight: choice.weight,
+                        branches: choice.branches,
                         generator: collapseUniformSubdivisions(choice.generator)
                     )
                 })
@@ -732,10 +745,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
         let subranges = (lower ... upper).split(into: subrangeCount)
 
+        let firstID = context.makeID()
+        let lastID = firstID + UInt64(subranges.count - 1)
+        let branchRange = firstID ... lastID
+
         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         subrangeChoices.reserveCapacity(subranges.count)
 
-        for subrange in subranges {
+        for (index, subrange) in subranges.enumerated() {
             let subGen: ReflectiveGenerator<Any> = .impure(
                 operation: .chooseBits(
                     min: subrange.lowerBound,
@@ -748,8 +765,9 @@ package enum ChoiceGradientTuner<FinalOutput> {
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
                 fingerprint: context.makeID(),
-                id: context.makeID(),
+                id: firstID + UInt64(index),
                 weight: 1,
+                branches: branchRange,
                 generator: subGen
             ))
         }

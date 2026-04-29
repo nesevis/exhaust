@@ -25,6 +25,7 @@ package extension Gen {
 
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
+        let branches: ClosedRange<UInt64> = 0 ... UInt64(choices.count - 1)
 
         for index in choices.indices {
             let choice = choices[index]
@@ -32,6 +33,7 @@ package extension Gen {
                 fingerprint: fingerprint,
                 id: UInt64(index),
                 weight: choice.weight,
+                branches: branches,
                 generator: choice.generator.erase()
             ))
         }

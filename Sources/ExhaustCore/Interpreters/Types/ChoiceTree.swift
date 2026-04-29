@@ -32,7 +32,7 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
         fingerprint: UInt64,
         weight: UInt64,
         id: UInt64,
-        branchIDs: [UInt64],
+        branchIDs: ClosedRange<UInt64>,
         choice: ChoiceTree
     )
 
@@ -341,9 +341,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return result
 
         case let .branch(fingerprint, weight, id, branchIDs, gen):
-            let index = branchIDs.firstIndex(of: id).map { $0 + 1 } ?? 0
+            let index = id - branchIDs.lowerBound + 1
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            var result = prefix + connector + "\(selected)branch(fingerprint: \(fingerprintShort), id: \(id), index: \(index), weight: \(weight), count: \(branchIDs.count))"
+            var result = prefix + connector + "\(selected)branch(fingerprint: \(fingerprintShort), id: \(id), index: \(index), weight: \(weight), count: \(Int(branchIDs.count)))"
             result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
             return result
 

@@ -314,6 +314,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
                         let subranges = (min ... max).split(into: subrangeCount)
 
+                        let branchRange = 0 ... UInt64(subranges.count - 1)
+
                         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                         subrangeChoices.reserveCapacity(subranges.count)
 
@@ -332,6 +334,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                 fingerprint: 0,
                                 id: UInt64(i),
                                 weight: 1,
+                                branches: branchRange,
                                 generator: subGen
                             ))
                         }
@@ -910,6 +913,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 weight: allLiveZero
                     ? (liveChoiceIndices.contains(i) ? 1 : 0)
                     : fitnesses[i],
+                branches: choice.branches,
                 generator: choice.generator
             ))
         }

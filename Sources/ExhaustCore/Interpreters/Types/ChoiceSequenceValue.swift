@@ -89,7 +89,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         case .reduced:
             return "_"
         case let .branch(value):
-            let index = value.validIDs.firstIndex(of: value.id) ?? 0
+            let index = value.id - value.validIDs.lowerBound
             return "B\(index):"
         }
     }
@@ -101,12 +101,12 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         /// The selected branch identifier for this pick site.
         public let id: UInt64
         /// All valid branch identifiers at this pick site.
-        public let validIDs: [UInt64]
+        public let validIDs: ClosedRange<UInt64>
         /// Identifies the pick site. Used by the guided cursor to match branch entries to the correct pick operation when cursor positions drift due to bind re-derivation.
         public let fingerprint: UInt64
 
         /// Creates a branch marker with the given selection, valid identifiers, and pick-site fingerprint.
-        public init(id: UInt64, validIDs: [UInt64], fingerprint: UInt64 = 0) {
+        public init(id: UInt64, validIDs: ClosedRange<UInt64>, fingerprint: UInt64 = 0) {
             self.id = id
             self.validIDs = validIDs
             self.fingerprint = fingerprint

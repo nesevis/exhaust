@@ -431,7 +431,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)
         var finalValue: Output?
-        let branchIDs = choices.map(\.id)
+        let branchIDs = choices[0].branches
         let fingerprint = choices[0].fingerprint
 
         for choice in choices {
