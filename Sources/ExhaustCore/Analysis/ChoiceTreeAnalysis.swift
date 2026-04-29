@@ -328,12 +328,11 @@ package enum ChoiceTreeAnalysis {
         var pickTuples = ContiguousArray<ReflectiveOperation.PickTuple>()
         for child in children {
             let unwrapped = child.unwrapped
-            guard case let .branch(fingerprint, weight, id, ids, _) = unwrapped else { return false }
+            guard case let .branch(fingerprint, weight, id, _, _) = unwrapped else { return false }
             pickTuples.append(ReflectiveOperation.PickTuple(
                 fingerprint: fingerprint,
                 id: id,
                 weight: weight,
-                branches: ids.first! ... ids.last!,
                 generator: .pure(())
             ))
         }

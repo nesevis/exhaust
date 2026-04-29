@@ -33,11 +33,10 @@ package extension Gen {
                 fingerprint: fingerprint,
                 id: UInt64(index),
                 weight: choice.weight,
-                branches: branches,
                 generator: choice.generator.erase()
             ))
         }
-        return liftF(.pick(choices: array))
+        return liftF(.pick(choices: array, branches: branches))
     }
 
     /// Creates a generator that randomly selects from multiple weighted options.

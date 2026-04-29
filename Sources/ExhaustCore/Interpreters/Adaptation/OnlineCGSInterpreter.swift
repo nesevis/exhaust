@@ -292,7 +292,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Pick (CGS Core)
 
-            case let .pick(choices):
+            case let .pick(choices, _):
                 return try handlePick(
                     choices,
                     continuation: continuation,
@@ -334,13 +334,12 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                 fingerprint: 0,
                                 id: UInt64(i),
                                 weight: 1,
-                                branches: branchRange,
                                 generator: subGen
                             ))
                         }
 
                         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                            operation: .pick(choices: subrangeChoices),
+                            operation: .pick(choices: subrangeChoices, branches: branchRange),
                             continuation: continuation
                         )
 
@@ -913,7 +912,6 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 weight: allLiveZero
                     ? (liveChoiceIndices.contains(i) ? 1 : 0)
                     : fitnesses[i],
-                branches: choice.branches,
                 generator: choice.generator
             ))
         }

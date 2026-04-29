@@ -62,8 +62,6 @@ public enum ReflectiveOperation {
         public let id: UInt64
         /// Probability mass for random selection during generation.
         public let weight: UInt64
-        /// The range of branch identifiers for the pick site this choice belongs to.
-        public let branches: ClosedRange<UInt64>
         /// The sub-generator to execute if this choice is selected.
         public let generator: ReflectiveGenerator<Any>
 
@@ -72,13 +70,11 @@ public enum ReflectiveOperation {
             fingerprint: UInt64,
             id: UInt64,
             weight: UInt64,
-            branches: ClosedRange<UInt64>,
             generator: ReflectiveGenerator<Any>
         ) {
             self.fingerprint = fingerprint
             self.id = id
             self.weight = weight
-            self.branches = branches
             self.generator = generator
         }
     }
@@ -109,8 +105,10 @@ public enum ReflectiveOperation {
     ///
     /// **Performance note**: ContiguousArray provides better cache locality than Array for frequent iteration during reflection.
     ///
-    /// - Parameter choices: Array of weighted generator options with replay labels.
-    case pick(choices: ContiguousArray<PickTuple>)
+    /// - Parameters:
+    ///   - choices: Array of weighted generator options with replay labels.
+    ///   - branches: The contiguous range of branch identifiers for this pick site.
+    case pick(choices: ContiguousArray<PickTuple>, branches: ClosedRange<UInt64>)
 
     /// Conditional generation that prunes invalid branches during reflection.
     ///

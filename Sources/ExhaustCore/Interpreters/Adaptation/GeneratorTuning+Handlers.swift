@@ -148,6 +148,7 @@ extension GeneratorTuning {
 
     static func measureAndTunePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        branches: ClosedRange<UInt64>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
@@ -191,7 +192,6 @@ extension GeneratorTuning {
                     fingerprint: choice.fingerprint,
                     id: choice.id,
                     weight: 0,
-                    branches: choice.branches,
                     generator: choice.generator
                 ))
                 continue
@@ -249,7 +249,6 @@ extension GeneratorTuning {
                 fingerprint: choice.fingerprint,
                 id: choice.id,
                 weight: weight,
-                branches: choice.branches,
                 generator: tunedInner
             ))
         }
@@ -262,7 +261,7 @@ extension GeneratorTuning {
                 guard choice.weight < floor else { return choice }
                 return ReflectiveOperation.PickTuple(
                     fingerprint: choice.fingerprint, id: choice.id,
-                    weight: floor, branches: choice.branches,
+                    weight: floor,
                     generator: choice.generator
                 )
             })
@@ -275,14 +274,13 @@ extension GeneratorTuning {
                     fingerprint: $0.fingerprint,
                     id: $0.id,
                     weight: 1,
-                    branches: $0.branches,
                     generator: $0.generator
                 )
             })
         }
 
         return .impure(
-            operation: .pick(choices: tunedChoices),
+            operation: .pick(choices: tunedChoices, branches: branches),
             continuation: continuation
         )
     }
@@ -327,13 +325,12 @@ extension GeneratorTuning {
                 fingerprint: context.rng.next(),
                 id: branchRange.lowerBound + UInt64(index),
                 weight: 1,
-                branches: branchRange,
                 generator: subGen
             ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-            operation: .pick(choices: subrangeChoices),
+            operation: .pick(choices: subrangeChoices, branches: branchRange),
             continuation: continuation
         )
 
@@ -399,13 +396,12 @@ extension GeneratorTuning {
                     fingerprint: context.rng.next(),
                     id: branchRange.lowerBound + UInt64(index),
                     weight: 1,
-                    branches: branchRange,
                     generator: subSeqGen
                 ))
             }
 
             let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices),
+                operation: .pick(choices: subrangeChoices, branches: branchRange),
                 continuation: continuation
             )
 
@@ -458,13 +454,12 @@ extension GeneratorTuning {
                     fingerprint: context.rng.next(),
                     id: branchRange.lowerBound + UInt64(index),
                     weight: 1,
-                    branches: branchRange,
                     generator: subSeqGen
                 ))
             }
 
             let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices),
+                operation: .pick(choices: subrangeChoices, branches: branchRange),
                 continuation: continuation
             )
 
@@ -527,13 +522,12 @@ extension GeneratorTuning {
                 fingerprint: context.rng.next(),
                 id: branchRange.lowerBound + UInt64(index),
                 weight: 1,
-                branches: branchRange,
                 generator: subGen
             ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-            operation: .pick(choices: subrangeChoices),
+            operation: .pick(choices: subrangeChoices, branches: branchRange),
             continuation: continuation
         )
 
