@@ -15,7 +15,7 @@ struct SemanticSimplestIntegrationTests {
         let gen = Gen.choose(in: UInt64(0) ... UInt64(100_000))
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         while let rawValue = try iterator.next() {
-            #expect(ChoiceValue.unsigned(rawValue, .uint64).semanticSimplest == .unsigned(0, .uint64))
+            #expect(ChoiceValue(rawValue, tag: .uint64).semanticSimplest == ChoiceValue(UInt64(0), tag: .uint64))
         }
     }
 
@@ -25,11 +25,7 @@ struct SemanticSimplestIntegrationTests {
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         while let rawValue = try iterator.next() {
             let simplest = ChoiceValue(rawValue, tag: .int64).semanticSimplest
-            guard case let .signed(int64Val, _, _) = simplest else {
-                Issue.record("Expected .signed case")
-                continue
-            }
-            #expect(int64Val == 0)
+            #expect(simplest.decodedSignedValue == 0)
         }
     }
 
@@ -39,11 +35,7 @@ struct SemanticSimplestIntegrationTests {
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         while let rawValue = try iterator.next() {
             let simplest = ChoiceValue(rawValue, tag: .double).semanticSimplest
-            guard case let .floating(doubleVal, _, _) = simplest else {
-                Issue.record("Expected .floating case")
-                continue
-            }
-            #expect(doubleVal == 0.0)
+            #expect(simplest.decodedDoubleValue == 0.0)
         }
     }
 }

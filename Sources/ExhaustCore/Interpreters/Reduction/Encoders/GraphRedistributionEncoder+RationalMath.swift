@@ -112,15 +112,15 @@ extension GraphRedistributionEncoder {
     private static func rationalForChoice(
         _ choice: ChoiceValue
     ) -> (numerator: Int64, denominator: UInt64)? {
-        switch choice {
-        case let .floating(value, _, tag):
+        if choice.tag.isFloatingPoint {
+            let value = choice.decodedDoubleValue
             guard value.isFinite else { return nil }
-            return FloatReduction.integerRatio(for: value, tag: tag)
-        case let .signed(value, _, _):
-            return (value, 1)
-        case let .unsigned(value, _):
-            guard value <= UInt64(Int64.max) else { return nil }
-            return (Int64(value), 1)
+            return FloatReduction.integerRatio(for: value, tag: choice.tag)
+        } else if choice.tag.isSigned {
+            return (choice.decodedSignedValue, 1)
+        } else {
+            guard choice.bitPattern64 <= UInt64(Int64.max) else { return nil }
+            return (Int64(choice.bitPattern64), 1)
         }
     }
 
@@ -128,30 +128,20 @@ extension GraphRedistributionEncoder {
         _ choice: ChoiceValue,
         targetBitPattern: UInt64
     ) -> (numerator: Int64, denominator: UInt64)? {
-        switch choice {
-        case let .floating(_, _, tag):
-            let targetChoice = ChoiceValue(
-                tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag
-            )
-            guard case let .floating(targetValue, _, _) = targetChoice,
-                  targetValue.isFinite else { return nil }
+        let tag = choice.tag
+        let targetChoice = ChoiceValue(
+            tag.makeConvertible(bitPattern64: targetBitPattern),
+            tag: tag
+        )
+        if tag.isFloatingPoint {
+            let targetValue = targetChoice.decodedDoubleValue
+            guard targetValue.isFinite else { return nil }
             return FloatReduction.integerRatio(for: targetValue, tag: tag)
-        case let .signed(_, _, tag):
-            let targetChoice = ChoiceValue(
-                tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag
-            )
-            guard case let .signed(targetValue, _, _) = targetChoice else { return nil }
-            return (targetValue, 1)
-        case let .unsigned(_, tag):
-            let targetChoice = ChoiceValue(
-                tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag
-            )
-            guard case let .unsigned(targetValue, _) = targetChoice else { return nil }
-            guard targetValue <= UInt64(Int64.max) else { return nil }
-            return (Int64(targetValue), 1)
+        } else if tag.isSigned {
+            return (targetChoice.decodedSignedValue, 1)
+        } else {
+            guard targetChoice.bitPattern64 <= UInt64(Int64.max) else { return nil }
+            return (Int64(targetChoice.bitPattern64), 1)
         }
     }
 
@@ -160,27 +150,25 @@ extension GraphRedistributionEncoder {
         denominator: UInt64,
         original: ChoiceValue
     ) -> ChoiceValue? {
-        switch original {
-        case let .floating(_, _, tag):
+        let tag = original.tag
+        if tag.isFloatingPoint {
             let value = Double(numerator) / Double(denominator)
             return tag.floatingChoice(from: value)
-        case let .signed(_, _, tag):
+        } else if tag.isSigned {
             let denom = Int64(denominator)
             guard denom > 0, numerator % denom == 0 else { return nil }
             let intValue = numerator / denom
             let narrowed = ChoiceValue(intValue, tag: tag)
-            guard case let .signed(narrowedValue, _, _) = narrowed,
-                  narrowedValue == intValue else { return nil }
+            guard narrowed.decodedSignedValue == intValue else { return nil }
             return narrowed
-        case let .unsigned(_, tag):
+        } else {
             let denom = Int64(denominator)
             guard denom > 0, numerator % denom == 0 else { return nil }
             let intValue = numerator / denom
             guard intValue >= 0 else { return nil }
             let uintValue = UInt64(intValue)
             let narrowed = ChoiceValue(uintValue, tag: tag)
-            guard case let .unsigned(narrowedValue, _) = narrowed,
-                  narrowedValue == uintValue else { return nil }
+            guard narrowed.bitPattern64 == uintValue else { return nil }
             return narrowed
         }
     }

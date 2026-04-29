@@ -45,7 +45,7 @@ struct ShortlexKeyTests {
 
     @Test("Unsigned shortlexKey equals bitPattern64")
     func unsignedKeyEqualsBitPattern() {
-        let value = ChoiceValue.unsigned(42, .uint64)
+        let value = ChoiceValue(42 as UInt64, tag: .uint64)
         #expect(value.shortlexKey == value.bitPattern64)
     }
 

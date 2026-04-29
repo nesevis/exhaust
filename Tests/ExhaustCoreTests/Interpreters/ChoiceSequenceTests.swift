@@ -13,7 +13,7 @@ struct ChoiceSequenceTests {
     @Test("Flatten simple choice")
     func flattenSimpleChoice() {
         let tree = ChoiceTree.choice(
-            .unsigned(42, .uint64),
+            ChoiceValue(UInt64(42), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
 
@@ -24,7 +24,7 @@ struct ChoiceSequenceTests {
             Issue.record("Expected value, got group marker")
             return
         }
-        #expect(value.choice == .unsigned(42, .uint64))
+        #expect(value.choice == ChoiceValue(UInt64(42), tag: .uint64))
         #expect(value.validRange == (0 ... 100 as ClosedRange<UInt64>))
     }
 
@@ -42,8 +42,8 @@ struct ChoiceSequenceTests {
         let tree = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
-                .choice(.unsigned(8, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+                .choice(ChoiceValue(UInt64(5), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+                .choice(ChoiceValue(UInt64(8), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
             ],
             ChoiceMetadata(validRange: 0 ... 10)
         )
@@ -62,15 +62,15 @@ struct ChoiceSequenceTests {
                 .sequence(
                     length: 2,
                     elements: [
-                        .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
-                        .choice(.unsigned(8, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+                        .choice(ChoiceValue(UInt64(5), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+                        .choice(ChoiceValue(UInt64(8), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                     ],
                     ChoiceMetadata(validRange: 0 ... 10)
                 ),
                 .sequence(
                     length: 1,
                     elements: [
-                        .choice(.unsigned(3, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+                        .choice(ChoiceValue(UInt64(3), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                     ],
                     ChoiceMetadata(validRange: 0 ... 10)
                 ),
@@ -86,9 +86,9 @@ struct ChoiceSequenceTests {
     @Test("Flatten group")
     func flattenGroup() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
-            .choice(.unsigned(2, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
-            .choice(.unsigned(3, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+            .choice(ChoiceValue(UInt64(1), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+            .choice(ChoiceValue(UInt64(2), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+            .choice(ChoiceValue(UInt64(3), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
         ])
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -106,7 +106,7 @@ struct ChoiceSequenceTests {
                 Issue.record("Expected value at index \(i)")
                 return
             }
-            #expect(value.choice == .unsigned(UInt64(i), .uint64))
+            #expect(value.choice == ChoiceValue(UInt64(i), tag: .uint64))
         }
 
         guard case .group(false) = flattened[4] else {
@@ -120,7 +120,7 @@ struct ChoiceSequenceTests {
         let tree = ChoiceTree.resize(
             newSize: 100,
             choices: [
-                .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
+                .choice(ChoiceValue(UInt64(42), tag: .uint64), ChoiceMetadata(validRange: 0 ... 100)),
             ]
         )
 
@@ -138,7 +138,7 @@ struct ChoiceSequenceTests {
             Issue.record("Expected value")
             return
         }
-        #expect(value.choice == .unsigned(42, .uint64))
+        #expect(value.choice == ChoiceValue(UInt64(42), tag: .uint64))
 
         guard case .group(false) = flattened[2] else {
             Issue.record("Expected closing group marker")
@@ -149,7 +149,7 @@ struct ChoiceSequenceTests {
     @Test("Flatten selected marker is transparent")
     func flattenSelected() {
         let tree = ChoiceTree.selected(
-            .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
+            .choice(ChoiceValue(UInt64(42), tag: .uint64), ChoiceMetadata(validRange: 0 ... 100))
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -160,7 +160,7 @@ struct ChoiceSequenceTests {
             Issue.record("Expected value")
             return
         }
-        #expect(value.choice == .unsigned(42, .uint64))
+        #expect(value.choice == ChoiceValue(UInt64(42), tag: .uint64))
     }
 
     @Test("Flatten mixed tree with non-choices")
@@ -168,7 +168,7 @@ struct ChoiceSequenceTests {
         let tree = ChoiceTree.group([
             .just,
             .getSize(100),
-            .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
+            .choice(ChoiceValue(UInt64(42), tag: .uint64), ChoiceMetadata(validRange: 0 ... 100)),
             .just,
         ])
 
@@ -189,7 +189,7 @@ struct ChoiceSequenceTests {
             Issue.record("Expected value")
             return
         }
-        #expect(value.choice == .unsigned(42, .uint64))
+        #expect(value.choice == ChoiceValue(UInt64(42), tag: .uint64))
 
         #expect(flattened[3] == .just)
 
@@ -217,7 +217,7 @@ struct ChoiceSequenceTests {
     func flattenPreservesValidRange() {
         let customRange: ClosedRange<UInt64> = 0 ... 200
         let tree = ChoiceTree.choice(
-            .unsigned(42, .uint64),
+            ChoiceValue(UInt64(42), tag: .uint64),
             ChoiceMetadata(validRange: customRange)
         )
 
@@ -234,9 +234,9 @@ struct ChoiceSequenceTests {
     @Test("Flatten with different choice value types")
     func flattenDifferentTypes() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
-            .choice(.signed(-10, Int64(-10).bitPattern64, .int64), ChoiceMetadata(validRange: 0 ... 100)),
-            .choice(.floating(3.14, Double(3.14).bitPattern64, .double), ChoiceMetadata(validRange: 0 ... 100)),
+            .choice(ChoiceValue(UInt64(42), tag: .uint64), ChoiceMetadata(validRange: 0 ... 100)),
+            .choice(ChoiceValue(Int64(-10), tag: .int64), ChoiceMetadata(validRange: 0 ... 100)),
+            .choice(ChoiceValue(Double(3.14), tag: .double), ChoiceMetadata(validRange: 0 ... 100)),
         ])
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -249,26 +249,23 @@ struct ChoiceSequenceTests {
             return
         }
 
-        guard case let .value(value1) = flattened[1],
-              case .unsigned(42, _) = value1.choice
-        else {
+        guard case let .value(value1) = flattened[1] else {
             Issue.record("Expected unsigned value")
             return
         }
+        #expect(value1.choice.bitPattern64 == 42)
 
-        guard case let .value(value2) = flattened[2],
-              case .signed(-10, _, _) = value2.choice
-        else {
+        guard case let .value(value2) = flattened[2] else {
             Issue.record("Expected signed value")
             return
         }
+        #expect(value2.choice.decodedSignedValue == -10)
 
-        guard case let .value(value3) = flattened[3],
-              case .floating(3.14, _, _) = value3.choice
-        else {
+        guard case let .value(value3) = flattened[3] else {
             Issue.record("Expected floating value")
             return
         }
+        #expect(value3.choice.decodedDoubleValue == 3.14)
 
         guard case .group(false) = flattened[4] else {
             Issue.record("Expected closing group marker")
@@ -282,7 +279,7 @@ struct ChoiceSequenceTests {
             length: 1,
             elements: [
                 .group([
-                    .choice(.unsigned(1, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
+                    .choice(ChoiceValue(UInt64(1), tag: .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                 ]),
             ],
             ChoiceMetadata(validRange: 0 ... 10)

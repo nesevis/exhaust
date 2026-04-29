@@ -141,7 +141,7 @@ package extension TypeTag {
             let encoded = Float16Emulation.encodedBitPattern(from: value)
             let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
             guard allowNonFinite || reconstructed.isFinite else { return nil }
-            return .floating(reconstructed, encoded, .float16)
+            return ChoiceValue(encoded, tag: .float16)
         default:
             return nil
         }

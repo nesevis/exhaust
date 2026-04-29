@@ -72,13 +72,13 @@ extension GraphLockstepEncoder {
         let searchUpward: Bool
         let distance: UInt64
         if usesFloatingSteps {
-            guard case let .floating(currentFloat, _, _) = firstValue.choice else { return nil }
+            let currentFloat = firstValue.choice.decodedDoubleValue
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),
                 tag: tag
             )
-            guard case let .floating(targetFloat, _, _) = targetChoice,
-                  currentFloat.isFinite,
+            let targetFloat = targetChoice.decodedDoubleValue
+            guard currentFloat.isFinite,
                   targetFloat.isFinite else { return nil }
             searchUpward = targetFloat > currentFloat
             let rawDistance = abs(currentFloat - targetFloat).rounded(.down)
@@ -185,7 +185,7 @@ extension GraphLockstepEncoder {
 
             let newChoice: ChoiceValue
             if plan.usesFloatingSteps {
-                guard case let .floating(currentFloat, _, _) = value.choice else { return nil }
+                let currentFloat = value.choice.decodedDoubleValue
                 let signedDelta = plan.searchUpward ? Double(delta) : -Double(delta)
                 let candidateFloat = currentFloat + signedDelta
                 guard let floatChoice = plan.tag.floatingChoice(

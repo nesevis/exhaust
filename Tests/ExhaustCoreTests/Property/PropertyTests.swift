@@ -255,7 +255,7 @@ struct ChoiceValuePropertyTests {
     func semanticSimplestMinimalComplexity() throws {
         // Unsigned
         try exhaustCheck(Gen.choose(in: UInt64(0) ... 100_000)) { rawValue in
-            let value = ChoiceValue.unsigned(rawValue, .uint64)
+            let value = ChoiceValue(rawValue, tag: .uint64)
             return value.semanticSimplest.complexity <= value.complexity
         }
 
@@ -279,8 +279,8 @@ struct ChoiceValuePropertyTests {
             Gen.choose(in: UInt64(0) ... 100_000)
         )) { a, b in
             guard a < b else { return true }
-            let va = ChoiceValue.unsigned(a, .uint64)
-            let vb = ChoiceValue.unsigned(b, .uint64)
+            let va = ChoiceValue(a, tag: .uint64)
+            let vb = ChoiceValue(b, tag: .uint64)
             return va.complexity < vb.complexity
         }
     }
@@ -426,8 +426,8 @@ struct ChoiceValueComparablePropertyTests {
             Gen.choose(in: UInt64(0) ... 100_000),
             Gen.choose(in: UInt64(0) ... 100_000)
         )) { a, b in
-            let va = ChoiceValue.unsigned(a, .uint64)
-            let vb = ChoiceValue.unsigned(b, .uint64)
+            let va = ChoiceValue(a, tag: .uint64)
+            let vb = ChoiceValue(b, tag: .uint64)
             if a < b { return va < vb }
             if a > b { return vb < va }
             return va == vb
