@@ -8,7 +8,7 @@ struct OpenPBTStatsTests {
     func accumulatorBasics() throws {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "testProperty()")
         let tree = ChoiceTree.choice(
-            .unsigned(50, .uint64),
+            ChoiceValue(50 as UInt64, tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
 
@@ -63,7 +63,7 @@ struct OpenPBTStatsTests {
     func filterFeatures() {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "testProperty()")
         let tree = ChoiceTree.choice(
-            .unsigned(50, .uint64),
+            ChoiceValue(50 as UInt64, tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
 

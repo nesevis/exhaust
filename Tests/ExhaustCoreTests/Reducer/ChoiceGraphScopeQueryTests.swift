@@ -17,17 +17,17 @@ struct ChoiceGraphScopeQueryTests {
         let seq1 = ChoiceTree.sequence(
             length: 3,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(4, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -46,8 +46,8 @@ struct ChoiceGraphScopeQueryTests {
     @Test("No covering aligned removal for zip of non-sequence children")
     func noCoveringAlignedRemovalForLeaves() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
         let coveringScopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
@@ -62,9 +62,9 @@ struct ChoiceGraphScopeQueryTests {
         let tree = ChoiceTree.sequence(
             length: 3,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -81,9 +81,9 @@ struct ChoiceGraphScopeQueryTests {
         let tree = ChoiceTree.sequence(
             length: 3,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: 2 ... 5, isRangeExplicit: true)
         )
@@ -99,8 +99,8 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Integer minimization scope collects non-zero leaves")
     func integerMinimizationScope() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-            .choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            .choice(ChoiceValue(42 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            .choice(ChoiceValue(99 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
         let scopes = MinimizationScopeQuery.build(graph: graph)
@@ -119,8 +119,8 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Minimization scope excludes already-converged leaves")
     func minimizationSkipsConverged() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(0, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-            .choice(.unsigned(0, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            .choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            .choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
         let scopes = MinimizationScopeQuery.build(graph: graph)
@@ -140,14 +140,14 @@ struct ChoiceGraphScopeQueryTests {
         let seq1 = ChoiceTree.sequence(
             length: 1,
             elements: [
-                .choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
             length: 1,
             elements: [
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -171,17 +171,17 @@ struct ChoiceGraphScopeQueryTests {
         let seq1 = ChoiceTree.sequence(
             length: 3,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(4, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(.unsigned(5, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -244,17 +244,17 @@ struct ChoiceGraphScopeQueryTests {
         let seq1 = ChoiceTree.sequence(
             length: 3,
             elements: [
-                .choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(30 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(40, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(.unsigned(50, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(40 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(50 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -278,16 +278,16 @@ struct ChoiceGraphScopeQueryTests {
         let seq1 = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(4, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -308,8 +308,8 @@ struct ChoiceGraphScopeQueryTests {
 
     @Test("Scalar bind-inner leaf is indexed to its bind")
     func innerDescendantIndexScalar() {
-        let inner = ChoiceTree.choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
@@ -334,13 +334,13 @@ struct ChoiceGraphScopeQueryTests {
         let innerSequence = ChoiceTree.sequence(
             length: 3,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
-        let bound = ChoiceTree.choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(7 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
@@ -381,12 +381,12 @@ struct ChoiceGraphScopeQueryTests {
         let innerSequence = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
-        let bound = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
         let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
@@ -421,10 +421,10 @@ struct ChoiceGraphScopeQueryTests {
     func innerDescendantIndexNested() {
         // outerBind.inner = (innerBind.inner = leafA, innerBind.bound = leafB) placed inside an outer bind.
         // That would put leafA inside both innerBind.inner and outerBind.inner subtree.
-        let leafA = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let leafB = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let leafA = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let leafB = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let innerBind = ChoiceTree.bind(fingerprint: 0, inner: leafA, bound: leafB)
-        let leafOuterBound = ChoiceTree.choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let leafOuterBound = ChoiceTree.choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let outerBind = ChoiceTree.bind(fingerprint: 0, inner: innerBind, bound: leafOuterBound)
 
         let graph = ChoiceGraph.build(from: outerBind)

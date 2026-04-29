@@ -7,114 +7,78 @@
 
 /// A single primitive value in the choice tree, tagged with its numeric type.
 ///
-/// Each case carries the decoded value for comparison, the raw `UInt64` bit pattern for hashing, and a ``TypeTag`` for reconstruction.
-package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
-    /// An unsigned integer value.
-    case unsigned(UInt64, TypeTag)
-    /// A signed integer value. The `UInt64` represents its hashable bit pattern.
-    case signed(Int64, UInt64, TypeTag)
-    /// A floating-point value. The `UInt64` represents its hashable bit pattern.
-    case floating(Double, UInt64, TypeTag)
+/// Stores only the raw `UInt64` bit pattern and a ``TypeTag``. Decoded values (signed integers, floating-point numbers) are computed on demand from these two fields, trading a per-access decode (single-instruction bitwise reinterpretation) for smaller size and branch-free field access.
+package struct ChoiceValue: Comparable, Hashable, Sendable {
+    /// The raw bit pattern encoding this value under the ``BitPatternConvertible`` protocol.
+    package let bitPattern64: UInt64
+    /// The numeric type tag for interpreting ``bitPattern64``.
+    package let tag: TypeTag
+
+    /// Creates a choice value from a raw bit pattern and type tag.
+    package init(_ bitPattern: UInt64, tag: TypeTag) {
+        self.bitPattern64 = bitPattern
+        self.tag = tag
+    }
 
     /// Creates a choice value from a ``BitPatternConvertible`` value and its type tag.
     public init(_ value: any BitPatternConvertible, tag: TypeTag) {
+        self.bitPattern64 = value.bitPattern64
+        self.tag = tag
+    }
+
+    // MARK: - Decoded Value Accessors
+
+    /// The decoded signed integer value. Only valid when ``tag`` is a signed integer type.
+    package var decodedSignedValue: Int64 {
         switch tag {
-        case .uint:
-            self = .unsigned(value.bitPattern64, .uint)
-        case .uint64:
-            self = .unsigned(value.bitPattern64, .uint64)
-        case .uint32:
-            self = .unsigned(value.bitPattern64, .uint32)
-        case .uint16:
-            self = .unsigned(value.bitPattern64, .uint16)
-        case .uint8:
-            self = .unsigned(value.bitPattern64, .uint8)
-        case .bits:
-            self = .unsigned(value.bitPattern64, .bits)
-        case .character:
-            self = .unsigned(value.bitPattern64, tag)
         case .int:
-            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, .int)
-        case .int64:
-            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, .int64)
+            Int64(Int(bitPattern64: bitPattern64))
+        case .int64, .date:
+            Int64(bitPattern64: bitPattern64)
         case .int32:
-            let int32 = Int32(bitPattern64: value.bitPattern64)
-            self = .signed(
-                Int64(int32),
-                value.bitPattern64,
-                .int32
-            )
+            Int64(Int32(bitPattern64: bitPattern64))
         case .int16:
-            let int16 = Int16(bitPattern64: value.bitPattern64)
-            self = .signed(
-                Int64(int16),
-                value.bitPattern64,
-                .int16
-            )
+            Int64(Int16(bitPattern64: bitPattern64))
         case .int8:
-            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, .int8)
+            Int64(Int8(bitPattern64: bitPattern64))
+        default:
+            0
+        }
+    }
+
+    /// The decoded floating-point value as `Double`. Only valid when ``tag`` is a floating-point type.
+    package var decodedDoubleValue: Double {
+        switch tag {
         case .double:
-            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, .double)
+            Double(bitPattern64: bitPattern64)
         case .float:
-            let float = Float(bitPattern64: value.bitPattern64)
-            self = .floating(
-                Double(float),
-                value.bitPattern64,
-                .float
-            )
+            Double(Float(bitPattern64: bitPattern64))
         case .float16:
-            self = .floating(
-                Float16Emulation.doubleValue(fromEncoded: value.bitPattern64),
-                value.bitPattern64,
-                .float16
-            )
-        case .date:
-            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, tag)
+            Float16Emulation.doubleValue(fromEncoded: bitPattern64)
+        default:
+            0.0
         }
     }
 
-    /// The semantically simplest value for a human reader.
-    /// - Unsigned integers: 0
-    /// - Signed integers: 0
-    /// - Floating point: 0.0
+    // MARK: - Semantic Properties
+
+    /// The semantically simplest value for a human reader: zero for all numeric types.
     public var semanticSimplest: ChoiceValue {
-        switch self {
-        case let .unsigned(_, tag):
-            .unsigned(0, tag)
-        case let .signed(_, _, tag):
-            .signed(0, tag.simplestBitPattern, tag)
-        case let .floating(_, _, tag):
-            .floating(0.0, tag.simplestBitPattern, tag)
-        }
-    }
-
-    /// The numeric type tag for this value.
-    @inline(__always)
-    var tag: TypeTag {
-        switch self {
-        case let .unsigned(_, tag): tag
-        case let .signed(_, _, tag): tag
-        case let .floating(_, _, tag): tag
-        }
+        ChoiceValue(tag.simplestBitPattern, tag: tag)
     }
 
     /// Returns a shortlex complexity score: the absolute magnitude of this value as a `UInt64`.
     public var complexity: UInt64 {
-        switch self {
-        case let .unsigned(value, _):
-            return value
-        case let .signed(value, _, _):
-            return UInt64(abs(value))
-        case let .floating(value, _, _):
-            let absValue = abs(value)
-            if absValue >= Double(UInt64.max) {
-                return UInt64.max
-            }
-            // Complexity does not handle values below 1
-            if absValue.isNaN || absValue.isInfinite {
+        if tag.isFloatingPoint {
+            let absValue = abs(decodedDoubleValue)
+            if absValue >= Double(UInt64.max) || absValue.isNaN || absValue.isInfinite {
                 return UInt64.max
             }
             return UInt64(absValue)
+        } else if tag.isSigned {
+            return UInt64(abs(decodedSignedValue))
+        } else {
+            return bitPattern64
         }
     }
 
@@ -127,18 +91,12 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
 
     /// Formats a bit-pattern range into a human-readable string using this value's type tag.
     func displayRange(_ range: ClosedRange<UInt64>) -> String {
-        switch self {
-        case .unsigned:
-            return range.description
-        case let .signed(_, _, tag):
-            let lower = tag.makeConvertible(bitPattern64: range.lowerBound)
-            let upper = tag.makeConvertible(bitPattern64: range.upperBound)
-            return "\(lower)...\(upper)"
-        case let .floating(_, _, tag):
+        if tag.isSigned || tag.isFloatingPoint {
             let lower = tag.makeConvertible(bitPattern64: range.lowerBound)
             let upper = tag.makeConvertible(bitPattern64: range.upperBound)
             return "\(lower)...\(upper)"
         }
+        return range.description
     }
 
     /// Reconstructs the original ``BitPatternConvertible`` value from this choice's bit pattern and type tag.
@@ -146,42 +104,15 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         tag.makeConvertible(bitPattern64: bitPattern64)
     }
 
-    public func hash(into hasher: inout Hasher) {
-        switch self {
-        case let .unsigned(uInt64, _):
-            hasher.combine(uInt64)
-        case let .signed(_, uInt64, _):
-            hasher.combine(uInt64)
-        case let .floating(_, uInt64, _):
-            hasher.combine(uInt64)
-        }
-        hasher.combine(tag)
-    }
-
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        guard lhs.tag == rhs.tag else { return false }
-        return switch (lhs, rhs) {
-        case let (.unsigned(lhsValue, _), .unsigned(rhsValue, _)):
-            lhsValue == rhsValue
-        case let (.signed(_, lhsBits, _), .signed(_, rhsBits, _)):
-            lhsBits == rhsBits
-        case let (.floating(_, lhsBits, _), .floating(_, rhsBits, _)):
-            lhsBits == rhsBits
-        default:
-            false
-        }
-    }
+    // MARK: - Comparable
 
     public static func < (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
-        case (.unsigned, .unsigned):
-            lhs.bitPattern64 < rhs.bitPattern64
-        case let (.signed(lhsInt, _, _), .signed(rhsInt, _, _)):
-            lhsInt < rhsInt
-        case let (.floating(lhsDouble, _, _), .floating(rhsDouble, _, _)):
-            lhsDouble < rhsDouble
-        default:
-            fatalError("Can't compare two different choice values!")
+        if lhs.tag.isFloatingPoint {
+            return lhs.decodedDoubleValue < rhs.decodedDoubleValue
+        } else if lhs.tag.isSigned {
+            return lhs.decodedSignedValue < rhs.decodedSignedValue
+        } else {
+            return lhs.bitPattern64 < rhs.bitPattern64
         }
     }
 }

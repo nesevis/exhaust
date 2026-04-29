@@ -19,15 +19,15 @@ extension GraphValueEncoder {
             if preservingConvergence[nodeID] != nil { continue }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
-            guard case let .floating(currentValue, currentBitPattern, _) = metadata.value else { continue }
+            guard metadata.value.tag.isFloatingPoint else { continue }
             targets.append(FloatTarget(
                 nodeID: nodeID,
                 sequenceIndex: range.lowerBound,
                 typeTag: metadata.typeTag,
                 validRange: metadata.validRange,
                 isRangeExplicit: metadata.isRangeExplicit,
-                currentValue: currentValue,
-                currentBitPattern: currentBitPattern,
+                currentValue: metadata.value.decodedDoubleValue,
+                currentBitPattern: metadata.value.bitPattern64,
                 mayReshape: entry.mayReshapeOnAcceptance
             ))
         }
@@ -474,8 +474,8 @@ extension GraphValueEncoder {
                     isRangeExplicit: target.isRangeExplicit
                 ))
                 state.sequence[target.sequenceIndex] = entry
-                if case let .floating(value, _, _) = choice {
-                    state.targets[state.currentTargetIndex].currentValue = value
+                if choice.tag.isFloatingPoint {
+                    state.targets[state.currentTargetIndex].currentValue = choice.decodedDoubleValue
                 }
                 state.targets[state.currentTargetIndex].currentBitPattern = bp
             }

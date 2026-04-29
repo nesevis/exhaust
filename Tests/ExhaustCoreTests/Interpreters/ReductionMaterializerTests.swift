@@ -64,7 +64,7 @@ struct ReductionMaterializerTests {
 
         // Construct a prefix with value 50, which is outside 0...10.
         let prefix: ChoiceSequence = [
-            .value(.init(choice: .unsigned(50, .uint64), validRange: 0 ... 100)),
+            .value(.init(choice: ChoiceValue(UInt64(50), tag: .uint64), validRange: 0 ... 100)),
         ]
 
         let result = Materializer.materialize(gen, prefix: prefix, mode: .exact)
@@ -83,7 +83,7 @@ struct ReductionMaterializerTests {
 
         // Prefix only has one value, but generator needs two.
         let prefix: ChoiceSequence = [
-            .value(.init(choice: .unsigned(5, .uint64), validRange: 0 ... 10)),
+            .value(.init(choice: ChoiceValue(UInt64(5), tag: .uint64), validRange: 0 ... 10)),
         ]
 
         let result = Materializer.materialize(gen, prefix: prefix, mode: .exact)
@@ -132,8 +132,8 @@ struct ReductionMaterializerTests {
         // Construct a prefix where inner = 5, bound = 8 (out of 0...5 but was valid for 0...10).
         let prefix: ChoiceSequence = [
             .bind(true),
-            .value(.init(choice: .unsigned(5, .uint64), validRange: 0 ... 10, isRangeExplicit: true)),
-            .value(.init(choice: .unsigned(8, .uint64), validRange: 0 ... 10, isRangeExplicit: true)),
+            .value(.init(choice: ChoiceValue(UInt64(5), tag: .uint64), validRange: 0 ... 10, isRangeExplicit: true)),
+            .value(.init(choice: ChoiceValue(UInt64(8), tag: .uint64), validRange: 0 ... 10, isRangeExplicit: true)),
             .bind(false),
         ]
 
@@ -156,7 +156,7 @@ struct ReductionMaterializerTests {
 
         // Prefix with value 50, outside 0...10.
         let prefix: ChoiceSequence = [
-            .value(.init(choice: .unsigned(50, .uint64), validRange: 0 ... 100)),
+            .value(.init(choice: ChoiceValue(UInt64(50), tag: .uint64), validRange: 0 ... 100)),
         ]
 
         guard case let .success(value, tree, _) = Materializer.materialize(
@@ -291,7 +291,7 @@ struct ReductionMaterializerTests {
 
         // Construct prefix with a STALE validRange (0...100).
         let prefix: ChoiceSequence = [
-            .value(.init(choice: .unsigned(15, .uint64), validRange: 0 ... 100)),
+            .value(.init(choice: ChoiceValue(UInt64(15), tag: .uint64), validRange: 0 ... 100)),
         ]
 
         guard case let .success(_, tree, _) = Materializer.materialize(
@@ -317,7 +317,7 @@ struct ReductionMaterializerTests {
 
         // Prefix with stale range.
         let prefix: ChoiceSequence = [
-            .value(.init(choice: .unsigned(10, .uint64), validRange: 0 ... 1000)),
+            .value(.init(choice: ChoiceValue(UInt64(10), tag: .uint64), validRange: 0 ... 1000)),
         ]
 
         guard case let .success(_, tree, _) = Materializer.materialize(
@@ -351,7 +351,7 @@ struct ReductionMaterializerTests {
         for idx in prefix.indices {
             if case .value = prefix[idx] {
                 prefix[idx] = .value(.init(
-                    choice: .unsigned(10, .uint64),
+                    choice: ChoiceValue(UInt64(10), tag: .uint64),
                     validRange: 1 ... 100,
                     isRangeExplicit: true
                 ))

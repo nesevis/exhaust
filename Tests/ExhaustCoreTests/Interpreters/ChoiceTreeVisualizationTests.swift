@@ -13,7 +13,7 @@ struct ChoiceTreeVisualizationTests {
 
     @Test("Single choice renders centered symbol")
     func singleChoice() {
-        let tree = ChoiceTree.choice(.unsigned(42, .uint), meta100)
+        let tree = ChoiceTree.choice(ChoiceValue(UInt64(42), tag: .uint), meta100)
         let result = tree.visualization(width: 20)
         // 42/100 = 0.42, in [0.25, 0.75) → high tier → ◎
         #expect(result.contains("✳"))
@@ -29,14 +29,14 @@ struct ChoiceTreeVisualizationTests {
 
     @Test("Zero value renders minimal dot")
     func zeroIsMinimal() {
-        let tree = ChoiceTree.choice(.unsigned(0, .uint), meta100)
+        let tree = ChoiceTree.choice(ChoiceValue(UInt64(0), tag: .uint), meta100)
         let result = tree.visualization(width: 20)
         #expect(result.contains("·"))
     }
 
     @Test("Max value renders extreme circle")
     func maxIsExtreme() {
-        let tree = ChoiceTree.choice(.unsigned(100, .uint), meta100)
+        let tree = ChoiceTree.choice(ChoiceValue(UInt64(100), tag: .uint), meta100)
         let result = tree.visualization(width: 20)
         #expect(result.contains("❋"))
     }
@@ -44,8 +44,8 @@ struct ChoiceTreeVisualizationTests {
     @Test("Two choices produce diagonal connectors")
     func twoChoices() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(0, .uint), meta100),
-            .choice(.unsigned(50, .uint), meta100),
+            .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
+            .choice(ChoiceValue(UInt64(50), tag: .uint), meta100),
         ])
         let result = tree.visualization(width: 40)
         print("--- Two choices ---")
@@ -58,9 +58,9 @@ struct ChoiceTreeVisualizationTests {
     @Test("Three choices produce box-drawing connectors")
     func threeChoices() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(5, .uint), meta100),
-            .choice(.unsigned(0, .uint), meta100),
-            .choice(.unsigned(95, .uint), meta100),
+            .choice(ChoiceValue(UInt64(5), tag: .uint), meta100),
+            .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
+            .choice(ChoiceValue(UInt64(95), tag: .uint), meta100),
         ])
         let result = tree.visualization(width: 40)
         print("--- Three choices ---")
@@ -72,10 +72,10 @@ struct ChoiceTreeVisualizationTests {
     @Test("Nested groups produce multi-level tree")
     func nestedGroups() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(5, .uint), meta100),
+            .choice(ChoiceValue(UInt64(5), tag: .uint), meta100),
             .group([
-                .choice(.unsigned(42, .uint), meta100),
-                .choice(.unsigned(0, .uint), meta100),
+                .choice(ChoiceValue(UInt64(42), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
             ]),
         ])
         let result = tree.visualization(width: 40)
@@ -88,7 +88,7 @@ struct ChoiceTreeVisualizationTests {
 
     @Test("Selected wrapper is transparent")
     func selectedTransparent() {
-        let inner = ChoiceTree.choice(.unsigned(42, .uint), meta100)
+        let inner = ChoiceTree.choice(ChoiceValue(UInt64(42), tag: .uint), meta100)
         let selected = ChoiceTree.selected(inner)
         let resultInner = inner.visualization(width: 20)
         let resultSelected = selected.visualization(width: 20)
@@ -101,8 +101,8 @@ struct ChoiceTreeVisualizationTests {
             fingerprint: 0,
             inner: .getSize(42),
             bound: .group([
-                .choice(.unsigned(5, .uint), meta100),
-                .choice(.unsigned(0, .uint), meta100),
+                .choice(ChoiceValue(UInt64(5), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
             ])
         )
         let result = tree.visualization(width: 40)
@@ -116,9 +116,9 @@ struct ChoiceTreeVisualizationTests {
         let tree = ChoiceTree.sequence(
             length: 3,
             elements: [
-                .choice(.unsigned(0, .uint), meta256),
-                .choice(.unsigned(128, .uint), meta256),
-                .choice(.unsigned(255, .uint), meta256),
+                .choice(ChoiceValue(UInt64(0), tag: .uint), meta256),
+                .choice(ChoiceValue(UInt64(128), tag: .uint), meta256),
+                .choice(ChoiceValue(UInt64(255), tag: .uint), meta256),
             ],
             meta256
         )
@@ -134,13 +134,13 @@ struct ChoiceTreeVisualizationTests {
     func deepTree() {
         let tree = ChoiceTree.group([
             .group([
-                .choice(.unsigned(10, .uint), meta100),
-                .choice(.unsigned(20, .uint), meta100),
+                .choice(ChoiceValue(UInt64(10), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(20), tag: .uint), meta100),
             ]),
             .group([
-                .choice(.unsigned(80, .uint), meta100),
-                .choice(.unsigned(0, .uint), meta100),
-                .choice(.unsigned(99, .uint), meta100),
+                .choice(ChoiceValue(UInt64(80), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(99), tag: .uint), meta100),
             ]),
         ])
         let result = tree.visualization(width: 60)
@@ -155,20 +155,20 @@ struct ChoiceTreeVisualizationTests {
     func deepTree3() {
         let tree = ChoiceTree.group([
             .group([
-                .choice(.unsigned(10, .uint), meta100),
-                .choice(.unsigned(20, .uint), meta100),
+                .choice(ChoiceValue(UInt64(10), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(20), tag: .uint), meta100),
             ]),
             .group([
-                .choice(.unsigned(80, .uint), meta100),
-                .choice(.unsigned(0, .uint), meta100),
-                .choice(.unsigned(99, .uint), meta100),
+                .choice(ChoiceValue(UInt64(80), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(99), tag: .uint), meta100),
             ]),
             .group([
-                .choice(.unsigned(0, .uint), meta100),
-                .choice(.unsigned(10, .uint), meta100),
-                .choice(.unsigned(20, .uint), meta100),
-                .choice(.unsigned(50, .uint), meta100),
-                .choice(.unsigned(90, .uint), meta100),
+                .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(10), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(20), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(50), tag: .uint), meta100),
+                .choice(ChoiceValue(UInt64(90), tag: .uint), meta100),
             ]),
         ])
         let result = tree.visualization(width: 60)
@@ -181,7 +181,7 @@ struct ChoiceTreeVisualizationTests {
 
     @Test("Width parameter controls centering")
     func widthCentering() {
-        let tree = ChoiceTree.choice(.unsigned(0, .uint), meta100)
+        let tree = ChoiceTree.choice(ChoiceValue(UInt64(0), tag: .uint), meta100)
         let narrow = tree.visualization(width: 10)
         let wide = tree.visualization(width: 40)
         // Wide should have more leading spaces
@@ -200,11 +200,11 @@ struct ChoiceTreeVisualizationTests {
     @Test("Wide tree with five children")
     func wideTree() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(0, .uint), meta100),
-            .choice(.unsigned(10, .uint), meta100),
-            .choice(.unsigned(20, .uint), meta100),
-            .choice(.unsigned(50, .uint), meta100),
-            .choice(.unsigned(90, .uint), meta100),
+            .choice(ChoiceValue(UInt64(0), tag: .uint), meta100),
+            .choice(ChoiceValue(UInt64(10), tag: .uint), meta100),
+            .choice(ChoiceValue(UInt64(20), tag: .uint), meta100),
+            .choice(ChoiceValue(UInt64(50), tag: .uint), meta100),
+            .choice(ChoiceValue(UInt64(90), tag: .uint), meta100),
         ])
         let result = tree.visualization(width: 50)
         print("--- Wide (5 children) ---")
@@ -217,7 +217,7 @@ struct ChoiceTreeVisualizationTests {
         // Build a wide tree that triggers scaling
         let meta = ChoiceMetadata(validRange: 0 ... 100)
         let makeGroup: ([UInt64]) -> ChoiceTree = { values in
-            .group(values.map { .choice(.unsigned($0, .uint), meta) })
+            .group(values.map { .choice(ChoiceValue($0, tag: .uint), meta) })
         }
         let tree = ChoiceTree.group([
             makeGroup([10, 20, 30, 40]),

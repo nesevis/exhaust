@@ -6,31 +6,19 @@
 //
 
 package extension ChoiceValue {
-    @inline(__always)
-    var bitPattern64: UInt64 {
-        switch self {
-        case let .unsigned(uint, _):
-            uint
-        case let .signed(_, uint, _):
-            uint
-        case let .floating(_, uint, _):
-            uint
-        }
-    }
-
     /// Key for shortlex ordering where values closer to zero are smaller.
     /// - Signed integers: zigzag encoding (0 → 0, -1 → 1, 1 → 2, -2 → 3, ...)
     /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
     /// - Unsigned integers: identical to `bitPattern64`
     @inline(__always)
     var shortlexKey: UInt64 {
-        switch self {
-        case let .unsigned(uint, _):
-            uint
-        case let .signed(value, _, _):
-            UInt64(bitPattern: (value << 1) ^ (value >> 63))
-        case let .floating(value, _, _):
-            FloatShortlex.shortlexKey(for: value)
+        if tag.isFloatingPoint {
+            return FloatShortlex.shortlexKey(for: decodedDoubleValue)
+        } else if tag.isSigned {
+            let value = decodedSignedValue
+            return UInt64(bitPattern: (value << 1) ^ (value >> 63))
+        } else {
+            return bitPattern64
         }
     }
 
@@ -41,20 +29,17 @@ package extension ChoiceValue {
     static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
         switch tag {
         case .int, .int8, .int16, .int32, .int64, .date:
-            // Zigzag decode: inverse of (value << 1) ^ (value >> 63)
             let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
-            // Convert decoded Int64 to the typed value's bit pattern encoding
             let bp: UInt64 = switch tag {
             case .int8: Int8(truncatingIfNeeded: decoded).bitPattern64
             case .int16: Int16(truncatingIfNeeded: decoded).bitPattern64
             case .int32: Int32(truncatingIfNeeded: decoded).bitPattern64
             case .int: Int(truncatingIfNeeded: decoded).bitPattern64
-            default: decoded.bitPattern64 // .int64
+            default: decoded.bitPattern64
             }
-            return ChoiceValue(tag.makeConvertible(bitPattern64: bp), tag: tag)
+            return ChoiceValue(bp, tag: tag)
         default:
-            // Unsigned, float: shortlexKey == bitPattern64
-            return ChoiceValue(tag.makeConvertible(bitPattern64: key), tag: tag)
+            return ChoiceValue(key, tag: tag)
         }
     }
 
@@ -67,7 +52,7 @@ package extension ChoiceValue {
             return target
         }
 
-        if case let .floating(_, _, tag) = self,
+        if tag.isFloatingPoint,
            let floatingTarget = floatingReductionTarget(in: range, tag: tag)
         {
             return floatingTarget
@@ -75,7 +60,6 @@ package extension ChoiceValue {
 
         guard let range else { return target }
 
-        // Find the range bound closest to the target
         var bestBound = range.lowerBound
         var bestDistance = target > bestBound
             ? target - bestBound
@@ -114,7 +98,6 @@ package extension ChoiceValue {
         let lower = tag.numericDoubleValue(forBitPattern: range.lowerBound)
         let upper = tag.numericDoubleValue(forBitPattern: range.upperBound)
         if lower.isFinite, upper.isFinite {
-            // Hypothesis-style ordering prefers simple non-negative integers when available.
             let simpleUpper = FloatShortlex.simpleIntegerUpperBound
 
             let positiveLower = max(0.0, lower)

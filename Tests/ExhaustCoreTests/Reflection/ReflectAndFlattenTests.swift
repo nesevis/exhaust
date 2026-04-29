@@ -38,7 +38,7 @@ struct ReflectAndFlattenTests {
 
         #expect(valueChoices.count >= 1)
         // The reflected tree contains the value - verify via bit pattern since it could be signed or unsigned
-        #expect(valueChoices[0].choice == .unsigned(42, .uint64))
+        #expect(valueChoices[0].choice == ChoiceValue(42 as UInt64, tag: .uint64))
     }
 
     @Test("Reflect and flatten array")
@@ -69,10 +69,8 @@ struct ReflectAndFlattenTests {
 
         // Verify the array elements are present
         let elementValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val, _) = choice.choice {
-                return val
-            }
-            return nil
+            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
+            return choice.choice.bitPattern64
         }
 
         #expect(elementValues.contains(1))
@@ -106,10 +104,8 @@ struct ReflectAndFlattenTests {
         #expect(valueChoices.count >= 2)
 
         let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val, _) = choice.choice {
-                return val
-            }
-            return nil
+            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
+            return choice.choice.bitPattern64
         }
 
         #expect(unsignedValues.contains(42))
@@ -204,10 +200,8 @@ struct ReflectAndFlattenTests {
         #expect(valueChoices.count >= 3)
 
         let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val, _) = choice.choice {
-                return val
-            }
-            return nil
+            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
+            return choice.choice.bitPattern64
         }
 
         #expect(unsignedValues.contains(5))
@@ -244,10 +238,8 @@ struct ReflectAndFlattenTests {
 
         // The reflected tree should contain 42 (the original choice before mapping)
         let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val, _) = choice.choice {
-                return val
-            }
-            return nil
+            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
+            return choice.choice.bitPattern64
         }
 
         #expect(unsignedValues.contains(42))
@@ -414,18 +406,15 @@ struct ReflectAndFlattenTests {
 
         // Check we have different types
         let hasUnsigned = valueChoices.contains { choice in
-            if case .unsigned = choice.choice { return true }
-            return false
+            choice.choice.tag.isSigned == false && choice.choice.tag.isFloatingPoint == false
         }
 
         let hasSigned = valueChoices.contains { choice in
-            if case .signed = choice.choice { return true }
-            return false
+            choice.choice.tag.isSigned
         }
 
         let hasFloating = valueChoices.contains { choice in
-            if case .floating = choice.choice { return true }
-            return false
+            choice.choice.tag.isFloatingPoint
         }
 
         #expect(hasUnsigned)
@@ -510,7 +499,7 @@ struct ReflectAndFlattenTests {
         var flattened = ChoiceSequence.flatten(tree)
 
         // Mess with it
-        flattened[2] = .value(.init(choice: .unsigned(64, .uint64), validRange: nil))
+        flattened[2] = .value(.init(choice: ChoiceValue(64 as UInt64, tag: .uint64), validRange: nil))
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")

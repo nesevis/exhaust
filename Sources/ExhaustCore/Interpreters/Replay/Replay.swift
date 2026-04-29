@@ -612,8 +612,8 @@ extension Interpreters {
         runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         switch script {
-        case let .choice(.unsigned(value, _), _):
-            try runContinuation(value)
+        case let .choice(choiceValue, _):
+            try runContinuation(choiceValue.bitPattern64)
         case let .getSize(value):
             try runContinuation(value)
         default:
@@ -665,7 +665,7 @@ extension Interpreters {
             isRangeExplicit: lengthGen.associatedRange != nil
         )
         let lengthChoice = ChoiceTree.choice(
-            .unsigned(length, .uint64),
+            ChoiceValue(length, tag: .uint64),
             lengthMetadata
         )
         guard try replayRecursive(lengthGen, with: lengthChoice) != nil else {

@@ -15,8 +15,8 @@ struct BindAwarenessTests {
 
     @Test("Bind tree has two children")
     func bindTreeChildren() {
-        let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         #expect(tree.children.count == 2)
@@ -26,11 +26,11 @@ struct BindAwarenessTests {
 
     @Test("Bind tree replacingChild works for inner")
     func bindTreeReplacingInner() {
-        let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
-        let newInner = ChoiceTree.choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let newInner = ChoiceTree.choice(ChoiceValue(99 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let replaced = tree.replacingChild(at: 0, with: newInner)
 
         #expect(replaced.children[0] == newInner)
@@ -39,11 +39,11 @@ struct BindAwarenessTests {
 
     @Test("Bind tree replacingChild works for bound")
     func bindTreeReplacingBound() {
-        let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
-        let newBound = ChoiceTree.choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let newBound = ChoiceTree.choice(ChoiceValue(99 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let replaced = tree.replacingChild(at: 1, with: newBound)
 
         #expect(replaced.children[0] == inner)
@@ -52,8 +52,8 @@ struct BindAwarenessTests {
 
     @Test("Bind tree containsPicks delegates to children")
     func bindTreeContainsPicks() {
-        let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         #expect(tree.containsPicks == false)
@@ -105,8 +105,8 @@ struct BindAwarenessTests {
 
     @Test("Bind tree flattens with bind markers")
     func bindTreeFlattens() {
-        let inner = ChoiceTree.choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(42 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(7 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -122,8 +122,8 @@ struct BindAwarenessTests {
 
     @Test("Flatten → validate succeeds for bind trees")
     func flattenValidateBindTree() {
-        let inner = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -134,7 +134,7 @@ struct BindAwarenessTests {
     func unbalancedBindFailsValidation() {
         var seq = ChoiceSequence()
         seq.append(.bind(true))
-        seq.append(.value(.init(choice: .unsigned(1, .uint64), validRange: 0 ... 10)))
+        seq.append(.value(.init(choice: ChoiceValue(1 as UInt64, tag: .uint64), validRange: 0 ... 10)))
         // Missing .bind(false)
         #expect(ChoiceSequence.validate(seq) == false)
     }

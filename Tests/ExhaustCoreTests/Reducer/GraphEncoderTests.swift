@@ -83,22 +83,22 @@ struct GraphEncoderTests {
         let seq1 = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
             length: 1,
             elements: [
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let seq3 = ChoiceTree.sequence(
             length: 1,
             elements: [
-                .choice(.unsigned(4, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -132,8 +132,8 @@ struct GraphEncoderTests {
     @Test("Minimization encoder drives non-zero leaves toward zero")
     func minimizationDrivesLeafTowardZero() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-            .choice(.unsigned(99, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            .choice(ChoiceValue(42 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            .choice(ChoiceValue(99 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
 
@@ -162,15 +162,15 @@ struct GraphEncoderTests {
         let inner1 = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
         let inner2 = ChoiceTree.sequence(
             length: 1,
             elements: [
-                .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             .init(validRange: nil, isRangeExplicit: false)
         )
@@ -258,7 +258,7 @@ struct GraphEncoderTests {
     @Test("Minimization encoder emits convergence records")
     func minimizationEmitsConvergenceRecords() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(50, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+            .choice(ChoiceValue(50 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
 

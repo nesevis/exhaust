@@ -15,8 +15,8 @@ struct ChoiceGraphTests {
     @Test("Zip of chooseBits leaves — two leaf nodes under one zip")
     func zipOfLeaves() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
 
@@ -40,8 +40,8 @@ struct ChoiceGraphTests {
 
     @Test("Single bind produces bind node with inner and bound children")
     func singleBind() {
-        let inner = ChoiceTree.choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let bound = ChoiceTree.choice(.unsigned(7, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let inner = ChoiceTree.choice(ChoiceValue(42 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let bound = ChoiceTree.choice(ChoiceValue(7 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let graph = ChoiceGraph.build(from: tree)
@@ -66,9 +66,9 @@ struct ChoiceGraphTests {
 
     @Test("Nested binds produce dependency chain in topological order")
     func nestedBinds() {
-        let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valC = ChoiceTree.choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valA = ChoiceTree.choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valB = ChoiceTree.choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valC = ChoiceTree.choice(ChoiceValue(30 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let innerBind = ChoiceTree.bind(fingerprint: 0, inner: valB, bound: valC)
         let outerBind = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: innerBind)
 
@@ -88,11 +88,11 @@ struct ChoiceGraphTests {
     func pickSite() {
         let branchA = ChoiceTree.branch(
             fingerprint: 1000, weight: 1, id: 0, branchIDs: [0, 1],
-            choice: .choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100))
+            choice: .choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
         )
         let branchB = ChoiceTree.branch(
             fingerprint: 1000, weight: 1, id: 1, branchIDs: [0, 1],
-            choice: .choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100))
+            choice: .choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
         )
         let tree = ChoiceTree.group([branchA, .selected(branchB)])
 
@@ -122,8 +122,8 @@ struct ChoiceGraphTests {
 
     @Test("Sequence node with element children")
     func sequenceNode() {
-        let elementA = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10))
-        let elementB = ChoiceTree.choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10))
+        let elementA = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))
+        let elementB = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))
         let tree = ChoiceTree.sequence(
             length: 2,
             elements: [elementA, elementB],
@@ -149,7 +149,7 @@ struct ChoiceGraphTests {
     @Test("getSize-bind is transparent — bound content appears directly")
     func getSizeBindTransparent() {
         let inner = ChoiceTree.getSize(100)
-        let bound = ChoiceTree.choice(.unsigned(42, .uint64), .init(validRange: 0 ... 100))
+        let bound = ChoiceTree.choice(ChoiceValue(42 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         let graph = ChoiceGraph.build(from: tree)
@@ -172,7 +172,7 @@ struct ChoiceGraphTests {
     @Test("Opaque zip preserves isOpaque flag")
     func opaqueZip() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
         ], isOpaque: true)
 
         let graph = ChoiceGraph.build(from: tree)
@@ -191,9 +191,9 @@ struct ChoiceGraphTests {
 
     @Test("Dependency edges exist for nested binds")
     func dependencyEdgesForNestedBinds() {
-        let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valC = ChoiceTree.choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valA = ChoiceTree.choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valB = ChoiceTree.choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valC = ChoiceTree.choice(ChoiceValue(30 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let innerBind = ChoiceTree.bind(fingerprint: 0, inner: valB, bound: valC)
         let outerBind = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: innerBind)
 
@@ -213,8 +213,8 @@ struct ChoiceGraphTests {
     @Test("Containment edges form tree structure")
     func containmentEdgesFormTree() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
         ])
 
         let graph = ChoiceGraph.build(from: tree)
@@ -229,15 +229,15 @@ struct ChoiceGraphTests {
         // Two pick sites with the same fingerprint should be grouped together.
         let pickA = ChoiceTree.group([
             .branch(fingerprint: 42, weight: 1, id: 0, branchIDs: [0, 1],
-                    choice: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10))),
+                    choice: .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
             .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchIDs: [0, 1],
-                              choice: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)))),
+                              choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
         ])
         let pickB = ChoiceTree.group([
             .branch(fingerprint: 42, weight: 1, id: 0, branchIDs: [0, 1],
-                    choice: .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10))),
+                    choice: .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
             .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchIDs: [0, 1],
-                              choice: .choice(.unsigned(4, .uint64), .init(validRange: 0 ... 10)))),
+                              choice: .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
         ])
         let tree = ChoiceTree.group([pickA, pickB])
 
@@ -253,9 +253,9 @@ struct ChoiceGraphTests {
         // A single pick site — only one active pick, no group of size >= 2 possible.
         let tree = ChoiceTree.group([
             .branch(fingerprint: 1000, weight: 1, id: 0, branchIDs: [0, 1],
-                    choice: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10))),
+                    choice: .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
             .selected(.branch(fingerprint: 1000, weight: 1, id: 1, branchIDs: [0, 1],
-                              choice: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)))),
+                              choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
         ])
 
         let graph = ChoiceGraph.build(from: tree)
@@ -271,9 +271,9 @@ struct ChoiceGraphTests {
     func bindDepthQuery() {
         // Sequence: .bind(true), A, .bind(true), B, C, .bind(false), .bind(false)
         // A is the outer inner (depth 0), B is the inner inner (depth 1), C is the inner bound (depth 2).
-        let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valC = ChoiceTree.choice(.unsigned(30, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valA = ChoiceTree.choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valB = ChoiceTree.choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valC = ChoiceTree.choice(ChoiceValue(30 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let innerBind = ChoiceTree.bind(fingerprint: 0, inner: valB, bound: valC)
         let outerBind = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: innerBind)
 
@@ -287,10 +287,10 @@ struct ChoiceGraphTests {
                 // A is outer-inner: depth 0. B is inner-inner inside outer-bound: depth 1.
                 // C is inner-bound inside outer-bound: depth 2.
                 let value = sequence[position].value!.choice
-                switch value {
-                case .unsigned(10, _): #expect(depth == 0)
-                case .unsigned(20, _): #expect(depth == 1)
-                case .unsigned(30, _): #expect(depth == 2)
+                switch value.bitPattern64 {
+                case 10: #expect(depth == 0)
+                case 20: #expect(depth == 1)
+                case 30: #expect(depth == 2)
                 default: break
                 }
             default:
@@ -303,8 +303,8 @@ struct ChoiceGraphTests {
     func isInBoundSubtreeQuery() {
         // Sequence: .bind(true), A, B, .bind(false)
         // A is inner (not in bound subtree), B is bound (in bound subtree).
-        let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valA = ChoiceTree.choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let valB = ChoiceTree.choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: valB)
 
         let graph = ChoiceGraph.build(from: tree)
@@ -315,9 +315,9 @@ struct ChoiceGraphTests {
             case .value, .reduced:
                 let inBound = graph.isInBoundSubtree(position)
                 let value = sequence[position].value!.choice
-                switch value {
-                case .unsigned(10, _): #expect(inBound == false) // inner
-                case .unsigned(20, _): #expect(inBound == true) // bound
+                switch value.bitPattern64 {
+                case 10: #expect(inBound == false) // inner
+                case 20: #expect(inBound == true) // bound
                 default: break
                 }
             default:
@@ -330,9 +330,9 @@ struct ChoiceGraphTests {
     func deletionAntichainExcludesLeaves() {
         // A zip of three leaves — the zip is in the antichain, not the individual leaves.
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
         ])
 
         let graph = ChoiceGraph.build(from: tree)
@@ -349,8 +349,8 @@ struct ChoiceGraphTests {
     @Test("Leaf nodes returns all active chooseBits nodes")
     func leafNodesQuery() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
         ])
 
         let graph = ChoiceGraph.build(from: tree)
@@ -369,13 +369,13 @@ struct ChoiceGraphTests {
     @Test("Structural fingerprint changes when structure changes")
     func structuralFingerprintChanges() {
         let treeA = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
         ])
         let treeB = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
         ])
 
         let graphA = ChoiceGraph.build(from: treeA)
@@ -387,8 +387,8 @@ struct ChoiceGraphTests {
     @Test("Structural fingerprint is stable for same tree")
     func structuralFingerprintStable() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10)),
-            .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
         ])
 
         let graphA = ChoiceGraph.build(from: tree)

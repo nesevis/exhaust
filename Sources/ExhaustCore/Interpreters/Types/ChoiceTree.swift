@@ -321,13 +321,12 @@ extension ChoiceTree: CustomDebugStringConvertible {
         switch self {
         case let .choice(value, meta):
             let displayRange = value.displayRange(meta.validRange!)
-            switch value {
-            case let .unsigned(uint, _):
-                return prefix + connector + "choice(unsigned:\(uint)) \(displayRange)"
-            case let .signed(int, _, _):
-                return prefix + connector + "choice(signed: \(int)) \(displayRange)"
-            case let .floating(float, _, _):
-                return prefix + connector + "choice(float: \(float)) \(displayRange)"
+            if value.tag.isFloatingPoint {
+                return prefix + connector + "choice(float: \(value.decodedDoubleValue)) \(displayRange)"
+            } else if value.tag.isSigned {
+                return prefix + connector + "choice(signed: \(value.decodedSignedValue)) \(displayRange)"
+            } else {
+                return prefix + connector + "choice(unsigned:\(value.bitPattern64)) \(displayRange)"
             }
 
         case .just:
@@ -382,13 +381,12 @@ extension ChoiceTree: CustomDebugStringConvertible {
     public var elementDescription: String {
         switch self {
         case let .choice(choiceValue, _):
-            switch choiceValue {
-            case let .unsigned(uInt64, _):
-                uInt64.description
-            case let .signed(int, _, _):
-                int.description
-            case let .floating(float, _, _):
-                float.description
+            if choiceValue.tag.isFloatingPoint {
+                choiceValue.decodedDoubleValue.description
+            } else if choiceValue.tag.isSigned {
+                choiceValue.decodedSignedValue.description
+            } else {
+                choiceValue.bitPattern64.description
             }
         case .just:
             "just"

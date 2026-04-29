@@ -6,7 +6,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Single choice at range midpoint scores 0.5")
     func choiceMidpoint() {
         let tree = ChoiceTree.choice(
-            .unsigned(50, .uint64),
+            ChoiceValue(UInt64(50), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let scores = tree.normalizedScores()
@@ -17,7 +17,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Choice at range minimum scores 0")
     func choiceMinimum() {
         let tree = ChoiceTree.choice(
-            .unsigned(10, .uint64),
+            ChoiceValue(UInt64(10), tag: .uint64),
             ChoiceMetadata(validRange: 10 ... 20)
         )
         let scores = tree.normalizedScores()
@@ -28,7 +28,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Choice at range maximum scores 1")
     func choiceMaximum() {
         let tree = ChoiceTree.choice(
-            .unsigned(20, .uint64),
+            ChoiceValue(UInt64(20), tag: .uint64),
             ChoiceMetadata(validRange: 10 ... 20)
         )
         let scores = tree.normalizedScores()
@@ -39,7 +39,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Choice with nil range produces no scores")
     func choiceNilRange() {
         let tree = ChoiceTree.choice(
-            .unsigned(42, .uint64),
+            ChoiceValue(UInt64(42), tag: .uint64),
             ChoiceMetadata(validRange: nil)
         )
         let scores = tree.normalizedScores()
@@ -49,7 +49,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Choice with zero-width range produces no scores")
     func choiceZeroWidthRange() {
         let tree = ChoiceTree.choice(
-            .unsigned(5, .uint64),
+            ChoiceValue(UInt64(5), tag: .uint64),
             ChoiceMetadata(validRange: 5 ... 5)
         )
         let scores = tree.normalizedScores()
@@ -59,7 +59,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Sequence scores length and recurses into elements")
     func sequenceScores() {
         let element = ChoiceTree.choice(
-            .unsigned(75, .uint64),
+            ChoiceValue(UInt64(75), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.sequence(
@@ -77,11 +77,11 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Group concatenates children's scores")
     func groupScores() {
         let child1 = ChoiceTree.choice(
-            .unsigned(0, .uint64),
+            ChoiceValue(UInt64(0), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let child2 = ChoiceTree.choice(
-            .unsigned(100, .uint64),
+            ChoiceValue(UInt64(100), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.group([child1, child2])
@@ -94,11 +94,11 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Bind concatenates inner and bound scores")
     func bindScores() {
         let inner = ChoiceTree.choice(
-            .unsigned(25, .uint64),
+            ChoiceValue(UInt64(25), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let bound = ChoiceTree.choice(
-            .unsigned(80, .uint64),
+            ChoiceValue(UInt64(80), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
@@ -111,7 +111,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Branch recurses into selected subtree")
     func branchScores() {
         let subtree = ChoiceTree.choice(
-            .unsigned(60, .uint64),
+            ChoiceValue(UInt64(60), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.branch(
@@ -129,7 +129,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Selected wrapper is transparent")
     func selectedTransparent() {
         let inner = ChoiceTree.choice(
-            .unsigned(50, .uint64),
+            ChoiceValue(UInt64(50), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.selected(inner)
@@ -141,7 +141,7 @@ struct ChoiceTreeNormalizedScoresTests {
     @Test("Resize recurses into children")
     func resizeScores() {
         let child = ChoiceTree.choice(
-            .unsigned(40, .uint64),
+            ChoiceValue(UInt64(40), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.resize(newSize: 50, choices: [child])

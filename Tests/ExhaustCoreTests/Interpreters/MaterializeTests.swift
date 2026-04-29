@@ -330,7 +330,7 @@ struct MaterializeTests {
         let gen = Gen.choose(in: UInt64(0) ... 1000)
         var matIter3 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42)
         let (_, tree) = try #require(matIter3.prefix(1).last)
-        let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, .uint64), validRange: 0 ... 1000)
+        let replacement = ChoiceSequenceValue.Value(choice: ChoiceValue(UInt64(777), tag: .uint64), validRange: 0 ... 1000)
         let modified: ChoiceSequence = [.value(replacement)]
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: modified, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
@@ -347,7 +347,7 @@ struct MaterializeTests {
         let flattened = ChoiceSequence.flatten(tree)
         let minimized = flattened.map { element -> ChoiceSequenceValue in
             guard case .value = element else { return element }
-            return .value(.init(choice: .unsigned(0, .uint64), validRange: nil))
+            return .value(.init(choice: ChoiceValue(UInt64(0), tag: .uint64), validRange: nil))
         }
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: ChoiceSequence(minimized), mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")

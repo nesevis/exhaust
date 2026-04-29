@@ -189,18 +189,18 @@ struct ChoiceGraphClassificationTests {
 
     @Test("sameTopology: identical leaf trees match regardless of value")
     func sameTopologyLeaves() {
-        let a = ChoiceTree.choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
-        let b = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        let a = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let b = ChoiceTree.choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         #expect(ChoiceGraph.sameTopology(a, b))
     }
 
     @Test("sameTopology: sequence element-count delta is not divergence")
     func sameTopologyVariableLengthSequence() {
         let elements2: [ChoiceTree] = (0 ..< 2).map { _ in
-            ChoiceTree.choice(.unsigned(0, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+            ChoiceTree.choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         }
         let elements5: [ChoiceTree] = (0 ..< 5).map { _ in
-            ChoiceTree.choice(.unsigned(0, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+            ChoiceTree.choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         }
         let seqLow = ChoiceTree.sequence(length: 2, elements: elements2, .init(validRange: nil, isRangeExplicit: false))
         let seqHigh = ChoiceTree.sequence(length: 5, elements: elements5, .init(validRange: nil, isRangeExplicit: false))
@@ -209,7 +209,7 @@ struct ChoiceGraphClassificationTests {
 
     @Test("sameTopology: leaf on one side, sequence on the other is divergent")
     func sameTopologyKindMismatch() {
-        let leaf = ChoiceTree.choice(.unsigned(0, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        let leaf = ChoiceTree.choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let seq = ChoiceTree.sequence(
             length: 1,
             elements: [leaf],
