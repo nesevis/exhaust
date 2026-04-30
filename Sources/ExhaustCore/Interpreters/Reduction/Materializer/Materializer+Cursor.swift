@@ -17,13 +17,11 @@ extension Materializer {
         private(set) var position: Int = 0
         var exhausted: Bool = false
 
-        /// Stack of position limits for nested scopes (zip children).
-        /// Max nesting depth ~3-4 in practice.
-        private var scopeLimits: [Int] = {
-            var a = [Int]()
-            a.reserveCapacity(4)
-            return a
-        }()
+        /// Fixed-capacity stack of position limits for nested scopes (zip children).
+        /// Max nesting depth is 4 in practice. Inline storage avoids heap allocation; overflow spills to an array.
+        private var scopeLimits: (Int, Int, Int, Int) = (0, 0, 0, 0)
+        private var scopeOverflow: [Int]?
+        private var scopeDepth: Int = 0
 
         /// Cached end position — updated on scope push/pop.
         private var effectiveEnd: Int
@@ -40,13 +38,34 @@ extension Materializer {
         // MARK: - Scope management
 
         mutating func pushScope(limit: Int) {
-            scopeLimits.append(limit)
+            switch scopeDepth {
+            case 0: scopeLimits.0 = limit
+            case 1: scopeLimits.1 = limit
+            case 2: scopeLimits.2 = limit
+            case 3: scopeLimits.3 = limit
+            default:
+                if scopeOverflow == nil { scopeOverflow = [] }
+                scopeOverflow!.append(limit)
+            }
+            scopeDepth &+= 1
             effectiveEnd = min(entries.count, limit)
         }
 
         mutating func popScope() {
-            scopeLimits.removeLast()
-            if let limit = scopeLimits.last {
+            scopeDepth &-= 1
+            if scopeDepth >= 4 {
+                scopeOverflow!.removeLast()
+                let limit = scopeOverflow!.isEmpty
+                    ? scopeLimits.3
+                    : scopeOverflow!.last!
+                effectiveEnd = min(entries.count, limit)
+            } else if scopeDepth > 0 {
+                let limit = switch scopeDepth {
+                case 1: scopeLimits.0
+                case 2: scopeLimits.1
+                case 3: scopeLimits.2
+                default: scopeLimits.3
+                }
                 effectiveEnd = min(entries.count, limit)
             } else {
                 effectiveEnd = entries.count
