@@ -105,8 +105,10 @@ public enum ReflectiveOperation {
     ///
     /// **Performance note**: ContiguousArray provides better cache locality than Array for frequent iteration during reflection.
     ///
-    /// - Parameter choices: Array of weighted generator options with replay labels.
-    case pick(choices: ContiguousArray<PickTuple>)
+    /// - Parameters:
+    ///   - choices: Array of weighted generator options with replay labels.
+    ///   - branches: The contiguous range of branch identifiers for this pick site.
+    case pick(choices: ContiguousArray<PickTuple>, branches: ClosedRange<UInt64>)
 
     /// Conditional generation that prunes invalid branches during reflection.
     ///

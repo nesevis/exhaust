@@ -62,7 +62,7 @@ enum ReplacementScopeQuery {
             let selectedLeafCount = leafCount(in: metadata.branchElements[metadata.selectedChildIndex])
 
             for index in 0 ..< metadata.branchIDs.count {
-                let branchID = metadata.branchIDs[index]
+                let branchID = metadata.branchIDs.lowerBound + UInt64(index)
                 guard branchID != metadata.selectedID else { continue }
 
                 // Leaf-count gate: skip branches with more leaves than the current selection.

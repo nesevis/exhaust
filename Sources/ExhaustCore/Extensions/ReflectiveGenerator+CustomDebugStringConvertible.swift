@@ -65,7 +65,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             }
             return "chooseBits(\(tag.description): \(range))\(suffix)"
 
-        case let .pick(choices):
+        case let .pick(choices, _):
             let fingerprint = choices.first?.fingerprint ?? 0
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
             let header = "pick(id: \(fingerprintShort), choices: \(choices.count))"

@@ -53,7 +53,7 @@ package enum LightweightSampler {
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
-            case let .pick(choices):
+            case let .pick(choices, _):
                 guard let selected = WeightedPickSelection.draw(from: choices, using: &rng) else {
                     return nil
                 }

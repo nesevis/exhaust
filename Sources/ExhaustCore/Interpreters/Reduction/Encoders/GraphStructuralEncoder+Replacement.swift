@@ -193,7 +193,7 @@ extension GraphStructuralEncoder {
     /// Wrapping kind for a depth-0 base case entry during cross-depth expansion.
     private enum LeafWrapping {
         /// Direct recursion (like BinaryHeap): wrap in pick-site markers.
-        case pick(branchID: UInt64, validIDs: [UInt64], fingerprint: UInt64)
+        case pick(branchID: UInt64, validIDs: ClosedRange<UInt64>, fingerprint: UInt64)
         /// `Gen.recursive` recursion: wrap in `._bound` bind markers with depth selector = 0.
         case bind(depthSelectorEntry: ChoiceSequenceValue)
     }
@@ -375,7 +375,7 @@ extension GraphStructuralEncoder {
         if let leafBranchID = findLeafBranchID(in: pickMetadata) {
             return .pick(branchID: leafBranchID, validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
         }
-        return .pick(branchID: pickMetadata.branchIDs[0], validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
+        return .pick(branchID: pickMetadata.branchIDs.lowerBound, validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
     }
 
     /// Records base case positions and wrapping kinds from an innermost pick using a precomputed mask. When ``mask`` is nil (no non-innermost picks available to derive the mask), all zip children are expanded.
@@ -422,7 +422,7 @@ extension GraphStructuralEncoder {
             if case let .branch(_, _, _, _, content) = inner {
                 switch content {
                 case .just, .choice:
-                    return metadata.branchIDs[index]
+                    return metadata.branchIDs.lowerBound + UInt64(index)
                 default:
                     continue
                 }

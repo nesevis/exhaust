@@ -70,7 +70,7 @@ extension Interpreters {
         switch operation {
         case .chooseBits:
             return try replayWithChoicesChooseBits(continuation: continuation, choices: &choices)
-        case let .pick(pickChoices):
+        case let .pick(pickChoices, _):
             return try replayWithChoicesPick(
                 pickChoices: pickChoices,
                 continuation: continuation,
@@ -477,7 +477,7 @@ extension Interpreters {
                 script: script,
                 runContinuation: runContinuation
             )
-        case let .pick(choices):
+        case let .pick(choices, _):
             return try replayRecursivePick(choices: choices, script: script)
         case let .sequence(lengthGen, elementGenerator):
             return try replayRecursiveSequence(

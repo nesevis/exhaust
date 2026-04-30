@@ -157,9 +157,10 @@ package enum GeneratorTuning {
 
         case let .impure(op, continuation):
             switch op {
-            case let .pick(choices):
+            case let .pick(choices, branches):
                 return try measureAndTunePick(
                     choices: choices,
+                    branches: branches,
                     continuation: continuation,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,

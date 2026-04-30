@@ -118,7 +118,7 @@ struct ChoiceTreeNormalizedScoresTests {
             fingerprint: 1,
             weight: 1,
             id: 0,
-            branchIDs: [0, 1, 2],
+            branchIDs: UInt64(0) ... UInt64(2),
             choice: subtree
         )
         let scores = tree.normalizedScores()

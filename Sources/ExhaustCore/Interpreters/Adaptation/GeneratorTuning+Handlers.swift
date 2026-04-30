@@ -148,6 +148,7 @@ extension GeneratorTuning {
 
     static func measureAndTunePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        branches: ClosedRange<UInt64>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
@@ -260,7 +261,8 @@ extension GeneratorTuning {
                 guard choice.weight < floor else { return choice }
                 return ReflectiveOperation.PickTuple(
                     fingerprint: choice.fingerprint, id: choice.id,
-                    weight: floor, generator: choice.generator
+                    weight: floor,
+                    generator: choice.generator
                 )
             })
         }
@@ -278,7 +280,7 @@ extension GeneratorTuning {
         }
 
         return .impure(
-            operation: .pick(choices: tunedChoices),
+            operation: .pick(choices: tunedChoices, branches: branches),
             continuation: continuation
         )
     }
@@ -302,10 +304,13 @@ extension GeneratorTuning {
         let subrangeCount = min(4, Int(min(rangeSize, UInt64(Int.max))))
         let subranges = (lower ... upper).split(into: subrangeCount)
 
+        let firstSyntheticID = context.rng.next()
+        let branchRange = firstSyntheticID ... (firstSyntheticID + UInt64(subranges.count - 1))
+
         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         subrangeChoices.reserveCapacity(subranges.count)
 
-        for subrange in subranges {
+        for (index, subrange) in subranges.enumerated() {
             let subGen: ReflectiveGenerator<Any> = .impure(
                 operation: .chooseBits(
                     min: subrange.lowerBound,
@@ -318,14 +323,14 @@ extension GeneratorTuning {
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
                 fingerprint: context.rng.next(),
-                id: context.rng.next(),
+                id: branchRange.lowerBound + UInt64(index),
                 weight: 1,
                 generator: subGen
             ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-            operation: .pick(choices: subrangeChoices),
+            operation: .pick(choices: subrangeChoices, branches: branchRange),
             continuation: continuation
         )
 
@@ -362,10 +367,13 @@ extension GeneratorTuning {
             let subrangeCount = min(4, Int(min(rangeSize, UInt64(Int.max))))
             let subranges = (lower ... upper).split(into: subrangeCount)
 
+            let firstSyntheticID = context.rng.next()
+            let branchRange = firstSyntheticID ... (firstSyntheticID + UInt64(subranges.count - 1))
+
             var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
             subrangeChoices.reserveCapacity(subranges.count)
 
-            for subrange in subranges {
+            for (index, subrange) in subranges.enumerated() {
                 // Create a sub-length generator for this subrange
                 let subLengthGen: ReflectiveGenerator<UInt64> = .impure(
                     operation: .chooseBits(
@@ -386,14 +394,14 @@ extension GeneratorTuning {
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
                     fingerprint: context.rng.next(),
-                    id: context.rng.next(),
+                    id: branchRange.lowerBound + UInt64(index),
                     weight: 1,
                     generator: subSeqGen
                 ))
             }
 
             let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices),
+                operation: .pick(choices: subrangeChoices, branches: branchRange),
                 continuation: continuation
             )
 
@@ -415,10 +423,13 @@ extension GeneratorTuning {
 
             let subranges = (0 ... context.maxSize).split(into: min(4, Int(context.maxSize + 1)))
 
+            let firstSyntheticID = context.rng.next()
+            let branchRange = firstSyntheticID ... (firstSyntheticID + UInt64(subranges.count - 1))
+
             var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
             subrangeChoices.reserveCapacity(subranges.count)
 
-            for subrange in subranges {
+            for (index, subrange) in subranges.enumerated() {
                 // Create a size generator for this subrange
                 let subSizeGen: ReflectiveGenerator<UInt64> = .impure(
                     operation: .chooseBits(
@@ -441,14 +452,14 @@ extension GeneratorTuning {
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
                     fingerprint: context.rng.next(),
-                    id: context.rng.next(),
+                    id: branchRange.lowerBound + UInt64(index),
                     weight: 1,
                     generator: subSeqGen
                 ))
             }
 
             let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices),
+                operation: .pick(choices: subrangeChoices, branches: branchRange),
                 continuation: continuation
             )
 
@@ -491,10 +502,13 @@ extension GeneratorTuning {
 
         let subranges = (0 ... context.maxSize).split(into: min(4, Int(context.maxSize + 1)))
 
+        let firstSyntheticID = context.rng.next()
+        let branchRange = firstSyntheticID ... (firstSyntheticID + UInt64(subranges.count - 1))
+
         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         subrangeChoices.reserveCapacity(subranges.count)
 
-        for subrange in subranges {
+        for (index, subrange) in subranges.enumerated() {
             let subGen: ReflectiveGenerator<Any> = .impure(
                 operation: .chooseBits(
                     min: subrange.lowerBound,
@@ -506,14 +520,14 @@ extension GeneratorTuning {
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
                 fingerprint: context.rng.next(),
-                id: context.rng.next(),
+                id: branchRange.lowerBound + UInt64(index),
                 weight: 1,
                 generator: subGen
             ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-            operation: .pick(choices: subrangeChoices),
+            operation: .pick(choices: subrangeChoices, branches: branchRange),
             continuation: continuation
         )
 

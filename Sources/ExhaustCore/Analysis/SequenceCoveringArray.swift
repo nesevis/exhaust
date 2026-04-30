@@ -90,8 +90,8 @@ package enum SequenceCoveringArray {
             guard valueIndex < choices.count else { return nil }
 
             let chosen = choices[Int(valueIndex)]
-            let branchIDs = choices.map(\.id)
 
+            let branchIDs = choices.first!.id ... choices.last!.id
             let branch = ChoiceTree.branch(
                 fingerprint: chosen.fingerprint,
                 weight: chosen.weight,
@@ -233,8 +233,6 @@ package enum SequenceCoveringArray {
         var elementTrees: [ChoiceTree] = []
         elementTrees.reserveCapacity(row.values.count)
 
-        let branchIDs = mapping.pickChoices.map(\.id)
-
         for valueIndex in row.values {
             guard let slot = findSlot(for: valueIndex, in: mapping.slots) else {
                 return nil
@@ -255,6 +253,7 @@ package enum SequenceCoveringArray {
                 subTree = argTree
             }
 
+            let branchIDs = mapping.pickChoices.first!.id ... mapping.pickChoices.last!.id
             let branch = ChoiceTree.branch(
                 fingerprint: chosen.fingerprint,
                 weight: chosen.weight,

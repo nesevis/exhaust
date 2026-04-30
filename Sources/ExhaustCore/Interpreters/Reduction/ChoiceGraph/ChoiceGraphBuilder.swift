@@ -481,7 +481,7 @@ struct ChoiceGraphBuilder {
     struct PickSiteInfo {
         let fingerprint: UInt64
         let selectedID: UInt64
-        let branchIDs: [UInt64]
+        let branchIDs: ClosedRange<UInt64>
     }
 
     /// Detects whether a group's children form a pick site.

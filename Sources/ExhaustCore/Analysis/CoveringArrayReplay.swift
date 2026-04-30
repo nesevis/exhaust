@@ -158,7 +158,7 @@ package enum CoveringArrayReplay {
                 return nil
             }
 
-            let branchIDs = choices.map(\.id)
+            let branchIDs = choices.first!.id ... choices.last!.id
             let branch = ChoiceTree.branch(
                 fingerprint: chosen.fingerprint,
                 weight: chosen.weight,

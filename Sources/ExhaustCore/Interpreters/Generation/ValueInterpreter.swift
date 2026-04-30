@@ -151,7 +151,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     runContinuation: runContinuation
                 )
 
-            case let .pick(choices):
+            case let .pick(choices, _):
                 return try handlePick(
                     choices,
                     inputValue: inputValue,

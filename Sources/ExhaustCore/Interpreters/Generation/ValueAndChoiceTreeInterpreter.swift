@@ -153,9 +153,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             // MARK: - Pick
 
-            case let .pick(choices):
+            case let .pick(choices, branches):
                 return try handlePick(
                     choices,
+                    branches: branches,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context
@@ -415,6 +416,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     private static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        branches branchIDs: ClosedRange<UInt64>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GenerationContext
@@ -431,7 +433,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)
         var finalValue: Output?
-        let branchIDs = choices.map(\.id)
         let fingerprint = choices[0].fingerprint
 
         for choice in choices {
