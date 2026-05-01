@@ -199,6 +199,77 @@ struct ExhaustMacroTests {
         )
     }
 
+    // MARK: - Issue.record Rewriting
+
+    @Test("Single Issue.record() routes to void path with detection closure")
+    func issueRecordSingleStatement() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                Issue.record()
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                sourceCode: "Issue.record()",
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                Issue.record()
+            },
+                detection: { value in
+                try __ExhaustRuntime.__detectRequire(false)
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Issue.record alongside #expect rewrites both in detection closure")
+    func issueRecordWithExpect() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                if value < 0 {
+                    Issue.record("negative")
+                }
+                #expect(value > 0)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                sourceCode: "if value < 0 {\\n    Issue.record(\\\"negative\\\")\\n}\\n#expect(value > 0)",
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                if value < 0 {
+                    Issue.record("negative")
+                }
+                #expect(value > 0)
+            },
+                detection: { value in
+                if value < 0 {
+                    try __ExhaustRuntime.__detectRequire(false)
+                }
+                try __ExhaustRuntime.__detectRequire(value > 0)
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
     @Test("Missing property produces error")
     func missingProperty() {
         assertMacroExpansion(

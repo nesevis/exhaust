@@ -47,6 +47,7 @@ public struct ExhaustTestMacro: ExpressionMacro {
 /// - Multi-statement closures with no `return <value>`.
 /// - Single statements that are control flow (`if`, `guard`, `for`, `while`, `do`, `switch`).
 /// - Single statements that are `#expect` or `#require` macro invocations.
+/// - Single statements that are `Issue.record(...)` calls.
 ///
 /// Returns `false` (Bool path) when the closure looks like a predicate:
 /// - Single-expression closures (implicit return of a value).
@@ -83,6 +84,11 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
         if name == "expect" || name == "require" {
             return true
         }
+    }
+
+    // Issue.record(...)
+    if let call = item.as(FunctionCallExprSyntax.self), isIssueRecordCall(call) {
+        return true
     }
 
     // Single expression that returns a value — Bool path.
@@ -139,15 +145,41 @@ private func containsReturnWithValueRecursive(_ node: Syntax) -> Bool {
     return false
 }
 
+// MARK: - Issue.record Detection
+
+/// Returns `true` when the call expression is `Issue.record(...)` or `Testing.Issue.record(...)`.
+private func isIssueRecordCall(_ node: FunctionCallExprSyntax) -> Bool {
+    guard let memberAccess = node.calledExpression.as(MemberAccessExprSyntax.self),
+          memberAccess.declName.baseName.text == "record"
+    else { return false }
+
+    if let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
+       base.baseName.text == "Issue"
+    {
+        return true
+    }
+
+    if let base = memberAccess.base?.as(MemberAccessExprSyntax.self),
+       base.declName.baseName.text == "Issue",
+       let outerBase = base.base?.as(DeclReferenceExprSyntax.self),
+       outerBase.baseName.text == "Testing"
+    {
+        return true
+    }
+
+    return false
+}
+
 // MARK: - Detection Closure Rewriting
 
-/// Rewrites `#expect` and `#require` calls in a closure body to use `__ExhaustRuntime.__detectRequire`.
+/// Rewrites `#expect`, `#require`, and `Issue.record` calls in a closure body to use `__ExhaustRuntime.__detectRequire`.
 ///
-/// This replaces Swift Testing assertion macros with plain throwing function calls that don't call `Issue.record()`, producing no test output during reduction. Both boolean checks and optional unwraps are handled:
+/// This replaces Swift Testing assertion macros and `Issue.record` calls with plain throwing function calls that don't call `Issue.record()`, producing no test output during reduction. Boolean checks, optional unwraps, and unconditional issue recording are handled:
 ///
 /// - `#expect(condition)` → `try __ExhaustRuntime.__detectRequire(condition)`
 /// - `try #require(condition)` → `try __ExhaustRuntime.__detectRequire(condition)`
 /// - `let x = try #require(optional)` → `let x = try __ExhaustRuntime.__detectRequire(optional)`
+/// - `Issue.record(...)` → `try __ExhaustRuntime.__detectRequire(false)`
 ///
 /// Does not recurse into nested closures.
 func rewriteExpectToRequire(_ closure: ClosureExprSyntax) -> ClosureExprSyntax {
@@ -210,7 +242,7 @@ final class SourceLocationRewriter: SyntaxRewriter {
     }
 }
 
-/// Replaces `#expect` and `#require` macro expansions with `__ExhaustRuntime.__detectRequire` calls.
+/// Replaces `#expect`, `#require`, and `Issue.record` calls with `__ExhaustRuntime.__detectRequire` calls.
 /// Skips nested closures (depth > 0) since their assertions are their own.
 private final class DetectionRewriter: SyntaxRewriter {
     private var closureDepth = 0
@@ -223,6 +255,29 @@ private final class DetectionRewriter: SyntaxRewriter {
             return ExprSyntax(node)
         }
         return super.visit(node)
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
+        guard isIssueRecordCall(node) else {
+            return super.visit(node)
+        }
+        let call = FunctionCallExprSyntax(
+            leadingTrivia: node.leadingTrivia,
+            calledExpression: MemberAccessExprSyntax(
+                base: DeclReferenceExprSyntax(baseName: .identifier("__ExhaustRuntime")),
+                period: .periodToken(),
+                name: .identifier("__detectRequire")
+            ),
+            leftParen: .leftParenToken(),
+            arguments: LabeledExprListSyntax([
+                LabeledExprSyntax(expression: ExprSyntax(BooleanLiteralExprSyntax(literal: .keyword(.false)))),
+            ]),
+            rightParen: .rightParenToken()
+        )
+        return ExprSyntax(TryExprSyntax(
+            tryKeyword: .keyword(.try, leadingTrivia: node.leadingTrivia, trailingTrivia: .space),
+            expression: ExprSyntax(call.with(\.leadingTrivia, []))
+        ))
     }
 
     override func visit(_ node: MacroExpansionExprSyntax) -> ExprSyntax {
