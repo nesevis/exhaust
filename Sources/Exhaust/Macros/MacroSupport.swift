@@ -120,7 +120,15 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 case .visualize:
                     visualize = true
                 case let .onReport(closure):
-                    onReportClosure = closure
+                    if let existing = onReportClosure {
+                        let chained = existing
+                        onReportClosure = { report in
+                            chained(report)
+                            closure(report)
+                        }
+                    } else {
+                        onReportClosure = closure
+                    }
                 case .collectOpenPBTStats:
                     collectOpenPBTStats = true
                 case let .logging(level, format):
