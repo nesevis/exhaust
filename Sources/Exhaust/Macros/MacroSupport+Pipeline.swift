@@ -318,7 +318,8 @@ package extension __ExhaustRuntime {
                     iteration: iteration,
                     phaseBudget: phaseBudget,
                     blueprint: reducedSequence.shortString,
-                    propertyInvocations: propertyInvocationCount
+                    propertyInvocations: propertyInvocationCount,
+                    reducedSequence: reducedSequence
                 )
                 failure.replayHint = replayHint
                 let rendered = failure.render(format: context.logFormat)

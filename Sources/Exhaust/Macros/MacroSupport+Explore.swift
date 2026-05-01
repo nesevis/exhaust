@@ -113,7 +113,8 @@ public extension __ExhaustRuntime {
                     seed: result.seed,
                     propertyInvocations: result.propertyInvocations,
                     totalBudget: directions.count * budget.maxAttemptsPerDirection,
-                    matchedDirections: matchedDirections
+                    matchedDirections: matchedDirections,
+                    reducedSequence: result.reducedSequence
                 )
                 let rendered = failure.render()
                 if suppressIssueReporting == false {

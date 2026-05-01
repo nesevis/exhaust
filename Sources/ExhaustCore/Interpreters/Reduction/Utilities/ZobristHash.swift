@@ -61,13 +61,13 @@ package enum ZobristHash {
             v.choice.bitPattern64 ^ (tagBits(v.choice.tag) << 48)
         case let .reduced(v):
             v.choice.bitPattern64 ^ (tagBits(v.choice.tag) << 48) ^ 0xFF00_FF00_FF00_FF00
-        case .sequence(true, isLengthExplicit: true):
+        case .sequence(true, validRange: _, isLengthExplicit: true):
             1
-        case .sequence(true, isLengthExplicit: false):
+        case .sequence(true, validRange: _, isLengthExplicit: false):
             2
-        case .sequence(false, isLengthExplicit: true):
+        case .sequence(false, validRange: _, isLengthExplicit: true):
             3
-        case .sequence(false, isLengthExplicit: false):
+        case .sequence(false, validRange: _, isLengthExplicit: false):
             4
         case .group(true):
             5

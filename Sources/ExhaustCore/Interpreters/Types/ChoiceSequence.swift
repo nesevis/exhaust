@@ -53,7 +53,7 @@ package extension ChoiceSequence {
         case .getSize:
             break
         case let .sequence(_, elements, meta):
-            output.append(.sequence(true, isLengthExplicit: meta.isRangeExplicit))
+            output.append(.sequence(true, validRange: meta.validRange, isLengthExplicit: meta.isRangeExplicit))
             // while-loop: avoiding IteratorProtocol overhead in debug builds.
             var eIdx = 0
             while eIdx < elements.count {
@@ -132,9 +132,9 @@ package extension ChoiceSequence {
         var bindCount = 0
         for element in sequence {
             switch element {
-            case .sequence(true, isLengthExplicit: _):
+            case .sequence(true, validRange: _, isLengthExplicit: _):
                 sequenceCount += 1
-            case .sequence(false, isLengthExplicit: _):
+            case .sequence(false, validRange: _, isLengthExplicit: _):
                 sequenceCount -= 1
             case .group(true):
                 groupCount += 1

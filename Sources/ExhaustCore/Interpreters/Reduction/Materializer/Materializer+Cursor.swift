@@ -144,7 +144,7 @@ extension Materializer {
                 exhausted = true
                 return nil
             }
-            guard case let .sequence(true, isLengthExplicit: isExplicit) = entries[position] else {
+            guard case let .sequence(true, validRange: _, isLengthExplicit: isExplicit) = entries[position] else {
                 exhausted = true
                 return nil
             }
@@ -161,7 +161,7 @@ extension Materializer {
             guard exhausted == false else { return }
             skipGroups()
             guard position < effectiveEnd else { return }
-            if case .sequence(false, _) = entries[position] {
+            if case .sequence(false, _, _) = entries[position] {
                 position &+= 1
             }
         }
@@ -173,12 +173,12 @@ extension Materializer {
 
             while pos < entries.count {
                 switch entries[pos] {
-                case .sequence(false, _) where depth == 0:
+                case .sequence(false, _, _) where depth == 0:
                     return count
-                case .group(true), .bind(true), .sequence(true, _):
+                case .group(true), .bind(true), .sequence(true, _, _):
                     if depth == 0 { count &+= 1 }
                     depth &+= 1
-                case .group(false), .bind(false), .sequence(false, _):
+                case .group(false), .bind(false), .sequence(false, _, _):
                     depth -= 1
                 case .value, .reduced, .just:
                     if depth == 0 { count &+= 1 }

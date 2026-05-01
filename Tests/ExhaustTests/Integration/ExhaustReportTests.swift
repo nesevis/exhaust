@@ -75,4 +75,65 @@ struct ExhaustReportTests {
         #expect(report.coverageMilliseconds >= 0)
         #expect(report.generationMilliseconds >= 0)
     }
+
+    // MARK: - onReport fires for all closure shapes
+
+    @Test("Report fires for sync Void/#expect closure (failing)")
+    func reportOnSyncExpectFailing() throws {
+        var capturedReport: ExhaustReport?
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 1000)),
+            .onReport { capturedReport = $0 },
+            .suppress(.all)
+        ) { value in
+            #expect(value < 50)
+        }
+        #expect(result != nil)
+        let report = try #require(capturedReport)
+        #expect(report.propertyInvocations > 0)
+    }
+
+    @Test("Report fires for sync Void/#expect closure (passing)")
+    func reportOnSyncExpectPassing() throws {
+        var capturedReport: ExhaustReport?
+        #exhaust(
+            #gen(.int(in: 0 ... 10)),
+            .onReport { capturedReport = $0 },
+            .suppress(.all)
+        ) { value in
+            #expect(value >= 0)
+        }
+        let report = try #require(capturedReport)
+        #expect(report.propertyInvocations > 0)
+    }
+
+    @Test("Report fires for async Bool closure (failing)")
+    func reportOnAsyncBoolFailing() async throws {
+        var capturedReport: ExhaustReport?
+        let result = await #exhaust(
+            #gen(.int(in: 0 ... 1000)),
+            .onReport { capturedReport = $0 },
+            .suppress(.all)
+        ) { value async in
+            value < 50
+        }
+        #expect(result != nil)
+        let report = try #require(capturedReport)
+        #expect(report.propertyInvocations > 0)
+    }
+
+    @Test("Report fires for async Void/#expect closure (failing)")
+    func reportOnAsyncExpectFailing() async throws {
+        var capturedReport: ExhaustReport?
+        let result = await #exhaust(
+            #gen(.int(in: 0 ... 1000)),
+            .onReport { capturedReport = $0 },
+            .suppress(.all)
+        ) { value async in
+            #expect(value < 50)
+        }
+        #expect(result != nil)
+        let report = try #require(capturedReport)
+        #expect(report.propertyInvocations > 0)
+    }
 }

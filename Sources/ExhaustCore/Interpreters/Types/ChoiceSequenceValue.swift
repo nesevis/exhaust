@@ -14,7 +14,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`--`false` range are logically grouped.
     case group(Bool)
     /// The elements within the `true`--`false` range are elements of a sequence.
-    case sequence(Bool, isLengthExplicit: Bool = false)
+    case sequence(Bool, validRange: ClosedRange<UInt64>? = nil, isLengthExplicit: Bool = false)
     /// A marker for a branching choice. Stores the selected branch identifier and the valid branch identifiers for the pick site. This marker has no explicit closing marker.
     case branch(Branch)
     /// An individual numeric value.
@@ -46,11 +46,11 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
         case (.group(false), .group(true)),
-             (.sequence(false, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)),
+             (.sequence(false, validRange: _, isLengthExplicit: _), .sequence(true, validRange: _, isLengthExplicit: _)),
              (.bind(false), .bind(true)):
             .lt
         case (.group(true), .group(false)),
-             (.sequence(true, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)),
+             (.sequence(true, validRange: _, isLengthExplicit: _), .sequence(false, validRange: _, isLengthExplicit: _)),
              (.bind(true), .bind(false)):
             .gt
         case (.just, .value), (.just, .reduced):
@@ -80,9 +80,9 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return "{"
         case .bind(false):
             return "}"
-        case .sequence(true, isLengthExplicit: _):
+        case .sequence(true, validRange: _, isLengthExplicit: _):
             return "["
-        case .sequence(false, isLengthExplicit: _):
+        case .sequence(false, validRange: _, isLengthExplicit: _):
             return "]"
         case .value:
             return "V"

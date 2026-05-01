@@ -29,7 +29,6 @@ struct BinaryHeapShrinkingChallenge {
                 boundGen,
                 .suppress(.issueReporting),
                 .replay(1591),
-                .logging(.debug),
                 .onReport { report = $0 },
                 property: BinaryHeapFixture.property
             )
