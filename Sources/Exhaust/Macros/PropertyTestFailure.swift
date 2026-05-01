@@ -12,6 +12,7 @@ struct PropertyTestFailure<Output> {
     /// The ``ChoiceSequence`` short-string representation.
     let blueprint: String?
     let propertyInvocations: Int?
+    var reducedSequence: ChoiceSequence? = nil
     var replayHint: String?
     /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
     var transparent: Bool = false
@@ -39,6 +40,16 @@ struct PropertyTestFailure<Output> {
             lines.append("Property failed (iteration \(iteration)/\(phaseBudget), seed \(encodedSeed))")
         } else {
             lines.append("Property failed (iteration \(iteration)/\(phaseBudget))")
+        }
+
+        if let original {
+            if let summary = summarizeReduction(original: original, reduced: counterexample, reducedSequence: reducedSequence) {
+                lines.append("")
+                lines.append("Reduction summary:")
+                for line in summary.split(separator: "\n", omittingEmptySubsequences: false) {
+                    lines.append("  \(line)")
+                }
+            }
         }
 
         lines.append("")

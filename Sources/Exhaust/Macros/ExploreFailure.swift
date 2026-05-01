@@ -8,6 +8,7 @@ struct ExploreFailure<Output> {
     let propertyInvocations: Int
     let totalBudget: Int
     let matchedDirections: [(index: Int, name: String)]
+    var reducedSequence: ChoiceSequence? = nil
 
     func render() -> String {
         var lines: [String] = []
@@ -19,6 +20,16 @@ struct ExploreFailure<Output> {
             let names = matchedDirections.map { "\"\($0.name)\"" }.joined(separator: ", ")
             lines.append("")
             lines.append("Directions: \(names)")
+        }
+
+        if let original {
+            if let summary = summarizeReduction(original: original, reduced: counterexample, reducedSequence: reducedSequence) {
+                lines.append("")
+                lines.append("Reduction summary:")
+                for line in summary.split(separator: "\n", omittingEmptySubsequences: false) {
+                    lines.append("  \(line)")
+                }
+            }
         }
 
         lines.append("")
