@@ -119,6 +119,24 @@ public extension ReflectiveGenerator {
         let bottom = resolveSimplest(simplest, in: characterSet)
         return stringGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom), length: length, scaling: scaling)
     }
+
+    /// Generates a random string whose characters are drawn from the given ``CharacterSet``.
+    ///
+    /// ```swift
+    /// let gen = #gen(.string(from: .letters, length: 1...10))
+    /// ```
+    ///
+    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
+    static func string(
+        from characterSet: CharacterSet,
+        simplest: Unicode.Scalar? = nil,
+        length: ClosedRange<Int>,
+        scaling: SizeScaling<UInt64> = .linear
+    ) -> ReflectiveGenerator<String> {
+        precondition(length.lowerBound >= 0, "Length must be non-negative")
+        let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
+        return string(from: characterSet, simplest: simplest, length: uint64Range, scaling: scaling)
+    }
 }
 
 // MARK: - Simplest Character Resolution

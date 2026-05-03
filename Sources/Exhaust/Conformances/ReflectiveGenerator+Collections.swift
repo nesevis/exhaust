@@ -64,6 +64,24 @@ public extension ReflectiveGenerator {
         Gen.arrayOf(gen, exactly: length)
     }
 
+    /// Creates a generator that produces arrays of an exact fixed length.
+    ///
+    /// ```swift
+    /// let gen = #gen(.array(.int(in: 0...9), length: 3))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - gen: Generator for each array element.
+    ///   - length: The exact number of elements in each generated array.
+    /// - Returns: A generator producing arrays of the specified length.
+    static func array<Element>(
+        _ gen: ReflectiveGenerator<Element>,
+        length: Int
+    ) -> ReflectiveGenerator<[Element]> where Value == [Element] {
+        precondition(length >= 0, "Length must be non-negative")
+        return array(gen, length: UInt64(length))
+    }
+
     /// Creates a generator that produces sets of random elements with size-scaled count.
     ///
     /// Elements are deduplicated by hash, so the generated set may be smaller than the requested count if the element generator produces duplicates.
@@ -116,6 +134,24 @@ public extension ReflectiveGenerator {
         count: UInt64
     ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
         Gen.setOf(gen, exactly: count)
+    }
+
+    /// Creates a generator that produces sets of an exact fixed count.
+    ///
+    /// ```swift
+    /// let gen = #gen(.set(.int(in: 0...100), count: 3))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - gen: Generator for each set element.
+    ///   - count: The exact number of elements in each generated set.
+    /// - Returns: A generator producing sets of the specified size.
+    static func set<Element: Hashable>(
+        _ gen: ReflectiveGenerator<Element>,
+        count: Int
+    ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
+        precondition(count >= 0, "Count must be non-negative")
+        return set(gen, count: UInt64(count))
     }
 
     /// Creates a generator that produces dictionaries from key and value generators.
@@ -215,6 +251,19 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.arrayOf(self, exactly: length)
     }
 
+    /// Wraps this element generator to produce arrays of an exact fixed length.
+    ///
+    /// ```swift
+    /// let pair = #gen(.bool()).array(length: 2)
+    /// ```
+    ///
+    /// - Parameter length: The exact number of elements in each generated array.
+    /// - Returns: A generator producing arrays of the specified length.
+    func array(length: Int) -> ReflectiveGenerator<[Value]> {
+        precondition(length >= 0, "Length must be non-negative")
+        return array(length: UInt64(length))
+    }
+
     /// Wraps this element generator to produce sets with size-scaled count.
     ///
     /// ```swift
@@ -255,6 +304,19 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator producing sets of the specified size.
     func set(count: UInt64) -> ReflectiveGenerator<Set<Value>> where Value: Hashable {
         Gen.setOf(self, exactly: count)
+    }
+
+    /// Wraps this element generator to produce sets of an exact fixed count.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 0...100)).set(count: 3)
+    /// ```
+    ///
+    /// - Parameter count: The exact number of elements in each generated set.
+    /// - Returns: A generator producing sets of the specified size.
+    func set(count: Int) -> ReflectiveGenerator<Set<Value>> where Value: Hashable {
+        precondition(count >= 0, "Count must be non-negative")
+        return set(count: UInt64(count))
     }
 
     /// Wraps this collection generator to produce randomly shuffled arrays.

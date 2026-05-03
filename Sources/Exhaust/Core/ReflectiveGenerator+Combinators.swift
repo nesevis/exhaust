@@ -168,6 +168,16 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.liftF(.resize(newSize: newSize, next: erase()))
     }
 
+    /// Runs this generator with a temporarily modified size parameter.
+    ///
+    /// ```swift
+    /// let small = #gen(.int().array()).resize(10)
+    /// ```
+    func resize(_ newSize: Int) -> ReflectiveGenerator<Value> {
+        precondition(newSize >= 0, "Size must be non-negative")
+        return resize(UInt64(newSize))
+    }
+
     /// Creates a filtered generator that only produces values satisfying a predicate.
     ///
     /// The filter combinator supports several strategies for satisfying the predicate, selectable via the `type` parameter:

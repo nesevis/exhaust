@@ -41,6 +41,14 @@ import ExhaustCore
                 scaling: (scaling ?? Float16.defaultScaling).erased
             )
         }
+
+        /// Generates arbitrary `Float16` values within the given `Double` range.
+        static func float16(
+            in range: ClosedRange<Double>,
+            scaling: SizeScaling<Float16>? = nil
+        ) -> ReflectiveGenerator<Float16> {
+            float16(in: Float16(range.lowerBound) ... Float16(range.upperBound), scaling: scaling)
+        }
     }
 #endif
 

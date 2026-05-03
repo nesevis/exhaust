@@ -69,4 +69,19 @@ public extension ReflectiveGenerator {
             backward: { Array($0) }
         )
     }
+
+    /// Generates arbitrary `Data` values of an exact fixed length.
+    ///
+    /// ```swift
+    /// let gen = #gen(.data(length: 32))
+    /// ```
+    ///
+    /// - Parameter length: The exact number of bytes in each generated `Data`.
+    /// - Returns: A generator producing `Data` of the specified length.
+    static func data(
+        length: Int
+    ) -> ReflectiveGenerator<Data> {
+        precondition(length >= 0, "Length must be non-negative")
+        return data(length: UInt64(length))
+    }
 }
