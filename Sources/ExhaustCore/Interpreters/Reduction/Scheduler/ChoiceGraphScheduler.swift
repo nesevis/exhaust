@@ -334,6 +334,7 @@ enum ChoiceGraphScheduler {
                     encoder = Self.makeBoundValueComposition(
                         fibreScope: fibreScope,
                         scope: scope,
+                        graph: graph,
                         gen: erasedGen,
                         upstreamBudget: decayedBudget
                     )

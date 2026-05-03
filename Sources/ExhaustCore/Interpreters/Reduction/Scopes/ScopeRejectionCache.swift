@@ -20,7 +20,7 @@ struct ScopeRejectionCache {
     mutating func recordRejection(
         operation: GraphOperation,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) {
         // Structural operations (replacement, deletion, migration) use the coarse (value-independent) cache, cleared per-cycle. A structural operation rejected with old leaf values may succeed after value search changes the surrounding tree — the property outcome depends on the whole tree, not just the targeted positions. Value-based operations (minimization, exchange) use the fine-grained cache.
         switch operation {
@@ -39,7 +39,7 @@ struct ScopeRejectionCache {
     func isRejected(
         operation: GraphOperation,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> Bool {
         switch operation {
         case .replace, .remove, .migrate:
@@ -73,7 +73,7 @@ struct ScopeRejectionCache {
     private func scopeHash(
         operation: GraphOperation,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> UInt64? {
         guard let nodeIDs = operation.affectedNodeIDs(in: graph) else {
             return nil
@@ -101,7 +101,7 @@ struct ScopeRejectionCache {
     /// Value-independent hash for structural operations. Uses node IDs instead of sequence values, so a deletion targeting the same nodes produces the same hash regardless of leaf values.
     private func coarseScopeHash(
         operation: GraphOperation,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> UInt64? {
         guard let nodeIDs = operation.affectedNodeIDs(in: graph) else {
             return nil

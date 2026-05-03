@@ -33,7 +33,7 @@ protocol ScopeSource {
 /// Creates one source per search space. The scheduler merges them by ``ScopeSource/peekYield``.
 enum ScopeSourceBuilder {
     /// Builds all scope sources from the current graph.
-    static func buildSources(from graph: ChoiceGraph) -> [any ScopeSource] {
+    static func buildSources(from graph: some ReadOnlyChoiceGraph) -> [any ScopeSource] {
         var sources: [any ScopeSource] = []
 
         // Batched cross-sequence removal — most drastic structural reduction.

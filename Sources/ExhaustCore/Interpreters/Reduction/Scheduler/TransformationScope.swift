@@ -349,10 +349,8 @@ struct TransformationScope {
     /// The generator's compositional structure. Required for path-changing operations (replacement with inactive donor) where the encoder must edit the tree and flatten. Also used by permutation for tree-based child swapping.
     let tree: ChoiceTree
 
-    /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction. The encoder reads from the graph but never mutates it.
-    ///
-    /// - Note: Temporary — a future refinement will pre-resolve metadata into scope types, making the graph unnecessary.
-    let graph: ChoiceGraph
+    /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction. Typed as ``ReadOnlyChoiceGraph`` to enforce at compile time that encoders read from the graph but never mutate it.
+    let graph: any ReadOnlyChoiceGraph
 
     /// Warm-start convergence records for leaves in this scope, keyed by graph **nodeID**.
     ///

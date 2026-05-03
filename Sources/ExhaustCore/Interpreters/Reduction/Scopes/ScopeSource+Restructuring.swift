@@ -14,7 +14,7 @@ struct ReplacementSource: ScopeSource {
     private var candidates: [(scope: ReplacementScope, yield: TransformationYield)]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(scope: ReplacementScope, yield: TransformationYield)] = []
 
         for scope in ReplacementScopeQuery.build(graph: graph) {
@@ -86,7 +86,7 @@ struct PermutationSource: ScopeSource {
     private var candidates: [(parentNodeID: Int, group: [Int])]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(parentNodeID: Int, group: [Int])] = []
         for scope in PermutationScopeQuery.build(graph: graph) {
             guard case let .siblingPermutation(permScope) = scope else { continue }

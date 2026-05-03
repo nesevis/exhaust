@@ -70,7 +70,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
         startRedistribution(scope: redistScope, graph: graph)
     }
 
-    mutating func refreshScope(graph: ChoiceGraph, sequence newSequence: ChoiceSequence) {
+    mutating func refreshScope(graph: some ReadOnlyChoiceGraph, sequence newSequence: ChoiceSequence) {
         valueState.reset(sequence: newSequence)
         mode = .idle
 

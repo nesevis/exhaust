@@ -9,7 +9,7 @@ extension GraphValueEncoder {
     mutating func startFloat(
         scope: FloatMinimizationScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         preservingConvergence: [Int: ConvergedOrigin] = [:]
     ) {
         var targets: [FloatTarget] = []

@@ -15,7 +15,7 @@ enum TransformationEnumerator {
     ///
     /// - Parameter graph: The current choice graph.
     /// - Returns: Sorted array of graph transformations, ready for the scheduler's priority queue.
-    static func enumerate(from graph: ChoiceGraph) -> [GraphTransformation] {
+    static func enumerate(from graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
         let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
         var transformations: [GraphTransformation] = []
 
@@ -38,7 +38,7 @@ enum TransformationEnumerator {
     // MARK: - Removal
 
     private static func removalTransformations(
-        from graph: ChoiceGraph
+        from graph: some ReadOnlyChoiceGraph
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
@@ -112,7 +112,7 @@ enum TransformationEnumerator {
     // MARK: - Replacement
 
     private static func replacementTransformations(
-        from graph: ChoiceGraph
+        from graph: some ReadOnlyChoiceGraph
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
 
@@ -184,7 +184,7 @@ enum TransformationEnumerator {
     // MARK: - Minimization
 
     private static func minimizationTransformations(
-        from graph: ChoiceGraph,
+        from graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
@@ -275,7 +275,7 @@ enum TransformationEnumerator {
     // MARK: - Exchange
 
     private static func exchangeTransformations(
-        from graph: ChoiceGraph,
+        from graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [GraphTransformation] {
         var result: [GraphTransformation] = []
@@ -365,7 +365,7 @@ enum TransformationEnumerator {
     // MARK: - Permutation
 
     private static func permutationTransformations(
-        from graph: ChoiceGraph
+        from graph: some ReadOnlyChoiceGraph
     ) -> [GraphTransformation] {
         PermutationScopeQuery.build(graph: graph).map { scope in
             guard case let .siblingPermutation(permScope) = scope else {
@@ -412,7 +412,7 @@ enum TransformationEnumerator {
     /// Computes value yield for a leaf.
     private static func computeValueYield(
         leafNodeID: Int,
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> Int {
         guard let bindNodeID = innerDescendantToBind[leafNodeID] else { return 0 }
@@ -427,7 +427,7 @@ enum TransformationEnumerator {
     private static func computeEnablingYield(
         sourceNodeID: Int,
         antichainSet: Set<Int>,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> Int {
         var yield = 0
         var current = sourceNodeID

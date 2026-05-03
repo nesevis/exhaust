@@ -16,7 +16,7 @@ enum MinimizationScopeQuery {
     ///   - innerDescendantToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)``. Pass a shared instance when also building exchange scopes so the same dictionary is reused across both families.
     /// - Returns: All minimization scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
     static func build(
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [MinimizationScope] {
         var scopes: [MinimizationScope] = []
@@ -132,7 +132,7 @@ enum MinimizationScopeQuery {
     }
 
     /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building exchange scopes so the index is computed once and shared.
-    static func build(graph: ChoiceGraph) -> [MinimizationScope] {
+    static func build(graph: some ReadOnlyChoiceGraph) -> [MinimizationScope] {
         build(
             graph: graph,
             innerDescendantToBind: ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
@@ -146,7 +146,7 @@ enum MinimizationScopeQuery {
     /// Bind-inner leaves are sorted first in the integer scope because their mutations have the largest downstream effect — changing the inner value rebuilds the entire bound subtree. Independent of ``BindMetadata/isStructurallyConstant``: a "structurally constant" bind in the no-nested-binds-or-picks sense (for example, Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`) can still carry domain-dependent values whose ranges and lengths shift with the inner, so changing the inner is still a high-yield mutation.
     private static func computeValueYield(
         leafNodeID: Int,
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> Int {
         guard let bindNodeID = innerDescendantToBind[leafNodeID] else { return 0 }
@@ -159,7 +159,7 @@ enum MinimizationScopeQuery {
     /// Collects all leaf node IDs (chooseBits with non-nil position range) within the subtree rooted at the given node.
     private static func collectDescendantLeaves(
         from rootNodeID: Int,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> [Int] {
         var result: [Int] = []
         var stack = [rootNodeID]
@@ -174,7 +174,7 @@ enum MinimizationScopeQuery {
     }
 
     /// Finds the parent bind node of a given node, or nil.
-    private static func findParentBind(of nodeID: Int, graph: ChoiceGraph) -> Int? {
+    private static func findParentBind(of nodeID: Int, graph: some ReadOnlyChoiceGraph) -> Int? {
         var current = nodeID
         while let parentID = graph.nodes[current].parent {
             if case .bind = graph.nodes[parentID].kind {

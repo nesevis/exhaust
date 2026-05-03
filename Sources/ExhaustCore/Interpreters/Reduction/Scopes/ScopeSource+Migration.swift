@@ -12,7 +12,7 @@ struct MigrationSource: ScopeSource {
     private var candidates: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)] = []
 
         // Find all sequence node pairs where source is earlier than receiver.

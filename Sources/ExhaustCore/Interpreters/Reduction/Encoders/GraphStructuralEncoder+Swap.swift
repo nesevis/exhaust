@@ -12,7 +12,7 @@ extension GraphSwapEncoder {
     mutating func buildInitialProbe(
         scope: PermutationScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> EncoderProbe? {
         guard case let .siblingPermutation(permutationScope) = scope else { return nil }
         guard let group = permutationScope.swappableGroups.first,

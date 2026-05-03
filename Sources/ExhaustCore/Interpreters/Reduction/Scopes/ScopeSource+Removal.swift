@@ -19,7 +19,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
     private var lastEmittedRange: (start: Int, end: Int)?
     private var exhausted: Bool
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         // Group antichain members by parent sequence.
         var parentToElements: [Int: [Int]] = [:]
         for nodeID in graph.deletionAntichain {
@@ -171,7 +171,7 @@ struct SequenceEmptyingSource: ScopeSource {
     private var candidates: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)] = []
         for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
             // Only consider single-target (per-parent) scopes for emptying.
@@ -249,7 +249,7 @@ struct BatchRemovalSource: ScopeSource {
     private var triedTail: Bool
     private var exhausted: Bool
 
-    init(sequenceNodeID: Int, graph: ChoiceGraph) {
+    init(sequenceNodeID: Int, graph: some ReadOnlyChoiceGraph) {
         self.sequenceNodeID = sequenceNodeID
         var elementList: [(nodeID: Int, positionRange: ClosedRange<Int>)] = []
         let node = graph.nodes[sequenceNodeID]
@@ -370,7 +370,7 @@ struct PerElementRemovalSource: ScopeSource {
     private var elements: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
         for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
             // Per-element source only handles single-target scopes.
@@ -453,7 +453,7 @@ struct AlignedRemovalSource: ScopeSource {
     private var scopes: [CoveringAlignedRemovalScope]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         scopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
             .sorted { scopeA, scopeB in
                 scopeA.maxElementYield > scopeB.maxElementYield

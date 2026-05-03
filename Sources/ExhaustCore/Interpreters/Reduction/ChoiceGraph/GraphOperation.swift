@@ -51,7 +51,7 @@ enum GraphOperation {
     /// Collects node IDs whose position ranges are affected by this operation. Used by ``ScopeRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
     ///
     /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
-    func affectedNodeIDs(in _: ChoiceGraph) -> [Int]? {
+    func affectedNodeIDs(in _: some ReadOnlyChoiceGraph) -> [Int]? {
         switch self {
         case let .remove(scope):
             switch scope {
@@ -113,7 +113,7 @@ enum TransformationPrecondition {
     ///
     /// - Parameter graph: The current choice graph.
     /// - Returns: Whether the precondition is satisfied.
-    func isSatisfied(in graph: ChoiceGraph) -> Bool {
+    func isSatisfied(in graph: some ReadOnlyChoiceGraph) -> Bool {
         switch self {
         case .unconditional:
             return true
@@ -146,7 +146,7 @@ extension TransformationPrecondition {
     /// Walks dependency edges in reverse from a leaf to verify all bind-inner ancestors have convergence records.
     private static func checkDependencyChain(
         from leafNodeID: Int,
-        in graph: ChoiceGraph
+        in graph: some ReadOnlyChoiceGraph
     ) -> Bool {
         // Find bind nodes where this leaf (or an ancestor) is the inner child.
         // Walk up the containment tree from the leaf, checking each bind-inner ancestor for convergence.
