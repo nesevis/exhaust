@@ -722,4 +722,82 @@ extension GeneratorTuning {
             continuation: continuation
         )
     }
+
+    // MARK: - Prune
+
+    static func tunePrune<Output>(
+        next: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        context: TuningContext,
+        insideSubdividedChooseBits: Bool,
+        predicate: @escaping (Output) -> Bool
+    ) throws -> ReflectiveGenerator<Output> {
+        let composedPredicate: (Any) -> Bool = { innerValue in
+            do {
+                let nextGen = try continuation(innerValue)
+                let output = try ValueInterpreter<Output>.generate(
+                    nextGen,
+                    maxRuns: 1,
+                    using: &context.rng
+                )
+                return output.map(predicate) ?? false
+            } catch {
+                return false
+            }
+        }
+
+        let tunedNext = try tuneRecursive(
+            next,
+            context: context,
+            insideSubdividedChooseBits: insideSubdividedChooseBits,
+            predicate: composedPredicate
+        )
+
+        return .impure(
+            operation: .prune(next: tunedNext),
+            continuation: continuation
+        )
+    }
+
+    // MARK: - Classify
+
+    static func tuneClassify<Output>(
+        subGen: ReflectiveGenerator<Any>,
+        fingerprint: UInt64,
+        classifiers: [(label: String, predicate: (Any) -> Bool)],
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        context: TuningContext,
+        insideSubdividedChooseBits: Bool,
+        predicate: @escaping (Output) -> Bool
+    ) throws -> ReflectiveGenerator<Output> {
+        let composedPredicate: (Any) -> Bool = { innerValue in
+            do {
+                let nextGen = try continuation(innerValue)
+                let output = try ValueInterpreter<Output>.generate(
+                    nextGen,
+                    maxRuns: 1,
+                    using: &context.rng
+                )
+                return output.map(predicate) ?? false
+            } catch {
+                return false
+            }
+        }
+
+        let tunedInner = try tuneRecursive(
+            subGen,
+            context: context,
+            insideSubdividedChooseBits: insideSubdividedChooseBits,
+            predicate: composedPredicate
+        )
+
+        return .impure(
+            operation: .classify(
+                gen: tunedInner,
+                fingerprint: fingerprint,
+                classifiers: classifiers
+            ),
+            continuation: continuation
+        )
+    }
 }
