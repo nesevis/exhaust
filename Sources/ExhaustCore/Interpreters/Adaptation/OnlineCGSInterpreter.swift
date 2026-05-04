@@ -682,13 +682,13 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         isDuplicate = !context.uniqueSeenKeys[
                             fingerprint, default: []
                         ].insert(key).inserted
-                    } else {
-                        // Without a key extractor, try AnyHashable-based dedup
-                        let key = result as? AnyHashable
-                            ?? AnyHashable(ObjectIdentifier(type(of: result)))
+                    } else if let key = result as? AnyHashable {
                         isDuplicate = !context.uniqueSeenKeys[
                             fingerprint, default: []
                         ].insert(key).inserted
+                    } else {
+                        // Non-Hashable types cannot be deduplicated in CGS mode (no choice-sequence tracking). All samples are treated as unique.
+                        isDuplicate = false
                     }
 
                     if !isDuplicate {
