@@ -149,7 +149,8 @@ enum ChoiceGraphScheduler {
                 }
 
                 guard let transformation = sources[sourceIndex].next(lastAccepted: false) else {
-                    sources.remove(at: sourceIndex)
+                    sources.swapAt(sourceIndex, sources.count - 1)
+                    sources.removeLast()
                     continue
                 }
 
