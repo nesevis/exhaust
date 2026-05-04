@@ -320,7 +320,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
 
         switch self {
         case let .choice(value, meta):
-            let displayRange = value.displayRange(meta.validRange!)
+            let displayRange = meta.validRange.map { value.displayRange($0) } ?? ""
             if value.tag.isFloatingPoint {
                 return prefix + connector + "choice(float: \(value.decodedDoubleValue)) \(displayRange)"
             } else if value.tag.isSigned {
