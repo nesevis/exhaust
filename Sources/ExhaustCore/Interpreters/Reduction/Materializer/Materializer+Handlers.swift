@@ -181,13 +181,16 @@ extension Materializer {
             guard let prefixBranch = context.cursor.tryConsumeBranch() else {
                 throw RejectionError()
             }
-            selectedChoice = choices.first(where: { $0.id == prefixBranch.id })
+            let exactIndex = Int(prefixBranch.id)
+            selectedChoice = exactIndex < choices.count ? choices[exactIndex] : nil
 
         case .guided:
             if let prefixBranch = context.cursor.tryConsumeBranch() {
-                selectedChoice = choices.first(where: { $0.id == prefixBranch.id })
+                let guidedIndex = Int(prefixBranch.id)
+                selectedChoice = guidedIndex < choices.count ? choices[guidedIndex] : nil
             } else if let fbBranchId {
-                selectedChoice = choices.first(where: { $0.id == fbBranchId })
+                let fallbackIndex = Int(fbBranchId)
+                selectedChoice = fallbackIndex < choices.count ? choices[fallbackIndex] : nil
             } else {
                 selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng)
             }
@@ -213,12 +216,7 @@ extension Materializer {
         let fingerprint = choices[0].fingerprint
 
         if context.materializePicks {
-            // Pre-compute selected index to avoid per-iteration ID comparison.
-            var selectedIndex = 0
-            while selectedIndex < choices.count {
-                if choices[selectedIndex].id == selectedChoice.id { break }
-                selectedIndex += 1
-            }
+            let selectedIndex = Int(selectedChoice.id)
 
             var choiceIdx = 0
             while choiceIdx < choices.count {
