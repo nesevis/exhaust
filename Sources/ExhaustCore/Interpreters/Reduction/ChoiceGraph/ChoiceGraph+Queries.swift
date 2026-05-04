@@ -123,14 +123,6 @@ package extension ChoiceGraph {
         return antichainIndices.map { candidateIDs[$0] }
     }
 
-    /// All leaf node IDs (chooseBits nodes with non-nil position range).
-    var leafNodes: [Int] {
-        liveNodeIDs.filter { nodeID in
-            guard case .chooseBits = nodes[nodeID].kind else { return false }
-            return true
-        }
-    }
-
     /// Returns the sequence positions of all active `chooseBits` leaf nodes.
     ///
     /// This is the graph's natural definition of leaf positions — every value-producing node with a non-nil position range. This differs from the CDG's `leafPositions`, which partitions the flat sequence around structural node ranges. The graph's model is richer: every leaf has an explicit node with type metadata.

@@ -72,6 +72,9 @@ package final class ChoiceGraph {
     /// Cached live (active) node ID list. Computed on first access, invalidated on structural mutation.
     private var cachedLiveNodeIDs: [Int]?
 
+    /// Cached leaf (chooseBits) node ID list. Computed on first access, invalidated only by structural mutations (``invalidateTopologicalCaches()``). Value-only changes do not add or remove chooseBits nodes, so this cache survives ``invalidateDerivedEdges()``.
+    private var cachedLeafNodes: [Int]?
+
     /// Type-compatibility edges between antichain members with matching types. Computed lazily on first access and cached until invalidated by a structural mutation.
     public var typeCompatibilityEdges: [TypeCompatibilityEdge] {
         if let cached = cachedTypeCompatibilityEdges { return cached }
@@ -104,6 +107,17 @@ package final class ChoiceGraph {
         return computed
     }
 
+    /// All leaf node IDs (chooseBits nodes with non-nil position range). Cached until ``invalidateTopologicalCaches()`` clears it.
+    public var leafNodes: [Int] {
+        if let cached = cachedLeafNodes { return cached }
+        let computed = liveNodeIDs.filter { nodeID in
+            guard case .chooseBits = nodes[nodeID].kind else { return false }
+            return true
+        }
+        cachedLeafNodes = computed
+        return computed
+    }
+
     /// Dependency adjacency list for on-demand reachability queries. Computed lazily from ``dependencyEdges`` and cached until ``invalidateTopologicalCaches()`` clears it.
     var dependencyAdjacency: [[Int]] {
         if let cached = cachedDependencyAdjacency { return cached }
@@ -128,6 +142,7 @@ package final class ChoiceGraph {
         cachedTopologicalOrder = nil
         cachedDependencyAdjacency = nil
         cachedLiveNodeIDs = nil
+        cachedLeafNodes = nil
     }
 
     /// Writes convergence records from an encoder pass onto the corresponding leaf nodes by sequence position.
@@ -217,6 +232,7 @@ package final class ChoiceGraph {
         result.cachedTopologicalOrder = cachedTopologicalOrder
         result.cachedDependencyAdjacency = cachedDependencyAdjacency
         result.cachedLiveNodeIDs = cachedLiveNodeIDs
+        result.cachedLeafNodes = cachedLeafNodes
         return result
     }
 }
