@@ -156,7 +156,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that produces dictionaries from key and value generators.
     ///
-    /// Array length (and thus dictionary size) is size-scaled. Keys are deduplicated by hash — if the key generator produces duplicates, later values overwrite earlier ones.
+    /// Array length (and thus dictionary size) is size-scaled. Keys are deduplicated by hash — if the key generator produces duplicates, the first value is kept.
     ///
     /// ```swift
     /// let gen = #gen(.dictionary(.asciiString(), .int(in: 0...100)))

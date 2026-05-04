@@ -80,33 +80,34 @@ package extension Gen {
 
     /// Creates a generator for dictionaries with random key-value pairs.
     ///
-    /// This combinator generates dictionaries by creating parallel arrays of keys and values, then zipping them together. If duplicate keys are generated, the `uniquingKeysWith` parameter determines which value to keep (currently keeps the first value).
-    ///
-    /// The dictionary size follows the same size-based generation as arrays, ensuring consistent behavior across collection types.
+    /// Generates a key array first, then binds on the key count to generate exactly the right number of values. Duplicate keys keep the first value.
     ///
     /// - Parameters:
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
     /// - Returns: A generator that produces dictionaries with random key-value pairs.
+    /// - Note: Reflection decomposes the dictionary into key/value arrays via ``Dictionary/keys`` and ``Dictionary/values``. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may reduce shrinking quality.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: ReflectiveGenerator<KeyOutput>,
         _ valueGenerator: ReflectiveGenerator<ValueOutput>
     ) -> ReflectiveGenerator<[KeyOutput: ValueOutput]> {
-        let zipped = Gen.zip(
-            // These arrays use `getSize()` under the hood and will be the same length
-            Gen.arrayOf(keyGenerator),
-            Gen.arrayOf(valueGenerator)
+        let pairGen = Gen.arrayOf(keyGenerator)._bound(
+            forward: { keys in
+                Gen.contramap(
+                    { (pair: ([KeyOutput], [ValueOutput])) in pair.1 },
+                    Gen.arrayOf(valueGenerator, exactly: UInt64(keys.count))
+                        ._map { values in (keys, values) }
+                )
+            },
+            backward: { (pair: ([KeyOutput], [ValueOutput])) in pair.0 }
         )
 
         return Gen.contramap(
-            { (dict: [KeyOutput: ValueOutput]) -> ([KeyOutput], [ValueOutput]) in
-                // This will be out of order, but is that ok?
-                (Array(dict.keys), Array(dict.values))
-            },
-            zipped._map { keys, values in
+            { (dict: [KeyOutput: ValueOutput]) in (Array(dict.keys), Array(dict.values)) },
+            pairGen._map { keys, values in
                 Dictionary(
-                    Swift.zip(keys, values).map { ($0.0, $0.1) },
-                    uniquingKeysWith: { key, _ in key }
+                    Swift.zip(keys, values).map { ($0, $1) },
+                    uniquingKeysWith: { first, _ in first }
                 )
             }
         )
