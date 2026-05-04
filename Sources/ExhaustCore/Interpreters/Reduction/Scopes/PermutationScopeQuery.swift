@@ -76,7 +76,7 @@ enum PermutationScopeQuery {
         case .bind:
             return .bind
         case let .pick(metadata):
-            return .pick(branchCount: metadata.branchIDs.count)
+            return .pick(branchCount: Int(metadata.branchCount))
         case .just:
             return .just
         }

@@ -65,7 +65,7 @@ struct ChoiceTreeTests {
         @Test("Branch node returns true")
         func branchReturnsTrue() {
             let branch = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(1),
+                fingerprint: 0, weight: 1, id: 0, branchCount: 2,
                 choice: .just
             )
             #expect(branch.containsPicks)
@@ -74,7 +74,7 @@ struct ChoiceTreeTests {
         @Test("Nested branch in group is found")
         func nestedBranchInGroup() {
             let branch = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(0),
+                fingerprint: 0, weight: 1, id: 0, branchCount: 1,
                 choice: .just
             )
             let group = ChoiceTree.group([.just, branch])
@@ -84,7 +84,7 @@ struct ChoiceTreeTests {
         @Test("Selected wrapping branch is found")
         func selectedBranch() {
             let branch = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(0),
+                fingerprint: 0, weight: 1, id: 0, branchCount: 1,
                 choice: .just
             )
             #expect(ChoiceTree.selected(branch).containsPicks)
@@ -103,7 +103,7 @@ struct ChoiceTreeTests {
         @Test("Resize containing branch returns true")
         func resizeWithBranch() {
             let branch = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(0),
+                fingerprint: 0, weight: 1, id: 0, branchCount: 1,
                 choice: .just
             )
             let resize = ChoiceTree.resize(newSize: 50, choices: [branch])
@@ -124,7 +124,7 @@ struct ChoiceTreeTests {
         @Test("Single branch complexity equals branch count")
         func singleBranch() {
             let branch = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(2),
+                fingerprint: 0, weight: 1, id: 0, branchCount: 3,
                 choice: .just
             )
             // 3 branches * 2^0 = 3
@@ -134,11 +134,11 @@ struct ChoiceTreeTests {
         @Test("Nested branches multiply by depth")
         func nestedBranches() {
             let inner = ChoiceTree.branch(
-                fingerprint: 1, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(1),
+                fingerprint: 1, weight: 1, id: 0, branchCount: 2,
                 choice: .just
             )
             let outer = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(1),
+                fingerprint: 0, weight: 1, id: 0, branchCount: 2,
                 choice: inner
             )
             // outer: 2 * 2^0 = 2, inner: 2 * 2^1 = 4, max = 4
@@ -325,7 +325,7 @@ struct ChoiceTreeTests {
         @Test("Extracts id from branch")
         func extractsFromBranch() {
             let tree = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 42, branchIDs: UInt64(42) ... UInt64(42),
+                fingerprint: 0, weight: 1, id: 42, branchCount: 1,
                 choice: .just
             )
             #expect(tree.branchId == 42)
@@ -334,7 +334,7 @@ struct ChoiceTreeTests {
         @Test("Extracts id from selected branch")
         func extractsFromSelectedBranch() {
             let branch = ChoiceTree.branch(
-                fingerprint: 0, weight: 1, id: 7, branchIDs: UInt64(7) ... UInt64(7),
+                fingerprint: 0, weight: 1, id: 7, branchCount: 1,
                 choice: .just
             )
             #expect(ChoiceTree.selected(branch).branchId == 7)
@@ -355,7 +355,7 @@ private let choiceNode = ChoiceTree.choice(
     ChoiceMetadata(validRange: 0 ... 10)
 )
 private let branchNode = ChoiceTree.branch(
-    fingerprint: 0, weight: 1, id: 1, branchIDs: UInt64(1) ... UInt64(2),
+    fingerprint: 0, weight: 1, id: 1, branchCount: 2,
     choice: .just
 )
 private let justNode = ChoiceTree.just

@@ -95,7 +95,7 @@ extension GraphStructuralEncoder {
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
         replacement.append(.group(true))
-        replacement.append(.branch(.init(id: scope.targetBranchID, validIDs: pickMetadata.branchIDs)))
+        replacement.append(.branch(.init(id: scope.targetBranchID, branchCount: pickMetadata.branchCount)))
         for index in 0 ..< targetContent.count {
             replacement.append(targetContent[index])
         }
@@ -159,12 +159,12 @@ extension GraphStructuralEncoder {
                 elements: elements.map { minimizingLeaves(in: $0) },
                 metadata
             )
-        case let .branch(fingerprint, weight, id, branchIDs, choice):
+        case let .branch(fingerprint, weight, id, branchCount, choice):
             return .branch(
                 fingerprint: fingerprint,
                 weight: weight,
                 id: id,
-                branchIDs: branchIDs,
+                branchCount: branchCount,
                 choice: minimizingLeaves(in: choice)
             )
         case let .group(children, isOpaque):
@@ -193,7 +193,7 @@ extension GraphStructuralEncoder {
     /// Wrapping kind for a depth-0 base case entry during cross-depth expansion.
     private enum LeafWrapping {
         /// Direct recursion (like BinaryHeap): wrap in pick-site markers.
-        case pick(branchID: UInt64, validIDs: ClosedRange<UInt64>, fingerprint: UInt64)
+        case pick(branchID: UInt64, branchCount: UInt64, fingerprint: UInt64)
         /// `Gen.recursive` recursion: wrap in `._bound` bind markers with depth selector = 0.
         case bind(depthSelectorEntry: ChoiceSequenceValue)
     }
@@ -228,9 +228,9 @@ extension GraphStructuralEncoder {
             let absolutePosition = donorRangeStart + index
             if let wrapping = leafExpansions[absolutePosition] {
                 switch wrapping {
-                case let .pick(branchID, validIDs, fingerprint):
+                case let .pick(branchID, branchCount, fingerprint):
                     result.append(.group(true))
-                    result.append(.branch(.init(id: branchID, validIDs: validIDs, fingerprint: fingerprint)))
+                    result.append(.branch(.init(id: branchID, branchCount: branchCount, fingerprint: fingerprint)))
                     result.append(entry)
                     result.append(.group(false))
                 case let .bind(depthSelectorEntry):
@@ -373,9 +373,9 @@ extension GraphStructuralEncoder {
 
         // Direct recursion: use pick wrapping.
         if let leafBranchID = findLeafBranchID(in: pickMetadata) {
-            return .pick(branchID: leafBranchID, validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
+            return .pick(branchID: leafBranchID, branchCount: pickMetadata.branchCount, fingerprint: pickMetadata.fingerprint)
         }
-        return .pick(branchID: pickMetadata.branchIDs.lowerBound, validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
+        return .pick(branchID: 0, branchCount: pickMetadata.branchCount, fingerprint: pickMetadata.fingerprint)
     }
 
     /// Records base case positions and wrapping kinds from an innermost pick using a precomputed mask. When ``mask`` is nil (no non-innermost picks available to derive the mask), all zip children are expanded.
@@ -417,12 +417,12 @@ extension GraphStructuralEncoder {
     /// Finds the branch ID of the first leaf (`.just` or `.choice`) branch in a pick site's elements.
     private static func findLeafBranchID(in metadata: PickMetadata) -> UInt64? {
         for (index, element) in metadata.branchElements.enumerated() {
-            guard index < metadata.branchIDs.count else { break }
+            guard index < Int(metadata.branchCount) else { break }
             let inner = element.isSelected ? element.unwrapped : element
             if case let .branch(_, _, _, _, content) = inner {
                 switch content {
                 case .just, .choice:
-                    return metadata.branchIDs.lowerBound + UInt64(index)
+                    return UInt64(index)
                 default:
                     continue
                 }

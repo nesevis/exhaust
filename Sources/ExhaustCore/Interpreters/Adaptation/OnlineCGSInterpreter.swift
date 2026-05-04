@@ -314,7 +314,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
                         let subranges = (min ... max).split(into: subrangeCount)
 
-                        let branchRange = 0 ... UInt64(subranges.count - 1)
+                        let branchCount = UInt64(subranges.count)
 
                         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                         subrangeChoices.reserveCapacity(subranges.count)
@@ -339,7 +339,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         }
 
                         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                            operation: .pick(choices: subrangeChoices, branches: branchRange),
+                            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
                             continuation: continuation
                         )
 

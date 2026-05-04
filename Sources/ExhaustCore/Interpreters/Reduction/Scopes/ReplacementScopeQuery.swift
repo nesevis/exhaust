@@ -56,13 +56,13 @@ enum ReplacementScopeQuery {
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case let .pick(metadata) = node.kind else { continue }
-            guard metadata.branchIDs.count >= 2 else { continue }
-            guard node.children.count == metadata.branchIDs.count else { continue }
+            guard metadata.branchCount >= 2 else { continue }
+            guard node.children.count == Int(metadata.branchCount) else { continue }
 
             let selectedLeafCount = leafCount(in: metadata.branchElements[metadata.selectedChildIndex])
 
-            for index in 0 ..< metadata.branchIDs.count {
-                let branchID = metadata.branchIDs.lowerBound + UInt64(index)
+            for index in 0 ..< Int(metadata.branchCount) {
+                let branchID = UInt64(index)
                 guard branchID != metadata.selectedID else { continue }
 
                 // Leaf-count gate: skip branches with more leaves than the current selection.

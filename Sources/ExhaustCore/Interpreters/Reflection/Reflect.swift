@@ -98,8 +98,8 @@ package enum Interpreters {
         case let .prune(nextGen):
             return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput)
 
-        case let .pick(choices, branches):
-            return try reflectPickOperation(choices: choices, branches: branches, finalOutput: finalOutput)
+        case let .pick(choices, branchCount):
+            return try reflectPickOperation(choices: choices, branchCount: branchCount, finalOutput: finalOutput)
 
         case let .chooseBits(min, max, tag, isRangeExplicit, _):
             return try reflectChooseBitsOperation(
@@ -237,7 +237,7 @@ package enum Interpreters {
 
     private static func reflectPickOperation(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branches branchIDs: ClosedRange<UInt64>,
+        branchCount: UInt64,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let fingerprint = choices[0].fingerprint
@@ -283,7 +283,7 @@ package enum Interpreters {
                 fingerprint: $0.fingerprint,
                 weight: $0.weight,
                 id: $0.id,
-                branchIDs: branchIDs,
+                branchCount: branchCount,
                 choice: $0.path
             )
             if hasSelected == false {

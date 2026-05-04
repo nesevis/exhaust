@@ -27,12 +27,12 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A node that represents the generation of a sequence. It explicitly captures the length and the choice trees for each of its elements.
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
-    /// A node that represents a branching choice made via ``pick``. ``fingerprint`` identifies the pick site, ``id`` is the stable branch identifier, and ``branchIDs`` contains all identifiers in this pick site.
+    /// A node that represents a branching choice made via ``pick``. ``fingerprint`` identifies the pick site, ``id`` is the stable branch identifier, and ``branchCount`` is the total number of branches.
     indirect case branch(
         fingerprint: UInt64,
         weight: UInt64,
         id: UInt64,
-        branchIDs: ClosedRange<UInt64>,
+        branchCount: UInt64,
         choice: ChoiceTree
     )
 
@@ -195,8 +195,8 @@ package extension ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             return 0
-        case let .branch(_, _, _, branchIDs, choice):
-            let here = UInt64(branchIDs.count) * (1 << pickDepth)
+        case let .branch(_, _, _, branchCount, choice):
+            let here = branchCount * (1 << pickDepth)
             let deeper = choice.pickComplexityHelper(pickDepth: pickDepth + 1)
             return max(here, deeper)
         case let .selected(inner):
@@ -235,13 +235,12 @@ package extension ChoiceTree {
                 elements: mapped,
                 metadata
             )
-        case let .branch(fingerprint, weight, id, branchIDs, choice):
-            // For a branch, recursively map over its children.
+        case let .branch(fingerprint, weight, id, branchCount, choice):
             return try .branch(
                 fingerprint: fingerprint,
                 weight: weight,
                 id: id,
-                branchIDs: branchIDs,
+                branchCount: branchCount,
                 choice: choice.map(transform)
             )
         case let .group(children, isOpaque: isOpaque):
@@ -340,10 +339,10 @@ extension ChoiceTree: CustomDebugStringConvertible {
             }
             return result
 
-        case let .branch(fingerprint, weight, id, branchIDs, gen):
-            let index = id - branchIDs.lowerBound + 1
+        case let .branch(fingerprint, weight, id, branchCount, gen):
+            let index = id + 1
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            var result = prefix + connector + "\(selected)branch(fingerprint: \(fingerprintShort), id: \(id), index: \(index), weight: \(weight), count: \(Int(branchIDs.count)))"
+            var result = prefix + connector + "\(selected)branch(fingerprint: \(fingerprintShort), id: \(id), index: \(index), weight: \(weight), count: \(branchCount))"
             result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
             return result
 

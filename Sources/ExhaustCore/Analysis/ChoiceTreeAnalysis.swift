@@ -286,7 +286,7 @@ package enum ChoiceTreeAnalysis {
     // Pick analysis requires ≤ 256 branches and structurally valid subtrees. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
     //
     // Synthetic PickTuples are created with .pure(()) generators because the original branch generators are not available from the ChoiceTree.
-    // The fingerprint, weight, id, and branchIDs metadata is preserved for replay compatibility — CoveringArrayReplay uses these to reconstruct the branch selection.
+    // The fingerprint, weight, id, and branchCount metadata is preserved for replay compatibility — CoveringArrayReplay uses these to reconstruct the branch selection.
 
     private static func walkGroup(
         _ children: [ChoiceTree],

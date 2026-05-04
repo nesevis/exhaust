@@ -109,7 +109,7 @@ package extension ChoiceGraph {
         // Update the pick node's metadata.
         nodes[pickNodeID] = pickNode.with(kind: .pick(PickMetadata(
             fingerprint: metadata.fingerprint,
-            branchIDs: metadata.branchIDs,
+            branchCount: metadata.branchCount,
             selectedID: newSelectedID,
             selectedChildIndex: newSelectedChildIndex,
             branchElements: metadata.branchElements

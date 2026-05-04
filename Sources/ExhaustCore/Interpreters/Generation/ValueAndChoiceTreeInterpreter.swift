@@ -153,10 +153,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             // MARK: - Pick
 
-            case let .pick(choices, branches):
+            case let .pick(choices, branchCount):
                 return try handlePick(
                     choices,
-                    branches: branches,
+                    branchCount: branchCount,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context
@@ -416,7 +416,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     private static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branches branchIDs: ClosedRange<UInt64>,
+        branchCount: UInt64,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GenerationContext
@@ -450,7 +450,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 fingerprint: fingerprint,
                 weight: selectedChoice.weight,
                 id: selectedChoice.id,
-                branchIDs: branchIDs,
+                branchCount: branchCount,
                 choice: final.1
             )
             return (final.0, .group([.selected(tree)]))
@@ -484,7 +484,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                         fingerprint: fingerprint,
                         weight: choice.weight,
                         id: choice.id,
-                        branchIDs: branchIDs,
+                        branchCount: branchCount,
                         choice: final.1
                     )
                 }
@@ -508,7 +508,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                         fingerprint: fingerprint,
                         weight: choice.weight,
                         id: choice.id,
-                        branchIDs: branchIDs,
+                        branchCount: branchCount,
                         choice: final.1
                     )
                 }

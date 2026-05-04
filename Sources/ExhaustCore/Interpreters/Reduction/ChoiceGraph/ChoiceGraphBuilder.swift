@@ -260,7 +260,7 @@ struct ChoiceGraphBuilder {
         let nodeID = emitNode(
             kind: .pick(PickMetadata(
                 fingerprint: selectedBranch.fingerprint,
-                branchIDs: selectedBranch.branchIDs,
+                branchCount: selectedBranch.branchCount,
                 selectedID: selectedBranch.selectedID,
                 selectedChildIndex: 0, // Patched below
                 branchElements: array // Stored verbatim — see ``PickMetadata/branchElements``.
@@ -322,7 +322,7 @@ struct ChoiceGraphBuilder {
                 id: nodeID,
                 kind: .pick(PickMetadata(
                     fingerprint: metadata.fingerprint,
-                    branchIDs: metadata.branchIDs,
+                    branchCount: metadata.branchCount,
                     selectedID: metadata.selectedID,
                     selectedChildIndex: selectedChildIndex,
                     branchElements: metadata.branchElements
@@ -481,7 +481,7 @@ struct ChoiceGraphBuilder {
     struct PickSiteInfo {
         let fingerprint: UInt64
         let selectedID: UInt64
-        let branchIDs: ClosedRange<UInt64>
+        let branchCount: UInt64
     }
 
     /// Detects whether a group's children form a pick site.
@@ -494,10 +494,10 @@ struct ChoiceGraphBuilder {
         guard let selected = array.first(where: \.isSelected) else {
             return nil
         }
-        guard case let .selected(.branch(fingerprint, _, id, branchIDs, _)) = selected else {
+        guard case let .selected(.branch(fingerprint, _, id, branchCount, _)) = selected else {
             return nil
         }
-        return PickSiteInfo(fingerprint: fingerprint, selectedID: id, branchIDs: branchIDs)
+        return PickSiteInfo(fingerprint: fingerprint, selectedID: id, branchCount: branchCount)
     }
 
     // MARK: - Assembly

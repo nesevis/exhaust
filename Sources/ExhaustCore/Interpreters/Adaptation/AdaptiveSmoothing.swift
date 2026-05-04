@@ -60,7 +60,7 @@ package enum AdaptiveSmoothing {
         maxTemperature: Double
     ) -> ReflectiveOperation {
         switch op {
-        case let .pick(choices, branches):
+        case let .pick(choices, branchCount):
             // Compute Shannon entropy to measure how uniform the weight distribution is
             let totalWeight = choices.reduce(into: UInt64(0)) { $0 += $1.weight }
             let entropy: Double
@@ -98,7 +98,7 @@ package enum AdaptiveSmoothing {
                 )
             })
 
-            return .pick(choices: smoothed, branches: branches)
+            return .pick(choices: smoothed, branchCount: branchCount)
 
         case let .zip(generators, _):
             return .zip(ContiguousArray(generators.map {

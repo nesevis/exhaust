@@ -165,7 +165,7 @@ extension ChoiceGraphBuilder {
         let nodeID = emitNode(
             kind: .pick(PickMetadata(
                 fingerprint: info.fingerprint,
-                branchIDs: info.branchIDs,
+                branchCount: info.branchCount,
                 selectedID: info.selectedID,
                 selectedChildIndex: 0,
                 branchElements: array

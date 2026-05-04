@@ -104,8 +104,8 @@ package struct PickMetadata {
     /// Pick site fingerprint. Two picks with matching values belong to the same recursive generator (possibly at different depths).
     public let fingerprint: UInt64
 
-    /// All valid branch identifiers at this site.
-    public let branchIDs: ClosedRange<UInt64>
+    /// The number of branches at this pick site. Branch identifiers are `0 ..< branchCount`.
+    public let branchCount: UInt64
 
     /// Currently selected branch identifier.
     public let selectedID: UInt64

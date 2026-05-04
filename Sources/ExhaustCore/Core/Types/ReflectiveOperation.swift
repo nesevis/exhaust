@@ -107,8 +107,8 @@ public enum ReflectiveOperation {
     ///
     /// - Parameters:
     ///   - choices: Array of weighted generator options with replay labels.
-    ///   - branches: The contiguous range of branch identifiers for this pick site.
-    case pick(choices: ContiguousArray<PickTuple>, branches: ClosedRange<UInt64>)
+    ///   - branchCount: The number of branches at this pick site. Branch identifiers are `0 ..< branchCount`.
+    case pick(choices: ContiguousArray<PickTuple>, branchCount: UInt64)
 
     /// Conditional generation that prunes invalid branches during reflection.
     ///

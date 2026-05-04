@@ -157,7 +157,7 @@ package enum BoundaryCoveringArrayReplay {
             }
             return .sequence(length: newLength, elements: newElements, metadata)
 
-        case let .branch(fingerprint, weight, id, branchIDs, choice):
+        case let .branch(fingerprint, weight, id, branchCount, choice):
             guard let newChoice = substituteParameters(
                 in: choice,
                 row: row,
@@ -170,7 +170,7 @@ package enum BoundaryCoveringArrayReplay {
                 fingerprint: fingerprint,
                 weight: weight,
                 id: id,
-                branchIDs: branchIDs,
+                branchCount: branchCount,
                 choice: newChoice
             )
         }
@@ -330,12 +330,11 @@ package enum BoundaryCoveringArrayReplay {
             return nil
         }
 
-        let branchIDs = choices.first!.id ... choices.last!.id
         let branch = ChoiceTree.branch(
             fingerprint: chosen.fingerprint,
             weight: chosen.weight,
             id: chosen.id,
-            branchIDs: branchIDs,
+            branchCount: UInt64(choices.count),
             choice: subTree
         )
         return .group([.selected(branch)])

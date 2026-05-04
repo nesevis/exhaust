@@ -145,7 +145,7 @@ extension Materializer {
     @inline(__always)
     static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branches branchIDs: ClosedRange<UInt64>,
+        branchCount: UInt64,
         continuation: (Any) throws -> ReflectiveGenerator<Any>,
         inputValue: Any,
         context: inout Context,
@@ -240,7 +240,7 @@ extension Materializer {
                     finalValue = contValue
                     branches.append(.selected(.branch(
                         fingerprint: fingerprint, weight: choice.weight,
-                        id: choice.id, branchIDs: branchIDs, choice: contTree
+                        id: choice.id, branchCount: branchCount, choice: contTree
                     )))
                 } else {
                     // Non-selected branch: minimize to produce the shortlex-simplest content. Values use reductionTarget (semantic zero when in range), nested picks select the first branch, and sequence lengths minimize.
@@ -263,7 +263,7 @@ extension Materializer {
                     {
                         branches.append(.branch(
                             fingerprint: fingerprint, weight: choice.weight,
-                            id: choice.id, branchIDs: branchIDs, choice: contTree
+                            id: choice.id, branchCount: branchCount, choice: contTree
                         ))
                     }
                 }
@@ -286,7 +286,7 @@ extension Materializer {
             finalValue = contValue
             branches.append(.selected(.branch(
                 fingerprint: fingerprint, weight: selectedChoice.weight,
-                id: selectedChoice.id, branchIDs: branchIDs, choice: contTree
+                id: selectedChoice.id, branchCount: branchCount, choice: contTree
             )))
         }
 
