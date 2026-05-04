@@ -108,16 +108,17 @@ extension GraphValueEncoder {
     }
 
     mutating func prepareFloatSpecialValues(state: inout FloatState, target: FloatTarget) {
+        var seen = Set<UInt64>()
+        seen.insert(target.currentBitPattern)
         var candidates: [UInt64] = []
 
-        // Try the semantic-simplest target directly.
         guard target.sequenceIndex < state.sequence.count,
               let entry = state.sequence[target.sequenceIndex].value else { return }
         let isWithinRecordedRange = entry.isRangeExplicit && entry.choice.fits(in: entry.validRange)
         let targetBitPattern = isWithinRecordedRange
             ? entry.choice.reductionTarget(in: entry.validRange)
             : entry.choice.semanticSimplest.bitPattern64
-        if targetBitPattern != target.currentBitPattern {
+        if seen.insert(targetBitPattern).inserted {
             candidates.append(targetBitPattern)
         }
 
@@ -127,7 +128,7 @@ extension GraphValueEncoder {
                 allowNonFinite: true
             ) else { continue }
             let bp = candidateChoice.bitPattern64
-            if bp != target.currentBitPattern, candidates.contains(bp) == false {
+            if seen.insert(bp).inserted {
                 candidates.append(bp)
             }
         }
