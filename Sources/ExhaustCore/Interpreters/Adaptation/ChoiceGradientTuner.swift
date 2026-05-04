@@ -215,74 +215,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation
                 )
 
-            case let .contramap(transform, next):
-                return .impure(
-                    operation: .contramap(
-                        transform: transform,
-                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .prune(next):
-                return .impure(
-                    operation: .prune(
-                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .resize(newSize, next):
-                return .impure(
-                    operation: .resize(
-                        newSize: newSize,
-                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
-                return .impure(
-                    operation: .filter(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
-                        fingerprint: fingerprint,
-                        filterType: filterType,
-                        predicate: predicate,
-                        sourceLocation: sourceLocation
-                    ),
-                    continuation: continuation
-                )
-
-            case let .classify(subGen, fingerprint, classifiers):
-                return .impure(
-                    operation: .classify(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
-                        fingerprint: fingerprint,
-                        classifiers: classifiers
-                    ),
-                    continuation: continuation
-                )
-
-            case let .unique(subGen, fingerprint, keyExtractor):
-                return .impure(
-                    operation: .unique(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor
-                    ),
-                    continuation: continuation
-                )
-
-            case let .transform(kind, inner):
-                return .impure(
-                    operation: .transform(
-                        kind: kind,
-                        inner: bakeWeights(inner, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case .chooseBits, .just, .getSize:
+            default:
+                if let mapped = operation.mapInnerGenerator({ bakeWeights($0, from: accumulator, strategy: strategy, depth: depth) }) {
+                    return .impure(operation: mapped, continuation: continuation)
+                }
                 return gen
             }
         }
@@ -523,72 +459,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 })
                 return .impure(operation: .zip(subdivided), continuation: continuation)
 
-            case let .contramap(transform, next):
-                return try .impure(
-                    operation: .contramap(
-                        transform: transform,
-                        next: subdivideForCGS(next, context: context, thresholds: thresholds)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .prune(next):
-                return try .impure(
-                    operation: .prune(next: subdivideForCGS(next, context: context, thresholds: thresholds)),
-                    continuation: continuation
-                )
-
-            case let .resize(newSize, next):
-                return try .impure(
-                    operation: .resize(
-                        newSize: newSize,
-                        next: subdivideForCGS(next, context: context, thresholds: thresholds)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
-                return try .impure(
-                    operation: .filter(
-                        gen: subdivideForCGS(subGen, context: context, thresholds: thresholds),
-                        fingerprint: fingerprint,
-                        filterType: filterType,
-                        predicate: predicate,
-                        sourceLocation: sourceLocation
-                    ),
-                    continuation: continuation
-                )
-
-            case let .classify(subGen, fingerprint, classifiers):
-                return try .impure(
-                    operation: .classify(
-                        gen: subdivideForCGS(subGen, context: context, thresholds: thresholds),
-                        fingerprint: fingerprint,
-                        classifiers: classifiers
-                    ),
-                    continuation: continuation
-                )
-
-            case let .unique(subGen, fingerprint, keyExtractor):
-                return try .impure(
-                    operation: .unique(
-                        gen: subdivideForCGS(subGen, context: context, thresholds: thresholds),
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor
-                    ),
-                    continuation: continuation
-                )
-
-            case let .transform(kind, inner):
-                return try .impure(
-                    operation: .transform(
-                        kind: kind,
-                        inner: subdivideForCGS(inner, context: context, thresholds: thresholds)
-                    ),
-                    continuation: continuation
-                )
-
-            case .chooseBits, .just, .getSize:
+            default:
+                if let mapped = try operation.mapInnerGenerator({ try subdivideForCGS($0, context: context, thresholds: thresholds) }) {
+                    return .impure(operation: mapped, continuation: continuation)
+                }
                 return gen
             }
         }
@@ -631,37 +505,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 let recursed = ContiguousArray(generators.map { collapseUniformSubdivisions($0) })
                 return .impure(operation: .zip(recursed), continuation: continuation)
 
-            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
-                return .impure(
-                    operation: .filter(
-                        gen: collapseUniformSubdivisions(subGen),
-                        fingerprint: fingerprint,
-                        filterType: filterType,
-                        predicate: predicate,
-                        sourceLocation: sourceLocation
-                    ),
-                    continuation: continuation
-                )
-
-            case let .transform(kind, inner):
-                return .impure(
-                    operation: .transform(kind: kind, inner: collapseUniformSubdivisions(inner)),
-                    continuation: continuation
-                )
-
-            case let .contramap(transform, next):
-                return .impure(
-                    operation: .contramap(transform: transform, next: collapseUniformSubdivisions(next)),
-                    continuation: continuation
-                )
-
-            case let .resize(newSize, next):
-                return .impure(
-                    operation: .resize(newSize: newSize, next: collapseUniformSubdivisions(next)),
-                    continuation: continuation
-                )
-
             default:
+                if let mapped = operation.mapInnerGenerator({ collapseUniformSubdivisions($0) }) {
+                    return .impure(operation: mapped, continuation: continuation)
+                }
                 return gen
             }
         }
