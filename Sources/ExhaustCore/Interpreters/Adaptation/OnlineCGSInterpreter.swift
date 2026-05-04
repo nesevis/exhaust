@@ -470,8 +470,11 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - GetSize
 
             case .getSize:
-                let size = context.sizeOverride
-                    ?? GenerationContext.scaledSize(forRun: context.runs)
+                let size: UInt64 = switch context.sizeOverride {
+                case let override?: override
+                case nil where context.size > 0: context.size
+                case nil: GenerationContext.scaledSize(forRun: context.runs)
+                }
                 context.sizeOverride = nil
                 return try runContinuation(
                     result: size,
