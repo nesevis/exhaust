@@ -57,9 +57,14 @@ package extension Gen {
             length: Gen.choose(in: range, scaling: scaling),
             gen: elementGenerator.erase()
         )
-        // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
-            .pure(result as! [Output])
+            guard let array = result as? [Output] else {
+                throw GeneratorError.typeMismatch(
+                    expected: String(describing: type(of: [Output].self)),
+                    actual: String(describing: type(of: result))
+                )
+            }
+            return .pure(array)
         }
     }
 
