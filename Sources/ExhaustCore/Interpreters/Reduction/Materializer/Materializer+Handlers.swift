@@ -128,11 +128,12 @@ extension Materializer {
             randomBits = placeholder.reductionTarget(in: min ... max)
         }
 
-        let choice = reusedChoice ?? ChoiceValue(randomBits, tag: tag)
-        let choiceTree = ChoiceTree.choice(
-            choice,
-            .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
-        )
+        let choiceTree: ChoiceTree = context.skipTree
+            ? .just
+            : .choice(
+                reusedChoice ?? ChoiceValue(randomBits, tag: tag),
+                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+            )
         return try runContinuation(
             result: randomBits, calleeChoiceTree: choiceTree,
             continuation: continuation, inputValue: inputValue,
@@ -208,6 +209,19 @@ extension Materializer {
         let (branchBodyFallback, branchContFallback) = decomposeNonGroupFallback(
             branchChoiceTree
         )
+
+        if context.skipTree {
+            guard let (result, _) = try generateRecursive(
+                selectedChoice.generator, with: inputValue, context: &context,
+                fallbackTree: branchBodyFallback
+            ) else { return nil }
+            return try runContinuation(
+                result: result, calleeChoiceTree: .just,
+                continuation: continuation, inputValue: inputValue,
+                context: &context,
+                continuationFallback: branchContFallback ?? continuationFallback
+            )
+        }
 
         // Execute selected branch; optionally materialize non-selected branches.
         var branches = [ChoiceTree]()
@@ -321,46 +335,18 @@ extension Materializer {
                 // The length value is not stored in the flattened sequence, so we can't consume it from the cursor. Use the prefix element count.
                 length = UInt64(seqInfo.elementCount)
                 // Fast path: extract metadata directly from chooseBits length generators (the common case, for example `array(length: 0...10)`), avoiding a full generateRecursive + runContinuation round-trip.
-                if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = lengthGen {
-                    lengthMeta = ChoiceMetadata(
-                        validRange: min ... max,
-                        isRangeExplicit: isRangeExplicit
-                    )
-                } else {
-                    // Erase ``lengthGen`` so it can be passed to the non-generic ``generateRecursive``. The fast path above (chooseBits) skips this so the only callers paying the structural rebuild cost are the rare non-chooseBits length generators.
-                    let erasedLengthGen = lengthGen.erase()
-                    let savedMode = context.mode
-                    context.mode = .generate
-                    if let (_, lengthTree) = try generateRecursive(
-                        erasedLengthGen, with: inputValue, context: &context
-                    ) {
-                        lengthMeta = lengthTree.metadata
-                    } else {
-                        lengthMeta = ChoiceMetadata(validRange: nil, isRangeExplicit: true)
-                    }
-                    context.mode = savedMode
-                }
+                lengthMeta = try extractLengthMetadata(lengthGen)
             } else if seqInfo.isLengthExplicit {
                 // Guided/generate mode + explicit-length: use the prefix element count, clamped to the generator's valid range. For fixed-length generators (for example `exactly: 2`, range 2...2) this produces 2 regardless of prefix. For variable-length generators (for example
                 // `length: 0...10`) this preserves the prefix count. Analogous to the fallback-length clamping at the cursor-suspended path below.
                 let prefixCount = UInt64(seqInfo.elementCount)
-                let erasedLengthGen = lengthGen.erase()
-                let savedMode = context.mode
-                context.mode = .generate
-                guard let (_, lengthTree) = try generateRecursive(
-                    erasedLengthGen, with: inputValue, context: &context
-                ) else {
-                    context.mode = savedMode
-                    return nil
-                }
-                context.mode = savedMode
-                if let freshRange = lengthTree.metadata.validRange {
+                lengthMeta = try extractLengthMetadata(lengthGen)
+                if let freshRange = lengthMeta.validRange {
                     let clamped = Swift.max(prefixCount, freshRange.lowerBound)
                     length = Swift.min(clamped, freshRange.upperBound)
                 } else {
                     length = prefixCount
                 }
-                lengthMeta = lengthTree.metadata
             } else {
                 // Variable-length (non-explicit): derive from prefix element count.
                 length = UInt64(seqInfo.elementCount)
@@ -372,37 +358,29 @@ extension Materializer {
         } else if let fbLen = fallbackLength {
             // Cursor exhausted in guided mode. Use the fallback tree's stored length, clamped to the generator's valid range.
             let resolvedLen = fbLen
-            let erasedLengthGen = lengthGen.erase()
-            let savedMode = context.mode
-            context.mode = .generate
-            guard let (_, lengthTree) = try generateRecursive(
-                erasedLengthGen, with: inputValue, context: &context
-            ) else {
-                context.mode = savedMode
-                return nil
-            }
-            context.mode = savedMode
-            if let freshRange = lengthTree.metadata.validRange {
+            lengthMeta = try extractLengthMetadata(lengthGen)
+            if let freshRange = lengthMeta.validRange {
                 let clamped = Swift.max(resolvedLen, freshRange.lowerBound)
                 length = Swift.min(clamped, freshRange.upperBound)
             } else {
                 length = resolvedLen
             }
-            lengthMeta = lengthTree.metadata
         } else {
             let erasedLengthGen = lengthGen.erase()
-            guard let (freshLength, lengthTree) = try generateRecursive(
+            guard let (freshLength, _) = try generateRecursive(
                 erasedLengthGen, with: inputValue, context: &context
             ) else { return nil }
             // swiftlint:disable:next force_cast
             length = freshLength as! UInt64
-            lengthMeta = lengthTree.metadata
+            lengthMeta = try extractLengthMetadata(lengthGen)
         }
 
         var results: [Any] = []
-        var elements: [ChoiceTree] = []
         results.reserveCapacity(Int(length))
-        elements.reserveCapacity(Int(length))
+        var elements: [ChoiceTree] = context.skipTree ? [] : []
+        if context.skipTree == false {
+            elements.reserveCapacity(Int(length))
+        }
 
         var elementIndex = 0
         var remaining = length
@@ -414,16 +392,18 @@ extension Materializer {
                 elementGen, with: inputValue, context: &context, fallbackTree: elFB
             ) else { return nil }
             results.append(result)
-            elements.append(element)
+            if context.skipTree == false {
+                elements.append(element)
+            }
             elementIndex += 1
             remaining -= 1
         }
 
         context.cursor.skipSequenceClose()
 
-        let choiceTree = ChoiceTree.sequence(
-            length: length, elements: elements, lengthMeta
-        )
+        let choiceTree: ChoiceTree = context.skipTree
+            ? .just
+            : .sequence(length: length, elements: elements, lengthMeta)
 
         if let (result, _) = try runContinuation(
             result: results, calleeChoiceTree: choiceTree,
@@ -455,8 +435,10 @@ extension Materializer {
 
         var results = [Any]()
         results.reserveCapacity(generators.count)
-        var choiceTrees = [ChoiceTree]()
-        choiceTrees.reserveCapacity(generators.count)
+        var choiceTrees: [ChoiceTree] = []
+        if context.skipTree == false {
+            choiceTrees.reserveCapacity(generators.count)
+        }
 
         let canScope = fallbackChildren != nil
 
@@ -485,11 +467,14 @@ extension Materializer {
             if canScope { context.cursor.skipGroupCloses() }
             if let fb { childScopeStart += fb.flattenedEntryCount }
             results.append(result)
-            choiceTrees.append(tree)
+            if context.skipTree == false {
+                choiceTrees.append(tree)
+            }
             zipIndex += 1
         }
+        let calleeTree: ChoiceTree = context.skipTree ? .just : .group(choiceTrees)
         return try runContinuation(
-            result: results, calleeChoiceTree: .group(choiceTrees),
+            result: results, calleeChoiceTree: calleeTree,
             continuation: continuation, inputValue: inputValue,
             context: &context, continuationFallback: continuationFallback
         )
@@ -519,9 +504,12 @@ extension Materializer {
         ) else { return nil }
         // Defensive clear — consumed by getSize, but guard against missing getSize.
         context.sizeOverride = nil
+        let calleeTree: ChoiceTree = context.skipTree
+            ? .just
+            : .resize(newSize: newSize, choices: [result.1])
         return try runContinuation(
             result: result.0,
-            calleeChoiceTree: .resize(newSize: newSize, choices: [result.1]),
+            calleeChoiceTree: calleeTree,
             continuation: continuation, inputValue: inputValue,
             context: &context, continuationFallback: continuationFallback
         )
@@ -579,9 +567,12 @@ extension Materializer {
                 )
                 context.boundDepth -= 1
                 guard let (boundValue, boundTree) = boundResult else { return nil }
+                let calleeTree: ChoiceTree = context.skipTree
+                    ? .just
+                    : .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
                 return try runContinuation(
                     result: boundValue,
-                    calleeChoiceTree: .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree),
+                    calleeChoiceTree: calleeTree,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )
@@ -600,9 +591,12 @@ extension Materializer {
                 )
                 context.boundDepth -= 1
                 guard let (boundValue, boundTree) = boundResult else { return nil }
+                let calleeTree: ChoiceTree = context.skipTree
+                    ? .just
+                    : .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
                 return try runContinuation(
                     result: boundValue,
-                    calleeChoiceTree: .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree),
+                    calleeChoiceTree: calleeTree,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )
@@ -613,30 +607,54 @@ extension Materializer {
                     boundGen, with: inputValue, context: &context, fallbackTree: nil
                 )
                 guard let (boundValue, boundTree) = boundResult else { return nil }
+                let calleeTree: ChoiceTree = context.skipTree
+                    ? .just
+                    : .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
                 return try runContinuation(
                     result: boundValue,
-                    calleeChoiceTree: .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree),
+                    calleeChoiceTree: calleeTree,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )
             }
 
         case let .metamorphic(transforms, _):
-            // Transparent like .map. Copies replay from innerTree because the cursor has already advanced past inner's choices; PRNG save/restore alone is insufficient.
+            // skipTree override: the metamorphic combinator produces independent copies via Interpreters.replay(inner, using: innerTree). Replay needs the real tree because the cursor has already advanced past the inner generator's choices — the tree is the only record of what choices were made. Without it, replay returns nil and every metamorphic generator fails materialisation. The override is scoped to the inner generateRecursive call only; once innerTree is captured, skipTree is restored so runContinuation returns .just as its callee tree.
+            let savedSkipTree = context.skipTree
+            context.skipTree = false
             guard let (original, innerTree) = try generateRecursive(
                 inner, with: inputValue, context: &context, fallbackTree: calleeFallback
-            ) else { return nil }
+            ) else {
+                context.skipTree = savedSkipTree
+                return nil
+            }
+            context.skipTree = savedSkipTree
             var results: [Any] = [original]
             results.reserveCapacity(transforms.count + 1)
             for transform in transforms {
                 guard let copy = try Interpreters.replay(inner, using: innerTree) else { return nil }
                 try results.append(transform(copy))
             }
+            let calleeTree: ChoiceTree = context.skipTree ? .just : innerTree
             return try runContinuation(
-                result: results as Any, calleeChoiceTree: innerTree,
+                result: results as Any, calleeChoiceTree: calleeTree,
                 continuation: continuation, inputValue: inputValue,
                 context: &context, continuationFallback: continuationFallback
             )
         }
+    }
+
+    private static func extractLengthMetadata(
+        _ lengthGen: ReflectiveGenerator<UInt64>
+    ) throws -> ChoiceMetadata {
+        if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = lengthGen {
+            return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+        }
+        if case let .impure(.getSize, sizeContinuation) = lengthGen,
+           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = try sizeContinuation(100 as Any)
+        {
+            return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+        }
+        return ChoiceMetadata(validRange: nil, isRangeExplicit: false)
     }
 }
