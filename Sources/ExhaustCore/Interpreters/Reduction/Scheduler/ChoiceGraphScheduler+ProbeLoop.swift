@@ -150,6 +150,9 @@ extension ChoiceGraphScheduler {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
+                if collectStats {
+                    stats.totalMaterializations += 1
+                }
                 // Track whether the latest accepted probe stripped the tree. The cycle loop reads this via ``ProbeLoopOutcome/treeIsStripped``
                 // to decide whether to re-materialize before any rebuild.
                 latestAcceptedTreeIsStripped = picksUnchanged
@@ -254,7 +257,8 @@ extension ChoiceGraphScheduler {
             treeIsStripped: latestAcceptedTreeIsStripped,
             probeCount: probeCount,
             acceptCount: acceptCount,
-            materializationCount: decoderRejectCount + acceptCount
+            // Any acceptance will be materialized twice: first cheaply without building the ChoiceTree, then again on a "successful" property failure
+            materializationCount: decoderRejectCount + (acceptCount * 2)
         )
     }
 

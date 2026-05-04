@@ -36,9 +36,9 @@ struct BinaryHeapShrinkingChallenge {
         let rep = try #require(report)
         // Temporarily commented while BoundValueScope is disabled and the inner-descendant rework is in progress. Restore once the multi-leaf inner fix lands and the counts stabilise.
         #expect(rep.propertyInvocations == 459)
-        #expect(rep.totalMaterializations == 413)
+        #expect(rep.totalMaterializations == 455)
 
-//        print(rep.profilingSummary)
+        print(rep.profilingSummary)
 
         let outputValues = BinaryHeapFixture.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.

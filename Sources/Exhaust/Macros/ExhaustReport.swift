@@ -103,7 +103,7 @@ public struct ExhaustReport: Sendable {
             let pct = invocations > 0 ? accepted * 100 / invocations : 0
             return "\(name.rawValue)=i\(invocations)/a\(accepted)/c\(cacheRej)/d\(decRej)/\(pct)%"
         }.joined(separator: " ")
-        return "cycles=\(cycles) invocations=\(propertyInvocations) materializations=\(totalMaterializations) probes=\(coverageInvocations)cov/\(randomSamplingInvocations)rand\(graphLabel)\(encoderLabel)\(phaseLabel)"
+        return "cycles=\(cycles) invocations=\(coverageInvocations)cov/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(phaseLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
