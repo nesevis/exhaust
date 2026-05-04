@@ -332,7 +332,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Picks a random element from a fixed collection.
     ///
-    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and test case reduction.
+    /// The collection is captured at construction time. The backward pass finds the element's index via hash-based O(1) lookup for reflection and test case reduction.
     ///
     /// ```swift
     /// let gen = #gen(.element(from: ["♠", "♥", "♦", "♣"]))
@@ -346,9 +346,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.element(from: collection)
     }
 
-    /// Picks a random element from a fixed collection (non-Hashable variant).
+    /// Picks a random element from a fixed collection.
     ///
-    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and test case reduction.
+    /// The collection is captured at construction time. The backward pass finds the element's index via linear equality scan for reflection and test case reduction.
     ///
     /// ```swift
     /// let gen = #gen(.element(from: [1.0, 2.5, 3.14]))
@@ -358,7 +358,46 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C
-    ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
+    ) -> ReflectiveGenerator<C.Element> where Value == C.Element, C.Element: Equatable {
         Gen.element(from: collection)
     }
+
+    /// Picks a random element from a fixed collection, using a hashable key path for O(1) reflection.
+    ///
+    /// The collection is captured at construction time. The backward pass identifies the element via hash-based dictionary lookup on the key-path-extracted value, enabling reflection for types that are not ``Hashable`` themselves.
+    ///
+    /// ```swift
+    /// let gen = #gen(.element(from: configs, by: \.id))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - collection: The collection to pick elements from.
+    ///   - keyPath: A key path to a hashable property used to identify elements during reflection.
+    /// - Returns: A generator that produces random elements from the collection.
+    static func element<C: Collection, Key: Hashable>(
+        from collection: C,
+        by keyPath: KeyPath<C.Element, Key>
+    ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
+        Gen.element(from: collection, by: keyPath)
+    }
+
+    /// Picks a random element from a fixed collection, using an equatable key path for reflection.
+    ///
+    /// The collection is captured at construction time. The backward pass identifies the element by linear scan comparing the key-path-extracted value, enabling reflection for types that are not ``Equatable``.
+    ///
+    /// ```swift
+    /// let gen = #gen(.element(from: configs, by: \.name))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - collection: The collection to pick elements from.
+    ///   - keyPath: A key path to an equatable property used to identify elements during reflection.
+    /// - Returns: A generator that produces random elements from the collection.
+    static func element<C: Collection, Key: Equatable>(
+        from collection: C,
+        by keyPath: KeyPath<C.Element, Key>
+    ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
+        Gen.element(from: collection, by: keyPath)
+    }
+
 }
