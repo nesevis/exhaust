@@ -19,6 +19,7 @@ package extension Gen {
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         precondition(choices.isEmpty == false, "At least one choice must be provided")
+        precondition(choices.allSatisfy { $0.weight > 0 }, "Weights must be greater than zero")
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call ensures the final monad has the correct `Output` type.
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
