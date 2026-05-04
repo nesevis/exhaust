@@ -69,6 +69,9 @@ package final class ChoiceGraph {
     /// Cached dependency adjacency list. Computed on first access from ``dependencyEdges``, invalidated by ``invalidateTopologicalCaches()``. Used by ``isReachable(from:to:)`` and ``reachableNodes(from:within:)`` for on-demand DFS instead of an eager O(V^2) transitive closure.
     private var cachedDependencyAdjacency: [[Int]]?
 
+    /// Cached live (active) node ID list. Computed on first access, invalidated on structural mutation.
+    private var cachedLiveNodeIDs: [Int]?
+
     /// Type-compatibility edges between antichain members with matching types. Computed lazily on first access and cached until invalidated by a structural mutation.
     public var typeCompatibilityEdges: [TypeCompatibilityEdge] {
         if let cached = cachedTypeCompatibilityEdges { return cached }
@@ -93,6 +96,14 @@ package final class ChoiceGraph {
         return computed
     }
 
+    /// IDs of active nodes, filtering out tombstoned and inactive (nil positionRange) nodes. Computed lazily on first access and cached until invalidated by a structural mutation. Callers read fresh node data via ``nodes`` subscript.
+    public var liveNodeIDs: [Int] {
+        if let cached = cachedLiveNodeIDs { return cached }
+        let computed = nodes.indices.filter { nodes[$0].positionRange != nil }
+        cachedLiveNodeIDs = computed
+        return computed
+    }
+
     /// Dependency adjacency list for on-demand reachability queries. Computed lazily from ``dependencyEdges`` and cached until ``invalidateTopologicalCaches()`` clears it.
     var dependencyAdjacency: [[Int]] {
         if let cached = cachedDependencyAdjacency { return cached }
@@ -104,17 +115,19 @@ package final class ChoiceGraph {
         return adjacency
     }
 
-    /// Drops cached type-compatibility edges, source/sink annotations, and convergence data on leaf nodes, forcing recomputation on next access.
+    /// Drops cached type-compatibility edges, source/sink annotations, live node list, and convergence data on leaf nodes, forcing recomputation on next access.
     func invalidateDerivedEdges() {
         cachedTypeCompatibilityEdges = nil
         cachedSourceSinkStatus = nil
+        cachedLiveNodeIDs = nil
         clearConvergenceData()
     }
 
-    /// Drops cached topological order and dependency adjacency list, forcing recomputation on next access. Called by in-place mutations that add or remove dependency edges (bind subtree rebuilds, branch pivots).
+    /// Drops cached topological order, dependency adjacency list, and live node list, forcing recomputation on next access. Called by in-place mutations that add or remove dependency edges (bind subtree rebuilds, branch pivots).
     func invalidateTopologicalCaches() {
         cachedTopologicalOrder = nil
         cachedDependencyAdjacency = nil
+        cachedLiveNodeIDs = nil
     }
 
     /// Writes convergence records from an encoder pass onto the corresponding leaf nodes by sequence position.
@@ -129,11 +142,10 @@ package final class ChoiceGraph {
         // Build position → node-array-index lookup once in O(N).
         var positionToIndex: [Int: Int] = [:]
         positionToIndex.reserveCapacity(records.count)
-        for index in nodes.indices {
-            guard isTombstoned(index) == false else { continue }
-            guard case .chooseBits = nodes[index].kind else { continue }
-            guard let position = nodes[index].positionRange?.lowerBound else { continue }
-            positionToIndex[position] = index
+        for nodeID in liveNodeIDs {
+            guard case .chooseBits = nodes[nodeID].kind else { continue }
+            guard let position = nodes[nodeID].positionRange?.lowerBound else { continue }
+            positionToIndex[position] = nodeID
         }
 
         for (sequenceIndex, origin) in records {
@@ -204,6 +216,7 @@ package final class ChoiceGraph {
         result.cachedSourceSinkStatus = cachedSourceSinkStatus
         result.cachedTopologicalOrder = cachedTopologicalOrder
         result.cachedDependencyAdjacency = cachedDependencyAdjacency
+        result.cachedLiveNodeIDs = cachedLiveNodeIDs
         return result
     }
 }
@@ -243,7 +256,8 @@ package extension ChoiceGraph {
     ///
     /// Used after an in-place mutation to detect graph/freshTree structural divergence: when the materializer reshapes the freshTree behind the encoder's back (for example low-fidelity PRNG fallback), the graph's stored positionRanges go stale relative to freshTree. The caller is expected to force a full rebuild on a non-`nil` return.
     func leafPositionsDivergence(in sequence: ChoiceSequence) -> String? {
-        for node in nodes {
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             guard case .chooseBits = node.kind else { continue }
             guard let range = node.positionRange else { continue }
             let position = range.lowerBound

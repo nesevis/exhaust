@@ -20,8 +20,8 @@ enum ReorderingScopeQuery {
         let bindInnerRanges = collectBindInnerRanges(graph: graph)
         var groups: [ReorderableGroup] = []
 
-        for node in graph.nodes {
-            guard node.positionRange != nil else { continue }
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
 
             let childRanges: [ClosedRange<Int>]
             let childKinds: [ChoiceGraphNodeKind]
@@ -45,7 +45,7 @@ enum ReorderingScopeQuery {
                 continue
             }
 
-            let depth = nodeDepth(nodeID: node.id, graph: graph)
+            let depth = nodeDepth(nodeID: nodeID, graph: graph)
 
             var byCategory: [SiblingGroupKey: [ClosedRange<Int>]] = [:]
             for (range, kind) in zip(childRanges, childKinds) {

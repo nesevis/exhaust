@@ -166,8 +166,8 @@ extension ChoiceGraph {
     ///
     /// Call after each graph rebuild. Avoids the two materialisation probes that ``classifyBind`` requires by observing natural upstream variation across rebuild cycles.
     func observeBindTopologies(tree: ChoiceTree) {
-        for (nodeID, node) in nodes.enumerated() {
-            guard isTombstoned(nodeID) == false else { continue }
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
             guard metadata.isStructurallyConstant == false else { continue }
             if bindClassifications[metadata.fingerprint] != nil { continue }

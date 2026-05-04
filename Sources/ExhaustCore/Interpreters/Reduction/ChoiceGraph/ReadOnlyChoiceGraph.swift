@@ -12,6 +12,9 @@ protocol ReadOnlyChoiceGraph {
     /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``.
     var nodes: [ChoiceGraphNode] { get }
 
+    /// IDs of active nodes, filtering out tombstoned and inactive (nil positionRange) nodes. Cached on ``ChoiceGraph`` and invalidated on structural mutation. Callers read fresh node data via ``nodes`` subscript.
+    var liveNodeIDs: [Int] { get }
+
     /// Active pick nodes grouped by fingerprint for self-similar replacement.
     var selfSimilarityGroups: [UInt64: [Int]] { get }
 

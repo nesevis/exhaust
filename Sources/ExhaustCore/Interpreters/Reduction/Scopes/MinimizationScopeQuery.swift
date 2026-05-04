@@ -28,9 +28,9 @@ enum MinimizationScopeQuery {
         // Float leaves.
         var floatLeafNodeIDs: [Int] = []
 
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
 
             let currentBitPattern = metadata.value.bitPattern64
             let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
@@ -44,15 +44,15 @@ enum MinimizationScopeQuery {
             }
 
             if metadata.typeTag.isFloatingPoint {
-                floatLeafNodeIDs.append(node.id)
+                floatLeafNodeIDs.append(nodeID)
             } else {
                 let valueYield = computeValueYield(
-                    leafNodeID: node.id,
+                    leafNodeID: nodeID,
                     graph: graph,
                     innerDescendantToBind: innerDescendantToBind
                 )
-                integerLeafNodeIDs.append(node.id)
-                integerValueYields[node.id] = valueYield
+                integerLeafNodeIDs.append(nodeID)
+                integerValueYields[nodeID] = valueYield
             }
         }
 
@@ -107,9 +107,9 @@ enum MinimizationScopeQuery {
         }
 
         // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage. Dispatch is gated per-site by ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` in the scheduler, which rejects topology-divergent binds (Calculator's `.recursive`) before any probe runs.
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]

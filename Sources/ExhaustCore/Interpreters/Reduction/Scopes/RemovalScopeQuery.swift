@@ -26,13 +26,13 @@ enum RemovalScopeQuery {
     private static func perParentElementScopes(graph: some ReadOnlyChoiceGraph) -> [ElementRemovalScope] {
         var parentGroups: [Int: [Int]] = [:]
 
-        for node in graph.nodes {
-            guard node.positionRange != nil else { continue }
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard let parentID = node.parent else { continue }
             guard case let .sequence(metadata) = graph.nodes[parentID].kind else { continue }
             let minLength = metadata.lengthConstraint?.lowerBound ?? 0
             guard UInt64(metadata.elementCount) > minLength else { continue }
-            parentGroups[parentID, default: []].append(node.id)
+            parentGroups[parentID, default: []].append(nodeID)
         }
 
         return parentGroups.sorted(by: { $0.key < $1.key }).map { parentID, elementNodeIDs in
@@ -71,9 +71,9 @@ enum RemovalScopeQuery {
     /// - Complexity: O(S) per zip node to build the generator, where S is the sibling count. The generator itself produces O(max(domain)^2 * log(S)) rows on demand, replacing the previous O(2^S) subset enumeration and O(nA * nB) cross-product expansion.
     static func coveringAlignedRemovalScopes(graph: some ReadOnlyChoiceGraph) -> [CoveringAlignedRemovalScope] {
         var scopes: [CoveringAlignedRemovalScope] = []
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case .zip = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
 
             let allSequenceChildren = node.children.compactMap { childID -> CoveringAlignedRemovalScope.AlignedSibling? in
                 guard let sequenceNodeID = ScopeQueryHelpers.findSequenceBeneath(childID, graph: graph) else { return nil }

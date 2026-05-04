@@ -53,9 +53,9 @@ enum ReplacementScopeQuery {
         }
 
         // Branch pivot: one scope per (pick node, alternative branch). The source iterates over branches; the encoder is single-shot per scope. The leaf-count gate is applied here — alternatives with more `.choice` leaves than the selected branch are filtered out because they almost always fail the shortlex check and dropping them avoids paying the materialization cost.
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case let .pick(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
             guard metadata.branchIDs.count >= 2 else { continue }
             guard node.children.count == metadata.branchIDs.count else { continue }
 
@@ -70,27 +70,28 @@ enum ReplacementScopeQuery {
                 guard candidateLeafCount <= selectedLeafCount else { continue }
 
                 scopes.append(.branchPivot(BranchPivotScope(
-                    pickNodeID: node.id,
+                    pickNodeID: nodeID,
                     targetBranchID: branchID
                 )))
             }
         }
 
         // Descendant promotion: for each pick node, check group members that are containment descendants with a smaller subtree.
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case let .pick(ancestorMetadata) = node.kind else { continue }
             guard let ancestorRange = node.positionRange else { continue }
             guard let group = graph.selfSimilarityGroups[ancestorMetadata.fingerprint] else { continue }
             for descendantID in group {
-                guard descendantID != node.id else { continue }
+                guard descendantID != nodeID else { continue }
                 guard let descendantRange = graph.nodes[descendantID].positionRange else { continue }
                 let sizeDelta = ancestorRange.count - descendantRange.count
                 guard sizeDelta > 0 else { continue }
-                let reachable = graph.isReachable(from: node.id, to: descendantID)
-                    || isContainmentDescendant(descendantID, of: node.id, graph: graph)
+                let reachable = graph.isReachable(from: nodeID, to: descendantID)
+                    || isContainmentDescendant(descendantID, of: nodeID, graph: graph)
                 guard reachable else { continue }
                 scopes.append(.descendantPromotion(DescendantPromotionScope(
-                    ancestorPickNodeID: node.id,
+                    ancestorPickNodeID: nodeID,
                     descendantPickNodeID: descendantID,
                     sizeDelta: sizeDelta
                 )))

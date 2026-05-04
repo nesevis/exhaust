@@ -79,10 +79,10 @@ enum ExchangeScopeQuery {
 
         // Tandem: group active leaves by TypeTag.
         var leafGroups: [TypeTag: [Int]] = [:]
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
-            leafGroups[metadata.typeTag, default: []].append(node.id)
+            leafGroups[metadata.typeTag, default: []].append(nodeID)
         }
         let tandemGroups = leafGroups.compactMap { tag, leafIDs -> TandemGroup? in
             guard leafIDs.count >= 2 else { return nil }
@@ -120,8 +120,8 @@ enum ExchangeScopeQuery {
         var pairs: [RedistributionPair] = []
 
         // Intra-sequence: each homogeneous sequence produces source-sink pairs among its own leaves.
-        for parentNode in graph.nodes {
-            guard parentNode.positionRange != nil else { continue }
+        for parentNodeID in graph.liveNodeIDs {
+            let parentNode = graph.nodes[parentNodeID]
             guard case let .sequence(seqMetadata) = parentNode.kind else { continue }
             guard let tag = seqMetadata.elementTypeTag else { continue }
 
@@ -135,9 +135,9 @@ enum ExchangeScopeQuery {
         }
 
         // Cross-zip: for each zip, find pairs of homogeneous sequence children with matching type tags. Generate cross-group source-sink pairs where the source comes from the earlier-positioned group.
-        for zipNode in graph.nodes {
+        for zipNodeID in graph.liveNodeIDs {
+            let zipNode = graph.nodes[zipNodeID]
             guard case .zip = zipNode.kind else { continue }
-            guard zipNode.positionRange != nil else { continue }
             guard zipNode.children.count >= 2 else { continue }
 
             // Collect homogeneous sequence children with their tags.
