@@ -92,13 +92,30 @@ enum ReorderingScopeQuery {
         _ childRanges: [ClosedRange<Int>],
         bindInnerRanges: [ClosedRange<Int>]
     ) -> Bool {
+        guard bindInnerRanges.isEmpty == false else { return true }
+        let sorted = bindInnerRanges.sorted { $0.lowerBound < $1.lowerBound }
         for siblingRange in childRanges {
-            for innerRange in bindInnerRanges {
-                if innerRange.lowerBound <= siblingRange.lowerBound,
-                   siblingRange.upperBound <= innerRange.upperBound
-                {
+            var low = 0
+            var high = sorted.count
+            while low < high {
+                let mid = low + (high - low) / 2
+                if sorted[mid].lowerBound <= siblingRange.lowerBound {
+                    low = mid + 1
+                } else {
+                    high = mid
+                }
+            }
+            // Check all candidates at indices 0..<low whose lowerBound <= siblingRange.lowerBound.
+            // Only the last few can contain the sibling — scan backward until lowerBound is too small
+            // to possibly contain siblingRange (optimization: break early when upperBound < siblingRange.lowerBound).
+            var candidate = low - 1
+            while candidate >= 0 {
+                let innerRange = sorted[candidate]
+                if innerRange.upperBound < siblingRange.lowerBound { break }
+                if siblingRange.upperBound <= innerRange.upperBound {
                     return false
                 }
+                candidate -= 1
             }
         }
         return true
