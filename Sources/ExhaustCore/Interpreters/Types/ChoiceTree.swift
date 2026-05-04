@@ -202,15 +202,16 @@ package extension ChoiceTree {
         case let .selected(inner):
             return inner.pickComplexityHelper(pickDepth: pickDepth)
         case let .sequence(_, elements, _):
-            return elements.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
+            return elements.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
         case let .group(array, _):
-            return array.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
+            return array.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
         case let .bind(_, inner, bound):
-            let innerComplexity = inner.pickComplexityHelper(pickDepth: pickDepth)
-            let boundComplexity = bound.pickComplexityHelper(pickDepth: pickDepth)
-            return max(innerComplexity, boundComplexity)
+            return Swift.max(
+                inner.pickComplexityHelper(pickDepth: pickDepth),
+                bound.pickComplexityHelper(pickDepth: pickDepth)
+            )
         case let .resize(_, choices):
-            return choices.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
+            return choices.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
         }
     }
 }
