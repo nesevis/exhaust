@@ -9,11 +9,11 @@
 package enum FloatShortlex {
     public static let simpleIntegerUpperBound = 72_057_594_037_927_936.0 // 2^56
 
-    public static let exponentMask: UInt64 = 0x7FF
+    public static let exponentMask: UInt64 = FloatReduction.doubleExponentMask
 
-    public static let mantissaMask: UInt64 = (UInt64(1) << 52) - 1
+    public static let mantissaMask: UInt64 = FloatReduction.doubleMantissaMask
 
-    public static let exponentBias: UInt64 = 1023
+    public static let exponentBias: UInt64 = UInt64(FloatReduction.doubleExponentBias)
 
     public static let nonSimpleTagMask: UInt64 = .init(1) << 63
 
