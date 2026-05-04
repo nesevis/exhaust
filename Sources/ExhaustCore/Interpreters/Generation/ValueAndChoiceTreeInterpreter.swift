@@ -427,13 +427,38 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         ) else {
             return nil
         }
-        // This may or may not be used, but we always have to consume it.
         let jumpSeed = context.prng.next()
+        let fingerprint = choices[0].fingerprint
+
+        if context.materializePicks == false {
+            guard let result = try generateRecursive(
+                selectedChoice.generator,
+                with: inputValue,
+                context: &context
+            ),
+                let final = try runContinuation(
+                    result: result.0,
+                    calleeChoiceTree: result.1,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context
+                )
+            else {
+                throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+            }
+            let tree = ChoiceTree.branch(
+                fingerprint: fingerprint,
+                weight: selectedChoice.weight,
+                id: selectedChoice.id,
+                branchIDs: branchIDs,
+                choice: final.1
+            )
+            return (final.0, .group([.selected(tree)]))
+        }
 
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)
         var finalValue: Output?
-        let fingerprint = choices[0].fingerprint
 
         for choice in choices {
             let isSelected = choice.id == selectedChoice.id
@@ -441,7 +466,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             var branch: ChoiceTree?
 
             if isSelected {
-                // Use context directly for the selected branch (no copy needed)
                 if let result = try generateRecursive(
                     choice.generator,
                     with: inputValue,
@@ -464,8 +488,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                         choice: final.1
                     )
                 }
-            } else if context.materializePicks {
-                // Use jumped context for non-selected branches
+            } else {
                 var branchContext = context.jump(seed: jumpSeed)
                 if let result = try generateRecursive(
                     choice.generator,
@@ -494,9 +517,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             if isSelected, let branch {
                 finalValue = value
                 branches.append(.selected(branch))
-                if context.materializePicks == false {
-                    break
-                }
             } else if let branch {
                 branches.append(branch)
             }
