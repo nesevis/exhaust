@@ -16,7 +16,7 @@ enum ScopeQueryHelpers {
     /// When a bind is nested inside another bind's inner subtree, descendant leaves are claimed by the outermost enclosing bind. ``ChoiceGraph.nodes`` is constructed top-down, so iterating in index order visits outer binds first and the conditional write preserves outermost-wins semantics. Yield priority tracks the outer reshape cost, which is the correct signal for scheduling — mutating such a leaf triggers reshape at every enclosing bind.
     ///
     /// Callers that need both minimization and exchange scopes should build this once and pass it to both to avoid duplicate allocations.
-    static func buildInnerDescendantToBind(graph: ChoiceGraph) -> [Int: Int] {
+    static func buildInnerDescendantToBind(graph: some ReadOnlyChoiceGraph) -> [Int: Int] {
         var index: [Int: Int] = [:]
         for node in graph.nodes {
             guard case let .bind(metadata) = node.kind else { continue }
@@ -39,7 +39,7 @@ enum ScopeQueryHelpers {
     /// Walks through transparent wrappers (groups, structurally-constant binds) beneath a node to find the first sequence node.
     ///
     /// Returns the sequence node's ID, or nil if no sequence is found beneath the transparent chain. Used by both removal scope construction (aligned deletion) and exchange scope construction (cross-zip homogeneous redistribution).
-    static func findSequenceBeneath(_ nodeID: Int, graph: ChoiceGraph) -> Int? {
+    static func findSequenceBeneath(_ nodeID: Int, graph: some ReadOnlyChoiceGraph) -> Int? {
         let node = graph.nodes[nodeID]
         if case .sequence = node.kind {
             return nodeID

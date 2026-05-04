@@ -314,7 +314,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
                         let subranges = (min ... max).split(into: subrangeCount)
 
-                        let branchRange = 0 ... UInt64(subranges.count - 1)
+                        let branchCount = UInt64(subranges.count)
 
                         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                         subrangeChoices.reserveCapacity(subranges.count)
@@ -339,7 +339,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         }
 
                         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                            operation: .pick(choices: subrangeChoices, branches: branchRange),
+                            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
                             continuation: continuation
                         )
 
@@ -470,8 +470,11 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - GetSize
 
             case .getSize:
-                let size = context.sizeOverride
-                    ?? GenerationContext.scaledSize(forRun: context.runs)
+                let size: UInt64 = switch context.sizeOverride {
+                case let override?: override
+                case nil where context.size > 0: context.size
+                case nil: GenerationContext.scaledSize(forRun: context.runs)
+                }
                 context.sizeOverride = nil
                 return try runContinuation(
                     result: size,
@@ -679,13 +682,13 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         isDuplicate = !context.uniqueSeenKeys[
                             fingerprint, default: []
                         ].insert(key).inserted
-                    } else {
-                        // Without a key extractor, try AnyHashable-based dedup
-                        let key = result as? AnyHashable
-                            ?? AnyHashable(ObjectIdentifier(type(of: result)))
+                    } else if let key = result as? AnyHashable {
                         isDuplicate = !context.uniqueSeenKeys[
                             fingerprint, default: []
                         ].insert(key).inserted
+                    } else {
+                        // Non-Hashable types cannot be deduplicated in CGS mode (no choice-sequence tracking). All samples are treated as unique.
+                        isDuplicate = false
                     }
 
                     if !isDuplicate {
@@ -903,6 +906,10 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         // 2. Build weighted choices — dead choices get weight 0, live choices with all-zero fitness fall back to equal weights
         let allLiveZero = liveChoiceIndices.allSatisfy { fitnesses[$0] == 0 }
+        var isLive = ContiguousArray<Bool>(repeating: false, count: choices.count)
+        for index in liveChoiceIndices {
+            isLive[index] = true
+        }
         var weightedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         weightedChoices.reserveCapacity(choices.count)
         for (i, choice) in choices.enumerated() {
@@ -910,7 +917,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 fingerprint: choice.fingerprint,
                 id: choice.id,
                 weight: allLiveZero
-                    ? (liveChoiceIndices.contains(i) ? 1 : 0)
+                    ? (isLive[i] ? 1 : 0)
                     : fitnesses[i],
                 generator: choice.generator
             ))

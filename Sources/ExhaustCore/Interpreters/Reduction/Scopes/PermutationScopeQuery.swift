@@ -14,12 +14,12 @@ enum PermutationScopeQuery {
     /// Groups children by structural shape derived from graph node metadata. Children with the same shape can be swapped for shortlex improvement. Only zip children are considered — sequence elements are excluded because their ordering is transient (value search minimizes them, and ``GraphReorderEncoder`` canonicalizes whatever remains). Including sequence elements caused a 6x materialization regression on NestedLists without improving the final counterexample.
     ///
     /// - Returns: One scope per zip node with at least one group of two or more same-shaped children.
-    static func build(graph: ChoiceGraph) -> [PermutationScope] {
+    static func build(graph: some ReadOnlyChoiceGraph) -> [PermutationScope] {
         var scopes: [PermutationScope] = []
 
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case .zip = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
             guard node.children.count >= 2 else { continue }
 
             var shapeGroups: [NodeShapeKey: [Int]] = [:]
@@ -40,7 +40,7 @@ enum PermutationScopeQuery {
             guard swappableGroups.isEmpty == false else { continue }
 
             scopes.append(.siblingPermutation(SiblingPermutationScope(
-                parentNodeID: node.id,
+                parentNodeID: nodeID,
                 swappableGroups: swappableGroups
             )))
         }
@@ -76,7 +76,7 @@ enum PermutationScopeQuery {
         case .bind:
             return .bind
         case let .pick(metadata):
-            return .pick(branchCount: metadata.branchIDs.count)
+            return .pick(branchCount: Int(metadata.branchCount))
         case .just:
             return .just
         }

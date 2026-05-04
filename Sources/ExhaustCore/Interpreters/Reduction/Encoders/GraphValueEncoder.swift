@@ -256,7 +256,7 @@ struct GraphValueEncoder: GraphEncoder {
         }
     }
 
-    mutating func refreshScope(graph: ChoiceGraph, sequence: ChoiceSequence) {
+    mutating func refreshScope(graph: some ReadOnlyChoiceGraph, sequence: ChoiceSequence) {
         // Re-derive the encoder's working set from the live graph after a structural mutation. The scheduler calls this between probe loop iterations whenever the most recent acceptance added or removed graph nodes (an in-place reshape via ``applyBindReshape``).
         // The cached ``IntegerState/leafPositions`` /
         // ``FloatState/targets`` reference pre-mutation node IDs and sequence positions; without a refresh the next probe would write to a stale slot or invoke ``applyLeafValueWrite`` on a tombstoned node, producing a position drift bug.

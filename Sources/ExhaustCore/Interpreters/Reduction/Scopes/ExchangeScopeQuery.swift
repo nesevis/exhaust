@@ -18,7 +18,7 @@ enum ExchangeScopeQuery {
     ///   - innerDescendantToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)``. Pass a shared instance when also building minimization scopes so the same dictionary is reused across both families.
     /// - Returns: Redistribution scope (if pairs exist) and tandem scope (if same-typed leaf groups with at least two members exist).
     static func build(
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [ExchangeScope] {
         var scopes: [ExchangeScope] = []
@@ -79,10 +79,10 @@ enum ExchangeScopeQuery {
 
         // Tandem: group active leaves by TypeTag.
         var leafGroups: [TypeTag: [Int]] = [:]
-        for node in graph.nodes {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
-            leafGroups[metadata.typeTag, default: []].append(node.id)
+            leafGroups[metadata.typeTag, default: []].append(nodeID)
         }
         let tandemGroups = leafGroups.compactMap { tag, leafIDs -> TandemGroup? in
             guard leafIDs.count >= 2 else { return nil }
@@ -99,7 +99,7 @@ enum ExchangeScopeQuery {
     }
 
     /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building minimization scopes so the index is computed once and shared.
-    static func build(graph: ChoiceGraph) -> [ExchangeScope] {
+    static func build(graph: some ReadOnlyChoiceGraph) -> [ExchangeScope] {
         build(
             graph: graph,
             innerDescendantToBind: ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
@@ -114,14 +114,14 @@ enum ExchangeScopeQuery {
     ///
     /// - Complexity: O(C log C) per sequence (dominated by the distance sort), O(groups) for cross-zip pairing. No O(C^2) enumeration.
     private static func homogeneousRedistributionPairs(
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         var pairs: [RedistributionPair] = []
 
         // Intra-sequence: each homogeneous sequence produces source-sink pairs among its own leaves.
-        for parentNode in graph.nodes {
-            guard parentNode.positionRange != nil else { continue }
+        for parentNodeID in graph.liveNodeIDs {
+            let parentNode = graph.nodes[parentNodeID]
             guard case let .sequence(seqMetadata) = parentNode.kind else { continue }
             guard let tag = seqMetadata.elementTypeTag else { continue }
 
@@ -135,9 +135,9 @@ enum ExchangeScopeQuery {
         }
 
         // Cross-zip: for each zip, find pairs of homogeneous sequence children with matching type tags. Generate cross-group source-sink pairs where the source comes from the earlier-positioned group.
-        for zipNode in graph.nodes {
+        for zipNodeID in graph.liveNodeIDs {
+            let zipNode = graph.nodes[zipNodeID]
             guard case .zip = zipNode.kind else { continue }
-            guard zipNode.positionRange != nil else { continue }
             guard zipNode.children.count >= 2 else { continue }
 
             // Collect homogeneous sequence children with their tags.
@@ -195,7 +195,7 @@ enum ExchangeScopeQuery {
     private static func pairsFromHomogeneousLeaves(
         childIDs: [Int],
         tag: TypeTag,
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         // Collect leaves with position and distance.
@@ -237,7 +237,7 @@ enum ExchangeScopeQuery {
         sourceChildIDs: [Int],
         sinkChildIDs: [Int],
         tag: TypeTag,
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         guard let firstSinkID = sinkChildIDs.first else { return [] }

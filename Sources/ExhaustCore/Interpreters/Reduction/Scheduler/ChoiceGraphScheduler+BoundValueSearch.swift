@@ -18,6 +18,7 @@ extension ChoiceGraphScheduler {
     static func makeBoundValueComposition(
         fibreScope: BoundValueScope,
         scope: TransformationScope,
+        graph: ChoiceGraph,
         gen: ReflectiveGenerator<Any>,
         upstreamBudget: Int = 15
     ) -> any GraphEncoder {
@@ -59,6 +60,7 @@ extension ChoiceGraphScheduler {
             Self.boundValueLift(
                 upstreamProbe: upstreamProbe,
                 parent: parent,
+                graph: graph,
                 fibreScope: fibreScope,
                 gen: gen
             )
@@ -83,6 +85,7 @@ extension ChoiceGraphScheduler {
     static func boundValueLift(
         upstreamProbe: EncoderProbe,
         parent: TransformationScope,
+        graph: ChoiceGraph,
         fibreScope: BoundValueScope,
         gen: ReflectiveGenerator<Any>
     ) -> TransformationScope? {
@@ -132,7 +135,7 @@ extension ChoiceGraphScheduler {
         )
 
         // 3. Copy the parent graph and apply the reshape on the copy. COW means only the bind subtree region is duplicated; the rest of the graph stays shared with the parent.
-        let copy = parent.graph.copy()
+        let copy = graph.copy()
         let application = copy.apply(.leafValues([reshapeChange]), freshTree: freshTree)
 
         // 4. Fall back to a full rebuild if applyBindReshape bailed (multi-pick, structural mismatch, missing metadata). Same fallback the live accept path uses; we just absorb it in the lift instead.

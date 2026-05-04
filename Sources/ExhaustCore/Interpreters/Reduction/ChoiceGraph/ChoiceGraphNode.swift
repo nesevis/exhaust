@@ -3,6 +3,45 @@
 //  Exhaust
 //
 
+// MARK: - Node
+
+/// A node in the ``ChoiceGraph`` representing a value-structural operation in the generator.
+///
+/// Each node stores its identity, kind with per-kind metadata, position mapping to the flat ``ChoiceSequence``, and parent-child relationships forming the containment tree.
+package struct ChoiceGraphNode {
+    /// Stable identity assigned during graph construction.
+    public let id: Int
+
+    /// The value-structural operation this node represents.
+    public let kind: ChoiceGraphNodeKind
+
+    /// Range of ``ChoiceSequence`` indices this node covers, or nil for inactive (unselected) branches. Encoders that modify the sequence can only target nodes with non-nil position ranges.
+    public let positionRange: ClosedRange<Int>?
+
+    /// Indices of child nodes in ``ChoiceGraph/nodes``.
+    public let children: [Int]
+
+    /// Index of the parent node in ``ChoiceGraph/nodes``, or nil for the root.
+    public let parent: Int?
+
+    /// Returns a copy with the specified fields replaced. Unspecified fields carry forward from `self`.
+    ///
+    /// `positionRange` uses a double-optional: `.none` keeps the current value, `.some(nil)` sets it to nil, `.some(.some(range))` sets it to `range`.
+    func with(
+        kind: ChoiceGraphNodeKind? = nil,
+        positionRange: ClosedRange<Int>?? = .none,
+        children: [Int]? = nil
+    ) -> ChoiceGraphNode {
+        ChoiceGraphNode(
+            id: id,
+            kind: kind ?? self.kind,
+            positionRange: positionRange ?? self.positionRange,
+            children: children ?? self.children,
+            parent: parent
+        )
+    }
+}
+
 // MARK: - Node Kind
 
 /// Classifies a node in the ``ChoiceGraph`` by the value-structural operation it represents.
@@ -65,8 +104,8 @@ package struct PickMetadata {
     /// Pick site fingerprint. Two picks with matching values belong to the same recursive generator (possibly at different depths).
     public let fingerprint: UInt64
 
-    /// All valid branch identifiers at this site.
-    public let branchIDs: ClosedRange<UInt64>
+    /// The number of branches at this pick site. Branch identifiers are `0 ..< branchCount`.
+    public let branchCount: UInt64
 
     /// Currently selected branch identifier.
     public let selectedID: UInt64
@@ -126,56 +165,6 @@ package struct BindMetadata {
     }
 }
 
-// MARK: - Bind Classification
-
-/// Classifies a bind site by how its bound subtree responds to variation in the upstream value.
-///
-/// Produced by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Stored on ``BindMetadata/classification``. Read by expensive dependent-node encoders before dispatch.
-package struct BindClassification: Equatable, Hashable, Sendable {
-    /// Structural relationship between the bound subtrees lifted at the upstream range's low and high endpoints.
-    public let topology: BindTopology
-
-    /// Which of the two endpoint lifts succeeded.
-    public let liftability: BindLiftability
-
-    /// Creates a classification with the given topology and liftability verdicts.
-    public init(topology: BindTopology, liftability: BindLiftability) {
-        self.topology = topology
-        self.liftability = liftability
-    }
-}
-
-/// Shape-stability verdict from the classifier's two lifts.
-package enum BindTopology: Equatable, Hashable, Sendable {
-    /// The two lifted bound subtrees have the same skeleton — same node kinds and child counts at matching positions. Leaf-level descriptor differences (tag, width, range) do not break this verdict; they are the signal expensive encoders such as ``GraphComposedEncoder`` converge on.
-    case identical
-    /// The two lifted bound subtrees disagree on node kind or child count at some non-leaf position. Binary-search-style dependent-node encoders cannot converge because each upstream probe reshapes the downstream topology.
-    case divergent
-    /// The classifier could not produce a comparison: singleton upstream domain, both lifts threw, or the walk could not be performed.
-    case unclassifiable
-}
-
-/// Reports which range endpoints the classifier was able to lift.
-package enum BindLiftability: Equatable, Hashable, Sendable {
-    /// Both endpoints materialized successfully.
-    case both
-    /// Only the low endpoint materialized.
-    case lowOnly
-    /// Only the high endpoint materialized.
-    case highOnly
-    /// Neither endpoint materialized.
-    case neither
-}
-
-/// Snapshot of a bind site's upstream value and downstream topology at a given graph state. Compared across graph rebuilds to passively classify binds without materialisation probes.
-package struct BindTopologyObservation: Equatable, Hashable, Sendable {
-    /// Bit pattern of the upstream (inner) leaf at observation time.
-    public let upstreamBitPattern: UInt64
-
-    /// Topology fingerprint of the bound subtree at observation time.
-    public let downstreamFingerprint: UInt64
-}
-
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.
 package struct ZipMetadata {
     /// When true, coverage analysis skips this subtree.
@@ -193,6 +182,9 @@ package struct SequenceMetadata {
     /// Full ``ChoiceSequence`` extent of each direct child element, including any transparent wrapper markers (group/bind from getSize-bind, transform-bind, and so on). Indexed parallel to ``ChoiceGraphNode/children``. Per-element removal must delete the full extent — removing only the inner chooseBits position leaves orphan markers that the materializer cannot decode.
     public let childPositionRanges: [ClosedRange<Int>]
 
+    /// Maps child node ID to its index in ``childPositionRanges`` and ``ChoiceGraphNode/children``. O(1) lookup replacing linear `firstIndex(of:)` scans.
+    public let childIndexByNodeID: [Int: Int]
+
     /// Common ``TypeTag`` of all elements when the sequence is type-homogeneous, or nil for heterogeneous or empty sequences.
     ///
     /// Derived bottom-up at graph construction time from two cases:
@@ -201,26 +193,4 @@ package struct SequenceMetadata {
     ///
     /// When non-nil, any two leaves within the sequence are type-compatible for redistribution without materializing pairwise edges. The exchange scope builder uses this to construct ``RedistributionGroup`` descriptors in O(1) per sequence instead of O(C^2) per sequence.
     public let elementTypeTag: TypeTag?
-}
-
-// MARK: - Node
-
-/// A node in the ``ChoiceGraph`` representing a value-structural operation in the generator.
-///
-/// Each node stores its identity, kind with per-kind metadata, position mapping to the flat ``ChoiceSequence``, and parent-child relationships forming the containment tree.
-package struct ChoiceGraphNode {
-    /// Stable identity assigned during graph construction.
-    public let id: Int
-
-    /// The value-structural operation this node represents.
-    public let kind: ChoiceGraphNodeKind
-
-    /// Range of ``ChoiceSequence`` indices this node covers, or nil for inactive (unselected) branches. Encoders that modify the sequence can only target nodes with non-nil position ranges.
-    public let positionRange: ClosedRange<Int>?
-
-    /// Indices of child nodes in ``ChoiceGraph/nodes``.
-    public let children: [Int]
-
-    /// Index of the parent node in ``ChoiceGraph/nodes``, or nil for the root.
-    public let parent: Int?
 }

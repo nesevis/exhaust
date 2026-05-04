@@ -8,7 +8,7 @@
 extension GraphRedistributionEncoder {
     mutating func startRedistribution(
         scope: RedistributionScope,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) {
         var pairs: [(sourceIndex: Int, sinkIndex: Int, sourceTag: TypeTag, sinkTag: TypeTag, maxDelta: UInt64, mixedContext: MixedRedistributionContext?)] = []
 

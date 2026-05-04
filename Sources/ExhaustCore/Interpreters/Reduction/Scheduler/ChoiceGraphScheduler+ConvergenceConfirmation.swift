@@ -90,13 +90,7 @@ extension ChoiceGraphScheduler {
 
                 if case var .chooseBits(md) = graph.nodes[nodeID].kind {
                     md.convergedOrigin = nil
-                    graph.nodes[nodeID] = ChoiceGraphNode(
-                        id: graph.nodes[nodeID].id,
-                        kind: .chooseBits(md),
-                        positionRange: graph.nodes[nodeID].positionRange,
-                        children: graph.nodes[nodeID].children,
-                        parent: graph.nodes[nodeID].parent
-                    )
+                    graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(md))
                 }
 
                 if isInstrumented {

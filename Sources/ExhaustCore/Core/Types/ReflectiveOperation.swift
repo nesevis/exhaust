@@ -107,8 +107,8 @@ public enum ReflectiveOperation {
     ///
     /// - Parameters:
     ///   - choices: Array of weighted generator options with replay labels.
-    ///   - branches: The contiguous range of branch identifiers for this pick site.
-    case pick(choices: ContiguousArray<PickTuple>, branches: ClosedRange<UInt64>)
+    ///   - branchCount: The number of branches at this pick site. Branch identifiers are `0 ..< branchCount`.
+    case pick(choices: ContiguousArray<PickTuple>, branchCount: UInt64)
 
     /// Conditional generation that prunes invalid branches during reflection.
     ///
@@ -395,4 +395,57 @@ public enum TransformKind {
         transforms: [(Any) throws -> Any],
         inputType: Any.Type
     )
+}
+
+extension ReflectiveOperation {
+
+    // MARK: - Inner Generator Mapping
+
+    /// Applies a transform to this operation's single inner sub-generator, if it has one.
+    ///
+    /// Returns the rebuilt operation for wrapper operations that contain exactly one sub-generator (`contramap`, `prune`, `resize`, `filter`, `classify`, `unique`, `transform`).
+    /// Returns `nil` for operations with zero or multiple sub-generators (`chooseBits`, `just`, `getSize`, `pick`, `zip`, `sequence`, `metamorphic`).
+    package func mapInnerGenerator(
+        _ transform: (ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<Any>
+    ) rethrows -> ReflectiveOperation? {
+        switch self {
+        case let .contramap(contramapTransform, next):
+            return .contramap(transform: contramapTransform, next: try transform(next))
+
+        case let .prune(next):
+            return .prune(next: try transform(next))
+
+        case let .resize(newSize, next):
+            return .resize(newSize: newSize, next: try transform(next))
+
+        case let .filter(gen, fingerprint, filterType, predicate, sourceLocation):
+            return .filter(
+                gen: try transform(gen),
+                fingerprint: fingerprint,
+                filterType: filterType,
+                predicate: predicate,
+                sourceLocation: sourceLocation
+            )
+
+        case let .classify(gen, fingerprint, classifiers):
+            return .classify(
+                gen: try transform(gen),
+                fingerprint: fingerprint,
+                classifiers: classifiers
+            )
+
+        case let .unique(gen, fingerprint, keyExtractor):
+            return .unique(
+                gen: try transform(gen),
+                fingerprint: fingerprint,
+                keyExtractor: keyExtractor
+            )
+
+        case let .transform(kind, inner):
+            return .transform(kind: kind, inner: try transform(inner))
+
+        case .chooseBits, .just, .getSize, .pick, .zip, .sequence:
+            return nil
+        }
+    }
 }

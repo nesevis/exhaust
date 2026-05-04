@@ -59,7 +59,7 @@ struct GraphReorderEncoder: GraphEncoder {
         return nil
     }
 
-    mutating func refreshScope(graph _: ChoiceGraph, sequence: ChoiceSequence) {
+    mutating func refreshScope(graph _: some ReadOnlyChoiceGraph, sequence: ChoiceSequence) {
         currentSequence = sequence
     }
 }

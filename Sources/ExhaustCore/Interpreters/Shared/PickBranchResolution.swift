@@ -30,13 +30,15 @@ package enum PickBranchResolution {
         }
     }
 
-    /// Returns the generator for the branch with the given identifier, or `nil` if no match exists.
+    /// Returns the generator for the branch with the given identifier, or `nil` if the identifier is out of range.
     @inline(__always)
     public static func generator(
         for id: UInt64,
         in choices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> ReflectiveGenerator<Any>? {
-        choices.first(where: { $0.id == id })?.generator
+        let index = Int(id)
+        guard index < choices.count else { return nil }
+        return choices[index].generator
     }
 
     /// Filters replay branches to only selected branches when any selection markers exist, passing through unchanged otherwise.

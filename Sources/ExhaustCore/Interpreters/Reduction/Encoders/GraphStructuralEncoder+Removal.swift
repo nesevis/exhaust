@@ -8,7 +8,7 @@ extension GraphStructuralEncoder {
     func buildRemovalProbe(
         scope: RemovalScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> EncoderProbe? {
         switch scope {
         case let .elements(elementScope):
@@ -45,7 +45,7 @@ extension GraphStructuralEncoder {
     private func buildElementCandidate(
         scope: ElementRemovalScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> ChoiceSequence? {
         var rangeSet = RangeSet<Int>()
         for target in scope.targets {
@@ -67,14 +67,14 @@ extension GraphStructuralEncoder {
     private func elementExtent(
         for elementNodeID: Int,
         inSequence sequenceNodeID: Int,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> ClosedRange<Int>? {
         guard sequenceNodeID < graph.nodes.count else { return nil }
         guard case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind
         else {
             return nil
         }
-        guard let childIndex = graph.nodes[sequenceNodeID].children.firstIndex(of: elementNodeID),
+        guard let childIndex = metadata.childIndexByNodeID[elementNodeID],
               childIndex < metadata.childPositionRanges.count
         else {
             return graph.nodes[elementNodeID].positionRange
@@ -86,7 +86,7 @@ extension GraphStructuralEncoder {
     private func buildSubtreeCandidate(
         scope: SubtreeRemovalScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> ChoiceSequence? {
         guard let range = graph.nodes[scope.nodeID].positionRange else { return nil }
         var rangeSet = RangeSet<Int>()
@@ -105,7 +105,7 @@ extension GraphStructuralEncoder {
     mutating func nextCoveringAlignedProbe() -> EncoderProbe? {
         guard let state = coveringAlignedState else { return nil }
 
-        while let row = state.scope.handle.generator.next() {
+        while let row = state.scope.generator.next() {
             // Decode the row into deletion targets.
             var targets: [SequenceRemovalTarget] = []
             var removedPairs: [(seqNodeID: Int, removedNodeIDs: [Int])] = []

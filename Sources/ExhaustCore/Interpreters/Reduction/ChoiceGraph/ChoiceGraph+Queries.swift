@@ -13,9 +13,9 @@ package extension ChoiceGraph {
     /// - SeeAlso: ``ChoiceDependencyGraph/reductionEdges()``
     var reductionEdges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] {
         var edges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] = []
-        for node in nodes {
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
@@ -82,17 +82,16 @@ package extension ChoiceGraph {
     ///
     /// - SeeAlso: ``BipartiteMatching``
     var deletionAntichain: [Int] {
-        let candidateNodes = nodes.filter { node in
-            guard node.positionRange != nil else { return false }
+        let candidateIDs = liveNodeIDs.filter { nodeID in
+            let node = nodes[nodeID]
             guard let parentID = node.parent else { return false }
             guard case .sequence = nodes[parentID].kind else { return false }
             return true
         }
 
-        guard candidateNodes.isEmpty == false else { return [] }
+        guard candidateIDs.isEmpty == false else { return [] }
 
         // Map candidate node IDs to dense indices for the bipartite graph.
-        let candidateIDs = candidateNodes.map(\.id)
         let candidateCount = candidateIDs.count
         var idToIndex = [Int: Int]()
         for (index, nodeID) in candidateIDs.enumerated() {
@@ -101,43 +100,36 @@ package extension ChoiceGraph {
 
         // Build reachability restricted to the candidate set via on-demand DFS from each candidate. O(K · (V + E)) where K is the candidate count — much cheaper than the former O(V · E) eager transitive closure when K << V.
         let candidateIDSet = Set(candidateIDs)
-        var adjacency = [[Int]](repeating: [], count: candidateCount)
+        var reachability = [Int: Set<Int>]()
+        reachability.reserveCapacity(candidateCount)
         for (sourceIndex, sourceID) in candidateIDs.enumerated() {
             let reached = reachableNodes(from: sourceID, within: candidateIDSet)
+            var targetIndices = Set<Int>()
             for targetID in reached {
                 if let targetIndex = idToIndex[targetID] {
-                    adjacency[sourceIndex].append(targetIndex)
+                    targetIndices.insert(targetIndex)
                 }
+            }
+            if targetIndices.isEmpty == false {
+                reachability[sourceIndex] = targetIndices
             }
         }
 
         let antichainIndices = BipartiteMatching.maximumAntichain(
             nodeCount: candidateCount,
-            reachability: Dictionary(
-                uniqueKeysWithValues: (0 ..< candidateCount).map { index in
-                    (index, Set(adjacency[index]))
-                }
-            )
+            reachability: reachability
         )
 
         // Map back to node IDs.
         return antichainIndices.map { candidateIDs[$0] }
     }
 
-    /// All leaf node IDs (chooseBits nodes with non-nil position range).
-    var leafNodes: [Int] {
-        nodes.compactMap { node in
-            guard case .chooseBits = node.kind else { return nil }
-            guard node.positionRange != nil else { return nil }
-            return node.id
-        }
-    }
-
     /// Returns the sequence positions of all active `chooseBits` leaf nodes.
     ///
     /// This is the graph's natural definition of leaf positions — every value-producing node with a non-nil position range. This differs from the CDG's `leafPositions`, which partitions the flat sequence around structural node ranges. The graph's model is richer: every leaf has an explicit node with type metadata.
     var leafPositions: [ClosedRange<Int>] {
-        nodes.compactMap { node in
+        liveNodeIDs.compactMap { nodeID in
+            let node = nodes[nodeID]
             guard case .chooseBits = node.kind else { return nil }
             return node.positionRange
         }
@@ -152,7 +144,8 @@ package extension ChoiceGraph {
     /// Counts the number of bind nodes whose bound child's position range contains the given position.
     func bindDepth(at position: Int) -> Int {
         var depth = 0
-        for node in nodes {
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.children.count >= 2 else { continue }
             let boundChildID = node.children[metadata.boundChildIndex]
@@ -167,7 +160,8 @@ package extension ChoiceGraph {
 
     /// Whether a sequence position falls inside any bind node's bound child range.
     func isInBoundSubtree(_ position: Int) -> Bool {
-        for node in nodes {
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.children.count >= 2 else { continue }
             let boundChildID = node.children[metadata.boundChildIndex]
@@ -182,7 +176,8 @@ package extension ChoiceGraph {
 
     /// Returns the bind node whose inner child's position range contains the given position, or nil.
     func bindNodeForInnerPosition(_ position: Int) -> ChoiceGraphNode? {
-        for node in nodes {
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
@@ -226,9 +221,9 @@ package extension ChoiceGraph {
     /// Used by the partial-rebuild scheduler (``ChoiceGraphScheduler/runProbeLoop(...)``) under instrumentation to validate that ``ChoiceGraph/apply(_:freshTree:)`` produces a graph structurally equivalent to ``ChoiceGraph/build(from:)`` on the same tree.
     var structuralFingerprint: UInt64 {
         var nodeHashes: [UInt64] = []
-        nodeHashes.reserveCapacity(nodes.count)
-        for node in nodes {
-            guard node.positionRange != nil else { continue }
+        nodeHashes.reserveCapacity(liveNodeIDs.count)
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             let kindByte: UInt64 = switch node.kind {
             case .chooseBits: 0
             case .pick: 1

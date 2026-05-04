@@ -150,13 +150,7 @@ extension ChoiceGraph {
             downstreamFingerprint: verdict.fingerprint
         )
         let node = nodes[bindNodeID]
-        nodes[bindNodeID] = ChoiceGraphNode(
-            id: node.id,
-            kind: .bind(updatedMetadata),
-            positionRange: node.positionRange,
-            children: node.children,
-            parent: node.parent
-        )
+        nodes[bindNodeID] = node.with(kind: .bind(updatedMetadata))
         // Mirror into the per-graph fingerprint-keyed cache so the verdict survives the next ``ChoiceGraph/build(from:inheriting:)``. The per-node `BindMetadata.classification` field is the in-instance authority; the cache is the across-instance one. Phase 2 keeps both stores updated for compatibility; later phases may demote the per-node field to a derived view populated from the cache at build time.
         bindClassifications[bindMetadata.fingerprint] = verdict.classification
     }
@@ -172,8 +166,8 @@ extension ChoiceGraph {
     ///
     /// Call after each graph rebuild. Avoids the two materialisation probes that ``classifyBind`` requires by observing natural upstream variation across rebuild cycles.
     func observeBindTopologies(tree: ChoiceTree) {
-        for (nodeID, node) in nodes.enumerated() {
-            guard isTombstoned(nodeID) == false else { continue }
+        for nodeID in liveNodeIDs {
+            let node = nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
             guard metadata.isStructurallyConstant == false else { continue }
             if bindClassifications[metadata.fingerprint] != nil { continue }
@@ -253,7 +247,7 @@ extension ChoiceGraph {
     /// Same node kind at each corresponding position, and same child counts at every non-leaf position, with these relaxations:
     /// - Leaf-level descriptors on ``ChoiceTree/choice(_:_:)`` (tag, width, range) are not compared — they are the signal expensive encoders operate on.
     /// - ``ChoiceTree/sequence(length:elements:_:)`` element counts may differ; elements are compared pairwise up to the shared prefix. A sequence that shifts length but keeps element shape stable (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`) remains ``BindTopology/identical``.
-    /// - Transparent wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchIDs:choice:)``, ``ChoiceTree/selected(_:)``) pass through without requiring a matching wrapper on the other side.
+    /// - Transparent wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:)``, ``ChoiceTree/selected(_:)``) pass through without requiring a matching wrapper on the other side.
     static func sameTopology(_ low: ChoiceTree, _ high: ChoiceTree) -> Bool {
         // Strip transparent wrappers symmetrically before comparing.
         let lhs = unwrapTransparent(low)
@@ -302,7 +296,7 @@ extension ChoiceGraph {
         }
     }
 
-    /// Strips through transparent tree wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchIDs:choice:)`` and ``ChoiceTree/selected(_:)``) so the caller can compare the underlying structure without tripping on wrapper asymmetry.
+    /// Strips through transparent tree wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:)`` and ``ChoiceTree/selected(_:)``) so the caller can compare the underlying structure without tripping on wrapper asymmetry.
     private static func unwrapTransparent(_ tree: ChoiceTree) -> ChoiceTree {
         switch tree {
         case let .branch(_, _, _, _, choice):

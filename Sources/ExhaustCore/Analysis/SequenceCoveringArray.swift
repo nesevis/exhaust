@@ -91,12 +91,11 @@ package enum SequenceCoveringArray {
 
             let chosen = choices[Int(valueIndex)]
 
-            let branchIDs = choices.first!.id ... choices.last!.id
             let branch = ChoiceTree.branch(
                 fingerprint: chosen.fingerprint,
                 weight: chosen.weight,
                 id: chosen.id,
-                branchIDs: branchIDs,
+                branchCount: UInt64(choices.count),
                 choice: .just
             )
 
@@ -253,12 +252,11 @@ package enum SequenceCoveringArray {
                 subTree = argTree
             }
 
-            let branchIDs = mapping.pickChoices.first!.id ... mapping.pickChoices.last!.id
             let branch = ChoiceTree.branch(
                 fingerprint: chosen.fingerprint,
                 weight: chosen.weight,
                 id: chosen.id,
-                branchIDs: branchIDs,
+                branchCount: UInt64(mapping.pickChoices.count),
                 choice: subTree
             )
 

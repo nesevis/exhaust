@@ -8,7 +8,7 @@ extension GraphStructuralEncoder {
     func buildReplacementProbe(
         scope: ReplacementScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> EncoderProbe? {
         switch scope {
         case let .selfSimilar(selfSimilarScope):
@@ -44,7 +44,7 @@ extension GraphStructuralEncoder {
     private func buildSelfSimilarCandidate(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> ChoiceSequence? {
         guard let targetRange = graph.nodes[scope.targetNodeID].positionRange,
               let donorRange = graph.nodes[scope.donorNodeID].positionRange
@@ -68,7 +68,7 @@ extension GraphStructuralEncoder {
     private func buildBranchPivotCandidate(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> EncoderProbe? {
         guard scope.pickNodeID < graph.nodes.count else { return nil }
         guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else {
@@ -95,7 +95,7 @@ extension GraphStructuralEncoder {
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
         replacement.append(.group(true))
-        replacement.append(.branch(.init(id: scope.targetBranchID, validIDs: pickMetadata.branchIDs)))
+        replacement.append(.branch(.init(id: scope.targetBranchID, branchCount: pickMetadata.branchCount)))
         for index in 0 ..< targetContent.count {
             replacement.append(targetContent[index])
         }
@@ -119,7 +119,7 @@ extension GraphStructuralEncoder {
     private func buildDescendantPromotionCandidate(
         scope: DescendantPromotionScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> ChoiceSequence? {
         guard let ancestorRange = graph.nodes[scope.ancestorPickNodeID].positionRange,
               let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange
@@ -159,12 +159,12 @@ extension GraphStructuralEncoder {
                 elements: elements.map { minimizingLeaves(in: $0) },
                 metadata
             )
-        case let .branch(fingerprint, weight, id, branchIDs, choice):
+        case let .branch(fingerprint, weight, id, branchCount, choice):
             return .branch(
                 fingerprint: fingerprint,
                 weight: weight,
                 id: id,
-                branchIDs: branchIDs,
+                branchCount: branchCount,
                 choice: minimizingLeaves(in: choice)
             )
         case let .group(children, isOpaque):
@@ -193,7 +193,7 @@ extension GraphStructuralEncoder {
     /// Wrapping kind for a depth-0 base case entry during cross-depth expansion.
     private enum LeafWrapping {
         /// Direct recursion (like BinaryHeap): wrap in pick-site markers.
-        case pick(branchID: UInt64, validIDs: ClosedRange<UInt64>, fingerprint: UInt64)
+        case pick(branchID: UInt64, branchCount: UInt64, fingerprint: UInt64)
         /// `Gen.recursive` recursion: wrap in `._bound` bind markers with depth selector = 0.
         case bind(depthSelectorEntry: ChoiceSequenceValue)
     }
@@ -207,7 +207,7 @@ extension GraphStructuralEncoder {
         _ entries: [ChoiceSequenceValue],
         donorNodeID: Int,
         donorRangeStart: Int,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> [ChoiceSequenceValue] {
         guard case let .pick(donorMeta) = graph.nodes[donorNodeID].kind else { return entries }
 
@@ -228,9 +228,9 @@ extension GraphStructuralEncoder {
             let absolutePosition = donorRangeStart + index
             if let wrapping = leafExpansions[absolutePosition] {
                 switch wrapping {
-                case let .pick(branchID, validIDs, fingerprint):
+                case let .pick(branchID, branchCount, fingerprint):
                     result.append(.group(true))
-                    result.append(.branch(.init(id: branchID, validIDs: validIDs, fingerprint: fingerprint)))
+                    result.append(.branch(.init(id: branchID, branchCount: branchCount, fingerprint: fingerprint)))
                     result.append(entry)
                     result.append(.group(false))
                 case let .bind(depthSelectorEntry):
@@ -254,7 +254,7 @@ extension GraphStructuralEncoder {
         donorRangeStart _: Int,
         fingerprint: UInt64,
         pickMetadata: PickMetadata,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> [Int: LeafWrapping] {
         // Phase 1: build per-branch masks from non-innermost picks across the entire self-similarity group.
         var branchMasks: [UInt64: Set<Int>] = [:]
@@ -297,7 +297,7 @@ extension GraphStructuralEncoder {
     private static func collectSelfSimilarPicks(
         rootID: Int,
         fingerprint: UInt64,
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         into result: inout [Int]
     ) {
         var stack = [rootID]
@@ -320,7 +320,7 @@ extension GraphStructuralEncoder {
     private static func zipMaskForPick(
         pickID: Int,
         fingerprint: UInt64,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> Set<Int>? {
         // Walk: pick → bind (bound child) → zip.
         let current = pickID
@@ -355,7 +355,7 @@ extension GraphStructuralEncoder {
         pickID: Int,
         fingerprint: UInt64,
         pickMetadata: PickMetadata,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> LeafWrapping? {
         // Check if the pick's parent is a ._bound bind (bind → pick with same fingerprint).
         if let parentID = graph.nodes[pickID].parent,
@@ -373,9 +373,9 @@ extension GraphStructuralEncoder {
 
         // Direct recursion: use pick wrapping.
         if let leafBranchID = findLeafBranchID(in: pickMetadata) {
-            return .pick(branchID: leafBranchID, validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
+            return .pick(branchID: leafBranchID, branchCount: pickMetadata.branchCount, fingerprint: pickMetadata.fingerprint)
         }
-        return .pick(branchID: pickMetadata.branchIDs.lowerBound, validIDs: pickMetadata.branchIDs, fingerprint: pickMetadata.fingerprint)
+        return .pick(branchID: 0, branchCount: pickMetadata.branchCount, fingerprint: pickMetadata.fingerprint)
     }
 
     /// Records base case positions and wrapping kinds from an innermost pick using a precomputed mask. When ``mask`` is nil (no non-innermost picks available to derive the mask), all zip children are expanded.
@@ -384,7 +384,7 @@ extension GraphStructuralEncoder {
         fingerprint: UInt64,
         mask: Set<Int>?,
         wrapping: LeafWrapping?,
-        graph: ChoiceGraph,
+        graph: some ReadOnlyChoiceGraph,
         expansions: inout [Int: LeafWrapping]
     ) {
         var stack = Array(graph.nodes[pickID].children)
@@ -417,12 +417,12 @@ extension GraphStructuralEncoder {
     /// Finds the branch ID of the first leaf (`.just` or `.choice`) branch in a pick site's elements.
     private static func findLeafBranchID(in metadata: PickMetadata) -> UInt64? {
         for (index, element) in metadata.branchElements.enumerated() {
-            guard index < metadata.branchIDs.count else { break }
+            guard index < Int(metadata.branchCount) else { break }
             let inner = element.isSelected ? element.unwrapped : element
             if case let .branch(_, _, _, _, content) = inner {
                 switch content {
                 case .just, .choice:
-                    return metadata.branchIDs.lowerBound + UInt64(index)
+                    return UInt64(index)
                 default:
                     continue
                 }

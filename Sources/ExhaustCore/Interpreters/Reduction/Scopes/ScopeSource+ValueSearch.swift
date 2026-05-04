@@ -12,7 +12,7 @@ struct MinimizationSource: ScopeSource {
     private var scopes: [(scope: MinimizationScope, yield: TransformationYield)]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
         var entries: [(scope: MinimizationScope, yield: TransformationYield)] = []
 
@@ -76,7 +76,7 @@ struct MinimizationSource: ScopeSource {
         )
     }
 
-    private static func computeValueYield(leafNodeID: Int, graph: ChoiceGraph, innerDescendantToBind: [Int: Int]) -> Int {
+    private static func computeValueYield(leafNodeID: Int, graph: some ReadOnlyChoiceGraph, innerDescendantToBind: [Int: Int]) -> Int {
         guard let bindNodeID = innerDescendantToBind[leafNodeID] else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
         guard metadata.isStructurallyConstant == false else { return 0 }
@@ -95,7 +95,7 @@ struct ExchangeSource: ScopeSource {
     private var scopes: [(scope: ExchangeScope, yield: TransformationYield)]
     private var index = 0
 
-    init(graph: ChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(scope: ExchangeScope, yield: TransformationYield)] = []
         for scope in ExchangeScopeQuery.build(graph: graph) {
             let estimatedProbes: Int

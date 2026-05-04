@@ -489,8 +489,6 @@ func runSCACoverage<Command>(
         domainSizes: domainSizes,
         strength: strength
     )
-    defer { generator.deallocate() }
-
     let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
     var iterations = 0

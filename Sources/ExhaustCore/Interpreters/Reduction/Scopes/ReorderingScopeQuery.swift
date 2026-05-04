@@ -16,12 +16,12 @@ enum ReorderingScopeQuery {
     /// The bind-inner exclusion uses a containment test (sibling ⊆ bind-inner range), not overlap. A bind block whose own length chooseBits sits inside it overlaps the bind-inner range but is not contained by it — moving the complete block carries inner and bound together, which is safe. Only a sibling whose range is entirely within a bind-inner range (that is, the sibling IS the bind-inner child) must be excluded.
     ///
     /// Returned groups are sorted deepest-first, rightmost-first so inner groups settle before outer groups compare them.
-    static func build(graph: ChoiceGraph) -> ReorderingScope? {
+    static func build(graph: some ReadOnlyChoiceGraph) -> ReorderingScope? {
         let bindInnerRanges = collectBindInnerRanges(graph: graph)
         var groups: [ReorderableGroup] = []
 
-        for node in graph.nodes {
-            guard node.positionRange != nil else { continue }
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
 
             let childRanges: [ClosedRange<Int>]
             let childKinds: [ChoiceGraphNodeKind]
@@ -45,7 +45,7 @@ enum ReorderingScopeQuery {
                 continue
             }
 
-            let depth = nodeDepth(nodeID: node.id, graph: graph)
+            let depth = nodeDepth(nodeID: nodeID, graph: graph)
 
             var byCategory: [SiblingGroupKey: [ClosedRange<Int>]] = [:]
             for (range, kind) in zip(childRanges, childKinds) {
@@ -72,7 +72,7 @@ enum ReorderingScopeQuery {
 
     // MARK: - Private Helpers
 
-    private static func collectBindInnerRanges(graph: ChoiceGraph) -> [ClosedRange<Int>] {
+    private static func collectBindInnerRanges(graph: some ReadOnlyChoiceGraph) -> [ClosedRange<Int>] {
         var result: [ClosedRange<Int>] = []
         for node in graph.nodes {
             guard case let .bind(metadata) = node.kind else { continue }
@@ -92,13 +92,30 @@ enum ReorderingScopeQuery {
         _ childRanges: [ClosedRange<Int>],
         bindInnerRanges: [ClosedRange<Int>]
     ) -> Bool {
+        guard bindInnerRanges.isEmpty == false else { return true }
+        let sorted = bindInnerRanges.sorted { $0.lowerBound < $1.lowerBound }
         for siblingRange in childRanges {
-            for innerRange in bindInnerRanges {
-                if innerRange.lowerBound <= siblingRange.lowerBound,
-                   siblingRange.upperBound <= innerRange.upperBound
-                {
+            var low = 0
+            var high = sorted.count
+            while low < high {
+                let mid = low + (high - low) / 2
+                if sorted[mid].lowerBound <= siblingRange.lowerBound {
+                    low = mid + 1
+                } else {
+                    high = mid
+                }
+            }
+            // Check all candidates at indices 0..<low whose lowerBound <= siblingRange.lowerBound.
+            // Only the last few can contain the sibling — scan backward until lowerBound is too small
+            // to possibly contain siblingRange (optimization: break early when upperBound < siblingRange.lowerBound).
+            var candidate = low - 1
+            while candidate >= 0 {
+                let innerRange = sorted[candidate]
+                if innerRange.upperBound < siblingRange.lowerBound { break }
+                if siblingRange.upperBound <= innerRange.upperBound {
                     return false
                 }
+                candidate -= 1
             }
         }
         return true
@@ -129,7 +146,7 @@ enum ReorderingScopeQuery {
         }
     }
 
-    private static func nodeDepth(nodeID: Int, graph: ChoiceGraph) -> Int {
+    private static func nodeDepth(nodeID: Int, graph: some ReadOnlyChoiceGraph) -> Int {
         var depth = 0
         var current = graph.nodes[nodeID].parent
         while let parentID = current {

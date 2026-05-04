@@ -75,8 +75,6 @@ package enum CoverageRunner {
                 domainSizes: domainSizes,
                 strength: strength
             )
-            defer { generator.deallocate() }
-
             var iterations = 0
             var rowIndex = 0
             while rowIndex < budget, let row = generator.next() {

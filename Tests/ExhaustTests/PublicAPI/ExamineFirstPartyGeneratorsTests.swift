@@ -283,8 +283,38 @@ struct ExamineFirstPartyGeneratorsTests {
 
     // MARK: - Collections: element
 
-    @Test func elementFromArray() {
+    @Test("element(from:) Hashable")
+    func elementFromArrayHashable() {
         let report = #examine(.element(from: [10, 20, 30, 40, 50]), samples: 50)
+        #expect(report.passed)
+    }
+
+    @Test("element(from:) Equatable, non-Hashable")
+    func elementFromArrayEquatable() {
+        let report = #examine(.element(from: [1.0, 2.5, 3.14, 0.0, -1.0]), samples: 50)
+        #expect(report.passed)
+    }
+
+    @Test("element(from:by:) Hashable key path")
+    func elementFromArrayByHashableKeyPath() {
+        let items = [
+            KeyPathFixture(id: 1, label: .init(value: "alpha")),
+            KeyPathFixture(id: 2, label: .init(value: "beta")),
+            KeyPathFixture(id: 3, label: .init(value: "gamma")),
+            KeyPathFixture(id: 4, label: .init(value: "delta")),
+        ]
+        let report = #examine(Gen.element(from: items, by: \.id), samples: 50)
+        #expect(report.passed)
+    }
+
+    @Test("element(from:by:) Equatable key path")
+    func elementFromArrayByEquatableKeyPath() {
+        let items = [
+            KeyPathFixture(id: 1, label: .init(value: "alpha")),
+            KeyPathFixture(id: 2, label: .init(value: "beta")),
+            KeyPathFixture(id: 3, label: .init(value: "gamma")),
+        ]
+        let report = #examine(Gen.element(from: items, by: \.label), samples: 50)
         #expect(report.passed)
     }
 
@@ -469,6 +499,15 @@ private enum Direction: CaseIterable, Equatable {
 
 private enum DirectionNonEquatable: CaseIterable {
     case north, south, east, west
+}
+
+private struct KeyPathFixture {
+    let id: Int
+    let label: EquatableOnly
+
+    struct EquatableOnly: Equatable {
+        let value: String
+    }
 }
 
 // swiftlint:enable type_body_length

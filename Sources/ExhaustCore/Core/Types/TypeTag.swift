@@ -240,8 +240,10 @@ extension TypeTag: Equatable {
              (.int, .int), (.int64, .int64), (.int32, .int32),
              (.int16, .int16), (.int8, .int8),
              (.double, .double), (.float, .float), (.float16, .float16),
-             (.bits, .bits), (.character, .character):
+             (.bits, .bits):
             true
+        case let (.character(lhsIndices), .character(rhsIndices)):
+            lhsIndices == rhsIndices
         case let (.date(lhsLower, lhsInterval, lhsTZ), .date(rhsLower, rhsInterval, rhsTZ)):
             lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ
         default:

@@ -87,11 +87,11 @@ struct ChoiceGraphTests {
     @Test("Pick site with two branches produces pick node with active and inactive children")
     func pickSite() {
         let branchA = ChoiceTree.branch(
-            fingerprint: 1000, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(1),
+            fingerprint: 1000, weight: 1, id: 0, branchCount: 2,
             choice: .choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
         )
         let branchB = ChoiceTree.branch(
-            fingerprint: 1000, weight: 1, id: 1, branchIDs: UInt64(0) ... UInt64(1),
+            fingerprint: 1000, weight: 1, id: 1, branchCount: 2,
             choice: .choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
         )
         let tree = ChoiceTree.group([branchA, .selected(branchB)])
@@ -107,7 +107,7 @@ struct ChoiceGraphTests {
         if case let .pick(metadata) = pickNodes[0].kind {
             #expect(metadata.fingerprint == 1000)
             #expect(metadata.selectedID == 1)
-            #expect(metadata.branchIDs == 0 ... 1)
+            #expect(metadata.branchCount == 2)
         }
 
         // Should have children — at least the active branch.
@@ -228,15 +228,15 @@ struct ChoiceGraphTests {
     func selfSimilarityGroups() {
         // Two pick sites with the same fingerprint should be grouped together.
         let pickA = ChoiceTree.group([
-            .branch(fingerprint: 42, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(1),
+            .branch(fingerprint: 42, weight: 1, id: 0, branchCount: 2,
                     choice: .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchIDs: UInt64(0) ... UInt64(1),
+            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchCount: 2,
                               choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
         ])
         let pickB = ChoiceTree.group([
-            .branch(fingerprint: 42, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(1),
+            .branch(fingerprint: 42, weight: 1, id: 0, branchCount: 2,
                     choice: .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchIDs: UInt64(0) ... UInt64(1),
+            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchCount: 2,
                               choice: .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
         ])
         let tree = ChoiceTree.group([pickA, pickB])
@@ -252,9 +252,9 @@ struct ChoiceGraphTests {
     func selfSimilarityExcludesInactivePicks() {
         // A single pick site — only one active pick, no group of size >= 2 possible.
         let tree = ChoiceTree.group([
-            .branch(fingerprint: 1000, weight: 1, id: 0, branchIDs: UInt64(0) ... UInt64(1),
+            .branch(fingerprint: 1000, weight: 1, id: 0, branchCount: 2,
                     choice: .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(fingerprint: 1000, weight: 1, id: 1, branchIDs: UInt64(0) ... UInt64(1),
+            .selected(.branch(fingerprint: 1000, weight: 1, id: 1, branchCount: 2,
                               choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
         ])
 

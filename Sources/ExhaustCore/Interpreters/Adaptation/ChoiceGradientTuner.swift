@@ -141,7 +141,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
         case let .impure(operation, continuation):
             switch operation {
-            case let .pick(choices, branches):
+            case let .pick(choices, branchCount):
                 var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
                 baked.reserveCapacity(choices.count)
                 let depthOffset = UInt64(depth) &* 0x9E37_79B9_7F4A_7C15
@@ -198,7 +198,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         )
                     ))
                 }
-                return .impure(operation: .pick(choices: baked, branches: branches), continuation: continuation)
+                return .impure(operation: .pick(choices: baked, branchCount: branchCount), continuation: continuation)
 
             case let .zip(generators, _):
                 let bakedGens = ContiguousArray(generators.map {
@@ -215,74 +215,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation
                 )
 
-            case let .contramap(transform, next):
-                return .impure(
-                    operation: .contramap(
-                        transform: transform,
-                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .prune(next):
-                return .impure(
-                    operation: .prune(
-                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .resize(newSize, next):
-                return .impure(
-                    operation: .resize(
-                        newSize: newSize,
-                        next: bakeWeights(next, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
-                return .impure(
-                    operation: .filter(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
-                        fingerprint: fingerprint,
-                        filterType: filterType,
-                        predicate: predicate,
-                        sourceLocation: sourceLocation
-                    ),
-                    continuation: continuation
-                )
-
-            case let .classify(subGen, fingerprint, classifiers):
-                return .impure(
-                    operation: .classify(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
-                        fingerprint: fingerprint,
-                        classifiers: classifiers
-                    ),
-                    continuation: continuation
-                )
-
-            case let .unique(subGen, fingerprint, keyExtractor):
-                return .impure(
-                    operation: .unique(
-                        gen: bakeWeights(subGen, from: accumulator, strategy: strategy, depth: depth),
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor
-                    ),
-                    continuation: continuation
-                )
-
-            case let .transform(kind, inner):
-                return .impure(
-                    operation: .transform(
-                        kind: kind,
-                        inner: bakeWeights(inner, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            case .chooseBits, .just, .getSize:
+            default:
+                if let mapped = operation.mapInnerGenerator({ bakeWeights($0, from: accumulator, strategy: strategy, depth: depth) }) {
+                    return .impure(operation: mapped, continuation: continuation)
+                }
                 return gen
             }
         }
@@ -411,9 +347,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
                         let subranges = (lower ... upper).split(into: subrangeCount)
 
-                        let firstID = context.makeID()
-                        let lastID = firstID + UInt64(subranges.count - 1)
-                        let branchRange = firstID ... lastID
+                        let branchCount = UInt64(subranges.count)
 
                         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                         subrangeChoices.reserveCapacity(subranges.count)
@@ -437,7 +371,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                             subrangeChoices.append(ReflectiveOperation.PickTuple(
                                 fingerprint: context.makeID(),
-                                id: firstID + UInt64(index),
+                                id: UInt64(index),
                                 weight: 1,
                                 generator: subSeqGen
                             ))
@@ -445,7 +379,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                         // Do NOT recurse into synthesized pick — inner generators are already subdivided
                         return .impure(
-                            operation: .pick(choices: subrangeChoices, branches: branchRange),
+                            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
                             continuation: continuation
                         )
                     }
@@ -457,9 +391,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         into: Swift.min(4, Int(context.maxSize + 1))
                     )
 
-                    let firstID = context.makeID()
-                    let lastID = firstID + UInt64(subranges.count - 1)
-                    let branchRange = firstID ... lastID
+                    let branchCount = UInt64(subranges.count)
 
                     var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
                     subrangeChoices.reserveCapacity(subranges.count)
@@ -485,7 +417,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                         subrangeChoices.append(ReflectiveOperation.PickTuple(
                             fingerprint: context.makeID(),
-                            id: firstID + UInt64(index),
+                            id: UInt64(index),
                             weight: 1,
                             generator: subSeqGen
                         ))
@@ -493,7 +425,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                     // Do NOT recurse into synthesized pick — inner generators are already subdivided
                     return .impure(
-                        operation: .pick(choices: subrangeChoices, branches: branchRange),
+                        operation: .pick(choices: subrangeChoices, branchCount: branchCount),
                         continuation: continuation
                     )
                 }
@@ -504,7 +436,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation
                 )
 
-            case let .pick(choices, branches):
+            case let .pick(choices, branchCount):
                 var subdivided = ContiguousArray<ReflectiveOperation.PickTuple>()
                 subdivided.reserveCapacity(choices.count)
                 for choice in choices {
@@ -515,7 +447,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         generator: subdivideForCGS(choice.generator, context: context, thresholds: thresholds)
                     ))
                 }
-                return .impure(operation: .pick(choices: subdivided, branches: branches), continuation: continuation)
+                return .impure(operation: .pick(choices: subdivided, branchCount: branchCount), continuation: continuation)
 
             case let .zip(generators, _):
                 let subdivided = try ContiguousArray(generators.map {
@@ -523,72 +455,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 })
                 return .impure(operation: .zip(subdivided), continuation: continuation)
 
-            case let .contramap(transform, next):
-                return try .impure(
-                    operation: .contramap(
-                        transform: transform,
-                        next: subdivideForCGS(next, context: context, thresholds: thresholds)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .prune(next):
-                return try .impure(
-                    operation: .prune(next: subdivideForCGS(next, context: context, thresholds: thresholds)),
-                    continuation: continuation
-                )
-
-            case let .resize(newSize, next):
-                return try .impure(
-                    operation: .resize(
-                        newSize: newSize,
-                        next: subdivideForCGS(next, context: context, thresholds: thresholds)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
-                return try .impure(
-                    operation: .filter(
-                        gen: subdivideForCGS(subGen, context: context, thresholds: thresholds),
-                        fingerprint: fingerprint,
-                        filterType: filterType,
-                        predicate: predicate,
-                        sourceLocation: sourceLocation
-                    ),
-                    continuation: continuation
-                )
-
-            case let .classify(subGen, fingerprint, classifiers):
-                return try .impure(
-                    operation: .classify(
-                        gen: subdivideForCGS(subGen, context: context, thresholds: thresholds),
-                        fingerprint: fingerprint,
-                        classifiers: classifiers
-                    ),
-                    continuation: continuation
-                )
-
-            case let .unique(subGen, fingerprint, keyExtractor):
-                return try .impure(
-                    operation: .unique(
-                        gen: subdivideForCGS(subGen, context: context, thresholds: thresholds),
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor
-                    ),
-                    continuation: continuation
-                )
-
-            case let .transform(kind, inner):
-                return try .impure(
-                    operation: .transform(
-                        kind: kind,
-                        inner: subdivideForCGS(inner, context: context, thresholds: thresholds)
-                    ),
-                    continuation: continuation
-                )
-
-            case .chooseBits, .just, .getSize:
+            default:
+                if let mapped = try operation.mapInnerGenerator({ try subdivideForCGS($0, context: context, thresholds: thresholds) }) {
+                    return .impure(operation: mapped, continuation: continuation)
+                }
                 return gen
             }
         }
@@ -604,7 +474,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
         case let .impure(operation, continuation):
             switch operation {
-            case let .pick(choices, branches) where choices.count >= 2:
+            case let .pick(choices, branchCount) where choices.count >= 2:
                 if let collapsed: ReflectiveGenerator<Output> = collapseIfUniform(choices, continuation: continuation) {
                     return collapsed
                 }
@@ -616,7 +486,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         generator: collapseUniformSubdivisions(choice.generator)
                     )
                 })
-                return .impure(operation: .pick(choices: recursed, branches: branches), continuation: continuation)
+                return .impure(operation: .pick(choices: recursed, branchCount: branchCount), continuation: continuation)
 
             case let .sequence(lengthGen, elementGen):
                 return .impure(
@@ -631,37 +501,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 let recursed = ContiguousArray(generators.map { collapseUniformSubdivisions($0) })
                 return .impure(operation: .zip(recursed), continuation: continuation)
 
-            case let .filter(subGen, fingerprint, filterType, predicate, sourceLocation):
-                return .impure(
-                    operation: .filter(
-                        gen: collapseUniformSubdivisions(subGen),
-                        fingerprint: fingerprint,
-                        filterType: filterType,
-                        predicate: predicate,
-                        sourceLocation: sourceLocation
-                    ),
-                    continuation: continuation
-                )
-
-            case let .transform(kind, inner):
-                return .impure(
-                    operation: .transform(kind: kind, inner: collapseUniformSubdivisions(inner)),
-                    continuation: continuation
-                )
-
-            case let .contramap(transform, next):
-                return .impure(
-                    operation: .contramap(transform: transform, next: collapseUniformSubdivisions(next)),
-                    continuation: continuation
-                )
-
-            case let .resize(newSize, next):
-                return .impure(
-                    operation: .resize(newSize: newSize, next: collapseUniformSubdivisions(next)),
-                    continuation: continuation
-                )
-
             default:
+                if let mapped = operation.mapInnerGenerator({ collapseUniformSubdivisions($0) }) {
+                    return .impure(operation: mapped, continuation: continuation)
+                }
                 return gen
             }
         }
@@ -740,9 +583,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
         let subranges = (lower ... upper).split(into: subrangeCount)
 
-        let firstID = context.makeID()
-        let lastID = firstID + UInt64(subranges.count - 1)
-        let branchRange = firstID ... lastID
+        let branchCount = UInt64(subranges.count)
 
         var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         subrangeChoices.reserveCapacity(subranges.count)
@@ -760,14 +601,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
                 fingerprint: context.makeID(),
-                id: firstID + UInt64(index),
+                id: UInt64(index),
                 weight: 1,
                 generator: subGen
             ))
         }
 
         return .impure(
-            operation: .pick(choices: subrangeChoices, branches: branchRange),
+            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
             continuation: { .pure($0 as! Output) }
         )
     }

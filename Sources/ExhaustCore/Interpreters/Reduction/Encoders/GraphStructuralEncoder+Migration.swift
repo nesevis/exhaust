@@ -8,7 +8,7 @@ extension GraphStructuralEncoder {
     func buildMigrationProbe(
         scope: MigrationScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> EncoderProbe? {
         guard let candidate = buildMigrationCandidate(scope: scope, sequence: sequence, graph: graph) else {
             return nil
@@ -28,7 +28,7 @@ extension GraphStructuralEncoder {
     private func buildMigrationCandidate(
         scope: MigrationScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: some ReadOnlyChoiceGraph
     ) -> ChoiceSequence? {
         guard scope.elementNodeIDs.isEmpty == false else { return nil }
         guard let sourceFullRange = graph.nodes[scope.sourceSequenceNodeID].positionRange else {

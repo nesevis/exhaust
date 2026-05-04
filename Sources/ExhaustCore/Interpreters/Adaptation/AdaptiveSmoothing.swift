@@ -60,7 +60,7 @@ package enum AdaptiveSmoothing {
         maxTemperature: Double
     ) -> ReflectiveOperation {
         switch op {
-        case let .pick(choices, branches):
+        case let .pick(choices, branchCount):
             // Compute Shannon entropy to measure how uniform the weight distribution is
             let totalWeight = choices.reduce(into: UInt64(0)) { $0 += $1.weight }
             let entropy: Double
@@ -98,7 +98,7 @@ package enum AdaptiveSmoothing {
                 )
             })
 
-            return .pick(choices: smoothed, branches: branches)
+            return .pick(choices: smoothed, branchCount: branchCount)
 
         case let .zip(generators, _):
             return .zip(ContiguousArray(generators.map {
@@ -125,84 +125,10 @@ package enum AdaptiveSmoothing {
             )
             return .sequence(length: smoothedLength, gen: smoothedGen)
 
-        case let .contramap(transform, next):
-            let smoothedNext = smoothGenerator(
-                next,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .contramap(transform: transform, next: smoothedNext)
-
-        case let .prune(next):
-            let smoothedNext = smoothGenerator(
-                next,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .prune(next: smoothedNext)
-
-        case let .resize(newSize, next):
-            let smoothedNext = smoothGenerator(
-                next,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .resize(newSize: newSize, next: smoothedNext)
-
-        case let .filter(gen, fingerprint, filterType, predicate, sourceLocation):
-            let smoothedGen = smoothGenerator(
-                gen,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .filter(
-                gen: smoothedGen,
-                fingerprint: fingerprint,
-                filterType: filterType,
-                predicate: predicate,
-                sourceLocation: sourceLocation
-            )
-
-        case let .classify(gen, fingerprint, classifiers):
-            let smoothedGen = smoothGenerator(
-                gen,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .classify(
-                gen: smoothedGen,
-                fingerprint: fingerprint,
-                classifiers: classifiers
-            )
-
-        case let .unique(gen, fingerprint, keyExtractor):
-            let smoothedGen = smoothGenerator(
-                gen,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .unique(
-                gen: smoothedGen,
-                fingerprint: fingerprint,
-                keyExtractor: keyExtractor
-            )
-
-        case let .transform(kind, inner):
-            let smoothedInner = smoothGenerator(
-                inner,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .transform(kind: kind, inner: smoothedInner)
-
-        case .chooseBits, .just, .getSize:
+        default:
+            if let mapped = op.mapInnerGenerator({ smoothGenerator($0, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature) }) {
+                return mapped
+            }
             return op
         }
     }

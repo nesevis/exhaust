@@ -57,9 +57,14 @@ package extension Gen {
             length: Gen.choose(in: range, scaling: scaling),
             gen: elementGenerator.erase()
         )
-        // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
-            .pure(result as! [Output])
+            guard let array = result as? [Output] else {
+                throw GeneratorError.typeMismatch(
+                    expected: String(describing: type(of: [Output].self)),
+                    actual: String(describing: type(of: result))
+                )
+            }
+            return .pure(array)
         }
     }
 
@@ -80,33 +85,34 @@ package extension Gen {
 
     /// Creates a generator for dictionaries with random key-value pairs.
     ///
-    /// This combinator generates dictionaries by creating parallel arrays of keys and values, then zipping them together. If duplicate keys are generated, the `uniquingKeysWith` parameter determines which value to keep (currently keeps the first value).
-    ///
-    /// The dictionary size follows the same size-based generation as arrays, ensuring consistent behavior across collection types.
+    /// Generates a key array first, then binds on the key count to generate exactly the right number of values. Duplicate keys keep the first value.
     ///
     /// - Parameters:
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
     /// - Returns: A generator that produces dictionaries with random key-value pairs.
+    /// - Note: Reflection decomposes the dictionary into key/value arrays via ``Dictionary/keys`` and ``Dictionary/values``. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may reduce shrinking quality.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: ReflectiveGenerator<KeyOutput>,
         _ valueGenerator: ReflectiveGenerator<ValueOutput>
     ) -> ReflectiveGenerator<[KeyOutput: ValueOutput]> {
-        let zipped = Gen.zip(
-            // These arrays use `getSize()` under the hood and will be the same length
-            Gen.arrayOf(keyGenerator),
-            Gen.arrayOf(valueGenerator)
+        let pairGen = Gen.arrayOf(keyGenerator)._bound(
+            forward: { keys in
+                Gen.contramap(
+                    { (pair: ([KeyOutput], [ValueOutput])) in pair.1 },
+                    Gen.arrayOf(valueGenerator, exactly: UInt64(keys.count))
+                        ._map { values in (keys, values) }
+                )
+            },
+            backward: { (pair: ([KeyOutput], [ValueOutput])) in pair.0 }
         )
 
         return Gen.contramap(
-            { (dict: [KeyOutput: ValueOutput]) -> ([KeyOutput], [ValueOutput]) in
-                // This will be out of order, but is that ok?
-                (Array(dict.keys), Array(dict.values))
-            },
-            zipped._map { keys, values in
+            { (dict: [KeyOutput: ValueOutput]) in (Array(dict.keys), Array(dict.values)) },
+            pairGen._map { keys, values in
                 Dictionary(
-                    Swift.zip(keys, values).map { ($0.0, $0.1) },
-                    uniquingKeysWith: { key, _ in key }
+                    Swift.zip(keys, values).map { ($0, $1) },
+                    uniquingKeysWith: { first, _ in first }
                 )
             }
         )
@@ -270,64 +276,108 @@ package extension Gen {
 
     /// Creates a generator that picks a random element from a collection.
     ///
-    /// This combinator generates individual elements by selecting random indices from the provided collection. It works with any ``Collection`` type.
+    /// Reflection uses hash-based O(1) lookup to find the element's index.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.
-    static func element<AnyCollection: Collection>(
-        from collection: AnyCollection
-    ) -> ReflectiveGenerator<AnyCollection.Element> {
+    static func element<C: Collection>(
+        from collection: C
+    ) -> ReflectiveGenerator<C.Element> where C.Element: Hashable {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
         )
-        let count = collection.count
-        let dict = Dictionary(grouping: collection.enumerated(), by: \.offset)
-            .mapValues { $0[0].element }
+        let elements = ContiguousArray(collection)
+        var indexMap: [C.Element: Int] = [:]
+        indexMap.reserveCapacity(elements.count)
+        for (offset, element) in elements.enumerated() where indexMap[element] == nil {
+            indexMap[element] = offset
+        }
 
         return Gen.contramap(
-            { (element: AnyCollection.Element) -> Int in
-                // Find the first index where this element appears This is best-effort since elements might recur
-                if let element = element as? any Equatable {
-                    if let (index, _) = dict.first(where: { element.isEqualToAny($0.value) }) {
-                        return index
-                    }
-                }
-                return 0
-            },
-            Gen.choose(in: 0 ... (count - 1))._map { dict[$0]! }
+            { (element: C.Element) -> Int in indexMap[element] ?? 0 },
+            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
 
     /// Creates a generator that picks a random element from a collection.
     ///
-    /// This combinator generates individual elements by selecting random indices from the provided collection. It works with any ``Collection`` type.
+    /// Reflection uses linear equality scan to find the element's index.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.
-    static func element<AnyCollection: Collection>(
-        from collection: AnyCollection
-    ) -> ReflectiveGenerator<AnyCollection.Element> where AnyCollection.Element: Hashable {
+    static func element<C: Collection>(
+        from collection: C
+    ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
         )
-        var elementToOffset: [AnyCollection.Element: Int] = [:]
-        var offsetToElement: [Int: AnyCollection.Element] = [:]
-        offsetToElement.reserveCapacity(collection.count)
-        elementToOffset.reserveCapacity(collection.count)
+        let elements = ContiguousArray(collection)
 
-        for (offset, element) in collection.enumerated() {
-            offsetToElement[offset] = element
-            // Keep only the first occurrence for backward mapping
-            if elementToOffset[element] == nil {
-                elementToOffset[element] = offset
+        return Gen.contramap(
+            { (element: C.Element) -> Int in elements.firstIndex(of: element) ?? 0 },
+            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+        )
+    }
+
+    /// Creates a generator that picks a random element from a collection, using a hashable key path for O(1) reflection.
+    ///
+    /// Use this overload when elements are not ``Hashable`` themselves but have a hashable property that uniquely identifies them.
+    ///
+    /// - Parameters:
+    ///   - collection: The collection to pick elements from.
+    ///   - keyPath: A key path to a hashable property used to identify elements during reflection.
+    /// - Returns: A generator that produces random elements from the collection.
+    static func element<C: Collection, Key: Hashable>(
+        from collection: C,
+        by keyPath: KeyPath<C.Element, Key>
+    ) -> ReflectiveGenerator<C.Element> {
+        precondition(
+            collection.isEmpty == false,
+            "Cannot return random element from empty collection"
+        )
+        let elements = ContiguousArray(collection)
+        var indexMap: [Key: Int] = [:]
+        indexMap.reserveCapacity(elements.count)
+        for (offset, element) in elements.enumerated() {
+            let key = element[keyPath: keyPath]
+            if indexMap[key] == nil {
+                indexMap[key] = offset
             }
         }
 
         return Gen.contramap(
-            { (element: AnyCollection.Element) -> Int in elementToOffset[element]! },
-            Gen.choose(in: 0 ... (collection.count - 1))._map { offsetToElement[$0]! }
+            { (element: C.Element) -> Int in indexMap[element[keyPath: keyPath]] ?? 0 },
+            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
+
+    /// Creates a generator that picks a random element from a collection, using an equatable key path for reflection.
+    ///
+    /// Use this overload when elements are not ``Equatable`` but have an equatable property that uniquely identifies them. Prefer the ``Hashable`` key path overload when the key conforms to ``Hashable`` for O(1) lookup.
+    ///
+    /// - Parameters:
+    ///   - collection: The collection to pick elements from.
+    ///   - keyPath: A key path to an equatable property used to identify elements during reflection.
+    /// - Returns: A generator that produces random elements from the collection.
+    static func element<C: Collection, Key: Equatable>(
+        from collection: C,
+        by keyPath: KeyPath<C.Element, Key>
+    ) -> ReflectiveGenerator<C.Element> {
+        precondition(
+            collection.isEmpty == false,
+            "Cannot return random element from empty collection"
+        )
+        let elements = ContiguousArray(collection)
+
+        return Gen.contramap(
+            { (element: C.Element) -> Int in
+                let key = element[keyPath: keyPath]
+                return elements.firstIndex { $0[keyPath: keyPath] == key } ?? 0
+            },
+            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+        )
+    }
+
 }

@@ -74,9 +74,9 @@ package extension ChoiceSequence {
                 }
                 i += 1
             }
-            if case let .selected(.branch(_, _, id, branchIDs, choice)) = selectedBranchTree {
+            if case let .selected(.branch(_, _, id, branchCount, choice)) = selectedBranchTree {
                 output.append(.group(true))
-                output.append(.branch(.init(id: id, validIDs: branchIDs)))
+                output.append(.branch(.init(id: id, branchCount: branchCount)))
                 let children = includingAllBranches ? array : [choice]
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var cIdx = 0

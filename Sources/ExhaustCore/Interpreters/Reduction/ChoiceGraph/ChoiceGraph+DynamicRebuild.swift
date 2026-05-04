@@ -16,19 +16,13 @@ package extension ChoiceGraph {
             guard range.lowerBound < sequence.count else { continue }
             guard let entryValue = sequence[range.lowerBound].value else { continue }
             guard entryValue.choice != metadata.value else { continue }
-            nodes[nodeID] = ChoiceGraphNode(
-                id: nodes[nodeID].id,
-                kind: .chooseBits(ChooseBitsMetadata(
-                    typeTag: metadata.typeTag,
-                    validRange: metadata.validRange,
-                    isRangeExplicit: metadata.isRangeExplicit,
-                    value: entryValue.choice,
-                    convergedOrigin: metadata.convergedOrigin
-                )),
-                positionRange: nodes[nodeID].positionRange,
-                children: nodes[nodeID].children,
-                parent: nodes[nodeID].parent
-            )
+            nodes[nodeID] = nodes[nodeID].with(kind: .chooseBits(ChooseBitsMetadata(
+                typeTag: metadata.typeTag,
+                validRange: metadata.validRange,
+                isRangeExplicit: metadata.isRangeExplicit,
+                value: entryValue.choice,
+                convergedOrigin: metadata.convergedOrigin
+            )))
         }
         invalidateDerivedEdges()
     }
@@ -75,13 +69,7 @@ package extension ChoiceGraph {
         if let firstNewNodeID = rebuilt.nodes.first?.id {
             var updatedChildren = bindNode.children
             updatedChildren[metadata.boundChildIndex] = firstNewNodeID
-            nodes[bindNodeID] = ChoiceGraphNode(
-                id: bindNodeID,
-                kind: bindNode.kind,
-                positionRange: bindNode.positionRange,
-                children: updatedChildren,
-                parent: bindNode.parent
-            )
+            nodes[bindNodeID] = bindNode.with(children: updatedChildren)
         }
 
         invalidateDerivedEdges()
@@ -119,19 +107,13 @@ package extension ChoiceGraph {
         }
 
         // Update the pick node's metadata.
-        nodes[pickNodeID] = ChoiceGraphNode(
-            id: pickNodeID,
-            kind: .pick(PickMetadata(
-                fingerprint: metadata.fingerprint,
-                branchIDs: metadata.branchIDs,
-                selectedID: newSelectedID,
-                selectedChildIndex: newSelectedChildIndex,
-                branchElements: metadata.branchElements
-            )),
-            positionRange: pickNode.positionRange,
-            children: pickNode.children,
-            parent: pickNode.parent
-        )
+        nodes[pickNodeID] = pickNode.with(kind: .pick(PickMetadata(
+            fingerprint: metadata.fingerprint,
+            branchCount: metadata.branchCount,
+            selectedID: newSelectedID,
+            selectedChildIndex: newSelectedChildIndex,
+            branchElements: metadata.branchElements
+        )))
 
         invalidateDerivedEdges()
     }

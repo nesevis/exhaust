@@ -44,6 +44,7 @@ extension ChoiceGraphBuilder {
                     lengthConstraint: metadata.validRange,
                     elementCount: elements.count,
                     childPositionRanges: [],
+                    childIndexByNodeID: [:],
                     elementTypeTag: nil
                 )),
                 positionRange: nil,
@@ -165,7 +166,7 @@ extension ChoiceGraphBuilder {
         let nodeID = emitNode(
             kind: .pick(PickMetadata(
                 fingerprint: info.fingerprint,
-                branchIDs: info.branchIDs,
+                branchCount: info.branchCount,
                 selectedID: info.selectedID,
                 selectedChildIndex: 0,
                 branchElements: array

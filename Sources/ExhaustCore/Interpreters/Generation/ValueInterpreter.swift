@@ -35,10 +35,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             maxRuns: maxRuns ?? 100,
             baseSeed: baseSeed,
             isFixed: false,
-            size: 0,
+            size: sizeOverride ?? 0,
             prng: Xoshiro256(seed: baseSeed)
         )
-        context.sizeOverride = sizeOverride
     }
 
     public mutating func next() throws -> Element? {
@@ -381,12 +380,15 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         return try runContinuation(randomBits, &context)
     }
 
-    /// Reads the active generation size: a one-shot `.resize` override if present, otherwise the per-run scaled size cycle.
+    /// Reads the active generation size in precedence order: a one-shot `.resize` override, then the persistent `context.size` baseline (set via the `sizeOverride` init arg), then the per-run scaled size cycle.
     @inline(__always)
     private static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
         if let override = context.sizeOverride {
             context.sizeOverride = nil
             return override
+        }
+        if context.size > 0 {
+            return context.size
         }
         return GenerationContext.scaledSize(forRun: context.runs)
     }

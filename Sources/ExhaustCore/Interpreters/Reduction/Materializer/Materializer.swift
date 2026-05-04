@@ -91,7 +91,8 @@ package enum Materializer {
         mode: Mode,
         fallbackTree: ChoiceTree? = nil,
         materializePicks: Bool = false,
-        precomputedSeed: UInt64? = nil
+        precomputedSeed: UInt64? = nil,
+        skipTree: Bool = false
     ) -> Result<Any> {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -118,6 +119,7 @@ package enum Materializer {
             size: 100,
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
             materializePicks: materializePicks,
+            skipTree: skipTree,
             decodingReport: DecodingReport()
         )
 
@@ -224,10 +226,10 @@ extension Materializer {
                 continuationFallback: continuationFallback
             )
 
-        case let .impure(.pick(choices, branches), continuation):
+        case let .impure(.pick(choices, branchCount), continuation):
             let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
             return try handlePick(
-                choices, branches: branches,
+                choices, branchCount: branchCount,
                 continuation: continuation, inputValue: inputValue,
                 context: &context, calleeFallback: calleeFallback,
                 continuationFallback: continuationFallback
@@ -281,8 +283,9 @@ extension Materializer {
             // Always use context.size (default 100 = max). At max size, all size-scaled generators produce their full range, so no valid prefix value is ever outside the derived range. Using the fallback tree's `.getSize` is unreliable — reflected trees may store a small size that produces tiny ranges, destroying values via clamping.
             let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
             let size = consumeSize(&context)
+            let calleeTree: ChoiceTree = context.skipTree ? .just : .getSize(size)
             return try runContinuation(
-                result: size, calleeChoiceTree: .getSize(size),
+                result: size, calleeChoiceTree: calleeTree,
                 continuation: continuation, inputValue: inputValue,
                 context: &context, continuationFallback: continuationFallback
             )
@@ -386,6 +389,19 @@ extension Materializer {
     ) throws -> (Any, ChoiceTree)? {
         let nextGen = try continuation(result)
 
+        if context.skipTree {
+            if case let .pure(value) = nextGen {
+                return (value, .just)
+            }
+            if let (continuationResult, _) = try generateRecursive(
+                nextGen, with: inputValue, context: &context,
+                fallbackTree: continuationFallback
+            ) {
+                return (continuationResult, .just)
+            }
+            return nil
+        }
+
         if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
             return (value, calleeChoiceTree)
         }
@@ -419,6 +435,8 @@ extension Materializer {
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
+        /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materialises with the real tree only on acceptance.
+        var skipTree: Bool = false
         /// Accumulates per-coordinate resolution tier data for guided mode.
         /// `nil` for exact mode and pure-generate mode.
         var decodingReport: DecodingReport?

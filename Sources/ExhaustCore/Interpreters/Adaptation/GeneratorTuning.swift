@@ -157,10 +157,12 @@ package enum GeneratorTuning {
 
         case let .impure(op, continuation):
             switch op {
-            case let .pick(choices, branches):
+
+            // Tunable sites: operations that consume randomness and can be probed directly.
+            case let .pick(choices, branchCount):
                 return try measureAndTunePick(
                     choices: choices,
-                    branches: branches,
+                    branchCount: branchCount,
                     continuation: continuation,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
@@ -218,6 +220,7 @@ package enum GeneratorTuning {
                     context: context
                 )
 
+            // Value-transparent wrappers: the inner value passes through unchanged to the continuation, so the outer predicate can be bridged by composing through the continuation.
             case let .contramap(transform, next):
                 return try tuneContramap(
                     transform: transform,
@@ -237,6 +240,27 @@ package enum GeneratorTuning {
                     predicate: predicate
                 )
 
+            case let .prune(next):
+                return try tunePrune(
+                    next: next,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            case let .classify(subGen, fingerprint, classifiers):
+                return try tuneClassify(
+                    subGen: subGen,
+                    fingerprint: fingerprint,
+                    classifiers: classifiers,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            // Transforming wrappers: the inner value is altered by an arbitrary function before reaching the continuation, so the outer predicate cannot apply to the inner type. Recurse with a trivial predicate.
             case let .unique(subGen, fingerprint, keyExtractor):
                 let tunedInner = try tuneRecursive(
                     subGen,
@@ -265,7 +289,8 @@ package enum GeneratorTuning {
                     continuation: continuation
                 )
 
-            case .just, .prune, .classify:
+            // Leaf: no sub-generators to recurse into.
+            case .just:
                 return gen
             }
         }

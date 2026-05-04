@@ -13,12 +13,12 @@ package enum LightweightSampler {
         using rng: inout Xoshiro256,
         size: UInt64 = 50
     ) throws -> Output? {
-        try eval(gen, with: (), rng: &rng, size: size)
+        try generateRecursive(gen, with: (), rng: &rng, size: size)
     }
 
     // MARK: - Recursive Engine
 
-    private static func eval<Output>(
+    private static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
         rng: inout Xoshiro256,
@@ -31,10 +31,10 @@ package enum LightweightSampler {
         case let .impure(operation, continuation):
             switch operation {
             case let .contramap(_, nextGen):
-                guard let result = try eval(
+                guard let result = try generateRecursive(
                     nextGen, with: inputValue, rng: &rng, size: size
                 ) else { return nil }
-                return try cont(
+                return try runContinuation(
                     result, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
@@ -45,10 +45,10 @@ package enum LightweightSampler {
                 ) else {
                     return nil
                 }
-                guard let result = try eval(
+                guard let result = try generateRecursive(
                     nextGen, with: wrappedValue, rng: &rng, size: size
                 ) else { return nil }
-                return try cont(
+                return try runContinuation(
                     result, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
@@ -58,12 +58,12 @@ package enum LightweightSampler {
                     return nil
                 }
                 _ = rng.next() // parity with other interpreters
-                guard let result = try eval(
+                guard let result = try generateRecursive(
                     selected.generator, with: inputValue, rng: &rng, size: size
                 ) else {
                     return nil
                 }
-                return try cont(
+                return try runContinuation(
                     result, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
@@ -75,13 +75,13 @@ package enum LightweightSampler {
                     )
                 } ?? (min ... max)
                 let bits = rng.next(in: effective)
-                return try cont(
+                return try runContinuation(
                     bits, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
             case let .sequence(lengthGen, elementGen):
-                guard let length = try eval(
+                guard let length = try generateRecursive(
                     lengthGen, with: inputValue, rng: &rng, size: size
                 ) else {
                     return nil
@@ -89,7 +89,7 @@ package enum LightweightSampler {
                 var results: [Any] = []
                 results.reserveCapacity(Int(length))
                 let ok = try SequenceExecutionKernel.run(count: length) {
-                    guard let element = try eval(
+                    guard let element = try generateRecursive(
                         elementGen, with: inputValue, rng: &rng, size: size
                     ) else {
                         return false
@@ -98,7 +98,7 @@ package enum LightweightSampler {
                     return true
                 }
                 guard ok else { return nil }
-                return try cont(
+                return try runContinuation(
                     results, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
@@ -107,51 +107,51 @@ package enum LightweightSampler {
                 var results = [Any]()
                 results.reserveCapacity(generators.count)
                 for g in generators {
-                    guard let result = try eval(
+                    guard let result = try generateRecursive(
                         g, with: inputValue, rng: &rng, size: size
                     ) else {
                         return nil
                     }
                     results.append(result)
                 }
-                return try cont(
+                return try runContinuation(
                     results, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
             case let .just(value):
-                return try cont(
+                return try runContinuation(
                     value, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
             case .getSize:
-                return try cont(
+                return try runContinuation(
                     size, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
             case let .resize(newSize, nextGen):
-                guard let result = try eval(
+                guard let result = try generateRecursive(
                     nextGen, with: inputValue, rng: &rng, size: newSize
                 ) else {
                     return nil
                 }
-                return try cont(
+                return try runContinuation(
                     result, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
             case let .filter(gen, _, _, predicate, _):
                 var attempts: UInt64 = 0
-                while attempts < 500 {
-                    guard let result = try eval(
+                while attempts < GenerationContext.maxFilterRuns {
+                    guard let result = try generateRecursive(
                         gen, with: inputValue, rng: &rng, size: size
                     ) else {
                         return nil
                     }
                     if predicate(result) {
-                        return try cont(
+                        return try runContinuation(
                             result, continuation,
                             inputValue: inputValue, rng: &rng, size: size
                         )
@@ -161,12 +161,12 @@ package enum LightweightSampler {
                 throw GeneratorError.sparseValidityCondition
 
             case let .classify(gen, _, _):
-                guard let result = try eval(
+                guard let result = try generateRecursive(
                     gen, with: inputValue, rng: &rng, size: size
                 ) else {
                     return nil
                 }
-                return try cont(
+                return try runContinuation(
                     result, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
@@ -175,20 +175,20 @@ package enum LightweightSampler {
                 let result: Any
                 switch kind {
                 case let .map(forward, _, _):
-                    guard let innerValue = try eval(
+                    guard let innerValue = try generateRecursive(
                         inner, with: inputValue, rng: &rng, size: size
                     ) else {
                         return nil
                     }
                     result = try forward(innerValue)
                 case let .bind(_, forward, _, _, _):
-                    guard let innerValue = try eval(
+                    guard let innerValue = try generateRecursive(
                         inner, with: inputValue, rng: &rng, size: size
                     ) else {
                         return nil
                     }
                     let boundGen = try forward(innerValue)
-                    guard let boundValue = try eval(
+                    guard let boundValue = try generateRecursive(
                         boundGen, with: inputValue, rng: &rng, size: size
                     ) else {
                         return nil
@@ -196,7 +196,7 @@ package enum LightweightSampler {
                     result = boundValue
                 case let .metamorphic(transforms, _):
                     let savedState = (rng.seed, rng.currentState)
-                    guard let original = try eval(
+                    guard let original = try generateRecursive(
                         inner, with: inputValue, rng: &rng, size: size
                     ) else {
                         return nil
@@ -205,7 +205,7 @@ package enum LightweightSampler {
                     results.reserveCapacity(transforms.count + 1)
                     for transform in transforms {
                         rng = Xoshiro256(seed: savedState.0, state: savedState.1)
-                        guard let copy = try eval(
+                        guard let copy = try generateRecursive(
                             inner, with: inputValue, rng: &rng, size: size
                         ) else {
                             return nil
@@ -214,20 +214,20 @@ package enum LightweightSampler {
                     }
                     result = results
                 }
-                return try cont(
+                return try runContinuation(
                     result, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
             case let .unique(gen, _, keyExtractor):
                 // Lightweight: skip dedup entirely — this is just for fitness estimation
-                guard let result = try eval(
+                guard let result = try generateRecursive(
                     gen, with: inputValue, rng: &rng, size: size
                 ) else {
                     return nil
                 }
                 _ = keyExtractor // suppress unused warning
-                return try cont(
+                return try runContinuation(
                     result, continuation,
                     inputValue: inputValue, rng: &rng, size: size
                 )
@@ -238,7 +238,7 @@ package enum LightweightSampler {
     // MARK: - Continuation
 
     @inline(__always)
-    private static func cont<Output>(
+    private static func runContinuation<Output>(
         _ result: Any,
         _ continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
@@ -246,6 +246,6 @@ package enum LightweightSampler {
         size: UInt64
     ) throws -> Output? {
         let nextGen = try continuation(result)
-        return try eval(nextGen, with: inputValue, rng: &rng, size: size)
+        return try generateRecursive(nextGen, with: inputValue, rng: &rng, size: size)
     }
 }

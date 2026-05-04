@@ -296,7 +296,6 @@ struct BoundaryCoveringArrayReplayUnitTests {
                 domainSizes: profile.domainSizes,
                 strength: min(profile.parameterCount, 4)
             )
-            defer { generator.deallocate() }
 
             var replayedCount = 0
             while let row = generator.next() {
@@ -324,7 +323,6 @@ struct BoundaryCoveringArrayReplayUnitTests {
                     domainSizes: profile.domainSizes,
                     strength: min(profile.parameterCount, 4)
                 )
-                defer { generator.deallocate() }
                 while let row = generator.next() {
                     guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
                         continue
