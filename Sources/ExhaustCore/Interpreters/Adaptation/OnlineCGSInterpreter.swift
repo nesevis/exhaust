@@ -906,6 +906,10 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         // 2. Build weighted choices — dead choices get weight 0, live choices with all-zero fitness fall back to equal weights
         let allLiveZero = liveChoiceIndices.allSatisfy { fitnesses[$0] == 0 }
+        var isLive = ContiguousArray<Bool>(repeating: false, count: choices.count)
+        for index in liveChoiceIndices {
+            isLive[index] = true
+        }
         var weightedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         weightedChoices.reserveCapacity(choices.count)
         for (i, choice) in choices.enumerated() {
@@ -913,7 +917,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 fingerprint: choice.fingerprint,
                 id: choice.id,
                 weight: allLiveZero
-                    ? (liveChoiceIndices.contains(i) ? 1 : 0)
+                    ? (isLive[i] ? 1 : 0)
                     : fitnesses[i],
                 generator: choice.generator
             ))
