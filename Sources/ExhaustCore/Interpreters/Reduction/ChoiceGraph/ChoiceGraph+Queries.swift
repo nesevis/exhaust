@@ -100,23 +100,24 @@ package extension ChoiceGraph {
 
         // Build reachability restricted to the candidate set via on-demand DFS from each candidate. O(K · (V + E)) where K is the candidate count — much cheaper than the former O(V · E) eager transitive closure when K << V.
         let candidateIDSet = Set(candidateIDs)
-        var adjacency = [[Int]](repeating: [], count: candidateCount)
+        var reachability = [Int: Set<Int>]()
+        reachability.reserveCapacity(candidateCount)
         for (sourceIndex, sourceID) in candidateIDs.enumerated() {
             let reached = reachableNodes(from: sourceID, within: candidateIDSet)
+            var targetIndices = Set<Int>()
             for targetID in reached {
                 if let targetIndex = idToIndex[targetID] {
-                    adjacency[sourceIndex].append(targetIndex)
+                    targetIndices.insert(targetIndex)
                 }
+            }
+            if targetIndices.isEmpty == false {
+                reachability[sourceIndex] = targetIndices
             }
         }
 
         let antichainIndices = BipartiteMatching.maximumAntichain(
             nodeCount: candidateCount,
-            reachability: Dictionary(
-                uniqueKeysWithValues: (0 ..< candidateCount).map { index in
-                    (index, Set(adjacency[index]))
-                }
-            )
+            reachability: reachability
         )
 
         // Map back to node IDs.
