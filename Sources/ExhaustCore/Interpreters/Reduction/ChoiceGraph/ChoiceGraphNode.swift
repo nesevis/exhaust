@@ -223,4 +223,21 @@ package struct ChoiceGraphNode {
 
     /// Index of the parent node in ``ChoiceGraph/nodes``, or nil for the root.
     public let parent: Int?
+
+    /// Returns a copy with the specified fields replaced. Unspecified fields carry forward from `self`.
+    ///
+    /// `positionRange` uses a double-optional: `.none` keeps the current value, `.some(nil)` sets it to nil, `.some(.some(range))` sets it to `range`.
+    func with(
+        kind: ChoiceGraphNodeKind? = nil,
+        positionRange: ClosedRange<Int>?? = .none,
+        children: [Int]? = nil
+    ) -> ChoiceGraphNode {
+        ChoiceGraphNode(
+            id: id,
+            kind: kind ?? self.kind,
+            positionRange: positionRange ?? self.positionRange,
+            children: children ?? self.children,
+            parent: parent
+        )
+    }
 }

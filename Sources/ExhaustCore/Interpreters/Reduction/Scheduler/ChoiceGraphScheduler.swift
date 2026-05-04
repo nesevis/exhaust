@@ -317,13 +317,7 @@ enum ChoiceGraphScheduler {
                                 guard case var .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
                                 guard metadata.convergedOrigin != nil else { continue }
                                 metadata.convergedOrigin = nil
-                                graph.nodes[nodeID] = ChoiceGraphNode(
-                                    id: graph.nodes[nodeID].id,
-                                    kind: .chooseBits(metadata),
-                                    positionRange: graph.nodes[nodeID].positionRange,
-                                    children: graph.nodes[nodeID].children,
-                                    parent: graph.nodes[nodeID].parent
-                                )
+                                graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(metadata))
                             }
                         }
                         scopeRejectionCache.clear()

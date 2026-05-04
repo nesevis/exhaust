@@ -140,13 +140,7 @@ package final class ChoiceGraph {
             guard let nodeIndex = positionToIndex[sequenceIndex] else { continue }
             guard case var .chooseBits(metadata) = nodes[nodeIndex].kind else { continue }
             metadata.convergedOrigin = origin
-            nodes[nodeIndex] = ChoiceGraphNode(
-                id: nodes[nodeIndex].id,
-                kind: .chooseBits(metadata),
-                positionRange: nodes[nodeIndex].positionRange,
-                children: nodes[nodeIndex].children,
-                parent: nodes[nodeIndex].parent
-            )
+            nodes[nodeIndex] = nodes[nodeIndex].with(kind: .chooseBits(metadata))
         }
     }
 
@@ -161,13 +155,7 @@ package final class ChoiceGraph {
             guard isTombstoned(nodeID) == false else { continue }
             guard case var .chooseBits(metadata) = nodes[nodeID].kind else { continue }
             metadata.convergedOrigin = origin
-            nodes[nodeID] = ChoiceGraphNode(
-                id: nodes[nodeID].id,
-                kind: .chooseBits(metadata),
-                positionRange: nodes[nodeID].positionRange,
-                children: nodes[nodeID].children,
-                parent: nodes[nodeID].parent
-            )
+            nodes[nodeID] = nodes[nodeID].with(kind: .chooseBits(metadata))
         }
     }
 
@@ -178,13 +166,7 @@ package final class ChoiceGraph {
             guard case var .chooseBits(metadata) = nodes[index].kind else { continue }
             guard metadata.convergedOrigin != nil else { continue }
             metadata.convergedOrigin = nil
-            nodes[index] = ChoiceGraphNode(
-                id: nodes[index].id,
-                kind: .chooseBits(metadata),
-                positionRange: nodes[index].positionRange,
-                children: nodes[index].children,
-                parent: nodes[index].parent
-            )
+            nodes[index] = nodes[index].with(kind: .chooseBits(metadata))
         }
     }
 

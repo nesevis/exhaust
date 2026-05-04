@@ -101,13 +101,7 @@ extension ChoiceGraph {
             value: change.newValue,
             convergedOrigin: metadata.convergedOrigin
         )
-        nodes[change.leafNodeID] = ChoiceGraphNode(
-            id: nodes[change.leafNodeID].id,
-            kind: .chooseBits(updatedMetadata),
-            positionRange: nodes[change.leafNodeID].positionRange,
-            children: nodes[change.leafNodeID].children,
-            parent: nodes[change.leafNodeID].parent
-        )
+        nodes[change.leafNodeID] = nodes[change.leafNodeID].with(kind: .chooseBits(updatedMetadata))
         application.touchedNodeIDs.insert(change.leafNodeID)
     }
 
@@ -190,13 +184,7 @@ extension ChoiceGraph {
         let oldBoundNodeIDs = collectSubtreeNodeIDs(rootID: oldBoundChildID)
         for nodeID in oldBoundNodeIDs {
             let node = nodes[nodeID]
-            nodes[nodeID] = ChoiceGraphNode(
-                id: node.id,
-                kind: node.kind,
-                positionRange: nil,
-                children: node.children,
-                parent: node.parent
-            )
+            nodes[nodeID] = node.with(positionRange: .some(nil))
             removedNodeIDs.insert(nodeID)
         }
         containmentEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
@@ -228,13 +216,7 @@ extension ChoiceGraph {
         if let firstNewNodeID {
             var updatedChildren = nodes[bindNodeID].children
             updatedChildren[bindMetadata.boundChildIndex] = firstNewNodeID
-            nodes[bindNodeID] = ChoiceGraphNode(
-                id: bindNodeID,
-                kind: nodes[bindNodeID].kind,
-                positionRange: nodes[bindNodeID].positionRange,
-                children: updatedChildren,
-                parent: nodes[bindNodeID].parent
-            )
+            nodes[bindNodeID] = nodes[bindNodeID].with(children: updatedChildren)
             containmentEdges.append(ContainmentEdge(
                 source: bindNodeID,
                 target: firstNewNodeID
@@ -282,13 +264,7 @@ extension ChoiceGraph {
                     value: entry.choice,
                     convergedOrigin: metadata.convergedOrigin
                 )
-                nodes[index] = ChoiceGraphNode(
-                    id: nodes[index].id,
-                    kind: .chooseBits(updated),
-                    positionRange: nodes[index].positionRange,
-                    children: nodes[index].children,
-                    parent: nodes[index].parent
-                )
+                nodes[index] = nodes[index].with(kind: .chooseBits(updated))
             }
         }
 
@@ -297,22 +273,16 @@ extension ChoiceGraph {
             && newBoundSubtree.containsPicks == false
         let hadClassification = bindMetadata.classification != nil || bindMetadata.downstreamFingerprint != nil
         if newIsStructurallyConstant != bindMetadata.isStructurallyConstant || hadClassification {
-            nodes[bindNodeID] = ChoiceGraphNode(
-                id: bindNodeID,
-                kind: .bind(BindMetadata(
-                    fingerprint: bindMetadata.fingerprint,
-                    isStructurallyConstant: newIsStructurallyConstant,
-                    bindDepth: bindMetadata.bindDepth,
-                    innerChildIndex: bindMetadata.innerChildIndex,
-                    boundChildIndex: bindMetadata.boundChildIndex,
-                    bindPath: bindMetadata.bindPath,
-                    classification: nil,
-                    downstreamFingerprint: nil
-                )),
-                positionRange: nodes[bindNodeID].positionRange,
-                children: nodes[bindNodeID].children,
-                parent: nodes[bindNodeID].parent
-            )
+            nodes[bindNodeID] = nodes[bindNodeID].with(kind: .bind(BindMetadata(
+                fingerprint: bindMetadata.fingerprint,
+                isStructurallyConstant: newIsStructurallyConstant,
+                bindDepth: bindMetadata.bindDepth,
+                innerChildIndex: bindMetadata.innerChildIndex,
+                boundChildIndex: bindMetadata.boundChildIndex,
+                bindPath: bindMetadata.bindPath,
+                classification: nil,
+                downstreamFingerprint: nil
+            )))
         }
 
         // Step 10: recompute self-similarity edges from scratch. The splice may have removed picks from the old subtree and added picks in the new subtree; the existing edge set is now incomplete (no edges to new picks, may have edges to picks that no longer have valid IDs — actually those were dropped above). Recomputing is O(picks²)
@@ -413,13 +383,7 @@ extension ChoiceGraph {
                 updatedKind = node.kind
             }
 
-            nodes[index] = ChoiceGraphNode(
-                id: node.id,
-                kind: updatedKind,
-                positionRange: newRange,
-                children: node.children,
-                parent: node.parent
-            )
+            nodes[index] = node.with(kind: updatedKind, positionRange: newRange)
         }
         ExhaustLog.debug(
             category: .reducer,
@@ -486,13 +450,7 @@ extension ChoiceGraph {
             let current = stack.removeLast()
             guard current < nodes.count else { continue }
             let node = nodes[current]
-            nodes[current] = ChoiceGraphNode(
-                id: node.id,
-                kind: node.kind,
-                positionRange: nil,
-                children: node.children,
-                parent: node.parent
-            )
+            nodes[current] = node.with(positionRange: .some(nil))
             for child in node.children {
                 stack.append(child)
             }
