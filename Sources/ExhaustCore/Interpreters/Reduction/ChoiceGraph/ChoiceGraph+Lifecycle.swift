@@ -377,6 +377,7 @@ extension ChoiceGraph {
                     lengthConstraint: seqMetadata.lengthConstraint,
                     elementCount: seqMetadata.elementCount,
                     childPositionRanges: shiftedChildRanges,
+                    childIndexByNodeID: seqMetadata.childIndexByNodeID,
                     elementTypeTag: seqMetadata.elementTypeTag
                 ))
             } else {

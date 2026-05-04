@@ -44,6 +44,7 @@ extension ChoiceGraphBuilder {
                     lengthConstraint: metadata.validRange,
                     elementCount: elements.count,
                     childPositionRanges: [],
+                    childIndexByNodeID: [:],
                     elementTypeTag: nil
                 )),
                 positionRange: nil,

@@ -74,7 +74,7 @@ extension GraphStructuralEncoder {
         else {
             return nil
         }
-        guard let childIndex = graph.nodes[sequenceNodeID].children.firstIndex(of: elementNodeID),
+        guard let childIndex = metadata.childIndexByNodeID[elementNodeID],
               childIndex < metadata.childPositionRanges.count
         else {
             return graph.nodes[elementNodeID].positionRange

@@ -182,6 +182,9 @@ package struct SequenceMetadata {
     /// Full ``ChoiceSequence`` extent of each direct child element, including any transparent wrapper markers (group/bind from getSize-bind, transform-bind, and so on). Indexed parallel to ``ChoiceGraphNode/children``. Per-element removal must delete the full extent — removing only the inner chooseBits position leaves orphan markers that the materializer cannot decode.
     public let childPositionRanges: [ClosedRange<Int>]
 
+    /// Maps child node ID to its index in ``childPositionRanges`` and ``ChoiceGraphNode/children``. O(1) lookup replacing linear `firstIndex(of:)` scans.
+    public let childIndexByNodeID: [Int: Int]
+
     /// Common ``TypeTag`` of all elements when the sequence is type-homogeneous, or nil for heterogeneous or empty sequences.
     ///
     /// Derived bottom-up at graph construction time from two cases:
