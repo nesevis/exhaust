@@ -75,7 +75,7 @@ enum TransformationEnumerator {
                     structural: scope.maxElementYield,
                     value: 0,
                     slack: .exact,
-                    estimatedProbes: scope.handle.generator.totalRemaining
+                    estimatedProbes: scope.generator.totalRemaining
                 ),
                 precondition: .all(scope.siblings.map {
                     .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)

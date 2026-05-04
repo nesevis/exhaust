@@ -220,7 +220,7 @@ private struct ParameterOrdering {
 /// The interaction strength is fixed at initialization and supports values 2, 3, or 4. It does not escalate during generation — all rows target the same strength throughout the generator's lifetime.
 ///
 /// Parameters are reordered internally so that smallest domains come first. This means early columns have fewer completing slices and fewer candidate values, resolving quickly. Later columns have the most completing slices and the richest greedy signal. Rows are restored to the original parameter order before being returned.
-package struct PullBasedCoveringArrayGenerator {
+package final class PullBasedCoveringArrayGenerator {
     private let strength: Int
     private let paramCount: Int
     private let ordering: ParameterOrdering
@@ -402,7 +402,7 @@ package struct PullBasedCoveringArrayGenerator {
     }
 
     /// Returns the next row that greedily maximises new t-tuple coverage, or `nil` if all t-tuples are already covered.
-    public mutating func next() -> CoveringArrayRow? {
+    public func next() -> CoveringArrayRow? {
         if totalRemaining == 0 { return nil }
 
         switch strength {
@@ -417,8 +417,7 @@ package struct PullBasedCoveringArrayGenerator {
         return CoveringArrayRow(values: ordering.restore(rowBuffer))
     }
 
-    /// Deallocates all coverage slice bit vectors. Must be called when the generator is no longer needed.
-    public mutating func deallocate() {
+    deinit {
         var index = 0
         while index < slices.count {
             slices[index].deallocate()
@@ -464,7 +463,7 @@ package struct PullBasedCoveringArrayGenerator {
 
     // MARK: - Strength-Specialized Row Fill
 
-    private mutating func fillRow2() {
+    private func fillRow2() {
         var column = 0
         while column < paramCount {
             let relevantSlices = slicesByColumn[column]
@@ -507,7 +506,7 @@ package struct PullBasedCoveringArrayGenerator {
         }
     }
 
-    private mutating func fillRow3() {
+    private func fillRow3() {
         var column = 0
         while column < paramCount {
             let relevantSlices = slicesByColumn[column]
@@ -549,7 +548,7 @@ package struct PullBasedCoveringArrayGenerator {
         }
     }
 
-    private mutating func fillRow4() {
+    private func fillRow4() {
         var column = 0
         while column < paramCount {
             let relevantSlices = slicesByColumn[column]
@@ -595,7 +594,7 @@ package struct PullBasedCoveringArrayGenerator {
     // MARK: - Coverage Marking
 
     /// Marks all tuples covered by the current row across all slices.
-    private mutating func markCoverage() {
+    private func markCoverage() {
         var column = 0
         while column < paramCount {
             let relevantSlices = slicesByColumn[column]

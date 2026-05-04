@@ -108,7 +108,7 @@ enum RemovalScopeQuery {
 
             scopes.append(CoveringAlignedRemovalScope(
                 siblings: allSequenceChildren,
-                handle: CoveringArrayHandle(generator: generator),
+                generator: generator,
                 skipValues: skipValues,
                 maxElementYield: maxElementYield
             ))

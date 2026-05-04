@@ -106,7 +106,6 @@ struct PullBasedCoveringArrayTests {
     func earlyStop() {
         let domains: [UInt64] = [3, 3, 3, 3, 3, 3]
         var generator = PullBasedCoveringArrayGenerator(domainSizes: domains, strength: 2)
-        defer { generator.deallocate() }
 
         let pullCount = 5
         let totalTuples = totalTWayTuples(domains, strength: 2)
@@ -134,7 +133,6 @@ struct PullBasedCoveringArrayTests {
     func exhaustionReturnsNil() {
         let domains: [UInt64] = [2, 2, 2]
         var generator = PullBasedCoveringArrayGenerator(domainSizes: domains, strength: 2)
-        defer { generator.deallocate() }
 
         let totalTuples = totalTWayTuples(domains, strength: 2)
         var count = 0
@@ -176,7 +174,6 @@ struct PullBasedCoveringArrayTests {
 
 private func generateAll(domainSizes: [UInt64], strength: Int) -> [CoveringArrayRow] {
     var generator = PullBasedCoveringArrayGenerator(domainSizes: domainSizes, strength: strength)
-    defer { generator.deallocate() }
 
     let upperBound = totalTWayTuples(domainSizes, strength: strength)
     var rows: [CoveringArrayRow] = []

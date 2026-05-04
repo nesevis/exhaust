@@ -201,7 +201,7 @@ struct ChoiceGraphScopeQueryTests {
                 structural: coveringScope.maxElementYield,
                 value: 0,
                 slack: .exact,
-                estimatedProbes: coveringScope.handle.generator.totalRemaining
+                estimatedProbes: coveringScope.generator.totalRemaining
             ),
             precondition: .unconditional,
             postcondition: TransformationPostcondition(

@@ -78,7 +78,6 @@ package struct FibreCoveringEncoder: ComposableEncoder {
         valuePositions = collectValuePositions(in: positionRange, from: sequence)
         exhaustiveProbeIndex = 0
         exhaustiveProbes = []
-        generator?.deallocate()
         generator = nil
         pullProbeCount = 0
 

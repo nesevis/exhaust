@@ -65,7 +65,6 @@ struct SCADomainBuildTreeTests {
             domainSizes: domain.profile.domainSizes,
             strength: min(domain.maxStrength, domain.profile.parameterCount, 4)
         )
-        defer { generator.deallocate() }
 
         let lengthRange = UInt64(0) ... UInt64(3)
         var treeCount = 0
@@ -97,7 +96,6 @@ struct SCADomainBuildTreeTests {
             domainSizes: domain.profile.domainSizes,
             strength: min(domain.maxStrength, domain.profile.parameterCount, 4)
         )
-        defer { generator.deallocate() }
 
         let lengthRange = UInt64(0) ... UInt64(3)
         var treeCount = 0

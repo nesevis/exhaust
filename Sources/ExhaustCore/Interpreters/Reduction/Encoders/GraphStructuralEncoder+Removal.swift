@@ -105,7 +105,7 @@ extension GraphStructuralEncoder {
     mutating func nextCoveringAlignedProbe() -> EncoderProbe? {
         guard let state = coveringAlignedState else { return nil }
 
-        while let row = state.scope.handle.generator.next() {
+        while let row = state.scope.generator.next() {
             // Decode the row into deletion targets.
             var targets: [SequenceRemovalTarget] = []
             var removedPairs: [(seqNodeID: Int, removedNodeIDs: [Int])] = []

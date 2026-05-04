@@ -55,30 +55,18 @@ struct SubtreeRemovalScope {
 
 // MARK: - Covering Aligned Removal
 
-/// ARC-managed handle for a ``PullBasedCoveringArrayGenerator`` that automatically deallocates the generator's internal bit vectors when the last reference is released.
-final class CoveringArrayHandle {
-    var generator: PullBasedCoveringArrayGenerator
-
-    init(generator: PullBasedCoveringArrayGenerator) {
-        self.generator = generator
-    }
-
-    deinit {
-        generator.deallocate()
-    }
-}
 
 /// Aligned removal scope backed by a strength-2 covering array over sibling sequence elements.
 ///
 /// Each sibling sequence under a common zip becomes a parameter whose domain is `elementCount + 1` — the extra value encodes "skip this sibling" (do not delete from it). The covering array generator produces rows that guarantee pairwise coverage of all (sibling-A element, sibling-B element) interactions in O(max(domain)^2 * log(siblings)) rows, replacing the previous exponential subset enumeration and cross-product expansion.
 ///
-/// The generator is wrapped in a ``CoveringArrayHandle`` for automatic deallocation via ARC. The encoder pulls rows from the generator on each ``GraphEncoder/nextProbe(lastAccepted:)`` call, decoding each row into deletion targets for candidate construction.
+/// The encoder pulls rows from the generator on each ``GraphEncoder/nextProbe(lastAccepted:)`` call, decoding each row into deletion targets for candidate construction.
 struct CoveringAlignedRemovalScope {
     /// The sibling sequences participating in aligned deletion.
     let siblings: [AlignedSibling]
 
-    /// ARC-managed covering array generator. The encoder pulls rows from ``CoveringArrayHandle/generator`` via ``PullBasedCoveringArrayGenerator/next()``.
-    let handle: CoveringArrayHandle
+    /// Covering array generator. The encoder pulls rows via ``PullBasedCoveringArrayGenerator/next()``. Bit vectors are deallocated automatically when the generator is released.
+    let generator: PullBasedCoveringArrayGenerator
 
     /// Per-parameter domain value that encodes "skip this sibling." Equal to the sibling's element count (one past the last valid element index).
     let skipValues: [UInt64]
