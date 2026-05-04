@@ -22,7 +22,7 @@ public enum GeneratorError: LocalizedError {
     /// The ``unique`` combinator exhausted its retry budget without finding a new unique value.
     case uniqueBudgetExhausted
 
-    var errorDescription: String {
+    public var errorDescription: String? {
         switch self {
         case .couldNotGenerateConcomitantChoiceTree:
             "Could not generate concomitant choice tree"
