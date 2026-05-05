@@ -6,37 +6,34 @@
 extension GraphStructuralEncoder {
     /// Builds a removal probe from an element or subtree removal scope.
     func buildRemovalProbe(
+        into candidate: inout ChoiceSequence,
         scope: RemovalScope,
         sequence: ChoiceSequence,
         graph: some ReadOnlyChoiceGraph
-    ) -> EncoderProbe? {
+    ) -> ProjectedMutation? {
         switch scope {
         case let .elements(elementScope):
-            guard let candidate = buildElementCandidate(scope: elementScope, sequence: sequence, graph: graph) else {
+            guard let built = buildElementCandidate(scope: elementScope, sequence: sequence, graph: graph) else {
                 return nil
             }
-            return EncoderProbe(
-                candidate: candidate,
-                mutation: .sequenceElementsRemoved(
-                    elementScope.targets.map { target in
-                        (seqNodeID: target.sequenceNodeID, removedNodeIDs: target.elementNodeIDs)
-                    }
-                )
+            candidate = built
+            return .sequenceElementsRemoved(
+                elementScope.targets.map { target in
+                    (seqNodeID: target.sequenceNodeID, removedNodeIDs: target.elementNodeIDs)
+                }
             )
 
         case let .subtree(subtreeScope):
-            guard let candidate = buildSubtreeCandidate(scope: subtreeScope, sequence: sequence, graph: graph) else {
+            guard let built = buildSubtreeCandidate(scope: subtreeScope, sequence: sequence, graph: graph) else {
                 return nil
             }
-            return EncoderProbe(
-                candidate: candidate,
-                mutation: .sequenceElementsRemoved(
-                    [(seqNodeID: graph.nodes[subtreeScope.nodeID].parent ?? -1, removedNodeIDs: [subtreeScope.nodeID])]
-                )
+            candidate = built
+            return .sequenceElementsRemoved(
+                [(seqNodeID: graph.nodes[subtreeScope.nodeID].parent ?? -1, removedNodeIDs: [subtreeScope.nodeID])]
             )
 
         case .coveringAligned:
-            // Covering aligned removal is handled by the multi-shot path in ``GraphStructuralEncoder/nextCoveringAlignedProbe()``.
+            // Covering aligned removal is handled by the multi-shot path in ``GraphStructuralEncoder/nextCoveringAlignedProbe(into:)``.
             return nil
         }
     }
@@ -102,7 +99,7 @@ extension GraphStructuralEncoder {
     /// Pulls the next row from the covering array generator and decodes it into a deletion probe.
     ///
     /// Each row is an array of `UInt64` values, one per sibling parameter. A value equal to the sibling's skip value (= element count) means "do not delete from this sibling." Any other value is an element index within that sibling's `elementNodeIDs`. Rows where fewer than two siblings participate are skipped — single-sequence deletion is already covered by ``PerElementRemovalSource``.
-    mutating func nextCoveringAlignedProbe() -> EncoderProbe? {
+    mutating func nextCoveringAlignedProbe(into candidate: inout ChoiceSequence) -> EncoderProbe? {
         guard let state = coveringAlignedState else { return nil }
 
         while let row = state.scope.generator.next() {
@@ -137,7 +134,7 @@ extension GraphStructuralEncoder {
                 maxElementYield: state.scope.maxElementYield
             )
 
-            guard let candidate = buildElementCandidate(
+            guard let built = buildElementCandidate(
                 scope: elementScope,
                 sequence: state.baseSequence,
                 graph: state.graph
@@ -145,10 +142,8 @@ extension GraphStructuralEncoder {
                 continue
             }
 
-            return EncoderProbe(
-                candidate: candidate,
-                mutation: .sequenceElementsRemoved(removedPairs)
-            )
+            candidate = built
+            return .sequenceElementsRemoved(removedPairs)
         }
 
         // Generator exhausted.

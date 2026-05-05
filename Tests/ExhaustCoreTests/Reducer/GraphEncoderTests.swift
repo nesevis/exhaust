@@ -116,8 +116,9 @@ struct GraphEncoderTests {
 
         var candidates: [ChoiceSequence] = []
         var lastAccepted = false
-        while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
-            candidates.append(probe.candidate)
+        var candidateBuffer = sequence
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: lastAccepted) != nil {
+            candidates.append(candidateBuffer)
             lastAccepted = false
         }
 
@@ -145,11 +146,12 @@ struct GraphEncoderTests {
         var encoder = GraphValueEncoder()
         encoder.start(scope: scope)
 
-        let firstProbe = encoder.nextProbe(lastAccepted: false)
+        var candidateBuffer = ChoiceSequence.flatten(tree)
+        let firstProbe = encoder.nextProbe(into: &candidateBuffer, lastAccepted: false)
         #expect(firstProbe != nil)
 
-        if let probe = firstProbe {
-            let probeValues = probe.candidate.compactMap { $0.value?.choice.bitPattern64 }
+        if firstProbe != nil {
+            let probeValues = candidateBuffer.compactMap { $0.value?.choice.bitPattern64 }
             #expect(probeValues.contains(0))
         }
     }
@@ -242,17 +244,16 @@ struct GraphEncoderTests {
 
         var encoder = GraphStructuralEncoder()
         encoder.start(scope: scope)
-        let probe = encoder.nextProbe(lastAccepted: false)
+        var candidateBuffer = sequence
+        let probe = encoder.nextProbe(into: &candidateBuffer, lastAccepted: false)
 
-        let resolvedProbe = try? #require(probe)
-        guard let resolvedProbe else { return }
-        let resolvedCandidate = resolvedProbe.candidate
+        guard probe != nil else { return }
 
         // Migration must produce a strictly shorter sequence (the source's
         // wrappers are removed entirely, not just emptied).
-        #expect(resolvedCandidate.count < sequence.count)
+        #expect(candidateBuffer.count < sequence.count)
         // And it must shortlex-precede the original.
-        #expect(resolvedCandidate.shortLexPrecedes(sequence))
+        #expect(candidateBuffer.shortLexPrecedes(sequence))
     }
 
     @Test("Minimization encoder emits convergence records")
@@ -270,7 +271,8 @@ struct GraphEncoderTests {
         var encoder = GraphValueEncoder()
         encoder.start(scope: scope)
 
-        while encoder.nextProbe(lastAccepted: false) != nil {}
+        var candidateBuffer = ChoiceSequence.flatten(tree)
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {}
 
         #expect(encoder.convergenceRecords.isEmpty == false)
     }

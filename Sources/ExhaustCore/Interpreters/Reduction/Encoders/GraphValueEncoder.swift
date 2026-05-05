@@ -331,26 +331,28 @@ struct GraphValueEncoder: GraphEncoder {
         )
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
         case .idle:
             return nil
         case var .valueLeaves(state):
-            guard let candidate = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {
+            guard let built = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {
                 mode = .valueLeaves(state)
                 return nil
             }
+            candidate = built
             let mutation = buildIntegerLeafValuesMutation(candidate: candidate, state: state)
             mode = .valueLeaves(state)
-            return EncoderProbe(candidate: candidate, mutation: mutation)
+            return mutation
         case var .floatLeaves(state):
-            guard let candidate = nextFloatProbe(state: &state, lastAccepted: lastAccepted) else {
+            guard let built = nextFloatProbe(state: &state, lastAccepted: lastAccepted) else {
                 mode = .floatLeaves(state)
                 return nil
             }
+            candidate = built
             let mutation = buildFloatLeafValuesMutation(candidate: candidate, state: state)
             mode = .floatLeaves(state)
-            return EncoderProbe(candidate: candidate, mutation: mutation)
+            return mutation
         }
     }
 

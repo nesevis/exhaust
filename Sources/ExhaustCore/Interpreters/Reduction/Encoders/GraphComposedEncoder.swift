@@ -16,7 +16,7 @@
 /// ## Lifecycle
 ///
 /// 1. ``start(scope:)`` extracts the single leaf from the scope's ``ValueMinimizationScope``, reads its current and target bit patterns, and initialises a ``BinarySearchStepper``. Multi-leaf scopes are not supported and produce no probes.
-/// 2. ``nextProbe(lastAccepted:)`` returns midpoint candidates until convergence. Each candidate writes the next bit pattern into the leaf's sequence position; the mutation is `.leafValues([LeafChange])` with `mayReshape: false` so the enclosing ``GraphComposedEncoder/wrap(downstreamProbe:upstreamProbe:)`` can flip the flag to `true` when wrapping the downstream probe.
+/// 2. ``nextProbe(into:lastAccepted:)`` returns midpoint candidates until convergence. Each candidate writes the next bit pattern into the caller's inout buffer; the mutation is `.leafValues([LeafChange])` with `mayReshape: false` so the enclosing ``GraphComposedEncoder/wrap(downstreamMutation:candidate:upstreamProbe:)`` can flip the flag to `true` when wrapping the downstream probe.
 ///
 /// - SeeAlso: ``GraphComposedEncoder``, ``BinarySearchStepper``
 struct GraphBinarySearchEncoder: GraphEncoder {
@@ -61,7 +61,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
         stepper = BinarySearchStepper(lo: targetBitPattern, hi: currentBitPattern)
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard leafNodeID >= 0 else { return nil }
 
         let nextBitPattern: UInt64?
@@ -77,7 +77,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
             typeTag.makeConvertible(bitPattern64: bitPattern),
             tag: typeTag
         )
-        var candidate = baseSequence
+        candidate = baseSequence
         candidate[sequenceIndex] = .value(.init(
             choice: newChoice,
             validRange: validRange,
@@ -89,7 +89,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
             newValue: newChoice,
             mayReshape: false
         )
-        return EncoderProbe(candidate: candidate, mutation: .leafValues([change]))
+        return .leafValues([change])
     }
 }
 
@@ -145,12 +145,13 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
         hasInner = true
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard hasInner else { return nil }
-        guard let candidate = inner.nextProbe(lastAccepted: lastAccepted) else { return nil }
+        guard let built = inner.nextProbe(lastAccepted: lastAccepted) else { return nil }
         // The composition's ``GraphComposedEncoder/wrap(downstreamProbe:upstreamProbe:)``
         // replaces this mutation with the upstream's reshape mutation, so we report an empty leafValues here as a placeholder — the candidate is what matters.
-        return EncoderProbe(candidate: candidate, mutation: .leafValues([]))
+        candidate = built
+        return .leafValues([])
     }
 }
 
@@ -162,7 +163,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
 ///
 /// ## Iteration Semantics
 ///
-/// - Outer loop: pull upstream probes via ``GraphEncoder/nextProbe(lastAccepted:)``.
+/// - Outer loop: pull upstream probes via ``GraphEncoder/nextProbe(into:lastAccepted:)``.
 /// - For each upstream probe, call ``lift`` to build a downstream scope.
 /// - Inner loop: pull downstream probes; emit each one via ``wrap(downstreamProbe:upstreamProbe:)``.
 /// - On downstream exhaustion, advance to the next upstream probe.
@@ -185,7 +186,7 @@ struct GraphComposedEncoder: GraphEncoder {
 
     private var upstream: any GraphEncoder
     private var downstream: any GraphEncoder
-    private let lift: (EncoderProbe, TransformationScope) -> TransformationScope?
+    private let lift: (ChoiceSequence, EncoderProbe, TransformationScope) -> TransformationScope?
     private let upstreamBudget: Int
 
     private var parentScope: TransformationScope?
@@ -208,7 +209,7 @@ struct GraphComposedEncoder: GraphEncoder {
         upstreamScope: TransformationScope,
         downstream: any GraphEncoder,
         upstreamBudget: Int = 15,
-        lift: @escaping (EncoderProbe, TransformationScope) -> TransformationScope?
+        lift: @escaping (ChoiceSequence, EncoderProbe, TransformationScope) -> TransformationScope?
     ) {
         self.name = name
         self.upstream = upstream
@@ -232,27 +233,28 @@ struct GraphComposedEncoder: GraphEncoder {
         upstreamProbesUsed = 0
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         // Drain the active downstream first.
         if downstreamActive {
-            if let downstreamProbe = downstream.nextProbe(lastAccepted: lastAccepted) {
+            if let downstreamMutation = downstream.nextProbe(into: &candidate, lastAccepted: lastAccepted) {
                 guard let upstreamProbe = currentUpstreamProbe else { return nil }
-                return wrap(downstreamProbe: downstreamProbe, upstreamProbe: upstreamProbe)
+                return wrap(downstreamMutation: downstreamMutation, candidate: candidate, upstreamProbe: upstreamProbe)
             }
             downstreamActive = false
         }
 
         // Advance upstream until we find one whose lift produces at least one downstream probe, or until the upstream budget is exhausted. The budget caps the number of upstream probes that contributed to a *valid* lift — failed lifts (`lift` returns nil) do not count because they incur no downstream materialisation cost.
         guard let parent = parentScope else { return nil }
+        var upstreamCandidate = candidate
         while upstreamProbesUsed < upstreamBudget {
-            guard let upstreamProbe = upstream.nextProbe(lastAccepted: false) else { return nil }
-            guard let downstreamScope = lift(upstreamProbe, parent) else { continue }
+            guard let upstreamMutation = upstream.nextProbe(into: &upstreamCandidate, lastAccepted: false) else { return nil }
+            guard let downstreamScope = lift(upstreamCandidate, upstreamMutation, parent) else { continue }
             upstreamProbesUsed += 1
             downstream.start(scope: downstreamScope)
             downstreamActive = true
-            currentUpstreamProbe = upstreamProbe
-            if let firstDownstreamProbe = downstream.nextProbe(lastAccepted: false) {
-                return wrap(downstreamProbe: firstDownstreamProbe, upstreamProbe: upstreamProbe)
+            currentUpstreamProbe = upstreamMutation
+            if let firstDownstreamMutation = downstream.nextProbe(into: &candidate, lastAccepted: false) {
+                return wrap(downstreamMutation: firstDownstreamMutation, candidate: candidate, upstreamProbe: upstreamMutation)
             }
             downstreamActive = false
         }
@@ -271,18 +273,16 @@ struct GraphComposedEncoder: GraphEncoder {
 
     /// Replaces a downstream probe's mutation with the upstream's mutation, lifted to set ``LeafChange/mayReshape`` to `true`.
     ///
-    /// The candidate sequence is the downstream's lifted candidate; the mutation is what the live graph applies on accept (one upstream leaf change that triggers the partial-rebuild splice path via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``).
+    /// The candidate sequence is already in the caller's inout buffer; the mutation is what the live graph applies on accept (one upstream leaf change that triggers the partial-rebuild splice path via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``).
     private func wrap(
-        downstreamProbe: EncoderProbe,
+        downstreamMutation _: EncoderProbe,
+        candidate _: ChoiceSequence,
         upstreamProbe: EncoderProbe
     ) -> EncoderProbe {
-        guard case let .leafValues(upstreamChanges) = upstreamProbe.mutation else {
+        guard case let .leafValues(upstreamChanges) = upstreamProbe else {
             // Non-leafValues upstream mutations are not the intended use of this primitive.
             // Pass the upstream mutation through defensively rather than fabricating one.
-            return EncoderProbe(
-                candidate: downstreamProbe.candidate,
-                mutation: upstreamProbe.mutation
-            )
+            return upstreamProbe
         }
         let reshapeChanges = upstreamChanges.map { change in
             LeafChange(
@@ -291,9 +291,6 @@ struct GraphComposedEncoder: GraphEncoder {
                 mayReshape: true
             )
         }
-        return EncoderProbe(
-            candidate: downstreamProbe.candidate,
-            mutation: .leafValues(reshapeChanges)
-        )
+        return .leafValues(reshapeChanges)
     }
 }

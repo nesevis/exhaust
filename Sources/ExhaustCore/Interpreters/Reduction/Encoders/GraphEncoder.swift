@@ -5,18 +5,12 @@
 
 // MARK: - Encoder Probe
 
-/// A candidate sequence paired with the mutation it would enact if accepted.
+/// The mutation a probe would enact if accepted, returned by ``GraphEncoder/nextProbe(into:lastAccepted:)``.
 ///
-/// Encoders return ``EncoderProbe`` from ``GraphEncoder/nextProbe(lastAccepted:)`` so that the scheduler can route the projected mutation to ``ChoiceGraph/apply(_:freshTree:)`` after acceptance without having to diff the result against the prior tree. The ``mutation`` field carries everything the graph needs to update itself in place; for value-only encoders it is a ``ProjectedMutation/leafValues(_:)`` listing the changed leaves with their bind-inner reshape markers.
+/// The candidate sequence itself is written into the caller-owned `inout` buffer to avoid per-probe COW allocation. The mutation carries everything the graph needs to update itself in place; for value-only encoders it is a ``ProjectedMutation/leafValues(_:)`` listing the changed leaves with their bind-inner reshape markers.
 ///
 /// - SeeAlso: ``ProjectedMutation``, ``LeafChange``, ``ChoiceGraph/apply(_:freshTree:)``
-struct EncoderProbe {
-    /// The candidate ``ChoiceSequence`` to pass to the decoder.
-    let candidate: ChoiceSequence
-
-    /// The mutation that would enact if the property still fails on ``candidate``.
-    let mutation: ProjectedMutation
-}
+typealias EncoderProbe = ProjectedMutation
 
 // MARK: - Graph Encoder Protocol
 
@@ -31,7 +25,7 @@ struct EncoderProbe {
 /// ## Lifecycle
 ///
 /// 1. The scheduler calls ``start(scope:)`` with a self-contained scope.
-/// 2. The scheduler calls ``nextProbe(lastAccepted:)`` in a loop until it returns nil (converged).
+/// 2. The scheduler calls ``nextProbe(into:lastAccepted:)`` in a loop until it returns nil (converged). The caller owns the candidate buffer and passes it as `inout`; the encoder writes the candidate directly into it.
 /// 3. The scheduler reads ``convergenceRecords`` after the loop to harvest cached bounds.
 protocol GraphEncoder {
     /// Descriptive name for logging and instrumentation.
@@ -47,17 +41,19 @@ protocol GraphEncoder {
     /// Called once per scope dispatch. The encoder extracts candidates from the scope's operation metadata and prepares its probe state machine. The encoder reads warm-start data from ``TransformationScope/warmStartRecords`` — it never accesses the graph directly.
     mutating func start(scope: TransformationScope)
 
-    /// Produces the next probe given feedback on the previous probe.
+    /// Produces the next probe by writing the candidate into `candidate` and returning the projected mutation.
     ///
-    /// The returned ``EncoderProbe`` pairs the candidate sequence with a ``ProjectedMutation`` describing what the graph should update if the candidate is accepted. The scheduler forwards the mutation to ``ChoiceGraph/apply(_:freshTree:)``.
+    /// The caller owns the candidate buffer and passes it as `inout`. The encoder overwrites it with the next candidate sequence. This avoids per-probe COW allocation — the same buffer is reused across all probes in the loop.
     ///
-    /// - Parameter lastAccepted: Whether the previous probe was accepted by the property. Ignored on the first call after ``start(scope:)``.
-    /// - Returns: The next probe to try, or `nil` when converged.
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe?
+    /// - Parameters:
+    ///   - candidate: Caller-owned buffer that the encoder writes the candidate sequence into.
+    ///   - lastAccepted: Whether the previous probe was accepted by the property. Ignored on the first call after ``start(scope:)``.
+    /// - Returns: The projected mutation for this probe, or `nil` when converged.
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe?
 
     /// Re-derives the encoder's scope state from the live graph after a structural mutation.
     ///
-    /// The scheduler calls this between ``nextProbe(lastAccepted:)`` invocations whenever the most recent probe acceptance added or removed graph nodes (any in-place reshape that adds/removes nodes, or any mutation flagged ``ChangeApplication/requiresFullRebuild``). At that point the encoder's per-pass cached state — leaf positions, in-flight binary-search steppers, pair indices — is no longer valid against the live graph: tombstoned nodes are still referenced, surviving nodes have shifted positions, and any new nodes the splice created are invisible.
+    /// The scheduler calls this between ``nextProbe(into:lastAccepted:)`` invocations whenever the most recent probe acceptance added or removed graph nodes (any in-place reshape that adds/removes nodes, or any mutation flagged ``ChangeApplication/requiresFullRebuild``). At that point the encoder's per-pass cached state — leaf positions, in-flight binary-search steppers, pair indices — is no longer valid against the live graph: tombstoned nodes are still referenced, surviving nodes have shifted positions, and any new nodes the splice created are invisible.
     ///
     /// Implementations must:
     ///
@@ -112,6 +108,6 @@ extension GraphEncoder {
 
     /// Default no-op refresh for single-shot and self-resetting encoders.
     ///
-    /// Correct for encoders whose ``nextProbe(lastAccepted:)`` returns nil after one probe (single-shot pattern: ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that transition to ``Mode/idle`` on every accepted probe (``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within one pass must override.
+    /// Correct for encoders whose ``nextProbe(into:lastAccepted:)`` returns nil after one probe (single-shot pattern: ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that transition to ``Mode/idle`` on every accepted probe (``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within one pass must override.
     mutating func refreshScope(graph _: some ReadOnlyChoiceGraph, sequence _: ChoiceSequence) {}
 }

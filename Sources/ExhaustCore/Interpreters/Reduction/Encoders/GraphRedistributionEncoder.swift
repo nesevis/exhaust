@@ -86,7 +86,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
         startRedistribution(scope: redistribution, graph: graph)
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard case var .active(state) = mode else { return nil }
 
         if lastAccepted, let accepted = state.lastEmittedCandidate {
@@ -94,14 +94,14 @@ struct GraphRedistributionEncoder: GraphEncoder {
             state.acceptedPairIndices.insert(state.pairIndex)
         }
         state.lastEmittedCandidate = nil
-        guard let candidate = nextRedistributionProbe(state: &state, lastAccepted: lastAccepted) else {
+        guard let built = nextRedistributionProbe(state: &state, lastAccepted: lastAccepted) else {
             mode = .active(state)
             return nil
         }
+        candidate = built
+        state.lastEmittedCandidate = candidate
+        let mutation = valueState.buildLeafValuesMutation(candidate: candidate)
         mode = .active(state)
-        return EncoderProbe(
-            candidate: candidate,
-            mutation: valueState.buildLeafValuesMutation(candidate: candidate)
-        )
+        return mutation
     }
 }

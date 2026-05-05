@@ -6,36 +6,33 @@
 extension GraphStructuralEncoder {
     /// Builds a replacement probe from a self-similar, branch-pivot, or descendant-promotion scope.
     func buildReplacementProbe(
+        into candidate: inout ChoiceSequence,
         scope: ReplacementScope,
         sequence: ChoiceSequence,
         graph: some ReadOnlyChoiceGraph
-    ) -> EncoderProbe? {
+    ) -> ProjectedMutation? {
         switch scope {
         case let .selfSimilar(selfSimilarScope):
-            guard let candidate = buildSelfSimilarCandidate(scope: selfSimilarScope, sequence: sequence, graph: graph) else {
+            guard let built = buildSelfSimilarCandidate(scope: selfSimilarScope, sequence: sequence, graph: graph) else {
                 return nil
             }
-            return EncoderProbe(
-                candidate: candidate,
-                mutation: .selfSimilarReplaced(
-                    targetNodeID: selfSimilarScope.targetNodeID,
-                    donorNodeID: selfSimilarScope.donorNodeID
-                )
+            candidate = built
+            return .selfSimilarReplaced(
+                targetNodeID: selfSimilarScope.targetNodeID,
+                donorNodeID: selfSimilarScope.donorNodeID
             )
 
         case let .branchPivot(pivotScope):
-            return buildBranchPivotCandidate(scope: pivotScope, sequence: sequence, graph: graph)
+            return buildBranchPivotCandidate(into: &candidate, scope: pivotScope, sequence: sequence, graph: graph)
 
         case let .descendantPromotion(promotionScope):
-            guard let candidate = buildDescendantPromotionCandidate(scope: promotionScope, sequence: sequence, graph: graph) else {
+            guard let built = buildDescendantPromotionCandidate(scope: promotionScope, sequence: sequence, graph: graph) else {
                 return nil
             }
-            return EncoderProbe(
-                candidate: candidate,
-                mutation: .descendantPromoted(
-                    ancestorPickNodeID: promotionScope.ancestorPickNodeID,
-                    descendantPickNodeID: promotionScope.descendantPickNodeID
-                )
+            candidate = built
+            return .descendantPromoted(
+                ancestorPickNodeID: promotionScope.ancestorPickNodeID,
+                descendantPickNodeID: promotionScope.descendantPickNodeID
             )
         }
     }
@@ -66,10 +63,11 @@ extension GraphStructuralEncoder {
 
     /// Builds a single branch-pivot candidate for the scope's target branch. The leaf-count gate is applied at scope construction time (in ``replacementScopes()``). This method applies speculative leaf minimization and the shortlex gate.
     private func buildBranchPivotCandidate(
+        into candidate: inout ChoiceSequence,
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
         graph: some ReadOnlyChoiceGraph
-    ) -> EncoderProbe? {
+    ) -> ProjectedMutation? {
         guard scope.pickNodeID < graph.nodes.count else { return nil }
         guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else {
             return nil
@@ -101,17 +99,14 @@ extension GraphStructuralEncoder {
         }
         replacement.append(.group(false))
 
-        var candidate = sequence
+        candidate = sequence
         candidate.replaceSubrange(pickRange.lowerBound ... pickRange.upperBound, with: replacement)
         guard candidate.shortLexPrecedes(sequence) else {
             return nil
         }
-        return EncoderProbe(
-            candidate: candidate,
-            mutation: .branchSelected(
-                pickNodeID: scope.pickNodeID,
-                newSelectedID: scope.targetBranchID
-            )
+        return .branchSelected(
+            pickNodeID: scope.pickNodeID,
+            newSelectedID: scope.targetBranchID
         )
     }
 
