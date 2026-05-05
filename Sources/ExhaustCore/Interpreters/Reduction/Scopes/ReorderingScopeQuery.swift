@@ -75,6 +75,7 @@ enum ReorderingScopeQuery {
     private static func collectBindInnerRanges(graph: some ReadOnlyChoiceGraph) -> [ClosedRange<Int>] {
         var result: [ClosedRange<Int>] = []
         for node in graph.nodes {
+            guard graph.isTombstoned(node.id) == false else { continue }
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]
