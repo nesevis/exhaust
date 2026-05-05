@@ -60,7 +60,7 @@ struct SubtreeRemovalScope {
 ///
 /// Each sibling sequence under a common zip becomes a parameter whose domain is `elementCount + 1` — the extra value encodes "skip this sibling" (do not delete from it). The covering array generator produces rows that guarantee pairwise coverage of all (sibling-A element, sibling-B element) interactions in O(max(domain)^2 * log(siblings)) rows, replacing the previous exponential subset enumeration and cross-product expansion.
 ///
-/// The encoder pulls rows from the generator on each ``GraphEncoder/nextProbe(lastAccepted:)`` call, decoding each row into deletion targets for candidate construction.
+/// The encoder pulls rows from the generator on each ``GraphEncoder/nextProbe(into:lastAccepted:)`` call, decoding each row into deletion targets for candidate construction.
 struct CoveringAlignedRemovalScope {
     /// The sibling sequences participating in aligned deletion.
     let siblings: [AlignedSibling]

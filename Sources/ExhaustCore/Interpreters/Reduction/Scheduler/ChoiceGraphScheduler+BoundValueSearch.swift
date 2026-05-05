@@ -56,9 +56,10 @@ extension ChoiceGraphScheduler {
             ? GraphBinarySearchEncoder()
             : GraphFibreCoveringEncoder()
 
-        let lift: (EncoderProbe, TransformationScope) -> TransformationScope? = { upstreamProbe, parent in
+        let lift: (ChoiceSequence, EncoderProbe, TransformationScope) -> TransformationScope? = { upstreamCandidate, upstreamMutation, parent in
             Self.boundValueLift(
-                upstreamProbe: upstreamProbe,
+                upstreamCandidate: upstreamCandidate,
+                upstreamMutation: upstreamMutation,
                 parent: parent,
                 graph: graph,
                 fibreScope: fibreScope,
@@ -83,7 +84,8 @@ extension ChoiceGraphScheduler {
     /// 3. Locates the bind's bound child in the lifted graph and collects its descendant leaves as the downstream search range.
     /// 4. Constructs an integer-leaves minimization scope on the lifted graph; the downstream encoder operates on it without knowing it is downstream.
     static func boundValueLift(
-        upstreamProbe: EncoderProbe,
+        upstreamCandidate: ChoiceSequence,
+        upstreamMutation: EncoderProbe,
         parent: TransformationScope,
         graph: ChoiceGraph,
         fibreScope: BoundValueScope,
@@ -94,8 +96,8 @@ extension ChoiceGraphScheduler {
         // Read the proposed upstream value for instrumentation.
         let upstreamSeqIndex = parent.graph.nodes[fibreScope.upstreamLeafNodeID].positionRange?.lowerBound
         let upstreamProposedBitPattern: UInt64? = upstreamSeqIndex.flatMap { i in
-            i < upstreamProbe.candidate.count
-                ? upstreamProbe.candidate[i].value?.choice.bitPattern64
+            i < upstreamCandidate.count
+                ? upstreamCandidate[i].value?.choice.bitPattern64
                 : nil
         }
 
@@ -104,7 +106,7 @@ extension ChoiceGraphScheduler {
         //    ``ReductionState/compositionDescriptors``'s lift configuration.
         guard case let .success(_, freshTree, _) = Materializer.materializeAny(
             gen,
-            prefix: upstreamProbe.candidate,
+            prefix: upstreamCandidate,
             mode: .guided(seed: 0, fallbackTree: parent.tree),
             fallbackTree: parent.tree,
             materializePicks: true
@@ -115,7 +117,7 @@ extension ChoiceGraphScheduler {
                     event: "bound_value_lift_failed",
                     metadata: [
                         "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
-                        "candidate_len": "\(upstreamProbe.candidate.count)",
+                        "candidate_len": "\(upstreamCandidate.count)",
                     ]
                 )
             }
@@ -123,7 +125,7 @@ extension ChoiceGraphScheduler {
         }
 
         // 2. Build a reshape change from the upstream's mutation. The upstream encoder reports a value-only LeafChange (mayReshape: false); we lift it to mayReshape: true so applyBindReshape rebuilds the bound subtree.
-        guard case let .leafValues(upstreamChanges) = upstreamProbe.mutation,
+        guard case let .leafValues(upstreamChanges) = upstreamMutation,
               let upstreamChange = upstreamChanges.first
         else {
             return nil

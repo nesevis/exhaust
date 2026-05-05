@@ -21,8 +21,9 @@ struct EncoderIsolationTests {
         encoder.start(scope: scope)
 
         var probeValues: [UInt64] = []
-        while let probe = encoder.nextProbe(lastAccepted: false) {
-            let values = probe.candidate.compactMap { $0.value?.choice.bitPattern64 }
+        var candidateBuffer = ChoiceSequence.flatten(tree)
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
+            let values = candidateBuffer.compactMap { $0.value?.choice.bitPattern64 }
             if let first = values.first {
                 probeValues.append(first)
             }
@@ -47,8 +48,9 @@ struct EncoderIsolationTests {
         encoder.start(scope: scope)
 
         var probeValues: [UInt64] = []
-        while let probe = encoder.nextProbe(lastAccepted: false) {
-            let values = probe.candidate.compactMap { $0.value?.choice.bitPattern64 }
+        var candidateBuffer = ChoiceSequence.flatten(tree)
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
+            let values = candidateBuffer.compactMap { $0.value?.choice.bitPattern64 }
             if let first = values.first {
                 probeValues.append(first)
             }
@@ -75,7 +77,8 @@ struct EncoderIsolationTests {
         encoder.start(scope: scope)
 
         var probeCount = 0
-        while encoder.nextProbe(lastAccepted: false) != nil {
+        var candidateBuffer = ChoiceSequence.flatten(tree)
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
             probeCount += 1
         }
 
@@ -107,8 +110,9 @@ struct EncoderIsolationTests {
         var encoder = GraphStructuralEncoder()
         encoder.start(scope: scope)
 
-        while let probe = encoder.nextProbe(lastAccepted: false) {
-            #expect(probe.candidate.count < sequence.count)
+        var candidateBuffer = sequence
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
+            #expect(candidateBuffer.count < sequence.count)
         }
     }
 
@@ -136,8 +140,9 @@ struct EncoderIsolationTests {
         encoder.start(scope: scope)
 
         var candidateLengths: [Int] = []
-        while let probe = encoder.nextProbe(lastAccepted: false) {
-            candidateLengths.append(probe.candidate.count)
+        var candidateBuffer = baseSequence
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
+            candidateLengths.append(candidateBuffer.count)
         }
 
         #expect(candidateLengths.isEmpty == false)

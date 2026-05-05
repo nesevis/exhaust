@@ -69,7 +69,8 @@ extension ChoiceGraphScheduler {
             return false
         }
 
-        while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
+        var candidateBuffer = sequence
+        while let mutation = encoder.nextProbe(into: &candidateBuffer, lastAccepted: lastAccepted) {
             probeCount += 1
             lastAccepted = false
             // True when this probe's acceptance structurally mutated the graph (in-place reshape that added/removed nodes, or any change that forced ``ChangeApplication/requiresFullRebuild``). The encoder's
@@ -79,7 +80,7 @@ extension ChoiceGraphScheduler {
             let probeHash = ZobristHash.incrementalHash(
                 baseHash: baseHash,
                 baseSequence: sequence,
-                probe: probe.candidate
+                probe: candidateBuffer
             )
             if rejectCache.contains(probeHash) {
                 cacheHitCount += 1
@@ -110,7 +111,7 @@ extension ChoiceGraphScheduler {
             // Safety: when an accepted probe sets ``ChangeApplication/requiresFullRebuild``
             // true (which every Layer 7a structural case does until Layer 7 implements them in ``ChoiceGraph/apply(_:freshTree:)``), the cycle loop's rebuild path at the call site re-materializes the sequence with `materializePicks: true` before calling
             // ``ChoiceGraph/build(from:)``, so the rebuilt graph never sees a stripped tree.
-            let picksUnchanged = switch probe.mutation {
+            let picksUnchanged = switch mutation {
             case let .leafValues(changes):
                 changes.contains(where: \.mayReshape) == false
             case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped, .sequenceReordered:
@@ -122,7 +123,7 @@ extension ChoiceGraphScheduler {
             // Composed encoders (bound value) emit post-lift candidates whose bound subtree differs from the parent ``tree``. Guided decoding would substitute stale fallback content; force the exact decoder when the encoder requests it.
             //
             // Per-probe bind awareness: independent-scope probes (no mayReshape changes) cannot reshape any bind region, so exact mode is safe and avoids guided materialization's fidelity noise. Bind-inner probes (mayReshape true) use guided mode for fallback context during bound subtree reconstruction.
-            let probeCanReshape = switch probe.mutation {
+            let probeCanReshape = switch mutation {
             case let .leafValues(changes):
                 changes.contains(where: \.mayReshape)
             default:
@@ -136,7 +137,7 @@ extension ChoiceGraphScheduler {
             var filterObservations: [UInt64: FilterObservation] = [:]
 
             if let result = try decoder.decodeAny(
-                candidate: probe.candidate,
+                candidate: candidateBuffer,
                 gen: gen,
                 tree: tree,
                 originalSequence: sequence,
@@ -173,7 +174,7 @@ extension ChoiceGraphScheduler {
                     // Encoders with requiresExactDecoder (bound value compositions) skip graph.apply, so requiresFullRebuild is never set on the ChangeApplication — but their cached state is equally stale after an acceptance and needs the same reset treatment.
                     mutatedStructurally = true
                 } else {
-                    application = graph.apply(probe.mutation, freshTree: tree)
+                    application = graph.apply(mutation, freshTree: tree)
                     if application.requiresFullRebuild {
                         anyRequiresRebuild = true
                         break
@@ -205,11 +206,11 @@ extension ChoiceGraphScheduler {
                 decoderRejectCount += 1
                 if isInstrumented {
                     logReplacementProbeRejection(
-                        mutation: probe.mutation,
+                        mutation: mutation,
                         encoder: encoder.name,
                         graph: graph,
                         baseSequenceCount: sequence.count,
-                        probeSequenceCount: probe.candidate.count,
+                        probeSequenceCount: candidateBuffer.count,
                         probeHash: probeHash
                     )
                 }

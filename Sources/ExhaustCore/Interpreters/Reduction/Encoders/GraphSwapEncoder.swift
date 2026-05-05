@@ -17,8 +17,11 @@ struct GraphSwapEncoder: GraphEncoder {
 
     // MARK: - State
 
-    /// The initial probe built at ``start(scope:)``. Consumed on the first ``nextProbe(lastAccepted:)`` call.
+    /// The initial mutation built at ``start(scope:)``. Consumed on the first ``nextProbe(into:lastAccepted:)`` call.
     private var initialProbe: EncoderProbe?
+
+    /// The candidate sequence for the initial probe, stored alongside ``initialProbe``.
+    private var initialProbeCandidate: ChoiceSequence?
 
     /// Adaptive extension state. Non-nil when the initial probe targeted a group of three or more and extension is viable. Set at ``start(scope:)`` alongside the initial probe.
     var extensionState: ExtensionState?
@@ -44,31 +47,47 @@ struct GraphSwapEncoder: GraphEncoder {
 
     mutating func start(scope: TransformationScope) {
         initialProbe = nil
+        initialProbeCandidate = nil
         extensionState = nil
 
         guard case let .permute(permutationScope) = scope.transformation.operation else {
             return
         }
 
+        var candidateBuffer = scope.baseSequence
         initialProbe = buildInitialProbe(
+            into: &candidateBuffer,
             scope: permutationScope,
             sequence: scope.baseSequence,
             graph: scope.graph
         )
+        if initialProbe != nil {
+            initialProbeCandidate = candidateBuffer
+        }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         // Initial probe: return it once, then clear.
-        if let probe = initialProbe {
-            initialProbe = nil
-            return probe
+        if initialProbe != nil {
+            return nextInitialProbe(into: &candidate)
         }
 
         // Adaptive extension: active after the initial probe was consumed.
         if extensionState != nil {
-            return nextExtensionProbe(lastAccepted: lastAccepted)
+            return nextExtensionProbe(into: &candidate, lastAccepted: lastAccepted)
         }
 
         return nil
+    }
+
+    /// Consumes the pre-built initial probe, writing its candidate into the buffer.
+    private mutating func nextInitialProbe(into candidate: inout ChoiceSequence) -> EncoderProbe? {
+        guard let stored = initialProbe else { return nil }
+        initialProbe = nil
+        if let storedCandidate = initialProbeCandidate {
+            candidate = storedCandidate
+            initialProbeCandidate = nil
+        }
+        return stored
     }
 }

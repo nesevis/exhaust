@@ -85,21 +85,21 @@ struct GraphLockstepEncoder: GraphEncoder {
         startLockstep(scope: tandem, graph: graph)
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard case var .active(state) = mode else { return nil }
 
         if lastAccepted, let accepted = state.lastEmittedCandidate {
             valueState.sequence = accepted
         }
         state.lastEmittedCandidate = nil
-        guard let candidate = nextLockstepProbe(state: &state, lastAccepted: lastAccepted) else {
+        guard let built = nextLockstepProbe(state: &state, lastAccepted: lastAccepted) else {
             mode = .active(state)
             return nil
         }
+        candidate = built
+        state.lastEmittedCandidate = candidate
+        let mutation = valueState.buildLeafValuesMutation(candidate: candidate)
         mode = .active(state)
-        return EncoderProbe(
-            candidate: candidate,
-            mutation: valueState.buildLeafValuesMutation(candidate: candidate)
-        )
+        return mutation
     }
 }

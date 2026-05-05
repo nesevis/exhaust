@@ -24,6 +24,9 @@ protocol ReadOnlyChoiceGraph {
     /// Maximum antichain over deletable structural boundary nodes.
     var deletionAntichain: [Int] { get }
 
+    /// Returns true when `nodeID` has been removed from the graph but its array slot is retained for ID stability.
+    func isTombstoned(_ nodeID: Int) -> Bool
+
     /// Whether two nodes are independent (no dependency path between them in either direction).
     func areIndependent(_ nodeA: Int, _ nodeB: Int) -> Bool
 

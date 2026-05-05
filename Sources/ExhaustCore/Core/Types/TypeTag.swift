@@ -253,6 +253,7 @@ extension TypeTag: Equatable {
 }
 
 extension TypeTag: Hashable {
+    /// Hashes by discriminator only for most cases. `.character` intentionally includes `boundaryIndices` because distinct character sets produce distinct generators that must not collide in keyed caches. `.date` includes all three associated values for the same reason.
     public func hash(into hasher: inout Hasher) {
         switch self {
         case .uint: hasher.combine(0)

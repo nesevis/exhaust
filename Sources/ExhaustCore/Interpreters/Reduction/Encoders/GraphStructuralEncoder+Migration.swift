@@ -6,21 +6,20 @@
 extension GraphStructuralEncoder {
     /// Builds a migration probe that moves elements from a source sequence to a receiver sequence.
     func buildMigrationProbe(
+        into candidate: inout ChoiceSequence,
         scope: MigrationScope,
         sequence: ChoiceSequence,
         graph: some ReadOnlyChoiceGraph
-    ) -> EncoderProbe? {
-        guard let candidate = buildMigrationCandidate(scope: scope, sequence: sequence, graph: graph) else {
+    ) -> ProjectedMutation? {
+        guard let built = buildMigrationCandidate(scope: scope, sequence: sequence, graph: graph) else {
             return nil
         }
-        return EncoderProbe(
-            candidate: candidate,
-            mutation: .sequenceElementsMigrated(
-                sourceSeqID: scope.sourceSequenceNodeID,
-                receiverSeqID: scope.receiverSequenceNodeID,
-                movedNodeIDs: scope.elementNodeIDs,
-                insertionOffset: scope.receiverPositionRange.upperBound
-            )
+        candidate = built
+        return .sequenceElementsMigrated(
+            sourceSeqID: scope.sourceSequenceNodeID,
+            receiverSeqID: scope.receiverSequenceNodeID,
+            movedNodeIDs: scope.elementNodeIDs,
+            insertionOffset: scope.receiverPositionRange.upperBound
         )
     }
 

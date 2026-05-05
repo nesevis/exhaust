@@ -29,7 +29,7 @@ struct GraphReorderEncoder: GraphEncoder {
     /// Emits the next group's reordering probe or `nil` when all groups have been attempted.
     ///
     /// Skips groups that are already in natural order. The `lastAccepted` parameter is intentionally ignored: ``refreshScope(graph:sequence:)`` delivers the updated sequence after every accepted probe, keeping ``currentSequence`` in sync without needing to re-examine the acceptance flag here.
-    mutating func nextProbe(lastAccepted _: Bool) -> EncoderProbe? {
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted _: Bool) -> EncoderProbe? {
         while groupIndex < groups.count {
             let group = groups[groupIndex]
             groupIndex += 1
@@ -48,13 +48,13 @@ struct GraphReorderEncoder: GraphEncoder {
             }
             guard sortedIndices != Array(keys.indices) else { continue }
 
-            let candidate = rebuildWithPermutation(
+            candidate = rebuildWithPermutation(
                 sequence: currentSequence,
                 ranges: ranges,
                 sortedIndices: sortedIndices
             )
 
-            return EncoderProbe(candidate: candidate, mutation: .sequenceReordered)
+            return .sequenceReordered
         }
         return nil
     }
