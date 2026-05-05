@@ -145,16 +145,15 @@ struct UniquenessBenchmarkTests {
     func avlBenchmark() throws {
         let adaptive = try measureAdaptivelySmoothed(Self.avlProblem)
         let cgsShared = try measureCGSFitnessSharing(Self.avlProblem)
-        let cgsUCB = try measureCGSUCB(Self.avlProblem)
-        printProblemResults(Self.avlProblem, results: [adaptive, cgsShared, cgsUCB])
+        printProblemResults(Self.avlProblem, results: [adaptive, cgsShared])
     }
 
-    @Test("Bounded sum: Adaptive vs CGS-Tuned", .disabled("Benchmark"))
+    @Test("Bounded sum: Adaptive vs CGS-Shared", .disabled("Benchmark"))
     func boundedSumBenchmark() throws {
         let rejection = try measureRejection(Self.boundedSumProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.boundedSumProblem)
-        let cgsTuned = try measureOnlineInformedTuning(Self.boundedSumProblem)
-        printProblemResults(Self.boundedSumProblem, results: [rejection, adaptive, cgsTuned])
+        let cgsShared = try measureCGSFitnessSharing(Self.boundedSumProblem)
+        printProblemResults(Self.boundedSumProblem, results: [rejection, adaptive, cgsShared])
     }
 
     @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled())
@@ -181,14 +180,10 @@ struct UniquenessBenchmarkTests {
     ) throws -> [BenchmarkResult] {
         let rejection = try measureRejection(problem)
         let smoothed = try measureSmoothed(problem)
-//        let onlineCGS = try measureOnlineCGS(problem)
         let adaptive = try measureAdaptivelySmoothed(problem)
         let auto = try measureAutoAdapted(problem)
-        let cgsTuned = try measureOnlineInformedTuning(problem, weightingStrategy: .totalFitness)
-        let cgsTunedValidity = try measureOnlineInformedTuning(problem, weightingStrategy: .validityRate)
         let cgsShared = try measureCGSFitnessSharing(problem)
-        let cgsUCB = try measureCGSUCB(problem)
-        return [rejection, smoothed, adaptive, auto, cgsTuned, cgsTunedValidity, cgsShared, cgsUCB]
+        return [rejection, smoothed, adaptive, auto, cgsShared]
     }
 
     // MARK: - Strategy Implementations
@@ -374,60 +369,6 @@ struct UniquenessBenchmarkTests {
         )
     }
 
-    /// Kolbu
-    private func measureOnlineInformedTuning<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
-        weightingStrategy: ChoiceGradientTuner<Value>.WeightingStrategy = .totalFitness
-    ) throws -> BenchmarkResult {
-        let strategyName = switch weightingStrategy {
-        case .totalFitness: "CGS-Tuned"
-        case .validityRate: "CGS-Rate"
-        case .fitnessSharing: "CGS-Shared"
-        case .ucb: "CGS-UCB"
-        }
-
-        let start = ContinuousClock.now
-
-        let tuned = try ChoiceGradientTuner.tune(
-            problem.generator,
-            predicate: problem.predicate,
-            warmupRuns: 200,
-            sampleCount: 5,
-            seed: 12345,
-            weightingStrategy: weightingStrategy
-        )
-
-        let warmupElapsed = ContinuousClock.now - start
-        let genStart = ContinuousClock.now
-
-        var unique = Set<Value>()
-        var total = 0
-        var quality = [Int: Int]()
-        var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
-
-        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
-            total += 1
-            if problem.predicate(value) {
-                let (inserted, _) = unique.insert(value)
-                if inserted {
-                    quality[problem.qualityBucket(value), default: 0] += 1
-                }
-            }
-        }
-        let genElapsed = ContinuousClock.now - genStart
-        let elapsed = ContinuousClock.now - start
-
-        print("  \(strategyName): warmup \(warmupElapsed), generation \(genElapsed), total generated \(total)")
-
-        return BenchmarkResult(
-            strategyName: strategyName,
-            uniqueCount: unique.count,
-            totalGenerated: total,
-            elapsed: elapsed,
-            qualityDistribution: quality
-        )
-    }
-
     private func measureCGSFitnessSharing<Value: Hashable>(
         _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
@@ -466,51 +407,6 @@ struct UniquenessBenchmarkTests {
 
         return BenchmarkResult(
             strategyName: "CGS-Shared",
-            uniqueCount: unique.count,
-            totalGenerated: total,
-            elapsed: elapsed,
-            qualityDistribution: quality
-        )
-    }
-
-    private func measureCGSUCB<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>
-    ) throws -> BenchmarkResult {
-        let start = ContinuousClock.now
-
-        let tuned: ReflectiveGenerator<Value> = try ChoiceGradientTuner<Value>.tune(
-            problem.generator,
-            predicate: problem.predicate,
-            warmupRuns: 200,
-            sampleCount: 5,
-            seed: 12345,
-            weightingStrategy: .ucb(explorationConstant: 1.4)
-        )
-
-        let warmupElapsed = ContinuousClock.now - start
-        let genStart = ContinuousClock.now
-
-        var unique = Set<Value>()
-        var total = 0
-        var quality = [Int: Int]()
-        var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
-
-        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
-            total += 1
-            if problem.predicate(value) {
-                let (inserted, _) = unique.insert(value)
-                if inserted {
-                    quality[problem.qualityBucket(value), default: 0] += 1
-                }
-            }
-        }
-        let genElapsed = ContinuousClock.now - genStart
-        let elapsed = ContinuousClock.now - start
-
-        print("  CGS-UCB: warmup \(warmupElapsed), generation \(genElapsed), total generated \(total)")
-
-        return BenchmarkResult(
-            strategyName: "CGS-UCB",
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,

@@ -146,19 +146,19 @@ package struct Xoshiro256: ~Copyable {
 private struct SplitMix64 {
     private var state: UInt64
 
-    let incrementConstant: UInt64 = 0x9E37_79B9_7F4A_7C15
-    let mixingConstant1: UInt64 = 0xBF58_476D_1CE4_E5B9
-    let mixingConstant2: UInt64 = 0x94D0_49BB_1331_11EB
+    static let incrementConstant: UInt64 = 0x9E37_79B9_7F4A_7C15
+    static let mixingConstant1: UInt64 = 0xBF58_476D_1CE4_E5B9
+    static let mixingConstant2: UInt64 = 0x94D0_49BB_1331_11EB
 
     init(seed: UInt64) {
         state = seed
     }
 
     mutating func next() -> UInt64 {
-        state = state &+ incrementConstant
+        state = state &+ Self.incrementConstant
         var z = state
-        z = (z ^ (z &>> 30)) &* mixingConstant1
-        z = (z ^ (z &>> 27)) &* mixingConstant2
+        z = (z ^ (z &>> 30)) &* Self.mixingConstant1
+        z = (z ^ (z &>> 27)) &* Self.mixingConstant2
         return z ^ (z &>> 31)
     }
 }

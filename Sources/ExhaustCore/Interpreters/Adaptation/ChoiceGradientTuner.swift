@@ -47,26 +47,11 @@ package enum ChoiceGradientTuner<FinalOutput> {
     ///
     /// All strategies use the same CGS warmup data; they differ only in how that data is converted to static pick weights.
     public enum WeightingStrategy {
-        /// Raw cumulative fitness: weight = sum of fitness scores across warmup runs.
-        /// Fast to compute but produces peaky weights that lock onto the dominant cluster, limiting diversity at high unique counts.
-        /// - Note: Not used in production. Retained for benchmarking against `.fitnessSharing`; consistently 2x slower on AVL.
-        case totalFitness
-
-        /// Validity rate: weight = (fitness / observations) × 10000.
-        /// Normalizes across sites regardless of sample count, but still suffers from the same overcommitment to dominant choices as `totalFitness`.
-        /// - Note: Not used in production. Retained for benchmarking; performs similarly to `totalFitness`.
-        case validityRate
-
         /// Niche-count fitness sharing: weight = fitness / (1 + N × share).
         /// Discounts dominant choices proportionally — a choice with 90% of the fitness gets a heavy divisor while a 10% choice gets a light one.
         /// Preserves the CGS ranking while redistributing weight to the tail.
-        /// Default strategy; benchmarked as 2–3x faster than alternatives on BST and AVL time-to-unique workloads.
+        /// Benchmarked as 2–3x faster than raw totalFitness or UCB alternatives on BST and AVL time-to-unique workloads.
         case fitnessSharing
-
-        /// UCB1 exploration bonus: weight = meanFitness + C × √(ln(N_total) / N_i).
-        /// Adds an exploration bonus that decays as a choice is observed more, based on the multi-armed bandit UCB1 formula. Unobserved choices get maximum exploration bonus. Competitive with fitness sharing on BST; slightly slower on AVL.
-        /// - Note: Not used in production. Retained as an alternative exploration strategy; ties with `.fitnessSharing` on BST but ~20% slower on AVL.
-        case ucb(explorationConstant: Double)
     }
 
     public static func tune(
@@ -152,46 +137,12 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 baked.reserveCapacity(choices.count)
                 let depthOffset = UInt64(depth) &* 0x9E37_79B9_7F4A_7C15
 
-                // Precompute for strategies that need cross-choice context
-                let precomputedWeights: ContiguousArray<UInt64>? = switch strategy {
-                case .fitnessSharing:
-                    computeFitnessSharingWeights(choices: choices, records: accumulator.records, fingerprintOffset: depthOffset)
-                case let .ucb(explorationConstant):
-                    computeUCBWeights(
-                        choices: choices,
-                        records: accumulator.records,
-                        explorationConstant: explorationConstant,
-                        fingerprintOffset: depthOffset
-                    )
-                default:
-                    nil
-                }
+                let precomputedWeights = computeFitnessSharingWeights(
+                    choices: choices, records: accumulator.records, fingerprintOffset: depthOffset
+                )
 
                 for (index, choice) in choices.enumerated() {
-                    let weight: UInt64
-                    if let precomputed = precomputedWeights {
-                        weight = precomputed[index]
-                    } else {
-                        let key = FitnessAccumulator.SiteChoiceKey(
-                            fingerprint: choice.fingerprint &+ depthOffset,
-                            choiceID: choice.id
-                        )
-                        if let record = accumulator.records[key] {
-                            switch strategy {
-                            case .totalFitness:
-                                weight = record.totalFitness
-                            case .validityRate:
-                                let rate = record.observationCount > 0
-                                    ? Double(record.totalFitness) / Double(record.observationCount)
-                                    : 0
-                                weight = UInt64(rate * 10000)
-                            case .fitnessSharing, .ucb:
-                                weight = choice.weight
-                            }
-                        } else {
-                            weight = choice.weight
-                        }
-                    }
+                    let weight = precomputedWeights[index]
                     baked.append(ReflectiveOperation.PickTuple(
                         fingerprint: choice.fingerprint,
                         id: choice.id,
@@ -263,49 +214,6 @@ package enum ChoiceGradientTuner<FinalOutput> {
             let nicheCount = 1.0 + n * share
             let weight = (fitness / nicheCount) * 10000
             weights.append(UInt64(weight))
-        }
-
-        return weights
-    }
-
-    // MARK: - UCB Exploration Bonus
-
-    /// UCB1 (Upper Confidence Bound) exploration bonus from multi-armed bandit literature. Each choice's weight is `meanFitness + C × √(ln(N) / n_i)` where `N` is total observations across all choices at the site and `n_i` is this choice's observation count. The exploration term decays as a choice is sampled more, naturally balancing exploitation of known-good choices with exploration of under-sampled ones. Unobserved choices get the maximum exploration bonus `C × √(ln(N))`.
-    private static func computeUCBWeights(
-        choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        records: [FitnessAccumulator.SiteChoiceKey: FitnessAccumulator.FitnessRecord],
-        explorationConstant: Double,
-        fingerprintOffset: UInt64 = 0
-    ) -> ContiguousArray<UInt64> {
-        let count = choices.count
-
-        // Gather per-choice stats and total site observations
-        var totalSiteObservations: UInt64 = 0
-        var fitnessRecords = ContiguousArray<FitnessAccumulator.FitnessRecord?>()
-        fitnessRecords.reserveCapacity(count)
-        for choice in choices {
-            let key = FitnessAccumulator.SiteChoiceKey(fingerprint: choice.fingerprint &+ fingerprintOffset, choiceID: choice.id)
-            let record = records[key]
-            fitnessRecords.append(record)
-            totalSiteObservations += record?.observationCount ?? 0
-        }
-
-        let logTotal = totalSiteObservations > 0 ? log(Double(totalSiteObservations)) : 0
-        var weights = ContiguousArray<UInt64>()
-        weights.reserveCapacity(count)
-
-        for record in fitnessRecords {
-            let ucbScore: Double
-            if let record, record.observationCount > 0 {
-                let meanFitness = Double(record.totalFitness) / Double(record.observationCount)
-                let explorationBonus =
-                    explorationConstant * sqrt(logTotal / Double(record.observationCount))
-                ucbScore = meanFitness + explorationBonus
-            } else {
-                // Unobserved choices get maximum exploration bonus
-                ucbScore = explorationConstant * sqrt(logTotal)
-            }
-            weights.append(UInt64(ucbScore * 10000))
         }
 
         return weights
