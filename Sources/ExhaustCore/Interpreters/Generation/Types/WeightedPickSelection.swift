@@ -7,7 +7,6 @@
 
 
 package enum WeightedPickSelection {
-    @inline(__always)
     public static func draw(
         from choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         using prng: inout Xoshiro256

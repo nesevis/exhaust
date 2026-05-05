@@ -6,7 +6,6 @@
 //
 
 package enum SequenceExecutionKernel {
-    @inline(__always)
     public static func run(
         count: UInt64,
         step: () throws -> Bool
@@ -21,7 +20,6 @@ package enum SequenceExecutionKernel {
         return true
     }
 
-    @inline(__always)
     public static func run<Script>(
         over scripts: [Script],
         step: (Script) throws -> Bool
