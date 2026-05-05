@@ -230,13 +230,22 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 throw GeneratorError.sparseValidityCondition
 
-            case let .classify(gen, _, _):
-                return try handlePassthrough(
-                    gen,
-                    inputValue: inputValue,
-                    context: &context,
-                    runContinuation: runContinuation
-                )
+            case let .classify(gen, fingerprint, classifiers):
+                guard let result = try generateRecursive(
+                    gen, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                for (label, classifier) in classifiers where classifier(result) {
+                    if context.classifications[fingerprint] == nil {
+                        context.classifications[fingerprint] = [:]
+                    }
+                    if context.classifications[fingerprint]![label] == nil {
+                        context.classifications[fingerprint]![label] = []
+                    }
+                    context.classifications[fingerprint]![label]!.insert(context.runs)
+                }
+                return try runContinuation(result, &context)
 
             case let .transform(kind, inner):
                 return try handleTransform(
