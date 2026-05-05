@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
-import Foundation
 
 // MARK: - Academic Provenance
 
@@ -96,6 +95,69 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             )
             return nil
         }
+    }
+
+    // MARK: - Value-Only Generation
+
+    /// Generates the next value without constructing a ``ChoiceTree``.
+    ///
+    /// Delegates to ``ValueInterpreter``'s tree-free recursive engine, which shares the same ``GenerationContext`` (filter cache, unique dedup, PRNG). PRNG consumption is identical to ``next()`` so the run can be reproduced with tree construction via ``reproduceWithTree()``.
+    ///
+    /// Falls back to tree-building generation (discarding the tree) when the generator contains a choice-sequence-based `.unique` site, because the value-only path cannot safely reproduce the dedup without a tree.
+    public mutating func nextValueOnly() throws -> FinalOutput? {
+        if context.uniqueSeenSequences.isEmpty == false {
+            return try next()?.value
+        }
+
+        guard context.runs < context.maxRuns else {
+            context.printClassifications()
+            return nil
+        }
+
+        if !context.isFixed {
+            let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
+            context.prng = Xoshiro256(seed: runSeed)
+        }
+
+        defer { context.runs += 1 }
+        do {
+            return try ValueInterpreter<FinalOutput>.generateRecursive(generator, with: (), context: &context)
+        } catch GeneratorError.uniqueBudgetExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "uniqueness_budget_exhausted",
+                metadata: [
+                    "unique_count": "\(context.runs)",
+                    "requested": "\(context.maxRuns)",
+                ]
+            )
+            context.runs = context.maxRuns
+            return nil
+        } catch GeneratorError.sparseValidityCondition {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "sparse_validity_condition",
+                metadata: ["run": "\(context.runs)"]
+            )
+            return nil
+        }
+    }
+
+    /// Re-runs the most recent generation with full ``ChoiceTree`` construction.
+    ///
+    /// Call after ``nextValueOnly()`` returns a failing value to obtain the tree for reduction. Uses the same per-run seed derivation as the original generation, producing an identical value and PRNG consumption path, but with tree construction enabled.
+    ///
+    /// The run index is `runs - 1` because ``nextValueOnly()`` increments `runs` before returning.
+    public mutating func reproduceWithTree() throws -> Element? {
+        let failingRunIndex = context.runs - 1
+        let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: failingRunIndex)
+        context.prng = Xoshiro256(seed: runSeed)
+
+        let savedRuns = context.runs
+        context.runs = failingRunIndex
+        defer { context.runs = savedRuns }
+
+        return try Self.generateRecursive(generator, with: (), context: &context)
     }
 
     /// Used to generate results around a similar level of complexity. Intended to be used to increase pool of results to compare against.
@@ -343,7 +405,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // Optimisation! Do not remove. This early return cuts 70% of the time for string generators
         if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
-            // Early return for a pure case originating with a choice
             return (value, calleeChoiceTree)
         }
         if let (continuationResult, innerChoiceTree) = try generateRecursive(
@@ -354,7 +415,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             if nextGen.isPure {
                 return (continuationResult, calleeChoiceTree)
             } else {
-                // A large part of the trace is adding these arrays together. Chain?
                 return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
             }
         }
@@ -679,9 +739,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         guard let result = try generateRecursive(gen, with: inputValue, context: &context) else {
             return nil
         }
+        let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [result.1])
         return try runContinuation(
             result: result.0,
-            calleeChoiceTree: .resize(newSize: newSize, choices: [result.1]),
+            calleeChoiceTree: calleeTree,
             continuation: continuation,
             inputValue: inputValue,
             context: &context

@@ -7,7 +7,6 @@
 
 package enum ChoiceTreeHandlers {
     /// Resolves the generator to use for a filter operation, using the tuning cache.
-    @inline(__always)
     public static func resolveFilterGenerator(
         gen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
@@ -47,7 +46,6 @@ package enum ChoiceTreeHandlers {
 
     /// Checks whether a generated result is a duplicate for a unique combinator.
     /// Returns `true` if duplicate.
-    @inline(__always)
     public static func checkDuplicate(
         result: Any,
         tree: ChoiceTree,

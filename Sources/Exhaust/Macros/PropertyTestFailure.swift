@@ -12,7 +12,7 @@ struct PropertyTestFailure<Output> {
     /// The ``ChoiceSequence`` short-string representation.
     let blueprint: String?
     let propertyInvocations: Int?
-    var reducedSequence: ChoiceSequence? = nil
+    var reducedSequence: ChoiceSequence?
     var replayHint: String?
     /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
     var transparent: Bool = false

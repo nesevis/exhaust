@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
-import Foundation
 
 // MARK: - Academic Provenance
 
@@ -114,7 +113,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
     // MARK: - Recursive Engine
 
-    private static func generateRecursive<Output>(
+    static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
         context: inout GenerationContext
@@ -202,7 +201,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     runContinuation: runContinuation
                 )
 
-            case let .filter(gen, fingerprint, filterType, predicate, _):
+            case let .filter(gen, fingerprint, filterType, predicate, sourceLocation):
                 let tunedGen = ChoiceTreeHandlers.resolveFilterGenerator(
                     gen: gen,
                     fingerprint: fingerprint,
@@ -219,7 +218,12 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         return nil
                     }
 
-                    if predicate(result) {
+                    let passed = predicate(result)
+                    if context.filterObservations[fingerprint] == nil {
+                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
+                    }
+                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
+                    if passed {
                         return try runContinuation(result, &context)
                     }
                     attempts += 1

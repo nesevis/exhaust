@@ -8,7 +8,7 @@ struct ExploreFailure<Output> {
     let propertyInvocations: Int
     let totalBudget: Int
     let matchedDirections: [(index: Int, name: String)]
-    var reducedSequence: ChoiceSequence? = nil
+    var reducedSequence: ChoiceSequence?
 
     func render() -> String {
         var lines: [String] = []

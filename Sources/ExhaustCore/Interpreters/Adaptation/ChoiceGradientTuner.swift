@@ -5,7 +5,13 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
-import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 
 /// Three-stage offline tuner for pick-heavy generators (BST, AVL, and so on).
 ///

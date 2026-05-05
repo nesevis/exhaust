@@ -210,7 +210,6 @@ package enum Interpreters {
         }
     }
 
-    @inline(__always)
     private static func reflectContramapOperation(
         transform: (Any) throws -> Any?,
         nextGen: ReflectiveGenerator<Any>,
@@ -222,7 +221,6 @@ package enum Interpreters {
         return try reflectRecursive(nextGen, onFinalOutput: subValue).map { ($0.value, $0.path) }
     }
 
-    @inline(__always)
     private static func reflectPruneOperation(
         nextGen: ReflectiveGenerator<Any>,
         finalOutput: Any
@@ -347,7 +345,6 @@ package enum Interpreters {
         return [(value: convertibleValue, path: [choiceTree])]
     }
 
-    @inline(__always)
     private static func reflectResizeOperation(
         newSize: UInt64,
         nextGen: ReflectiveGenerator<Any>,
@@ -430,7 +427,6 @@ package enum Interpreters {
         return [(value: results, path: [.group(paths)])]
     }
 
-    @inline(__always)
     private static func reflectPassthroughOperation(
         gen: ReflectiveGenerator<Any>,
         finalOutput: Any

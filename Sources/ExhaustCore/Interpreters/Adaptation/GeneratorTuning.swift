@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
-import Foundation
 
 /// Offline, one-shot tuning that transforms a generator's pick structure using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
 ///
