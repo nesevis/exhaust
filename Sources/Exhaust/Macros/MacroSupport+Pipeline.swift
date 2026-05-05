@@ -156,20 +156,20 @@ package extension __ExhaustRuntime {
     ) -> Output? {
         let generationPhaseStart = monotonicNanoseconds()
         var iterations = 0
-        var generator = ValueAndChoiceTreeInterpreter(
+        var interpreter = ValueAndChoiceTreeInterpreter(
             context.gen,
             materializePicks: true,
             seed: seed,
             maxRuns: context.samplingBudget
         )
-        let actualSeed = generator.baseSeed
+        let actualSeed = interpreter.baseSeed
         report.seed = actualSeed
 
         var previousFilterObservations: [UInt64: FilterObservation] = [:]
 
         defer {
             if context.suppressIssueReporting == false {
-                for (_, observation) in generator.filterObservations where observation.attempts >= 20 {
+                for (_, observation) in interpreter.filterObservations where observation.attempts >= 20 {
                     if observation.validityRate < 0.02, let location = observation.sourceLocation {
                         reportIssue(
                             "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
@@ -185,18 +185,14 @@ package extension __ExhaustRuntime {
         }
 
         do { while true {
-            if context.statsAccumulator != nil {
-                previousFilterObservations = generator.filterObservations
-            }
-            let generateStart = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
-            guard let (next, tree) = try generator.next() else { break }
-            let generateEnd = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
-            iterations += 1
+            if let statsAccumulator = context.statsAccumulator {
+                previousFilterObservations = interpreter.filterObservations
+                let generateStart = monotonicNanoseconds()
+                guard let (next, tree) = try interpreter.next() else { break }
+                let generateEnd = monotonicNanoseconds()
+                iterations += 1
 
-            var filterAttempts: Int?
-            var filterRejections: Int?
-            if context.statsAccumulator != nil {
-                let currentObservations = generator.filterObservations
+                let currentObservations = interpreter.filterObservations
                 var totalAttempts = 0
                 var totalPasses = 0
                 for (fingerprint, observation) in currentObservations {
@@ -204,17 +200,17 @@ package extension __ExhaustRuntime {
                     totalAttempts += observation.attempts - (previous?.attempts ?? 0)
                     totalPasses += observation.passes - (previous?.passes ?? 0)
                 }
+                var filterAttempts: Int?
+                var filterRejections: Int?
                 if totalAttempts > 0 {
                     filterAttempts = totalAttempts
                     filterRejections = totalAttempts - totalPasses
                 }
-            }
 
-            let testStart = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
-            let passed = context.property(next)
-            let testEnd = context.statsAccumulator != nil ? monotonicNanoseconds() : 0
+                let testStart = monotonicNanoseconds()
+                let passed = context.property(next)
+                let testEnd = monotonicNanoseconds()
 
-            if let statsAccumulator = context.statsAccumulator {
                 let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
                 let testSeconds = Double(testEnd - testStart) / 1_000_000_000
                 var representation = ""
@@ -232,29 +228,60 @@ package extension __ExhaustRuntime {
                     filterAttempts: filterAttempts,
                     filterRejections: filterRejections
                 )
-            }
 
-            if passed == false {
-                report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
-                let result = reduceAndReport(
-                    context: context,
-                    value: next,
-                    tree: tree,
-                    seed: actualSeed,
-                    iteration: iterations,
-                    phaseBudget: context.samplingBudget,
-                    coverageIterations: coverageIterations,
-                    randomSamplingIterations: iterations,
-                    replayHint: nil,
-                    report: &report
-                )
-                switch result {
-                case let .reduced(counterexample):
-                    return counterexample
-                case let .unreduced(counterexample):
-                    return counterexample
-                case .reductionError:
-                    return next
+                if passed == false {
+                    report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+                    let result = reduceAndReport(
+                        context: context,
+                        value: next,
+                        tree: tree,
+                        seed: actualSeed,
+                        iteration: iterations,
+                        phaseBudget: context.samplingBudget,
+                        coverageIterations: coverageIterations,
+                        randomSamplingIterations: iterations,
+                        replayHint: nil,
+                        report: &report
+                    )
+                    switch result {
+                    case let .reduced(counterexample):
+                        return counterexample
+                    case let .unreduced(counterexample):
+                        return counterexample
+                    case .reductionError:
+                        return next
+                    }
+                }
+            } else {
+                guard let next = try interpreter.nextValueOnly() else { break }
+                iterations += 1
+
+                let passed = context.property(next)
+                if passed == false {
+                    report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+                    guard let (_, tree) = try interpreter.reproduceWithTree() else {
+                        return next
+                    }
+                    let result = reduceAndReport(
+                        context: context,
+                        value: next,
+                        tree: tree,
+                        seed: actualSeed,
+                        iteration: iterations,
+                        phaseBudget: context.samplingBudget,
+                        coverageIterations: coverageIterations,
+                        randomSamplingIterations: iterations,
+                        replayHint: nil,
+                        report: &report
+                    )
+                    switch result {
+                    case let .reduced(counterexample):
+                        return counterexample
+                    case let .unreduced(counterexample):
+                        return counterexample
+                    case .reductionError:
+                        return next
+                    }
                 }
             }
         }
