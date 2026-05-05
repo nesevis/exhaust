@@ -5,7 +5,13 @@
 //  Created by Chris Kolbu on 25/3/2026.
 //
 
-import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 
 extension GeneratorTuning {
     // MARK: - Fitness Measurement

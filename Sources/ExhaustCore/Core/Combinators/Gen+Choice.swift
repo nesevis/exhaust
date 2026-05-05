@@ -1,4 +1,10 @@
-import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 
 /// Operations for making choices and generating random values within ranges.
 /// These combinators handle weighted selection and bounded value generation.

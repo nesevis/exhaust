@@ -1,7 +1,13 @@
 // Adaptive smoothing for tuned generators.
 // Shared between GeneratorTuning (probe-based) and ChoiceGradientTuner (CGS).
 
-import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 
 package enum AdaptiveSmoothing {
     /// Applies per-site temperature scaling based on entropy analysis.

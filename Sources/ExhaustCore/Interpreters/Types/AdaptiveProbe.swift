@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import Foundation
 
 /// Adaptive probes for efficient reduction, based on David MacIver's Hypothesis reducer (MacIver & Donaldson, "Reduction via Generation", ECOOP 2020, §3.1).
 ///

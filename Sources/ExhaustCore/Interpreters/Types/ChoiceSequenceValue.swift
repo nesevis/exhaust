@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import Foundation
 
 /// An element in a flattened ``ChoiceSequence``, representing one entry from a ``ChoiceTree``.
 ///
