@@ -15,6 +15,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 
     let generator: ReflectiveGenerator<FinalOutput>
+    private var erasedGenerator: ReflectiveGenerator<Any>?
     private(set) var context: GenerationContext
 
     /// Creates an interpreter for the given generator with optional pick materialization, seed, run cap, and size override.
@@ -121,7 +122,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         defer { context.runs += 1 }
         do {
-            return try ValueInterpreter<FinalOutput>.generateRecursive(generator, with: (), context: &context)
+            if erasedGenerator == nil {
+                erasedGenerator = generator.erase()
+            }
+            // swiftlint:disable:next force_cast
+            return try ValueInterpreter<FinalOutput>.generateRecursiveAny(erasedGenerator!, with: (), context: &context) as! FinalOutput?
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
                 category: .generation,
