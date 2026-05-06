@@ -206,6 +206,7 @@ package extension Gen {
         }
     }
 
+    // FIXME: Rewrite based on bind
     static func slice<AnyCollection: Collection>(
         of collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
@@ -225,21 +226,16 @@ package extension Gen {
                 Gen.chooseDerived(in: 0 ... (count - 1)) // start position index
             )
 
-            let filtered: ReflectiveGenerator<(Int, Int)> = .impure(
-                operation: .filter(
-                    gen: zipped.erase(),
-                    fingerprint: 0,
-                    filterType: .auto,
-                    predicate: { value in
-                        let (length, startIndexPos) = value as! (Int, Int)
-                        return startIndexPos + length <= count
-                    },
-                    sourceLocation: FilterSourceLocation(
-                        fileID: #fileID, filePath: #filePath,
-                        line: #line, column: #column
-                    )
-                ),
-                continuation: { .pure($0 as! (Int, Int)) }
+            let filtered = Gen.filter(
+                zipped,
+                type: .rejectionSampling,
+                predicate: { (value: (Int, Int)) in
+                    value.0 + value.1 <= count
+                },
+                sourceLocation: FilterSourceLocation(
+                    fileID: #fileID, filePath: #filePath,
+                    line: #line, column: #column
+                )
             )
 
             return Gen.contramap(

@@ -28,8 +28,6 @@ package struct GenerationContext: ~Copyable {
 
     // MARK: - Caches
 
-    /// Cache of CGS-tuned filter generators, keyed by fingerprint.
-    public var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
     /// Seen keys for `unique(by:)` deduplication, keyed by site fingerprint.
     public var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
     /// Seen choice sequences for `unique()` deduplication, keyed by site fingerprint.

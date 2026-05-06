@@ -6,7 +6,7 @@
 //
 
 /// Strategy used by the `filter` combinator to satisfy its predicate.
-public enum FilterType: Equatable, Hashable, CaseIterable {
+public enum FilterType: Equatable, Hashable {
     /// Selects a strategy automatically based on generator structure.
     /// Uses ``choiceGradientSampling`` to tune pick weights via CGS with fitness sharing, producing the best balance of validity rate and output diversity.
     case auto
@@ -20,6 +20,18 @@ public enum FilterType: Equatable, Hashable, CaseIterable {
 
     /// Uses online CGS derivative sampling to condition pick weights on upstream choices, then bakes them with fitness sharing to prevent overcommitting to the dominant cluster. Produces the best-quality outputs for recursive generators (for example BSTs, AVL trees) at the cost of a short warmup pass.
     case choiceGradientSampling
+
+    /// CGS with explicit tuning parameters for benchmarking and fine-tuning.
+    ///
+    /// - Parameters:
+    ///   - warmupRuns: Number of warmup passes to collect fitness data.
+    ///   - sampleCount: Number of derivative samples per pick site per warmup run.
+    ///   - subdivisionThresholds: Controls when `chooseBits` sites are subdivided into picks.
+    case customCGS(
+        warmupRuns: UInt64,
+        sampleCount: UInt64,
+        subdivisionThresholds: CGSSubdivisionThresholds
+    )
 }
 
 // MARK: - Filter Source Location
