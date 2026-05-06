@@ -37,7 +37,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         backward: some PartialPath<NewOutput, Value>
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
-            try backward.extract(from: newOutput)!
+            guard let extracted = try backward.extract(from: newOutput) else {
+                throw Interpreters.ReflectionError.reflectedNil(
+                    type: "\(Value.self)",
+                    resultType: String(describing: type(of: newOutput))
+                )
+            }
+            return extracted
         }
         let erasedGen = try _map(forward)
 
@@ -58,8 +64,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         backward: some PartialPath<NewOutput, Value>
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
-            // Question: Should we be force unwrapping here? What if it's optional?
-            try backward.extract(from: newOutput)!
+            guard let extracted = try backward.extract(from: newOutput) else {
+                throw Interpreters.ReflectionError.reflectedNil(
+                    type: "\(Value.self)",
+                    resultType: String(describing: type(of: newOutput))
+                )
+            }
+            return extracted
         }
         let erasedGen = try _map { try forward.extract(from: $0) }
 
@@ -646,7 +657,15 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ) rethrows -> ReflectiveGenerator<NewValue> {
         try _bound(
             forward: forward,
-            backward: { try backward.extract(from: $0)! },
+            backward: {
+                guard let extracted = try backward.extract(from: $0) else {
+                    throw Interpreters.ReflectionError.reflectedNil(
+                        type: "\(Value.self)",
+                        resultType: String(describing: type(of: $0))
+                    )
+                }
+                return extracted
+            },
             fileID: fileID,
             line: line,
             column: column
