@@ -208,7 +208,7 @@ package enum GeneratorTuning {
                     predicate: predicate
                 )
 
-            case let .filter(subGen, fingerprint, filterType, filterPredicate, sourceLocation, tuned):
+            case let .filter(subGen, fingerprint, filterType, filterPredicate, tuned, sourceLocation):
                 return try tuneFilter(
                     subGen: subGen,
                     fingerprint: fingerprint,

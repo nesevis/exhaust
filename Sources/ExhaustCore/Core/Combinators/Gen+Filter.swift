@@ -34,6 +34,14 @@ package extension Gen {
                 erased,
                 predicate: erasedPredicate
             )
+        case let .customCGS(warmupRuns, sampleCount, subdivisionThresholds):
+            tuned = try? ChoiceGradientTuner<Any>.tune(
+                erased,
+                predicate: erasedPredicate,
+                warmupRuns: warmupRuns,
+                sampleCount: sampleCount,
+                subdivisionThresholds: subdivisionThresholds
+            )
         }
 
         return .impure(
@@ -42,8 +50,8 @@ package extension Gen {
                 fingerprint: fingerprint,
                 filterType: type,
                 predicate: erasedPredicate,
-                sourceLocation: sourceLocation,
-                tuned: tuned
+                tuned: tuned,
+                sourceLocation: sourceLocation
             ),
             continuation: { .pure($0 as! Output) }
         )

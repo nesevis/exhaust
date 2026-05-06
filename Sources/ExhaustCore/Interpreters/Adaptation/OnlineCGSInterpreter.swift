@@ -512,7 +512,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Filter
 
-            case let .filter(gen, _, _, filterPredicate, _, tuned):
+            case let .filter(gen, _, _, filterPredicate, tuned, _):
                 let tunedGen = tuned ?? gen
 
                 var attempts = 0 as UInt64

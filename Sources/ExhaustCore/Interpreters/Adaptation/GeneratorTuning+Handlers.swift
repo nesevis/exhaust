@@ -627,8 +627,8 @@ extension GeneratorTuning {
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: filterPredicate,
-                    sourceLocation: sourceLocation,
-                    tuned: tuned
+                    tuned: tuned,
+                    sourceLocation: sourceLocation
                 ),
                 continuation: continuation
             )
@@ -647,8 +647,8 @@ extension GeneratorTuning {
                 fingerprint: fingerprint,
                 filterType: filterType,
                 predicate: filterPredicate,
-                sourceLocation: sourceLocation,
-                tuned: nil
+                tuned: nil,
+                sourceLocation: sourceLocation
             ),
             continuation: continuation
         )
