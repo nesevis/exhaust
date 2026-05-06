@@ -178,15 +178,31 @@ public extension ReflectiveGenerator {
     /// Generates the full collection, then selects a random start index and length to produce a `SubSequence`.
     ///
     /// ```swift
-    /// let gen = #gen(.slice(.array(.int(in: 0...9), length: 5...10)))
+    /// let gen = #gen(.slice(of: .array(.int(in: 0...9), length: 5...10)))
     /// ```
     ///
     /// - Parameter gen: Generator for the source collection to slice.
     /// - Returns: A generator producing random sub-sequences.
     static func slice<C: Collection>(
-        _ gen: ReflectiveGenerator<C>
+        of gen: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<C.SubSequence> where Value == C.SubSequence {
         Gen.slice(of: gen)
+    }
+
+    /// Creates a generator that produces random contiguous slices of a fixed collection.
+    ///
+    /// The collection is captured at construction time. Each generated value is a non-empty contiguous sub-sequence.
+    ///
+    /// ```swift
+    /// let gen = #gen(.slice(of: ["a", "b", "c", "d", "e"]))
+    /// ```
+    ///
+    /// - Parameter collection: The collection to slice.
+    /// - Returns: A generator producing random sub-sequences of the collection.
+    static func slice<C: Collection>(
+        of collection: C
+    ) -> ReflectiveGenerator<C.SubSequence> where Value == C.SubSequence {
+        Gen.slice(of: collection)
     }
 
     /// Creates a generator that produces randomly shuffled versions of a generated collection.
@@ -317,6 +333,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func set(count: Int) -> ReflectiveGenerator<Set<Value>> where Value: Hashable {
         precondition(count >= 0, "Count must be non-negative")
         return set(count: UInt64(count))
+    }
+
+    /// Wraps this collection generator to produce random contiguous slices.
+    ///
+    /// ```swift
+    /// let gen = #gen(.int(in: 0...9).array(length: 3...8).slice())
+    /// ```
+    ///
+    /// - Returns: A generator producing non-empty sub-sequences of the generated collection.
+    func slice() -> ReflectiveGenerator<Value.SubSequence> where Value: Collection {
+        Gen.slice(of: self)
     }
 
     /// Wraps this collection generator to produce randomly shuffled arrays.

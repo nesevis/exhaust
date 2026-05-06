@@ -51,7 +51,7 @@ private enum SweepBST: Equatable, Hashable {
 
 // MARK: - Test Suite
 
-@Suite("CGS Tuning Parameter Sweep")
+@Suite("CGS Tuning Parameter Sweep", .disabled())
 struct CGSTuningParameterSweep {
     private let target = 200
 

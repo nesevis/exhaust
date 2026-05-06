@@ -320,14 +320,22 @@ struct ExamineFirstPartyGeneratorsTests {
 
     // MARK: - Collections: slice
 
-    @Test func slice() {
-        withKnownIssue("Slice uses a forward-only transform — reflection not supported") {
+    @Test func sliceOfGenerator() {
+        withKnownIssue("slice(of: gen) uses a forward-only _bind — reflection not supported") {
             let report = #examine(
-                #gen(.slice(.int(in: 0 ... 50).array(length: 3 ... 6))),
+                #gen(.slice(of: .int(in: 0 ... 50).array(length: 3 ... 6))),
                 samples: 30
             )
             #expect(report.passed)
         }
+    }
+
+    @Test func sliceOfFixedCollection() {
+        let report = #examine(
+            ReflectiveGenerator.slice(of: [10, 20, 30, 40, 50]),
+            samples: 30
+        )
+        #expect(report.passed)
     }
 
     // MARK: - Collections: shuffled

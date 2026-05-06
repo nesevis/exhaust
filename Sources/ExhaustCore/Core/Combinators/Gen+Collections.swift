@@ -206,54 +206,41 @@ package extension Gen {
         }
     }
 
-    // FIXME: Rewrite based on bind
+    /// Generates a contiguous non-empty subrange of the given collection.
+    ///
+    /// Uses a bidirectional bind: the start position is generated first, then the length is bound to `1 ... (count - startPosition)`, guaranteeing validity by construction without rejection sampling. The backward pass extracts the start position from the subsequence's `startIndex` for reflection.
+    ///
+    /// Reduction drives the start position toward zero and the length toward one.
     static func slice<AnyCollection: Collection>(
         of collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
-        getSize { size in
-            let count = collection.count
-            // Max length with size as percentage of total space/count
-            let maxLength = min(((count * Int(size)) / 100) + 2, count)
+        let count = collection.count
+        guard count > 0 else {
+            return .pure(collection[collection.startIndex ..< collection.startIndex])
+        }
+        let indices = ContiguousArray(collection.indices)
 
-            // Convert collection to array of indices for easier manipulation Surely there's a better way? 😬
-            let indices = ContiguousArray(collection.indices)
-            guard !indices.isEmpty else {
-                return .pure(collection[collection.startIndex ..< collection.startIndex])
-            }
-
-            let zipped = Gen.zip(
-                Gen.chooseDerived(in: 1 ... maxLength), // subset length
-                Gen.chooseDerived(in: 0 ... (count - 1)) // start position index
-            )
-
-            let filtered = Gen.filter(
-                zipped,
-                type: .rejectionSampling,
-                predicate: { (value: (Int, Int)) in
-                    value.0 + value.1 <= count
+        return Gen.chooseDerived(in: Int(0) ... (count - 1))
+            ._bound(
+                forward: { startPosition in
+                    let maxLength = count - startPosition
+                    return Gen.contramap(
+                        { (subset: AnyCollection.SubSequence) -> Int in subset.count },
+                        Gen.chooseDerived(in: Int(1) ... maxLength)
+                            ._map { length -> AnyCollection.SubSequence in
+                                let startIndex = indices[startPosition]
+                                let endIndexPos = min(startPosition + length, indices.count)
+                                let endIndex = endIndexPos < indices.count
+                                    ? indices[endIndexPos]
+                                    : collection.endIndex
+                                return collection[startIndex ..< endIndex]
+                            }
+                    )
                 },
-                sourceLocation: FilterSourceLocation(
-                    fileID: #fileID, filePath: #filePath,
-                    line: #line, column: #column
-                )
-            )
-
-            return Gen.contramap(
-                { (subset: AnyCollection.SubSequence) -> (Int, Int) in
-                    // Find the position of start index in the indices array
-                    let startPos = indices.firstIndex(of: subset.startIndex) ?? 0
-                    return (subset.count, startPos)
-                },
-                filtered._map { (length: Int, startIndexPos: Int) -> AnyCollection.SubSequence in
-                    let startIndex = indices[startIndexPos]
-                    let endIndexPos = min(startIndexPos + length, indices.count)
-                    let endIndex = endIndexPos < indices.count
-                        ? indices[endIndexPos]
-                        : collection.endIndex
-                    return collection[startIndex ..< endIndex]
+                backward: { (subset: AnyCollection.SubSequence) -> Int in
+                    indices.firstIndex(of: subset.startIndex) ?? 0
                 }
             )
-        }
     }
 
     /// Creates a generator for a contiguous subrange of a generated collection.
