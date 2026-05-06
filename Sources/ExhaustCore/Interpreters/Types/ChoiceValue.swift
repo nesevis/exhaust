@@ -9,9 +9,9 @@
 ///
 /// Stores only the raw `UInt64` bit pattern and a ``TypeTag``. Decoded values (signed integers, floating-point numbers) are computed on demand from these two fields, trading a per-access decode (single-instruction bitwise reinterpretation) for smaller size and branch-free field access.
 package struct ChoiceValue: Comparable, Hashable, Sendable {
-    /// The raw bit pattern encoding this value under the ``BitPatternConvertible`` protocol.
+    /// All numeric types are stored in this single `UInt64` regardless of original width. Signed integers use sign-bit XOR for order-preserving shortlex reduction; floats use a Hedgehog-style sign-preserving transform. Decoding is controlled by ``tag``.
     package let bitPattern64: UInt64
-    /// The numeric type tag for interpreting ``bitPattern64``.
+    /// Controls how ``bitPattern64`` is decoded (signed vs unsigned vs float), which reduction strategies apply (shortlex for integers, mantissa-first for floats), and what the semantically simplest value is (zero for all types, but at different bit patterns).
     package let tag: TypeTag
 
     /// Creates a choice value from a raw bit pattern and type tag.

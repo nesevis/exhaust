@@ -2,39 +2,13 @@ import ExhaustCore
 
 /// Runs a property test that systematically explores the generator's output space, then reports a reduced counterexample on failure.
 ///
-/// ## How It Works
-///
-/// Three phases, executed in order:
-///
-/// **1. Structured coverage** (default budget: 200 test cases). Analyzes the generator to identify its independent parameters — numeric ranges, branch selections, and sequence lengths. If the generator is analyzable:
-/// - For small parameter domains (each having 256 or fewer values): constructs a t-way covering array using a greedy density algorithm (Bryce and Colbourn 2009). Rows are generated lazily and tested immediately — the macro stops as soon as a failure is found. If the entire combinatorial space fits the budget, every combination is tested exhaustively.
-/// - For large parameter domains: synthesizes boundary values (domain edges, plus/minus 1 neighbors, midpoint, zero, and type-specific values like NaN and DST transitions) and constructs a covering array over those representatives.
-/// - Each covering array row is replayed through the generator to produce a concrete test case. If the property fails on any row, the macro proceeds directly to test case reduction.
-///
-/// **2. Random sampling** (default: 200 iterations). Generates values using a seeded PRNG. Each value is tested against the property. Skipped entirely if structured coverage already tested every combination exhaustively.
-///
-/// **3. Test case reduction**. When a failing test case is found (in either phase), the macro reduces it to a simpler counterexample. The generator's choice tree is flattened to a linear choice sequence, then a series of simplification passes — structural deletion, value minimization, and reordering — are applied repeatedly until no pass can simplify further. The reduced counterexample is reported as a test failure with a replay seed for reproducibility.
-///
-/// ## Settings
-///
-/// - `.budget(_)`: controls iteration budgets for coverage, sampling, and reduction. Presets: `.expedient` (200/200, default), `.expensive` (500/500), `.exorbitant` (2000/2000), or `.custom(coverage:sampling:)`.
-/// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
-/// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
-/// - `.randomOnly`: disables structured coverage analysis.
-/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
-/// - `.suppress(.logs)`: silences all console output. Overrides `.logging(...)`.
-/// - `.suppress(.all)`: skips issue reporting and silences all console output.
-///
-/// ## Examples
-///
-/// Trailing closure (source code captured):
 /// ```swift
 /// let counterexample = #exhaust(personGen, .budget(.expensive)) { person in
 ///     person.age >= 0
 /// }
 /// ```
 ///
-/// Function reference (no source capture):
+/// Or with a function reference:
 /// ```swift
 /// let counterexample = #exhaust(personGen, .replay("8DZR69"), property: isValid)
 /// ```
@@ -59,6 +33,29 @@ import ExhaustCore
 /// ```
 ///
 /// The `Void` path detects `#expect` failures automatically (including inside helper functions) using `withExpectedIssue`. After reduction, the property is re-run one final time without suppression so `#expect` failures record with the reduced values. The only Exhaust artifact is the replay seed.
+///
+/// ## Settings
+///
+/// - `.budget(_)`: controls iteration budgets for coverage, sampling, and reduction. Presets: `.expedient` (200/200, default), `.expensive` (500/500), `.exorbitant` (2000/2000), or `.custom(coverage:sampling:)`.
+/// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
+/// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
+/// - `.randomOnly`: disables structured coverage analysis.
+/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
+/// - `.suppress(.logs)`: silences all console output. Overrides `.logging(...)`.
+/// - `.suppress(.all)`: skips issue reporting and silences all console output.
+///
+/// ## How It Works
+///
+/// Three phases, executed in order:
+///
+/// **1. Structured coverage** (default budget: 200 test cases). Analyzes the generator to identify its independent parameters — numeric ranges, branch selections, and sequence lengths. If the generator is analyzable:
+/// - For small parameter domains (each having 256 or fewer values): constructs a t-way covering array using a greedy density algorithm (Bryce and Colbourn 2009). Rows are generated lazily and tested immediately — the macro stops as soon as a failure is found. If the entire combinatorial space fits the budget, every combination is tested exhaustively.
+/// - For large parameter domains: synthesizes boundary values (domain edges, plus/minus 1 neighbors, midpoint, zero, and type-specific values like NaN and DST transitions) and constructs a covering array over those representatives.
+/// - Each covering array row is replayed through the generator to produce a concrete test case. If the property fails on any row, the macro proceeds directly to test case reduction.
+///
+/// **2. Random sampling** (default: 200 iterations). Generates values using a seeded PRNG. Each value is tested against the property. Skipped entirely if structured coverage already tested every combination exhaustively.
+///
+/// **3. Test case reduction**. When a failing test case is found (in either phase), the macro reduces it to a simpler counterexample. The generator's choice tree is flattened to a linear choice sequence, then a series of simplification passes — structural deletion, value minimization, and reordering — are applied repeatedly until no pass can simplify further. The reduced counterexample is reported as a test failure with a replay seed for reproducibility.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
@@ -80,7 +77,27 @@ public macro exhaust<GeneratedValue, PropertyResult>(
     property: (GeneratedValue) async throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
 
-/// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts (invariants, postconditions, and optional model comparisons) hold after every step.
+/// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts hold after every step.
+///
+/// ```swift
+/// @Test func boundedQueueBehavior() {
+///     #exhaust(BoundedQueueSpec.self, commandLimit: 20)
+/// }
+/// ```
+///
+/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
+///
+/// ## Parameters
+///
+/// - `commandLimit`: The maximum number of commands per generated sequence. The reducer can reduce below this value.
+///
+/// ## Settings
+///
+/// - `.budget(_)`: controls iteration budgets. Defaults to `.expensive` (500/500).
+/// - `.replay(_)`: fixed seed for deterministic reproduction.
+/// - `.randomOnly`: disables structured coverage analysis.
+/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
+/// - `.suppress(.logs)`: silences all console output.
 ///
 /// ## How It Works
 ///
@@ -90,29 +107,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 ///
 /// **2. Random sampling** (default: 100 iterations). Generates random command sequences with weighted command selection.
 ///
-/// **3. Test case reduction**. When a failing sequence is found, the existing Reducer strategies apply — deleting commands, simplifying arguments, reordering steps — until a minimal counterexample is found.
-///
-/// ## Parameters
-///
-/// - `commandLimit`: The maximum number of commands per generated sequence. The reducer can reduce below this value.
-///
-/// ## Settings
-///
-/// - `.samplingBudget(_)`: upper bound on random sampling iterations (default 100).
-/// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 200).
-/// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.reductionBudget(_)`: controls reduction aggressiveness.
-/// - `.randomOnly`: disables structured coverage analysis.
-///
-/// ## Example
-///
-/// ```swift
-/// @Test func boundedQueueBehavior() {
-///     #exhaust(BoundedQueueSpec.self, commandLimit: 20)
-/// }
-/// ```
-///
-/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
+/// **3. Test case reduction**. When a failing sequence is found, the existing reducer strategies apply — deleting commands, simplifying arguments, reordering steps — until a minimal counterexample is found.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: ContractSpec>(

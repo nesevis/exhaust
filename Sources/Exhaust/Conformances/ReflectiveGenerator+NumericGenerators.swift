@@ -42,7 +42,7 @@ import ExhaustCore
             )
         }
 
-        /// Generates arbitrary `Float16` values within the given `Double` range.
+        /// Generates arbitrary `Float16` values within the given range.
         static func float16(
             in range: ClosedRange<Double>,
             scaling: SizeScaling<Float16>? = nil
@@ -109,7 +109,7 @@ public extension ReflectiveGenerator {
         )
     }
 
-    /// Convenience overload accepting `ClosedRange<Double>` (for example `0.0...1.0`).
+    /// Generates arbitrary values within the given range.
     static func float(
         in range: ClosedRange<Double>,
         scaling: SizeScaling<Float>? = nil
@@ -137,7 +137,7 @@ public extension ReflectiveGenerator {
                 )
         }
 
-        /// Generates arbitrary `CGFloat` values within the given `Double` range.
+        /// Generates arbitrary `CGFloat` values within the given range.
         static func cgfloat(
             in range: ClosedRange<Double>,
             scaling: SizeScaling<Double>? = nil
@@ -172,7 +172,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `0...10`).
+    /// Generates arbitrary values within the given range.
     static func uint8(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt8>? = nil
@@ -209,7 +209,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `0...1000`).
+    /// Generates arbitrary values within the given range.
     static func uint16(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt16>? = nil
@@ -246,7 +246,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `0...100_000`).
+    /// Generates arbitrary values within the given range.
     static func uint32(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt32>? = nil
@@ -283,7 +283,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `0...10`).
+    /// Generates arbitrary values within the given range.
     static func uint64(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt64>? = nil
@@ -320,7 +320,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `0...10`).
+    /// Generates arbitrary values within the given range.
     static func uint(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt>? = nil
@@ -361,7 +361,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `-10...10`).
+    /// Generates arbitrary values within the given range.
     static func int8(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int8>? = nil
@@ -394,7 +394,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `-1000...1000`).
+    /// Generates arbitrary values within the given range.
     static func int16(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int16>? = nil
@@ -427,7 +427,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `-100_000...100_000`).
+    /// Generates arbitrary values within the given range.
     static func int32(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int32>? = nil
@@ -460,7 +460,7 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` (for example `-10...10`).
+    /// Generates arbitrary values within the given range.
     static func int64(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int64>? = nil

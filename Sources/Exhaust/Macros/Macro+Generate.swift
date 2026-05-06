@@ -1,32 +1,16 @@
 import ExhaustCore
 
-/// Constructs a ``ReflectiveGenerator`` from one or more component generators and a transform closure.
+/// Combines generators through a transform closure, synthesizing a bidirectional backward mapping when possible.
 ///
-/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro automatically synthesizes a `Mirror`-based backward mapping, producing a fully bidirectional generator. Using `Mirror` allows the backward pass to work regardless of property access control.
+/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro synthesizes a `Mirror`-based backward mapping automatically. When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
 ///
-/// When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
-///
-/// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported for bidirectional mapping — the labels come from the call-site argument labels, while the shorthand indices provide the positional correspondence to generators.
-///
-/// Single generator:
-///
-/// ```swift
-/// let personGen = #gen(nameGen) { name in
-///     Person(name: name)
-/// }
-/// ```
-///
-/// Multiple generators:
+/// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported.
 ///
 /// ```swift
 /// let personGen = #gen(nameGen, ageGen) { name, age in
 ///     Person(name: name, age: age)
 /// }
-/// ```
-///
-/// Shorthand parameters:
-///
-/// ```swift
+/// // or with shorthand:
 /// let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
 /// ```
 @freestanding(expression)
@@ -35,67 +19,29 @@ public macro gen<each GeneratedValue, TransformedValue>(
     transform: (repeat each GeneratedValue) -> TransformedValue
 ) -> ReflectiveGenerator<TransformedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
-/// Constructs a ``ReflectiveGenerator`` from one or more component generators and a transform closure.
+/// Wraps a single generator expression, enabling dot-syntax (for example `.int(in: 0...100)`).
 ///
-/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro automatically synthesizes a `Mirror`-based backward mapping, producing a fully bidirectional generator. Using `Mirror` allows the backward pass to work regardless of property access control.
+/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro synthesizes a `Mirror`-based backward mapping automatically. When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
 ///
-/// When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
-///
-/// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported for bidirectional mapping — the labels come from the call-site argument labels, while the shorthand indices provide the positional correspondence to generators.
-///
-/// Single generator:
+/// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported.
 ///
 /// ```swift
-/// let personGen = #gen(nameGen) { name in
-///     Person(name: name)
-/// }
-/// ```
-///
-/// Multiple generators:
-///
-/// ```swift
-/// let personGen = #gen(nameGen, ageGen) { name, age in
-///     Person(name: name, age: age)
-/// }
-/// ```
-///
-/// Shorthand parameters:
-///
-/// ```swift
-/// let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
+/// let gen = #gen(.int(in: 0...100))
+/// let personGen = #gen(nameGen) { Person(name: $0) }
 /// ```
 @freestanding(expression)
 public macro gen<GeneratedValue>(
     _ generator: ReflectiveGenerator<GeneratedValue>
 ) -> ReflectiveGenerator<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
-/// Constructs a ``ReflectiveGenerator`` from one or more component generators and a transform closure.
+/// Combines multiple generators into a tuple without transformation.
 ///
-/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro automatically synthesizes a `Mirror`-based backward mapping, producing a fully bidirectional generator. Using `Mirror` allows the backward pass to work regardless of property access control.
+/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro synthesizes a `Mirror`-based backward mapping automatically. When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
 ///
-/// When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
-///
-/// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported for bidirectional mapping — the labels come from the call-site argument labels, while the shorthand indices provide the positional correspondence to generators.
-///
-/// Single generator:
+/// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported.
 ///
 /// ```swift
-/// let personGen = #gen(nameGen) { name in
-///     Person(name: name)
-/// }
-/// ```
-///
-/// Multiple generators:
-///
-/// ```swift
-/// let personGen = #gen(nameGen, ageGen) { name, age in
-///     Person(name: name, age: age)
-/// }
-/// ```
-///
-/// Shorthand parameters:
-///
-/// ```swift
+/// let pair = #gen(.int(in: 0...10), .asciiString(length: 1...5))
 /// let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
 /// ```
 @freestanding(expression)

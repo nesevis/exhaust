@@ -105,17 +105,13 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
         ))
     }
 
-    /// Returns `true` when this generator is a `.pure` value with no pending effects.
+    /// Short-circuit check for the terminal case. Used as the recursion base in analysis passes (for example ``ChoiceTreeAnalysis``) and by combinators that need to detect constant generators.
     var isPure: Bool {
         if case .pure = self { return true }
         return false
     }
 
-    /// The bit pattern range associated with this generator's immediate choice operation.
-    ///
-    /// For generators wrapping a `chooseBits` operation, returns the min/max range that constrains the random values. Returns `nil` for pure values or non-choice operations.
-    ///
-    /// This property is used internally for optimization and analysis of generator constraints.
+    /// Exposes the explicit min/max constraint of a `chooseBits` leaf without interpreting the full generator. Used by ``FiniteDomainProfile`` and coverage analysis to collect parameter ranges for covering-array construction. Returns nil for pure values, non-choice operations, or ranges derived from size scaling (which are not stable across runs).
     var associatedRange: ClosedRange<UInt64>? {
         switch self {
         case .pure:

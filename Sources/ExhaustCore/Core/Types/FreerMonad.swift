@@ -1,38 +1,20 @@
 // MARK: - Academic Provenance
-// Based on the Freer Monad encoding from Goldstein §3.3.2: `data Freer f a = Return a | Bind (f a) (a -> Freer f b)`. Correspondence: `.pure` = `Return`, `.impure` = `Bind`. The dissertation is parameterized over a generic effect functor `f`; Exhaust fixes `f` to `ReflectiveOperation` for bidirectional generation.
+//
+// Freer Monad encoding from Goldstein §3.3.2. Correspondence: `.pure` = `Return`, `.impure` = `Bind`.
+// Exhaust fixes the effect functor to `ReflectiveOperation` for bidirectional generation.
 
-/// A free monad implementation that separates effect descriptions from their interpretation.
+/// Reifies generator decisions as inspectable data rather than opaque closures.
 ///
-/// FreerMonad enables the description of computations with effects without executing them immediately.
-/// This separation allows for:
-/// - **Composable effects**: Chain operations without coupling to specific interpreters
-/// - **Multiple interpretations**: The same computation can be run with different interpreters
-/// - **Testability**: Effects can be mocked or traced during testing
-/// - **Optimization**: Interpreters can analyze the entire computation tree before execution
+/// A closure-based generator can only be run forward. Each closure boundary is opaque: reflection, replay, coverage analysis, and graph-based reduction cannot see through it. The Freer Monad encoding eliminates this limitation by suspending each decision as a ``ReflectiveOperation`` node with an explicit continuation. The same generator structure can then be interpreted in any direction by any interpreter.
 ///
-/// The monad has two states:
-/// - `pure`: Contains a final computed value with no remaining effects
-/// - `impure`: Contains a suspended operation awaiting interpretation and a continuation
-///
-/// **Usage in property-based testing:**
-/// FreerMonad forms the foundation for generators that can both produce values (forward pass) and validate against target values (backward pass via reflection).
-///
-/// - Parameters:
+/// `.pure` carries a final value with no remaining decisions. `.impure` carries the next decision and a continuation that consumes the interpreter's answer.
 ///   - Operation: The type of effects this monad can represent.
 ///   - Value: The type of values this computation ultimately produces.
 public enum FreerMonad<Operation, Value> {
-    /// A pure value representing the successful completion of a computation.
-    ///
-    /// This case indicates that all effects have been resolved and the computation has produced its final result. No further interpretation is needed.
+    /// The terminal state. Interpreters return the contained value directly without further traversal. Pure nodes produce no entries in the ``ChoiceSequence``: they carry the result but no randomness.
     case pure(Value)
 
-    /// An impure value representing a suspended computation awaiting interpretation.
-    ///
-    /// This case contains:
-    /// - `operation`: The effect to be interpreted
-    /// - `continuation`: A function that processes the effect's result and produces the next step
-    ///
-    /// The continuation receives `Any` to maintain type erasure across the interpretation boundary, allowing interpreters to work with heterogeneous effect types.
+    /// A suspended effect awaiting interpretation. The `operation` describes what randomness to consume or what structural choice to make; the `continuation` transforms the interpreter's result into the next step. The continuation takes `Any` because operations are type-erased: each case carries heterogeneous associated values that the continuation casts back to the expected type.
     indirect case impure(
         operation: Operation,
         continuation: (Any) throws -> FreerMonad<Operation, Value>
@@ -42,18 +24,13 @@ public enum FreerMonad<Operation, Value> {
 // MARK: - Functor and Monad
 
 package extension FreerMonad {
-    /// Monadic bind operation that sequences computations with effects.
+    /// Sequences two computations: uses the result of this one to determine the next.
     ///
-    /// This is the fundamental operation for chaining effectful computations. It allows you to use the result of one computation to determine the next computation, properly handling both pure values and suspended operations.
-    ///
-    /// **For pure values:** Immediately applies the transform to get the next computation
-    /// **For impure values:** Extends the continuation chain to apply the transform later
-    ///
-    /// This operation is associative and follows the monad laws, enabling safe composition of complex effectful programs from simpler building blocks.
+    /// For `.pure`, applies the transform immediately. For `.impure`, extends the continuation chain so the transform runs after the operation is interpreted. This is the invisible plumbing behind every generator combinator: `Gen.arrayOf`, `Gen.pick`, and `Gen.zip` all compose via `_bind`.
     ///
     /// - Parameter transform: A function that takes the current value and produces a new computation.
     /// - Returns: A new computation representing the sequenced effects.
-    /// - Throws: Rethrows any errors from the transform function
+    /// - Throws: Rethrows any errors from the transform function.
     func _bind<NewValue>(
         _ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>
     ) rethrows -> FreerMonad<Operation, NewValue> {
@@ -65,19 +42,13 @@ package extension FreerMonad {
         }
     }
 
-    /// Functor map operation that transforms the final value of a computation.
+    /// Transforms the eventual result without introducing new effects.
     ///
-    /// This operation applies a pure function to transform the eventual result of the computation without changing the effect structure. It's implemented in terms of `bind` for consistency and simplicity.
-    ///
-    /// **Key difference from bind:**
-    /// - `map` transforms values with pure functions (Value -> NewValue)
-    /// - `bind` sequences computations with effects (Value -> FreerMonad<Operation, NewValue>)
-    ///
-    /// Use `map` when you want to transform the result but don't need to introduce additional effects or change the computational structure.
+    /// Unlike `_bind`, which can introduce additional operations, `_map` only changes the value at the end of the chain. The effect structure (which operations run, in what order) remains unchanged. This is the invisible `_map` that powers `Gen.contramap` and the macro's backward-mapping infrastructure.
     ///
     /// - Parameter transform: A pure function to apply to the final value.
     /// - Returns: A computation that produces the transformed value.
-    /// - Throws: Rethrows any errors from the transform function
+    /// - Throws: Rethrows any errors from the transform function.
     func _map<NewValue>(
         _ transform: @escaping (Value) throws -> NewValue
     ) rethrows -> FreerMonad<Operation, NewValue> {
