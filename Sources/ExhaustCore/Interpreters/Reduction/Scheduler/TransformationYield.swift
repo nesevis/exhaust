@@ -48,7 +48,7 @@ struct AffineSlack: Comparable, Equatable {
 ///
 /// Corresponds to G = Aff_{>=0} x W (Sepulveda-Jimenez, Def. 10.1), where the approximation component tracks quality loss and the resource component tracks probe count. Grades compose under the monoidal product law: structural yields sum, value yields take the max, slack composes via ``AffineSlack/composed(with:)``, and costs sum.
 ///
-/// The scheduler orders scopes by grade: structural yield descending, then value yield descending, then slack ascending (exact preferred over approximate), then estimated probes ascending (cheaper preferred at equal yield). The ``Comparable`` conformance encodes "less than" as "higher priority" so that sorting produces a highest-priority-first queue.
+/// Ordering follows natural semantics: a yield with more structural reduction, more value unlocked, tighter slack, or lower cost is greater than one with less. The scheduler selects the maximum yield.
 struct TransformationYield: Comparable, Equatable {
     /// Sequence positions removed. Zero for minimization, exchange, and permutation.
     let structural: Int
@@ -87,17 +87,17 @@ struct TransformationYield: Comparable, Equatable {
         )
     }
 
-    /// Higher priority is "less than" for sorting into a highest-priority-first queue. Structural yield dominates value yield. Within each tier, higher yield wins. At equal yield, exact reductions are preferred over approximate. At equal yield and slack, lower cost wins.
+    /// Natural ordering: higher structural yield, then higher value yield, then tighter slack, then lower cost.
     static func < (lhs: TransformationYield, rhs: TransformationYield) -> Bool {
         if lhs.structural != rhs.structural {
-            return lhs.structural > rhs.structural
+            return lhs.structural < rhs.structural
         }
         if lhs.value != rhs.value {
-            return lhs.value > rhs.value
+            return lhs.value < rhs.value
         }
         if lhs.slack != rhs.slack {
-            return lhs.slack < rhs.slack
+            return lhs.slack > rhs.slack
         }
-        return lhs.estimatedProbes < rhs.estimatedProbes
+        return lhs.estimatedProbes > rhs.estimatedProbes
     }
 }

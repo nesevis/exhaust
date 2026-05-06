@@ -265,12 +265,11 @@ struct ChoiceGraphScopeQueryTests {
 
         #expect(transformations.isEmpty == false)
 
-        // Verify sorted: each element should be <= the next (higher or equal priority).
+        // Verify sorted: each element should be >= the next (higher or equal priority first).
         for index in 0 ..< transformations.count - 1 {
             let current = transformations[index].yield
             let next = transformations[index + 1].yield
-            // current should be higher or equal priority (less than or equal in sort order).
-            #expect(current <= next || current == next)
+            #expect(current >= next)
         }
     }
 

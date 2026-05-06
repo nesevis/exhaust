@@ -31,7 +31,7 @@ enum TransformationEnumerator {
         ))
         transformations.append(contentsOf: permutationTransformations(from: graph))
 
-        transformations.sort { $0.yield < $1.yield }
+        transformations.sort { $0.yield > $1.yield }
         return transformations
     }
 

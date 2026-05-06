@@ -51,7 +51,7 @@ struct MinimizationSource: ScopeSource {
                 )
             ))
         }
-        scopes = entries.sorted { $0.yield < $1.yield }
+        scopes = entries.sorted { $0.yield > $1.yield }
     }
 
     var peekYield: TransformationYield? {
@@ -129,7 +129,7 @@ struct ExchangeSource: ScopeSource {
                 )
             ))
         }
-        scopes = entries.sorted { $0.yield < $1.yield }
+        scopes = entries.sorted { $0.yield > $1.yield }
     }
 
     var peekYield: TransformationYield? {

@@ -42,7 +42,7 @@ struct ReplacementSource: ScopeSource {
                 )
             ))
         }
-        candidates = entries.sorted { $0.yield < $1.yield }
+        candidates = entries.sorted { $0.yield > $1.yield }
     }
 
     var peekYield: TransformationYield? {

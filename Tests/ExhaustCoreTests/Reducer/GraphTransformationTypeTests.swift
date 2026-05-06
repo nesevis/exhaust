@@ -101,8 +101,8 @@ struct TransformationYieldTests {
             slack: .exact,
             estimatedProbes: 1
         )
-        // highStructural should be higher priority (less than in sort order).
-        #expect(highStructural < highValue)
+        // highStructural should be higher priority (greater in natural order).
+        #expect(highStructural > highValue)
     }
 
     @Test("Ordering: higher structural yield is higher priority")
@@ -119,7 +119,7 @@ struct TransformationYieldTests {
             slack: .exact,
             estimatedProbes: 5
         )
-        #expect(larger < smaller)
+        #expect(larger > smaller)
     }
 
     @Test("Ordering: at equal structural, higher value yield wins")
@@ -136,7 +136,7 @@ struct TransformationYieldTests {
             slack: .exact,
             estimatedProbes: 5
         )
-        #expect(highValue < lowValue)
+        #expect(highValue > lowValue)
     }
 
     @Test("Ordering: at equal yield, exact preferred over approximate")
@@ -153,7 +153,7 @@ struct TransformationYieldTests {
             slack: AffineSlack(multiplicative: 1, additive: 3),
             estimatedProbes: 10
         )
-        #expect(exact < approximate)
+        #expect(exact > approximate)
     }
 
     @Test("Ordering: at equal yield and slack, lower cost wins")
@@ -170,7 +170,7 @@ struct TransformationYieldTests {
             slack: .exact,
             estimatedProbes: 20
         )
-        #expect(cheap < expensive)
+        #expect(cheap > expensive)
     }
 }
 

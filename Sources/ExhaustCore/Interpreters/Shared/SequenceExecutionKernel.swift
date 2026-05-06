@@ -2,8 +2,6 @@
 //  SequenceExecutionKernel.swift
 //  Exhaust
 //
-//  Created by Codex on 21/2/2026.
-//
 
 package enum SequenceExecutionKernel {
     public static func run(

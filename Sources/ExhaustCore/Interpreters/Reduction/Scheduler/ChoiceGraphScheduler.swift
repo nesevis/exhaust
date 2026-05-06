@@ -532,7 +532,7 @@ enum ChoiceGraphScheduler {
         for (index, source) in sources.enumerated() {
             guard let yield = source.peekYield else { continue }
             if let currentBest = bestYield {
-                if yield < currentBest {
+                if yield > currentBest {
                     bestIndex = index
                     bestYield = yield
                 }
