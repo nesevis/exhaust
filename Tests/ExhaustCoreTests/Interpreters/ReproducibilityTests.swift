@@ -60,9 +60,9 @@ struct ReproducibilityTests {
         }
     }
 
-    @Test("runSeed produces distinct seeds for 1000 consecutive runs")
-    func runSeedDistinctness() {
-        let seeds = Set((0 as UInt64 ..< 1000).map { GenerationContext.runSeed(base: 42, runIndex: $0) })
+    @Test("deriveSeed produces distinct seeds for 1000 consecutive runs")
+    func deriveSeedDistinctness() {
+        let seeds = Set((0 as UInt64 ..< 1000).map { Xoshiro256.deriveSeed(from: 42, at: $0) })
         #expect(seeds.count == 1000)
     }
 }

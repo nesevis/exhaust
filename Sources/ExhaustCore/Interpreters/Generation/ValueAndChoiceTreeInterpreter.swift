@@ -66,8 +66,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // Per-run seed derivation: each run gets an independent PRNG
         if !context.isFixed {
-            let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
-            context.prng = Xoshiro256(seed: runSeed)
+            context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
 
         defer {
@@ -116,8 +115,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         }
 
         if !context.isFixed {
-            let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
-            context.prng = Xoshiro256(seed: runSeed)
+            context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
 
         defer { context.runs += 1 }
@@ -155,8 +153,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     /// The run index is `runs - 1` because ``nextValueOnly()`` increments `runs` before returning.
     public mutating func reproduceWithTree() throws -> Element? {
         let failingRunIndex = context.runs - 1
-        let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: failingRunIndex)
-        context.prng = Xoshiro256(seed: runSeed)
+        context.prng = Xoshiro256.derive(from: context.baseSeed, at: failingRunIndex)
 
         let savedRuns = context.runs
         context.runs = failingRunIndex

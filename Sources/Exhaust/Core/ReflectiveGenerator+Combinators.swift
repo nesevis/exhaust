@@ -61,7 +61,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         backward: some PartialPath<NewOutput, Value>
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
-            // FIXME: Should we be force unwrapping here? What if it's optional?
+            // Question: Should we be force unwrapping here? What if it's optional?
             try backward.extract(from: newOutput)!
         }
         let erasedGen = try _map { try forward.extract(from: $0) }

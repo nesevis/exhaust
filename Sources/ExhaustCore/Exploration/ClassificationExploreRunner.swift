@@ -176,10 +176,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                 predicate: directions[targetDirection].predicate,
                 warmupRuns: 400,
                 sampleCount: 20,
-                seed: GenerationContext.runSeed(
-                    base: prng.seed,
-                    runIndex: UInt64(targetDirection)
-                ),
+                seed: Xoshiro256.deriveSeed(from: prng.seed, at: UInt64(targetDirection)),
                 subdivisionThresholds: .relaxed
             )
         } catch {
@@ -196,10 +193,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         var passInterpreter = ValueAndChoiceTreeInterpreter(
             tunedGen,
             materializePicks: false,
-            seed: GenerationContext.runSeed(
-                base: prng.seed,
-                runIndex: UInt64(directionCount + targetDirection)
-            ),
+            seed: Xoshiro256.deriveSeed(from: prng.seed, at: UInt64(directionCount + targetDirection)),
             maxRuns: UInt64(passBudget)
         )
 

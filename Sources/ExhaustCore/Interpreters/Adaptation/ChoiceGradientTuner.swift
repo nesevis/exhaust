@@ -95,7 +95,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
         while completedRuns < warmupRuns {
             let runsThisBatch = min(resamplingBatchSize, warmupRuns - completedRuns)
-            let batchSeed = GenerationContext.runSeed(base: baseSeed, runIndex: completedRuns)
+            let batchSeed = Xoshiro256.deriveSeed(from: baseSeed, at: completedRuns)
 
             var iterator = OnlineCGSInterpreter(
                 currentGen,

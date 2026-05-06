@@ -131,6 +131,23 @@ package struct Xoshiro256: ~Copyable {
         state = (s0, s1, s2, s3)
     }
 
+    /// Derives a deterministic seed from a base seed and an index using SplitMix64 mixing.
+    ///
+    /// Each index yields an independent seed reproducible from the base seed alone.
+    public static func deriveSeed(from baseSeed: UInt64, at index: UInt64) -> UInt64 {
+        var z = baseSeed &+ index &* SplitMix64.incrementConstant
+        z = (z ^ (z &>> 30)) &* SplitMix64.mixingConstant1
+        z = (z ^ (z &>> 27)) &* SplitMix64.mixingConstant2
+        return z ^ (z &>> 31)
+    }
+
+    /// Derives a child generator from a base seed and an index using SplitMix64 mixing.
+    ///
+    /// Produces a fresh ``Xoshiro256`` seeded deterministically from the base seed and the index. Each index yields an independent stream reproducible from the base seed alone.
+    public static func derive(from baseSeed: UInt64, at index: UInt64) -> Xoshiro256 {
+        Xoshiro256(seed: deriveSeed(from: baseSeed, at: index))
+    }
+
     /// Creates an independent stream by jumping forward a number of steps derived from the stream identifier.
     public func spawned(streamID: UInt64) -> Xoshiro256 {
         var newGen = Xoshiro256(seed: seed, state: state)

@@ -186,7 +186,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         }
 
         // Per-run seed derivation: each run gets an independent PRNG
-        let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
+        let runSeed = Xoshiro256.deriveSeed(from: context.baseSeed, at: context.runs)
         context.prng = Xoshiro256(seed: runSeed)
         cgsState.samplingPRNG = Xoshiro256(seed: runSeed)
         cgsState.samplingPRNG.jump()
