@@ -127,7 +127,7 @@ For enum cases, go beyond the case name. Explain the structural role the case pl
 
 ### Summary Line
 
-One sentence. Technical terminology is expected — ChoiceTree, VACTI, CGS, choice sequence, shortlex, bid pattern are all fine without explanation.
+One sentence. Technical terminology is expected: ChoiceTree, VACTI, CGS, choice sequence, shortlex, bit pattern are all fine without explanation.
 
 ```swift
 /// Finds the largest contiguous batch of same-depth spans that can be deleted while preserving the property failure.

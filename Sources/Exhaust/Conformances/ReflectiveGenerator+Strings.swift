@@ -15,7 +15,7 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.character(in: "a"..."z"))
     /// ```
     ///
-    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. This character occupies index 0 in the shortlex ordering, so any character that is not essential to the property failure will be replaced by it. Defaults to space if the range contains it, otherwise the range's lower bound. Must be within the range.
+    /// - Parameter simplest: The character that the reducer substitutes for any character not essential to the property failure. Defaults to space if the range contains it, otherwise the range's lower bound. Must be within the range.
     static func character(
         in range: ClosedRange<Character>? = nil,
         simplest: Unicode.Scalar? = nil
@@ -54,7 +54,7 @@ public extension ReflectiveGenerator {
         stringGenerator(from: asciiScalarRangeSet, length: length, scaling: scaling)
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` for string length.
+    /// Generates a random Unicode string with the given length range.
     static func string(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
@@ -64,7 +64,7 @@ public extension ReflectiveGenerator {
         return string(length: uint64Range, scaling: scaling)
     }
 
-    /// Convenience overload accepting `ClosedRange<Int>` for ASCII string length.
+    /// Generates a random printable ASCII string with the given length range.
     static func asciiString(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear

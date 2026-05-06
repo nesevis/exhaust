@@ -16,19 +16,19 @@ import ExhaustCore
 
 /// Controls the per-direction hit target and attempt budget for `#explore`.
 ///
-/// Three named presets cover common use cases. Use `.custom` for fine-grained control.
-///
 /// | Preset | K (hits per direction) | Max attempts per direction |
 /// |---|---|---|
 /// | `.expedient` | 30 | 300 |
 /// | `.expensive` | 100 | 1000 |
 /// | `.exorbitant` | 300 | 3000 |
+///
+/// Use `.expedient` (the default) when 30 hits per direction is enough to confirm reachability. Use `.expensive` when direction predicates are sparse (less than 10 percent acceptance rate) and need more attempts to accumulate hits. Use `.exorbitant` for statistical coverage reporting where confidence intervals matter.
 public enum ExploreBudget: Sendable {
-    /// 30 hits per direction, 300 max attempts per direction. The default for exploration tests.
+    /// Default. Confirms direction reachability with 30 hits per direction.
     case expedient
-    /// 100 hits per direction, 1000 max attempts per direction.
+    /// For sparse direction predicates. Draws up to 1000 attempts per direction.
     case expensive
-    /// 300 hits per direction, 3000 max attempts per direction.
+    /// For statistical confidence. Accumulates 300 hits per direction.
     case exorbitant
     /// Explicit values for both budget aspects.
     case custom(hitsPerDirection: Int, maxAttemptsPerDirection: Int)

@@ -17,18 +17,16 @@ import Foundation
 ///
 /// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, reduce, or analyze generated values.
 package enum ChoiceTree: Hashable, Equatable, Sendable {
-    /// A primitive choice, typically a number or a high-level semantic label.
+    /// A single randomness decision. Produces one entry in the ``ChoiceSequence`` whose ``ChoiceValue`` the reducer can minimize toward semantic simplest. The ``ChoiceMetadata`` records the valid range so the reducer never proposes an out-of-bounds value.
     case choice(ChoiceValue, ChoiceMetadata)
 
-    /// A deterministic or constant value that cannot be reduced.
-    ///
-    /// This is encoded into the generator and does not need to be part of the ``ChoiceTree``.
+    /// A constant with no randomness. Produces a `.just` marker in the ``ChoiceSequence`` so that surrounding elements keep stable indices, but the reducer skips it: there is nothing to simplify.
     case just
 
-    /// A node that represents the generation of a sequence. It explicitly captures the length and the choice trees for each of its elements.
+    /// A variable-length collection. Flattened as open-marker, then one subtree per element, then close-marker. The length and the element values are independently reducible: structural encoders can delete elements, and value encoders can minimize within them.
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
-    /// A node that represents a branching choice made via ``pick``. ``fingerprint`` identifies the pick site, ``id`` is the stable branch identifier, and ``branchCount`` is the total number of branches.
+    /// A branching decision. The `fingerprint` identifies the pick site's recursive template: the ``ChoiceGraph`` uses matching fingerprints to build self-similarity edges, enabling substitution of one branch's subtree into another. Inactive (unselected) branches retain full structural metadata so coverage analysis can reason about alternatives without regenerating.
     indirect case branch(
         fingerprint: UInt64,
         weight: UInt64,
@@ -42,10 +40,10 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
     /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents high-lane compositions (for example SIMD8+) from exploding the parameter count in covering arrays, and isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
     indirect case group([ChoiceTree], isOpaque: Bool = false)
 
-    /// Represents a size value retrieved from the generation context.
+    /// Records the generation-time size parameter. Produces no entry in the ``ChoiceSequence``: the value is consumed during replay to restore the correct size context but is invisible to the reducer.
     case getSize(UInt64)
 
-    /// Represents a resized generation context with nested choices.
+    /// Scopes a temporary size override for its children. Flattened identically to a regular group; the override is consumed during generation and replay but leaves no trace in the ``ChoiceSequence``.
     indirect case resize(newSize: UInt64, choices: [ChoiceTree])
 
     /// A bind node: the bound subtree's structure depends on the inner subtree's value.
@@ -56,7 +54,7 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
     /// `fingerprint` is the source-location hash carried from the originating ``ReflectiveOperation/transform(kind:inner:)`` (`TransformKind.bind.fingerprint`). It survives every materialization round-trip and is read by ``ChoiceGraphBuilder`` to populate ``BindMetadata/fingerprint`` for the classification cache.
     indirect case bind(fingerprint: UInt64, inner: ChoiceTree, bound: ChoiceTree)
 
-    /// Wraps the selected branch in a ``group`` of ``branch`` nodes. Produced by reflection and VACTI, consumed by replay and materialization.
+    /// Marks the active branch within a pick group. The materializer reads this wrapper to identify which branch was taken during replay without scanning all siblings for a match.
     indirect case selected(ChoiceTree)
 }
 

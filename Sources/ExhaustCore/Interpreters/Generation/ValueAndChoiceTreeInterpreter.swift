@@ -7,9 +7,8 @@
 
 
 // MARK: - Academic Provenance
-
-// Combines the `generate` and `randomness` interpretations: G⟦·⟧ + R⟦·⟧ (Goldstein §3.3.3).
-// Captures a hierarchical ChoiceTree (Exhaust extension) alongside the generated value. Relates to the factoring theorem (Theorem 1, §4.4): P⟦g⟧ <$> R⟦g⟧ ≡ G⟦g⟧.
+//
+// Combines the dissertation's `generate` and `randomness` interpretations (Goldstein §3.3.3) into a single pass that produces both the value and the ChoiceTree recording every decision. The ChoiceTree is Exhaust's extension — the dissertation uses flat choice sequences. Correctness relies on the factoring theorem (§4.4): replaying the recorded randomness through the generator reproduces the original value.
 
 package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)

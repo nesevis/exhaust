@@ -59,19 +59,19 @@ public enum SuppressOption: Sendable, Equatable {
 
 /// Controls the iteration budgets for coverage, random sampling, and reduction.
 ///
-/// Three named presets cover common use cases. Use `.custom` for fine-grained control.
-///
 /// | Preset | Coverage | Sampling | Reduction |
 /// |---|---|---|---|
 /// | `.expedient` | 200 | 200 | `.fast` |
 /// | `.expensive` | 500 | 500 | `.fast` |
 /// | `.exorbitant` | 2000 | 2000 | `.slow` |
+///
+/// Use `.expedient` (the default) for fast iteration during development — sufficient for generators with fewer than 50 independent parameters. Use `.expensive` when the generator has high combinatorial complexity (many picks, nested sequences) and you want stronger coverage guarantees. Use `.exorbitant` for pre-release validation or when counterexamples are rare; expect roughly 10x the runtime of `.expedient`.
 public enum ExhaustBudget: Sendable {
-    /// 200 coverage rows, 200 random samplings, fast reduction. The default for property tests.
+    /// Default for property tests. Sufficient for most generators during development.
     case expedient
-    /// 500 coverage rows, 500 random samplings, fast reduction. The default for contract tests.
+    /// Stronger coverage for complex generators. Default for contract tests.
     case expensive
-    /// 2000 coverage rows, 2000 random samplings, slow reduction.
+    /// Pre-release validation. Thorough coverage and aggressive reduction at 10x the cost of `.expedient`.
     case exorbitant
     /// Explicit values for all budget aspects.
     case custom(coverage: UInt64, sampling: UInt64)

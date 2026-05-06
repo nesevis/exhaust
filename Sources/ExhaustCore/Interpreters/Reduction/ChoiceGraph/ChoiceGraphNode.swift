@@ -7,21 +7,21 @@
 
 /// A node in the ``ChoiceGraph`` representing a value-structural operation in the generator.
 ///
-/// Each node stores its identity, kind with per-kind metadata, position mapping to the flat ``ChoiceSequence``, and parent-child relationships forming the containment tree.
+/// Inactive (unselected) branches carry a nil ``positionRange`` and do not address live entries in the ``ChoiceSequence``. Encoders must skip these nodes. Only nodes with a non-nil position range correspond to mutable sequence positions.
 package struct ChoiceGraphNode {
-    /// Stable identity assigned during graph construction.
+    /// Assigned sequentially during graph construction. Stays stable across in-place mutations: tombstoned nodes keep their ID so surviving references remain valid.
     public let id: Int
 
-    /// The value-structural operation this node represents.
+    /// Determines which encoder passes may target this node. Value encoders target chooseBits leaves, structural encoders target pick, sequence, and bind nodes.
     public let kind: ChoiceGraphNodeKind
 
     /// Range of ``ChoiceSequence`` indices this node covers, or nil for inactive (unselected) branches. Encoders that modify the sequence can only target nodes with non-nil position ranges.
     public let positionRange: ClosedRange<Int>?
 
-    /// Indices of child nodes in ``ChoiceGraph/nodes``.
+    /// Ordered by position in the ``ChoiceSequence``. For pick nodes, index corresponds to branch ID; for sequences, index corresponds to element ordinal.
     public let children: [Int]
 
-    /// Index of the parent node in ``ChoiceGraph/nodes``, or nil for the root.
+    /// Nil only for the root. Used by scope queries to find enclosing bind and pick contexts for dependency analysis.
     public let parent: Int?
 
     /// Returns a copy with the specified fields replaced. Unspecified fields carry forward from `self`.

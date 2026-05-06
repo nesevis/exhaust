@@ -40,14 +40,34 @@
 /// - `sequence`: Replays each element using recorded sub-trees
 /// - `contramap`/`prune`: Passes through recorded decisions
 ///
-/// ## Architecture
+/// ## Type Erasure Contract
 ///
-/// Operations use type erasure (`Any`) because Swift enums cannot change generic parameters across cases. The FreerMonad continuation handles type-safe conversion back to the expected output type, enabling the separation of effect description from interpretation.
+/// Associated values use `Any` because Swift enums cannot vary generic parameters across cases. The public API never exposes this: users see only typed generators and typed closures.
 ///
-/// **Construction**: Operations are created by ``Gen`` combinators and interpreted by ``Interpreters``.
-/// Never construct directly.
+/// Every `as!` cast in an interpreter succeeds because the ``Gen`` combinator that constructed the operation guarantees the type: the value an interpreter produces for an operation is the type that operation's continuation was built to receive. The compiler cannot verify this. If you add a case or write an interpreter, the contract is yours to uphold.
+///
+/// A failing cast means the interpreter produced the wrong type, or the combinator attached the wrong continuation. The fault is always internal to the framework.
+///
+/// **Construction**: Operations are created by ``Gen`` combinators and interpreted by ``Interpreters``. Never construct directly.
 ///
 /// - SeeAlso: ``ReflectiveGenerator``, ``Gen``, ``Interpreters``
+// MARK: - Interpretation Sites
+//
+// Case              Generate                      Reflect           Replay            Adapt / Analyze
+// chooseBits        VACTI / VI                    Reflect.swift     Replay.swift      ChoiceTreeAnalysis
+// pick              VACTI / VI                    Reflect.swift     Replay.swift      ChoiceGraphBuilder
+// contramap         InterpreterWrapperHandlers    Reflect.swift     Replay.swift      (transparent)
+// prune             InterpreterWrapperHandlers    Reflect.swift     Replay.swift      (transparent)
+// sequence          VACTI / VI                    Reflect.swift     Replay.swift      ChoiceTreeAnalysis
+// zip               VACTI / VI                    Reflect.swift     Replay.swift      ChoiceTreeAnalysis
+// just              VACTI / VI                    Reflect.swift     Replay.swift      (terminal)
+// getSize           VACTI / VI                    Reflect.swift     Replay.swift      (terminal)
+// resize            InterpreterWrapperHandlers    Reflect.swift     Replay.swift      (transparent)
+// filter            Gen+Filter / CGS pipeline     (pass-through)    (pass-through)    OnlineCGSInterpreter
+// classify          InterpreterWrapperHandlers    (pass-through)    (pass-through)    (pass-through)
+// unique            InterpreterWrapperHandlers    (pass-through)    (pass-through)    (pass-through)
+// transform         VACTI / VI                    Reflect.swift     Replay.swift      ChoiceGraphBuilder
+
 public enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
     ///
@@ -56,13 +76,13 @@ public enum ReflectiveOperation {
     /// - **weight**: Probability mass for random selection during generation
     /// - **generator**: The sub-generator to execute if this choice is selected
     public struct PickTuple {
-        /// A stable hash of the choice's generator structure, used to match branches across separate generation runs.
+        /// Derived from the generator's structural shape. Two picks with matching fingerprints share the same recursive template at different unrolling depths: the ChoiceGraph uses this to build self-similarity edges for substitution.
         public let fingerprint: UInt64
-        /// Stable identifier for this choice across generation runs.
+        /// Zero-based index within the pick's branch list. Persisted in the ChoiceSequence so the materializer can select this exact branch during replay without re-running all branches.
         public let id: UInt64
-        /// Probability mass for random selection during generation.
+        /// Relative (unnormalized) probability. During generation, the PRNG draw is partitioned proportionally across branches. During CGS tuning, weights are overridden by learned biases. Zero weight makes the branch unreachable during generation but still reachable during reflection.
         public let weight: UInt64
-        /// The sub-generator to execute if this choice is selected.
+        /// Type-erased because Swift enums cannot vary generic parameters across cases. The pick interpreter casts the continuation result back to the expected type at each branch boundary.
         public let generator: ReflectiveGenerator<Any>
 
         /// Creates a pick tuple with the given fingerprint, identifier, weight, and generator.
@@ -79,16 +99,7 @@ public enum ReflectiveOperation {
         }
     }
 
-    /// Contravariant transformation that focuses on part of the input during reflection.
-    ///
-    /// This is the key operation that enables generators to work with different input types while maintaining bidirectional capabilities. The transform function acts as a "lens" that extracts the relevant portion of data during reflection.
-    ///
-    /// **Forward pass**: Transform is ignored - generation proceeds with current context
-    /// **Backward pass**: Transform extracts the focus area from the target value
-    /// **Replay pass**: Transform processes the replayed input context
-    ///
-    /// **Failure handling**: If transform returns `nil`, that reflection branch is pruned.
-    /// This enables conditional generation based on input structure.
+    /// Focuses the reflection target on the subpart that the inner generator can reflect on. During generation, the transform is skipped: it affects only the backward pass. During reflection, `transform` narrows the target value; when it returns `nil`, the enclosing ``prune`` eliminates that branch.
     ///
     /// - Parameters:
     ///   - transform: Function that extracts focus area, returning nil to prune branches.
