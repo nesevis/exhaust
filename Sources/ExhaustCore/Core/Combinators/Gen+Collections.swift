@@ -317,17 +317,17 @@ package extension Gen {
         )
     }
 
-    /// Creates a generator that picks a random element from a collection, using a hashable key path for O(1) reflection.
+    /// Creates a generator that picks a random element from a collection, identified by a hashable partial path for O(1) reflection.
     ///
     /// Use this overload when elements are not ``Hashable`` themselves but have a hashable property that uniquely identifies them.
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - keyPath: A key path to a hashable property used to identify elements during reflection.
+    ///   - id: A partial path to a hashable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection, Key: Hashable>(
         from collection: C,
-        by keyPath: KeyPath<C.Element, Key>
+        id path: some PartialPath<C.Element, Key>
     ) -> ReflectiveGenerator<C.Element> {
         precondition(
             collection.isEmpty == false,
@@ -337,29 +337,32 @@ package extension Gen {
         var indexMap: [Key: Int] = [:]
         indexMap.reserveCapacity(elements.count)
         for (offset, element) in elements.enumerated() {
-            let key = element[keyPath: keyPath]
+            guard let key = try? path.extract(from: element) else { continue }
             if indexMap[key] == nil {
                 indexMap[key] = offset
             }
         }
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in indexMap[element[keyPath: keyPath]] ?? 0 },
+            { (element: C.Element) -> Int in
+                guard let key = try? path.extract(from: element) else { return 0 }
+                return indexMap[key] ?? 0
+            },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
 
-    /// Creates a generator that picks a random element from a collection, using an equatable key path for reflection.
+    /// Creates a generator that picks a random element from a collection, identified by an equatable partial path for reflection.
     ///
-    /// Use this overload when elements are not ``Equatable`` but have an equatable property that uniquely identifies them. Prefer the ``Hashable`` key path overload when the key conforms to ``Hashable`` for O(1) lookup.
+    /// Use this overload when elements are not ``Equatable`` but have an equatable property that uniquely identifies them. Prefer the ``Hashable`` overload when the key conforms to ``Hashable`` for O(1) lookup.
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - keyPath: A key path to an equatable property used to identify elements during reflection.
+    ///   - id: A partial path to an equatable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection, Key: Equatable>(
         from collection: C,
-        by keyPath: KeyPath<C.Element, Key>
+        id path: some PartialPath<C.Element, Key>
     ) -> ReflectiveGenerator<C.Element> {
         precondition(
             collection.isEmpty == false,
@@ -369,8 +372,8 @@ package extension Gen {
 
         return Gen.contramap(
             { (element: C.Element) -> Int in
-                let key = element[keyPath: keyPath]
-                return elements.firstIndex { $0[keyPath: keyPath] == key } ?? 0
+                guard let key = try? path.extract(from: element) else { return 0 }
+                return elements.firstIndex { (try? path.extract(from: $0)) == key } ?? 0
             },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )

@@ -362,42 +362,42 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.element(from: collection)
     }
 
-    /// Picks a random element from a fixed collection, using a hashable key path for O(1) reflection.
+    /// Picks a random element from a fixed collection, identified by a hashable partial path for O(1) reflection.
     ///
-    /// The collection is captured at construction time. The backward pass identifies the element via hash-based dictionary lookup on the key-path-extracted value, enabling reflection for types that are not ``Hashable`` themselves.
+    /// The collection is captured at construction time. The backward pass identifies the element via hash-based dictionary lookup on the extracted value, enabling reflection for types that are not ``Hashable`` themselves.
     ///
     /// ```swift
-    /// let gen = #gen(.element(from: configs, by: \.id))
+    /// let gen = #gen(.element(from: configs, id: \.id))
     /// ```
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - keyPath: A key path to a hashable property used to identify elements during reflection.
+    ///   - id: A partial path to a hashable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection, Key: Hashable>(
         from collection: C,
-        by keyPath: KeyPath<C.Element, Key>
+        id path: some PartialPath<C.Element, Key>
     ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
-        Gen.element(from: collection, by: keyPath)
+        Gen.element(from: collection, id: path)
     }
 
-    /// Picks a random element from a fixed collection, using an equatable key path for reflection.
+    /// Picks a random element from a fixed collection, identified by an equatable partial path for reflection.
     ///
-    /// The collection is captured at construction time. The backward pass identifies the element by linear scan comparing the key-path-extracted value, enabling reflection for types that are not ``Equatable``.
+    /// The collection is captured at construction time. The backward pass identifies the element by linear scan comparing the extracted value, enabling reflection for types that are not ``Equatable``.
     ///
     /// ```swift
-    /// let gen = #gen(.element(from: configs, by: \.name))
+    /// let gen = #gen(.element(from: configs, id: \.name))
     /// ```
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - keyPath: A key path to an equatable property used to identify elements during reflection.
+    ///   - id: A partial path to an equatable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection, Key: Equatable>(
         from collection: C,
-        by keyPath: KeyPath<C.Element, Key>
+        id path: some PartialPath<C.Element, Key>
     ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
-        Gen.element(from: collection, by: keyPath)
+        Gen.element(from: collection, id: path)
     }
 
 }

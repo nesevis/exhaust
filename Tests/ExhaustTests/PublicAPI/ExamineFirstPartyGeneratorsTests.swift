@@ -295,7 +295,7 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
-    @Test("element(from:by:) Hashable key path")
+    @Test("element(from:id:) Hashable key path")
     func elementFromArrayByHashableKeyPath() {
         let items = [
             KeyPathFixture(id: 1, label: .init(value: "alpha")),
@@ -303,18 +303,18 @@ struct ExamineFirstPartyGeneratorsTests {
             KeyPathFixture(id: 3, label: .init(value: "gamma")),
             KeyPathFixture(id: 4, label: .init(value: "delta")),
         ]
-        let report = #examine(Gen.element(from: items, by: \.id), samples: 50)
+        let report = #examine(Gen.element(from: items, id: \KeyPathFixture.id), samples: 50)
         #expect(report.passed)
     }
 
-    @Test("element(from:by:) Equatable key path")
+    @Test("element(from:id:) Equatable key path")
     func elementFromArrayByEquatableKeyPath() {
         let items = [
             KeyPathFixture(id: 1, label: .init(value: "alpha")),
             KeyPathFixture(id: 2, label: .init(value: "beta")),
             KeyPathFixture(id: 3, label: .init(value: "gamma")),
         ]
-        let report = #examine(Gen.element(from: items, by: \.label), samples: 50)
+        let report = #examine(Gen.element(from: items, id: \KeyPathFixture.label), samples: 50)
         #expect(report.passed)
     }
 
@@ -487,6 +487,39 @@ struct ExamineFirstPartyGeneratorsTests {
 
     @Test func resize() {
         let report = #examine(.int(in: 0 ... 100).resize(50), samples: 30)
+        #expect(report.passed)
+    }
+
+    // MARK: - Unique
+
+    @Test("unique(by:) deduplicates by hashable partial path")
+    func uniqueByHashable() {
+        let items = [
+            KeyPathFixture(id: 1, label: .init(value: "alpha")),
+            KeyPathFixture(id: 2, label: .init(value: "beta")),
+            KeyPathFixture(id: 3, label: .init(value: "gamma")),
+            KeyPathFixture(id: 4, label: .init(value: "delta")),
+        ]
+        let report = #examine(
+            Gen.element(from: items, id: \KeyPathFixture.id)
+                .unique(by: \KeyPathFixture.id),
+            samples: 50
+        )
+        #expect(report.passed)
+    }
+
+    @Test("unique(by:) deduplicates by equatable partial path")
+    func uniqueByEquatable() {
+        let items = [
+            KeyPathFixture(id: 1, label: .init(value: "alpha")),
+            KeyPathFixture(id: 2, label: .init(value: "beta")),
+            KeyPathFixture(id: 3, label: .init(value: "gamma")),
+        ]
+        let report = #examine(
+            Gen.element(from: items, id: \KeyPathFixture.id)
+                .unique(by: \KeyPathFixture.label),
+            samples: 50
+        )
         #expect(report.passed)
     }
 }

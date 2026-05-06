@@ -257,22 +257,68 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
-    /// Creates a generator that only produces unique values, deduplicated by a key path.
+    /// Creates a generator that only produces unique values, deduplicated by a hashable partial path.
     ///
-    /// The value at the given key path is used as the deduplication key. Two values are considered duplicates if they produce the same key.
+    /// The value extracted by the partial path is used as the deduplication key. Two values are considered duplicates if they produce the same key.
+    ///
+    /// ```swift
+    /// let gen = #gen(.element(from: configs, id: \.id)).unique(by: \.id)
+    /// ```
     ///
     /// - Parameters:
-    ///   - keyPath: A key path to the hashable property used for deduplication.
+    ///   - by: A partial path to the hashable property used for deduplication.
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
-    func unique(
-        by keyPath: KeyPath<Value, some Hashable & Sendable>,
+    func unique<Key: Hashable>(
+        by path: some PartialPath<Value, Key> & Sendable,
         fileID: String = #fileID,
         line: UInt = #line
     ) -> ReflectiveGenerator<Value> {
-        nonisolated(unsafe) let keyPath = keyPath
-        return unique(by: { $0[keyPath: keyPath] }, fileID: fileID, line: line)
+        unique(by: { value in
+            (try? path.extract(from: value)).map { AnyHashable($0) }
+                ?? AnyHashable(ObjectIdentifier(type(of: value as Any)))
+        }, fileID: fileID, line: line)
+    }
+
+    /// Creates a generator that only produces unique values, deduplicated by an equatable partial path.
+    ///
+    /// The value extracted by the partial path is used as the deduplication key. Two values are considered duplicates if they produce the same key under equality comparison. This uses linear scan for duplicate detection.
+    ///
+    /// ```swift
+    /// let gen = #gen(.element(from: configs, id: \.name)).unique(by: \.name)
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - by: A partial path to the equatable property used for deduplication.
+    ///   - fileID: Source file identifier for fingerprinting (auto-captured).
+    ///   - line: Source line number for fingerprinting (auto-captured).
+    /// - Returns: A generator that only yields values with unique keys.
+    func unique<Key: Equatable>(
+        by path: some PartialPath<Value, Key> & Sendable,
+        fileID: String = #fileID,
+        line: UInt = #line
+    ) -> ReflectiveGenerator<Value> {
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+        var seen: [Key] = []
+
+        return .impure(
+            operation: .unique(
+                gen: erase(),
+                fingerprint: fingerprint,
+                keyExtractor: { value in
+                    guard let key = try? path.extract(from: value) else {
+                        return AnyHashable(ObjectIdentifier(type(of: value)))
+                    }
+                    if seen.contains(where: { $0 == key }) {
+                        return AnyHashable(seen.count)
+                    }
+                    seen.append(key)
+                    return AnyHashable(seen.count)
+                }
+            ),
+            continuation: { .pure($0 as! Value) }
+        )
     }
 
     /// Creates a generator that only produces unique values, deduplicated by a transform.
