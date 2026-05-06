@@ -512,14 +512,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Filter
 
-            case let .filter(gen, fingerprint, filterType, filterPredicate, _):
-                let tunedGen = ChoiceTreeHandlers.resolveFilterGenerator(
-                    gen: gen,
-                    fingerprint: fingerprint,
-                    filterType: filterType,
-                    predicate: filterPredicate,
-                    context: &context
-                )
+            case let .filter(gen, _, _, filterPredicate, _, tuned):
+                let tunedGen = tuned ?? gen
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {

@@ -142,11 +142,12 @@ package enum LightweightSampler {
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
-            case let .filter(gen, _, _, predicate, _):
+            case let .filter(gen, _, _, predicate, tuned, _):
+                let filterGen = tuned ?? gen
                 var attempts: UInt64 = 0
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let result = try generateRecursive(
-                        gen, with: inputValue, rng: &rng, size: size
+                        filterGen, with: inputValue, rng: &rng, size: size
                     ) else {
                         return nil
                     }

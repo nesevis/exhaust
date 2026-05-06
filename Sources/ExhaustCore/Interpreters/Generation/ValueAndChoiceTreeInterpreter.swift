@@ -301,14 +301,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             // MARK: - Filter
 
-            case let .filter(gen, fingerprint, filterType, predicate, sourceLocation):
-                let filteredGen = ChoiceTreeHandlers.resolveFilterGenerator(
-                    gen: gen,
-                    fingerprint: fingerprint,
-                    filterType: filterType,
-                    predicate: predicate,
-                    context: &context
-                )
+            case let .filter(gen, fingerprint, _, predicate, tuned, sourceLocation):
+                let filteredGen = tuned ?? gen
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {

@@ -616,23 +616,24 @@ extension GeneratorTuning {
         filterType: FilterType,
         filterPredicate: @escaping (Any) -> Bool,
         sourceLocation: FilterSourceLocation,
+        tuned: ReflectiveGenerator<Any>?,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext
     ) throws -> ReflectiveGenerator<Output> {
-        guard filterType != .rejectionSampling else {
+        if tuned != nil || filterType == .rejectionSampling {
             return .impure(
                 operation: .filter(
                     gen: subGen,
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: filterPredicate,
-                    sourceLocation: sourceLocation
+                    sourceLocation: sourceLocation,
+                    tuned: tuned
                 ),
                 continuation: continuation
             )
         }
 
-        // Use the filter's own predicate to tune the inner generator
         let tunedInner = try tuneRecursive(
             subGen,
             context: context,
@@ -646,7 +647,8 @@ extension GeneratorTuning {
                 fingerprint: fingerprint,
                 filterType: filterType,
                 predicate: filterPredicate,
-                sourceLocation: sourceLocation
+                sourceLocation: sourceLocation,
+                tuned: nil
             ),
             continuation: continuation
         )
