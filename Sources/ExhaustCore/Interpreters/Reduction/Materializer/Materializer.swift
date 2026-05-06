@@ -3,18 +3,13 @@
 //  Exhaust
 //
 
-/// Materializer that always produces a fresh ``ChoiceTree`` with current ``validRange`` metadata and all branch alternatives at pick sites.
+/// Replays a candidate ``ChoiceSequence`` through a generator to produce a fresh ``ChoiceTree`` with current metadata.
 ///
-/// This materializer:
-/// - Rebuilds the tree from the generator on every invocation (no stale metadata).
-/// - Materializes all branch alternatives at pick sites (``DeleteByBranchPromotionEncoder`` sees candidates).
-/// - Supports exact and guided modes with inner-reject/bound-clamp semantics.
+/// Two modes:
+/// - **Exact**: every value comes from the prefix. Out-of-range values reject the candidate.
+/// - **Guided**: three-tier resolution — prefix first, then fallback tree, then PRNG. Values that fit the new domain are carried forward unchanged; values that don't fall back to the next tier.
 ///
-/// Guided mode computes the canonical cartesian lift in the simple fibration over trace space. The trace space is fibred: the base is the set of trace structures (which choice points exist and what controls them), and above each structure sits a fibre — the set of value assignments compatible with that structure. A structural reduction is a morphism in the base; guided mode lifts it canonically by replaying the current value assignment into the new fibre, carrying forward each value where it fits in the new domain and falling back to the fallback tree or PRNG otherwise.
-///
-/// The three-tier resolution (prefix → fallback tree → PRNG) approximates this lift for the common case where the new domain is a strict subset of the old domain and the carried-forward value would be out of range. The canonical lift itself — carrying the value unchanged — is the unique cartesian morphism in the simple fibration (Jacobs, *Categorical Logic and Type Theory*, 1999, §1.4).
-///
-/// The result intentionally omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata. The tree is the single source of truth.
+/// Always materializes all branch alternatives at pick sites so structural encoders can see inactive candidates. The result omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata.
 package enum Materializer {
     /// Reads the active generation size for a materialization call. Reads the one-shot `.resize` override first, then falls back to `context.size` (the Materializer's persistent baseline, defaulting to 100).
     @inline(__always)

@@ -26,8 +26,8 @@ struct MinimizationSource: ScopeSource {
                 floatScope.leaves.reduce(0) { maxSoFar, leaf in
                     max(maxSoFar, Self.computeValueYield(leafNodeID: leaf.nodeID, graph: graph, innerDescendantToBind: innerDescendantToBind))
                 }
-            case let .boundValue(fibreScope):
-                fibreScope.boundSubtreeSize
+            case let .boundValue(bindScope):
+                bindScope.boundSubtreeSize
             }
 
             let estimatedProbes: Int = switch scope {
@@ -35,10 +35,10 @@ struct MinimizationSource: ScopeSource {
                 1 + integerScope.leaves.count * 16
             case let .floatLeaves(floatScope):
                 floatScope.leaves.count * 15
-            case let .boundValue(fibreScope):
-                15 * (fibreScope.downstreamNodeIDs.count == 1
+            case let .boundValue(bindScope):
+                15 * (bindScope.downstreamNodeIDs.count == 1
                     ? 16
-                    : min(64, fibreScope.downstreamNodeIDs.count * 8))
+                    : min(64, bindScope.downstreamNodeIDs.count * 8))
             }
 
             entries.append((

@@ -106,7 +106,7 @@ enum MinimizationScopeQuery {
             }
         }
 
-        // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's fibre coverage. Dispatch is gated per-site by ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` in the scheduler, which rejects topology-divergent binds (Calculator's `.recursive`) before any probe runs.
+        // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's bound value coverage. Dispatch is gated per-site by ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` in the scheduler, which rejects topology-divergent binds (Calculator's `.recursive`) before any probe runs.
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }

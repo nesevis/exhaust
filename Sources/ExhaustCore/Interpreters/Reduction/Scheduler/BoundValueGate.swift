@@ -7,7 +7,7 @@
 
 /// Controls dispatch of bound value composition encoders within the scheduler's cycle loop.
 ///
-/// Bound value compositions are expensive: each dispatch runs a generator lift per upstream probe and a fibre search per lift. The gate enforces three skip rules that prevent redundant or futile dispatches:
+/// Bound value compositions are expensive: each dispatch runs a generator lift per upstream probe and a bound subtree search per lift. The gate enforces three skip rules that prevent redundant or futile dispatches:
 ///
 /// 1. **Per-cycle dedup**: after the first dispatch for a given bind node within a cycle, subsequent dispatches are skipped. The upstream encoder has already explored its full search space.
 /// 2. **Acceptance deferral**: bound value dispatches are skipped when any encoder has already accepted a probe this cycle. Structural changes from the acceptance may invalidate the bound value search.

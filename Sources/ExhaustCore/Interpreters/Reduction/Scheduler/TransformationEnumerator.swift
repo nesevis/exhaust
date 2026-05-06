@@ -249,17 +249,17 @@ enum TransformationEnumerator {
                     )
                 ))
 
-            case let .boundValue(fibreScope):
-                let estimatedProbes = 15 + min(128, fibreScope.boundSubtreeSize)
+            case let .boundValue(bindScope):
+                let estimatedProbes = 15 + min(128, bindScope.boundSubtreeSize)
                 result.append(GraphTransformation(
                     operation: .minimize(scope),
                     yield: TransformationYield(
                         structural: 0,
-                        value: fibreScope.boundSubtreeSize,
+                        value: bindScope.boundSubtreeSize,
                         slack: .exact,
                         estimatedProbes: estimatedProbes
                     ),
-                    precondition: .nodeActive(fibreScope.bindNodeID),
+                    precondition: .nodeActive(bindScope.bindNodeID),
                     postcondition: TransformationPostcondition(
                         isStructural: false,
                         invalidatesConvergence: [],

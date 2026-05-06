@@ -11,7 +11,7 @@
 ///
 /// ## Why not ``GraphValueEncoder``?
 ///
-/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialisation plus a full downstream fibre search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
+/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialisation plus a full downstream bound subtree search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
 ///
 /// ## Lifecycle
 ///
@@ -93,19 +93,19 @@ struct GraphBinarySearchEncoder: GraphEncoder {
     }
 }
 
-// MARK: - Graph Fibre Covering Encoder
+// MARK: - Graph Bound Value Covering Encoder
 
-/// Adapts ``FibreCoveringEncoder`` (a ``ComposableEncoder``) to the ``GraphEncoder`` protocol so it can be used as the downstream of a ``GraphComposedEncoder``.
+/// Adapts ``BoundValueCoveringEncoder`` (a ``ComposableEncoder``) to the ``GraphEncoder`` protocol so it can be used as the downstream of a ``GraphComposedEncoder``.
 ///
-/// The downstream slot of a bound value composition needs to *discover* failures in the lifted fibre, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
+/// The downstream slot of a bound value composition needs to *discover* failures in the lifted bound subtree, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
 ///
-/// ``FibreCoveringEncoder`` enumerates the entire fibre value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
+/// ``BoundValueCoveringEncoder`` enumerates the entire bound value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
 ///
 /// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the leaf positions are read from the scope's leaves, the contiguous position range is computed from them, and the inner encoder is started on the scope's `baseSequence` over that range.
-struct GraphFibreCoveringEncoder: GraphEncoder {
+struct GraphBoundValueCoveringEncoder: GraphEncoder {
     let name: EncoderName = .boundValueSearch
 
-    private var inner = FibreCoveringEncoder()
+    private var inner = BoundValueCoveringEncoder()
     private var leafEntries: [LeafEntry] = []
     private var hasInner = false
 
@@ -178,7 +178,7 @@ struct GraphFibreCoveringEncoder: GraphEncoder {
 ///
 /// ## Convergence
 ///
-/// Only the upstream encoder's convergence records are exposed to the scheduler. The downstream encoder cold-starts on each upstream probe via ``GraphEncoder/start(scope:)``, so any convergence it accumulates is fibre-local and not transferable to the live graph.
+/// Only the upstream encoder's convergence records are exposed to the scheduler. The downstream encoder cold-starts on each upstream probe via ``GraphEncoder/start(scope:)``, so any convergence it accumulates is downstream-local and not transferable to the live graph.
 ///
 struct GraphComposedEncoder: GraphEncoder {
     let name: EncoderName

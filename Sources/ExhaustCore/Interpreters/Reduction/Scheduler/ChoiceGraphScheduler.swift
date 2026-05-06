@@ -167,12 +167,12 @@ enum ChoiceGraphScheduler {
                 }
 
                 // Bound value gating.
-                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
-                    switch gate.shouldDispatch(bindNodeID: fibreScope.bindNodeID, anyAcceptedThisCycle: anyAccepted) {
+                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
+                    switch gate.shouldDispatch(bindNodeID: bindScope.bindNodeID, anyAcceptedThisCycle: anyAccepted) {
                     case .skip:
                         continue
                     case .classifyFirst:
-                        guard case let .bind(bindMetadata) = graph.nodes[fibreScope.bindNodeID].kind else {
+                        guard case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind else {
                             continue
                         }
                         let classification: BindClassification
@@ -180,13 +180,13 @@ enum ChoiceGraphScheduler {
                             classification = cached
                         } else {
                             graph.classifyBind(
-                                at: fibreScope.bindNodeID,
+                                at: bindScope.bindNodeID,
                                 gen: erasedGen,
                                 baseSequence: sequence,
                                 fallbackTree: tree,
-                                upstreamLeafNodeID: fibreScope.upstreamLeafNodeID
+                                upstreamLeafNodeID: bindScope.upstreamLeafNodeID
                             )
-                            guard case let .bind(updatedMetadata) = graph.nodes[fibreScope.bindNodeID].kind,
+                            guard case let .bind(updatedMetadata) = graph.nodes[bindScope.bindNodeID].kind,
                                   let verdict = updatedMetadata.classification
                             else {
                                 continue
@@ -194,7 +194,7 @@ enum ChoiceGraphScheduler {
                             classification = verdict
                         }
                         if classification.topology != .identical || classification.liftability != .both {
-                            gate.markFruitless(fibreScope.bindNodeID)
+                            gate.markFruitless(bindScope.bindNodeID)
                             continue
                         }
                     case .dispatch:
@@ -237,19 +237,19 @@ enum ChoiceGraphScheduler {
 
                 // Select encoder and dispatch.
                 var encoder: any GraphEncoder
-                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
+                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
                     encoder = Self.makeBoundValueComposition(
-                        fibreScope: fibreScope,
+                        bindScope: bindScope,
                         scope: scope,
                         graph: graph,
                         gen: erasedGen,
-                        upstreamBudget: gate.decayedBudget(bindNodeID: fibreScope.bindNodeID)
+                        upstreamBudget: gate.decayedBudget(bindNodeID: bindScope.bindNodeID)
                     )
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
                 }
-                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
-                    gate.markDispatched(fibreScope.bindNodeID)
+                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
+                    gate.markDispatched(bindScope.bindNodeID)
                 }
                 let outcome = try runProbeLoop(
                     encoder: &encoder,
@@ -280,8 +280,8 @@ enum ChoiceGraphScheduler {
                     accepts: outcome.acceptCount
                 )
 
-                if case let .minimize(.boundValue(fibreScope)) = transformation.operation {
-                    gate.recordOutcome(bindNodeID: fibreScope.bindNodeID, accepted: outcome.acceptCount > 0)
+                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
+                    gate.recordOutcome(bindNodeID: bindScope.bindNodeID, accepted: outcome.acceptCount > 0)
                 }
 
                 if outcome.accepted {
@@ -298,12 +298,12 @@ enum ChoiceGraphScheduler {
                         // Save bound subtree's position range before rebuild for stale convergence clearing.
                         var boundPositionRange: ClosedRange<Int>?
                         if isBoundValue,
-                           case let .minimize(.boundValue(fibreScope)) = transformation.operation,
-                           fibreScope.bindNodeID < graph.nodes.count,
-                           case let .bind(bindMetadata) = graph.nodes[fibreScope.bindNodeID].kind,
-                           graph.nodes[fibreScope.bindNodeID].children.count > bindMetadata.boundChildIndex
+                           case let .minimize(.boundValue(bindScope)) = transformation.operation,
+                           bindScope.bindNodeID < graph.nodes.count,
+                           case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind,
+                           graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
                         {
-                            let boundChildID = graph.nodes[fibreScope.bindNodeID].children[bindMetadata.boundChildIndex]
+                            let boundChildID = graph.nodes[bindScope.bindNodeID].children[bindMetadata.boundChildIndex]
                             boundPositionRange = graph.nodes[boundChildID].positionRange
                         }
 
@@ -548,7 +548,7 @@ enum ChoiceGraphScheduler {
 
     /// Selects the appropriate encoder for a graph operation type.
     ///
-    /// Bound value minimization scopes are not handled here because they need the typed generator at construction time. The dispatch site in ``runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` builds them via ``makeBoundValueComposition(fibreScope:scope:graph:gen:upstreamBudget:)`` instead.
+    /// Bound value minimization scopes are not handled here because they need the typed generator at construction time. The dispatch site in ``runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` builds them via ``makeBoundValueComposition(bindScope:scope:graph:gen:upstreamBudget:)`` instead.
     private static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
         case .remove, .replace, .migrate:

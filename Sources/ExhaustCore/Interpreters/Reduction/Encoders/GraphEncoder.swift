@@ -31,7 +31,7 @@ protocol GraphEncoder {
     /// Descriptive name for logging and instrumentation.
     var name: EncoderName { get }
 
-    /// True when the encoder's probe candidates are post-lift sequences whose fibre differs from ``TransformationScope/tree``.
+    /// True when the encoder's probe candidates are post-lift sequences whose bound subtree differs from ``TransformationScope/tree``.
     ///
     /// The scheduler routes such probes through ``SequenceDecoder/exact(materializePicks:)`` instead of the bind-aware guided decoder, because guided decoding would substitute stale bound-subtree content from the parent tree's fallback path. Default `false` for all intra-skeleton encoders. Composed encoders that drive a generator lift internally (such as ``GraphComposedEncoder``) override this to `true`.
     var requiresExactDecoder: Bool { get }
