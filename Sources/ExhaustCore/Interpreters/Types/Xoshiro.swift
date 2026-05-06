@@ -148,14 +148,11 @@ package struct Xoshiro256: ~Copyable {
         Xoshiro256(seed: deriveSeed(from: baseSeed, at: index))
     }
 
-    /// Creates an independent stream by jumping forward a number of steps derived from the stream identifier.
+    /// Creates an independent stream by deriving a new seed from this generator's seed and the stream identifier.
+    ///
+    /// Each `streamID` value produces a distinct, deterministic child generator via SplitMix64 mixing of the full 64-bit identifier. The child's state is independent of the parent's current position in the PRNG cycle.
     public func spawned(streamID: UInt64) -> Xoshiro256 {
-        var newGen = Xoshiro256(seed: seed, state: state)
-        // Use streamID to determine number of jumps
-        for _ in 0 ..< (streamID & 0xFF) {
-            newGen.jump()
-        }
-        return newGen
+        Xoshiro256(seed: Xoshiro256.deriveSeed(from: seed, at: streamID))
     }
 }
 
