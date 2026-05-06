@@ -655,20 +655,16 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         results.reserveCapacity(Int(length))
         elements.reserveCapacity(Int(length))
 
-        let didSucceed = try SequenceExecutionKernel.run(count: length) {
+        for _ in 0 ..< length {
             guard let (result, element) = try generateRecursive(
                 elementGen,
                 with: inputValue,
                 context: &context
             ) else {
-                return false
+                return nil
             }
             results.append(result)
             elements.append(element)
-            return true
-        }
-        guard didSucceed else {
-            return nil
         }
 
         let choiceTree = ChoiceTree.sequence(

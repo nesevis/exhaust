@@ -279,18 +279,14 @@ extension Interpreters {
 
         var accumulatedValues: [Any] = []
         accumulatedValues.reserveCapacity(elements.count)
-        let didSucceed = try SequenceExecutionKernel.run(over: elements) { elementScript in
+        for elementScript in elements {
             guard let elementValue = try replayRecursive(
                 elementGenerator,
                 with: elementScript
             ) else {
-                return false
+                return nil
             }
             accumulatedValues.append(elementValue)
-            return true
-        }
-        guard didSucceed else {
-            return nil
         }
 
         let nextGen = try continuation(accumulatedValues)
@@ -674,18 +670,14 @@ extension Interpreters {
 
         var accumulatedValues: [Any] = []
         accumulatedValues.reserveCapacity(elements.count)
-        let didSucceed = try SequenceExecutionKernel.run(over: elements) { elementScript in
+        for elementScript in elements {
             guard let elementValue = try replayRecursive(
                 elementGenerator,
                 with: elementScript
             ) else {
-                return false
+                return nil
             }
             accumulatedValues.append(elementValue)
-            return true
-        }
-        guard didSucceed else {
-            return nil
         }
 
         return try runContinuation(accumulatedValues)

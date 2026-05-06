@@ -402,7 +402,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 let elementCount = Int(length)
                 var results: [Any] = []
                 results.reserveCapacity(elementCount)
-                let didSucceed = try SequenceExecutionKernel.run(count: length) {
+                for _ in 0 ..< length {
                     var elementContext = derivativeContext
                     elementContext.push(.sequenceElement(
                         index: results.count,
@@ -421,12 +421,10 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         cgsState: &cgsState,
                         derivativeContext: elementContext
                     ) else {
-                        return false
+                        return nil
                     }
                     results.append(result)
-                    return true
                 }
-                guard didSucceed else { return nil }
                 return try runContinuation(
                     result: results,
                     continuation: continuation,

@@ -177,16 +177,14 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 var results: [Any] = []
                 results.reserveCapacity(Int(length))
-                let didSucceed = try SequenceExecutionKernel.run(count: length) {
+                for _ in 0 ..< length {
                     guard let element = try generateRecursiveAny(
                         elementGen, with: inputValue, context: &context
                     ) else {
-                        return false
+                        return nil
                     }
                     results.append(element)
-                    return true
                 }
-                guard didSucceed else { return nil }
                 result = results
 
             case let .zip(generators, _):

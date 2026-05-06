@@ -88,16 +88,14 @@ package enum LightweightSampler {
                 }
                 var results: [Any] = []
                 results.reserveCapacity(Int(length))
-                let ok = try SequenceExecutionKernel.run(count: length) {
+                for _ in 0 ..< length {
                     guard let element = try generateRecursive(
                         elementGen, with: inputValue, rng: &rng, size: size
                     ) else {
-                        return false
+                        return nil
                     }
                     results.append(element)
-                    return true
                 }
-                guard ok else { return nil }
                 return try runContinuation(
                     results, continuation,
                     inputValue: inputValue, rng: &rng, size: size
