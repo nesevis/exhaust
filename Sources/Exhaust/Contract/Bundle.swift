@@ -77,7 +77,7 @@ public final class Bundle<Element>: @unchecked Sendable {
     ///
     /// Use this when bulk removal of specific elements is required.
     public func remove(where predicate: (Element) -> Bool) {
-        elements = elements.filter(predicate)
+        elements.removeAll(where: predicate)
     }
 
     /// Removes all elements from the bundle.

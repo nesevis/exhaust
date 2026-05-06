@@ -17,9 +17,30 @@
 
 Audience: Swift developers writing property-based tests. They may not know what a Freer Monad is.
 
+### Tone: Teach, Don't Assert
+
+Public doc comments should help the reader make a decision, not convince them that something is important. Every doc comment answers one or both of: "when do I use this?" and "what happens if I use the wrong thing?"
+
+**Do not** write phrases like "this is the fundamental operation for," "this is essential for," or "this is the key operation that enables." These assert importance without demonstrating it. A reader who does not already understand the concept learns nothing from being told it is key.
+
+**Instead**, show consequences. Explain what the reader gains or loses by choosing this API over an alternative:
+
+```swift
+// Bad — asserts importance:
+/// This is the fundamental operation for adapting generators to work with different types
+/// while preserving the bidirectional capability.
+
+// Good — teaches the decision:
+/// Adapts a generator to a new output type while preserving reflection support.
+/// Use this when `#gen` cannot synthesize the backward mapping automatically
+/// (for example, when the transform involves computation rather than an initializer call).
+```
+
+When multiple APIs serve similar purposes (for example `map`, `mapped`, and `#gen` with a closure), the doc comment for each should explain when *this* one is the right choice and what the reader loses by picking a different one. Do not describe the mechanism in isolation — describe the tradeoff.
+
 ### Summary Line
 
-One sentence, present tense, starts with a verb. Describes what the generator produces, not how it works internally. Ends with a period.
+One sentence, present tense, starts with a verb. Describes what the generator produces, not how it works internally. Ends with a period. When the API has a natural alternative, the summary line should hint at the distinction.
 
 ```swift
 /// Generates arbitrary `Int128` values from two `UInt64` halves.
@@ -29,6 +50,8 @@ One sentence, present tense, starts with a verb. Describes what the generator pr
 
 Optional — add when behavior is non-obvious. Plain language. Explain what the user observes, not the internal mechanism. Do not use contractions in summary lines; contractions are acceptable in discussion paragraphs.
 
+When an API has consequences the reader might not expect, state them early in the discussion rather than burying them in a note callout. Prefer "without this, X happens" over "this enables X."
+
 ```swift
 /// Generates dates within the given range, spaced by `interval`.
 ///
@@ -37,7 +60,7 @@ Optional — add when behavior is non-obvious. Plain language. Explain what the 
 
 ### Code Examples
 
-Required for every generator factory method. Use the `#gen(...)` macro form when one exists. Keep examples to three to five lines.
+Required for every generator factory method. Use the `#gen(...)` macro form when one exists. Keep examples to three to five lines. For macros and complex entry points, place examples *before* architecture explanations — the reader should see how to call the API before learning how it works internally.
 
 ```swift
 /// ```swift
@@ -70,7 +93,7 @@ Use `/// - Note:` or `/// - Important:` callouts inside the doc comment. Do not 
 
 ### Convenience Overloads
 
-Document what the generator does, the same as any other factory method. An IDE user hovering over an overload should see a useful description, not just "this is an overload." No code example needed if the primary method already has one.
+Document what the generator does, the same as any other factory method. An IDE user hovering over an overload should see a useful description, not just "this is an overload." No code example needed if the primary method already has one. State why the overload exists (for example, "accepts `ClosedRange<Int>` so integer literals resolve without explicit type annotation").
 
 ```swift
 /// Generates arbitrary integers within the given range.
@@ -79,6 +102,28 @@ Document what the generator does, the same as any other factory method. An IDE u
 ## Internal API (ExhaustCore Module)
 
 Audience: Maintainers who understand the Freer Monad, ChoiceTree, and interpreter architecture.
+
+### Tone: Explain Why, Not What
+
+The reader can see the type signature, the field names, and the case labels. Do not restate them in English. A doc comment that says "stores its identity, kind, position mapping, and parent-child relationships" on a struct with fields `id`, `kind`, `positionRange`, `children`, and `parent` adds nothing.
+
+Instead, explain what the reader *cannot* see from the declaration alone:
+- **Why** a design choice was made (why indices instead of pointers, why a class instead of a struct).
+- **When** a value takes on a special state (when is `positionRange` nil, and what does that mean for encoders).
+- **What invariants** the type relies on that the compiler does not enforce (which fields must stay in sync, what ordering is assumed).
+
+```swift
+// Bad — restates the fields:
+/// Each node stores its identity, kind with per-kind metadata, position mapping
+/// to the flat ChoiceSequence, and parent-child relationships forming the containment tree.
+
+// Good — explains what the reader cannot see:
+/// Inactive (unselected) branches have nil position ranges. Encoders must skip
+/// these nodes — only nodes with a position range address live entries in the
+/// ChoiceSequence.
+```
+
+For enum cases, go beyond the case name. Explain the structural role the case plays in the system — what edges it sources, what operations target it, what happens when it changes.
 
 ### Summary Line
 
