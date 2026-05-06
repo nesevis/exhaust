@@ -1,7 +1,10 @@
 // MARK: - Academic Provenance
 //
-// Freer Monad encoding from Goldstein §3.3.2. Correspondence: `.pure` = `Return`, `.impure` = `Bind`.
-// Exhaust fixes the effect functor to `ReflectiveOperation` for bidirectional generation.
+// Freer Monad from Kiselyov and Ishii, "Freer Monads, More Extensible Effects" (Haskell Symposium 2015). Goldstein et al., "Reflecting on Random Generation" (ICFP 2023), §3.2 chose it as the encoding for reflective generators.
+//
+// A closure-based generator (QuickCheck's `Gen a = Int -> a`) is a black box: it can only be run forward. The Freer Monad lifts each generator decision out of closures and into an inspectable data structure — a chain of `ReflectiveOperation` nodes connected by continuations. Because the decisions are data, not control flow, the same generator can be interpreted in multiple ways: forward (generation), backward (reflection), deterministic replay, adaptation (CGS tuning), coverage analysis, and graph-based reduction all operate on the same `FreerMonad` value without the generator author writing mode-specific code.
+//
+// Goldstein et al. considered a tagless-final encoding but found it more tedious to program with and no more expressive. The Freer Monad's concrete data representation is what makes the multi-interpretation architecture practical: interpreters pattern-match on operations rather than threading effect handlers through type class dictionaries.
 
 /// Reifies generator decisions as inspectable data rather than opaque closures.
 ///
@@ -24,7 +27,7 @@ public enum FreerMonad<Operation, Value> {
 // MARK: - Functor and Monad
 
 package extension FreerMonad {
-    /// Sequences two computations: uses the result of this one to determine the next.
+    /// Sequences two computations; uses the result of this one to determine the next.
     ///
     /// For `.pure`, applies the transform immediately. For `.impure`, extends the continuation chain so the transform runs after the operation is interpreted. This is the invisible plumbing behind every generator combinator: `Gen.arrayOf`, `Gen.pick`, and `Gen.zip` all compose via `_bind`.
     ///
