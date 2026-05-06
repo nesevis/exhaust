@@ -4,7 +4,10 @@
 /// Namespace for generator factory methods and combinators.
 ///
 /// ``Gen`` provides a unified entry point to all generator construction. Import `Exhaust` and use `Gen.int(in:)`, `Gen.string()`, `Gen.pick(choices:)`, and so on, or use the ``#gen(_:transform:)`` macro for composing generators from existing ones.
-package enum Gen {}
+package enum Gen {
+    /// Set by the generation pipeline to signal that `.filter` is being constructed during interpretation (inside a bind continuation) rather than at top level. When true, `.filter` defers CGS tuning to the interpreter's fingerprint-keyed cache instead of tuning eagerly.
+    @TaskLocal package static var isInterpreting: Bool = false
+}
 
 package extension Gen {
     /// Lifts a reflective operation into a generator with type-safe result handling.

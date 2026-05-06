@@ -81,7 +81,9 @@ public extension __ExhaustRuntime {
                 maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
                 seed: seed
             )
-            let result = runner.run()
+            let result = Gen.$isInterpreting.withValue(true) {
+                runner.run()
+            }
 
             let directionCoverage = result.directionCoverage.map { entry in
                 DirectionCoverage(

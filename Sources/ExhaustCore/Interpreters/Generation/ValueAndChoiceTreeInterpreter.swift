@@ -297,8 +297,19 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             // MARK: - Filter
 
-            case let .filter(gen, fingerprint, _, predicate, tuned, sourceLocation):
-                let filteredGen = tuned ?? gen
+            case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
+                let filteredGen: ReflectiveGenerator<Any>
+                if let tuned {
+                    filteredGen = tuned
+                } else if filterType == .rejectionSampling {
+                    filteredGen = gen
+                } else if let cached = context.tunedFilterCache[fingerprint] {
+                    filteredGen = cached
+                } else {
+                    let resolved = (try? ChoiceGradientTuner<Any>.tune(gen, predicate: predicate)) ?? gen
+                    context.tunedFilterCache[fingerprint] = resolved
+                    filteredGen = resolved
+                }
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {

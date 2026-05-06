@@ -211,8 +211,19 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 context.sizeOverride = newSize
                 result = try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
-            case let .filter(gen, fingerprint, _, predicate, tuned, sourceLocation):
-                let tunedGen = tuned ?? gen
+            case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
+                let tunedGen: ReflectiveGenerator<Any>
+                if let tuned {
+                    tunedGen = tuned
+                } else if filterType == .rejectionSampling {
+                    tunedGen = gen
+                } else if let cached = context.tunedFilterCache[fingerprint] {
+                    tunedGen = cached
+                } else {
+                    let resolved = (try? ChoiceGradientTuner<Any>.tune(gen, predicate: predicate)) ?? gen
+                    context.tunedFilterCache[fingerprint] = resolved
+                    tunedGen = resolved
+                }
                 var attempts = 0 as UInt64
                 var filterResult: Any?
                 while attempts < GenerationContext.maxFilterRuns {

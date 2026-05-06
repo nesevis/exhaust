@@ -20,21 +20,26 @@ package extension Gen {
         let fingerprint = sourceLocation.fileID.description.hashValue.bitPattern64
             &+ sourceLocation.line.bitPattern64
 
+        let isInterpreting = Gen.isInterpreting
         let tuned: ReflectiveGenerator<Any>?
-        switch type {
-        case .rejectionSampling:
+        switch (type, isInterpreting) {
+        case (.rejectionSampling, _),
+             (.choiceGradientSampling, true),
+             (.auto, true),
+             (.probeSampling, true),
+             (.customCGS, true):
             tuned = nil
-        case .choiceGradientSampling, .auto:
+        case (.choiceGradientSampling, false), (.auto, false):
             tuned = try? ChoiceGradientTuner<Any>.tune(
                 erased,
                 predicate: erasedPredicate
             )
-        case .probeSampling:
+        case (.probeSampling, false):
             tuned = try? GeneratorTuning.probeAndTune(
                 erased,
                 predicate: erasedPredicate
             )
-        case let .customCGS(warmupRuns, sampleCount, subdivisionThresholds):
+        case let (.customCGS(warmupRuns, sampleCount, subdivisionThresholds), false):
             tuned = try? ChoiceGradientTuner<Any>.tune(
                 erased,
                 predicate: erasedPredicate,
