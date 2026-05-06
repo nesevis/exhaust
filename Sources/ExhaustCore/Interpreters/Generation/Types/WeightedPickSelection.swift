@@ -11,7 +11,15 @@ package enum WeightedPickSelection {
         from choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         using prng: inout Xoshiro256
     ) -> ReflectiveOperation.PickTuple? {
-        let totalWeight = choices.reduce(0) { $0 + $1.weight }
+        var totalWeight: UInt64 = 0
+        for choice in choices {
+            let (newTotal, overflow) = totalWeight.addingReportingOverflow(choice.weight)
+            if overflow {
+                totalWeight = UInt64.max
+                break
+            }
+            totalWeight = newTotal
+        }
         guard totalWeight > 0 else {
             return nil
         }
