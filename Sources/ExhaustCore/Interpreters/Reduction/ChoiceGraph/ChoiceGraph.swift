@@ -146,7 +146,6 @@ package final class ChoiceGraph {
         cachedSourceSinkStatus = nil
         cachedLiveNodeIDs = nil
         cachedInnerDescendantToBind = nil
-        clearConvergenceData()
     }
 
     /// Drops cached topological order, dependency adjacency list, and live node list, forcing recomputation on next access. Called by in-place mutations that add or remove dependency edges (bind subtree rebuilds, branch pivots).
