@@ -52,7 +52,7 @@ extension ChoiceGraph {
                 for element in array {
                     // The selected element wraps the originally-picked branch.
                     if case let .selected(inner) = element,
-                       case let .branch(id, _, _, _, _) = inner,
+                       case let .branch(_, _, id, _, _) = inner,
                        id == targetID
                     {
                         return walkForPathMatch(
