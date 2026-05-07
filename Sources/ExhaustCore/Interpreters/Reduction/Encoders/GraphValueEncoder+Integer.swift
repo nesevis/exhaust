@@ -356,10 +356,10 @@ extension GraphValueEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         let leaf = state.leafPositions[state.leafIndex]
+        let currentEntry = state.sequence[leaf.sequenceIndex]
 
         if state.stepper == nil {
             // Initialize directional stepper in bit-pattern space.
-            let currentEntry = state.sequence[leaf.sequenceIndex]
             guard let currentChoice = currentEntry.value?.choice else {
                 return nil
             }
@@ -414,20 +414,20 @@ extension GraphValueEncoder {
                 return nil
             }
 
-            var candidate = state.sequence
-            candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                .withBitPattern(firstBitPattern)
-            if candidate.shortLexPrecedes(state.sequence) {
+            let newEntry = currentEntry.withBitPattern(firstBitPattern)
+            if newEntry.shortLexCompare(currentEntry) == .lt {
+                var candidate = state.sequence
+                candidate[leaf.sequenceIndex] = newEntry
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
         }
 
         if let nextBitPattern = state.stepper?.advance(lastAccepted: lastAccepted) {
-            var candidate = state.sequence
-            candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                .withBitPattern(nextBitPattern)
-            if candidate.shortLexPrecedes(state.sequence) {
+            let newEntry = currentEntry.withBitPattern(nextBitPattern)
+            if newEntry.shortLexCompare(currentEntry) == .lt {
+                var candidate = state.sequence
+                candidate[leaf.sequenceIndex] = newEntry
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
@@ -509,15 +509,15 @@ extension GraphValueEncoder {
         let probeValue = scanValues[state.scanIndex]
         state.scanIndex += 1
 
-        var candidate = state.sequence
-        candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-            .withBitPattern(probeValue)
+        let currentEntry = state.sequence[leaf.sequenceIndex]
+        let newEntry = currentEntry.withBitPattern(probeValue)
 
-        guard candidate.shortLexPrecedes(state.sequence) else {
-            // Value doesn't improve shortlex — skip to next.
+        guard newEntry.shortLexCompare(currentEntry) == .lt else {
             return nextLinearScanProbe(state: &state, lastAccepted: false)
         }
 
+        var candidate = state.sequence
+        candidate[leaf.sequenceIndex] = newEntry
         state.lastEmittedCandidate = candidate
         return candidate
     }
