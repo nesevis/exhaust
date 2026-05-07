@@ -51,7 +51,7 @@ extension ChoiceGraph {
         }
         if application.requiresFullRebuild == false {
             if let divergence = leafPositionsDivergence(in: ChoiceSequence(freshTree)) {
-                ExhaustLog.warning(
+                ExhaustLog.info(
                     category: .reducer,
                     event: "graph_freshtree_divergence",
                     metadata: [
