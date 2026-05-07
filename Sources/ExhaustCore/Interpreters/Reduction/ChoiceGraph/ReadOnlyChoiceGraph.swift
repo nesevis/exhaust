@@ -21,6 +21,9 @@ protocol ReadOnlyChoiceGraph {
     /// Type-compatibility edges between antichain members with matching types.
     var typeCompatibilityEdges: [TypeCompatibilityEdge] { get }
 
+    /// Bind-inner descendant index. Maps each chooseBits leaf inside a bind's inner subtree to the outermost enclosing bind's node ID.
+    var innerDescendantToBind: [Int: Int] { get }
+
     /// Maximum antichain over deletable structural boundary nodes.
     var deletionAntichain: [Int] { get }
 

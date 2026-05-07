@@ -16,7 +16,7 @@ enum TransformationEnumerator {
     /// - Parameter graph: The current choice graph.
     /// - Returns: Sorted array of graph transformations, ready for the scheduler's priority queue.
     static func enumerate(from graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
-        let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+        let innerDescendantToBind = graph.innerDescendantToBind
         var transformations: [GraphTransformation] = []
 
         transformations.append(contentsOf: removalTransformations(from: graph))

@@ -75,11 +75,22 @@ package final class ChoiceGraph {
     /// Cached leaf (chooseBits) node ID list. Computed on first access, invalidated only by structural mutations (``invalidateTopologicalCaches()``). Value-only changes do not add or remove chooseBits nodes, so this cache survives ``invalidateDerivedEdges()``.
     private var cachedLeafNodes: [Int]?
 
+    /// Cached bind-inner descendant index. Maps each chooseBits leaf inside a bind's inner subtree to the enclosing bind's node ID. Invalidated by ``invalidateDerivedEdges()`` so that in-place reshapes that create new nodes get fresh entries.
+    private var cachedInnerDescendantToBind: [Int: Int]?
+
     /// Type-compatibility edges between antichain members with matching types. Computed lazily on first access and cached until invalidated by a structural mutation.
     public var typeCompatibilityEdges: [TypeCompatibilityEdge] {
         if let cached = cachedTypeCompatibilityEdges { return cached }
         let computed = computeTypeCompatibilityEdges()
         cachedTypeCompatibilityEdges = computed
+        return computed
+    }
+
+    /// Bind-inner descendant index. Maps each chooseBits leaf inside a bind's inner subtree to the outermost enclosing bind's node ID. Computed lazily on first access and cached until invalidated by structural changes.
+    public var innerDescendantToBind: [Int: Int] {
+        if let cached = cachedInnerDescendantToBind { return cached }
+        let computed = ScopeQueryHelpers.buildInnerDescendantToBind(graph: self)
+        cachedInnerDescendantToBind = computed
         return computed
     }
 
@@ -134,6 +145,7 @@ package final class ChoiceGraph {
         cachedTypeCompatibilityEdges = nil
         cachedSourceSinkStatus = nil
         cachedLiveNodeIDs = nil
+        cachedInnerDescendantToBind = nil
         clearConvergenceData()
     }
 
@@ -233,6 +245,7 @@ package final class ChoiceGraph {
         result.cachedDependencyAdjacency = cachedDependencyAdjacency
         result.cachedLiveNodeIDs = cachedLiveNodeIDs
         result.cachedLeafNodes = cachedLeafNodes
+        result.cachedInnerDescendantToBind = cachedInnerDescendantToBind
         return result
     }
 }
