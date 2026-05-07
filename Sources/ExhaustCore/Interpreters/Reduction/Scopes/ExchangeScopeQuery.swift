@@ -32,6 +32,11 @@ enum ExchangeScopeQuery {
             innerDescendantToBind: innerDescendantToBind
         ))
         for edge in graph.typeCompatibilityEdges {
+            // Bind-inner leaves control structure — redistributing them in either direction changes the bound's shape unpredictably. Only bound and independent values participate.
+            guard ScopeQueryHelpers.isBindInner(edge.nodeA, innerDescendantToBind: innerDescendantToBind) == false,
+                  ScopeQueryHelpers.isBindInner(edge.nodeB, innerDescendantToBind: innerDescendantToBind) == false
+            else { continue }
+
             guard case let .chooseBits(metadataA) = graph.nodes[edge.nodeA].kind,
                   case let .chooseBits(metadataB) = graph.nodes[edge.nodeB].kind
             else {
@@ -50,11 +55,9 @@ enum ExchangeScopeQuery {
             // Skip if both are already at target.
             guard distanceA > 0 || distanceB > 0 else { continue }
 
-            // The source must be at an earlier position than the receiver so that zeroing the source produces a shortlex-smaller candidate (the first pairwise difference favors the candidate).
             let positionA = graph.nodes[edge.nodeA].positionRange?.lowerBound ?? Int.max
             let positionB = graph.nodes[edge.nodeB].positionRange?.lowerBound ?? Int.max
 
-            // A is earlier — A can be the source (zeroed), B receives.
             if positionA < positionB, distanceA > 0 {
                 pairs.append(RedistributionPair(
                     source: ScopeQueryHelpers.makeLeafEntry(edge.nodeA, innerDescendantToBind: innerDescendantToBind),
@@ -63,7 +66,6 @@ enum ExchangeScopeQuery {
                     sinkTag: metadataB.typeTag
                 ))
             }
-            // B is earlier — B can be the source (zeroed), A receives.
             if positionB < positionA, distanceB > 0 {
                 pairs.append(RedistributionPair(
                     source: ScopeQueryHelpers.makeLeafEntry(edge.nodeB, innerDescendantToBind: innerDescendantToBind),
@@ -198,9 +200,10 @@ enum ExchangeScopeQuery {
         graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
-        // Collect leaves with position and distance.
+        // Collect non-bind-inner leaves with position and distance.
         var leaves: [(nodeID: Int, position: Int, distance: UInt64)] = []
         for childID in childIDs {
+            guard ScopeQueryHelpers.isBindInner(childID, innerDescendantToBind: innerDescendantToBind) == false else { continue }
             guard case let .chooseBits(metadata) = graph.nodes[childID].kind else { continue }
             guard let range = graph.nodes[childID].positionRange else { continue }
             let target = metadata.value.reductionTarget(in: metadata.validRange)
@@ -217,7 +220,7 @@ enum ExchangeScopeQuery {
         var pairs: [RedistributionPair] = []
         for index in 0 ..< leaves.count {
             guard leaves[index].distance > 0 else { continue }
-            // Pair with the first later-position leaf.
+            // Pair with the first later-position leaf (bind-inner leaves were already filtered above).
             if index + 1 < leaves.count {
                 pairs.append(RedistributionPair(
                     source: ScopeQueryHelpers.makeLeafEntry(leaves[index].nodeID, innerDescendantToBind: innerDescendantToBind),
@@ -240,11 +243,20 @@ enum ExchangeScopeQuery {
         graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
-        guard let firstSinkID = sinkChildIDs.first else { return [] }
-        guard graph.nodes[firstSinkID].positionRange != nil else { return [] }
+        // Find the first non-bind-inner sink leaf.
+        var firstSinkID: Int?
+        for childID in sinkChildIDs {
+            guard graph.nodes[childID].positionRange != nil else { continue }
+            if ScopeQueryHelpers.isBindInner(childID, innerDescendantToBind: innerDescendantToBind) == false {
+                firstSinkID = childID
+                break
+            }
+        }
+        guard let firstSinkID else { return [] }
 
         var sources: [(nodeID: Int, distance: UInt64)] = []
         for childID in sourceChildIDs {
+            guard ScopeQueryHelpers.isBindInner(childID, innerDescendantToBind: innerDescendantToBind) == false else { continue }
             guard case let .chooseBits(metadata) = graph.nodes[childID].kind else { continue }
             guard graph.nodes[childID].positionRange != nil else { continue }
             let target = metadata.value.reductionTarget(in: metadata.validRange)
