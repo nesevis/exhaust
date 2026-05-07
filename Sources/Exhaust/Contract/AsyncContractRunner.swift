@@ -25,6 +25,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     var suppressIssueReporting = false
     var suppressLogs = false
     var useRandomOnly = false
+    var collectOpenPBTStats = false
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
     for setting in settings {
@@ -56,7 +57,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         case .randomOnly:
             useRandomOnly = true
         case .collectOpenPBTStats:
-            break // Async contract tests do not yet support OpenPBTStats collection.
+            collectOpenPBTStats = true
         case let .logging(level, format):
             logLevel = level
             logFormat = format
@@ -112,6 +113,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         let covBudget = coverageBudget
         let replaySeed = seed
         let randomOnly = useRandomOnly
+        let capturedCollectOpenPBTStats = collectOpenPBTStats
         let capturedLogLevel = logLevel
         let capturedLogFormat = logFormat
 
@@ -151,6 +153,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                             seed: replaySeed,
                             suppressIssueReporting: true,
                             useRandomOnly: randomOnly || scaOutcome.isCompleted,
+                            collectOpenPBTStats: capturedCollectOpenPBTStats,
                             logLevel: capturedLogLevel,
                             logFormat: capturedLogFormat
                         ),
