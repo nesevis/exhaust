@@ -128,26 +128,14 @@ extension ChoiceGraphScheduler {
             return nil
         }
 
-        // 2. Build a reshape change from the upstream's mutation. The upstream encoder reports a value-only LeafChange (mayReshape: false); we lift it to mayReshape: true so applyBindReshape rebuilds the bound subtree.
-        guard case let .leafValues(upstreamChanges) = upstreamMutation,
-              let upstreamChange = upstreamChanges.first
-        else {
+        // 2. Gate: the lifted tree must not be larger than the current best sequence. Structural bind-inner changes can produce a freshTree with a different entry layout (the guided materializer falls back to PRNG for mismatched entries), so compare total entry counts rather than attempting an incremental reshape that would diverge.
+        let liftedSequence = ChoiceSequence(freshTree)
+        guard liftedSequence.count <= parent.baseSequence.count else {
             return nil
         }
-        let reshapeChange = LeafChange(
-            leafNodeID: upstreamChange.leafNodeID,
-            newValue: upstreamChange.newValue,
-            mayReshape: true
-        )
 
-        // 3. Copy the parent graph and apply the reshape on the copy. COW means only the bind subtree region is duplicated; the rest of the graph stays shared with the parent.
-        let copy = graph.copy()
-        let application = copy.apply(.leafValues([reshapeChange]), freshTree: freshTree)
-
-        // 4. Fall back to a full rebuild if applyBindReshape bailed (multi-pick, structural mismatch, missing metadata). Same fallback the live accept path uses; we just absorb it in the lift instead.
-        let liftedGraph: ChoiceGraph = application.requiresFullRebuild
-            ? ChoiceGraph.build(from: freshTree)
-            : copy
+        // 3. Build the lifted graph from the freshTree. The upstream probe changes a bind-inner value, which can restructure the bound subtree — a full build is the only reliable path when the structure changes.
+        let liftedGraph = ChoiceGraph.build(from: freshTree)
 
         // 5. Find the bound child of the target bind in the lifted graph, then collect its descendant leaves as the downstream search range.
         guard bindScope.bindNodeID < liftedGraph.nodes.count,
@@ -168,7 +156,6 @@ extension ChoiceGraphScheduler {
         guard downstreamLeaves.isEmpty == false else { return nil }
 
         // 6. Build the downstream scope as a plain integer-leaves minimization on the lifted graph. The downstream encoder doesn't know it's downstream.
-        let liftedSequence = ChoiceSequence(freshTree)
         if isInstrumented {
             ExhaustLog.debug(
                 category: .reducer,
@@ -179,7 +166,6 @@ extension ChoiceGraphScheduler {
                     "lifted_seq_len": "\(liftedSequence.count)",
                     "downstream_leaves": "\(downstreamLeaves.count)",
                     "bound_range": "\(boundRange.lowerBound)...\(boundRange.upperBound)",
-                    "rebuild_fallback": "\(application.requiresFullRebuild)",
                 ]
             )
         }
