@@ -80,6 +80,8 @@ enum MinimizationScopeQuery {
                 )))
             }
             if bindInnerEntries.isEmpty == false {
+                // Contravariant ordering: smallest downstream effect first (inverted relative to yield). Each bind-inner acceptance reshapes the bound subtree (a structural side effect). Probing the smallest-effect leaves first keeps early acceptances near-value-only, deferring large structural reshapes to later in the pass where the scheduler can interleave structural operations between them.
+                bindInnerEntries.reverse()
                 scopes.append(.valueLeaves(ValueMinimizationScope(
                     leaves: bindInnerEntries,
                     batchZeroEligible: bindInnerEntries.count > 1
