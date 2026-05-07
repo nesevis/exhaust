@@ -96,8 +96,8 @@ package enum CoverageRunner {
                 iterations += 1
             }
 
-            // If the generator exhausted all tuples, the entire space was covered.
-            if generator.totalRemaining == 0, isExhaustiveCandidate {
+            // Only report exhaustive when every point in the full Cartesian product was tested, not just all t-tuples.
+            if isExhaustiveCandidate, UInt64(iterations) >= totalSpace {
                 return .exhaustive(iterations: iterations)
             }
 
