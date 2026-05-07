@@ -35,8 +35,14 @@ extension ChoiceGraph {
                 )
                 if application.requiresFullRebuild { break }
             }
-        case .branchSelected,
-             .selfSimilarReplaced,
+        case let .branchSelected(pickNodeID, newSelectedID):
+            applyBranchPivot(
+                pickNodeID: pickNodeID,
+                newSelectedID: newSelectedID,
+                freshTree: freshTree,
+                into: &application
+            )
+        case .selfSimilarReplaced,
              .descendantPromoted,
              .sequenceElementsMigrated,
              .siblingsSwapped,
@@ -178,6 +184,7 @@ extension ChoiceGraph {
         let oldBoundLength = oldBoundRange.count
         let newBoundLength = newBoundSubtree.flattenedEntryCount
         let lengthDelta = newBoundLength - oldBoundLength
+
 
         ExhaustLog.debug(
             category: .reducer,

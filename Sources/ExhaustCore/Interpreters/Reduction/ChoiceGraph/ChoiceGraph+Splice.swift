@@ -269,3 +269,155 @@ extension ChoiceGraph {
         application.touchedNodeIDs.insert(seqNodeID)
     }
 }
+
+// MARK: - Branch Pivot
+
+extension ChoiceGraph {
+    /// Switches a pick node's active branch incrementally by tombstoning the old branch's subtree, building the new branch from freshTree, and propagating position shifts for the size delta.
+    ///
+    /// The new branch subtree is extracted from freshTree using a structural path computed from the pick node's position in the graph. Falls back to ``ChangeApplication/requiresFullRebuild`` when the pick node is in an unexpected state or the extraction fails.
+    func applyBranchPivot(
+        pickNodeID: Int,
+        newSelectedID: UInt64,
+        freshTree: ChoiceTree,
+        into application: inout ChangeApplication
+    ) {
+        guard pickNodeID < nodes.count, isTombstoned(pickNodeID) == false else {
+            application.requiresFullRebuild = true
+            return
+        }
+        guard case let .pick(pickMetadata) = nodes[pickNodeID].kind else {
+            application.requiresFullRebuild = true
+            return
+        }
+        guard let pickRange = nodes[pickNodeID].positionRange else {
+            application.requiresFullRebuild = true
+            return
+        }
+
+        let oldSelectedChildID = nodes[pickNodeID].children[pickMetadata.selectedChildIndex]
+        guard let oldBranchRange = nodes[oldSelectedChildID].positionRange else {
+            application.requiresFullRebuild = true
+            return
+        }
+
+        // Find the target branch's index in the children/branchElements array.
+        var targetChildIndex: Int?
+        for (index, element) in pickMetadata.branchElements.enumerated() {
+            let branchID: UInt64?
+            switch element {
+            case let .branch(_, _, id, _, _):
+                branchID = id
+            case let .selected(.branch(_, _, id, _, _)):
+                branchID = id
+            default:
+                branchID = nil
+            }
+            if branchID == newSelectedID {
+                targetChildIndex = index
+                break
+            }
+        }
+        guard let targetChildIndex else {
+            application.requiresFullRebuild = true
+            return
+        }
+
+        // Compute structural path to the pick node, then extend to the new branch in freshTree.
+        guard var pathToNewBranch = structuralPath(to: pickNodeID) else {
+            application.requiresFullRebuild = true
+            return
+        }
+        pathToNewBranch.append(.pickBranch(newSelectedID))
+
+        guard let newBranchSubtree = Self.extractSubtreeAtPath(
+            from: freshTree,
+            path: pathToNewBranch
+        ) else {
+            application.requiresFullRebuild = true
+            return
+        }
+
+        // Unwrap to content tree: the extracted subtree is .selected(.branch(..., choice: content)) but the builder treats .selected and .branch as transparent (0 entries). oldBranchRange.count is the content size only, so the delta must compare content-to-content.
+        let contentTree: ChoiceTree
+        if case let .branch(_, _, _, _, choice) = newBranchSubtree.unwrapped {
+            contentTree = choice
+        } else {
+            contentTree = newBranchSubtree
+        }
+        let oldBranchLength = oldBranchRange.count
+        let newBranchLength = contentTree.flattenedEntryCount
+        let lengthDelta = newBranchLength - oldBranchLength
+
+        // The new branch content starts after the group-open and branch markers.
+        let branchContentOffset = pickRange.lowerBound + 2
+
+        // Tombstone the old selected branch's subtree.
+        let tombstonedIDs = tombstoneSubtree(rootNodeID: oldSelectedChildID, into: &application)
+
+        // Build new subtree from the extracted branch content.
+        let bindDepth = ancestorBindDepth(of: pickNodeID)
+        let parentPath = structuralPath(to: pickNodeID) ?? []
+        let firstNewNodeID = buildAndAppendSubtree(
+            from: newBranchSubtree,
+            startingOffset: branchContentOffset,
+            parent: pickNodeID,
+            bindDepth: bindDepth,
+            parentPath: parentPath + [.pickBranch(newSelectedID)],
+            into: &application
+        )
+
+        // Patch the pick node's children and metadata.
+        if let firstNewNodeID {
+            var updatedChildren = nodes[pickNodeID].children
+            updatedChildren[targetChildIndex] = firstNewNodeID
+            nodes[pickNodeID] = nodes[pickNodeID].with(
+                kind: .pick(PickMetadata(
+                    fingerprint: pickMetadata.fingerprint,
+                    branchCount: pickMetadata.branchCount,
+                    selectedID: newSelectedID,
+                    selectedChildIndex: targetChildIndex,
+                    branchElements: pickMetadata.branchElements
+                )),
+                children: updatedChildren
+            )
+            containmentEdges.append(ContainmentEdge(
+                source: pickNodeID,
+                target: firstNewNodeID
+            ))
+        }
+
+        // Propagate position shift and resync.
+        if lengthDelta != 0 {
+            propagatePositionShift(
+                after: oldBranchRange.upperBound,
+                delta: lengthDelta,
+                excluding: tombstonedIDs.union(application.addedNodeIDs)
+            )
+            application.positionShifts.append(
+                (insertionPoint: oldBranchRange.upperBound, delta: lengthDelta)
+            )
+            resyncShiftedLeaves(
+                pastPosition: oldBranchRange.upperBound + lengthDelta,
+                freshTree: freshTree,
+                excluding: application.addedNodeIDs
+            )
+        }
+
+        finalizeStructuralSplice()
+        application.touchedNodeIDs.insert(pickNodeID)
+    }
+
+    /// Returns the bind depth at a node by counting bind ancestors.
+    private func ancestorBindDepth(of nodeID: Int) -> Int {
+        var depth = 0
+        var current = nodeID
+        while let parentID = nodes[current].parent {
+            if case .bind = nodes[parentID].kind {
+                depth += 1
+            }
+            current = parentID
+        }
+        return depth
+    }
+}

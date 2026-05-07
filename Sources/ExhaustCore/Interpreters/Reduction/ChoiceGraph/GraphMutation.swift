@@ -52,13 +52,19 @@ package enum ProjectedMutation {
 /// The encoder copies ``mayReshape`` from the originating ``LeafEntry/mayReshapeOnAcceptance`` without inspecting it. ``ChoiceGraph/apply(_:freshTree:)`` reads the flag to route between the value-only fast path and the bind-inner reshape path.
 package struct LeafChange {
     /// Identifier of the leaf node whose value changed.
-    let leafNodeID: Int
+    package let leafNodeID: Int
 
     /// New value to write into the leaf's ``ChooseBitsMetadata``.
-    let newValue: ChoiceValue
+    package let newValue: ChoiceValue
 
     /// True when the change may trigger a downstream bind subtree rebuild. Copied from the originating ``LeafEntry/mayReshapeOnAcceptance``.
-    let mayReshape: Bool
+    package let mayReshape: Bool
+
+    package init(leafNodeID: Int, newValue: ChoiceValue, mayReshape: Bool) {
+        self.leafNodeID = leafNodeID
+        self.newValue = newValue
+        self.mayReshape = mayReshape
+    }
 }
 
 // MARK: - Change Application
