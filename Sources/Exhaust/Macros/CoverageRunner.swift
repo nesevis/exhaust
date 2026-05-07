@@ -71,7 +71,7 @@ package enum CoverageRunner {
         if paramCount >= 2 {
             // Use the highest strength the space can support for exhaustive candidates.
             let strength = isExhaustiveCandidate ? min(paramCount, 4) : 2
-            var generator = PullBasedCoveringArrayGenerator(
+            let generator = PullBasedCoveringArrayGenerator(
                 domainSizes: domainSizes,
                 strength: strength
             )

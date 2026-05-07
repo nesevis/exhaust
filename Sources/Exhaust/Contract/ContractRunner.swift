@@ -108,7 +108,7 @@ public func __runContract<Spec: ContractSpec>(
         // --- Phase 1: Sequence Covering Array (SCA) coverage ---
         //
         // If the command generator is a simple pick with parameter-free branches, build a covering array where each sequence position is a parameter and each command type is a domain value. This guarantees every t-way ordered permutation of command types is tested.
-        var scaResult: SCAResult<Spec.Command>?
+        var scaOutcome: SCAOutcome<Spec.Command> = .skipped
         if useRandomOnly {
             ExhaustLog.notice(
                 category: .propertyTest,
@@ -121,9 +121,8 @@ public func __runContract<Spec: ContractSpec>(
                 event: "sca_coverage_skipped",
                 "SCA coverage skipped (deterministic replay)"
             )
-        }
-        if !useRandomOnly, seed == nil {
-            scaResult = runSCACoverage(
+        } else {
+            scaOutcome = runSCACoverage(
                 seqGen: commandSequenceGenerator,
                 commandGen: commandGen,
                 commandLimit: resolvedCommandLimit,
@@ -135,18 +134,16 @@ public func __runContract<Spec: ContractSpec>(
         // --- Phase 2: Random sampling (full budget) ---
         let failingSequence: [Spec.Command]?
         let failureInfo: ContractFailureInfo<Spec.Command>
-        if let scaResult {
-            failingSequence = scaResult.commands
+        switch scaOutcome {
+        case let .failure(commands, original):
+            failingSequence = commands
             failureInfo = ContractFailureInfo(
-                originalCommands: scaResult.original,
+                originalCommands: original,
                 discoveryMethod: .coverage
             )
-        } else {
-            // Skip generic coverage — SCA already covered command orderings.
-            // If SCA wasn't applicable, __exhaust's generic coverage runs.
-            let skipGenericCoverage =
-                !useRandomOnly && seed == nil
-                    && extractPickChoices(from: commandGen) != nil
+        case .completed, .skipped:
+            // Only suppress generic coverage when SCA ran its covering array to completion.
+            // When SCA was skipped, generic coverage is still needed.
             failingSequence = __ExhaustRuntime.__exhaust(
                 commandSequenceGenerator,
                 settings: buildExhaustSettings(
@@ -154,7 +151,7 @@ public func __runContract<Spec: ContractSpec>(
                     coverageBudget: coverageBudget,
                     seed: seed,
                     suppressIssueReporting: true,
-                    useRandomOnly: useRandomOnly || skipGenericCoverage,
+                    useRandomOnly: useRandomOnly || scaOutcome.isCompleted,
                     collectOpenPBTStats: collectOpenPBTStats,
                     logLevel: logLevel,
                     logFormat: logFormat
@@ -413,28 +410,43 @@ func estimateCommandLimit(
     return limit
 }
 
-/// Return type for SCA coverage: the reduced (or unreduced) failing sequence plus the original.
-typealias SCAResult<Command> = (commands: [Command], original: [Command])
+/// Outcome of an SCA coverage run.
+enum SCAOutcome<Command> {
+    /// SCA found a counterexample.
+    case failure(commands: [Command], original: [Command])
+    /// SCA ran its covering array to completion without finding a failure.
+    case completed
+    /// SCA was not applicable or was skipped before covering anything.
+    case skipped
+
+    /// Whether SCA ran to completion, covering command orderings.
+    var isCompleted: Bool {
+        switch self {
+        case .completed: true
+        case .failure, .skipped: false
+        }
+    }
+}
 
 /// Runs SCA coverage for contract command sequences.
 ///
 /// Builds a covering array where each position's domain is the flattened union of `(commandType × argumentCombinations)`. Parameter-free branches contribute one domain value each; analyzed branches contribute the product of their parameter domain sizes. When any branch has analyzed arguments, interaction strength caps at t=2 to keep covering array sizes manageable; otherwise higher strengths (up to t=6 for short sequences) are used.
 ///
-/// If domain construction fails or the domain is too small for pairwise coverage, SCA is skipped and the caller falls through to random sampling.
+/// Returns ``SCAOutcome/skipped`` when domain construction fails or the domain is too small for pairwise coverage, so the caller can fall through to generic coverage and random sampling.
 func runSCACoverage<Command>(
     seqGen: ReflectiveGenerator<[Command]>,
     commandGen: ReflectiveGenerator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
     property: @escaping @Sendable ([Command]) -> Bool
-) -> SCAResult<Command>? {
+) -> SCAOutcome<Command> {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
         ExhaustLog.notice(
             category: .propertyTest,
             event: "sca_coverage_skipped",
             "Command generator is not a top-level pick — SCA not applicable"
         )
-        return nil
+        return .skipped
     }
 
     let sequenceLength = commandLimit
@@ -447,7 +459,7 @@ func runSCACoverage<Command>(
                 "reason": "sequence length must be >= 2 for SCA",
             ]
         )
-        return nil
+        return .skipped
     }
 
     // Cap interaction strength based on sequence length. Higher strength gives better coverage but the number of covering array rows grows with C(sequenceLength, t).
@@ -471,7 +483,7 @@ func runSCACoverage<Command>(
             event: "sca_coverage_skipped",
             "Domain construction failed — branches could not be analyzed"
         )
-        return nil
+        return .skipped
     }
 
     let domainSizes = domain.profile.domainSizes
@@ -482,10 +494,10 @@ func runSCACoverage<Command>(
             event: "sca_coverage_skipped",
             "Too few parameters for covering array (need >= 2)"
         )
-        return nil
+        return .skipped
     }
 
-    var generator = PullBasedCoveringArrayGenerator(
+    let generator = PullBasedCoveringArrayGenerator(
         domainSizes: domainSizes,
         strength: strength
     )
@@ -512,9 +524,9 @@ func runSCACoverage<Command>(
                 config: .init(maxStalls: 2),
                 property: property
             ) {
-                return (reducedValue, value)
+                return .failure(commands: reducedValue, original: value)
             }
-            return (value, value)
+            return .failure(commands: value, original: value)
         }
     }
 
@@ -530,7 +542,7 @@ func runSCACoverage<Command>(
         ]
     )
 
-    return nil
+    return .completed
 }
 
 /// Builds a ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.

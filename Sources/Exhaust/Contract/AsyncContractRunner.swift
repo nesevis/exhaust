@@ -120,9 +120,11 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         let searchResult: SearchResult? = await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
                 // SCA coverage
-                var scaResult: SCAResult<Spec.Command>?
-                if !randomOnly, replaySeed == nil {
-                    scaResult = runSCACoverage(
+                let scaOutcome: SCAOutcome<Spec.Command>
+                if randomOnly || replaySeed != nil {
+                    scaOutcome = .skipped
+                } else {
+                    scaOutcome = runSCACoverage(
                         seqGen: commandSequenceGenerator,
                         commandGen: commandGen,
                         commandLimit: resolvedCommandLimit,
@@ -131,16 +133,16 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                     )
                 }
 
-                if let scaResult {
+                switch scaOutcome {
+                case let .failure(commands, original):
                     let info = ContractFailureInfo(
-                        originalCommands: scaResult.original,
+                        originalCommands: original,
                         discoveryMethod: .coverage
                     )
-                    continuation.resume(returning: (scaResult.commands, info))
-                } else {
-                    let skipGenericCoverage =
-                        !randomOnly && replaySeed == nil
-                            && extractPickChoices(from: commandGen) != nil
+                    continuation.resume(returning: (commands, info))
+                case .completed, .skipped:
+                    // Only suppress generic coverage when SCA ran its covering array to completion.
+                    // When SCA was skipped, generic coverage is still needed.
                     let exhaustResult = __ExhaustRuntime.__exhaust(
                         commandSequenceGenerator,
                         settings: buildExhaustSettings(
@@ -148,7 +150,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                             coverageBudget: covBudget,
                             seed: replaySeed,
                             suppressIssueReporting: true,
-                            useRandomOnly: randomOnly || skipGenericCoverage,
+                            useRandomOnly: randomOnly || scaOutcome.isCompleted,
                             logLevel: capturedLogLevel,
                             logFormat: capturedLogFormat
                         ),
