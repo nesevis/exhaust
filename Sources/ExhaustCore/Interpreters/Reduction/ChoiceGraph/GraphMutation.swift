@@ -12,7 +12,7 @@
 /// Layer 2 introduces this enum and implements only the value-only fast path of ``leafValues(_:)``. The remaining cases are scaffolding for Layer 7's structural-encoder rollout — they all return ``ChangeApplication/requiresFullRebuild`` true until then.
 ///
 /// - SeeAlso: ``LeafChange``, ``ChangeApplication``, ``LeafEntry``
-enum ProjectedMutation {
+package enum ProjectedMutation {
     /// One or more leaf values changed. Each ``LeafChange``'s ``LeafChange/mayReshape`` flag tells the graph whether the change might trigger a downstream bind subtree rebuild.
     case leafValues([LeafChange])
 
@@ -50,7 +50,7 @@ enum ProjectedMutation {
 /// One leaf change in a ``ProjectedMutation/leafValues(_:)`` report.
 ///
 /// The encoder copies ``mayReshape`` from the originating ``LeafEntry/mayReshapeOnAcceptance`` without inspecting it. ``ChoiceGraph/apply(_:freshTree:)`` reads the flag to route between the value-only fast path and the bind-inner reshape path.
-struct LeafChange {
+package struct LeafChange {
     /// Identifier of the leaf node whose value changed.
     let leafNodeID: Int
 
@@ -66,19 +66,19 @@ struct LeafChange {
 /// Result of applying a ``ProjectedMutation`` to a ``ChoiceGraph``.
 ///
 /// Reports which nodes were touched, removed, or added; any position shifts applied; and a fallback flag (``requiresFullRebuild``) that the scheduler reads to decide whether to discard the partial application and rebuild the graph from scratch.
-struct ChangeApplication {
+package struct ChangeApplication {
     /// Node IDs whose values or metadata were updated in place.
-    var touchedNodeIDs: Set<Int> = []
+    package var touchedNodeIDs: Set<Int> = []
 
     /// Node IDs added to ``ChoiceGraph/removedNodeIDs`` by this application. Layer 4 populates these.
-    var removedNodeIDs: Set<Int> = []
+    package var removedNodeIDs: Set<Int> = []
 
     /// Node IDs newly appended to ``ChoiceGraph/nodes`` by this application. Layer 4 populates these.
-    var addedNodeIDs: Set<Int> = []
+    package var addedNodeIDs: Set<Int> = []
 
     /// Position shifts applied to right-of-insertion nodes. Layer 4 populates these.
-    var positionShifts: [(insertionPoint: Int, delta: Int)] = []
+    package var positionShifts: [(insertionPoint: Int, delta: Int)] = []
 
     /// True when the partial-rebuild path cannot honour the mutation and the scheduler must fall back to ``ChoiceGraph/build(from:)``. Layer 2 sets this for every case except the value-only fast path of ``ProjectedMutation/leafValues(_:)`` with no reshape leaves.
-    var requiresFullRebuild: Bool = false
+    package var requiresFullRebuild: Bool = false
 }

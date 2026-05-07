@@ -51,7 +51,7 @@ package final class ChoiceGraph {
     var bindTopologyObservations: [UInt64: BindTopologyObservation] = [:]
 
     /// Returns true when `nodeID` has been removed from the graph but its array slot is retained. Used by every iteration site on ``ChoiceGraph`` to skip removed nodes.
-    func isTombstoned(_ nodeID: Int) -> Bool {
+    package func isTombstoned(_ nodeID: Int) -> Bool {
         removedNodeIDs.contains(nodeID)
     }
 
@@ -271,7 +271,7 @@ package extension ChoiceGraph {
     /// Returns a diagnostic description if any `chooseBits` node's position range fails to point to a value entry in `sequence`, or `nil` if every leaf position is consistent.
     ///
     /// Used after an in-place mutation to detect graph/freshTree structural divergence: when the materializer reshapes the freshTree behind the encoder's back (for example low-fidelity PRNG fallback), the graph's stored positionRanges go stale relative to freshTree. The caller is expected to force a full rebuild on a non-`nil` return.
-    func leafPositionsDivergence(in sequence: ChoiceSequence) -> String? {
+    package func leafPositionsDivergence(in sequence: ChoiceSequence) -> String? {
         for nodeID in liveNodeIDs {
             let node = nodes[nodeID]
             guard case .chooseBits = node.kind else { continue }

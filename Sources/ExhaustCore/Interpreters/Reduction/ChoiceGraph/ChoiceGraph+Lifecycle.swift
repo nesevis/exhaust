@@ -10,19 +10,32 @@ extension ChoiceGraph {
     ///
     /// Returns a ``ChangeApplication`` describing what changed. When ``ChangeApplication/requiresFullRebuild`` is true the scheduler should discard the partial result and rebuild the graph from `freshTree` via ``ChoiceGraph/build(from:)``.
     ///
-    /// Layer 4 implements both branches of ``ProjectedMutation/leafValues(_:)``: pure value-only changes (`mayReshape == false`) take the fast path that just rewrites leaf metadata, and bind-inner reshape changes (`mayReshape == true`) trigger an in-place splice of the affected bound subtree extracted from `freshTree`. Structural mutation cases still set `requiresFullRebuild = true` until Layer 7 wires them up.
+    /// Layer 4 implements both branches of ``ProjectedMutation/leafValues(_:)``: pure value-only changes (`mayReshape == false`) take the fast path that just rewrites leaf metadata, and bind-inner reshape changes (`mayReshape == true`) trigger an in-place splice of the affected bound subtree extracted from `freshTree`. Sequence-element removals use the shared splice infrastructure to tombstone, shift, and resync in place. Remaining structural mutation cases still set `requiresFullRebuild = true`.
     ///
     /// - Parameters:
     ///   - mutation: The mutation reported by the encoder whose probe was just accepted.
     ///   - freshTree: The choice tree the materializer produced for the accepted candidate. The reshape path walks it to extract the new bound subtree at the affected bind's known position.
     /// - Returns: A ``ChangeApplication`` describing the in-place edits and any fallback signal.
-    func apply(_ mutation: ProjectedMutation, freshTree: ChoiceTree) -> ChangeApplication {
+    package func apply(_ mutation: ProjectedMutation, freshTree: ChoiceTree) -> ChangeApplication {
         var application = ChangeApplication()
         switch mutation {
         case let .leafValues(changes):
             applyLeafValues(changes, freshTree: freshTree, into: &application)
-        case .sequenceElementsRemoved,
-             .branchSelected,
+        case let .sequenceElementsRemoved(removals):
+            let sortedRemovals = removals.sorted {
+                (nodes[$0.seqNodeID].positionRange?.lowerBound ?? 0)
+                    > (nodes[$1.seqNodeID].positionRange?.lowerBound ?? 0)
+            }
+            for (seqNodeID, removedIDs) in sortedRemovals {
+                applySequenceRemoval(
+                    seqNodeID: seqNodeID,
+                    removedChildIDs: removedIDs,
+                    freshTree: freshTree,
+                    into: &application
+                )
+                if application.requiresFullRebuild { break }
+            }
+        case .branchSelected,
              .selfSimilarReplaced,
              .descendantPromoted,
              .sequenceElementsMigrated,
@@ -178,38 +191,18 @@ extension ChoiceGraph {
             ]
         )
 
-        // Step 5: tombstone the old bound subtree's node IDs and drop edges referencing them. Tombstones (Layer 1) keep node IDs stable so existing scopes that captured node IDs at construction time stay referencing valid entries. Nil-ing the position range makes every iteration site that filters on `positionRange != nil` (including
-        // ``structuralFingerprint``, ``leafNodes``, ``leafPositions``, the type-compatibility computation, and the source-sink computation)
-        // treat them as inactive uniformly.
-        let oldBoundNodeIDs = collectSubtreeNodeIDs(rootID: oldBoundChildID)
-        for nodeID in oldBoundNodeIDs {
-            let node = nodes[nodeID]
-            nodes[nodeID] = node.with(positionRange: .some(nil))
-            removedNodeIDs.insert(nodeID)
-        }
-        containmentEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
-        dependencyEdges.removeAll { oldBoundNodeIDs.contains($0.source) || oldBoundNodeIDs.contains($0.target) }
-        // Self-similarity groups are rebuilt from scratch by recomputeSelfSimilarityGroups() below — no incremental removal needed.
-        application.removedNodeIDs.formUnion(oldBoundNodeIDs)
+        // Step 5: tombstone the old bound subtree.
+        let oldBoundNodeIDs = tombstoneSubtree(rootNodeID: oldBoundChildID, into: &application)
 
         // Step 6: walk the new bound subtree.
-        let rebuilt = ChoiceGraphBuilder.buildSubtree(
+        let firstNewNodeID = buildAndAppendSubtree(
             from: newBoundSubtree,
             startingOffset: oldBoundRange.lowerBound,
             parent: bindNodeID,
             bindDepth: bindMetadata.bindDepth + 1,
-            nodeIDOffset: nodes.count,
-            parentPath: bindMetadata.bindPath + [.bindBound]
+            parentPath: bindMetadata.bindPath + [.bindBound],
+            into: &application
         )
-        let firstNewNodeID = rebuilt.nodes.first?.id
-        for newNode in rebuilt.nodes {
-            application.addedNodeIDs.insert(newNode.id)
-        }
-        nodes.append(contentsOf: rebuilt.nodes)
-        containmentEdges.append(contentsOf: rebuilt.containmentEdges)
-        dependencyEdges.append(contentsOf: rebuilt.dependencyEdges)
-        graphStats.dynamicRegionRebuilds += 1
-        graphStats.dynamicRegionNodesRebuilt += rebuilt.nodes.count
 
         // Step 7: patch the bind node's children to reference the new bound child, and add the containment edge from the bind to the new bound child. ``ChoiceGraphBuilder/buildSubtree`` walks with
         // `parent: nil` and renumbers internally, which means it does NOT emit the containment edge from the external bind to the subtree root. The caller (this method) is responsible for adding it.
@@ -223,20 +216,7 @@ extension ChoiceGraph {
             ))
         }
 
-        // Step 8: propagate the length delta to right siblings and ancestors, then resync chooseBits leaf values from the live tree for any leaf propagation moved.
-        //
-        // ``propagatePositionShift`` only moves ``positionRange``; it leaves each propagated leaf's ``ChooseBitsMetadata/value`` untouched. The value was set when the leaf was created (either by an original
-        // ``ChoiceGraphBuilder/build(from:)`` walk or by an earlier
-        // ``buildSubtree`` splice) from the freshTree of *that* moment. After the current reshape, the live tree's content at the leaf's *new* position can be different from what the leaf's value field still holds — the materializer in guided decode mode walks the new tree with the candidate as a prefix, and the values it produces at shifted positions don't necessarily match what the candidate's same numerical position contained. Without this resync, every active leaf right of ``insertionPoint`` (and not in the rebuilt region) is a position drift candidate: its stored value diverges from the sequence content at its new ``positionRange.lowerBound``. The
-        // ``graph_sequence_drift`` probe in ``ChoiceGraphScheduler/runProbeLoop``
-        // catches this exact divergence; this pass eliminates the cause.
-        //
-        // The resync is gated on ``lengthDelta != 0``: when delta is zero, no positions shifted, no leaf can have a stale value relative to its (unchanged) position, and the entire flatten + walk is skipped.
-        // Most bind-inner mutations leave the bound subtree's flattened length unchanged (changing a leaf's value within its type does not add or remove sequence entries), so this gate is the common case.
-        //
-        // When the resync does run, only leaves whose new position lies strictly past ``newBoundUpper`` need to be checked: those are exactly the propagated leaves. Leaves in the new bound region are already in ``application.addedNodeIDs`` and skipped; leaves in the unchanged prefix sit at positions ≤ the bind's lowerBound and were never touched by propagation, so their values and positions both still match ``freshTree``.
-        //
-        // - Complexity: zero when delta is zero. Otherwise O(*L*) leaves + one ``ChoiceSequence(freshTree)`` flatten, where the per-leaf inner work is gated on ``range.lowerBound > newBoundUpper``.
+        // Step 8: propagate the length delta to right siblings and ancestors, then resync leaf values at their new positions.
         if lengthDelta != 0 {
             propagatePositionShift(
                 after: oldBoundRange.upperBound,
@@ -244,31 +224,14 @@ extension ChoiceGraph {
                 excluding: oldBoundNodeIDs.union(application.addedNodeIDs)
             )
             application.positionShifts.append((insertionPoint: oldBoundRange.upperBound, delta: lengthDelta))
-
-            let newBoundUpper = oldBoundRange.upperBound + lengthDelta
-            let freshSequence = ChoiceSequence(freshTree)
-            for index in nodes.indices {
-                if isTombstoned(index) { continue }
-                if application.addedNodeIDs.contains(index) { continue }
-                guard case let .chooseBits(metadata) = nodes[index].kind else { continue }
-                guard let range = nodes[index].positionRange else { continue }
-                // Only propagated leaves (now strictly past the new bound's last position) can hold a stale value relative to the post-mutation tree.
-                guard range.lowerBound > newBoundUpper else { continue }
-                guard range.lowerBound < freshSequence.count else { continue }
-                guard let entry = freshSequence[range.lowerBound].value else { continue }
-                if entry.choice.bitPattern64 == metadata.value.bitPattern64 { continue }
-                let updated = ChooseBitsMetadata(
-                    typeTag: metadata.typeTag,
-                    validRange: metadata.validRange,
-                    isRangeExplicit: metadata.isRangeExplicit,
-                    value: entry.choice,
-                    convergedOrigin: metadata.convergedOrigin
-                )
-                nodes[index] = nodes[index].with(kind: .chooseBits(updated))
-            }
+            resyncShiftedLeaves(
+                pastPosition: oldBoundRange.upperBound + lengthDelta,
+                freshTree: freshTree,
+                excluding: application.addedNodeIDs
+            )
         }
 
-        // Step 9: refresh structural-constancy on the bind, and clear any cached ``BindMetadata/classification``. The new subtree may have flipped from "constant" to "non-constant" or vice versa depending on whether it contains nested binds or picks, and any previously- recorded classification reflects the pre-reshape subtree's shape — it must not be reused against a subtree that has been spliced out from under it. The bind node is rewritten whenever either signal has changed since the last refresh.
+        // Step 9: refresh structural-constancy on the bind, and clear any cached classification. The new subtree may have changed shape.
         let newIsStructurallyConstant = newBoundSubtree.containsBind == false
             && newBoundSubtree.containsPicks == false
         let hadClassification = bindMetadata.classification != nil || bindMetadata.downstreamFingerprint != nil
@@ -285,13 +248,8 @@ extension ChoiceGraph {
             )))
         }
 
-        // Step 10: recompute self-similarity edges from scratch. The splice may have removed picks from the old subtree and added picks in the new subtree; the existing edge set is now incomplete (no edges to new picks, may have edges to picks that no longer have valid IDs — actually those were dropped above). Recomputing is O(picks²)
-        // where pick count is in the dozens, so much cheaper than a full graph rebuild.
-        recomputeSelfSimilarityGroups()
-
-        // Step 11: invalidate caches. Topological order and reachability depend on dependency edges (which we just modified). Type-compat and source/sink depend on leaf values (the value-only path already calls ``invalidateDerivedEdges``; calling it twice is idempotent).
-        invalidateTopologicalCaches()
-        invalidateDerivedEdges()
+        // Step 10: finalize — recompute self-similarity groups, invalidate caches.
+        finalizeStructuralSplice()
 
         application.touchedNodeIDs.insert(bindNodeID)
     }
@@ -331,71 +289,6 @@ extension ChoiceGraph {
         return nil
     }
 
-    /// Shifts the `positionRange` of every live node whose range starts strictly after `insertionPoint` by `delta`. Nodes whose range *contains* `insertionPoint` (the changed subtree's ancestors) get their `upperBound` extended by `delta`. Sequence nodes additionally have their `childPositionRanges` metadata shifted in lockstep.
-    ///
-    /// `excluding` is the set of node IDs that belong to the rebuilt subtree itself — those nodes are already laid out at the correct offsets by ``ChoiceGraphBuilder/buildSubtree(from:startingOffset:parent:bindDepth:nodeIDOffset:)`` and must not be shifted again.
-    private func propagatePositionShift(
-        after insertionPoint: Int,
-        delta: Int,
-        excluding: Set<Int>
-    ) {
-        if delta == 0 { return }
-        var shiftedSummary: [String] = []
-        for index in nodes.indices {
-            if isTombstoned(index) { continue }
-            if excluding.contains(index) { continue }
-            let node = nodes[index]
-            guard let range = node.positionRange else { continue }
-
-            let newRange: ClosedRange<Int>
-            if range.lowerBound > insertionPoint {
-                // Right of the change: shift both bounds.
-                newRange = (range.lowerBound + delta) ... (range.upperBound + delta)
-            } else if range.upperBound >= insertionPoint {
-                // Contains the change: extend upperBound only.
-                newRange = range.lowerBound ... (range.upperBound + delta)
-            } else {
-                continue
-            }
-            if shiftedSummary.count < 16 {
-                shiftedSummary.append("\(node.id):\(range.lowerBound)...\(range.upperBound)→\(newRange.lowerBound)...\(newRange.upperBound)")
-            }
-
-            // Sequence nodes also store per-child extents that move with the same shift rule.
-            let updatedKind: ChoiceGraphNodeKind
-            if case let .sequence(seqMetadata) = node.kind {
-                let shiftedChildRanges = seqMetadata.childPositionRanges.map { childRange -> ClosedRange<Int> in
-                    if childRange.lowerBound > insertionPoint {
-                        return (childRange.lowerBound + delta) ... (childRange.upperBound + delta)
-                    }
-                    if childRange.upperBound >= insertionPoint {
-                        return childRange.lowerBound ... (childRange.upperBound + delta)
-                    }
-                    return childRange
-                }
-                updatedKind = .sequence(SequenceMetadata(
-                    lengthConstraint: seqMetadata.lengthConstraint,
-                    elementCount: seqMetadata.elementCount,
-                    childPositionRanges: shiftedChildRanges,
-                    childIndexByNodeID: seqMetadata.childIndexByNodeID,
-                    elementTypeTag: seqMetadata.elementTypeTag
-                ))
-            } else {
-                updatedKind = node.kind
-            }
-
-            nodes[index] = node.with(kind: updatedKind, positionRange: newRange)
-        }
-        ExhaustLog.debug(
-            category: .reducer,
-            event: "position_shift_complete",
-            metadata: [
-                "after": "\(insertionPoint)",
-                "delta": "\(delta)",
-                "sample": shiftedSummary.joined(separator: " "),
-            ]
-        )
-    }
 }
 
 // MARK: - Internal Node-Set Helpers
