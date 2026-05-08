@@ -23,6 +23,7 @@ struct GraphValueEncoder: GraphEncoder {
     var mode: Mode = .idle
     var convergenceStore: [Int: ConvergedOrigin] = [:]
 
+
     enum Mode {
         case idle
         case valueLeaves(IntegerState)
@@ -57,6 +58,8 @@ struct GraphValueEncoder: GraphEncoder {
         var bisection: BisectionState?
         /// Whether the reduction target has been probed directly for the current leaf. Reset when advancing to the next leaf.
         var semanticSimplestProbed: Bool = false
+        /// Per-leaf-zero pre-round state, active during the ``IntegerPhase/perLeafZero`` phase.
+        var perLeafZero: PerLeafZeroState?
     }
 
     /// State for the cross-zero phase of per-leaf minimization.
@@ -82,8 +85,15 @@ struct GraphValueEncoder: GraphEncoder {
 
     enum IntegerPhase {
         case batchZero
+        case perLeafZero
         case batchBisect
         case perLeaf
+    }
+
+    /// State for the per-leaf-zero pre-round.
+    struct PerLeafZeroState {
+        var leafCursor: Int = 0
+        var convergedIndices: Set<Int> = []
     }
 
     /// State for the batch bisection phase.

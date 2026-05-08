@@ -77,26 +77,19 @@ extension GraphValueEncoder {
                     .withBitPattern(leaf.targetBitPattern)
             }
             if candidate.shortLexPrecedes(state.sequence) {
-                // Emit the batch-zero probe. If accepted, batchBisect will see lastAccepted=true and converge all leaves. If rejected, batchBisect will begin joint interpolation search.
-                if state.leafPositions.count >= 4 {
-                    state.phase = .batchBisect
-                    state.bisection = BisectionState(
-                        pendingGroups: [],
-                        activeGroup: (start: 0, end: state.leafPositions.count),
-                        divisor: BisectionState.initialDivisor,
-                        awaitingFeedback: true,
-                        convergedIndices: []
-                    )
-                } else {
-                    state.phase = .perLeaf
-                }
+                // Emit the batch-zero probe. If accepted, perLeafZero will see lastAccepted=true and converge all leaves. If rejected, perLeafZero tries each leaf individually at its target before per-leaf binary search.
+                state.phase = .perLeafZero
+                state.perLeafZero = PerLeafZeroState()
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
-            // Batch zero not shortlex-smaller — skip bisection, go to per-leaf.
+            // Batch zero not shortlex-smaller — skip to per-leaf.
             state.batchRejected = true
             state.phase = .perLeaf
             return nextIntegerProbe(state: &state, lastAccepted: false)
+
+        case .perLeafZero:
+            return nextPerLeafZeroProbe(state: &state, lastAccepted: lastAccepted)
 
         case .batchBisect:
             if lastAccepted == false {
@@ -107,6 +100,77 @@ extension GraphValueEncoder {
         case .perLeaf:
             return nextPerLeafProbe(state: &state, lastAccepted: lastAccepted)
         }
+    }
+
+    // MARK: - Per-Leaf Zero Pre-Round
+
+    /// Tries each leaf individually at its reduction target. Leaves that accept converge immediately and are excluded from batch bisection. After all leaves are tried, transitions to batch bisection with only the survivors.
+    mutating func nextPerLeafZeroProbe(
+        state: inout IntegerState,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        guard var plz = state.perLeafZero else {
+            state.phase = .perLeaf
+            return nextIntegerProbe(state: &state, lastAccepted: lastAccepted)
+        }
+
+        // Process feedback from the previous per-leaf-zero probe.
+        if lastAccepted, let accepted = state.lastEmittedCandidate {
+            state.sequence = accepted
+            // The leaf at cursor-1 accepted at its target — mark it converged.
+            if plz.leafCursor > 0 {
+                let acceptedIndex = plz.leafCursor - 1
+                plz.convergedIndices.insert(acceptedIndex)
+                state.leafPositions[acceptedIndex].currentBitPattern = state.leafPositions[acceptedIndex].targetBitPattern
+            }
+        } else if plz.leafCursor == 0, lastAccepted {
+            // Batch-zero accepted — all leaves converge.
+            state.perLeafZero = nil
+            state.phase = .perLeaf
+            return nil
+        }
+        state.lastEmittedCandidate = nil
+
+        // Try the next unconverged leaf.
+        while plz.leafCursor < state.leafPositions.count {
+            let index = plz.leafCursor
+            plz.leafCursor += 1
+            let leaf = state.leafPositions[index]
+            guard leaf.currentBitPattern != leaf.targetBitPattern else {
+                plz.convergedIndices.insert(index)
+                continue
+            }
+
+            var candidate = state.sequence
+            candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
+                .withBitPattern(leaf.targetBitPattern)
+
+            guard candidate.shortLexPrecedes(state.sequence) else { continue }
+
+            state.perLeafZero = plz
+            state.lastEmittedCandidate = candidate
+            return candidate
+        }
+
+        // All leaves tried. Transition to batch bisection with only the survivors.
+        let unconvergedCount = state.leafPositions.count - plz.convergedIndices.count
+        state.perLeafZero = nil
+        state.batchRejected = true
+
+        if unconvergedCount >= 4 {
+            state.phase = .batchBisect
+            state.bisection = BisectionState(
+                pendingGroups: [],
+                activeGroup: (start: 0, end: state.leafPositions.count),
+                divisor: BisectionState.initialDivisor,
+                awaitingFeedback: false,
+                convergedIndices: plz.convergedIndices
+            )
+            return nextIntegerProbe(state: &state, lastAccepted: false)
+        }
+
+        state.phase = .perLeaf
+        return nextIntegerProbe(state: &state, lastAccepted: false)
     }
 
     // MARK: - Batch Bisection
