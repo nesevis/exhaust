@@ -198,8 +198,6 @@ struct GeneratorTuningTests {
             predicate: isValidBST
         )
 
-        print("Tuned BST generator:\n\(tuned.debugDescription)")
-
         // The top-level should be a pick (leaf vs node)
         guard case let .impure(.pick(choices, _), _) = tuned else {
             Issue.record("Expected tuned generator to be a pick at top level")

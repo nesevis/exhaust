@@ -25,17 +25,34 @@ struct CalculatorShrinkingChallenge {
      */
 
     @Test("Calculator, Full")
-    func calculatorfull() {
+    func calculatorFull() {
         let gen = #gen(CalculatorFixture.expression(depth: 5))
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .logging(.debug),
-            .replay(2293),
             .budget(.exorbitant)
         ) { expr in
             CalculatorFixture.property(expr)
         }
         #expect(result == .div(.value(0), .add(.value(0), .value(0))))
+    }
+    
+    // This test ought to reduce to the minimal CE, but a bug fix that allowed for multiple bind-inner leaf scope dispatches surfaced a 1.4% counterexample:
+    // 98.6% div(value(0), add(value(0), value(0))) (986 seeds)
+    // 1.4% div(value(0), div(value(0), value(-1)))
+    @Test("Calculator pathological 1")
+    func calculatorPathological1() {
+        let gen = #gen(CalculatorFixture.expression(depth: 5))
+        let result = #exhaust(
+            gen,
+            .suppress(.issueReporting),
+            .replay(.numeric(8012154019151340001)),
+            .budget(.exorbitant)
+        ) { expr in
+            CalculatorFixture.property(expr)
+        }
+        withKnownIssue {
+            #expect(result == .div(.value(0), .add(.value(0), .value(0))))
+        }
     }
 }
