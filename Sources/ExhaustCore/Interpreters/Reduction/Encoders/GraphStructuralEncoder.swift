@@ -28,6 +28,9 @@ struct GraphStructuralEncoder: GraphEncoder {
     /// Multi-shot state for covering-array-backed aligned removal. Accessed by ``nextCoveringAlignedProbe()`` in `GraphStructuralEncoder+Removal.swift`.
     var coveringAlignedState: CoveringAlignedState?
 
+    /// True if any replacement candidate was built but rejected by the shortlex gate. When true, the structural relax round may find value in trying the same candidates without the gate.
+    var hadReplacementShortlexRejection = false
+
     /// Mutable state for the covering-array-backed aligned removal encoder.
     struct CoveringAlignedState {
         let scope: CoveringAlignedRemovalScope

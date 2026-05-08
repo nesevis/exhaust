@@ -5,7 +5,7 @@
 
 extension GraphStructuralEncoder {
     /// Builds a replacement probe from a self-similar, branch-pivot, or descendant-promotion scope.
-    func buildReplacementProbe(
+    mutating func buildReplacementProbe(
         into candidate: inout ChoiceSequence,
         scope: ReplacementScope,
         sequence: ChoiceSequence,
@@ -38,7 +38,7 @@ extension GraphStructuralEncoder {
     }
 
     /// Copies donor entries into the target's position range, expanding depth-0 leaf entries to full pick-site equivalents for depth-crossing compatibility.
-    private func buildSelfSimilarCandidate(
+    private mutating func buildSelfSimilarCandidate(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
         graph: some ReadOnlyChoiceGraph
@@ -57,12 +57,15 @@ extension GraphStructuralEncoder {
         )
         var candidate = sequence
         candidate.replaceSubrange(targetRange.lowerBound ... targetRange.upperBound, with: expanded)
-        guard candidate.shortLexPrecedes(sequence) else { return nil }
+        guard candidate.shortLexPrecedes(sequence) else {
+            hadReplacementShortlexRejection = true
+            return nil
+        }
         return candidate
     }
 
     /// Builds a single branch-pivot candidate for the scope's target branch. The leaf-count gate is applied at scope construction time (in ``replacementScopes()``). This method applies speculative leaf minimization and the shortlex gate.
-    private func buildBranchPivotCandidate(
+    private mutating func buildBranchPivotCandidate(
         into candidate: inout ChoiceSequence,
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
@@ -102,6 +105,7 @@ extension GraphStructuralEncoder {
         candidate = sequence
         candidate.replaceSubrange(pickRange.lowerBound ... pickRange.upperBound, with: replacement)
         guard candidate.shortLexPrecedes(sequence) else {
+            hadReplacementShortlexRejection = true
             return nil
         }
         return .branchSelected(
@@ -111,7 +115,7 @@ extension GraphStructuralEncoder {
     }
 
     /// Replaces the ancestor's range with the descendant's content.
-    private func buildDescendantPromotionCandidate(
+    private mutating func buildDescendantPromotionCandidate(
         scope: DescendantPromotionScope,
         sequence: ChoiceSequence,
         graph: some ReadOnlyChoiceGraph
@@ -130,7 +134,10 @@ extension GraphStructuralEncoder {
         )
         var candidate = sequence
         candidate.replaceSubrange(ancestorRange.lowerBound ... ancestorRange.upperBound, with: expanded)
-        guard candidate.shortLexPrecedes(sequence) else { return nil }
+        guard candidate.shortLexPrecedes(sequence) else {
+            hadReplacementShortlexRejection = true
+            return nil
+        }
         return candidate
     }
 

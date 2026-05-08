@@ -118,12 +118,14 @@ enum ChoiceGraphScheduler {
         var scopeRejectionCache = ScopeRejectionCache()
         var gate = BoundValueGate()
         var futility = FutilityTracker()
+        var hadReplacementShortlexRejection = false
 
         while stallBudget > 0 {
             cycles += 1
             gate.resetForNewCycle()
             futility.prepareForNewCycle()
             scopeRejectionCache.clearCoarse()
+            hadReplacementShortlexRejection = false
             let sequenceBeforeCycle = sequence
 
             var sources = ScopeSourceBuilder.buildSources(from: graph)
@@ -282,6 +284,13 @@ enum ChoiceGraphScheduler {
 
                 if case let .minimize(.boundValue(bindScope)) = transformation.operation {
                     gate.recordOutcome(bindNodeID: bindScope.bindNodeID, accepted: outcome.acceptCount > 0)
+                }
+
+                if hadReplacementShortlexRejection == false,
+                   let structuralEncoder = encoder as? GraphStructuralEncoder,
+                   structuralEncoder.hadReplacementShortlexRejection
+                {
+                    hadReplacementShortlexRejection = true
                 }
 
                 if outcome.accepted {
