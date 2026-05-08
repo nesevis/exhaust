@@ -47,12 +47,11 @@ struct CalculatorShrinkingChallenge {
             gen,
             .suppress(.issueReporting),
             .replay(.numeric(8012154019151340001)),
+            .logging(.debug),
             .budget(.exorbitant)
         ) { expr in
             CalculatorFixture.property(expr)
         }
-        withKnownIssue {
-            #expect(result == .div(.value(0), .add(.value(0), .value(0))))
-        }
+        #expect(result == .div(.value(0), .add(.value(0), .value(0))))
     }
 }

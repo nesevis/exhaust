@@ -278,6 +278,8 @@ package enum BoundaryDomainAnalysis {
             0
         case .character:
             0 // Index 0 = first scalar in the ScalarRangeSet
+        case .depthControl:
+            0 // Depth 0 = shallowest (base case)
         }
     }
 

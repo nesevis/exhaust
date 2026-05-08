@@ -228,7 +228,22 @@ package enum SequenceDecoder {
             case let .success(_, freshTree, phase2Report):
                 let freshSequence = ChoiceSequence(freshTree)
                 if skipShortlexCheck == false {
-                    guard freshSequence.shortLexPrecedes(originalSequence) else {
+                    let passes = freshSequence.shortLexPrecedes(originalSequence)
+                    if ExhaustLog.isEnabled(.debug, for: .reducer) {
+                        ExhaustLog.debug(
+                            category: .reducer,
+                            event: "shortlex_check",
+                            metadata: [
+                                "passes": "\(passes)",
+                                "fresh_len": "\(freshSequence.count)",
+                                "original_len": "\(originalSequence.count)",
+                                "fresh_seq": freshSequence.shortString,
+                                "original_seq": originalSequence.shortString,
+                                "output": String(describing: output),
+                            ]
+                        )
+                    }
+                    guard passes else {
                         logDecoderRejection(
                             reason: "not_shortlex",
                             probeHash: precomputedHash,
@@ -357,7 +372,22 @@ package enum SequenceDecoder {
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
             if skipShortlexCheck == false {
-                guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
+                let passes = freshSequence.shortLexPrecedes(originalSequence)
+                if ExhaustLog.isEnabled(.debug, for: .reducer) {
+                    ExhaustLog.debug(
+                        category: .reducer,
+                        event: "shortlex_check",
+                        metadata: [
+                            "passes": "\(passes)",
+                            "fresh_len": "\(freshSequence.count)",
+                            "original_len": "\(originalSequence.count)",
+                            "fresh_seq": freshSequence.shortString,
+                            "original_seq": originalSequence.shortString,
+                            "output": String(describing: output),
+                        ]
+                    )
+                }
+                guard passes else { return nil }
             }
             if let report = decodingReport, ExhaustLog.isEnabled(.debug, for: .reducer) {
                 ExhaustLog.debug(

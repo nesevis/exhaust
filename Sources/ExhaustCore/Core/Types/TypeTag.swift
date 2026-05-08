@@ -39,6 +39,8 @@ public enum TypeTag: Sendable {
     case bits
     /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as `UInt32`. The bit pattern is an index, not a Unicode code point. The associated boundary indices are pre-computed by ``ScalarRangeSet`` during construction and used by ``BoundaryDomainAnalysis`` for coverage analysis.
     case character(boundaryIndices: [UInt64])
+    /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
+    case depthControl
 
     /// Creates a type tag by matching the metatype of the given value against known numeric types.
     public init<T>(type: T) {
@@ -110,7 +112,7 @@ package extension TypeTag {
     @inline(__always)
     var simplestBitPattern: UInt64 {
         switch self {
-        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character:
+        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character, .depthControl:
             0
         case .int8:
             1 << 7
@@ -228,6 +230,7 @@ package extension TypeTag {
         case .date: Int64(bitPattern64: bitPattern64)
         case .bits: UInt64(bitPattern64: bitPattern64)
         case .character: UInt32(bitPattern64: bitPattern64)
+        case .depthControl: UInt64(bitPattern64: bitPattern64)
         }
     }
 }
@@ -278,6 +281,7 @@ extension TypeTag: Hashable {
         case let .character(boundaryIndices):
             hasher.combine(15)
             hasher.combine(boundaryIndices)
+        case .depthControl: hasher.combine(16)
         }
     }
 }
@@ -301,6 +305,7 @@ extension TypeTag: CustomStringConvertible {
         case .date: "Date"
         case .bits: "Bits"
         case .character: "Character"
+        case .depthControl: "DepthControl"
         }
     }
 }

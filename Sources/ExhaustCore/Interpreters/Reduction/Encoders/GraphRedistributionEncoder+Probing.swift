@@ -277,7 +277,7 @@ extension GraphRedistributionEncoder {
 
     /// Builds a redistribution candidate by transferring `delta` units from source to sink.
     ///
-    /// For pairs with a ``MixedRedistributionContext`` (cross-type or floating-point), uses rational arithmetic with a common denominator. For same-tag integer pairs, operates in UInt64 bit-pattern space — modular wraparound when the sink's declared domain equals its natural type width, validation-with-rejection when the sink has an explicit narrow range. See `graph-exchange-semantic-cast-removal.md` for the rationale behind the same-tag arithmetic choices.
+    /// For pairs with a ``MixedRedistributionContext`` (cross-type or floating-point), uses rational arithmetic with a common denominator. For same-tag integer pairs, operates in UInt64 bit-pattern space — modular wraparound when the sink's declared domain equals its natural type width, validation-with-rejection when the sink has an explicit narrow range.
     func buildRedistributionCandidate(
         sourceIndex: Int,
         sinkIndex: Int,
@@ -326,12 +326,10 @@ extension GraphRedistributionEncoder {
         //
         // The gate is on the sink, not the source. The source moves toward its own reduction target — a contraction inside `[min(currentBP, targetBP), max(currentBP, targetBP)]` — so its new bp never leaves the source's own valid range regardless of whether that range is narrow or full-width. The sink is the side that can escape its valid range as it absorbs the opposing delta, so the sink is the side that determines which sub-path we take.
         //
-        // When the sink's declared domain equals the natural type width, we use bit-pattern modular arithmetic with a width-aware mask. This matches the wrapping arithmetic (`&+`/`&-`) the property under test likely uses for the same type and lets redistribution reach boundary counterexamples like `(Int16.min, -1)` that semantic-space arithmetic would reject as overflow. See
-        // `bound5-redistribution-wraparound-diagnosis.md` for the motivating trace.
+        // When the sink's declared domain equals the natural type width, we use bit-pattern modular arithmetic with a width-aware mask. This matches the wrapping arithmetic (`&+`/`&-`) the property under test likely uses for the same type and lets redistribution reach boundary counterexamples like `(Int16.min, -1)` that semantic-space arithmetic would reject as overflow.
         //
         // When the sink carries an explicit narrow range, we still operate in UInt64 bit-pattern space (signed types are biased via the
-        // `signBitMask` XOR in their `BitPatternConvertible` conformance, so additive arithmetic in biased space matches semantic arithmetic), but we use overflow-checked operations and reject — rather than wrap — any candidate that lands outside the sink's `validRange` or the type's natural bounds. See
-        // `graph-exchange-semantic-cast-removal.md` for the rationale and for the discussion of the latent bugs in the previous semantic-Int64 implementation that this rewrite addresses.
+        // `signBitMask` XOR in their `BitPatternConvertible` conformance, so additive arithmetic in biased space matches semantic arithmetic), but we use overflow-checked operations and reject — rather than wrap — any candidate that lands outside the sink's `validRange` or the type's natural bounds.
         let sourceBitPattern = sourceValue.choice.bitPattern64
         let sinkBitPattern = sinkValue.choice.bitPattern64
         let targetBitPattern = sourceValue.choice.reductionTarget(in: sourceValue.validRange)

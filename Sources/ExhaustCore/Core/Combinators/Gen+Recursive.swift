@@ -58,7 +58,7 @@ package extension Gen {
         for layer in 0 ... depthRange.upperBound {
             let availableLayers = layers // capture current set
             // recurse() draws its OWN depth independently
-            let recurseGen = Gen.choose(in: 0 ... UInt64(layer), scaling: .constant)
+            let recurseGen = chooseDepth(in: 0 ... UInt64(layer))
                 ._bound(
                     forward: { depth in availableLayers[Int(depth)] },
                     backward: { _ in UInt64(layer) }
@@ -67,10 +67,29 @@ package extension Gen {
         }
 
         // Outer depth draw selects the root layer
-        return Gen.choose(in: depthRange, scaling: .constant)
+        return chooseDepth(in: depthRange)
             ._bound(
                 forward: { depth in layers[Int(depth)] },
                 backward: { _ in depthRange.upperBound }
             )
+    }
+
+    /// Generates a depth index tagged with ``TypeTag/depthControl``. Excluded from value search during reduction — structural operations handle depth reduction while preserving structural context.
+    private static func chooseDepth(in range: ClosedRange<UInt64>) -> ReflectiveGenerator<UInt64> {
+        let operation = ReflectiveOperation.chooseBits(
+            min: range.lowerBound,
+            max: range.upperBound,
+            tag: .depthControl,
+            isRangeExplicit: true
+        )
+        return .impure(operation: operation) { result in
+            guard let convertible = result as? any BitPatternConvertible else {
+                throw GeneratorError.typeMismatch(
+                    expected: "any BitPatternConvertible",
+                    actual: String(describing: Swift.type(of: result))
+                )
+            }
+            return .pure(UInt64(bitPattern64: convertible.bitPattern64))
+        }
     }
 }

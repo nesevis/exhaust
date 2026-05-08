@@ -222,8 +222,8 @@ extension ChoiceGraphScheduler {
 
             // Refresh the encoder's scope on structural mutation. The encoder's cached state (for example, ``IntegerState/leafPositions``)
             // was built at ``start(scope:)`` against the pre-mutation graph and cannot be safely re-used after a reshape tombstones leaves and splices in new nodes. Continuing to iterate without a refresh would let the encoder address
-            // ``state.sequence`` at stale indices and silently corrupt either the live sequence or the new spliced leaves' values, producing the position drift bug documented in ExhaustDocs/graph-reducer-position-drift-bug.md. Calling
-            // ``refreshScope`` lets the encoder re-derive its scope state from the live graph in place — preserving in-pass convergence records keyed by nodeID, picking up new leaves the splice created, and dropping tombstoned ones — without paying the full source-rebuild + dispatch overhead the earlier `break`-out fix imposed.
+            // ``state.sequence`` at stale indices and silently corrupt either the live sequence or the new spliced leaves' values, producing a position drift bug.
+            // Calling ``refreshScope`` lets the encoder re-derive its scope state from the live graph in place — preserving in-pass convergence records keyed by nodeID, picking up new leaves the splice created, and dropping tombstoned ones — without paying the full source-rebuild + dispatch overhead the earlier `break`-out fix imposed.
             if mutatedStructurally {
                 encoder.refreshScope(graph: graph, sequence: sequence)
             }
