@@ -384,6 +384,26 @@ enum ChoiceGraphScheduler {
                 )
             }
 
+            if anyAccepted == false, hadReplacementShortlexRejection {
+                let relaxResult = try runRelaxRound(
+                    sequence: &sequence,
+                    tree: &tree,
+                    output: &output,
+                    graph: &graph,
+                    gen: erasedGen,
+                    property: wrappedProperty,
+                    rejectCache: &rejectCache,
+                    stats: &stats,
+                    collectStats: collectStats,
+                    isInstrumented: isInstrumented
+                )
+                if relaxResult {
+                    anyAccepted = true
+                    scopeRejectionCache.clear()
+                    gate.resetAfterRebuild()
+                }
+            }
+
             let improved = sequence != sequenceBeforeCycle
             if improved {
                 stallBudget = config.maxStalls
@@ -454,7 +474,7 @@ enum ChoiceGraphScheduler {
     /// Consolidates the 9-step rebuild sequence used by both the lazy rematerialize path and the post-acceptance rebuild path: accumulate dynamic stats, extract convergence, capture classifications and observations, build the new graph with inherited caches, observe bind topologies, transfer convergence, and increment the rebuild counter.
     ///
     /// Post-rebuild actions that differ between call sites (clearing the rejection cache, resetting the bound value gate, rebuilding sources, clearing downstream convergence) stay at each call site.
-    private static func rebuildGraph(
+    static func rebuildGraph(
         from tree: ChoiceTree,
         replacing oldGraph: ChoiceGraph,
         stats: inout ReductionStats
@@ -533,7 +553,7 @@ enum ChoiceGraphScheduler {
     // MARK: - Source Selection
 
     /// Returns the index of the source with the highest peekYield, or nil if all are exhausted.
-    private static func highestYieldSourceIndex(
+    static func highestYieldSourceIndex(
         _ sources: [any ScopeSource]
     ) -> Int? {
         var bestIndex: Int?
@@ -558,7 +578,7 @@ enum ChoiceGraphScheduler {
     /// Selects the appropriate encoder for a graph operation type.
     ///
     /// Bound value minimization scopes are not handled here because they need the typed generator at construction time. The dispatch site in ``runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` builds them via ``makeBoundValueComposition(bindScope:scope:graph:gen:upstreamBudget:)`` instead.
-    private static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
+    static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
         case .remove, .replace, .migrate:
             GraphStructuralEncoder()
