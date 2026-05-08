@@ -21,98 +21,27 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         try Gen.contramap(backward, _map(forward))
     }
 
-    /// Creates a bidirectional transformation using a forward function and a partial path for backward.
+    /// Creates a bidirectional transformation using a forward function and a key path for backward.
     ///
-    /// Transforms the output type while providing a ``PartialPath`` as the inverse for reflection.
+    /// Transforms the output type while providing a key path as the inverse for reflection.
     ///
-    /// Use this when the backward direction can be expressed as a path extraction rather than an arbitrary closure. If extraction fails (the path does not match the reflection target), that branch is pruned.
+    /// Use this when the backward direction can be expressed as a property extraction rather than an arbitrary closure.
     ///
     /// - Parameters:
     ///   - forward: Function to transform generated values.
-    ///   - backward: Partial path to extract the original value from the new type.
+    ///   - backward: Key path to extract the original value from the new type.
     /// - Returns: A generator producing values of the new output type.
     /// - Throws: Rethrows errors from the forward transformation.
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
-        backward: some PartialPath<NewOutput, Value>
+        backward: KeyPath<NewOutput, Value>
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
-            guard let extracted = try backward.extract(from: newOutput) else {
-                throw Interpreters.ReflectionError.reflectedNil(
-                    type: "\(Value.self)",
-                    resultType: String(describing: type(of: newOutput))
-                )
-            }
-            return extracted
+            (newOutput as! NewOutput)[keyPath: backward]
         }
         let erasedGen = try _map(forward)
 
         return Gen.contramap(erasedBackward, erasedGen)
-    }
-
-    /// Transforms the output type using partial paths in both directions.
-    ///
-    /// Both directions can fail: when either path extraction does not match, that reflection branch is pruned. The result type is optional because the forward path may not match every generated value.
-    ///
-    /// - Parameters:
-    ///   - forward: Partial path to transform from original to new type.
-    ///   - backward: Partial path to transform back during reflection.
-    /// - Returns: A generator producing optional values of the new type.
-    /// - Throws: Errors from path extraction during setup.
-    func mapped<NewOutput>(
-        forward: some PartialPath<Value, NewOutput>,
-        backward: some PartialPath<NewOutput, Value>
-    ) throws -> ReflectiveGenerator<NewOutput?> {
-        let erasedBackward: (Any) throws -> Any = { newOutput in
-            guard let extracted = try backward.extract(from: newOutput) else {
-                throw Interpreters.ReflectionError.reflectedNil(
-                    type: "\(Value.self)",
-                    resultType: String(describing: type(of: newOutput))
-                )
-            }
-            return extracted
-        }
-        let erasedGen = try _map { try forward.extract(from: $0) }
-
-        return Gen.contramap(erasedBackward, erasedGen)
-    }
-
-    /// Transforms the output type using a partial path forward and a closure backward.
-    ///
-    /// The forward path extraction may not match every generated value, so the result type is optional. The backward closure is always called during reflection.
-    ///
-    /// - Parameters:
-    ///   - forward: Partial path to transform from original to new type.
-    ///   - backward: Function to transform back during reflection.
-    /// - Returns: A generator producing optional values of the new type.
-    /// - Throws: Errors from path extraction during setup.
-    func mapped<NewOutput>(
-        forward: some PartialPath<Value, NewOutput>,
-        backward: @Sendable @escaping (NewOutput) throws -> Value
-    ) throws -> ReflectiveGenerator<NewOutput?> {
-        let erasedBackward: (Any) throws -> Any = { try backward($0 as! NewOutput) }
-        let erasedGen = try _map { try forward.extract(from: $0) }
-
-        return Gen.contramap(erasedBackward, erasedGen)
-    }
-
-    /// Transforms generated values through a partial path, producing optional results.
-    ///
-    /// Applies the partial path's extraction to each generated value. Since extraction may fail (for example a case path that doesn't match), the result type is optional.
-    ///
-    /// - Parameter path: Partial path to extract the new value from the generated value.
-    /// - Returns: A generator producing optional values of the extracted type.
-    func map<NewOutput>(
-        _ path: some PartialPath<Value, NewOutput>
-    ) throws -> ReflectiveGenerator<NewOutput?> {
-        Gen.liftF(.transform(
-            kind: .map(
-                forward: { try path.extract(from: $0) as Any },
-                inputType: Value.self,
-                outputType: NewOutput.self
-            ),
-            inner: erase()
-        ))
     }
 
     /// Lifts this generator's output from `T` to `T?` so reflection can distinguish the `.some` branch from `.none`.
@@ -265,45 +194,44 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
-    /// Creates a generator that only produces unique values, deduplicated by a hashable partial path.
+    /// Creates a generator that only produces unique values, deduplicated by a hashable key path.
     ///
-    /// The value extracted by the partial path is used as the deduplication key. Two values are considered duplicates if they produce the same key.
+    /// The value extracted by the key path is used as the deduplication key. Two values are considered duplicates if they produce the same key.
     ///
     /// ```swift
     /// let gen = #gen(.element(from: configs, id: \.id)).unique(by: \.id)
     /// ```
     ///
     /// - Parameters:
-    ///   - by: A partial path to the hashable property used for deduplication.
+    ///   - by: A key path to the hashable property used for deduplication.
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
     func unique<Key: Hashable>(
-        by path: some PartialPath<Value, Key> & Sendable,
+        by path: KeyPath<Value, Key> & Sendable,
         fileID: String = #fileID,
         line: UInt = #line
     ) -> ReflectiveGenerator<Value> {
         unique(by: { value in
-            (try? path.extract(from: value)).map { AnyHashable($0) }
-                ?? AnyHashable(ObjectIdentifier(type(of: value as Any)))
+            AnyHashable(value[keyPath: path])
         }, fileID: fileID, line: line)
     }
 
-    /// Creates a generator that only produces unique values, deduplicated by an equatable partial path.
+    /// Creates a generator that only produces unique values, deduplicated by an equatable key path.
     ///
-    /// The value extracted by the partial path is used as the deduplication key. Two values are considered duplicates if they produce the same key under equality comparison. This uses linear scan for duplicate detection.
+    /// The value extracted by the key path is used as the deduplication key. Two values are considered duplicates if they produce the same key under equality comparison. This uses linear scan for duplicate detection.
     ///
     /// ```swift
     /// let gen = #gen(.element(from: configs, id: \.name)).unique(by: \.name)
     /// ```
     ///
     /// - Parameters:
-    ///   - by: A partial path to the equatable property used for deduplication.
+    ///   - by: A key path to the equatable property used for deduplication.
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
     func unique<Key: Equatable>(
-        by path: some PartialPath<Value, Key> & Sendable,
+        by path: KeyPath<Value, Key> & Sendable,
         fileID: String = #fileID,
         line: UInt = #line
     ) -> ReflectiveGenerator<Value> {
@@ -315,9 +243,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 gen: erase(),
                 fingerprint: fingerprint,
                 keyExtractor: { value in
-                    guard let key = try? path.extract(from: value) else {
-                        return AnyHashable(ObjectIdentifier(type(of: value)))
-                    }
+                    let key = (value as! Value)[keyPath: path]
                     if seen.contains(where: { $0 == key }) {
                         return AnyHashable(seen.count)
                     }
@@ -633,9 +559,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         try _bound(forward: forward, backward: backward, fileID: fileID, line: line, column: column)
     }
 
-    /// Chains this generator with a dependent generator, using a partial path for backward extraction.
+    /// Chains this generator with a dependent generator, using a key path for backward extraction.
     ///
-    /// This overload uses a ``PartialPath`` for the backward transformation, which can fail gracefully when the reflection target doesn't contain the expected structure. If extraction fails, that reflection branch is pruned.
+    /// Use this when the backward direction is a simple property access rather than an arbitrary closure.
     ///
     /// ```swift
     /// let gen = #gen(.int(in: 1...10)).bound(
@@ -646,26 +572,18 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// - Parameters:
     ///   - forward: Function that takes the generated value and returns a new generator.
-    ///   - backward: Partial path to extract the inner value from the final output.
-    /// - Returns: A generator that sequences the two computations. with bidirectional support.
+    ///   - backward: Key path to extract the inner value from the final output.
+    /// - Returns: A generator that sequences the two computations with bidirectional support.
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
-        backward: some PartialPath<NewValue, Value>,
+        backward: KeyPath<NewValue, Value>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
         try _bound(
             forward: forward,
-            backward: {
-                guard let extracted = try backward.extract(from: $0) else {
-                    throw Interpreters.ReflectionError.reflectedNil(
-                        type: "\(Value.self)",
-                        resultType: String(describing: type(of: $0))
-                    )
-                }
-                return extracted
-            },
+            backward: { $0[keyPath: backward] },
             fileID: fileID,
             line: line,
             column: column

@@ -500,7 +500,7 @@ struct ExamineFirstPartyGeneratorsTests {
 
     // MARK: - Unique
 
-    @Test("unique(by:) deduplicates by hashable partial path")
+    @Test("unique(by:) deduplicates by hashable key path")
     func uniqueByHashable() {
         let items = [
             KeyPathFixture(id: 1, label: .init(value: "alpha")),
@@ -516,7 +516,7 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
-    @Test("unique(by:) deduplicates by equatable partial path")
+    @Test("unique(by:) deduplicates by equatable key path")
     func uniqueByEquatable() {
         let items = [
             KeyPathFixture(id: 1, label: .init(value: "alpha")),

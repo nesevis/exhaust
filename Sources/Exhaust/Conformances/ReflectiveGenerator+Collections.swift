@@ -389,7 +389,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.element(from: collection)
     }
 
-    /// Picks a random element from a fixed collection, identified by a hashable partial path for O(1) reflection.
+    /// Picks a random element from a fixed collection, identified by a hashable key path for O(1) reflection.
     ///
     /// The collection is captured at construction time. The backward pass identifies the element via hash-based dictionary lookup on the extracted value, enabling reflection for types that are not ``Hashable`` themselves.
     ///
@@ -399,16 +399,16 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - id: A partial path to a hashable property used to identify elements during reflection.
+    ///   - id: A key path to a hashable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection, Key: Hashable>(
         from collection: C,
-        id path: some PartialPath<C.Element, Key>
+        id path: KeyPath<C.Element, Key>
     ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
         Gen.element(from: collection, id: path)
     }
 
-    /// Picks a random element from a fixed collection, identified by an equatable partial path for reflection.
+    /// Picks a random element from a fixed collection, identified by an equatable key path for reflection.
     ///
     /// The collection is captured at construction time. The backward pass identifies the element by linear scan comparing the extracted value, enabling reflection for types that are not ``Equatable``.
     ///
@@ -418,11 +418,11 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - id: A partial path to an equatable property used to identify elements during reflection.
+    ///   - id: A key path to an equatable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection, Key: Equatable>(
         from collection: C,
-        id path: some PartialPath<C.Element, Key>
+        id path: KeyPath<C.Element, Key>
     ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
         Gen.element(from: collection, id: path)
     }

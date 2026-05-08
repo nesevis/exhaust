@@ -46,9 +46,6 @@ let package = Package(
             targets: ["Exhaust"]
         ),
     ],
-    traits: [
-        .trait(name: "CasePathable", description: "Adds PartialPath conformance for AnyCasePath from swift-case-paths"),
-    ],
     dependencies: [
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
@@ -56,7 +53,6 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "1.0.0"),
     ] + swiftLintDependency,
     targets: [
         coreTarget,
@@ -67,7 +63,6 @@ let package = Package(
                 "ExhaustMacros",
                 .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
-                .product(name: "CasePaths", package: "swift-case-paths", condition: .when(traits: ["CasePathable"])),
             ],
             swiftSettings: usePrecompiled
                 ? [.unsafeFlags(["-Xfrontend", "-experimental-package-interface-load"])]
