@@ -22,11 +22,15 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "BinaryHeap", gen: binaryHeapGen(depth: 10).unique(), property: binaryHeapProperty,
+        name: "BinaryHeap", gen: #gen(.uint64(in: 0 ... 20)).bind { binaryHeapGen(depth: $0) }.unique(), property: binaryHeapProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 4)), property: calculatorProperty,
+        name: "BinaryHeap (recursive)", gen: binaryHeapGenRecursive(), property: binaryHeapProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 5)), property: calculatorProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
@@ -291,6 +295,15 @@ private func printECOOPReport(
             let seedPreview = seeds.prefix(3).map { String($0) }.joined(separator: ", ")
             let suffix = seeds.count > 3 ? ", ... (\(seeds.count) total)" : " (\(seeds.count) total)"
             print("  \(percentage)% \(counterexample) — seeds: \(seedPreview)\(suffix)")
+        }
+    }
+
+    // Top seeds by materialization count.
+    let worstSeeds = results.sorted { $0.materializations > $1.materializations }.prefix(5)
+    if let worst = worstSeeds.first, worst.materializations > Int(matStats.mean * 2) {
+        print("[\(name) ECOOP] highest-mat seeds:")
+        for result in worstSeeds {
+            print("  seed \(result.seed): mats=\(result.materializations) invocations=\(result.invocations) reduce=\(f2(result.reductionMilliseconds))ms CE=\(result.counterexampleDescription)")
         }
     }
 }

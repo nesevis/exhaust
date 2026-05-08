@@ -10,7 +10,7 @@
 
 /// Min-heap of `Int` plus a buggy `toSortedList` that violates the property `toSortedList(h).sorted() == toList(h).sorted()`.
 enum BinaryHeapFixture {
-    indirect enum Heap<Element: Comparable>: Equatable {
+    indirect enum Heap<Element: Comparable & Sendable>: Equatable, Sendable {
         case empty
         case node(Element, Heap, Heap)
     }
@@ -109,6 +109,27 @@ enum BinaryHeapFixture {
 
     /// Top-level generator with depth 20 — matches the ECOOP harness configuration.
     static let gen = heapGen(depth: 20)
+
+    /// Recursive combinator variant. Depth is controlled by `.recursive` instead of an outer `bind`. The min-value constraint is dropped — invalid heaps are filtered by ``invariant(_:)`` in the property.
+    static func heapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<Int>> {
+        .recursive(
+            base: Heap<Int>.empty,
+            depthRange: 0 ... 10
+        ) { recurse, _ in
+            let nodeGen = #gen(.int(in: 0 ... maxValue), recurse(), recurse())
+                .mapped(
+                    forward: { value, left, right in Heap.node(value, left, right) },
+                    backward: { heap in
+                        switch heap {
+                        case let .node(value, left, right): (value, left, right)
+                        case .empty: (0, .empty, .empty)
+                        }
+                    }
+                )
+            return #gen(.oneOf(weighted: (1, .just(.empty)), (5, nodeGen)))
+        }
+        .filter { Self.invariant($0) }
+    }
 
     /// Property under test: if the heap satisfies the min-heap invariant, then ``toSortedList(_:)`` produces a sorted list with the same elements as ``toList(_:)``. False because of the buggy ``toSortedList(_:)``.
     @Sendable

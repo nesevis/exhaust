@@ -28,7 +28,8 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 boundGen,
                 .suppress(.issueReporting),
-                .replay(1591),
+                .replay(2250),
+                .logging(.debug),
                 .onReport { report = $0 },
                 property: BinaryHeapFixture.property
             )
@@ -43,6 +44,26 @@ struct BinaryHeapShrinkingChallenge {
         let outputValues = BinaryHeapFixture.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
         // 1 *should* be the last value, as this is the shortlex smallest, but
+        #expect(outputValues.sorted() == [0, 0, 0, 1])
+    }
+
+    @Test("Binary heap, Recursive combinator")
+    func binaryHeapRecursive() throws {
+        let recursiveGen = BinaryHeapFixture.heapGenRecursive()
+        var report: ExhaustReport?
+        let output = try #require(
+            #exhaust(
+                recursiveGen,
+                .suppress(.issueReporting),
+                .logging(.debug),
+                .onReport { report = $0 },
+                property: BinaryHeapFixture.property
+            )
+        )
+        let rep = try #require(report)
+        print(rep.profilingSummary)
+
+        let outputValues = BinaryHeapFixture.toList(output)
         #expect(outputValues.sorted() == [0, 0, 0, 1])
     }
 }
