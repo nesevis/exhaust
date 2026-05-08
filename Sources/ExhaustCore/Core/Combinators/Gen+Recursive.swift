@@ -74,8 +74,71 @@ package extension Gen {
             )
     }
 
+    // MARK: - Unfold
+
+    /// Generates values by iteratively transforming state from a seed, with reducible iteration depth.
+    ///
+    /// Starting from an initial state produced by `seed`, the generator repeatedly calls `step` to either produce the final value (`.done`) or continue with new state (`.recurse`). The `remaining` parameter counts down from the chosen depth to zero; `step` must return `.done` when `remaining` is zero.
+    ///
+    /// The iteration count is drawn from `depthRange` as a reducible depth-control choice. The reducer can collapse iterations through structural operations to find the minimum number of steps needed to trigger a property failure. Because the chosen depth may be less than the upper bound, `step` should not assume that `remaining` starts at any particular value — use it only for relative decisions (for example, "generate a leaf when `remaining` is zero") rather than absolute thresholds.
+    ///
+    /// - Parameters:
+    ///   - seed: Generator for the initial state.
+    ///   - depthRange: The range of iteration counts to draw from. The lower bound must be at least 1.
+    ///   - step: Closure that receives the current state and remaining depth, returning a generator of ``UnfoldStep``.
+    /// - Returns: A generator producing values built by iterative state transformation.
+    static func unfold<State, Output>(
+        seed: ReflectiveGenerator<State>,
+        depthRange: ClosedRange<Int>,
+        step: @escaping (State, UInt64) -> ReflectiveGenerator<UnfoldStep<State, Output>>,
+        fileID: String = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) -> ReflectiveGenerator<Output> {
+        precondition(depthRange.lowerBound >= 1, "lower bound must be >= 1")
+        func loop(
+            state: ReflectiveGenerator<State>,
+            remaining: UInt64
+        ) -> ReflectiveGenerator<Output> {
+            state._bindReified(
+                { currentState in
+                    step(currentState, remaining)._bindReified(
+                        { result in
+                            switch result {
+                            case let .done(output):
+                                return Gen.just(output)
+                            case let .recurse(nextState):
+                                guard remaining > 0 else {
+                                    preconditionFailure(
+                                        "step returned .recurse at remaining=0; "
+                                            + "step must return .done when remaining is 0"
+                                    )
+                                }
+                                return loop(
+                                    state: Gen.just(nextState),
+                                    remaining: remaining - 1
+                                )
+                            }
+                        },
+                        fileID: fileID, line: line &+ 1, column: column
+                    )
+                },
+                fileID: fileID, line: line, column: column
+            )
+        }
+
+        let range = UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound)
+        return chooseDepth(in: range)
+            ._bound(
+                forward: { depth in loop(state: seed, remaining: depth) },
+                backward: { _ in range.upperBound }
+            )
+    }
+
+    // MARK: - Depth Control
+
     /// Generates a depth index tagged with ``TypeTag/depthControl``. Excluded from value search during reduction — structural operations handle depth reduction while preserving structural context.
-    private static func chooseDepth(in range: ClosedRange<UInt64>) -> ReflectiveGenerator<UInt64> {
+    static func chooseDepth(in range: ClosedRange<UInt64>) -> ReflectiveGenerator<UInt64> {
         let operation = ReflectiveOperation.chooseBits(
             min: range.lowerBound,
             max: range.upperBound,

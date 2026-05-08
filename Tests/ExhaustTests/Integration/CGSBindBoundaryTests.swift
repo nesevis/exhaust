@@ -37,7 +37,7 @@ struct CGSBindBoundaryTests {
     func unfoldWithFilter() {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .just(0),
-            maxDepth: 3
+            depthRange: 1 ... 3
         ) { state, remaining in
             if remaining == 0 {
                 return .just(.done(state))
