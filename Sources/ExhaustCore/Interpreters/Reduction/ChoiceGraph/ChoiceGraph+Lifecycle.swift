@@ -255,6 +255,23 @@ extension ChoiceGraph {
             )))
         }
 
+        // Resync pick metadata after position-shifting splices when surviving picks exist past the insertion point. Those picks retain their pre-shift selectedID even though the sequence entry at their new position may encode a different branch.
+        if lengthDelta != 0 {
+            let hasShiftedPicks = nodes.contains { node in
+                guard case .pick = node.kind else { return false }
+                guard let range = node.positionRange else { return false }
+                return range.lowerBound > oldBoundRange.upperBound
+            }
+            if hasShiftedPicks {
+                let freshSequence = ChoiceSequence(freshTree)
+                resyncPickMetadata(
+                    pastPosition: oldBoundRange.upperBound,
+                    acceptedSequence: freshSequence
+                )
+            }
+        }
+
+
         // Step 10: finalize — recompute self-similarity groups, invalidate caches.
         finalizeStructuralSplice()
 
@@ -275,6 +292,49 @@ extension ChoiceGraph {
             guard case let .pick(metadata) = node.kind else { continue }
             guard node.positionRange != nil else { continue }
             selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
+        }
+    }
+
+    /// Patches `selectedID` on pick nodes whose positions shifted past `pastPosition`.
+    ///
+    /// A bind-inner reshape may shift positions of surviving pick nodes that were created by a prior splice. Those nodes retain their old `selectedID` because the current splice only rebuilds its own subtree. The accepted sequence's `.branch(Branch)` entry at `positionRange.lowerBound + 1` is authoritative.
+    private func resyncPickMetadata(
+        pastPosition: Int,
+        acceptedSequence: ChoiceSequence
+    ) {
+        for nodeID in 0 ..< nodes.count {
+            guard isTombstoned(nodeID) == false else { continue }
+            guard case let .pick(pickMetadata) = nodes[nodeID].kind else { continue }
+            guard let range = nodes[nodeID].positionRange else { continue }
+            guard range.lowerBound > pastPosition else { continue }
+            let branchEntryPosition = range.lowerBound + 1
+            guard branchEntryPosition < acceptedSequence.count else { continue }
+            guard case let .branch(branchInfo) = acceptedSequence[branchEntryPosition] else { continue }
+            guard branchInfo.id != pickMetadata.selectedID else { continue }
+
+            let correctedChildIndex = nodes[nodeID].children.firstIndex { childID in
+                guard childID < nodes.count else { return false }
+                guard nodes[childID].positionRange != nil else { return false }
+                return true
+            } ?? pickMetadata.selectedChildIndex
+
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "pick_metadata_resynced",
+                metadata: [
+                    "node_id": "\(nodeID)",
+                    "stale_selected_id": "\(pickMetadata.selectedID)",
+                    "corrected_selected_id": "\(branchInfo.id)",
+                ]
+            )
+
+            nodes[nodeID] = nodes[nodeID].with(kind: .pick(PickMetadata(
+                fingerprint: pickMetadata.fingerprint,
+                branchCount: pickMetadata.branchCount,
+                selectedID: branchInfo.id,
+                selectedChildIndex: correctedChildIndex,
+                branchElements: pickMetadata.branchElements
+            )))
         }
     }
 

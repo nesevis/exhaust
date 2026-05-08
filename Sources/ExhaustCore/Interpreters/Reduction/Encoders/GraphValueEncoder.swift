@@ -250,7 +250,6 @@ struct GraphValueEncoder: GraphEncoder {
         case .boundValue:
             // bound value scopes are dispatched via ``GraphComposedEncoder``
             // constructed at the scheduler call site, never through this encoder.
-            // Reaching this branch indicates a routing bug.
             assertionFailure("boundValue scopes must route through GraphComposedEncoder, not GraphValueEncoder")
             mode = .idle
         }
