@@ -309,11 +309,16 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         base: Value,
         depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (
-            @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> ReflectiveGenerator<Value>,
             UInt64
         ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
-        Gen.recursive(base: base, depthRange: depthRange, extend: extend)
+        precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
+        return recursive(
+            base: Gen.just(base),
+            depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound),
+            extend: extend
+        )
     }
 
     /// Creates a recursive generator with a constant base case value.
@@ -341,11 +346,11 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         base: Value,
         depthRange: ClosedRange<UInt64>,
         extend: @Sendable @escaping (
-            @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> ReflectiveGenerator<Value>,
             UInt64
         ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
-        Gen.recursive(base: Gen.just(base), depthRange: depthRange, extend: extend)
+        recursive(base: Gen.just(base), depthRange: depthRange, extend: extend)
     }
 
     /// Creates a recursive generator with a generator base case and a reducible depth range.
@@ -370,12 +375,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         base: ReflectiveGenerator<Value>,
         depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (
-            @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> ReflectiveGenerator<Value>,
             UInt64
         ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
-        return Gen.recursive(
+        return recursive(
             base: base,
             depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound),
             extend: extend
@@ -395,11 +400,18 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         base: ReflectiveGenerator<Value>,
         depthRange: ClosedRange<UInt64>,
         extend: @Sendable @escaping (
-            @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> ReflectiveGenerator<Value>,
             UInt64
         ) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
-        Gen.recursive(base: base, depthRange: depthRange, extend: extend)
+        // Bridge the Sendable boundary: Gen.recursive is internal and provides a non-Sendable
+        // recurse thunk. The public API requires @Sendable on the thunk so users can capture it
+        // in #gen(...) closures. The wrap is safe because ReflectiveGenerator is @unchecked Sendable.
+        Gen.recursive(base: base, depthRange: depthRange) { recurse, remaining in
+            nonisolated(unsafe) let capturedRecurse = recurse
+            let sendableRecurse: @Sendable () -> ReflectiveGenerator<Value> = { capturedRecurse() }
+            return extend(sendableRecurse, remaining)
+        }
     }
 
     /// Retrieves the current size parameter and feeds it into a generator-producing closure.
