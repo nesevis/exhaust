@@ -33,7 +33,9 @@ protocol ScopeSource {
 /// Creates one source per search space. The scheduler merges them by ``ScopeSource/peekYield``.
 enum ScopeSourceBuilder {
     /// Builds all scope sources from the current graph.
-    static func buildSources(from graph: some ReadOnlyChoiceGraph) -> [any ScopeSource] {
+    ///
+    /// - Parameter deferBindInner: When true, bind-inner value leaves and bound value scopes are excluded from the minimization source. The scheduler sets this while structural reduction is still active to avoid probing values on nodes that will be structurally removed.
+    static func buildSources(from graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [any ScopeSource] {
         var sources: [any ScopeSource] = []
 
         // Batched cross-sequence removal — most drastic structural reduction.
@@ -93,7 +95,7 @@ enum ScopeSourceBuilder {
         }
 
         // Minimization (search-based).
-        let minimizationSource = MinimizationSource(graph: graph)
+        let minimizationSource = MinimizationSource(graph: graph, deferBindInner: deferBindInner)
         if minimizationSource.peekYield != nil {
             sources.append(minimizationSource)
         }

@@ -12,11 +12,11 @@ struct MinimizationSource: ScopeSource {
     private var scopes: [(scope: MinimizationScope, yield: TransformationYield)]
     private var index = 0
 
-    init(graph: some ReadOnlyChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) {
         let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
         var entries: [(scope: MinimizationScope, yield: TransformationYield)] = []
 
-        for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind) {
+        for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind, deferBindInner: deferBindInner) {
             let valueYield: Int = switch scope {
             case let .valueLeaves(integerScope):
                 integerScope.leaves.reduce(0) { maxSoFar, leaf in

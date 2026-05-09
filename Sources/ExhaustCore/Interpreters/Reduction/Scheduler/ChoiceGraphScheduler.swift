@@ -118,6 +118,9 @@ enum ChoiceGraphScheduler {
         var gate = BoundValueGate()
         var hadReplacementShortlexRejection = false
 
+        // Defer bind-inner value search until structural reduction converges. This avoids probing values on nodes that will be structurally removed, and avoids the cascade where bind-inner value acceptances reshape the graph and invalidate other in-progress structural operations. Only active when the graph has bind-inner leaves.
+        var deferBindInner = graph.reductionEdges.isEmpty == false
+
         while stallBudget > 0 {
             cycles += 1
             gate.resetForNewCycle()
@@ -125,7 +128,7 @@ enum ChoiceGraphScheduler {
             hadReplacementShortlexRejection = false
             let sequenceBeforeCycle = sequence
 
-            var sources = ScopeSourceBuilder.buildSources(from: graph)
+            var sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
             if isInstrumented {
                 ExhaustLog.debug(
@@ -213,7 +216,7 @@ enum ChoiceGraphScheduler {
                         tree = fullTree
                     }
                     graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-                    sources = ScopeSourceBuilder.buildSources(from: graph)
+                    sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
                     graphIsStripped = false
                     continue
                 }
@@ -316,7 +319,7 @@ enum ChoiceGraphScheduler {
                         }
                         scopeRejectionCache.clear()
                         gate.resetAfterRebuild()
-                        sources = ScopeSourceBuilder.buildSources(from: graph)
+                        sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -330,7 +333,7 @@ enum ChoiceGraphScheduler {
                             )
                         }
                     } else if outcome.requiresSourceRebuild {
-                        sources = ScopeSourceBuilder.buildSources(from: graph)
+                        sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -396,6 +399,22 @@ enum ChoiceGraphScheduler {
             }
 
             let structurallyImproved = sequence.count < sequenceBeforeCycle.count
+
+            // Release bind-inner value search once structural reduction has converged. Once released, the flag stays false for the remainder of the reduction — the greedy yield scheduler already prioritises structural operations over value operations, so any structural opportunities unlocked by bind-inner reshapes will be picked up naturally.
+            if deferBindInner, structurallyImproved == false {
+                deferBindInner = false
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .reducer,
+                        event: "bind_inner_deferral_released",
+                        metadata: [
+                            "cycle": "\(cycles)",
+                            "seq_len": "\(sequence.count)",
+                        ]
+                    )
+                }
+            }
+
             if structurallyImproved == false,
                anyAccepted == false,
                allValuesConverged(in: sequence, graph: graph)

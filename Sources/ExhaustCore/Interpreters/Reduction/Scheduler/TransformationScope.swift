@@ -163,9 +163,13 @@ struct LeafEntry {
     /// True when this leaf is the inner child of a non-structurally-constant bind. Encoders ignore this; the graph reads it on acceptance.
     let mayReshapeOnAcceptance: Bool
 
-    init(nodeID: Int, mayReshapeOnAcceptance: Bool = false) {
+    /// Nesting depth of the controlling bind, or nil for independent leaves. Used by the scheduler to order bind-inner value search top-down (shallowest first), eliminating cascade restarts where a shallow acceptance invalidates deeper in-progress searches.
+    let bindDepth: Int?
+
+    init(nodeID: Int, mayReshapeOnAcceptance: Bool = false, bindDepth: Int? = nil) {
         self.nodeID = nodeID
         self.mayReshapeOnAcceptance = mayReshapeOnAcceptance
+        self.bindDepth = bindDepth
     }
 }
 

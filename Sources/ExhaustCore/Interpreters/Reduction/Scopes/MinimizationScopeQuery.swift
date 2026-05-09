@@ -17,9 +17,15 @@ enum MinimizationScopeQuery {
     /// - Returns: All minimization scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
     static func build(
         graph: some ReadOnlyChoiceGraph,
-        innerDescendantToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int],
+        deferBindInner: Bool = false
     ) -> [MinimizationScope] {
         var scopes: [MinimizationScope] = []
+
+        let bindDepthByLeaf = ScopeQueryHelpers.buildBindDepthByLeaf(
+            graph: graph,
+            innerDescendantToBind: innerDescendantToBind
+        )
 
         // Integer leaves.
         var integerLeafNodeIDs: [Int] = []
@@ -73,9 +79,15 @@ enum MinimizationScopeQuery {
                 {
                     continue
                 }
-                let entry = ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
+                let entry = ScopeQueryHelpers.makeLeafEntry(
+                    nodeID,
+                    innerDescendantToBind: innerDescendantToBind,
+                    bindDepthByLeaf: bindDepthByLeaf
+                )
                 if entry.mayReshapeOnAcceptance {
-                    bindInnerEntries.append(entry)
+                    if deferBindInner == false {
+                        bindInnerEntries.append(entry)
+                    }
                 } else {
                     independentEntries.append(entry)
                 }
@@ -87,12 +99,16 @@ enum MinimizationScopeQuery {
                 )))
             }
             if bindInnerEntries.isEmpty == false {
-                // Contravariant ordering: smallest downstream effect first (inverted relative to yield). Each bind-inner acceptance reshapes the bound subtree (a structural side effect). Probing the smallest-effect leaves first keeps early acceptances near-value-only, deferring large structural reshapes to later in the pass where the scheduler can interleave structural operations between them.
-                bindInnerEntries.reverse()
-                scopes.append(.valueLeaves(ValueMinimizationScope(
-                    leaves: bindInnerEntries,
-                    batchZeroEligible: bindInnerEntries.count > 1
-                )))
+                // Depth-partitioned ordering: group bind-inner leaves by bindDepth, emit shallowest first. Within each depth level, smallest downstream effect first (contravariant relative to yield). Top-down ordering ensures that by the time a leaf is searched, all its upstream ancestors are already converged — no cascade restarts from upstream acceptances invalidating downstream searches.
+                let grouped = Dictionary(grouping: bindInnerEntries) { $0.bindDepth ?? 0 }
+                for depth in grouped.keys.sorted() {
+                    var depthEntries = grouped[depth]!
+                    depthEntries.sort { ($0.bindDepth ?? 0) < ($1.bindDepth ?? 0) }
+                    scopes.append(.valueLeaves(ValueMinimizationScope(
+                        leaves: depthEntries,
+                        batchZeroEligible: depthEntries.count > 1
+                    )))
+                }
             }
         }
 
@@ -100,9 +116,15 @@ enum MinimizationScopeQuery {
             var bindInnerFloats: [LeafEntry] = []
             var independentFloats: [LeafEntry] = []
             for nodeID in floatLeafNodeIDs {
-                let entry = ScopeQueryHelpers.makeLeafEntry(nodeID, innerDescendantToBind: innerDescendantToBind)
+                let entry = ScopeQueryHelpers.makeLeafEntry(
+                    nodeID,
+                    innerDescendantToBind: innerDescendantToBind,
+                    bindDepthByLeaf: bindDepthByLeaf
+                )
                 if entry.mayReshapeOnAcceptance {
-                    bindInnerFloats.append(entry)
+                    if deferBindInner == false {
+                        bindInnerFloats.append(entry)
+                    }
                 } else {
                     independentFloats.append(entry)
                 }
@@ -116,6 +138,9 @@ enum MinimizationScopeQuery {
         }
 
         // Bound value: one scope per bind node with an active inner child. Does NOT filter on ``isStructurallyConstant``: a structurally constant bind can still carry domain-dependent values whose ranges shift with the upstream value (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))` is the canonical example). The composition's downstream encoder finds these via the lift's bound value coverage. Dispatch is gated per-site by ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` in the scheduler, which rejects topology-divergent binds (Calculator's `.recursive`) before any probe runs.
+        //
+        // Deferred when structural reduction is still active: bound value compositions probe bind-inner values, which trigger reshapes that interleave with and invalidate structural search. Deferral avoids probing nodes that will be structurally removed.
+        guard deferBindInner == false else { return scopes }
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }
@@ -141,10 +166,11 @@ enum MinimizationScopeQuery {
     }
 
     /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building exchange scopes so the index is computed once and shared.
-    static func build(graph: some ReadOnlyChoiceGraph) -> [MinimizationScope] {
+    static func build(graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [MinimizationScope] {
         build(
             graph: graph,
-            innerDescendantToBind: ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+            innerDescendantToBind: ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph),
+            deferBindInner: deferBindInner
         )
     }
 

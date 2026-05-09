@@ -66,6 +66,21 @@ enum ScopeQueryHelpers {
         }
     }
 
+    /// Builds an index from bind-inner leaf node IDs to their controlling bind's ``BindMetadata/bindDepth``.
+    ///
+    /// Used by ``MinimizationScopeQuery`` to annotate ``LeafEntry/bindDepth`` for top-down depth ordering of bind-inner value search. Only includes leaves that appear in `innerDescendantToBind` (bind-inner leaves).
+    static func buildBindDepthByLeaf(
+        graph: some ReadOnlyChoiceGraph,
+        innerDescendantToBind: [Int: Int]
+    ) -> [Int: Int] {
+        var result: [Int: Int] = [:]
+        for (leafNodeID, bindNodeID) in innerDescendantToBind {
+            guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { continue }
+            result[leafNodeID] = metadata.bindDepth
+        }
+        return result
+    }
+
     /// Returns true when a leaf is the inner child of a bind. Any bind-inner mutation must route through ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` (not the value-only fast path) because the materializer may produce a tree with a different bound-subtree shape — different array length, different value ranges, different content — even when the bind has no *nested* binds or picks.
     ///
     /// The previous predicate filtered on ``BindMetadata/isStructurallyConstant`` and missed Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`: the bound contains only plain choices (so `isStructurallyConstant == true`), but its length and element validRanges depend on `n`, so changing `n` changes the live tree's shape. The value-only fast path then left the graph holding the old bound subtree's nodes at positions that no longer corresponded to value entries in the live sequence, producing a position drift bug.
@@ -78,17 +93,19 @@ enum ScopeQueryHelpers {
         innerDescendantToBind[leafNodeID] != nil
     }
 
-    /// Wraps a leaf node ID in a ``LeafEntry`` with the bind-inner reshape marker populated from the supplied index.
+    /// Wraps a leaf node ID in a ``LeafEntry`` with the bind-inner reshape marker and bind depth populated from the supplied indices.
     static func makeLeafEntry(
         _ nodeID: Int,
-        innerDescendantToBind: [Int: Int]
+        innerDescendantToBind: [Int: Int],
+        bindDepthByLeaf: [Int: Int] = [:]
     ) -> LeafEntry {
         LeafEntry(
             nodeID: nodeID,
             mayReshapeOnAcceptance: isBindInner(
                 nodeID,
                 innerDescendantToBind: innerDescendantToBind
-            )
+            ),
+            bindDepth: bindDepthByLeaf[nodeID]
         )
     }
 }
