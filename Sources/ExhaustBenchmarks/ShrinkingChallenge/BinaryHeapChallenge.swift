@@ -72,17 +72,17 @@ func binaryHeapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<In
 // MARK: - Buggy Heap Operations
 
 func heapToList<Element>(_ heap: Heap<Element>) -> [Element] {
-    var queue = [heap]
+    var stack = [heap]
     var result: [Element] = []
-    while queue.isEmpty == false {
-        let current = queue.removeFirst()
+    while stack.isEmpty == false {
+        let current = stack.removeLast()
         switch current {
         case .empty:
             continue
         case let .node(x, h1, h2):
             result.append(x)
-            queue.append(h1)
-            queue.append(h2)
+            stack.append(h1)
+            stack.append(h2)
         }
     }
     return result

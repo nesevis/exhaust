@@ -15,19 +15,19 @@ enum BinaryHeapFixture {
         case node(Element, Heap, Heap)
     }
 
-    /// Flattens a heap into a list via breadth-first traversal.
+    /// Flattens a heap into a list via depth-first traversal (right-child first, matching the ECOOP reference).
     static func toList<Element>(_ heap: Heap<Element>) -> [Element] {
-        var queue = [heap]
+        var stack = [heap]
         var result: [Element] = []
-        while queue.isEmpty == false {
-            let current = queue.removeFirst()
+        while stack.isEmpty == false {
+            let current = stack.removeLast()
             switch current {
             case .empty:
                 continue
             case let .node(value, left, right):
                 result.append(value)
-                queue.append(left)
-                queue.append(right)
+                stack.append(left)
+                stack.append(right)
             }
         }
         return result
