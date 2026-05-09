@@ -137,7 +137,7 @@ package struct BindMetadata {
     /// Structural path from the ``ChoiceTree`` root at graph-construction time to this bind. Used by ``ChoiceGraph/extractBoundSubtree(from:matchingPath:)`` to locate the matching bind in a post-mutation freshTree. The root bind has the empty path.
     public let bindPath: BindPath
 
-    /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``GraphComposedEncoder``) so unsuitable sites are skipped immediately rather than via emergent futility counting.
+    /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``GraphComposedEncoder``) so unsuitable sites are skipped immediately.
     public var classification: BindClassification?
 
     /// Topology hash of the bound subtree at classification time. Nil until classification runs. Intended as a future-facing staleness check: callers may re-hash the current bound subtree and compare against this value before trusting a cached ``classification``. Today, reshape clearing and full-graph-rebuild replacement already cover the common invalidation paths, so this field is defensive rather than load-bearing.
