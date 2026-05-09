@@ -18,7 +18,6 @@
 ///
 /// State clusters that were previously inline local variables are factored into dedicated types:
 /// - ``BoundValueGate``: per-cycle dedup, fruitless tracking, and stall-count decay for bound value composition dispatches.
-/// - ``FutilityTracker``: cumulative per-encoder probe history and per-cycle budget caps for structurally futile encoders.
 ///
 /// - SeeAlso: ``ScopeSource``, ``ScopeSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
@@ -117,13 +116,11 @@ enum ChoiceGraphScheduler {
 
         var scopeRejectionCache = ScopeRejectionCache()
         var gate = BoundValueGate()
-        var futility = FutilityTracker()
         var hadReplacementShortlexRejection = false
 
         while stallBudget > 0 {
             cycles += 1
             gate.resetForNewCycle()
-            futility.prepareForNewCycle()
             scopeRejectionCache.clearCoarse()
             hadReplacementShortlexRejection = false
             let sequenceBeforeCycle = sequence
@@ -204,12 +201,6 @@ enum ChoiceGraphScheduler {
                     }
                 }
 
-                // Futility budget check.
-                let pendingEncoderName = FutilityTracker.encoderName(for: transformation.operation)
-                if futility.isBudgetExhausted(for: pendingEncoderName) {
-                    continue
-                }
-
                 // Lazy rematerialize for stripped graphs before path-changing operations.
                 if graphIsStripped, transformation.operation.isPathChanging {
                     if case let .success(_, fullTree, _) = Materializer.materializeAny(
@@ -265,8 +256,7 @@ enum ChoiceGraphScheduler {
                     rejectCache: &rejectCache,
                     stats: &stats,
                     collectStats: collectStats,
-                    isInstrumented: isInstrumented,
-                    materializationBudget: futility.remainingBudget(for: pendingEncoderName)
+                    isInstrumented: isInstrumented
                 )
 
                 encoder.flushPartialConvergence()
@@ -275,12 +265,6 @@ enum ChoiceGraphScheduler {
                 if convergence.isEmpty == false {
                     graph.recordConvergence(byNodeID: convergence)
                 }
-
-                futility.recordOutcome(
-                    encoder: pendingEncoderName,
-                    materializations: outcome.materializationCount,
-                    accepts: outcome.acceptCount
-                )
 
                 if case let .minimize(.boundValue(bindScope)) = transformation.operation {
                     gate.recordOutcome(bindNodeID: bindScope.bindNodeID, accepted: outcome.acceptCount > 0)

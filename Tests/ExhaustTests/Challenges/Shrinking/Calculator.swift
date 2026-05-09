@@ -46,7 +46,7 @@ struct CalculatorShrinkingChallenge {
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(.numeric(8012154019151340001)),
+            .replay(.numeric(1509)),
             .logging(.debug),
             .budget(.exorbitant)
         ) { expr in

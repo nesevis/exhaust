@@ -22,14 +22,12 @@ extension ChoiceGraphScheduler {
         let treeIsStripped: Bool
         let probeCount: Int
         let acceptCount: Int
-        /// Probes that reached the decoder (probeCount minus cache hits). Cache hits are free hash lookups that should not count toward futility budgets.
+        /// Probes that reached the decoder (probeCount minus cache hits).
         let materializationCount: Int
     }
 
     // swiftlint:disable function_parameter_count
     /// Runs an encoder's probe loop, accepting improvements.
-    ///
-    /// - Parameter materializationBudget: Maximum number of decoder-reaching probes (materializations) to allow in this dispatch. Cache hits do not count. Nil means unlimited. When the budget is exhausted, the loop breaks even if the encoder has more probes. Used by the scheduler to enforce the per-cycle futility cap at probe granularity rather than at dispatch granularity.
     static func runProbeLoop(
         encoder: inout any GraphEncoder,
         scope: TransformationScope,
@@ -42,8 +40,7 @@ extension ChoiceGraphScheduler {
         rejectCache: inout Set<UInt64>,
         stats: inout ReductionStats,
         collectStats: Bool,
-        isInstrumented: Bool,
-        materializationBudget: Int? = nil
+        isInstrumented: Bool
     ) throws -> ProbeLoopOutcome {
         encoder.start(scope: scope)
 
@@ -60,7 +57,6 @@ extension ChoiceGraphScheduler {
         // `stats.encoderProbesAccepted` and so on at the end of the loop.
         var cacheHitCount = 0
         var decoderRejectCount = 0
-        var materializationsRemaining = materializationBudget
         let baseHash = ZobristHash.hash(of: sequence)
         // Bind status is structural — value-only mutations within the probe loop cannot add or remove bind markers. Hoisted to avoid an O(N)
         // scan on every probe iteration.
@@ -85,12 +81,6 @@ extension ChoiceGraphScheduler {
             if rejectCache.contains(probeHash) {
                 cacheHitCount += 1
                 continue
-            }
-
-            // Per-probe materialization budget: if the budget is exhausted, break before decoding. Cache hits above are free and don't consume budget.
-            if let remaining = materializationsRemaining {
-                if remaining <= 0 { break }
-                materializationsRemaining = remaining - 1
             }
 
             // Layer 6 + Layer 7a: probes whose mutation does not change which branch is selected at any pick site can skip
