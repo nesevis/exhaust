@@ -517,7 +517,7 @@ enum ChoiceGraphScheduler {
         guard let reorderScope = ReorderingScopeQuery.build(graph: graph) else { return }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
-            yield: TransformationYield(structural: 0, value: 0, slack: .exact, estimatedProbes: 1),
+            yield: TransformationYield(structural: 0, value: 0, maxSourceDistance: 0, estimatedProbes: 1),
             precondition: .unconditional,
             postcondition: TransformationPostcondition(
                 isStructural: false,

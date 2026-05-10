@@ -46,7 +46,7 @@ struct MinimizationSource: ScopeSource {
                 yield: TransformationYield(
                     structural: 0,
                     value: valueYield,
-                    slack: .exact,
+                    maxSourceDistance: 0,
                     estimatedProbes: estimatedProbes
                 )
             ))
@@ -99,11 +99,10 @@ struct ExchangeSource: ScopeSource {
         var entries: [(scope: ExchangeScope, yield: TransformationYield)] = []
         for scope in ExchangeScopeQuery.build(graph: graph) {
             let estimatedProbes: Int
-            let slack: AffineSlack
+            let sourceDistance: Int
             switch scope {
             case let .redistribution(redistScope):
-                estimatedProbes = min(24, redistScope.pairs.count)
-                let maxDistance = redistScope.pairs.reduce(0) { maxSoFar, pair in
+                let maxDistance = redistScope.pairs.reduce(UInt64(0)) { maxSoFar, pair in
                     guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
                         return maxSoFar
                     }
@@ -111,12 +110,26 @@ struct ExchangeSource: ScopeSource {
                     let distance = metadata.value.bitPattern64 > target
                         ? metadata.value.bitPattern64 - target
                         : target - metadata.value.bitPattern64
-                    return max(maxSoFar, Int(min(distance, UInt64(Int.max))))
+                    return max(maxSoFar, distance)
                 }
-                slack = AffineSlack(multiplicative: 1, additive: maxDistance)
+                sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
+                estimatedProbes = min(24, redistScope.pairs.count)
             case let .tandem(tandemScope):
+                let maxDistance = tandemScope.groups.reduce(UInt64(0)) { maxSoFar, group in
+                    let groupMax = group.leaves.reduce(UInt64(0)) { leafMax, leaf in
+                        guard case let .chooseBits(metadata) = graph.nodes[leaf.nodeID].kind else {
+                            return leafMax
+                        }
+                        let target = metadata.value.reductionTarget(in: metadata.validRange)
+                        let distance = metadata.value.bitPattern64 > target
+                            ? metadata.value.bitPattern64 - target
+                            : target - metadata.value.bitPattern64
+                        return max(leafMax, distance)
+                    }
+                    return max(maxSoFar, groupMax)
+                }
+                sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
                 estimatedProbes = tandemScope.groups.count * 8
-                slack = AffineSlack(multiplicative: 1, additive: 1)
             }
 
             entries.append((
@@ -124,7 +137,7 @@ struct ExchangeSource: ScopeSource {
                 yield: TransformationYield(
                     structural: 0,
                     value: 0,
-                    slack: slack,
+                    maxSourceDistance: sourceDistance,
                     estimatedProbes: estimatedProbes
                 )
             ))

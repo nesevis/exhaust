@@ -37,7 +37,7 @@ struct ReplacementSource: ScopeSource {
                 yield: TransformationYield(
                     structural: structuralYield,
                     value: 0,
-                    slack: .exact,
+                    maxSourceDistance: 0,
                     estimatedProbes: 1
                 )
             ))
@@ -117,7 +117,7 @@ struct PermutationSource: ScopeSource {
         return TransformationYield(
             structural: 0,
             value: 0,
-            slack: .exact,
+            maxSourceDistance: 0,
             estimatedProbes: estimatedProbes
         )
     }
@@ -138,7 +138,7 @@ struct PermutationSource: ScopeSource {
             yield: TransformationYield(
                 structural: 0,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: estimatedProbes
             ),
             precondition: .nodeActive(entry.parentNodeID),

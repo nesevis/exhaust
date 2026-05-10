@@ -43,7 +43,7 @@ enum TransformationEnumerator {
         var result: [GraphTransformation] = []
 
         for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
-            let estimatedProbes = 2 * ceilLog2(scope.maxBatch)
+            let estimatedProbes = 2 * scope.maxBatch.ceilLog2
             let totalYield = scope.targets.reduce(0) { total, target in
                 total + target.elementNodeIDs.reduce(0) { subtotal, nodeID in
                     subtotal + (graph.nodes[nodeID].positionRange?.count ?? 0)
@@ -54,7 +54,7 @@ enum TransformationEnumerator {
                 yield: TransformationYield(
                     structural: totalYield,
                     value: 0,
-                    slack: .exact,
+                    maxSourceDistance: 0,
                     estimatedProbes: max(1, estimatedProbes)
                 ),
                 precondition: .all(scope.targets.map {
@@ -74,7 +74,7 @@ enum TransformationEnumerator {
                 yield: TransformationYield(
                     structural: scope.maxElementYield,
                     value: 0,
-                    slack: .exact,
+                    maxSourceDistance: 0,
                     estimatedProbes: scope.generator.totalRemaining
                 ),
                 precondition: .all(scope.siblings.map {
@@ -94,7 +94,7 @@ enum TransformationEnumerator {
                 yield: TransformationYield(
                     structural: scope.yield,
                     value: 0,
-                    slack: .exact,
+                    maxSourceDistance: 0,
                     estimatedProbes: 1
                 ),
                 precondition: .nodeActive(scope.nodeID),
@@ -124,7 +124,7 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: max(0, selfSimilarScope.sizeDelta),
                         value: 0,
-                        slack: .exact,
+                        maxSourceDistance: 0,
                         estimatedProbes: 1
                     ),
                     precondition: .all([
@@ -145,7 +145,7 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: activeSize,
                         value: 0,
-                        slack: .exact,
+                        maxSourceDistance: 0,
                         estimatedProbes: 1
                     ),
                     precondition: .nodeActive(pivotScope.pickNodeID),
@@ -162,7 +162,7 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: promotionScope.sizeDelta,
                         value: 0,
-                        slack: .exact,
+                        maxSourceDistance: 0,
                         estimatedProbes: 1
                     ),
                     precondition: .all([
@@ -208,13 +208,13 @@ enum TransformationEnumerator {
                     return max(maxSoFar, rangeSize)
                 }
                 let leafCount = integerScope.leaves.count
-                let estimatedProbes = 1 + leafCount * ceilLog2(Int(min(maxRange, UInt64(Int.max))))
+                let estimatedProbes = 1 + leafCount * Int(min(maxRange, UInt64(Int.max))).ceilLog2
                 result.append(GraphTransformation(
                     operation: .minimize(scope),
                     yield: TransformationYield(
                         structural: 0,
                         value: maxValueYield,
-                        slack: .exact,
+                        maxSourceDistance: 0,
                         estimatedProbes: max(1, estimatedProbes)
                     ),
                     precondition: .unconditional,
@@ -238,7 +238,7 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: 0,
                         value: maxValueYield,
-                        slack: .exact,
+                        maxSourceDistance: 0,
                         estimatedProbes: floatScope.leaves.count * 15
                     ),
                     precondition: .unconditional,
@@ -256,7 +256,7 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: 0,
                         value: bindScope.boundSubtreeSize,
-                        slack: .exact,
+                        maxSourceDistance: 0,
                         estimatedProbes: estimatedProbes
                     ),
                     precondition: .nodeActive(bindScope.bindNodeID),
@@ -283,17 +283,15 @@ enum TransformationEnumerator {
         for scope in ExchangeScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind) {
             switch scope {
             case let .redistribution(redistScope):
-                // Slack: maximum magnitude transferred (source's distance to target).
-                let maxSlack = redistScope.pairs.reduce(0) { maxSoFar, pair in
+                // Maximum source-to-target distance across all pairs. Tighter distances need fewer probes.
+                let maxDistance = redistScope.pairs.reduce(UInt64(0)) { maxSoFar, pair in
                     guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
                         return maxSoFar
                     }
                     let target = metadata.value.reductionTarget(in: metadata.validRange)
-                    let distance = Int(
-                        metadata.value.bitPattern64 > target
-                            ? metadata.value.bitPattern64 - target
-                            : target - metadata.value.bitPattern64
-                    )
+                    let distance = metadata.value.bitPattern64 > target
+                        ? metadata.value.bitPattern64 - target
+                        : target - metadata.value.bitPattern64
                     return max(maxSoFar, distance)
                 }
 
@@ -313,7 +311,7 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: 0,
                         value: maxEnablingYield,
-                        slack: AffineSlack(multiplicative: 1, additive: maxSlack),
+                        maxSourceDistance: Int(min(maxDistance, UInt64(Int.max))),
                         estimatedProbes: min(24, redistScope.pairs.count)
                     ),
                     precondition: .unconditional,
@@ -346,8 +344,8 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: 0,
                         value: 0,
-                        slack: AffineSlack(multiplicative: 1, additive: maxDistance),
-                        estimatedProbes: groupCount * ceilLog2(maxDistance)
+                        maxSourceDistance: maxDistance,
+                        estimatedProbes: groupCount * maxDistance.ceilLog2
                     ),
                     precondition: .unconditional,
                     postcondition: TransformationPostcondition(
@@ -375,7 +373,7 @@ enum TransformationEnumerator {
                     yield: TransformationYield(
                         structural: 0,
                         value: 0,
-                        slack: .exact,
+                        maxSourceDistance: 0,
                         estimatedProbes: 1
                     ),
                     precondition: .unconditional,
@@ -394,7 +392,7 @@ enum TransformationEnumerator {
                 yield: TransformationYield(
                     structural: 0,
                     value: 0,
-                    slack: .exact,
+                    maxSourceDistance: 0,
                     estimatedProbes: totalPairs
                 ),
                 precondition: .nodeActive(permScope.parentNodeID),
@@ -440,9 +438,4 @@ enum TransformationEnumerator {
         return yield
     }
 
-    /// Ceiling of log base 2, with a minimum of 1.
-    private static func ceilLog2(_ value: Int) -> Int {
-        guard value > 1 else { return 1 }
-        return Int.bitWidth - (value - 1).leadingZeroBitCount
-    }
 }

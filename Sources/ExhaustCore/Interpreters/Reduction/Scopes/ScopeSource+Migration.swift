@@ -99,7 +99,7 @@ struct MigrationSource: ScopeSource {
         return TransformationYield(
             structural: candidates[index].yield,
             value: 0,
-            slack: .exact,
+            maxSourceDistance: 0,
             estimatedProbes: 1
         )
     }
@@ -122,7 +122,7 @@ struct MigrationSource: ScopeSource {
             yield: TransformationYield(
                 structural: entry.yield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
             precondition: {

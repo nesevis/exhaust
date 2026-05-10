@@ -200,7 +200,7 @@ struct ChoiceGraphScopeQueryTests {
             yield: TransformationYield(
                 structural: coveringScope.maxElementYield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: coveringScope.generator.totalRemaining
             ),
             precondition: .unconditional,

@@ -84,7 +84,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             return TransformationYield(
                 structural: totalYield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             )
         }
@@ -97,7 +97,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             return TransformationYield(
                 structural: firstHalfYield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             )
         }
@@ -147,7 +147,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             yield: TransformationYield(
                 structural: totalYield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
             precondition: .all(targets.map {
@@ -199,7 +199,7 @@ struct SequenceEmptyingSource: ScopeSource {
         return TransformationYield(
             structural: candidates[index].yield,
             value: 0,
-            slack: .exact,
+            maxSourceDistance: 0,
             estimatedProbes: 1
         )
     }
@@ -223,7 +223,7 @@ struct SequenceEmptyingSource: ScopeSource {
             yield: TransformationYield(
                 structural: candidate.yield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
             precondition: .sequenceLengthAboveMinimum(sequenceNodeID: candidate.sequenceNodeID),
@@ -285,7 +285,7 @@ struct BatchRemovalSource: ScopeSource {
         return TransformationYield(
             structural: batchYield,
             value: 0,
-            slack: .exact,
+            maxSourceDistance: 0,
             estimatedProbes: 1
         )
     }
@@ -322,7 +322,7 @@ struct BatchRemovalSource: ScopeSource {
             yield: TransformationYield(
                 structural: batchYield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
             precondition: .sequenceLengthAboveMinimum(sequenceNodeID: sequenceNodeID),
@@ -407,7 +407,7 @@ struct PerElementRemovalSource: ScopeSource {
         return TransformationYield(
             structural: elements[index].positionRange.count,
             value: 0,
-            slack: .exact,
+            maxSourceDistance: 0,
             estimatedProbes: 1
         )
     }
@@ -431,7 +431,7 @@ struct PerElementRemovalSource: ScopeSource {
             yield: TransformationYield(
                 structural: element.positionRange.count,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
             precondition: .sequenceLengthAboveMinimum(sequenceNodeID: element.sequenceNodeID),
@@ -465,7 +465,7 @@ struct AlignedRemovalSource: ScopeSource {
         return TransformationYield(
             structural: scopes[index].maxElementYield,
             value: 0,
-            slack: .exact,
+            maxSourceDistance: 0,
             estimatedProbes: scopes[index].generator.totalRemaining
         )
     }
@@ -480,7 +480,7 @@ struct AlignedRemovalSource: ScopeSource {
             yield: TransformationYield(
                 structural: scope.maxElementYield,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: scope.generator.totalRemaining
             ),
             precondition: .all(scope.siblings.map {

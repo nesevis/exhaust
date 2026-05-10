@@ -25,7 +25,7 @@ struct GraphEncoderTests {
             yield: TransformationYield(
                 structural: firstScope.maxBatch,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: firstScope.maxBatch
             ),
             precondition: .unconditional,
@@ -57,7 +57,7 @@ struct GraphEncoderTests {
             yield: TransformationYield(
                 structural: 0,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 10
             ),
             precondition: .unconditional,
@@ -224,7 +224,7 @@ struct GraphEncoderTests {
             yield: TransformationYield(
                 structural: 1,
                 value: 0,
-                slack: .exact,
+                maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
             precondition: .unconditional,
