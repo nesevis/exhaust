@@ -107,6 +107,63 @@ extension ChoiceGraphScheduler {
             } else {
                 rejectCache.insert(probeHash)
                 decoderRejectCount += 1
+
+                // Non-monotonicity check: the floor is genuine at floor - 1 (property passed), but there may be a failing region below a one-wide gap. Probe floor - 2 to detect non-monotone convergence landscapes.
+                if origin.bound >= minBound + 2 {
+                    let gapProbeValue = origin.bound - 2
+                    var gapCandidate = sequence
+                    gapCandidate[range.lowerBound] = gapCandidate[range.lowerBound]
+                        .withBitPattern(gapProbeValue)
+
+                    if gapCandidate.shortLexPrecedes(sequence) {
+                        probeCount += 1
+
+                        let gapHash = ZobristHash.incrementalHash(
+                            baseHash: ZobristHash.hash(of: sequence),
+                            baseSequence: sequence,
+                            probe: gapCandidate
+                        )
+
+                        if rejectCache.contains(gapHash) {
+                            cacheHitCount += 1
+                        } else if try decoder.decodeAny(
+                            candidate: gapCandidate,
+                            gen: gen,
+                            tree: tree,
+                            originalSequence: sequence,
+                            property: property,
+                            filterObservations: &filterObservations,
+                            precomputedHash: gapHash
+                        ) != nil {
+                            anyStale = true
+                            acceptCount += 1
+
+                            if case var .chooseBits(md) = graph.nodes[nodeID].kind {
+                                md.convergedOrigin = nil
+                                graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(md))
+                            }
+
+                            if isInstrumented {
+                                ExhaustLog.debug(
+                                    category: .reducer,
+                                    event: "non_monotone_convergence_detected",
+                                    metadata: [
+                                        "position": "\(range.lowerBound)",
+                                        "floor": "\(origin.bound)",
+                                        "gap_probe_succeeded_at": "\(gapProbeValue)",
+                                    ]
+                                )
+                            }
+                        } else {
+                            rejectCache.insert(gapHash)
+                            decoderRejectCount += 1
+                        }
+
+                        if collectStats {
+                            stats.totalMaterializations += 1
+                        }
+                    }
+                }
             }
 
             if collectStats {
