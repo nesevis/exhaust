@@ -11,7 +11,7 @@ extension ChoiceGraphScheduler {
     /// Three accepted states:
     ///
     /// - ``requiresRebuild`` true: at least one accepted probe set ``ChangeApplication/requiresFullRebuild``. The graph is stale; the cycle loop must do a full rebuild + source rebuild before the next dispatch.
-    /// - ``requiresSourceRebuild`` true (and ``requiresRebuild`` false): at least one accepted probe was a successful in-place reshape that added or removed graph nodes (Layer 4). The graph is in sync via ``ChoiceGraph/apply(_:freshTree:)``, but the existing scope sources captured node IDs at construction time and do not know about the new nodes. The cycle loop must rebuild sources from the (already up-to-date) graph; the graph itself does not need a full rebuild.
+    /// - ``requiresSourceRebuild`` true (and ``requiresRebuild`` false): at least one accepted probe was a successful in-place reshape that added or removed graph nodes. The graph is in sync via ``ChoiceGraph/apply(_:freshTree:)``, but the existing scope sources captured node IDs at construction time and do not know about the new nodes. The cycle loop must rebuild sources from the (already up-to-date) graph; the graph itself does not need a full rebuild.
     /// - both false: every accepted probe was a pure value-only fast-path application that touched no node-set membership. The graph and the existing sources are both still valid.
     ///
     /// ``treeIsStripped`` reports whether the *latest* accepted probe used `materializePicks: false`. The cycle loop reads it before any rebuild path: when true, the carried `tree` is missing inactive pick branches and must be re-materialized with `materializePicks: true` before ``ChoiceGraph/build(from:)``, otherwise the rebuilt graph's ``PickMetadata/branchElements`` would contain only the selected branch and silently break ``GraphReplacementEncoder``'s branch enumeration on the next cycle. False when no probe accepted, when only `materializePicks: true` probes accepted, or when the latest acceptance happened to be a non-stripped one.
@@ -48,8 +48,7 @@ extension ChoiceGraphScheduler {
         var anyAccepted = false
         var anyRequiresRebuild = false
         var anyRequiresSourceRebuild = false
-        // Layer 7a: tracks whether the *latest* accepted probe used
-        // `materializePicks: false`. The cycle loop reads it from the outcome to decide whether the carried `tree` needs re-materializing before any subsequent ``ChoiceGraph/build(from:)`` call. Only the latest acceptance matters because each accepted probe overwrites the tree state.
+        // Tracks whether the *latest* accepted probe used `materializePicks: false`. The cycle loop reads it to decide whether the carried `tree` needs re-materializing before any subsequent ``ChoiceGraph/build(from:)`` call. Only the latest acceptance matters because each accepted probe overwrites the tree state.
         var latestAcceptedTreeIsStripped = false
         var probeCount = 0
         var acceptCount = 0
@@ -83,24 +82,13 @@ extension ChoiceGraphScheduler {
                 continue
             }
 
-            // Layer 6 + Layer 7a: probes whose mutation does not change which branch is selected at any pick site can skip
-            // `materializePicks: true`. The graph's structural skeleton — including non-selected pick branches — persists across cycles via the in-place reshape path, so the decoder no longer needs to re-materialize inactive branches on every probe.
+            // Probes whose mutation does not change which branch is selected at any pick site can skip `materializePicks: true`. The graph's structural skeleton — including non-selected pick branches — persists across cycles via the in-place reshape path, so the decoder no longer needs to re-materialize inactive branches on every probe.
             //
-            // Layer 6 covers value-only ``ProjectedMutation/leafValues(_:)``
-            // with no reshape leaves. Layer 7a extends the same check to
-            // ``ProjectedMutation/sequenceElementsRemoved(seqNodeID:removedNodeIDs:)``,
-            // ``ProjectedMutation/sequenceElementsMigrated(sourceSeqID:receiverSeqID:movedNodeIDs:insertionOffset:)``, and ``ProjectedMutation/siblingsSwapped(parentNodeID:idA:idB:)``
-            // — none of these change branch selections, so any branch pivot encoder dispatched on the next cycle still finds its alternative branches in ``PickMetadata/branchElements``, which is captured at graph construction time.
+            // Value-only leafValues (no reshape), sequenceElementsRemoved, sequenceElementsMigrated, and siblingsSwapped do not change branch selections, so any branch pivot encoder dispatched on the next cycle still finds its alternative branches in ``PickMetadata/branchElements``, which is captured at graph construction time.
             //
-            // Pivoting mutations (``ProjectedMutation/branchSelected(pickNodeID:newSelectedID:)``,
-            // ``ProjectedMutation/selfSimilarReplaced(targetNodeID:donorNodeID:)``,
-            // ``ProjectedMutation/descendantPromoted(ancestorPickNodeID:descendantPickNodeID:)``)
-            // and reshape leafValues keep `materializePicks: true`
-            // because the resulting tree feeds the splice path or future branch pivots that need the inactive subtree content.
+            // Pivoting mutations (branchSelected, selfSimilarReplaced, descendantPromoted) and reshape leafValues keep `materializePicks: true` because the resulting tree feeds the splice path or future branch pivots that need the inactive subtree content.
             //
-            // Safety: when an accepted probe sets ``ChangeApplication/requiresFullRebuild``
-            // true (which every Layer 7a structural case does until Layer 7 implements them in ``ChoiceGraph/apply(_:freshTree:)``), the cycle loop's rebuild path at the call site re-materializes the sequence with `materializePicks: true` before calling
-            // ``ChoiceGraph/build(from:)``, so the rebuilt graph never sees a stripped tree.
+            // Safety: when an accepted probe sets ``ChangeApplication/requiresFullRebuild`` true, the cycle loop's rebuild path re-materializes the sequence with `materializePicks: true` before calling ``ChoiceGraph/build(from:)``, so the rebuilt graph never sees a stripped tree.
             let picksUnchanged = switch mutation {
             case let .leafValues(changes):
                 changes.contains(where: \.mayReshape) == false

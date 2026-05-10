@@ -10,7 +10,7 @@ extension ChoiceGraph {
     ///
     /// Returns a ``ChangeApplication`` describing what changed. When ``ChangeApplication/requiresFullRebuild`` is true the scheduler should discard the partial result and rebuild the graph from `freshTree` via ``ChoiceGraph/build(from:)``.
     ///
-    /// Layer 4 implements both branches of ``ProjectedMutation/leafValues(_:)``: pure value-only changes (`mayReshape == false`) take the fast path that just rewrites leaf metadata, and bind-inner reshape changes (`mayReshape == true`) trigger an in-place splice of the affected bound subtree extracted from `freshTree`. Sequence-element removals use the shared splice infrastructure to tombstone, shift, and resync in place. Remaining structural mutation cases still set `requiresFullRebuild = true`.
+    /// Both branches of ``ProjectedMutation/leafValues(_:)`` are handled in place: pure value-only changes (`mayReshape == false`) take the fast path that rewrites leaf metadata, and bind-inner reshape changes (`mayReshape == true`) trigger an in-place splice of the affected bound subtree extracted from `freshTree`. Sequence-element removals and branch pivots use the shared splice infrastructure to tombstone, shift, and resync in place. Remaining structural mutation cases still set `requiresFullRebuild = true`.
     ///
     /// - Parameters:
     ///   - mutation: The mutation reported by the encoder whose probe was just accepted.
@@ -68,7 +68,7 @@ extension ChoiceGraph {
     ///
     /// Partitions the changes into pure value-only (no bind-inner reshape) and reshape (`mayReshape == true`). Value-only changes always take the fast path and just rewrite leaf metadata. Reshape changes trigger ``applyBindReshape(forLeaf:freshTree:into:)`` for each affected leaf, which extracts the new bound subtree from `freshTree` and splices it into the graph in place.
     ///
-    /// Conservative fallback: if more than one leaf in the same mutation report has `mayReshape == true`, fall back to a full rebuild. The simple case (one bind-inner change per probe) covers BinaryHeap and the typical Calculator workload; multi-bind reshape requires dependency-ordered processing that Layer 4 defers as future work.
+    /// Conservative fallback: if more than one leaf in the same mutation report has `mayReshape == true`, fall back to a full rebuild. The simple case (one bind-inner change per probe) covers BinaryHeap and the typical Calculator workload; multi-bind reshape requires dependency-ordered processing.
     private func applyLeafValues(
         _ changes: [LeafChange],
         freshTree: ChoiceTree,
@@ -77,13 +77,13 @@ extension ChoiceGraph {
         let reshapeChanges = changes.filter(\.mayReshape)
         let valueOnlyChanges = changes.filter { $0.mayReshape == false }
 
-        // Multi-bind reshape conservative fallback. Layer 4 handles a single bind-inner change per acceptance; multiple require dependency-ordered processing because the second bind's tree path may have shifted by the time the first bind's subtree was rebuilt.
+        // Multi-bind reshape conservative fallback. Only a single bind-inner change per acceptance is handled in place; multiple require dependency-ordered processing because the second bind's tree path may have shifted by the time the first bind's subtree was rebuilt.
         if reshapeChanges.count > 1 {
             application.requiresFullRebuild = true
             return
         }
 
-        // Apply value-only changes first. These are the same fast path the pre-Layer-4 implementation used: rewrite leaf metadata in place, drop type-compatibility and source/sink caches at the end.
+        // Apply value-only changes first: rewrite leaf metadata in place, drop type-compatibility and source/sink caches at the end.
         for change in valueOnlyChanges {
             applyLeafValueWrite(change, into: &application)
         }
@@ -131,7 +131,7 @@ extension ChoiceGraph {
     /// 1. Locates the controlling bind node by walking from the leaf up the parent chain.
     /// 2. Reads the bind's ``BindMetadata/bindPath`` from its existing ``ChoiceGraphNode/kind``.
     /// 3. Walks `freshTree` along that path to extract the new bound subtree.
-    /// 4. Detects picks in the old or new subtree and falls back to full rebuild if found (Layer 4 does not yet maintain self-similarity edges incrementally).
+    /// 4. Detects picks in the old or new subtree and falls back to full rebuild if found (self-similarity edges are not maintained incrementally).
     /// 5. Tombstones the old subtree's node IDs and edges referencing them.
     /// 6. Walks the new subtree via ``ChoiceGraphBuilder/buildSubtree(from:startingOffset:parent:bindDepth:nodeIDOffset:parentPath:)`` and appends the resulting nodes / edges.
     /// 7. Patches the bind node's children to reference the new bound child.

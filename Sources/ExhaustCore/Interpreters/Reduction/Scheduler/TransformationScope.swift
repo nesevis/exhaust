@@ -155,7 +155,7 @@ enum MinimizationScope {
 ///
 /// Carries the leaf's node ID plus a marker that tells the graph (on acceptance) whether mutating this leaf might trigger a downstream bind subtree rebuild. The encoder ignores ``mayReshapeOnAcceptance`` and minimizes the leaf value identically for both kinds. The marker rides along into the encoder's ``ProjectedMutation`` report so that ``ChoiceGraph/apply(_:freshTree:)`` can route between the value-only fast path and the bind-inner reshape path on a per-leaf basis.
 ///
-/// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. Layer 4's extended ``ChoiceGraph/rebuildBoundSubtree(bindNodeID:newBoundTree:)`` is what makes the marker actionable; until then, any leaf change with the marker set causes ``ChoiceGraph/apply(_:freshTree:)`` to set ``ChangeApplication/requiresFullRebuild``.
+/// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. On acceptance, ``ChoiceGraph/apply(_:freshTree:)`` reads the marker to route between the value-only fast path and the bind-inner reshape path via ``ChoiceGraph/rebuildBoundSubtree(bindNodeID:newBoundTree:)``.
 struct LeafEntry {
     /// Identifier of the leaf node.
     let nodeID: Int

@@ -49,7 +49,6 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A bind node: the bound subtree's structure depends on the inner subtree's value.
     ///
     /// Produced by VACTI, reflection, and materialization for `.transform(.bind(...))` operations.
-    /// In Phase 1, all reducer passes treat `.bind` like `.group([inner, bound])`.
     ///
     /// `fingerprint` is the source-location hash carried from the originating ``ReflectiveOperation/transform(kind:inner:)`` (`TransformKind.bind.fingerprint`). It survives every materialization round-trip and is read by ``ChoiceGraphBuilder`` to populate ``BindMetadata/fingerprint`` for the classification cache.
     indirect case bind(fingerprint: UInt64, inner: ChoiceTree, bound: ChoiceTree)

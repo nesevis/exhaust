@@ -2,14 +2,14 @@
 //  BindAwarenessTests.swift
 //  ExhaustTests
 //
-//  Tests for Phase 1 bind-aware annotations: ChoiceTree.bind, ChoiceSequenceValue.bind,
+//  Tests for bind-aware annotations: ChoiceTree.bind, ChoiceSequenceValue.bind,
 //  and their treatment across the interpreter pipeline.
 //
 
 import Testing
 @testable import ExhaustCore
 
-@Suite("Bind Awareness — Phase 1")
+@Suite("Bind Awareness")
 struct BindAwarenessTests {
     // MARK: - ChoiceTree.bind
 

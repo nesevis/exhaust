@@ -548,7 +548,7 @@ struct ChoiceGraphBuilder {
             selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
         }
 
-        // Topological order and dependency adjacency are computed lazily on first access. The builder no longer eagerly computes them — keeping the computation close to the cache slot lets Layer 4's partial-rebuild path invalidate and recompute through the same code path.
+        // Topological order and dependency adjacency are computed lazily on first access, sharing the same code path with the partial-rebuild invalidation logic.
         return ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,
