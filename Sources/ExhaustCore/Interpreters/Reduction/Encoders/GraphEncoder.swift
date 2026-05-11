@@ -67,7 +67,7 @@ protocol GraphEncoder {
     /// - Parameters:
     ///   - graph: The live graph after the structural mutation.
     ///   - sequence: The live sequence after the structural mutation. Encoders that cache a baseline sequence in their state must replace it with this value, since their cached copy is from before the mutation.
-    mutating func refreshState(graph: some ReadOnlyChoiceGraph, sequence: ChoiceSequence)
+    mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence)
 
     /// Whether every cached sequence position still addresses a value entry in the given sequence.
     ///
@@ -109,5 +109,5 @@ extension GraphEncoder {
     /// Default no-op refresh for single-shot and self-resetting encoders.
     ///
     /// Correct for encoders whose ``nextProbe(into:lastAccepted:)`` returns nil after one probe (single-shot pattern: ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that transition to ``Mode/idle`` on every accepted probe (``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within one pass must override.
-    mutating func refreshState(graph _: some ReadOnlyChoiceGraph, sequence _: ChoiceSequence) {}
+    mutating func refreshState(graph _: ChoiceGraph, sequence _: ChoiceSequence) {}
 }

@@ -7,13 +7,11 @@
 
 /// Constructs a ``ChoiceGraph`` from a ``ChoiceTree`` and its flattened ``ChoiceSequence``.
 ///
-/// A single recursive walk of the tree produces nodes and containment/dependency edges. Post-walk passes compute self-similarity edges (grouping active picks by `fingerprint`), topological order (Kahn's algorithm), and reachability (reverse topological propagation). Type-compatibility edges are computed after antichain construction.
+/// A single recursive walk of the tree produces nodes and containment/dependency edges. ``assembleGraph()`` then computes self-similarity groups, live node IDs, leaf nodes, dependency adjacency, and topological order — all stored eagerly on the resulting struct.
 ///
 /// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)`` to maintain position-to-node correspondence.
 ///
 /// Active branches carry position ranges and offset arithmetic. Inactive branches (unselected pick alternatives) are walked with `isActive: false`, which emits nodes with nil position ranges and skips offset tracking.
-///
-/// The subtree splice helpers used by ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` live in `ChoiceGraphBuilder+Subtree.swift`.
 struct ChoiceGraphBuilder {
     var nodes: [ChoiceGraphNode] = []
     var containmentEdges: [ContainmentEdge] = []
@@ -536,10 +534,8 @@ struct ChoiceGraphBuilder {
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
 
-            // The fundamental dependency: inner → bound.
             allDependencyEdges.append(DependencyEdge(source: innerChildID, target: boundChildID))
 
-            // Additional edges to structural nodes deeper in the bound subtree.
             var stack = [boundChildID]
             while stack.isEmpty == false {
                 let current = stack.removeLast()
@@ -560,7 +556,6 @@ struct ChoiceGraphBuilder {
         }
 
         // Self-similarity groups: active pick nodes indexed by fingerprint.
-        // O(P) construction instead of the previous O(P²) all-pairs edge array.
         var selfSimilarityGroups: [UInt64: [Int]] = [:]
         for node in nodes {
             guard case let .pick(metadata) = node.kind else { continue }
@@ -568,12 +563,66 @@ struct ChoiceGraphBuilder {
             selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
         }
 
-        // Topological order and dependency adjacency are computed lazily on first access, sharing the same code path with the partial-rebuild invalidation logic.
+        // Eagerly compute derived fields that are accessed multiple times per cycle.
+        let liveNodeIDs = nodes.indices.filter { nodes[$0].positionRange != nil }
+
+        let leafNodes = liveNodeIDs.filter { nodeID in
+            guard case .chooseBits = nodes[nodeID].kind else { return false }
+            return true
+        }
+
+        // Dependency adjacency list for reachability queries.
+        var dependencyAdjacency = [[Int]](repeating: [], count: nodes.count)
+        for edge in allDependencyEdges {
+            dependencyAdjacency[edge.source].append(edge.target)
+        }
+
+        // Topological order via Kahn's algorithm over dependency edges.
+        let topologicalOrder: [Int] = {
+            let nodeCount = nodes.count
+            var inDegree = [Int](repeating: 0, count: nodeCount)
+            for edge in allDependencyEdges {
+                inDegree[edge.target] += 1
+            }
+
+            var participatingNodes = Set<Int>()
+            for edge in allDependencyEdges {
+                participatingNodes.insert(edge.source)
+                participatingNodes.insert(edge.target)
+            }
+
+            var queue: [Int] = []
+            for nodeID in participatingNodes where inDegree[nodeID] == 0 {
+                queue.append(nodeID)
+            }
+
+            var order: [Int] = []
+            order.reserveCapacity(participatingNodes.count)
+            var front = 0
+
+            while front < queue.count {
+                let current = queue[front]
+                front += 1
+                order.append(current)
+                for dependent in dependencyAdjacency[current] {
+                    inDegree[dependent] -= 1
+                    if inDegree[dependent] == 0 {
+                        queue.append(dependent)
+                    }
+                }
+            }
+            return order
+        }()
+
         return ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,
             dependencyEdges: allDependencyEdges,
-            selfSimilarityGroups: selfSimilarityGroups
+            selfSimilarityGroups: selfSimilarityGroups,
+            liveNodeIDs: liveNodeIDs,
+            leafNodes: leafNodes,
+            topologicalOrder: topologicalOrder,
+            dependencyAdjacency: dependencyAdjacency
         )
     }
 }

@@ -20,7 +20,7 @@ struct ChoiceGraphClassificationTests {
         // topology, both endpoints liftable.
         let gen = makeCouplingLikeGen()
         let tree = try generateTree(from: gen, seed: 17)
-        let graph = ChoiceGraph.build(from: tree)
+        var graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence(tree)
         let bindNodeID = try #require(firstActiveBindNodeID(in: graph))
         let upstreamLeafNodeID = try #require(innerLeafNodeID(ofBind: bindNodeID, in: graph))
@@ -47,7 +47,7 @@ struct ChoiceGraphClassificationTests {
         // of the bound subtree → divergent topology.
         let gen = makeDivergentGen()
         let tree = try generateTree(from: gen, seed: 33)
-        let graph = ChoiceGraph.build(from: tree)
+        var graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence(tree)
         let bindNodeID = try #require(firstActiveBindNodeID(in: graph))
         let upstreamLeafNodeID = try #require(innerLeafNodeID(ofBind: bindNodeID, in: graph))
@@ -75,7 +75,7 @@ struct ChoiceGraphClassificationTests {
             backward: { m in max(7, min(7, m)) }
         )
         let tree = try generateTree(from: gen, seed: 5)
-        let graph = ChoiceGraph.build(from: tree)
+        var graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence(tree)
         let bindNodeID = try #require(firstActiveBindNodeID(in: graph))
         let upstreamLeafNodeID = try #require(innerLeafNodeID(ofBind: bindNodeID, in: graph))
@@ -99,7 +99,7 @@ struct ChoiceGraphClassificationTests {
     func classifyBindIsIdempotent() throws {
         let gen = makeCouplingLikeGen()
         let tree = try generateTree(from: gen, seed: 9)
-        let graph = ChoiceGraph.build(from: tree)
+        var graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence(tree)
         let bindNodeID = try #require(firstActiveBindNodeID(in: graph))
         let upstreamLeafNodeID = try #require(innerLeafNodeID(ofBind: bindNodeID, in: graph))
@@ -131,7 +131,7 @@ struct ChoiceGraphClassificationTests {
     func bindReshapeSignalsRebuild() throws {
         let gen = makeCouplingLikeGen()
         let tree = try generateTree(from: gen, seed: 12)
-        let graph = ChoiceGraph.build(from: tree)
+        var graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence(tree)
         let bindNodeID = try #require(firstActiveBindNodeID(in: graph))
         let upstreamLeafNodeID = try #require(innerLeafNodeID(ofBind: bindNodeID, in: graph))

@@ -9,7 +9,7 @@ extension ChoiceGraph {
     /// Applies an encoder-reported mutation to the graph.
     ///
     /// Value-only leaf changes (no `mayReshape`) are applied in place — the graph structure is unchanged and only leaf metadata is rewritten. All structural mutations (reshape, removal, pivot, substitution, migration, swap, reorder) return ``ChangeApplication/requiresFullRebuild`` true, delegating the rebuild to the scheduler.
-    package func apply(_ mutation: ProjectedMutation, freshTree _: ChoiceTree) -> ChangeApplication {
+    package mutating func apply(_ mutation: ProjectedMutation, freshTree _: ChoiceTree) -> ChangeApplication {
         var application = ChangeApplication()
         switch mutation {
         case let .leafValues(changes):
@@ -19,7 +19,6 @@ extension ChoiceGraph {
                 for change in changes {
                     applyLeafValueWrite(change, into: &application)
                 }
-                invalidateDerivedEdges()
             }
         case .sequenceElementsRemoved,
              .branchSelected,
@@ -34,7 +33,7 @@ extension ChoiceGraph {
     }
 
     /// Rewrites a single leaf's ``ChooseBitsMetadata/value`` in place.
-    private func applyLeafValueWrite(
+    private mutating func applyLeafValueWrite(
         _ change: LeafChange,
         into application: inout ChangeApplication
     ) {

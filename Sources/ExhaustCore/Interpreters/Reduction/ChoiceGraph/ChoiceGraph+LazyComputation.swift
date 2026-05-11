@@ -140,50 +140,6 @@ extension ChoiceGraph {
         return status
     }
 
-    /// Computes topological order over dependency edges via Kahn's algorithm.
-    ///
-    /// Returns node IDs in dependency order (roots first). Only nodes that appear in dependency edges are included. Mirrors the prior implementation in ``ChoiceGraphBuilder`` so that the lazy computed property produces the same result the eager constructor used to.
-    ///
-    /// - Complexity: O(*V* + *E*) where *V* is the node count and *E* is the dependency edge count.
-    func computeTopologicalOrder() -> [Int] {
-        let nodeCount = nodes.count
-        var inDegree = [Int](repeating: 0, count: nodeCount)
-        var adjacency = [[Int]](repeating: [], count: nodeCount)
-        for edge in dependencyEdges {
-            adjacency[edge.source].append(edge.target)
-            inDegree[edge.target] += 1
-        }
-
-        // Only include nodes that participate in dependency relationships.
-        var participatingNodes = Set<Int>()
-        for edge in dependencyEdges {
-            participatingNodes.insert(edge.source)
-            participatingNodes.insert(edge.target)
-        }
-
-        var queue: [Int] = []
-        for nodeID in participatingNodes where inDegree[nodeID] == 0 {
-            queue.append(nodeID)
-        }
-
-        var order: [Int] = []
-        order.reserveCapacity(participatingNodes.count)
-        var front = 0
-
-        while front < queue.count {
-            let current = queue[front]
-            front += 1
-            order.append(current)
-            for dependent in adjacency[current] {
-                inDegree[dependent] -= 1
-                if inDegree[dependent] == 0 {
-                    queue.append(dependent)
-                }
-            }
-        }
-        return order
-    }
-
     // MARK: - On-Demand Reachability
 
     /// Returns true when `target` is reachable from `source` via one or more dependency edges.

@@ -18,7 +18,7 @@ extension ChoiceGraph {
     ///   - baseSequence: The live ``ChoiceSequence``. The classifier overwrites a single upstream entry to construct each endpoint candidate.
     ///   - fallbackTree: The live ``ChoiceTree``. Passed to ``Materializer/materializeAny(_:prefix:mode:fallbackTree:materializePicks:)`` as the guided-mode fallback so downstream positions outside the probed endpoint's domain re-resolve coherently.
     ///   - upstreamLeafNodeID: The ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf whose valid range defines the probe endpoints. Typically the bind's inner child.
-    func classifyBind(
+    mutating func classifyBind(
         at bindNodeID: Int,
         gen: ReflectiveGenerator<Any>,
         baseSequence: ChoiceSequence,
@@ -134,7 +134,7 @@ extension ChoiceGraph {
         return Self.extractBoundSubtree(from: freshTree, matchingPath: bindPath)
     }
 
-    private func writeClassification(
+    private mutating func writeClassification(
         _ verdict: (classification: BindClassification, fingerprint: UInt64?),
         bindMetadata: BindMetadata,
         bindNodeID: Int
@@ -163,7 +163,7 @@ extension ChoiceGraph {
     /// - Upstream changed, downstream fingerprint different: classifies as `.divergent` — the bind reshapes under upstream variation.
     ///
     /// Call after each graph rebuild. Avoids the two materialisation probes that ``classifyBind`` requires by observing natural upstream variation across rebuild cycles.
-    func observeBindTopologies(tree: ChoiceTree) {
+    mutating func observeBindTopologies(tree: ChoiceTree) {
         for nodeID in liveNodeIDs {
             let node = nodes[nodeID]
             guard case let .bind(metadata) = node.kind else { continue }

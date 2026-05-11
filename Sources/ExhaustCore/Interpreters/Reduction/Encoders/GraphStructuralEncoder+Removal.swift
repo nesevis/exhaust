@@ -9,7 +9,7 @@ extension GraphStructuralEncoder {
         into candidate: inout ChoiceSequence,
         scope: RemovalScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ProjectedMutation? {
         switch scope {
         case let .elements(elementScope):
@@ -42,7 +42,7 @@ extension GraphStructuralEncoder {
     private func buildElementCandidate(
         scope: ElementRemovalScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         var rangeSet = RangeSet<Int>()
         for target in scope.targets {
@@ -64,7 +64,7 @@ extension GraphStructuralEncoder {
     private func elementExtent(
         for elementNodeID: Int,
         inSequence sequenceNodeID: Int,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ClosedRange<Int>? {
         guard sequenceNodeID < graph.nodes.count else { return nil }
         guard case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind
@@ -83,7 +83,7 @@ extension GraphStructuralEncoder {
     private func buildSubtreeCandidate(
         scope: SubtreeRemovalScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let range = graph.nodes[scope.nodeID].positionRange else { return nil }
         var rangeSet = RangeSet<Int>()

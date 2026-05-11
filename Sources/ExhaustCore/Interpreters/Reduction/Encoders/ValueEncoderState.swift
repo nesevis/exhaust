@@ -22,7 +22,7 @@ struct ValueEncoderState {
     }
 
     /// Registers a leaf node in the lookup by its sequence position.
-    mutating func registerLeaf(nodeID: Int, mayReshape: Bool, graph: some ReadOnlyChoiceGraph) {
+    mutating func registerLeaf(nodeID: Int, mayReshape: Bool, graph: ChoiceGraph) {
         if let range = graph.nodes[nodeID].positionRange {
             leafLookup[range.lowerBound] = (nodeID, mayReshape)
         }

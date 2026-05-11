@@ -135,7 +135,7 @@ extension ChoiceGraphScheduler {
         state.tree = checkpointTree
         state.output = checkpointOutput
         state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
-        transferConvergence(checkpointConvergence, to: state.graph)
+        transferConvergence(checkpointConvergence, to: &state.graph)
 
         Self.logReducer("relax_round_rolled_back", isInstrumented: state.isInstrumented, metadata: [
             "seq_len": "\(state.sequence.count)",
@@ -147,7 +147,7 @@ extension ChoiceGraphScheduler {
 
     private static func buildRelaxCandidates(
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
 
@@ -189,7 +189,7 @@ extension ChoiceGraphScheduler {
     private static func buildUnguardedBranchPivot(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard scope.pickNodeID < graph.nodes.count else { return nil }
         guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else { return nil }
@@ -225,7 +225,7 @@ extension ChoiceGraphScheduler {
     private static func buildUnguardedSelfSimilar(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let targetRange = graph.nodes[scope.targetNodeID].positionRange,
               let donorRange = graph.nodes[scope.donorNodeID].positionRange
@@ -246,7 +246,7 @@ extension ChoiceGraphScheduler {
     private static func buildUnguardedDescendantPromotion(
         scope: DescendantPromotionScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let ancestorRange = graph.nodes[scope.ancestorPickNodeID].positionRange,
               let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange

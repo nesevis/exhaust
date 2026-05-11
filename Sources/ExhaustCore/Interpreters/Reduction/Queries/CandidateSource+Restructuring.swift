@@ -14,7 +14,7 @@ import Musl
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
-    static func buildReplacementCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+    static func buildReplacementCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
 
         for scope in ReplacementQuery.build(graph: graph) {
@@ -41,7 +41,7 @@ extension CandidateSourceBuilder {
         return results
     }
 
-    static func buildPermutationCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+    static func buildPermutationCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var entries: [(parentNodeID: Int, group: [Int], position: Int)] = []
         for scope in PermutationQuery.build(graph: graph) {
             guard case let .siblingPermutation(permScope) = scope else { continue }

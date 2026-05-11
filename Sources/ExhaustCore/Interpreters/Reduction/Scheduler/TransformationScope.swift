@@ -343,7 +343,7 @@ struct EncoderInput {
     let tree: ChoiceTree
 
     /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction.
-    let graph: ReadOnlyChoiceGraph
+    let graph: ChoiceGraph
 
     /// Warm-start convergence records for leaves in this scope, keyed by graph **nodeID**.
     ///

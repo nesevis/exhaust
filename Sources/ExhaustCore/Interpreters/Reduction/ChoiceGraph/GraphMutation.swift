@@ -69,20 +69,11 @@ package struct LeafChange {
 
 /// Result of applying a ``ProjectedMutation`` to a ``ChoiceGraph``.
 ///
-/// Reports which nodes were touched, removed, or added; any position shifts applied; and a fallback flag (``requiresFullRebuild``) that the scheduler reads to decide whether to discard the partial application and rebuild the graph from scratch.
+/// Reports which nodes were touched and a fallback flag (``requiresFullRebuild``) that the scheduler reads to decide whether to rebuild the graph from scratch.
 package struct ChangeApplication {
     /// Node IDs whose values or metadata were updated in place.
     package var touchedNodeIDs: Set<Int> = []
 
-    /// Node IDs added to ``ChoiceGraph/removedNodeIDs`` by this application. Populated by the in-place reshape path.
-    package var removedNodeIDs: Set<Int> = []
-
-    /// Node IDs newly appended to ``ChoiceGraph/nodes`` by this application. Populated by the in-place reshape path.
-    package var addedNodeIDs: Set<Int> = []
-
-    /// Position shifts applied to right-of-insertion nodes. Populated by the in-place reshape path.
-    package var positionShifts: [(insertionPoint: Int, delta: Int)] = []
-
-    /// True when the partial-rebuild path cannot honour the mutation and the scheduler must fall back to ``ChoiceGraph/build(from:)``. Set for every case except the value-only fast path of ``ProjectedMutation/leafValues(_:)`` with no reshape leaves.
+    /// True when the mutation requires a full graph rebuild via ``ChoiceGraph/build(from:)``. Set for every case except the value-only fast path of ``ProjectedMutation/leafValues(_:)`` with no reshape leaves.
     package var requiresFullRebuild: Bool = false
 }

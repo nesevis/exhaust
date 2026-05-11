@@ -403,13 +403,13 @@ enum ChoiceGraphScheduler {
         let oldConvergence = extractAllConvergence(from: oldGraph)
         let inheritedClassifications = oldGraph.bindClassifications
         let inheritedObservations = oldGraph.bindTopologyObservations
-        let newGraph = ChoiceGraph.build(
+        var newGraph = ChoiceGraph.build(
             from: tree,
             inheriting: inheritedClassifications,
             observations: inheritedObservations
         )
         newGraph.observeBindTopologies(tree: tree)
-        transferConvergence(oldConvergence, to: newGraph)
+        transferConvergence(oldConvergence, to: &newGraph)
         stats.graphStats.fullGraphRebuilds += 1
         return newGraph
     }

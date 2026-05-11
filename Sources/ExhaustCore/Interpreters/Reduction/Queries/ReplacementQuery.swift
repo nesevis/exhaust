@@ -12,7 +12,7 @@ enum ReplacementQuery {
     /// Computes replacement scopes from self-similarity groups, pick nodes, and descendant promotion candidates.
     ///
     /// - Returns: All replacement scopes across the three sub-types.
-    static func build(graph: some ReadOnlyChoiceGraph) -> [ReplacementScope] {
+    static func build(graph: ChoiceGraph) -> [ReplacementScope] {
         var scopes: [ReplacementScope] = []
 
         // Self-similar substitution: for each group of picks with the same fingerprint, generate one scope per ordered pair where the target is larger than the donor (positive size delta), plus one scope per zero-delta pair.
@@ -121,7 +121,7 @@ enum ReplacementQuery {
     private static func isContainmentDescendant(
         _ descendant: Int,
         of ancestor: Int,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> Bool {
         var current = descendant
         while let parentID = graph.nodes[current].parent {

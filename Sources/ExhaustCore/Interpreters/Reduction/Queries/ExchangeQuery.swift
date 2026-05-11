@@ -18,7 +18,7 @@ enum ExchangeQuery {
     ///   - innerDescendantToBind: Precomputed bind-inner index from ``QueryHelpers/buildInnerDescendantToBind(graph:)``. Pass a shared instance when also building minimization scopes so the same dictionary is reused across both families.
     /// - Returns: Redistribution scope (if pairs exist) and tandem scope (if same-typed leaf groups with at least two members exist).
     static func build(
-        graph: some ReadOnlyChoiceGraph,
+        graph: ChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [ExchangeScope] {
         var scopes: [ExchangeScope] = []
@@ -101,7 +101,7 @@ enum ExchangeQuery {
     }
 
     /// Convenience overload that builds ``QueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building minimization scopes so the index is computed once and shared.
-    static func build(graph: some ReadOnlyChoiceGraph) -> [ExchangeScope] {
+    static func build(graph: ChoiceGraph) -> [ExchangeScope] {
         build(
             graph: graph,
             innerDescendantToBind: QueryHelpers.buildInnerDescendantToBind(graph: graph)
@@ -116,7 +116,7 @@ enum ExchangeQuery {
     ///
     /// - Complexity: O(C log C) per sequence (dominated by the distance sort), O(groups) for cross-zip pairing. No O(C^2) enumeration.
     private static func homogeneousRedistributionPairs(
-        graph: some ReadOnlyChoiceGraph,
+        graph: ChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         var pairs: [RedistributionPair] = []
@@ -197,7 +197,7 @@ enum ExchangeQuery {
     private static func pairsFromHomogeneousLeaves(
         childIDs: [Int],
         tag: TypeTag,
-        graph: some ReadOnlyChoiceGraph,
+        graph: ChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         // Collect non-bind-inner leaves with position and distance.
@@ -240,7 +240,7 @@ enum ExchangeQuery {
         sourceChildIDs: [Int],
         sinkChildIDs: [Int],
         tag: TypeTag,
-        graph: some ReadOnlyChoiceGraph,
+        graph: ChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
         // Find the first non-bind-inner sink leaf.

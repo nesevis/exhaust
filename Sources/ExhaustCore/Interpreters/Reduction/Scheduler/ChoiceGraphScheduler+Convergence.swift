@@ -56,7 +56,7 @@ extension ChoiceGraphScheduler {
     /// - Leaves in non-constant bind subtrees: match on position + typeTag + validRange. The subtree was rebuilt — ranges may be different.
     static func transferConvergence(
         _ records: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)],
-        to graph: ChoiceGraph
+        to graph: inout ChoiceGraph
     ) {
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }

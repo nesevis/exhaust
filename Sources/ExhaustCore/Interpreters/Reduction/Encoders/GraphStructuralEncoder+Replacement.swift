@@ -9,7 +9,7 @@ extension GraphStructuralEncoder {
         into candidate: inout ChoiceSequence,
         scope: ReplacementScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ProjectedMutation? {
         switch scope {
         case let .selfSimilar(selfSimilarScope):
@@ -41,7 +41,7 @@ extension GraphStructuralEncoder {
     private mutating func buildSelfSimilarCandidate(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let targetRange = graph.nodes[scope.targetNodeID].positionRange,
               let donorRange = graph.nodes[scope.donorNodeID].positionRange
@@ -69,7 +69,7 @@ extension GraphStructuralEncoder {
         into candidate: inout ChoiceSequence,
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ProjectedMutation? {
         guard scope.pickNodeID < graph.nodes.count else { return nil }
         guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else {
@@ -118,7 +118,7 @@ extension GraphStructuralEncoder {
     private mutating func buildDescendantPromotionCandidate(
         scope: DescendantPromotionScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let ancestorRange = graph.nodes[scope.ancestorPickNodeID].positionRange,
               let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange
@@ -209,7 +209,7 @@ extension GraphStructuralEncoder {
         _ entries: [ChoiceSequenceValue],
         donorNodeID: Int,
         donorRangeStart: Int,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> [ChoiceSequenceValue] {
         guard case let .pick(donorMeta) = graph.nodes[donorNodeID].kind else { return entries }
 
@@ -256,7 +256,7 @@ extension GraphStructuralEncoder {
         donorRangeStart _: Int,
         fingerprint: UInt64,
         pickMetadata: PickMetadata,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> [Int: LeafWrapping] {
         // Phase 1: build per-branch masks from non-innermost picks across the entire self-similarity group.
         var branchMasks: [UInt64: Set<Int>] = [:]
@@ -299,7 +299,7 @@ extension GraphStructuralEncoder {
     private static func collectSelfSimilarPicks(
         rootID: Int,
         fingerprint: UInt64,
-        graph: some ReadOnlyChoiceGraph,
+        graph: ChoiceGraph,
         into result: inout [Int]
     ) {
         var stack = [rootID]
@@ -322,7 +322,7 @@ extension GraphStructuralEncoder {
     private static func zipMaskForPick(
         pickID: Int,
         fingerprint: UInt64,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> Set<Int>? {
         // Walk: pick → bind (bound child) → zip.
         let current = pickID
@@ -357,7 +357,7 @@ extension GraphStructuralEncoder {
         pickID: Int,
         fingerprint: UInt64,
         pickMetadata: PickMetadata,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> LeafWrapping? {
         // Check if the pick's parent is a ._bound bind (bind → pick with same fingerprint).
         if let parentID = graph.nodes[pickID].parent,
@@ -386,7 +386,7 @@ extension GraphStructuralEncoder {
         fingerprint: UInt64,
         mask: Set<Int>?,
         wrapping: LeafWrapping?,
-        graph: some ReadOnlyChoiceGraph,
+        graph: ChoiceGraph,
         expansions: inout [Int: LeafWrapping]
     ) {
         var stack = Array(graph.nodes[pickID].children)

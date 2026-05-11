@@ -13,7 +13,7 @@ extension GraphSwapEncoder {
         into candidate: inout ChoiceSequence,
         scope: PermutationScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ProjectedMutation? {
         guard case let .siblingPermutation(permutationScope) = scope else { return nil }
         guard let group = permutationScope.swappableGroups.first,

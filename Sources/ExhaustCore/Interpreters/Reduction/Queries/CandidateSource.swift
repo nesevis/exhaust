@@ -43,7 +43,7 @@ struct SortedCandidateSource: CandidateSource {
 
 /// Builds the collection of candidate sources from a graph.
 enum CandidateSourceBuilder {
-    static func buildSources(from graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [any CandidateSource] {
+    static func buildSources(from graph: ChoiceGraph, deferBindInner: Bool = false) -> [any CandidateSource] {
         var sources: [any CandidateSource] = []
 
         let elementScopes = RemovalQuery.elementRemovalScopes(graph: graph)
