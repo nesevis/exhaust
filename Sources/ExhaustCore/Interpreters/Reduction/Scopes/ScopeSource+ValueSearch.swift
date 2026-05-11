@@ -67,12 +67,7 @@ struct MinimizationSource: ScopeSource {
         return GraphTransformation(
             operation: .minimize(entry.scope),
             yield: entry.yield,
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: false,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .unconditional
         )
     }
 
@@ -158,12 +153,7 @@ struct ExchangeSource: ScopeSource {
         return GraphTransformation(
             operation: .exchange(entry.scope),
             yield: entry.yield,
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: false,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .unconditional
         )
     }
 }

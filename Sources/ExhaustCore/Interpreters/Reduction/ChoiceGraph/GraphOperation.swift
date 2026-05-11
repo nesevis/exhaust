@@ -177,37 +177,16 @@ extension TransformationPrecondition {
     }
 }
 
-// MARK: - Postconditions
-
-/// Predicted graph state changes on acceptance.
-///
-/// The scheduler reads postconditions to determine whether a structural rebuild is needed and which convergence records to invalidate.
-struct TransformationPostcondition {
-    /// Whether this acceptance changes the graph's structure (requires queue rebuild).
-    let isStructural: Bool
-
-    /// Node IDs whose convergence records are invalidated by this acceptance.
-    let invalidatesConvergence: [Int]
-
-    /// Node IDs that become new removal candidates after this acceptance (for example, after exchange zeroes a value).
-    let enablesRemoval: [Int]
-}
-
 // MARK: - Graph Transformation
 
 /// A graph-derived transformation scope with yield estimate and precondition.
-///
-/// This is a morphism in OptRed_{T,alpha} (Sepulveda-Jimenez, Def. 10.3): the operation defines enc_a, the materializer provides dec_a, and the grade packages approximation slack with resource cost.
 struct GraphTransformation {
     /// The graph operation this transformation enacts.
     let operation: GraphOperation
 
-    /// Graph-computable yield estimate (the grade).
+    /// Graph-computable yield estimate.
     let yield: TransformationYield
 
     /// Preconditions on graph node state.
     let precondition: TransformationPrecondition
-
-    /// Predicted graph state changes on acceptance.
-    let postcondition: TransformationPostcondition
 }

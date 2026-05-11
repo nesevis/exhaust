@@ -170,12 +170,7 @@ private func minimizationScope(
             maxSourceDistance: 0,
             estimatedProbes: 10
         ),
-        precondition: .unconditional,
-        postcondition: TransformationPostcondition(
-            isStructural: false,
-            invalidatesConvergence: [],
-            enablesRemoval: []
-        )
+        precondition: .unconditional
     )
     return TransformationScope(
         transformation: transformation,
@@ -201,12 +196,7 @@ private func removalScope(
             maxSourceDistance: 0,
             estimatedProbes: firstScope.maxBatch
         ),
-        precondition: .unconditional,
-        postcondition: TransformationPostcondition(
-            isStructural: true,
-            invalidatesConvergence: [],
-            enablesRemoval: []
-        )
+        precondition: .unconditional
     )
     return TransformationScope(
         transformation: transformation,

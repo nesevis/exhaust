@@ -332,7 +332,7 @@ struct ReorderableGroup {
 ///
 /// - Note: The graph is carried temporarily for node metadata access (position ranges, leaf values). A future refinement will pre-resolve all needed metadata into the scope types and remove the graph dependency.
 struct TransformationScope {
-    /// The transformation to execute (operation, yield, precondition, postcondition).
+    /// The transformation to execute (operation, yield, precondition).
     let transformation: GraphTransformation
 
     /// The sequence the encoder operates on. The encoder modifies this sequence to produce candidates.

@@ -73,12 +73,7 @@ struct ReplacementSource: ScopeSource {
         return GraphTransformation(
             operation: .replace(entry.scope),
             yield: entry.yield,
-            precondition: precondition,
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: precondition
         )
     }
 }
@@ -141,12 +136,7 @@ struct PermutationSource: ScopeSource {
                 maxSourceDistance: 0,
                 estimatedProbes: estimatedProbes
             ),
-            precondition: .nodeActive(entry.parentNodeID),
-            postcondition: TransformationPostcondition(
-                isStructural: false,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .nodeActive(entry.parentNodeID)
         )
     }
 }

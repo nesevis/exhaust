@@ -39,12 +39,7 @@ extension ChoiceGraphScheduler {
                     batchZeroEligible: false
                 ))),
                 yield: scope.transformation.yield,
-                precondition: .unconditional,
-                postcondition: TransformationPostcondition(
-                    isStructural: false,
-                    invalidatesConvergence: [],
-                    enablesRemoval: []
-                )
+                precondition: .unconditional
             ),
             baseSequence: scope.baseSequence,
             tree: scope.tree,
@@ -178,12 +173,7 @@ extension ChoiceGraphScheduler {
                     batchZeroEligible: downstreamLeaves.count > 1
                 ))),
                 yield: parent.transformation.yield,
-                precondition: .unconditional,
-                postcondition: TransformationPostcondition(
-                    isStructural: false,
-                    invalidatesConvergence: [],
-                    enablesRemoval: []
-                )
+                precondition: .unconditional
             ),
             baseSequence: liftedSequence,
             tree: freshTree,

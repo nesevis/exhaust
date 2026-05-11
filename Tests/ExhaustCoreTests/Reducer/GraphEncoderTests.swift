@@ -28,12 +28,7 @@ struct GraphEncoderTests {
                 maxSourceDistance: 0,
                 estimatedProbes: firstScope.maxBatch
             ),
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .unconditional
         )
         return TransformationScope(
             transformation: transformation,
@@ -60,12 +55,7 @@ struct GraphEncoderTests {
                 maxSourceDistance: 0,
                 estimatedProbes: 10
             ),
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: false,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .unconditional
         )
         return TransformationScope(
             transformation: transformation,
@@ -227,12 +217,7 @@ struct GraphEncoderTests {
                 maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .unconditional
         )
         let scope = TransformationScope(
             transformation: transformation,

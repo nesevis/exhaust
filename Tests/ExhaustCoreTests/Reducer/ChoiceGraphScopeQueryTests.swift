@@ -203,12 +203,7 @@ struct ChoiceGraphScopeQueryTests {
                 maxSourceDistance: 0,
                 estimatedProbes: coveringScope.generator.totalRemaining
             ),
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .unconditional
         )
         let scope = TransformationScope(
             transformation: transformation,
@@ -238,71 +233,6 @@ struct ChoiceGraphScopeQueryTests {
         }
     }
 
-    // MARK: - Enumerator
-
-    @Test("Enumerator produces sorted transformations")
-    func enumeratorSorted() {
-        let seq1 = ChoiceTree.sequence(
-            length: 3,
-            elements: [
-                .choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(ChoiceValue(30 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-            ],
-            .init(validRange: nil, isRangeExplicit: false)
-        )
-        let seq2 = ChoiceTree.sequence(
-            length: 2,
-            elements: [
-                .choice(ChoiceValue(40 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-                .choice(ChoiceValue(50 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
-            ],
-            .init(validRange: nil, isRangeExplicit: false)
-        )
-        let tree = ChoiceTree.group([seq1, seq2])
-        let graph = ChoiceGraph.build(from: tree)
-        let transformations = TransformationEnumerator.enumerate(from: graph)
-
-        #expect(transformations.isEmpty == false)
-
-        // Verify sorted: each element should be >= the next (higher or equal priority first).
-        for index in 0 ..< transformations.count - 1 {
-            let current = transformations[index].yield
-            let next = transformations[index + 1].yield
-            #expect(current >= next)
-        }
-    }
-
-    @Test("Enumerator includes covering aligned removal for zip of sequences")
-    func enumeratorIncludesCoveringAligned() {
-        let seq1 = ChoiceTree.sequence(
-            length: 2,
-            elements: [
-                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-            ],
-            .init(validRange: nil, isRangeExplicit: false)
-        )
-        let seq2 = ChoiceTree.sequence(
-            length: 2,
-            elements: [
-                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-                .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
-            ],
-            .init(validRange: nil, isRangeExplicit: false)
-        )
-        let tree = ChoiceTree.group([seq1, seq2])
-        let graph = ChoiceGraph.build(from: tree)
-        let transformations = TransformationEnumerator.enumerate(from: graph)
-
-        let hasCoveringAligned = transformations.contains { transformation in
-            if case .remove(.coveringAligned) = transformation.operation {
-                return true
-            }
-            return false
-        }
-        #expect(hasCoveringAligned)
-    }
 
     // MARK: - Inner Descendant Index
 

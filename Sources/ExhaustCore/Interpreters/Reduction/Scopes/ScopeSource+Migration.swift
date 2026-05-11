@@ -137,12 +137,7 @@ struct MigrationSource: ScopeSource {
                     .sequenceLengthAboveMinimum(sequenceNodeID: entry.sourceSeqID),
                     .nodeActive(entry.receiverSeqID),
                 ])
-            }(),
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            }()
         )
     }
 }

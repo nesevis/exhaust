@@ -152,12 +152,7 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             ),
             precondition: .all(targets.map {
                 .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
-            }),
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            })
         )
     }
 }
@@ -226,12 +221,7 @@ struct SequenceEmptyingSource: ScopeSource {
                 maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
-            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: candidate.sequenceNodeID),
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: candidate.sequenceNodeID)
         )
     }
 }
@@ -325,12 +315,7 @@ struct BatchRemovalSource: ScopeSource {
                 maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
-            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: sequenceNodeID),
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: sequenceNodeID)
         )
 
         // Advance state for next call.
@@ -434,12 +419,7 @@ struct PerElementRemovalSource: ScopeSource {
                 maxSourceDistance: 0,
                 estimatedProbes: 1
             ),
-            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: element.sequenceNodeID),
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: element.sequenceNodeID)
         )
     }
 }
@@ -485,12 +465,7 @@ struct AlignedRemovalSource: ScopeSource {
             ),
             precondition: .all(scope.siblings.map {
                 .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
-            }),
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
+            })
         )
     }
 }
