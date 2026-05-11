@@ -216,9 +216,7 @@ package extension ChoiceGraph {
 package extension ChoiceGraph {
     /// Computes a structural fingerprint over the active region topology.
     ///
-    /// The fingerprint hashes the multiset of `(kind, positionRange.lowerBound, positionRange.upperBound)` tuples for every active node (skipping tombstones and inactive branches). Per-node hashes are collected, sorted, then chained through an FNV-1a-style aggregator so the final value is independent of `nodes` array order. Crucially, the fingerprint does **not** include `node.id` — node identity is unstable across in-place mutations (the splice path keeps existing IDs and appends new ones, while a fresh ``ChoiceGraph/build(from:)`` walks the tree and assigns IDs in walk order), so including identity would make a structurally-correct splice compare unequal to its fresh-rebuild equivalent.
-    ///
-    /// Used by the partial-rebuild scheduler (``ChoiceGraphScheduler/runProbeLoop(...)``) under instrumentation to validate that ``ChoiceGraph/apply(_:freshTree:)`` produces a graph structurally equivalent to ``ChoiceGraph/build(from:)`` on the same tree.
+    /// Hashes the multiset of `(kind, positionRange.lowerBound, positionRange.upperBound)` tuples for every active node. Per-node hashes are collected, sorted, then chained through an FNV-1a-style aggregator so the final value is independent of `nodes` array order. Does **not** include `node.id` — node identity is unstable across rebuilds (``ChoiceGraphBuilder`` assigns IDs sequentially during the tree walk, so the same logical node gets a different ID after any structural change).
     var structuralFingerprint: UInt64 {
         var nodeHashes: [UInt64] = []
         nodeHashes.reserveCapacity(liveNodeIDs.count)

@@ -170,7 +170,7 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
 ///
 /// ## Mutation Reporting
 ///
-/// The downstream encoder's mutation references node IDs in the *lifted* graph, which mean nothing to the live graph after acceptance. The composition discards the downstream mutation and emits the upstream's mutation with ``LeafChange/mayReshape`` set to `true`, which routes ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` to splice the rebuilt subtree from the decoder's freshTree on accept. The downstream's actual values are baked into the candidate sequence — the materializer reads them when the decoder reconstructs the freshTree.
+/// The downstream encoder's mutation references node IDs in the *lifted* graph, which mean nothing to the live graph after acceptance. The composition discards the downstream mutation and emits the upstream's mutation with ``LeafChange/mayReshape`` set to `true`, triggering a full graph rebuild on acceptance. The downstream's actual values are baked into the candidate sequence — the materializer reads them when the decoder reconstructs the freshTree.
 ///
 /// ## Decoder Hint
 ///
@@ -273,7 +273,7 @@ struct GraphComposedEncoder: GraphEncoder {
 
     /// Replaces a downstream probe's mutation with the upstream's mutation, lifted to set ``LeafChange/mayReshape`` to `true`.
     ///
-    /// The candidate sequence is already in the caller's inout buffer; the mutation is what the live graph applies on accept (one upstream leaf change that triggers the partial-rebuild splice path via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``).
+    /// The candidate sequence is already in the caller's inout buffer; the mutation is what the live graph applies on accept (one upstream leaf change with ``LeafChange/mayReshape`` set to `true`, triggering a full graph rebuild).
     private func wrap(
         downstreamMutation _: EncoderProbe,
         candidate _: ChoiceSequence,

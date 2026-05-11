@@ -53,13 +53,13 @@ protocol GraphEncoder {
 
     /// Re-derives the encoder's scope state from the live graph after a structural mutation.
     ///
-    /// The scheduler calls this between ``nextProbe(into:lastAccepted:)`` invocations whenever the most recent probe acceptance added or removed graph nodes (any in-place reshape that adds/removes nodes, or any mutation flagged ``ChangeApplication/requiresFullRebuild``). At that point the encoder's per-pass cached state — leaf positions, in-flight binary-search steppers, pair indices — is no longer valid against the live graph: tombstoned nodes are still referenced, surviving nodes have shifted positions, and any new nodes the splice created are invisible.
+    /// The scheduler calls this between ``nextProbe(into:lastAccepted:)`` invocations whenever the most recent probe acceptance triggered a structural mutation (``ChangeApplication/requiresFullRebuild``). At that point the encoder's per-pass cached state — leaf positions, in-flight binary-search steppers, pair indices — may reference nodes that no longer exist or have different positions in the rebuilt graph.
     ///
     /// Implementations must:
     ///
     /// 1. Re-walk the live graph and rebuild every nodeID-keyed cache (leaf positions, pair plans, lookup tables) from the current state.
     /// 2. Drop in-flight per-leaf iteration state (steppers, scan windows, cross-zero phases) — those refer to the old leaf set and are not meaningful after re-scoping.
-    /// 3. Preserve convergence records by nodeID. Records whose nodeID is now tombstoned (`positionRange == nil`) should be dropped; surviving nodeIDs keep their records.
+    /// 3. Preserve convergence records by nodeID. Records whose nodeID no longer has a position range should be dropped; surviving nodeIDs keep their records.
     /// 4. Update the encoder's internal sequence reference (``IntegerState/sequence`` and similar) to match the live `sequence` parameter.
     ///
     /// The default implementation is a no-op, suitable for single-shot encoders that emit one probe per scope (for example, ``GraphStructuralEncoder``, ``GraphSwapEncoder``, ``GraphReorderEncoder``) and for encoders that already self-reset on every accepted probe. Stateful encoders that cache leaf positions across multiple probes within a pass (``GraphValueEncoder``, ``GraphRedistributionEncoder``) must override this method.

@@ -37,8 +37,7 @@ extension GraphValueEncoder {
             }
         }
 
-        // Phase selection. ``armBatchZero`` is `true` for the initial
-        // ``start(scope:)`` call (the trivial all-targets shortcut is worth one probe at pass start) and `false` for refresh calls from ``refreshState(graph:sequence:)``. Re-arming batch-zero on every refresh wastes one full materialisation per accepted reshape: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the new leaves the splice added rarely flip that. The waste was the dominant cost on BinaryHeap (~30k refresh-induced batchZero probes per 1000-seed run, each rejected because all-zero is a valid heap and the failing predicate requires non-heap shape).
+        // Phase selection. armBatchZero is true for the initial start(scope:) call (the trivial all-targets shortcut is worth one probe at pass start) and false for refresh calls from refreshState(graph:sequence:). Re-arming batch-zero on every refresh wastes one full materialisation per structural acceptance: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the rebuilt graph's leaves rarely change that.
         let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible) ? .batchZero : .perLeaf
 
         mode = .valueLeaves(IntegerState(

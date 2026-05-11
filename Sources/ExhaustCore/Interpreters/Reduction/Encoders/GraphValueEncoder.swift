@@ -266,17 +266,11 @@ struct GraphValueEncoder: GraphEncoder {
     }
 
     mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
-        // Re-derive the encoder's working set from the live graph after a structural mutation. The scheduler calls this between probe loop iterations whenever the most recent acceptance added or removed graph nodes (an in-place reshape via ``applyBindReshape``).
-        // The cached ``IntegerState/leafPositions`` /
-        // ``FloatState/targets`` reference pre-mutation node IDs and sequence positions; without a refresh the next probe would write to a stale slot or invoke ``applyLeafValueWrite`` on a tombstoned node, producing a position drift bug.
+        // Re-derive the encoder's working set from the live graph after a structural mutation. The cached leaf positions reference pre-mutation node IDs and sequence positions; without a refresh the next probe would write to a stale slot.
         //
-        // Strategy: pull the canonical integer/float scope from
-        // ``graph.minimizationScopes()`` against the live graph (which automatically picks up new leaves the splice created and drops tombstoned ones), filter out leaves we have already converged in this pass via ``convergenceStore``, and replace the per-mode state in place. Convergence records keyed by nodeID survive any number of refreshes; records for tombstoned IDs are dropped so they cannot leak across the boundary.
+        // Strategy: pull the canonical integer/float scope from the live graph (which automatically reflects the rebuilt node set), filter out leaves we have already converged in this pass via convergenceStore, and replace the per-mode state in place.
         //
-        // The leafIndex, in-flight stepper, scan window, and cross-zero phase are all per-leaf state from the pre-refresh leaf set and are reset. The phase is re-armed to ``IntegerPhase/batchZero``
-        // (when more than one leaf is in the new set) so the new leaves get a chance at the joint-zero probe; the cost is one extra probe per refresh.
-        // Drop convergence records whose nodeID has been tombstoned by the splice — those nodes no longer exist and recording their convergence onto the live graph at end-of-pass would be a no-op.
-        // Done before reading the new scope so the predicate sees a clean store.
+        // Drop convergence records whose nodeID no longer has a position range.
         for nodeID in convergenceStore.keys
             where nodeID >= graph.nodes.count || graph.nodes[nodeID].positionRange == nil
         {

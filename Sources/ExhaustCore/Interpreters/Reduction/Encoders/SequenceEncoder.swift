@@ -18,7 +18,7 @@ public enum EncoderName: String, Hashable, Sendable {
     /// Shifts value between type-compatible parameters to find a simpler combination. When two parameters sum to a constant that the property depends on, redistribution searches for the split closest to zero on both sides.
     case redistribution
 
-    /// Tries selecting a different branch at a pick site. Builds a candidate by replacing the selected branch content with a minimized version of an alternative branch, using the graph's position range to splice directly into the sequence.
+    /// Tries selecting a different branch at a pick site. Builds a candidate by replacing the selected branch content with a minimized version of an alternative branch, using the graph's position range to locate and replace the relevant entries in the sequence.
     case branchPivot
 
     /// Replaces a subtree with a smaller one from the same recursive generator (self-similar substitution) or promotes a descendant pick to replace its ancestor (descendant promotion). Both use the graph's self-similarity groups to identify structurally exchangeable sites.

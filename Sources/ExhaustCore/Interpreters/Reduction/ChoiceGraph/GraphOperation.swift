@@ -46,8 +46,8 @@ enum GraphOperation {
 
     /// Per-scope discriminator for the rejection cache. Branch pivot uses the target branch ID so that rejecting branch A at a pick site does not block branch B at the same site. All other operations return 0.
     var scopeSubDiscriminator: UInt64 {
-        if case let .replace(.branchPivot(scope)) = self {
-            return scope.targetBranchID
+        if case let .replace(.branchPivot(_, targetBranchID)) = self {
+            return targetBranchID
         }
         return 0
     }
@@ -61,24 +61,24 @@ enum GraphOperation {
             switch scope {
             case let .elements(elementScope):
                 elementScope.targets.flatMap(\.elementNodeIDs)
-            case let .subtree(subtreeScope):
-                [subtreeScope.nodeID]
+            case let .subtree(nodeID, _):
+                [nodeID]
             case .coveringAligned:
                 nil
             }
         case let .replace(scope):
             switch scope {
-            case let .selfSimilar(selfSimilarScope):
-                [selfSimilarScope.targetNodeID, selfSimilarScope.donorNodeID]
-            case let .branchPivot(pivotScope):
-                [pivotScope.pickNodeID]
-            case let .descendantPromotion(promotionScope):
-                [promotionScope.ancestorPickNodeID, promotionScope.descendantPickNodeID]
+            case let .selfSimilar(targetNodeID, donorNodeID, _):
+                [targetNodeID, donorNodeID]
+            case let .branchPivot(pickNodeID, _):
+                [pickNodeID]
+            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
+                [ancestorPickNodeID, descendantPickNodeID]
             }
         case let .permute(scope):
             switch scope {
-            case let .siblingPermutation(permScope):
-                permScope.swappableGroups.flatMap(\.self)
+            case let .siblingPermutation(_, swappableGroups):
+                swappableGroups.flatMap(\.self)
             }
         case let .migrate(scope):
             scope.elementNodeIDs + [scope.receiverSequenceNodeID]
@@ -102,31 +102,31 @@ extension GraphOperation {
                 guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else { return false }
                 return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
             }
-        case let .remove(.subtree(scope)):
-            return scope.nodeID < graph.nodes.count
-                && graph.nodes[scope.nodeID].positionRange != nil
+        case let .remove(.subtree(nodeID, _)):
+            return nodeID < graph.nodes.count
+                && graph.nodes[nodeID].positionRange != nil
         case let .remove(.coveringAligned(scope)):
             return scope.siblings.allSatisfy { sibling in
                 guard sibling.sequenceNodeID < graph.nodes.count else { return false }
                 guard case let .sequence(metadata) = graph.nodes[sibling.sequenceNodeID].kind else { return false }
                 return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
             }
-        case let .replace(.selfSimilar(scope)):
-            return scope.targetNodeID < graph.nodes.count
-                && graph.nodes[scope.targetNodeID].positionRange != nil
-                && scope.donorNodeID < graph.nodes.count
-                && graph.nodes[scope.donorNodeID].positionRange != nil
-        case let .replace(.branchPivot(scope)):
-            return scope.pickNodeID < graph.nodes.count
-                && graph.nodes[scope.pickNodeID].positionRange != nil
-        case let .replace(.descendantPromotion(scope)):
-            return scope.ancestorPickNodeID < graph.nodes.count
-                && graph.nodes[scope.ancestorPickNodeID].positionRange != nil
-                && scope.descendantPickNodeID < graph.nodes.count
-                && graph.nodes[scope.descendantPickNodeID].positionRange != nil
-        case let .permute(.siblingPermutation(scope)):
-            return scope.parentNodeID < graph.nodes.count
-                && graph.nodes[scope.parentNodeID].positionRange != nil
+        case let .replace(.selfSimilar(targetNodeID, donorNodeID, _)):
+            return targetNodeID < graph.nodes.count
+                && graph.nodes[targetNodeID].positionRange != nil
+                && donorNodeID < graph.nodes.count
+                && graph.nodes[donorNodeID].positionRange != nil
+        case let .replace(.branchPivot(pickNodeID, _)):
+            return pickNodeID < graph.nodes.count
+                && graph.nodes[pickNodeID].positionRange != nil
+        case let .replace(.descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _)):
+            return ancestorPickNodeID < graph.nodes.count
+                && graph.nodes[ancestorPickNodeID].positionRange != nil
+                && descendantPickNodeID < graph.nodes.count
+                && graph.nodes[descendantPickNodeID].positionRange != nil
+        case let .permute(.siblingPermutation(parentNodeID, _)):
+            return parentNodeID < graph.nodes.count
+                && graph.nodes[parentNodeID].positionRange != nil
         case let .migrate(scope):
             if let parentSeqID = scope.sourceParentSequenceNodeID {
                 guard parentSeqID < graph.nodes.count else { return false }

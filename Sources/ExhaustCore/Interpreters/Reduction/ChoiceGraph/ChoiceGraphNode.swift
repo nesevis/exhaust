@@ -9,7 +9,7 @@
 ///
 /// Inactive (unselected) branches carry a nil ``positionRange`` and do not address live entries in the ``ChoiceSequence``. Encoders must skip these nodes. Only nodes with a non-nil position range correspond to mutable sequence positions.
 package struct ChoiceGraphNode {
-    /// Assigned sequentially during graph construction. Stays stable across in-place mutations: tombstoned nodes keep their ID so surviving references remain valid.
+    /// Assigned sequentially during graph construction. Unstable across rebuilds — the same logical node gets a different ID after any structural change.
     public let id: Int
 
     /// Determines which encoder passes may target this node. Value encoders target chooseBits leaves, structural encoders target pick, sequence, and bind nodes.

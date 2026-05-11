@@ -12,7 +12,7 @@ extension ChoiceGraphScheduler {
     ///
     /// The downstream encoder depends on the bound subtree's leaf count: a ``GraphBinarySearchEncoder`` for single-leaf subtrees, or a ``GraphBoundValueCoveringEncoder`` for multi-leaf subtrees. The downstream is started by the lift closure on the lifted graph's bound-subtree leaves.
     ///
-    /// The lift materializes each upstream candidate through `gen`, copies the parent graph, applies the upstream change to the copy via ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)``, and constructs the downstream scope on the resulting graph.
+    /// The lift materializes each upstream candidate through `gen`, builds a fresh graph from the resulting tree, and constructs the downstream scope on the lifted graph's bound-subtree leaves.
     ///
     /// - Parameters:
     ///   - bindScope: The bound value scope from the source pipeline.
@@ -78,7 +78,7 @@ extension ChoiceGraphScheduler {
     /// Lifts an upstream probe into a downstream ``EncoderInput`` for the bound value composition.
     ///
     /// 1. Materialises the upstream candidate through `gen` to obtain the new bound subtree's choice tree.
-    /// 2. Copies the parent graph and applies the upstream change to the copy as a reshape (`mayReshape: true`), so ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` splices the rebuilt bound subtree from the freshTree on the throwaway copy. Falls back to a full ``ChoiceGraph/build(from:)`` if the partial path bails.
+    /// 2. Builds a fresh ``ChoiceGraph`` from the materialised tree. The upstream probe changes a bind-inner value, which can restructure the bound subtree — a full build is the only reliable path when the structure changes.
     /// 3. Locates the bind's bound child in the lifted graph and collects its descendant leaves as the downstream search range.
     /// 4. Constructs an integer-leaves minimization scope on the lifted graph; the downstream encoder operates on it without knowing it is downstream.
     static func boundValueLift(

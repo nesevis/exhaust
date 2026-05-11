@@ -15,8 +15,8 @@ extension GraphSwapEncoder {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ProjectedMutation? {
-        guard case let .siblingPermutation(permutationScope) = scope else { return nil }
-        guard let group = permutationScope.swappableGroups.first,
+        guard case let .siblingPermutation(parentNodeID, swappableGroups) = scope else { return nil }
+        guard let group = swappableGroups.first,
               group.count >= 2
         else {
             return nil
@@ -42,7 +42,7 @@ extension GraphSwapEncoder {
             // Initialize extension state for groups of three or more.
             if slots.count >= 3 {
                 extensionState = ExtensionState(
-                    parentNodeID: permutationScope.parentNodeID,
+                    parentNodeID: parentNodeID,
                     slots: slots,
                     runningSequence: built,
                     contentSlotIndex: slotIndex + 1,
@@ -54,7 +54,7 @@ extension GraphSwapEncoder {
 
             candidate = built
             return .siblingsSwapped(
-                parentNodeID: permutationScope.parentNodeID,
+                parentNodeID: parentNodeID,
                 idA: slots[slotIndex].nodeID,
                 idB: slots[slotIndex + 1].nodeID
             )

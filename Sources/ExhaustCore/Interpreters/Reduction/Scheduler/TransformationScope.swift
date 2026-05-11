@@ -80,7 +80,7 @@ struct CoveringAlignedRemovalScope {
 ///
 /// Replacement is the only operation type that changes the generator's active execution path. Active donors (non-nil position range) enable sequence surgery. Inactive donors (nil position range) require tree edit and flatten.
 enum ReplacementScope {
-    /// Splice a donor subtree along a self-similarity edge.
+    /// Replace a pick subtree with a smaller same-fingerprint subtree.
     case selfSimilar(targetNodeID: Int, donorNodeID: Int, sizeDelta: Int)
 
     /// Change the selected branch at a pick node.

@@ -8,7 +8,7 @@
 extension ChoiceGraph {
     /// Walks `tree` following the structural steps in `path` to locate a bind node, and returns that bind's bound child subtree.
     ///
-    /// Used by ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` to extract the new bound subtree from the materializer's freshly produced tree, given the target bind's ``BindMetadata/bindPath`` from the pre-mutation graph. Path-based identification remains stable across upstream-induced structural divergence, whereas the prior offset-based lookup would silently match a different bind when the sequence layout shifted.
+    /// Used by ``classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` and ``observeBindTopologies(tree:)`` to extract the bound subtree from a materialized tree, given the target bind's ``BindMetadata/bindPath``. Path-based identification remains stable across upstream-induced structural divergence, whereas offset-based lookup would silently match a different bind when the sequence layout shifted.
     ///
     /// Returns `nil` if the path does not resolve to a non-getSize bind inside `tree`. The caller falls back to a full graph rebuild in that case.
     static func extractBoundSubtree(
@@ -110,7 +110,7 @@ extension ChoiceGraph {
 
     /// Walks `tree` following `path` and returns whatever subtree the path terminates at, or nil on mismatch.
     ///
-    /// Unlike ``extractBoundSubtree(from:matchingPath:)`` which specifically returns a bind's bound child, this method returns the tree node at the exact path terminus. Used by the branch pivot splice to extract the new selected branch's content from the freshTree.
+    /// Unlike ``extractBoundSubtree(from:matchingPath:)`` which specifically returns a bind's bound child, this method returns the tree node at the exact path terminus.
     static func extractSubtreeAtPath(
         from tree: ChoiceTree,
         path: BindPath
@@ -201,7 +201,7 @@ extension ChoiceGraph {
 
     /// Computes the ``BindPath`` from the tree root to the given node by walking up the parent chain.
     ///
-    /// Returns nil if the path cannot be determined (for example, the node is a root or has a tombstoned ancestor). The returned path can be used with ``extractSubtreeAtPath(from:path:)`` to locate the corresponding subtree in a freshTree.
+    /// Returns nil if the path cannot be determined (for example, the node is the root). The returned path can be used with ``extractSubtreeAtPath(from:path:)`` to locate the corresponding subtree in a freshTree.
     func structuralPath(to nodeID: Int) -> BindPath? {
         var steps: [BindPathStep] = []
         var current = nodeID
