@@ -14,11 +14,11 @@ typealias EncoderProbe = ProjectedMutation
 
 // MARK: - Graph Encoder Protocol
 
-/// The encoding half of the SJ algebra's (enc_a, dec_a) morphism pair for graph-based reduction.
+/// Produces candidate sequences for a given operation scope.
 ///
-/// Receives a ``EncoderInput`` (self-contained: base sequence, operation metadata, warm-start records) and produces candidate sequences via its probe loop. Each candidate is passed to the decoder (``SequenceDecoder``, the dec_a half) for materialisation and property checking.
+/// Receives an ``EncoderInput`` (self-contained: base sequence, operation metadata, warm-start records) and produces candidate sequences via its probe loop. Each candidate is passed to the decoder (``SequenceDecoder``) for materialisation and property checking.
 ///
-/// The scope defines the search space (graph-computable). The encoder determines how to explore it (predicate-dependent). This separation is the opacity boundary: the scope is constructed by the scheduler from graph metadata; the encoder searches within it using predicate feedback.
+/// The scope defines the search space (graph-computable). The encoder determines how to explore it (predicate-dependent). The scheduler constructs scopes from graph metadata; the encoder searches within them using predicate feedback.
 ///
 /// Active-path encoders (removal, minimization, exchange, permutation) produce candidates via sequence surgery on ``EncoderInput/baseSequence`` at pre-resolved position ranges. Path-changing encoders (replacement with inactive donor) edit ``EncoderInput/tree`` and flatten.
 ///

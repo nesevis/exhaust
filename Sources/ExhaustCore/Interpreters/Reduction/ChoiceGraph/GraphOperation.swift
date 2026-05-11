@@ -3,13 +3,17 @@
 //  Exhaust
 //
 
+// MARK: - Academic Provenance
+
+// The operation taxonomy, encoder/decoder split, priority-based scheduling, and relax round are informed by Sepulveda-Jimenez, "Categories of Optimization Reductions" (2026), which formalises reduce-solve-recover pipelines as morphisms in a graded category with approximation slack and resource tracking. The paper is an optimisation algebra designed for composing known reductions; Exhaust adapts it for morphism discovery, where candidates are proposed speculatively and certified by an opaque property oracle.
+
 // MARK: - Graph Operation
 
-/// The six fundamental operations on a ``ChoiceGraph``.
+/// The seven fundamental operations on a ``ChoiceGraph``.
 ///
-/// Each case corresponds to a morphism type in OptRed (Sepulveda-Jimenez): remove, replace, permute, and migrate are exact reductions; minimize is a multi-probe search; exchange is an approximate reduction with affine slack.
+/// Remove, replace, permute, and migrate are exact (one-shot) reductions. Minimize is a multi-probe binary search. Exchange is an approximate reduction that may temporarily worsen shortlex before enabling further progress. Reorder is a final canonicalization pass.
 ///
-/// Five of six operations work within the generator's active execution path (nodes with non-nil position ranges). Only replace changes the active path — it may bring inactive content into the sequence, requiring tree editing and flattening.
+/// Six of seven operations work within the generator's active execution path (nodes with non-nil position ranges). Only replace changes the active path — it may bring inactive content into the sequence, requiring tree editing and flattening.
 enum GraphOperation {
     /// Remove containment-subtrees, reducing sequence length.
     case remove(RemovalScope)

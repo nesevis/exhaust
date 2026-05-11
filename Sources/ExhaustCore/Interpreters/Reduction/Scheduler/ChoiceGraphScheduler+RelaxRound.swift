@@ -8,7 +8,7 @@
 extension ChoiceGraphScheduler {
     /// Runs a structural relax–solve–round pass: checkpoint, apply a shortlex-worsening structural perturbation, reduce from the perturbed state, commit if the result beats the checkpoint.
     ///
-    /// Implements the approximate reduction morphism `a : P → Q` from Sepulveda-Jimenez §11.2. The relaxation removes the shortlex constraint on structural operations — branch pivots, self-similar substitutions, and descendant promotions that the standard encoder rejected because the candidate was shortlex-larger. The exploitation phase runs a full reduction cycle from the perturbed state. The round phase compares the exploited result against the checkpoint.
+    /// The relaxation removes the shortlex constraint on structural operations — branch pivots, self-similar substitutions, and descendant promotions that the standard encoder rejected because the candidate was shortlex-larger. The exploitation phase runs a full reduction cycle from the perturbed state. The round phase compares the exploited result against the checkpoint and commits only if the final state is strictly better.
     ///
     /// Perturbation candidates are built directly from the graph's replacement scopes with the shortlex gate removed. Each candidate is materialized and property-checked; the first property-failing candidate seeds the exploitation phase.
     ///
