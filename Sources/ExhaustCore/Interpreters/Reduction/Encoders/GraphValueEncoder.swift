@@ -14,7 +14,7 @@
 ///
 /// This is an active-path operation: all leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions.
 ///
-/// The integer- and float-mode implementations live in `GraphValueEncoder+Integer.swift` and `GraphValueEncoder+Float.swift` respectively. State types are nested here so both extensions can reference them, and the protocol-level dispatch (`start`, `nextProbe`, `refreshScope`) sits in this core file.
+/// The integer- and float-mode implementations live in `GraphValueEncoder+Integer.swift` and `GraphValueEncoder+Float.swift` respectively. State types are nested here so both extensions can reference them, and the protocol-level dispatch (`start`, `nextProbe`, `refreshState`) sits in this core file.
 struct GraphValueEncoder: GraphEncoder {
     let name: EncoderName = .valueSearch
 
@@ -241,7 +241,7 @@ struct GraphValueEncoder: GraphEncoder {
         }
     }
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         convergenceStore = [:]
 
         guard case let .minimize(minimizationScope) = scope.transformation.operation else {
@@ -265,7 +265,7 @@ struct GraphValueEncoder: GraphEncoder {
         }
     }
 
-    mutating func refreshScope(graph: some ReadOnlyChoiceGraph, sequence: ChoiceSequence) {
+    mutating func refreshState(graph: some ReadOnlyChoiceGraph, sequence: ChoiceSequence) {
         // Re-derive the encoder's working set from the live graph after a structural mutation. The scheduler calls this between probe loop iterations whenever the most recent acceptance added or removed graph nodes (an in-place reshape via ``applyBindReshape``).
         // The cached ``IntegerState/leafPositions`` /
         // ``FloatState/targets`` reference pre-mutation node IDs and sequence positions; without a refresh the next probe would write to a stale slot or invoke ``applyLeafValueWrite`` on a tombstoned node, producing a position drift bug.
@@ -287,7 +287,7 @@ struct GraphValueEncoder: GraphEncoder {
         case .idle:
             return
         case let .valueLeaves(state):
-            let scopes = MinimizationScopeQuery.build(graph: graph)
+            let scopes = MinimizationQuery.build(graph: graph)
             let integerScope = scopes.firstNonNil { scope -> ValueMinimizationScope? in
                 if case let .valueLeaves(inner) = scope { return inner }
                 return nil
@@ -305,7 +305,7 @@ struct GraphValueEncoder: GraphEncoder {
                 armBatchZero: false
             )
         case .floatLeaves:
-            let scopes = MinimizationScopeQuery.build(graph: graph)
+            let scopes = MinimizationQuery.build(graph: graph)
             let floatScope = scopes.firstNonNil { scope -> FloatMinimizationScope? in
                 if case let .floatLeaves(inner) = scope { return inner }
                 return nil

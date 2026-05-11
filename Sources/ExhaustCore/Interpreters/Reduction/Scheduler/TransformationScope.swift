@@ -1,5 +1,5 @@
 //
-//  TransformationScope.swift
+//  EncoderInput.swift
 //  Exhaust
 //
 
@@ -71,7 +71,7 @@ struct CoveringAlignedRemovalScope {
     /// Per-parameter domain value that encodes "skip this sibling." Equal to the sibling's element count (one past the last valid element index).
     let skipValues: [UInt64]
 
-    /// Maximum single-element yield across all siblings. Used for the scope source's ``TransformationYield/structural`` estimate.
+    /// Maximum single-element yield across all siblings. Used for the scope source's ``DispatchPriority/structuralBenefit`` estimate.
     let maxElementYield: Int
 
     /// One sibling sequence in the aligned deletion group.
@@ -155,7 +155,7 @@ enum MinimizationScope {
 ///
 /// Carries the leaf's node ID plus a marker that tells the graph (on acceptance) whether mutating this leaf might trigger a downstream bind subtree rebuild. The encoder ignores ``mayReshapeOnAcceptance`` and minimizes the leaf value identically for both kinds. The marker rides along into the encoder's ``ProjectedMutation`` report so that ``ChoiceGraph/apply(_:freshTree:)`` can route between the value-only fast path and the bind-inner reshape path on a per-leaf basis.
 ///
-/// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. Layer 4's extended ``ChoiceGraph/rebuildBoundSubtree(bindNodeID:newBoundTree:)`` is what makes the marker actionable; until then, any leaf change with the marker set causes ``ChoiceGraph/apply(_:freshTree:)`` to set ``ChangeApplication/requiresFullRebuild``.
+/// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. On acceptance, ``ChoiceGraph/apply(_:freshTree:)`` reads the marker to route between the value-only fast path and the bind-inner reshape path via ``ChoiceGraph/rebuildBoundSubtree(bindNodeID:newBoundTree:)``.
 struct LeafEntry {
     /// Identifier of the leaf node.
     let nodeID: Int
@@ -293,6 +293,9 @@ struct MigrationScope {
 
     /// Position range of the receiver sequence (elements are appended after its current content).
     let receiverPositionRange: ClosedRange<Int>
+
+    /// When the migration empties the source entirely and the source is a child of a parent sequence, this holds the parent's node ID. The validity check constrains the parent's minimum length rather than the source's.
+    let sourceParentSequenceNodeID: Int?
 }
 
 // MARK: - Reordering Scopes
@@ -329,10 +332,8 @@ struct ReorderableGroup {
 /// The encoder receives a scope and operates on it without modifying the graph — the scope is the interface between the graph (which constructs it) and the encoder (which consumes it).
 ///
 /// For simple transformations, ``baseSequence`` is the current sequence. For bound value composition, the downstream scope's ``baseSequence`` is the lifted result from the upstream probe — the encoder does not know or care that it is downstream.
-///
-/// - Note: The graph is carried temporarily for node metadata access (position ranges, leaf values). A future refinement will pre-resolve all needed metadata into the scope types and remove the graph dependency.
-struct TransformationScope {
-    /// The transformation to execute (operation, yield, precondition, postcondition).
+struct EncoderInput {
+    /// The transformation to execute (operation, yield, precondition).
     let transformation: GraphTransformation
 
     /// The sequence the encoder operates on. The encoder modifies this sequence to produce candidates.
@@ -346,6 +347,6 @@ struct TransformationScope {
 
     /// Warm-start convergence records for leaves in this scope, keyed by graph **nodeID**.
     ///
-    /// Extracted from graph nodes at scope construction time via ``ChoiceGraphScheduler/extractWarmStarts(from:)``. NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survive any in-pass position shift triggered by ``GraphEncoder/refreshScope(graph:sequence:)``. The encoder never accesses the graph directly for convergence data.
+    /// Extracted from graph nodes at scope construction time via ``ChoiceGraphScheduler/extractWarmStarts(from:)``. NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survive any in-pass position shift triggered by ``GraphEncoder/refreshState(graph:sequence:)``. The encoder never accesses the graph directly for convergence data.
     let warmStartRecords: [Int: ConvergedOrigin]
 }

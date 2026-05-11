@@ -3,101 +3,35 @@
 //  Exhaust
 //
 
-// MARK: - Affine Slack
+// MARK: - Dispatch Priority
 
-/// Approximation slack for a graph transformation, from the affine monoid Aff_{>=0}.
+/// Scheduling priority for a graph transformation candidate.
 ///
-/// For exact reductions (removal, replacement, permutation): (1, 0). For approximate reductions (exchange): (1, beta) where beta is the shortlex distance budget the intermediate may exceed the starting point.
-///
-/// Composition follows the monoidal product: (alpha, beta) (x) (alpha', beta') = (alpha . alpha', beta + alpha . beta'). Multiplicative factors multiply and additive terms accumulate with upstream scaling (Sepulveda-Jimenez, Def. 8.1).
-///
-/// The categorical framework defines Aff_{>=0} with real-valued (alpha, beta). For Exhaust's use cases, multiplicative is always 1: reductions are either exact or approximate with unit multiplicative. The full real-valued structure from the paper is available if future operations require non-unity multiplicative factors.
-struct AffineSlack: Comparable, Equatable {
-    /// Multiplicative factor. Always 1 for current reduction use cases.
-    let multiplicative: Int
-
-    /// Additive slack: shortlex distance budget the intermediate may exceed the starting point.
-    let additive: Int
-
-    /// Identity element: exact reduction with no slack.
-    static let exact = AffineSlack(multiplicative: 1, additive: 0)
-
-    /// Composes two slacks under the monoidal product.
-    ///
-    /// - Parameter other: The downstream slack to compose with.
-    /// - Returns: The composed slack where multiplicative factors multiply and additive terms accumulate with upstream scaling.
-    func composed(with other: AffineSlack) -> AffineSlack {
-        AffineSlack(
-            multiplicative: multiplicative * other.multiplicative,
-            additive: additive + multiplicative * other.additive
-        )
-    }
-
-    /// Lower slack is preferred: lower additive first, then lower multiplicative.
-    static func < (lhs: AffineSlack, rhs: AffineSlack) -> Bool {
-        if lhs.additive != rhs.additive {
-            return lhs.additive < rhs.additive
-        }
-        return lhs.multiplicative < rhs.multiplicative
-    }
-}
-
-// MARK: - Transformation Yield
-
-/// Packages structural yield, value yield, approximation slack, and estimated resource cost for a graph transformation.
-///
-/// Corresponds to G = Aff_{>=0} x W (Sepulveda-Jimenez, Def. 10.1), where the approximation component tracks quality loss and the resource component tracks probe count. Grades compose under the monoidal product law: structural yields sum, value yields take the max, slack composes via ``AffineSlack/composed(with:)``, and costs sum.
-///
-/// Ordering follows natural semantics: a yield with more structural reduction, more value unlocked, tighter slack, or lower cost is greater than one with less. The scheduler selects the maximum yield.
-struct TransformationYield: Comparable, Equatable {
-    /// Sequence positions removed. Zero for minimization, exchange, and permutation.
-    let structural: Int
+/// The scheduler dispatches the highest-priority candidate first. Ordering: more structural reduction, then more value unlocked, then smaller reduction magnitude remaining, then lower cost.
+struct DispatchPriority: Comparable, Equatable {
+    /// Estimated sequence positions removed. Zero for minimization, exchange, and permutation.
+    let structuralBenefit: Int
 
     /// Bound subtree size that reducing this value would structurally unlock. Zero for removal, replacement, exchange, and permutation.
-    let value: Int
+    let valueBenefit: Int
 
-    /// Approximation slack. Identity (1, 0) for exact reductions.
-    let slack: AffineSlack
+    /// Maximum value-space distance any source leaf must traverse to reach its reduction target. Zero for exact operations (removal, replacement, permutation, minimisation). Non-zero for approximate operations (exchange), where closer-to-target candidates are preferred.
+    let reductionMagnitude: Int
 
     /// Expected number of probes the encoder will need.
-    let estimatedProbes: Int
+    let estimatedCost: Int
 
-    /// Identity element for composition. Composing with identity preserves the other operand unchanged.
-    static let identity = TransformationYield(
-        structural: 0,
-        value: 0,
-        slack: .exact,
-        estimatedProbes: 0
-    )
-
-    /// Composes two yields under the monoidal product.
-    ///
-    /// Structural yields sum (both steps reduce the sequence independently).
-    /// Value yield takes the max (the compound enables the most enabling step's potential). Slack composes via ``AffineSlack/composed(with:)``.
-    /// Costs sum (sequential probe budgets are additive).
-    ///
-    /// - Parameter other: The downstream yield to compose with.
-    /// - Returns: The composed yield for the compound transformation.
-    func composed(with other: TransformationYield) -> TransformationYield {
-        TransformationYield(
-            structural: structural + other.structural,
-            value: max(value, other.value),
-            slack: slack.composed(with: other.slack),
-            estimatedProbes: estimatedProbes + other.estimatedProbes
-        )
-    }
-
-    /// Natural ordering: higher structural yield, then higher value yield, then tighter slack, then lower cost.
-    static func < (lhs: TransformationYield, rhs: TransformationYield) -> Bool {
-        if lhs.structural != rhs.structural {
-            return lhs.structural < rhs.structural
+    /// Natural ordering: higher structural benefit, then higher value benefit, then smaller reduction magnitude, then lower cost.
+    static func < (lhs: DispatchPriority, rhs: DispatchPriority) -> Bool {
+        if lhs.structuralBenefit != rhs.structuralBenefit {
+            return lhs.structuralBenefit < rhs.structuralBenefit
         }
-        if lhs.value != rhs.value {
-            return lhs.value < rhs.value
+        if lhs.valueBenefit != rhs.valueBenefit {
+            return lhs.valueBenefit < rhs.valueBenefit
         }
-        if lhs.slack != rhs.slack {
-            return lhs.slack > rhs.slack
+        if lhs.reductionMagnitude != rhs.reductionMagnitude {
+            return lhs.reductionMagnitude > rhs.reductionMagnitude
         }
-        return lhs.estimatedProbes > rhs.estimatedProbes
+        return lhs.estimatedCost > rhs.estimatedCost
     }
 }

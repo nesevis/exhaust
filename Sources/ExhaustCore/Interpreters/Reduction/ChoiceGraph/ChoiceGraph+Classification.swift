@@ -58,7 +58,7 @@ extension ChoiceGraph {
             return (BindClassification(topology: .unclassifiable, liftability: .neither), nil)
         }
         if leafMetadata.typeTag.isFloatingPoint {
-            // Phase 1 scope: integer-indexed binds only. Float upstreams can be added once the clamp heuristic is extended to the Hedgehog-style signed float encoding.
+            // Integer-indexed binds only. Float upstreams require extending the clamp heuristic to the Hedgehog-style signed float encoding.
             return (BindClassification(topology: .unclassifiable, liftability: .both), nil)
         }
         let fullRange = leafMetadata.validRange ?? leafMetadata.typeTag.bitPatternRange
@@ -146,12 +146,10 @@ extension ChoiceGraph {
             innerChildIndex: bindMetadata.innerChildIndex,
             boundChildIndex: bindMetadata.boundChildIndex,
             bindPath: bindMetadata.bindPath,
-            classification: verdict.classification,
-            downstreamFingerprint: verdict.fingerprint
+            classification: verdict.classification
         )
         let node = nodes[bindNodeID]
         nodes[bindNodeID] = node.with(kind: .bind(updatedMetadata))
-        // Mirror into the per-graph fingerprint-keyed cache so the verdict survives the next ``ChoiceGraph/build(from:inheriting:)``. The per-node `BindMetadata.classification` field is the in-instance authority; the cache is the across-instance one. Phase 2 keeps both stores updated for compatibility; later phases may demote the per-node field to a derived view populated from the cache at build time.
         bindClassifications[bindMetadata.fingerprint] = verdict.classification
     }
 

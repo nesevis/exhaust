@@ -3,13 +3,17 @@
 //  Exhaust
 //
 
+// MARK: - Academic Provenance
+
+// The operation taxonomy, encoder/decoder split, priority-based scheduling, and relax round are informed by Sepulveda-Jimenez, "Categories of Optimization Reductions" (2026), which formalises reduce-solve-recover pipelines as morphisms in a graded category with approximation slack and resource tracking. The paper is an optimisation algebra designed for composing known reductions; Exhaust adapts it for morphism discovery, where candidates are proposed speculatively and certified by an opaque property oracle.
+
 // MARK: - Graph Operation
 
-/// The six fundamental operations on a ``ChoiceGraph``.
+/// The seven fundamental operations on a ``ChoiceGraph``.
 ///
-/// Each case corresponds to a morphism type in OptRed (Sepulveda-Jimenez): remove, replace, permute, and migrate are exact reductions; minimize is a multi-probe search; exchange is an approximate reduction with affine slack.
+/// Remove, replace, permute, and migrate are exact (one-shot) reductions. Minimize is a multi-probe binary search. Exchange is an approximate reduction that may temporarily worsen shortlex before enabling further progress. Reorder is a final canonicalization pass.
 ///
-/// Five of six operations work within the generator's active execution path (nodes with non-nil position ranges). Only replace changes the active path — it may bring inactive content into the sequence, requiring tree editing and flattening.
+/// Six of seven operations work within the generator's active execution path (nodes with non-nil position ranges). Only replace changes the active path — it may bring inactive content into the sequence, requiring tree editing and flattening.
 enum GraphOperation {
     /// Remove containment-subtrees, reducing sequence length.
     case remove(RemovalScope)
@@ -31,7 +35,7 @@ enum GraphOperation {
 
     /// Reorder sequence elements into natural numeric order as a final canonicalization pass.
     ///
-    /// Only dispatched post-loop by ``ChoiceGraphScheduler`` after all other reduction is complete. Never emitted by any ``ScopeSource``.
+    /// Only dispatched post-loop by ``ChoiceGraphScheduler`` after all other reduction is complete. Never emitted by any ``CandidateSource``.
     case reorder(ReorderingScope)
 
     /// Whether this operation changes the generator's active execution path. Only replace is path-changing.
@@ -48,7 +52,7 @@ enum GraphOperation {
         return 0
     }
 
-    /// Collects node IDs whose position ranges are affected by this operation. Used by ``ScopeRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
+    /// Collects node IDs whose position ranges are affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
     ///
     /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
     func affectedNodeIDs(in _: some ReadOnlyChoiceGraph) -> [Int]? {
@@ -86,128 +90,68 @@ enum GraphOperation {
     }
 }
 
-// MARK: - Preconditions
+// MARK: - Validity
 
-/// Preconditions on graph state for a transformation to be valid.
-///
-/// Preconditions reference graph node state, not queue state. The scheduler evaluates them against the current graph before dispatching to an encoder. After a structural acceptance rebuilds the graph, preconditions are re-evaluated on the fresh queue.
-enum TransformationPrecondition {
-    /// Always satisfiable. The transformation can be attempted immediately.
-    case unconditional
-
-    /// Requires the target node to exist in the current graph with a non-nil position range.
-    case nodeActive(Int)
-
-    /// The dependency chain from this node to the root must have all bind-inner ancestors at their convergence floor.
-    ///
-    /// Evaluated by walking dependency edges in reverse from the leaf through bind-inner ancestors, checking each for a non-nil ``ChooseBitsMetadata/convergedOrigin``. O(bind depth), typically one to three hops.
-    case dependencyChainConverged(Int)
-
-    /// The parent sequence must have more elements than its minimum length constraint.
-    case sequenceLengthAboveMinimum(sequenceNodeID: Int)
-
-    /// Conjunction of multiple preconditions. Satisfied when all sub-preconditions are satisfied.
-    case all([TransformationPrecondition])
-
-    /// Evaluates this precondition against the current graph state.
-    ///
-    /// - Parameter graph: The current choice graph.
-    /// - Returns: Whether the precondition is satisfied.
-    func isSatisfied(in graph: some ReadOnlyChoiceGraph) -> Bool {
+extension GraphOperation {
+    /// Whether this operation can be dispatched against the current graph state.
+    func isValid(in graph: some ReadOnlyChoiceGraph) -> Bool {
         switch self {
-        case .unconditional:
+        case let .remove(.elements(scope)):
+            return scope.targets.allSatisfy { target in
+                guard target.sequenceNodeID < graph.nodes.count else { return false }
+                guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else { return false }
+                return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+            }
+        case let .remove(.subtree(scope)):
+            return scope.nodeID < graph.nodes.count
+                && graph.nodes[scope.nodeID].positionRange != nil
+        case let .remove(.coveringAligned(scope)):
+            return scope.siblings.allSatisfy { sibling in
+                guard sibling.sequenceNodeID < graph.nodes.count else { return false }
+                guard case let .sequence(metadata) = graph.nodes[sibling.sequenceNodeID].kind else { return false }
+                return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+            }
+        case let .replace(.selfSimilar(scope)):
+            return scope.targetNodeID < graph.nodes.count
+                && graph.nodes[scope.targetNodeID].positionRange != nil
+                && scope.donorNodeID < graph.nodes.count
+                && graph.nodes[scope.donorNodeID].positionRange != nil
+        case let .replace(.branchPivot(scope)):
+            return scope.pickNodeID < graph.nodes.count
+                && graph.nodes[scope.pickNodeID].positionRange != nil
+        case let .replace(.descendantPromotion(scope)):
+            return scope.ancestorPickNodeID < graph.nodes.count
+                && graph.nodes[scope.ancestorPickNodeID].positionRange != nil
+                && scope.descendantPickNodeID < graph.nodes.count
+                && graph.nodes[scope.descendantPickNodeID].positionRange != nil
+        case let .permute(.siblingPermutation(scope)):
+            return scope.parentNodeID < graph.nodes.count
+                && graph.nodes[scope.parentNodeID].positionRange != nil
+        case let .migrate(scope):
+            if let parentSeqID = scope.sourceParentSequenceNodeID {
+                guard parentSeqID < graph.nodes.count else { return false }
+                guard case let .sequence(metadata) = graph.nodes[parentSeqID].kind else { return false }
+                guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
+            } else {
+                guard scope.sourceSequenceNodeID < graph.nodes.count else { return false }
+                guard case let .sequence(metadata) = graph.nodes[scope.sourceSequenceNodeID].kind else { return false }
+                guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
+            }
+            return scope.receiverSequenceNodeID < graph.nodes.count
+                && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
+        case .minimize, .exchange, .reorder:
             return true
-
-        case let .nodeActive(nodeID):
-            guard nodeID < graph.nodes.count else { return false }
-            return graph.nodes[nodeID].positionRange != nil
-
-        case let .dependencyChainConverged(leafNodeID):
-            return TransformationPrecondition.checkDependencyChain(
-                from: leafNodeID,
-                in: graph
-            )
-
-        case let .sequenceLengthAboveMinimum(sequenceNodeID):
-            guard sequenceNodeID < graph.nodes.count else { return false }
-            guard case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind else {
-                return false
-            }
-            let minLength = metadata.lengthConstraint?.lowerBound ?? 0
-            return UInt64(metadata.elementCount) > minLength
-
-        case let .all(preconditions):
-            return preconditions.allSatisfy { $0.isSatisfied(in: graph) }
         }
     }
-}
-
-extension TransformationPrecondition {
-    /// Walks dependency edges in reverse from a leaf to verify all bind-inner ancestors have convergence records.
-    private static func checkDependencyChain(
-        from leafNodeID: Int,
-        in graph: some ReadOnlyChoiceGraph
-    ) -> Bool {
-        // Find bind nodes where this leaf (or an ancestor) is the inner child.
-        // Walk up the containment tree from the leaf, checking each bind-inner ancestor for convergence.
-        var currentNodeID = leafNodeID
-        while let parentID = graph.nodes[currentNodeID].parent {
-            let parentNode = graph.nodes[parentID]
-            if case let .bind(metadata) = parentNode.kind,
-               parentNode.children.count >= 2
-            {
-                let innerChildID = parentNode.children[metadata.innerChildIndex]
-                // If the current node is in the bound subtree (not the inner), check that the inner child has converged.
-                let boundChildID = parentNode.children[metadata.boundChildIndex]
-                if let boundRange = graph.nodes[boundChildID].positionRange,
-                   let leafRange = graph.nodes[leafNodeID].positionRange,
-                   boundRange.contains(leafRange.lowerBound)
-                {
-                    // This leaf is in the bound subtree — the inner must be converged.
-                    guard case let .chooseBits(innerMetadata) = graph.nodes[innerChildID].kind,
-                          innerMetadata.convergedOrigin != nil
-                    else {
-                        return false
-                    }
-                }
-            }
-            currentNodeID = parentID
-        }
-        return true
-    }
-}
-
-// MARK: - Postconditions
-
-/// Predicted graph state changes on acceptance.
-///
-/// The scheduler reads postconditions to determine whether a structural rebuild is needed and which convergence records to invalidate.
-struct TransformationPostcondition {
-    /// Whether this acceptance changes the graph's structure (requires queue rebuild).
-    let isStructural: Bool
-
-    /// Node IDs whose convergence records are invalidated by this acceptance.
-    let invalidatesConvergence: [Int]
-
-    /// Node IDs that become new removal candidates after this acceptance (for example, after exchange zeroes a value).
-    let enablesRemoval: [Int]
 }
 
 // MARK: - Graph Transformation
 
-/// A graph-derived transformation scope with yield estimate and precondition.
-///
-/// This is a morphism in OptRed_{T,alpha} (Sepulveda-Jimenez, Def. 10.3): the operation defines enc_a, the materializer provides dec_a, and the grade packages approximation slack with resource cost.
+/// A graph-derived transformation with its scheduling priority.
 struct GraphTransformation {
     /// The graph operation this transformation enacts.
     let operation: GraphOperation
 
-    /// Graph-computable yield estimate (the grade).
-    let yield: TransformationYield
-
-    /// Preconditions on graph node state.
-    let precondition: TransformationPrecondition
-
-    /// Predicted graph state changes on acceptance.
-    let postcondition: TransformationPostcondition
+    /// Graph-computable scheduling priority.
+    let priority: DispatchPriority
 }

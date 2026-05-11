@@ -31,7 +31,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
     private var baseSequence: ChoiceSequence = .init([])
     private var needsFirstProbe = true
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         leafNodeID = -1
         sequenceIndex = -1
         stepper = nil
@@ -109,7 +109,7 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
     private var leafEntries: [LeafEntry] = []
     private var hasInner = false
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         leafEntries = []
         hasInner = false
 
@@ -157,7 +157,7 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
 
 // MARK: - Graph Composed Encoder
 
-/// Composes two ``GraphEncoder``s through a lift closure that translates an upstream probe into a downstream ``TransformationScope``.
+/// Composes two ``GraphEncoder``s through a lift closure that translates an upstream probe into a downstream ``EncoderInput``.
 ///
 /// The upstream and downstream encoders operate on separate scopes. The upstream scope is fixed at construction time; the lift closure produces a fresh downstream scope for each upstream probe. When the scheduler calls ``start(scope:)``, the composition stores that scope as the parent context for the lift but does not forward it to the upstream encoder.
 ///
@@ -186,10 +186,10 @@ struct GraphComposedEncoder: GraphEncoder {
 
     private var upstream: any GraphEncoder
     private var downstream: any GraphEncoder
-    private let lift: (ChoiceSequence, EncoderProbe, TransformationScope) -> TransformationScope?
+    private let lift: (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
     private let upstreamBudget: Int
 
-    private var parentScope: TransformationScope?
+    private var parentScope: EncoderInput?
     private var currentUpstreamProbe: EncoderProbe?
     private var downstreamActive = false
     private var upstreamProbesUsed = 0
@@ -206,10 +206,10 @@ struct GraphComposedEncoder: GraphEncoder {
     init(
         name: EncoderName,
         upstream: any GraphEncoder,
-        upstreamScope: TransformationScope,
+        upstreamScope: EncoderInput,
         downstream: any GraphEncoder,
         upstreamBudget: Int = 15,
-        lift: @escaping (ChoiceSequence, EncoderProbe, TransformationScope) -> TransformationScope?
+        lift: @escaping (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
     ) {
         self.name = name
         self.upstream = upstream
@@ -226,7 +226,7 @@ struct GraphComposedEncoder: GraphEncoder {
         upstream.convergenceRecords
     }
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         parentScope = scope
         currentUpstreamProbe = nil
         downstreamActive = false
@@ -264,7 +264,7 @@ struct GraphComposedEncoder: GraphEncoder {
     /// Resets the composition to idle when a mid-pass structural acceptance has updated the live sequence.
     ///
     /// The composition caches the pre-dispatch scope, the in-flight upstream probe, and the downstream iterator. After any accepted probe triggers a reshape or full rebuild, all three are stale — the upstream binary search was calibrated to the old sequence, the lifted downstream scope was built from the old tree, and continuing would emit probes that may not shortlex-precede the new live sequence. Resetting to idle aborts the current pass; the scheduler re-dispatches a fresh composition next cycle.
-    mutating func refreshScope(graph _: some ReadOnlyChoiceGraph, sequence _: ChoiceSequence) {
+    mutating func refreshState(graph _: some ReadOnlyChoiceGraph, sequence _: ChoiceSequence) {
         parentScope = nil
         currentUpstreamProbe = nil
         downstreamActive = false

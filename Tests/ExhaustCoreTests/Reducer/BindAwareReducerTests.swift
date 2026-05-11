@@ -2,7 +2,7 @@
 //  BindAwareReducerTests.swift
 //  Exhaust
 //
-//  Tests for bind-aware reducer passes (Opportunity 2, Phases 2-3).
+//  Tests for bind-aware reducer passes.
 //  Verifies bind-dependent shrinking via GuidedMaterializer routing and
 //  non-regression for bind-free generators.
 //

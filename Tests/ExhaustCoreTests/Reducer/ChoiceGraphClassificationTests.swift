@@ -112,7 +112,6 @@ struct ChoiceGraphClassificationTests {
             upstreamLeafNodeID: upstreamLeafNodeID
         )
         let firstClassification = try #require(bindClassification(at: bindNodeID, in: graph))
-        let firstFingerprint = bindFingerprint(at: bindNodeID, in: graph)
 
         graph.classifyBind(
             at: bindNodeID,
@@ -122,10 +121,8 @@ struct ChoiceGraphClassificationTests {
             upstreamLeafNodeID: upstreamLeafNodeID
         )
         let secondClassification = try #require(bindClassification(at: bindNodeID, in: graph))
-        let secondFingerprint = bindFingerprint(at: bindNodeID, in: graph)
 
         #expect(firstClassification == secondClassification)
-        #expect(firstFingerprint == secondFingerprint)
     }
 
     // MARK: - Reshape clears classification
@@ -182,7 +179,6 @@ struct ChoiceGraphClassificationTests {
         _ = graph.apply(.leafValues([reshapeChange]), freshTree: freshTree)
 
         #expect(bindClassification(at: bindNodeID, in: graph) == nil)
-        #expect(bindFingerprint(at: bindNodeID, in: graph) == nil)
     }
 
     // MARK: - Topology Walker (pure)
@@ -279,11 +275,6 @@ private func innerLeafNodeID(ofBind bindNodeID: Int, in graph: ChoiceGraph) -> I
 private func bindClassification(at bindNodeID: Int, in graph: ChoiceGraph) -> BindClassification? {
     guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return nil }
     return metadata.classification
-}
-
-private func bindFingerprint(at bindNodeID: Int, in graph: ChoiceGraph) -> UInt64? {
-    guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return nil }
-    return metadata.downstreamFingerprint
 }
 
 private func chooseBitsMetadata(ofNodeID nodeID: Int, in graph: ChoiceGraph) -> ChooseBitsMetadata? {

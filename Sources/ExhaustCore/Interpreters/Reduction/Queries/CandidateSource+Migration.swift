@@ -1,19 +1,13 @@
 //
-//  ScopeSource+Migration.swift
+//  CandidateSource+Migration.swift
 //  Exhaust
 //
 
-// MARK: - Migration Source
+// MARK: - Builder Functions
 
-/// Emits element migration scopes from earlier sequences to later sequences.
-///
-/// For each pair of antichain-independent sequences where the source is at an earlier position, emits scopes at geometrically decreasing element counts. Moving elements rightward improves shortlex at earlier positions.
-struct MigrationSource: ScopeSource {
-    private var candidates: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)]
-    private var index = 0
-
-    init(graph: some ReadOnlyChoiceGraph) {
-        var entries: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)] = []
+extension CandidateSourceBuilder {
+    static func buildMigrationCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+        var entries: [(scope: MigrationScope, yield: Int)] = []
 
         // Find all sequence node pairs where source is earlier than receiver.
         // Lengths use UInt64 throughout to match the framework's length-generator type.
@@ -75,74 +69,32 @@ struct MigrationSource: ScopeSource {
                     return parentID
                 }()
 
-                // Start with moving ALL elements (most drastic).
-                entries.append((
-                    sourceSeqID: source.nodeID,
-                    receiverSeqID: receiver.nodeID,
+                let scope = MigrationScope(
+                    sourceSequenceNodeID: source.nodeID,
+                    receiverSequenceNodeID: receiver.nodeID,
                     elementNodeIDs: elementNodeIDs,
-                    elementRanges: elementRanges,
-                    receiverRange: receiver.positionRange,
-                    yield: totalYield,
-                    isFullMigration: isFullMigration,
-                    sourceParentSeqID: sourceParentSeqID
-                ))
+                    elementPositionRanges: elementRanges,
+                    receiverPositionRange: receiver.positionRange,
+                    sourceParentSequenceNodeID: sourceParentSeqID
+                )
+
+                entries.append((scope: scope, yield: totalYield))
             }
         }
 
         // Sort by yield descending.
         entries.sort { $0.yield > $1.yield }
-        candidates = entries
-    }
 
-    var peekYield: TransformationYield? {
-        guard index < candidates.count else { return nil }
-        return TransformationYield(
-            structural: candidates[index].yield,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 1
-        )
-    }
-
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
-        guard index < candidates.count else { return nil }
-        let entry = candidates[index]
-        index += 1
-
-        let scope = MigrationScope(
-            sourceSequenceNodeID: entry.sourceSeqID,
-            receiverSequenceNodeID: entry.receiverSeqID,
-            elementNodeIDs: entry.elementNodeIDs,
-            elementPositionRanges: entry.elementRanges,
-            receiverPositionRange: entry.receiverRange
-        )
-
-        return GraphTransformation(
-            operation: .migrate(scope),
-            yield: TransformationYield(
-                structural: entry.yield,
-                value: 0,
-                slack: .exact,
-                estimatedProbes: 1
-            ),
-            precondition: {
-                // When migration empties the source entirely and the source's parent is a sequence, the constraint is on the parent's ability to lose a child, not the source's own element count.
-                if let parentSeqID = entry.sourceParentSeqID {
-                    return .all([
-                        .sequenceLengthAboveMinimum(sequenceNodeID: parentSeqID),
-                        .nodeActive(entry.receiverSeqID),
-                    ])
-                }
-                return .all([
-                    .sequenceLengthAboveMinimum(sequenceNodeID: entry.sourceSeqID),
-                    .nodeActive(entry.receiverSeqID),
-                ])
-            }(),
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
+        return entries.map { entry in
+            GraphTransformation(
+                operation: .migrate(entry.scope),
+                priority: DispatchPriority(
+                    structuralBenefit: entry.yield,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
+                )
             )
-        )
+        }
     }
 }

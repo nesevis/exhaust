@@ -7,9 +7,7 @@
 
 /// Encoder-published description of the mutation a probe would enact if accepted.
 ///
-/// Each ``GraphEncoder`` returns a ``ProjectedMutation`` alongside its candidate sequence on every probe (Layer 3 of the partial-rebuild rollout). When the scheduler accepts a probe, it forwards the mutation to ``ChoiceGraph/apply(_:freshTree:)``, which performs the corresponding in-place update without rebuilding the graph from scratch.
-///
-/// Layer 2 introduces this enum and implements only the value-only fast path of ``leafValues(_:)``. The remaining cases are scaffolding for Layer 7's structural-encoder rollout — they all return ``ChangeApplication/requiresFullRebuild`` true until then.
+/// Each ``GraphEncoder`` returns a ``ProjectedMutation`` alongside its candidate sequence on every probe. When the scheduler accepts a probe, it forwards the mutation to ``ChoiceGraph/apply(_:freshTree:)``, which performs the corresponding in-place update without rebuilding the graph from scratch.
 ///
 /// - SeeAlso: ``LeafChange``, ``ChangeApplication``, ``LeafEntry``
 package enum ProjectedMutation {
@@ -19,16 +17,16 @@ package enum ProjectedMutation {
     /// Sequence elements removed from one or more parent sequences. Each tuple identifies the parent sequence and the node IDs of the removed elements.
     case sequenceElementsRemoved([(seqNodeID: Int, removedNodeIDs: [Int])])
 
-    /// Branch selection changed at a pick node. Layer 7.
+    /// Branch selection changed at a pick node.
     case branchSelected(pickNodeID: Int, newSelectedID: UInt64)
 
-    /// Self-similar replacement: target subtree replaced by donor subtree. Layer 7.
+    /// Self-similar replacement: target subtree replaced by donor subtree.
     case selfSimilarReplaced(targetNodeID: Int, donorNodeID: Int)
 
-    /// Descendant pick promoted into ancestor pick position. Layer 7.
+    /// Descendant pick promoted into ancestor pick position.
     case descendantPromoted(ancestorPickNodeID: Int, descendantPickNodeID: Int)
 
-    /// Sequence elements migrated between two sequences. Layer 7.
+    /// Sequence elements migrated between two sequences.
     case sequenceElementsMigrated(
         sourceSeqID: Int,
         receiverSeqID: Int,
@@ -36,7 +34,7 @@ package enum ProjectedMutation {
         insertionOffset: Int
     )
 
-    /// Two same-shaped siblings swapped within a parent (zip or sequence). Layer 7.
+    /// Two same-shaped siblings swapped within a parent (zip or sequence).
     case siblingsSwapped(parentNodeID: Int, idA: Int, idB: Int)
 
     /// Sequence elements permuted into natural numeric order by ``GraphReorderEncoder``.
@@ -76,15 +74,15 @@ package struct ChangeApplication {
     /// Node IDs whose values or metadata were updated in place.
     package var touchedNodeIDs: Set<Int> = []
 
-    /// Node IDs added to ``ChoiceGraph/removedNodeIDs`` by this application. Layer 4 populates these.
+    /// Node IDs added to ``ChoiceGraph/removedNodeIDs`` by this application. Populated by the in-place reshape path.
     package var removedNodeIDs: Set<Int> = []
 
-    /// Node IDs newly appended to ``ChoiceGraph/nodes`` by this application. Layer 4 populates these.
+    /// Node IDs newly appended to ``ChoiceGraph/nodes`` by this application. Populated by the in-place reshape path.
     package var addedNodeIDs: Set<Int> = []
 
-    /// Position shifts applied to right-of-insertion nodes. Layer 4 populates these.
+    /// Position shifts applied to right-of-insertion nodes. Populated by the in-place reshape path.
     package var positionShifts: [(insertionPoint: Int, delta: Int)] = []
 
-    /// True when the partial-rebuild path cannot honour the mutation and the scheduler must fall back to ``ChoiceGraph/build(from:)``. Layer 2 sets this for every case except the value-only fast path of ``ProjectedMutation/leafValues(_:)`` with no reshape leaves.
+    /// True when the partial-rebuild path cannot honour the mutation and the scheduler must fall back to ``ChoiceGraph/build(from:)``. Set for every case except the value-only fast path of ``ProjectedMutation/leafValues(_:)`` with no reshape leaves.
     package var requiresFullRebuild: Bool = false
 }

@@ -6,169 +6,108 @@
 import Testing
 @testable import ExhaustCore
 
-// MARK: - Affine Slack Tests
+// MARK: - Dispatch Priority Tests
 
-@Suite("AffineSlack")
-struct AffineSlackTests {
-    @Test("Exact is identity under composition")
-    func exactIsIdentity() {
-        let slack = AffineSlack(multiplicative: 1, additive: 5)
-        let composed = AffineSlack.exact.composed(with: slack)
-        #expect(composed.multiplicative == 1)
-        #expect(composed.additive == 5)
-
-        let composedReverse = slack.composed(with: .exact)
-        #expect(composedReverse.multiplicative == 1)
-        #expect(composedReverse.additive == 5)
-    }
-
-    @Test("Monoidal product accumulates additive with upstream scaling")
-    func monoidalProduct() {
-        let slackA = AffineSlack(multiplicative: 1, additive: 2)
-        let slackB = AffineSlack(multiplicative: 1, additive: 3)
-        let composed = slackA.composed(with: slackB)
-        // (1, 2) (x) (1, 3) = (1*1, 2 + 1*3) = (1, 5)
-        #expect(composed.multiplicative == 1)
-        #expect(composed.additive == 5)
-    }
-
-    @Test("Ordering: exact precedes approximate")
-    func orderingExactFirst() {
-        let exact = AffineSlack.exact
-        let approximate = AffineSlack(multiplicative: 1, additive: 5)
-        #expect(exact < approximate)
-    }
-
-    @Test("Ordering: lower additive precedes higher")
-    func orderingByAdditive() {
-        let small = AffineSlack(multiplicative: 1, additive: 2)
-        let large = AffineSlack(multiplicative: 1, additive: 10)
-        #expect(small < large)
-    }
-}
-
-// MARK: - Transformation Yield Tests
-
-@Suite("TransformationYield")
-struct TransformationYieldTests {
-    @Test("Identity is neutral under composition")
-    func identityIsNeutral() {
-        let yield = TransformationYield(
-            structural: 10,
-            value: 5,
-            slack: .exact,
-            estimatedProbes: 3
-        )
-        let composed = TransformationYield.identity.composed(with: yield)
-        #expect(composed.structural == 10)
-        #expect(composed.value == 5)
-        #expect(composed.slack == .exact)
-        #expect(composed.estimatedProbes == 3)
-    }
-
-    @Test("Composition sums structural, maxes value, composes slack, sums probes")
-    func compositionSemantics() {
-        let yieldA = TransformationYield(
-            structural: 5,
-            value: 10,
-            slack: AffineSlack(multiplicative: 1, additive: 2),
-            estimatedProbes: 3
-        )
-        let yieldB = TransformationYield(
-            structural: 8,
-            value: 3,
-            slack: .exact,
-            estimatedProbes: 7
-        )
-        let composed = yieldA.composed(with: yieldB)
-        #expect(composed.structural == 13)
-        #expect(composed.value == 10)
-        #expect(composed.slack.additive == 2)
-        #expect(composed.estimatedProbes == 10)
-    }
-
-    @Test("Ordering: structural yield dominates value yield")
+@Suite("DispatchPriority")
+struct DispatchPriorityTests {
+    @Test("Ordering: structural benefit dominates value benefit")
     func structuralDominatesValue() {
-        let highStructural = TransformationYield(
-            structural: 10,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 100
+        let highStructural = DispatchPriority(
+            structuralBenefit: 10,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 100
         )
-        let highValue = TransformationYield(
-            structural: 0,
-            value: 100,
-            slack: .exact,
-            estimatedProbes: 1
+        let highValue = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 100,
+            reductionMagnitude: 0,
+            estimatedCost: 1
         )
-        // highStructural should be higher priority (greater in natural order).
         #expect(highStructural > highValue)
     }
 
-    @Test("Ordering: higher structural yield is higher priority")
+    @Test("Ordering: higher structural benefit is higher priority")
     func higherStructuralWins() {
-        let larger = TransformationYield(
-            structural: 20,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 5
+        let larger = DispatchPriority(
+            structuralBenefit: 20,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
-        let smaller = TransformationYield(
-            structural: 5,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 5
+        let smaller = DispatchPriority(
+            structuralBenefit: 5,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
         #expect(larger > smaller)
     }
 
-    @Test("Ordering: at equal structural, higher value yield wins")
+    @Test("Ordering: at equal structural benefit, higher value benefit wins")
     func valueBreaksTie() {
-        let highValue = TransformationYield(
-            structural: 0,
-            value: 15,
-            slack: .exact,
-            estimatedProbes: 5
+        let highValue = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 15,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
-        let lowValue = TransformationYield(
-            structural: 0,
-            value: 3,
-            slack: .exact,
-            estimatedProbes: 5
+        let lowValue = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 3,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
         #expect(highValue > lowValue)
     }
 
-    @Test("Ordering: at equal yield, exact preferred over approximate")
+    @Test("Ordering: at equal benefit, exact preferred over approximate")
     func exactPreferred() {
-        let exact = TransformationYield(
-            structural: 0,
-            value: 5,
-            slack: .exact,
-            estimatedProbes: 10
+        let exact = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 5,
+            reductionMagnitude: 0,
+            estimatedCost: 10
         )
-        let approximate = TransformationYield(
-            structural: 0,
-            value: 5,
-            slack: AffineSlack(multiplicative: 1, additive: 3),
-            estimatedProbes: 10
+        let approximate = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 5,
+            reductionMagnitude: 100,
+            estimatedCost: 10
         )
         #expect(exact > approximate)
     }
 
-    @Test("Ordering: at equal yield and slack, lower cost wins")
-    func lowerCostWins() {
-        let cheap = TransformationYield(
-            structural: 5,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 2
+    @Test("Ordering: at equal benefit, smaller reduction magnitude preferred")
+    func closerDistancePreferred() {
+        let close = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 0,
+            reductionMagnitude: 5,
+            estimatedCost: 10
         )
-        let expensive = TransformationYield(
-            structural: 5,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 20
+        let far = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 0,
+            reductionMagnitude: 5000,
+            estimatedCost: 10
+        )
+        #expect(close > far)
+    }
+
+    @Test("Ordering: at equal benefit and magnitude, lower cost wins")
+    func lowerCostWins() {
+        let cheap = DispatchPriority(
+            structuralBenefit: 5,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 2
+        )
+        let expensive = DispatchPriority(
+            structuralBenefit: 5,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 20
         )
         #expect(cheap > expensive)
     }

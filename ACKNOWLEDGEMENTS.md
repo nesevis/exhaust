@@ -13,8 +13,8 @@ Exhaust would not exist without the foundation laid out in his thesis: the Freer
 Links:
 
 1. [Property-based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content) (2024)
-2. [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Goldstein as co-author)
-3. [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842) (2023)
+2. [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842) (2023)
+3. [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Tjoa et al; Goldstein as co-author)
 4. [Tyche: Making Sense of PBT Effectiveness](https://dl.acm.org/doi/10.1145/3654777.3676407) (2024)
 
 ## David MacIver, Alastair Donaldson and Hypothesis
@@ -40,7 +40,7 @@ Links:
 The categorical framework for _optimisation_ laid out in this preprint provides Exhaust with an organisational algebra for test case reduction:
 - Each reduction “strategy” is a self-contained encoder-decoder pair that composes cleanly
 - Composed search extends this through an effectful “lift” step that enables joint search over a controlling value and its dependents
-- The graded composition structure inspired the yield-priority dispatch model where encoders are ordered by expected structural and value yield
+- The graded morphism structure inspired the yield-priority dispatch model where encoders are ranked by structural benefit, value benefit, source distance, and estimated cost
 
 Links:
 

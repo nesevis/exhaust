@@ -158,26 +158,20 @@ struct EncoderIsolationTests {
 private func minimizationScope(
     tree: ChoiceTree,
     graph: ChoiceGraph
-) -> TransformationScope? {
+) -> EncoderInput? {
     let sequence = ChoiceSequence.flatten(tree)
-    let scopes = MinimizationScopeQuery.build(graph: graph)
+    let scopes = MinimizationQuery.build(graph: graph)
     guard let firstScope = scopes.first else { return nil }
     let transformation = GraphTransformation(
         operation: .minimize(firstScope),
-        yield: TransformationYield(
-            structural: 0,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: 10
+        priority: DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 10
         ),
-        precondition: .unconditional,
-        postcondition: TransformationPostcondition(
-            isStructural: false,
-            invalidatesConvergence: [],
-            enablesRemoval: []
-        )
     )
-    return TransformationScope(
+    return EncoderInput(
         transformation: transformation,
         baseSequence: sequence,
         tree: tree,
@@ -189,26 +183,20 @@ private func minimizationScope(
 private func removalScope(
     tree: ChoiceTree,
     graph: ChoiceGraph
-) -> TransformationScope? {
+) -> EncoderInput? {
     let sequence = ChoiceSequence.flatten(tree)
-    let scopes = RemovalScopeQuery.elementRemovalScopes(graph: graph)
+    let scopes = RemovalQuery.elementRemovalScopes(graph: graph)
     guard let firstScope = scopes.first else { return nil }
     let transformation = GraphTransformation(
         operation: .remove(.elements(firstScope)),
-        yield: TransformationYield(
-            structural: firstScope.maxBatch,
-            value: 0,
-            slack: .exact,
-            estimatedProbes: firstScope.maxBatch
+        priority: DispatchPriority(
+            structuralBenefit: firstScope.maxBatch,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: firstScope.maxBatch
         ),
-        precondition: .unconditional,
-        postcondition: TransformationPostcondition(
-            isStructural: true,
-            invalidatesConvergence: [],
-            enablesRemoval: []
-        )
     )
-    return TransformationScope(
+    return EncoderInput(
         transformation: transformation,
         baseSequence: sequence,
         tree: tree,

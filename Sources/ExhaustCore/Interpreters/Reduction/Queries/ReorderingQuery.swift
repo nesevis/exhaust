@@ -1,5 +1,5 @@
 //
-//  ReorderingScopeQuery.swift
+//  ReorderingQuery.swift
 //  Exhaust
 //
 
@@ -8,7 +8,7 @@
 /// Static scope builder for the numeric reordering pass.
 ///
 /// Derives pre-filtered sibling groups from graph ``SequenceMetadata/childPositionRanges`` and bind node metadata.
-enum ReorderingScopeQuery {
+enum ReorderingQuery {
     /// Builds a reordering scope from the graph's sequence and zip nodes, or `nil` if no eligible groups exist.
     ///
     /// For each sequence and zip node the builder groups direct children by ``siblingGroupKey(_:)`` and emits one ``ReorderableGroup`` per bucket that has two or more members and passes the bind-inner containment check.

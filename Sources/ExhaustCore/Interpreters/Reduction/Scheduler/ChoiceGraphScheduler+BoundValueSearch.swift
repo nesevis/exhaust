@@ -16,12 +16,12 @@ extension ChoiceGraphScheduler {
     ///
     /// - Parameters:
     ///   - bindScope: The bound value scope from the source pipeline.
-    ///   - scope: The dispatched ``TransformationScope``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
+    ///   - scope: The dispatched ``EncoderInput``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
     ///   - gen: The generator. Captured by the lift closure for materialisation.
     ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``ChoiceGraphScheduler/runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` based on per-bind stall counts.
     static func makeBoundValueComposition(
         bindScope: BoundValueScope,
-        scope: TransformationScope,
+        scope: EncoderInput,
         graph: ChoiceGraph,
         gen: ReflectiveGenerator<Any>,
         upstreamBudget: Int = 15
@@ -32,19 +32,13 @@ extension ChoiceGraphScheduler {
             nodeID: bindScope.upstreamLeafNodeID,
             mayReshapeOnAcceptance: false
         )
-        let upstreamScope = TransformationScope(
+        let upstreamScope = EncoderInput(
             transformation: GraphTransformation(
                 operation: .minimize(.valueLeaves(ValueMinimizationScope(
                     leaves: [upstreamLeafEntry],
                     batchZeroEligible: false
                 ))),
-                yield: scope.transformation.yield,
-                precondition: .unconditional,
-                postcondition: TransformationPostcondition(
-                    isStructural: false,
-                    invalidatesConvergence: [],
-                    enablesRemoval: []
-                )
+                priority: scope.transformation.priority,
             ),
             baseSequence: scope.baseSequence,
             tree: scope.tree,
@@ -60,7 +54,7 @@ extension ChoiceGraphScheduler {
             ? GraphBinarySearchEncoder()
             : GraphBoundValueCoveringEncoder()
 
-        let lift: (ChoiceSequence, EncoderProbe, TransformationScope) -> TransformationScope? = { upstreamCandidate, upstreamMutation, parent in
+        let lift: (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput? = { upstreamCandidate, upstreamMutation, parent in
             Self.boundValueLift(
                 upstreamCandidate: upstreamCandidate,
                 upstreamMutation: upstreamMutation,
@@ -81,7 +75,7 @@ extension ChoiceGraphScheduler {
         )
     }
 
-    /// Lifts an upstream probe into a downstream ``TransformationScope`` for the bound value composition.
+    /// Lifts an upstream probe into a downstream ``EncoderInput`` for the bound value composition.
     ///
     /// 1. Materialises the upstream candidate through `gen` to obtain the new bound subtree's choice tree.
     /// 2. Copies the parent graph and applies the upstream change to the copy as a reshape (`mayReshape: true`), so ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` splices the rebuilt bound subtree from the freshTree on the throwaway copy. Falls back to a full ``ChoiceGraph/build(from:)`` if the partial path bails.
@@ -90,11 +84,11 @@ extension ChoiceGraphScheduler {
     static func boundValueLift(
         upstreamCandidate: ChoiceSequence,
         upstreamMutation: EncoderProbe,
-        parent: TransformationScope,
+        parent: EncoderInput,
         graph: ChoiceGraph,
         bindScope: BoundValueScope,
         gen: ReflectiveGenerator<Any>
-    ) -> TransformationScope? {
+    ) -> EncoderInput? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
 
         // Read the proposed upstream value for instrumentation.
@@ -115,16 +109,10 @@ extension ChoiceGraphScheduler {
             fallbackTree: parent.tree,
             materializePicks: true
         ) else {
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "bound_value_lift_failed",
-                    metadata: [
-                        "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
-                        "candidate_len": "\(upstreamCandidate.count)",
-                    ]
-                )
-            }
+            Self.logReducer("bound_value_lift_failed", isInstrumented: isInstrumented, metadata: [
+                "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
+                "candidate_len": "\(upstreamCandidate.count)",
+            ])
             return nil
         }
 
@@ -156,20 +144,14 @@ extension ChoiceGraphScheduler {
         guard downstreamLeaves.isEmpty == false else { return nil }
 
         // 6. Build the downstream scope as a plain integer-leaves minimization on the lifted graph. The downstream encoder doesn't know it's downstream.
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "bound_value_lift_built",
-                metadata: [
-                    "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
-                    "parent_seq_len": "\(parent.baseSequence.count)",
-                    "lifted_seq_len": "\(liftedSequence.count)",
-                    "downstream_leaves": "\(downstreamLeaves.count)",
-                    "bound_range": "\(boundRange.lowerBound)...\(boundRange.upperBound)",
-                ]
-            )
-        }
-        return TransformationScope(
+        Self.logReducer("bound_value_lift_built", isInstrumented: isInstrumented, metadata: [
+            "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
+            "parent_seq_len": "\(parent.baseSequence.count)",
+            "lifted_seq_len": "\(liftedSequence.count)",
+            "downstream_leaves": "\(downstreamLeaves.count)",
+            "bound_range": "\(boundRange.lowerBound)...\(boundRange.upperBound)",
+        ])
+        return EncoderInput(
             transformation: GraphTransformation(
                 operation: .minimize(.valueLeaves(ValueMinimizationScope(
                     leaves: downstreamLeaves.map {
@@ -177,13 +159,7 @@ extension ChoiceGraphScheduler {
                     },
                     batchZeroEligible: downstreamLeaves.count > 1
                 ))),
-                yield: parent.transformation.yield,
-                precondition: .unconditional,
-                postcondition: TransformationPostcondition(
-                    isStructural: false,
-                    invalidatesConvergence: [],
-                    enablesRemoval: []
-                )
+                priority: parent.transformation.priority,
             ),
             baseSequence: liftedSequence,
             tree: freshTree,

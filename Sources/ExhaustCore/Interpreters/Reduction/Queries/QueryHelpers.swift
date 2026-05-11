@@ -1,14 +1,14 @@
 //
-//  ScopeQueryHelpers.swift
+//  QueryHelpers.swift
 //  Exhaust
 //
 
 // MARK: - Scope Query Helpers
 
-/// Shared helpers used by the scope query namespaces (``MinimizationScopeQuery``, ``ExchangeScopeQuery``, ``RemovalScopeQuery``, and siblings).
+/// Shared helpers used by the scope query namespaces (``MinimizationQuery``, ``ExchangeQuery``, ``RemovalQuery``, and siblings).
 ///
 /// These previously lived as instance methods on ``ChoiceGraph`` but are now called as pure functions from the static scope builders so that multiple builders can share a single ``buildInnerDescendantToBind(graph:)`` allocation per enumeration pass.
-enum ScopeQueryHelpers {
+enum QueryHelpers {
     /// Builds an index from any ``chooseBits`` leaf inside a bind's inner subtree to the enclosing bind's node ID.
     ///
     /// Used by minimization and exchange scope construction to tag bind-inner leaves in ``LeafEntry/mayReshapeOnAcceptance`` and to compute value yield for prioritization. Covers both scalar inner (the inner child is itself a leaf) and multi-leaf inner (the inner child is a sequence, zip, or pick container — every ``chooseBits`` descendant gets mapped).
@@ -68,7 +68,7 @@ enum ScopeQueryHelpers {
 
     /// Builds an index from bind-inner leaf node IDs to their controlling bind's ``BindMetadata/bindDepth``.
     ///
-    /// Used by ``MinimizationScopeQuery`` to annotate ``LeafEntry/bindDepth`` for top-down depth ordering of bind-inner value search. Only includes leaves that appear in `innerDescendantToBind` (bind-inner leaves).
+    /// Used by ``MinimizationQuery`` to annotate ``LeafEntry/bindDepth`` for top-down depth ordering of bind-inner value search. Only includes leaves that appear in `innerDescendantToBind` (bind-inner leaves).
     static func buildBindDepthByLeaf(
         graph: some ReadOnlyChoiceGraph,
         innerDescendantToBind: [Int: Int]

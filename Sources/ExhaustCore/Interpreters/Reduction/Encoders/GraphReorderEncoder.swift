@@ -7,7 +7,7 @@
 ///
 /// Shortlex reduction produces counterexamples like `[0, -1, 1]` because zigzag encoding maps `-1` to shortlex key `1` and `1` to key `2`. This encoder reorders to `[-1, 0, 1]` — the ascending numeric order a user expects — and validates that the property still fails.
 ///
-/// Runs as a final pass after the main graph reduction loop. Receives a pre-filtered ``NumericReorderScope`` from ``ReorderingScopeQuery`` and emits one probe per eligible group, deepest-first. On acceptance, ``refreshScope(graph:sequence:)`` updates the internal sequence so subsequent groups operate on the latest accepted state.
+/// Runs as a final pass after the main graph reduction loop. Receives a pre-filtered ``NumericReorderScope`` from ``ReorderingQuery`` and emits one probe per eligible group, deepest-first. On acceptance, ``refreshState(graph:sequence:)`` updates the internal sequence so subsequent groups operate on the latest accepted state.
 struct GraphReorderEncoder: GraphEncoder {
     let name: EncoderName = .numericReorder
 
@@ -15,7 +15,7 @@ struct GraphReorderEncoder: GraphEncoder {
     private var groupIndex: Int = 0
     private var currentSequence: ChoiceSequence = []
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         guard case let .reorder(.numericReorder(reorderScope)) = scope.transformation.operation else {
             groups = []
             groupIndex = 0
@@ -28,7 +28,7 @@ struct GraphReorderEncoder: GraphEncoder {
 
     /// Emits the next group's reordering probe or `nil` when all groups have been attempted.
     ///
-    /// Skips groups that are already in natural order. The `lastAccepted` parameter is intentionally ignored: ``refreshScope(graph:sequence:)`` delivers the updated sequence after every accepted probe, keeping ``currentSequence`` in sync without needing to re-examine the acceptance flag here.
+    /// Skips groups that are already in natural order. The `lastAccepted` parameter is intentionally ignored: ``refreshState(graph:sequence:)`` delivers the updated sequence after every accepted probe, keeping ``currentSequence`` in sync without needing to re-examine the acceptance flag here.
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted _: Bool) -> EncoderProbe? {
         while groupIndex < groups.count {
             let group = groups[groupIndex]
@@ -40,7 +40,7 @@ struct GraphReorderEncoder: GraphEncoder {
                 ChoiceSequence.siblingComparisonKey(from: currentSequence, range: $0)
             }
 
-            // ``ReorderingScopeQuery`` buckets siblings by outer-node ``ChoiceGraphNodeKind`` category. For container kinds (bind, zip, sequence, pick) the inner structure may diverge across siblings — for example, two recursive bind siblings where one took a base-case branch and the other took a non-base branch will flatten to different ``ChoiceValue`` type profiles. ``naturalOrderPrecedes`` traps on mismatched tag categories (unsigned vs signed vs floating), so skip any group whose keys are not pairwise type-compatible rather than attempting to sort them.
+            // ``ReorderingQuery`` buckets siblings by outer-node ``ChoiceGraphNodeKind`` category. For container kinds (bind, zip, sequence, pick) the inner structure may diverge across siblings — for example, two recursive bind siblings where one took a base-case branch and the other took a non-base branch will flatten to different ``ChoiceValue`` type profiles. ``naturalOrderPrecedes`` traps on mismatched tag categories (unsigned vs signed vs floating), so skip any group whose keys are not pairwise type-compatible rather than attempting to sort them.
             guard keysAreTypeCompatible(keys) else { continue }
 
             let sortedIndices = keys.indices.sorted { lhs, rhs in
@@ -59,7 +59,7 @@ struct GraphReorderEncoder: GraphEncoder {
         return nil
     }
 
-    mutating func refreshScope(graph _: some ReadOnlyChoiceGraph, sequence: ChoiceSequence) {
+    mutating func refreshState(graph _: some ReadOnlyChoiceGraph, sequence: ChoiceSequence) {
         currentSequence = sequence
     }
 }

@@ -16,26 +16,20 @@ struct GraphEncoderTests {
     private static func removalScope(
         tree: ChoiceTree,
         graph: ChoiceGraph
-    ) -> TransformationScope? {
+    ) -> EncoderInput? {
         let sequence = ChoiceSequence.flatten(tree)
-        let scopes = RemovalScopeQuery.elementRemovalScopes(graph: graph)
+        let scopes = RemovalQuery.elementRemovalScopes(graph: graph)
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
             operation: .remove(.elements(firstScope)),
-            yield: TransformationYield(
-                structural: firstScope.maxBatch,
-                value: 0,
-                slack: .exact,
-                estimatedProbes: firstScope.maxBatch
+            priority: DispatchPriority(
+                structuralBenefit: firstScope.maxBatch,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: firstScope.maxBatch
             ),
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
         )
-        return TransformationScope(
+        return EncoderInput(
             transformation: transformation,
             baseSequence: sequence,
             tree: tree,
@@ -48,26 +42,20 @@ struct GraphEncoderTests {
     private static func minimizationScope(
         tree: ChoiceTree,
         graph: ChoiceGraph
-    ) -> TransformationScope? {
+    ) -> EncoderInput? {
         let sequence = ChoiceSequence.flatten(tree)
-        let scopes = MinimizationScopeQuery.build(graph: graph)
+        let scopes = MinimizationQuery.build(graph: graph)
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
             operation: .minimize(firstScope),
-            yield: TransformationYield(
-                structural: 0,
-                value: 0,
-                slack: .exact,
-                estimatedProbes: 10
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 10
             ),
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: false,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
         )
-        return TransformationScope(
+        return EncoderInput(
             transformation: transformation,
             baseSequence: sequence,
             tree: tree,
@@ -217,24 +205,19 @@ struct GraphEncoderTests {
             receiverSequenceNodeID: inner2NodeID,
             elementNodeIDs: graph.nodes[inner1NodeID].children,
             elementPositionRanges: inner1Meta.childPositionRanges,
-            receiverPositionRange: inner2Range
+            receiverPositionRange: inner2Range,
+            sourceParentSequenceNodeID: nil
         )
         let transformation = GraphTransformation(
             operation: .migrate(migrationScope),
-            yield: TransformationYield(
-                structural: 1,
-                value: 0,
-                slack: .exact,
-                estimatedProbes: 1
+            priority: DispatchPriority(
+                structuralBenefit: 1,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             ),
-            precondition: .unconditional,
-            postcondition: TransformationPostcondition(
-                isStructural: true,
-                invalidatesConvergence: [],
-                enablesRemoval: []
-            )
         )
-        let scope = TransformationScope(
+        let scope = EncoderInput(
             transformation: transformation,
             baseSequence: sequence,
             tree: outer,

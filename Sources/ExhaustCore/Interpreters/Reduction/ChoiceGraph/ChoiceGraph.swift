@@ -38,7 +38,7 @@ package final class ChoiceGraph {
     /// Active pick nodes grouped by fingerprint. Picks in the same group are structurally exchangeable — any pair is a candidate for self-similar replacement. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
     public var selfSimilarityGroups: [UInt64: [Int]]
 
-    /// Node IDs that have been removed from the graph by an in-place mutation but whose array slots are retained for ID stability. Iteration sites must skip these via ``isTombstoned(_:)``. Always empty until Layer 4 of the partial-rebuild rollout introduces in-place mutation; Layer 1 adds the field, the helper, and the filtering as a no-op precondition.
+    /// Node IDs that have been removed from the graph by an in-place mutation but whose array slots are retained for ID stability. Iteration sites must skip these via ``isTombstoned(_:)``.
     var removedNodeIDs: Set<Int> = []
 
     /// Lifecycle statistics accumulated on this graph instance. Dynamic fields (``ChoiceGraphStats/dynamicRegionRebuilds``, ``ChoiceGraphStats/dynamicRegionNodesRebuilt``) are incremented by ``applyBindReshape(forLeaf:freshTree:into:)``; construction-time fields are zero until the scheduler calls ``ChoiceGraphStats/from(_:)`` and merges them into ``ReductionStats/graphStats``.
@@ -63,7 +63,7 @@ package final class ChoiceGraph {
     /// Cached source/sink annotations. Computed on first access via ``computeSourceSinkAnnotations()``, invalidated by ``invalidateDerivedEdges()``.
     private var cachedSourceSinkStatus: [Int: SourceSinkStatus]?
 
-    /// Cached topological order over dependency edges. Computed on first access via ``computeTopologicalOrder()``, invalidated by ``invalidateTopologicalCaches()``. Layer 1 introduces the cache; Layer 4 wires up the invalidation when bind subtrees are rebuilt in place.
+    /// Cached topological order over dependency edges. Computed on first access via ``computeTopologicalOrder()``, invalidated by ``invalidateTopologicalCaches()`` when bind subtrees are rebuilt in place.
     private var cachedTopologicalOrder: [Int]?
 
     /// Cached dependency adjacency list. Computed on first access from ``dependencyEdges``, invalidated by ``invalidateTopologicalCaches()``. Used by ``isReachable(from:to:)`` and ``reachableNodes(from:within:)`` for on-demand DFS instead of an eager O(V^2) transitive closure.
@@ -89,7 +89,7 @@ package final class ChoiceGraph {
     /// Bind-inner descendant index. Maps each chooseBits leaf inside a bind's inner subtree to the outermost enclosing bind's node ID. Computed lazily on first access and cached until invalidated by structural changes.
     public var innerDescendantToBind: [Int: Int] {
         if let cached = cachedInnerDescendantToBind { return cached }
-        let computed = ScopeQueryHelpers.buildInnerDescendantToBind(graph: self)
+        let computed = QueryHelpers.buildInnerDescendantToBind(graph: self)
         cachedInnerDescendantToBind = computed
         return computed
     }
@@ -184,7 +184,7 @@ package final class ChoiceGraph {
 
     /// Writes convergence records from an encoder pass onto leaf nodes by node ID.
     ///
-    /// Preferred over ``recordConvergence(_:)`` for harvesting from encoders within a single graph instance: node IDs are stable and the lookup is O(1) per record instead of O(N) per record (the positional version walks every node looking for a position match). Encoders' internal `convergenceStore` is keyed by node ID so that records survive in-pass position shifts triggered by ``GraphEncoder/refreshScope(graph:sequence:)``.
+    /// Preferred over ``recordConvergence(_:)`` for harvesting from encoders within a single graph instance: node IDs are stable and the lookup is O(1) per record instead of O(N) per record (the positional version walks every node looking for a position match). Encoders' internal `convergenceStore` is keyed by node ID so that records survive in-pass position shifts triggered by ``GraphEncoder/refreshState(graph:sequence:)``.
     ///
     /// - Parameter records: Map from graph node ID to the convergence floor at that node's leaf.
     func recordConvergence(byNodeID records: [Int: ConvergedOrigin]) {
