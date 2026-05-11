@@ -9,7 +9,7 @@
 ///
 /// The deletion antichain identifies element nodes that are pairwise independent (no containment or dependency path). Grouping these by parent sequence yields a set of independent sequences. The first probe attempts to remove all deletable elements from every independent sequence at once. On rejection, the target list is bisected and each half is tried independently.
 ///
-/// Runs before ``SequenceEmptyingSource`` — a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
+/// Runs before the emptying builder — a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
 struct BatchedCrossSequenceRemovalSource: CandidateSource {
     /// Each entry represents one independent sequence with its deletable elements and yield.
     private let sequences: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)]
@@ -141,7 +141,6 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
             maxBatch: maxBatch,
             maxElementYield: maxElementYield
         )
-//        print("\(Self.self) returning \(scope)")
         return GraphTransformation(
             operation: .remove(.elements(scope)),
             priority: DispatchPriority(
@@ -150,74 +149,6 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
                 reductionMagnitude: 0,
                 estimatedCost: 1
             )
-        )
-    }
-}
-
-// MARK: - Sequence Emptying Source
-
-/// Emits "empty this sequence entirely" scopes in yield-descending order.
-///
-/// For each sequence that can be emptied (deletable count equals element count, or no minimum length constraint), produces one scope that removes all elements. Most drastic structural reduction — tried before batch removal and aligned windows.
-struct SequenceEmptyingSource: CandidateSource {
-    private var candidates: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)]
-    private var index = 0
-
-    init(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) {
-        var entries: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)] = []
-        for scope in elementScopes {
-            // Only consider single-target (per-parent) scopes for emptying.
-            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
-            guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else {
-                continue
-            }
-            let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
-            guard metadata.elementCount > minLength else { continue }
-            guard minLength == 0 else { continue }
-            let totalYield = target.elementNodeIDs.reduce(0) { total, nodeID in
-                total + (graph.nodes[nodeID].positionRange?.count ?? 0)
-            }
-            entries.append((
-                sequenceNodeID: target.sequenceNodeID,
-                elementNodeIDs: target.elementNodeIDs,
-                yield: totalYield
-            ))
-        }
-        candidates = entries.sorted { $0.yield > $1.yield }
-    }
-
-    var peekPriority: DispatchPriority? {
-        guard index < candidates.count else { return nil }
-        return DispatchPriority(
-            structuralBenefit: candidates[index].yield,
-            valueBenefit: 0,
-            reductionMagnitude: 0,
-            estimatedCost: 1
-        )
-    }
-
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
-        guard index < candidates.count else { return nil }
-        let candidate = candidates[index]
-        index += 1
-
-        let scope = ElementRemovalScope(
-            targets: [SequenceRemovalTarget(
-                sequenceNodeID: candidate.sequenceNodeID,
-                elementNodeIDs: candidate.elementNodeIDs
-            )],
-            maxBatch: candidate.elementNodeIDs.count,
-            maxElementYield: candidate.yield
-        )
-
-        return GraphTransformation(
-            operation: .remove(.elements(scope)),
-            priority: DispatchPriority(
-                structuralBenefit: candidate.yield,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: 1
-            ),
         )
     }
 }
@@ -257,7 +188,7 @@ struct BatchRemovalSource: CandidateSource {
 
         elements = elementList
         maxBatch = deletable
-        // Start below full emptying (SequenceEmptyingSource handles that).
+        // Start below full emptying (emptying builder handles that).
         // Begin at half the max, or max-1 if max is small.
         let startBatch = deletable > 2 ? deletable / 2 : max(deletable - 1, 0)
         currentBatch = startBatch
@@ -341,16 +272,48 @@ struct BatchRemovalSource: CandidateSource {
     }
 }
 
-// MARK: - Per-Element Removal Source
+// MARK: - Builder Functions
 
-/// Emits individual element removal scopes, one per deletable element.
-///
-/// Orders zero-valued elements first — removing a zero-valued element does not change sums, making it the cheapest deletion for sum-constrained generators. Remaining elements ordered by position.
-struct PerElementRemovalSource: CandidateSource {
-    private var elements: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)]
-    private var index = 0
+extension CandidateSourceBuilder {
+    static func buildEmptyingCandidates(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
+        var results: [GraphTransformation] = []
+        for scope in elementScopes {
+            // Only consider single-target (per-parent) scopes for emptying.
+            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
+            guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else {
+                continue
+            }
+            let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+            guard metadata.elementCount > minLength else { continue }
+            guard minLength == 0 else { continue }
+            let totalYield = target.elementNodeIDs.reduce(0) { total, nodeID in
+                total + (graph.nodes[nodeID].positionRange?.count ?? 0)
+            }
 
-    init(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) {
+            let emptyingScope = ElementRemovalScope(
+                targets: [SequenceRemovalTarget(
+                    sequenceNodeID: target.sequenceNodeID,
+                    elementNodeIDs: target.elementNodeIDs
+                )],
+                maxBatch: target.elementNodeIDs.count,
+                maxElementYield: totalYield
+            )
+
+            results.append(GraphTransformation(
+                operation: .remove(.elements(emptyingScope)),
+                priority: DispatchPriority(
+                    structuralBenefit: totalYield,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
+                )
+            ))
+        }
+        results.sort { $0.priority > $1.priority }
+        return results
+    }
+
+    static func buildPerElementCandidates(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
         for scope in elementScopes {
             // Per-element source only handles single-target scopes.
@@ -379,84 +342,42 @@ struct PerElementRemovalSource: CandidateSource {
             }
             return entryA.positionRange.lowerBound < entryB.positionRange.lowerBound
         }
-        elements = entries
-    }
 
-    var peekPriority: DispatchPriority? {
-        guard index < elements.count else { return nil }
-        return DispatchPriority(
-            structuralBenefit: elements[index].positionRange.count,
-            valueBenefit: 0,
-            reductionMagnitude: 0,
-            estimatedCost: 1
-        )
-    }
-
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
-        guard index < elements.count else { return nil }
-        let element = elements[index]
-        index += 1
-
-        let scope = ElementRemovalScope(
-            targets: [SequenceRemovalTarget(
-                sequenceNodeID: element.sequenceNodeID,
-                elementNodeIDs: [element.nodeID]
-            )],
-            maxBatch: 1,
-            maxElementYield: element.positionRange.count
-        )
-
-        return GraphTransformation(
-            operation: .remove(.elements(scope)),
-            priority: DispatchPriority(
-                structuralBenefit: element.positionRange.count,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: 1
-            ),
-        )
-    }
-}
-
-// MARK: - Aligned Removal Source
-
-/// Emits covering-array-backed aligned removal scopes across sibling sequences under zip nodes.
-///
-/// Each scope carries a ``PullBasedCoveringArrayGenerator`` that the encoder pulls rows from on each probe. The source emits one transformation per zip node; the encoder is multi-shot.
-struct AlignedRemovalSource: CandidateSource {
-    private var scopes: [CoveringAlignedRemovalScope]
-    private var index = 0
-
-    init(graph: some ReadOnlyChoiceGraph) {
-        scopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
-            .sorted { scopeA, scopeB in
-                scopeA.maxElementYield > scopeB.maxElementYield
-            }
-    }
-
-    var peekPriority: DispatchPriority? {
-        guard index < scopes.count else { return nil }
-        return DispatchPriority(
-            structuralBenefit: scopes[index].maxElementYield,
-            valueBenefit: 0,
-            reductionMagnitude: 0,
-            estimatedCost: scopes[index].generator.totalRemaining
-        )
-    }
-
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
-        guard index < scopes.count else { return nil }
-        let scope = scopes[index]
-        index += 1
-
-        return GraphTransformation(
-            operation: .remove(.coveringAligned(scope)),
-            priority: DispatchPriority(
-                structuralBenefit: scope.maxElementYield,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: scope.generator.totalRemaining
+        return entries.map { element in
+            let scope = ElementRemovalScope(
+                targets: [SequenceRemovalTarget(
+                    sequenceNodeID: element.sequenceNodeID,
+                    elementNodeIDs: [element.nodeID]
+                )],
+                maxBatch: 1,
+                maxElementYield: element.positionRange.count
             )
-        )
+            return GraphTransformation(
+                operation: .remove(.elements(scope)),
+                priority: DispatchPriority(
+                    structuralBenefit: element.positionRange.count,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
+                )
+            )
+        }
+    }
+
+    static func buildAlignedCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+        let scopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
+            .sorted { $0.maxElementYield > $1.maxElementYield }
+
+        return scopes.map { scope in
+            GraphTransformation(
+                operation: .remove(.coveringAligned(scope)),
+                priority: DispatchPriority(
+                    structuralBenefit: scope.maxElementYield,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: scope.generator.totalRemaining
+                )
+            )
+        }
     }
 }

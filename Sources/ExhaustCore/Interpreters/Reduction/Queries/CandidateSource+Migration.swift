@@ -3,17 +3,11 @@
 //  Exhaust
 //
 
-// MARK: - Migration Source
+// MARK: - Builder Functions
 
-/// Emits element migration scopes from earlier sequences to later sequences.
-///
-/// For each pair of antichain-independent sequences where the source is at an earlier position, emits scopes at geometrically decreasing element counts. Moving elements rightward improves shortlex at earlier positions.
-struct MigrationSource: CandidateSource {
-    private var candidates: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)]
-    private var index = 0
-
-    init(graph: some ReadOnlyChoiceGraph) {
-        var entries: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)] = []
+extension CandidateSourceBuilder {
+    static func buildMigrationCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+        var entries: [(scope: MigrationScope, yield: Int)] = []
 
         // Find all sequence node pairs where source is earlier than receiver.
         // Lengths use UInt64 throughout to match the framework's length-generator type.
@@ -75,57 +69,32 @@ struct MigrationSource: CandidateSource {
                     return parentID
                 }()
 
-                // Start with moving ALL elements (most drastic).
-                entries.append((
-                    sourceSeqID: source.nodeID,
-                    receiverSeqID: receiver.nodeID,
+                let scope = MigrationScope(
+                    sourceSequenceNodeID: source.nodeID,
+                    receiverSequenceNodeID: receiver.nodeID,
                     elementNodeIDs: elementNodeIDs,
-                    elementRanges: elementRanges,
-                    receiverRange: receiver.positionRange,
-                    yield: totalYield,
-                    isFullMigration: isFullMigration,
-                    sourceParentSeqID: sourceParentSeqID
-                ))
+                    elementPositionRanges: elementRanges,
+                    receiverPositionRange: receiver.positionRange,
+                    sourceParentSequenceNodeID: sourceParentSeqID
+                )
+
+                entries.append((scope: scope, yield: totalYield))
             }
         }
 
         // Sort by yield descending.
         entries.sort { $0.yield > $1.yield }
-        candidates = entries
-    }
 
-    var peekPriority: DispatchPriority? {
-        guard index < candidates.count else { return nil }
-        return DispatchPriority(
-            structuralBenefit: candidates[index].yield,
-            valueBenefit: 0,
-            reductionMagnitude: 0,
-            estimatedCost: 1
-        )
-    }
-
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
-        guard index < candidates.count else { return nil }
-        let entry = candidates[index]
-        index += 1
-
-        let scope = MigrationScope(
-            sourceSequenceNodeID: entry.sourceSeqID,
-            receiverSequenceNodeID: entry.receiverSeqID,
-            elementNodeIDs: entry.elementNodeIDs,
-            elementPositionRanges: entry.elementRanges,
-            receiverPositionRange: entry.receiverRange,
-            sourceParentSequenceNodeID: entry.sourceParentSeqID
-        )
-
-        return GraphTransformation(
-            operation: .migrate(scope),
-            priority: DispatchPriority(
-                structuralBenefit: entry.yield,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: 1
+        return entries.map { entry in
+            GraphTransformation(
+                operation: .migrate(entry.scope),
+                priority: DispatchPriority(
+                    structuralBenefit: entry.yield,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
+                )
             )
-        )
+        }
     }
 }

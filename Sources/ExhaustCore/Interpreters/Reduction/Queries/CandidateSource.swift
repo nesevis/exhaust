@@ -3,38 +3,46 @@
 //  Exhaust
 //
 
-// MARK: - Scope Source Protocol
+// MARK: - Candidate Source Protocol
 
-/// A pull-based iterator that lazily produces scopes in yield-descending order.
+/// A pull-based iterator that produces transformations in priority-descending order.
 ///
-/// Each source represents one structural search space (a sequence to empty, a batch removal range, an aligned sibling set, a replacement candidate). It emits one fully specified scope at a time via ``next(lastAccepted:)``. The scheduler merges sources by ``peekPriority``, pulling from whichever has the highest-yield next scope.
-///
-/// This is a graph-aware variant of the pull-based density algorithm used by ``PullBasedCoveringArrayGenerator``. The same pattern — lazy, greedy, demand-driven — applies to scope generation, with graph-specific advantages: heterogeneous unit sizes weighted by exact yield, independence structure from the antichain, constraint-aware pruning via length constraints, and hierarchical decomposition from the containment tree.
-///
-/// On structural acceptance, all sources are rebuilt from the new graph. On rejection, only the dispatched source advances.
-///
-/// Concrete sources live in sibling files grouped by domain:
-/// - `CandidateSource+Removal.swift`: deletion-based sources (batched cross-sequence, emptying, batch, per-element, aligned).
-/// - `CandidateSource+Migration.swift`: element migration between independent sequences.
-/// - `CandidateSource+Restructuring.swift`: replacement and permutation.
-/// - `CandidateSource+ValueSearch.swift`: minimization and exchange (search-based).
+/// Concrete conformers are either stateless (``SortedCandidateSource``) or stateful (``BatchedCrossSequenceRemovalSource``, ``BatchRemovalSource``). On structural acceptance, all sources are rebuilt from the new graph. On rejection, only the dispatched source advances.
 protocol CandidateSource {
-    /// The yield of the scope that would be returned by the next call to ``next(lastAccepted:)``. Nil when exhausted.
     var peekPriority: DispatchPriority? { get }
-
-    /// Produces the next scope, incorporating feedback from the prior probe.
     mutating func next(lastAccepted: Bool) -> GraphTransformation?
+}
+
+// MARK: - Sorted Candidate Source
+
+/// A stateless candidate source that emits pre-built transformations in priority order.
+///
+/// Replaces the eight per-operation-type source structs that all followed the same pattern: eagerly sort candidates at init, emit via incrementing index, ignore `lastAccepted`.
+struct SortedCandidateSource: CandidateSource {
+    private let transformations: [GraphTransformation]
+    private var index = 0
+
+    init(_ transformations: [GraphTransformation]) {
+        self.transformations = transformations
+    }
+
+    var peekPriority: DispatchPriority? {
+        guard index < transformations.count else { return nil }
+        return transformations[index].priority
+    }
+
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
+        guard index < transformations.count else { return nil }
+        let result = transformations[index]
+        index += 1
+        return result
+    }
 }
 
 // MARK: - Source Collection Builder
 
-/// Builds the collection of scope sources from a graph.
-///
-/// Creates one source per search space. The scheduler merges them by ``CandidateSource/peekPriority``.
+/// Builds the collection of candidate sources from a graph.
 enum CandidateSourceBuilder {
-    /// Builds all scope sources from the current graph.
-    ///
-    /// - Parameter deferBindInner: When true, bind-inner value leaves and bound value scopes are excluded from the minimization source. The scheduler sets this while structural reduction is still active to avoid probing values on nodes that will be structurally removed.
     static func buildSources(from graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [any CandidateSource] {
         var sources: [any CandidateSource] = []
 
@@ -46,14 +54,13 @@ enum CandidateSourceBuilder {
             sources.append(batchedSource)
         }
 
-        // Sequence emptying — per-sequence emptying.
-        let emptyingSource = SequenceEmptyingSource(graph: graph, elementScopes: elementScopes)
-        if emptyingSource.peekPriority != nil {
-            sources.append(emptyingSource)
+        // Sequence emptying.
+        let emptyingCandidates = buildEmptyingCandidates(graph: graph, elementScopes: elementScopes)
+        if emptyingCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(emptyingCandidates))
         }
 
-        // Batch removal — one source per sequence with deletable elements.
-        // Geometric halving within each sequence (half → quarter → eighth).
+        // Batch removal — one source per sequence (stateful: geometric halving).
         for scope in elementScopes {
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             let source = BatchRemovalSource(
@@ -65,47 +72,46 @@ enum CandidateSourceBuilder {
             }
         }
 
-        // Migration — move elements between antichain-independent sequences.
-        // Runs before per-element deletion: migrating all elements out of a source sequence and removing it is more powerful than deleting individual elements, and its low per-element yield would otherwise be starved by the stall budget.
-        let migrationSource = MigrationSource(graph: graph)
-        if migrationSource.peekPriority != nil {
-            sources.append(migrationSource)
+        // Migration.
+        let migrationCandidates = buildMigrationCandidates(graph: graph)
+        if migrationCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(migrationCandidates))
         }
 
         // Per-element removal.
-        let perElementSource = PerElementRemovalSource(graph: graph, elementScopes: elementScopes)
-        if perElementSource.peekPriority != nil {
-            sources.append(perElementSource)
+        let perElementCandidates = buildPerElementCandidates(graph: graph, elementScopes: elementScopes)
+        if perElementCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(perElementCandidates))
         }
 
-        // Aligned removal — only if at least one participating sibling is dirty.
-        let alignedSource = AlignedRemovalSource(graph: graph)
-        if alignedSource.peekPriority != nil {
-            sources.append(alignedSource)
+        // Aligned removal.
+        let alignedCandidates = buildAlignedCandidates(graph: graph)
+        if alignedCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(alignedCandidates))
         }
 
         // Replacement.
-        let replacementSource = ReplacementSource(graph: graph)
-        if replacementSource.peekPriority != nil {
-            sources.append(replacementSource)
+        let replacementCandidates = buildReplacementCandidates(graph: graph)
+        if replacementCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(replacementCandidates))
         }
 
         // Permutation.
-        let permutationSource = PermutationSource(graph: graph)
-        if permutationSource.peekPriority != nil {
-            sources.append(permutationSource)
+        let permutationCandidates = buildPermutationCandidates(graph: graph)
+        if permutationCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(permutationCandidates))
         }
 
-        // Minimization (search-based).
-        let minimizationSource = MinimizationSource(graph: graph, deferBindInner: deferBindInner)
-        if minimizationSource.peekPriority != nil {
-            sources.append(minimizationSource)
+        // Minimization.
+        let minimizationCandidates = buildMinimizationCandidates(graph: graph, deferBindInner: deferBindInner)
+        if minimizationCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(minimizationCandidates))
         }
 
-        // Exchange (search-based).
-        let exchangeSource = ExchangeSource(graph: graph)
-        if exchangeSource.peekPriority != nil {
-            sources.append(exchangeSource)
+        // Exchange.
+        let exchangeCandidates = buildExchangeCandidates(graph: graph)
+        if exchangeCandidates.isEmpty == false {
+            sources.append(SortedCandidateSource(exchangeCandidates))
         }
 
         return sources
