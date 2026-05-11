@@ -12,46 +12,47 @@ extension GraphStructuralEncoder {
         graph: ChoiceGraph
     ) -> ProjectedMutation? {
         switch scope {
-        case let .selfSimilar(selfSimilarScope):
-            guard let built = buildSelfSimilarCandidate(scope: selfSimilarScope, sequence: sequence, graph: graph) else {
+        case let .selfSimilar(targetNodeID, donorNodeID, _):
+            guard let built = buildSelfSimilarCandidate(targetNodeID: targetNodeID, donorNodeID: donorNodeID, sequence: sequence, graph: graph) else {
                 return nil
             }
             candidate = built
             return .selfSimilarReplaced(
-                targetNodeID: selfSimilarScope.targetNodeID,
-                donorNodeID: selfSimilarScope.donorNodeID
+                targetNodeID: targetNodeID,
+                donorNodeID: donorNodeID
             )
 
-        case let .branchPivot(pivotScope):
-            return buildBranchPivotCandidate(into: &candidate, scope: pivotScope, sequence: sequence, graph: graph)
+        case let .branchPivot(pickNodeID, targetBranchID):
+            return buildBranchPivotCandidate(into: &candidate, pickNodeID: pickNodeID, targetBranchID: targetBranchID, sequence: sequence, graph: graph)
 
-        case let .descendantPromotion(promotionScope):
-            guard let built = buildDescendantPromotionCandidate(scope: promotionScope, sequence: sequence, graph: graph) else {
+        case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
+            guard let built = buildDescendantPromotionCandidate(ancestorPickNodeID: ancestorPickNodeID, descendantPickNodeID: descendantPickNodeID, sequence: sequence, graph: graph) else {
                 return nil
             }
             candidate = built
             return .descendantPromoted(
-                ancestorPickNodeID: promotionScope.ancestorPickNodeID,
-                descendantPickNodeID: promotionScope.descendantPickNodeID
+                ancestorPickNodeID: ancestorPickNodeID,
+                descendantPickNodeID: descendantPickNodeID
             )
         }
     }
 
     /// Copies donor entries into the target's position range, expanding depth-0 leaf entries to full pick-site equivalents for depth-crossing compatibility.
     private mutating func buildSelfSimilarCandidate(
-        scope: SelfSimilarReplacementScope,
+        targetNodeID: Int,
+        donorNodeID: Int,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        guard let targetRange = graph.nodes[scope.targetNodeID].positionRange,
-              let donorRange = graph.nodes[scope.donorNodeID].positionRange
+        guard let targetRange = graph.nodes[targetNodeID].positionRange,
+              let donorRange = graph.nodes[donorNodeID].positionRange
         else {
             return nil
         }
         let donorEntries = Array(sequence[donorRange.lowerBound ... donorRange.upperBound])
         let expanded = Self.expandDepthZeroLeaves(
             donorEntries,
-            donorNodeID: scope.donorNodeID,
+            donorNodeID: donorNodeID,
             donorRangeStart: donorRange.lowerBound,
             graph: graph
         )
@@ -67,15 +68,16 @@ extension GraphStructuralEncoder {
     /// Builds a single branch-pivot candidate for the scope's target branch. The leaf-count gate is applied at scope construction time (in ``replacementScopes()``). This method applies speculative leaf minimization and the shortlex gate.
     private mutating func buildBranchPivotCandidate(
         into candidate: inout ChoiceSequence,
-        scope: BranchPivotScope,
+        pickNodeID: Int,
+        targetBranchID: UInt64,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ProjectedMutation? {
-        guard scope.pickNodeID < graph.nodes.count else { return nil }
-        guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else {
+        guard pickNodeID < graph.nodes.count else { return nil }
+        guard case let .pick(pickMetadata) = graph.nodes[pickNodeID].kind else {
             return nil
         }
-        guard let pickRange = graph.nodes[scope.pickNodeID].positionRange else {
+        guard let pickRange = graph.nodes[pickNodeID].positionRange else {
             return nil
         }
         let elements = pickMetadata.branchElements
@@ -84,7 +86,7 @@ extension GraphStructuralEncoder {
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
             case let .branch(_, _, candidateID, _, _):
-                candidateID == scope.targetBranchID
+                candidateID == targetBranchID
             default:
                 false
             }
@@ -96,7 +98,7 @@ extension GraphStructuralEncoder {
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
         replacement.append(.group(true))
-        replacement.append(.branch(.init(id: scope.targetBranchID, branchCount: pickMetadata.branchCount)))
+        replacement.append(.branch(.init(id: targetBranchID, branchCount: pickMetadata.branchCount)))
         for index in 0 ..< targetContent.count {
             replacement.append(targetContent[index])
         }
@@ -109,26 +111,27 @@ extension GraphStructuralEncoder {
             return nil
         }
         return .branchSelected(
-            pickNodeID: scope.pickNodeID,
-            newSelectedID: scope.targetBranchID
+            pickNodeID: pickNodeID,
+            newSelectedID: targetBranchID
         )
     }
 
     /// Replaces the ancestor's range with the descendant's content.
     private mutating func buildDescendantPromotionCandidate(
-        scope: DescendantPromotionScope,
+        ancestorPickNodeID: Int,
+        descendantPickNodeID: Int,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        guard let ancestorRange = graph.nodes[scope.ancestorPickNodeID].positionRange,
-              let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange
+        guard let ancestorRange = graph.nodes[ancestorPickNodeID].positionRange,
+              let descendantRange = graph.nodes[descendantPickNodeID].positionRange
         else {
             return nil
         }
         let descendantEntries = Array(sequence[descendantRange.lowerBound ... descendantRange.upperBound])
         let expanded = Self.expandDepthZeroLeaves(
             descendantEntries,
-            donorNodeID: scope.descendantPickNodeID,
+            donorNodeID: descendantPickNodeID,
             donorRangeStart: descendantRange.lowerBound,
             graph: graph
         )

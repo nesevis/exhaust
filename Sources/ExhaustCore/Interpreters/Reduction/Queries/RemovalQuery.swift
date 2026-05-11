@@ -123,11 +123,11 @@ enum RemovalQuery {
     /// Targets nodes with ``ChoiceGraphNode/positionRange`` count greater than one — bind subtrees, zip children, and other compound elements worth removing as a unit.
     ///
     /// - Returns: One scope per compound node in the deletion antichain.
-    static func subtreeRemovalScopes(graph: ChoiceGraph) -> [SubtreeRemovalScope] {
+    static func subtreeRemovalScopes(graph: ChoiceGraph) -> [RemovalScope] {
         graph.deletionAntichain.compactMap { nodeID in
             guard let range = graph.nodes[nodeID].positionRange else { return nil }
             guard range.count > 1 else { return nil }
-            return SubtreeRemovalScope(nodeID: nodeID, yield: range.count)
+            return .subtree(nodeID: nodeID, yield: range.count)
         }
     }
 }

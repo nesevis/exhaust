@@ -40,23 +40,23 @@ enum ReplacementQuery {
                     let sizeB = graph.nodes[nodeB].positionRange?.count ?? 0
                     let sizeDelta = sizeA - sizeB
                     if sizeDelta > 0 {
-                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                        scopes.append(.selfSimilar(
                             targetNodeID: nodeA,
                             donorNodeID: nodeB,
                             sizeDelta: sizeDelta
-                        )))
+                        ))
                     } else if sizeDelta < 0 {
-                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                        scopes.append(.selfSimilar(
                             targetNodeID: nodeB,
                             donorNodeID: nodeA,
                             sizeDelta: -sizeDelta
-                        )))
+                        ))
                     } else {
-                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                        scopes.append(.selfSimilar(
                             targetNodeID: nodeA,
                             donorNodeID: nodeB,
                             sizeDelta: 0
-                        )))
+                        ))
                     }
                     indexB += 1
                 }
@@ -80,10 +80,10 @@ enum ReplacementQuery {
                 let candidateLeafCount = leafCount(in: metadata.branchElements[index])
                 guard candidateLeafCount <= selectedLeafCount else { continue }
 
-                scopes.append(.branchPivot(BranchPivotScope(
+                scopes.append(.branchPivot(
                     pickNodeID: nodeID,
                     targetBranchID: branchID
-                )))
+                ))
             }
         }
 
@@ -102,11 +102,11 @@ enum ReplacementQuery {
                 let reachable = graph.isReachable(from: nodeID, to: descendantID)
                     || isContainmentDescendant(descendantID, of: nodeID, graph: graph)
                 guard reachable else { continue }
-                scopes.append(.descendantPromotion(DescendantPromotionScope(
+                scopes.append(.descendantPromotion(
                     ancestorPickNodeID: nodeID,
                     descendantPickNodeID: descendantID,
                     sizeDelta: sizeDelta
-                )))
+                ))
             }
         }
 
