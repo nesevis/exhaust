@@ -146,12 +146,10 @@ extension ChoiceGraph {
             innerChildIndex: bindMetadata.innerChildIndex,
             boundChildIndex: bindMetadata.boundChildIndex,
             bindPath: bindMetadata.bindPath,
-            classification: verdict.classification,
-            downstreamFingerprint: verdict.fingerprint
+            classification: verdict.classification
         )
         let node = nodes[bindNodeID]
         nodes[bindNodeID] = node.with(kind: .bind(updatedMetadata))
-        // Mirror into the per-graph fingerprint-keyed cache so the verdict survives the next ``ChoiceGraph/build(from:inheriting:)``. The per-node `BindMetadata.classification` field is the in-instance authority; the cache is the across-instance one. Both stores are kept in sync.
         bindClassifications[bindMetadata.fingerprint] = verdict.classification
     }
 

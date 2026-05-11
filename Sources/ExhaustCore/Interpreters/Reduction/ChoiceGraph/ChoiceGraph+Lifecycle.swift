@@ -129,15 +129,15 @@ extension ChoiceGraph {
     /// Splices a rebuilt bound subtree into the graph in place after a bind-inner value change.
     ///
     /// 1. Locates the controlling bind node by walking from the leaf up the parent chain.
-    /// 2. Reads the bind's ``BindMetadata/bindPath`` from its existing ``ChoiceGraphNode/kind``.
-    /// 3. Walks `freshTree` along that path to extract the new bound subtree.
-    /// 4. Detects picks in the old or new subtree and falls back to full rebuild if found (self-similarity edges are not maintained incrementally).
+    /// 2. Reads the old bound subtree's extent from the graph.
+    /// 3. Extracts the new bound subtree from `freshTree` by bind path.
+    /// 4. Computes the length delta between old and new bound subtrees.
     /// 5. Tombstones the old subtree's node IDs and edges referencing them.
     /// 6. Walks the new subtree via ``ChoiceGraphBuilder/buildSubtree(from:startingOffset:parent:bindDepth:nodeIDOffset:parentPath:)`` and appends the resulting nodes / edges.
     /// 7. Patches the bind node's children to reference the new bound child.
     /// 8. Propagates the length delta to right siblings and ancestors via ``propagatePositionShift(after:delta:excluding:)``.
-    /// 9. Refreshes the bind's ``BindMetadata/isStructurallyConstant`` flag from the new subtree.
-    /// 10. Invalidates topology / reachability and derived-edge caches.
+    /// 9. Refreshes the bind's ``BindMetadata/isStructurallyConstant`` flag and clears cached classification.
+    /// 10. Finalises — recomputes self-similarity groups and invalidates caches.
     private func applyBindReshape(
         forLeaf leafNodeID: Int,
         freshTree: ChoiceTree,
@@ -165,13 +165,14 @@ extension ChoiceGraph {
             return
         }
 
+        // Step 2: read the old bound subtree's extent.
         let oldBoundChildID = nodes[bindNodeID].children[bindMetadata.boundChildIndex]
         guard let oldBoundRange = nodes[oldBoundChildID].positionRange else {
             application.requiresFullRebuild = true
             return
         }
 
-        // Path-based bind identification stays correct when an upstream change shifts sequence positions. The prior offset-based lookup could silently match the wrong bind in divergent freshTrees — for example, symmetric recursive generators where sibling binds sit at near-identical offsets.
+        // Step 3: extract the new bound subtree from the fresh tree by bind path.
         guard let newBoundSubtree = Self.extractBoundSubtree(
             from: freshTree,
             matchingPath: bindMetadata.bindPath
@@ -180,11 +181,10 @@ extension ChoiceGraph {
             return
         }
 
-        // Compute length delta from the OLD bound subtree's stored extent versus the NEW bound subtree's flattened entry count.
+        // Step 4: compute the length delta.
         let oldBoundLength = oldBoundRange.count
         let newBoundLength = newBoundSubtree.flattenedEntryCount
         let lengthDelta = newBoundLength - oldBoundLength
-
 
         ExhaustLog.debug(
             category: .reducer,
@@ -241,17 +241,14 @@ extension ChoiceGraph {
         // Step 9: refresh structural-constancy on the bind, and clear any cached classification. The new subtree may have changed shape.
         let newIsStructurallyConstant = newBoundSubtree.containsBind == false
             && newBoundSubtree.containsPicks == false
-        let hadClassification = bindMetadata.classification != nil || bindMetadata.downstreamFingerprint != nil
-        if newIsStructurallyConstant != bindMetadata.isStructurallyConstant || hadClassification {
+        if newIsStructurallyConstant != bindMetadata.isStructurallyConstant || bindMetadata.classification != nil {
             nodes[bindNodeID] = nodes[bindNodeID].with(kind: .bind(BindMetadata(
                 fingerprint: bindMetadata.fingerprint,
                 isStructurallyConstant: newIsStructurallyConstant,
                 bindDepth: bindMetadata.bindDepth,
                 innerChildIndex: bindMetadata.innerChildIndex,
                 boundChildIndex: bindMetadata.boundChildIndex,
-                bindPath: bindMetadata.bindPath,
-                classification: nil,
-                downstreamFingerprint: nil
+                bindPath: bindMetadata.bindPath
             )))
         }
 

@@ -129,6 +129,8 @@ extension ChoiceGraphScheduler {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
+                // Accepted probes cost two materialisations: one for the property check (counted
+                // unconditionally below), one for tree reconstruction (counted here).
                 if collectStats {
                     stats.totalMaterializations += 1
                 }
@@ -194,6 +196,8 @@ extension ChoiceGraphScheduler {
                 }
             }
 
+            // One materialisation per non-cache-hit probe (the property check).
+            // Accepted probes add a second materialisation above for tree reconstruction.
             if collectStats {
                 stats.totalMaterializations += 1
             }

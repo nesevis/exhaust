@@ -140,9 +140,6 @@ package struct BindMetadata {
     /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``GraphComposedEncoder``) so unsuitable sites are skipped immediately.
     public var classification: BindClassification?
 
-    /// Topology hash of the bound subtree at classification time. Nil until classification runs. Intended as a future-facing staleness check: callers may re-hash the current bound subtree and compare against this value before trusting a cached ``classification``. Today, reshape clearing and full-graph-rebuild replacement already cover the common invalidation paths, so this field is defensive rather than load-bearing.
-    public var downstreamFingerprint: UInt64?
-
     /// Creates bind metadata with the given structural properties and optional cached classification.
     public init(
         fingerprint: UInt64,
@@ -151,8 +148,7 @@ package struct BindMetadata {
         innerChildIndex: Int,
         boundChildIndex: Int,
         bindPath: BindPath,
-        classification: BindClassification? = nil,
-        downstreamFingerprint: UInt64? = nil
+        classification: BindClassification? = nil
     ) {
         self.fingerprint = fingerprint
         self.isStructurallyConstant = isStructurallyConstant
@@ -161,7 +157,6 @@ package struct BindMetadata {
         self.boundChildIndex = boundChildIndex
         self.bindPath = bindPath
         self.classification = classification
-        self.downstreamFingerprint = downstreamFingerprint
     }
 }
 

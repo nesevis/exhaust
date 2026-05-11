@@ -332,8 +332,6 @@ struct ReorderableGroup {
 /// The encoder receives a scope and operates on it without modifying the graph — the scope is the interface between the graph (which constructs it) and the encoder (which consumes it).
 ///
 /// For simple transformations, ``baseSequence`` is the current sequence. For bound value composition, the downstream scope's ``baseSequence`` is the lifted result from the upstream probe — the encoder does not know or care that it is downstream.
-///
-/// - Note: The graph is carried temporarily for node metadata access (position ranges, leaf values). A future refinement will pre-resolve all needed metadata into the scope types and remove the graph dependency.
 struct EncoderInput {
     /// The transformation to execute (operation, yield, precondition).
     let transformation: GraphTransformation
