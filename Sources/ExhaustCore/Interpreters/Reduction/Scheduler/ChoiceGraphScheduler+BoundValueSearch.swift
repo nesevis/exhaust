@@ -39,7 +39,6 @@ extension ChoiceGraphScheduler {
                     batchZeroEligible: false
                 ))),
                 priority: scope.transformation.priority,
-                precondition: .unconditional
             ),
             baseSequence: scope.baseSequence,
             tree: scope.tree,
@@ -173,7 +172,6 @@ extension ChoiceGraphScheduler {
                     batchZeroEligible: downstreamLeaves.count > 1
                 ))),
                 priority: parent.transformation.priority,
-                precondition: .unconditional
             ),
             baseSequence: liftedSequence,
             tree: freshTree,

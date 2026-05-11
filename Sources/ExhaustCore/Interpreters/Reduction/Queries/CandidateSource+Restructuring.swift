@@ -55,25 +55,9 @@ struct ReplacementSource: CandidateSource {
         let entry = candidates[index]
         index += 1
 
-        let precondition: TransformationPrecondition = switch entry.scope {
-        case let .selfSimilar(selfSimilar):
-            .all([
-                .nodeActive(selfSimilar.targetNodeID),
-                .nodeActive(selfSimilar.donorNodeID),
-            ])
-        case let .branchPivot(pivot):
-            .nodeActive(pivot.pickNodeID)
-        case let .descendantPromotion(promotion):
-            .all([
-                .nodeActive(promotion.ancestorPickNodeID),
-                .nodeActive(promotion.descendantPickNodeID),
-            ])
-        }
-
         return GraphTransformation(
             operation: .replace(entry.scope),
-            priority: entry.priority,
-            precondition: precondition
+            priority: entry.priority
         )
     }
 }
@@ -135,8 +119,7 @@ struct PermutationSource: CandidateSource {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: estimatedCost
-            ),
-            precondition: .nodeActive(entry.parentNodeID)
+            )
         )
     }
 }

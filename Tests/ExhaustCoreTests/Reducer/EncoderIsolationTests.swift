@@ -170,7 +170,6 @@ private func minimizationScope(
             reductionMagnitude: 0,
             estimatedCost: 10
         ),
-        precondition: .unconditional
     )
     return EncoderInput(
         transformation: transformation,
@@ -196,7 +195,6 @@ private func removalScope(
             reductionMagnitude: 0,
             estimatedCost: firstScope.maxBatch
         ),
-        precondition: .unconditional
     )
     return EncoderInput(
         transformation: transformation,

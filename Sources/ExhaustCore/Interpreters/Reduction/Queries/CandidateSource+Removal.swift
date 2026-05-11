@@ -149,10 +149,7 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: 1
-            ),
-            precondition: .all(targets.map {
-                .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
-            })
+            )
         )
     }
 }
@@ -221,7 +218,6 @@ struct SequenceEmptyingSource: CandidateSource {
                 reductionMagnitude: 0,
                 estimatedCost: 1
             ),
-            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: candidate.sequenceNodeID)
         )
     }
 }
@@ -315,7 +311,6 @@ struct BatchRemovalSource: CandidateSource {
                 reductionMagnitude: 0,
                 estimatedCost: 1
             ),
-            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: sequenceNodeID)
         )
 
         // Advance state for next call.
@@ -419,7 +414,6 @@ struct PerElementRemovalSource: CandidateSource {
                 reductionMagnitude: 0,
                 estimatedCost: 1
             ),
-            precondition: .sequenceLengthAboveMinimum(sequenceNodeID: element.sequenceNodeID)
         )
     }
 }
@@ -462,10 +456,7 @@ struct AlignedRemovalSource: CandidateSource {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: scope.generator.totalRemaining
-            ),
-            precondition: .all(scope.siblings.map {
-                .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
-            })
+            )
         )
     }
 }

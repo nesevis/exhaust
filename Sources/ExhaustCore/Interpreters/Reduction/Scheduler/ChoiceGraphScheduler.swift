@@ -156,7 +156,7 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                guard transformation.precondition.isSatisfied(in: graph) else {
+                guard transformation.operation.isValid(in: graph) else {
                     continue
                 }
 
@@ -518,7 +518,6 @@ enum ChoiceGraphScheduler {
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
             priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1),
-            precondition: .unconditional
         )
         let reorderScopeBundle = EncoderInput(
             transformation: reorderTransformation,

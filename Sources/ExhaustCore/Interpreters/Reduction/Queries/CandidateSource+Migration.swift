@@ -114,7 +114,8 @@ struct MigrationSource: CandidateSource {
             receiverSequenceNodeID: entry.receiverSeqID,
             elementNodeIDs: entry.elementNodeIDs,
             elementPositionRanges: entry.elementRanges,
-            receiverPositionRange: entry.receiverRange
+            receiverPositionRange: entry.receiverRange,
+            sourceParentSequenceNodeID: entry.sourceParentSeqID
         )
 
         return GraphTransformation(
@@ -124,20 +125,7 @@ struct MigrationSource: CandidateSource {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: 1
-            ),
-            precondition: {
-                // When migration empties the source entirely and the source's parent is a sequence, the constraint is on the parent's ability to lose a child, not the source's own element count.
-                if let parentSeqID = entry.sourceParentSeqID {
-                    return .all([
-                        .sequenceLengthAboveMinimum(sequenceNodeID: parentSeqID),
-                        .nodeActive(entry.receiverSeqID),
-                    ])
-                }
-                return .all([
-                    .sequenceLengthAboveMinimum(sequenceNodeID: entry.sourceSeqID),
-                    .nodeActive(entry.receiverSeqID),
-                ])
-            }()
+            )
         )
     }
 }

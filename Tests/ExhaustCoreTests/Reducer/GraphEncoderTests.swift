@@ -28,7 +28,6 @@ struct GraphEncoderTests {
                 reductionMagnitude: 0,
                 estimatedCost: firstScope.maxBatch
             ),
-            precondition: .unconditional
         )
         return EncoderInput(
             transformation: transformation,
@@ -55,7 +54,6 @@ struct GraphEncoderTests {
                 reductionMagnitude: 0,
                 estimatedCost: 10
             ),
-            precondition: .unconditional
         )
         return EncoderInput(
             transformation: transformation,
@@ -207,7 +205,8 @@ struct GraphEncoderTests {
             receiverSequenceNodeID: inner2NodeID,
             elementNodeIDs: graph.nodes[inner1NodeID].children,
             elementPositionRanges: inner1Meta.childPositionRanges,
-            receiverPositionRange: inner2Range
+            receiverPositionRange: inner2Range,
+            sourceParentSequenceNodeID: nil
         )
         let transformation = GraphTransformation(
             operation: .migrate(migrationScope),
@@ -217,7 +216,6 @@ struct GraphEncoderTests {
                 reductionMagnitude: 0,
                 estimatedCost: 1
             ),
-            precondition: .unconditional
         )
         let scope = EncoderInput(
             transformation: transformation,

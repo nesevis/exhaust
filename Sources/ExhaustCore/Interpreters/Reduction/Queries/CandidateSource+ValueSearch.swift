@@ -67,7 +67,6 @@ struct MinimizationSource: CandidateSource {
         return GraphTransformation(
             operation: .minimize(entry.scope),
             priority: entry.priority,
-            precondition: .unconditional
         )
     }
 
@@ -153,7 +152,6 @@ struct ExchangeSource: CandidateSource {
         return GraphTransformation(
             operation: .exchange(entry.scope),
             priority: entry.priority,
-            precondition: .unconditional
         )
     }
 }

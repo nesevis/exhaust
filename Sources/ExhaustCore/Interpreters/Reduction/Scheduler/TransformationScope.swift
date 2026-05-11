@@ -293,6 +293,9 @@ struct MigrationScope {
 
     /// Position range of the receiver sequence (elements are appended after its current content).
     let receiverPositionRange: ClosedRange<Int>
+
+    /// When the migration empties the source entirely and the source is a child of a parent sequence, this holds the parent's node ID. The validity check constrains the parent's minimum length rather than the source's.
+    let sourceParentSequenceNodeID: Int?
 }
 
 // MARK: - Reordering Scopes

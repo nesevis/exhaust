@@ -203,7 +203,6 @@ struct ChoiceGraphScopeQueryTests {
                 reductionMagnitude: 0,
                 estimatedCost: coveringScope.generator.totalRemaining
             ),
-            precondition: .unconditional
         )
         let scope = EncoderInput(
             transformation: transformation,

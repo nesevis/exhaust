@@ -137,7 +137,7 @@ extension ChoiceGraphScheduler {
                 exploitSources.removeLast()
                 continue
             }
-            guard exploitTransformation.precondition.isSatisfied(in: graph) else {
+            guard exploitTransformation.operation.isValid(in: graph) else {
                 continue
             }
             if case .minimize(.boundValue) = exploitTransformation.operation {
