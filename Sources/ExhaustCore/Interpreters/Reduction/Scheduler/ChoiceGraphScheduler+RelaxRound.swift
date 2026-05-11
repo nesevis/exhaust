@@ -6,64 +6,33 @@
 // MARK: - Structural Relax Round
 
 extension ChoiceGraphScheduler {
-    /// Runs a structural relax–solve–round pass: checkpoint, apply a shortlex-worsening structural perturbation, reduce from the perturbed state, commit if the result beats the checkpoint.
-    ///
-    /// The relaxation removes the shortlex constraint on structural operations — branch pivots, self-similar substitutions, and descendant promotions that the standard encoder rejected because the candidate was shortlex-larger. The exploitation phase runs a full reduction cycle from the perturbed state. The round phase compares the exploited result against the checkpoint and commits only if the final state is strictly better.
-    ///
-    /// Perturbation candidates are built directly from the graph's replacement scopes with the shortlex gate removed. Each candidate is materialized and property-checked; the first property-failing candidate seeds the exploitation phase.
+    /// Runs a structural relax-solve-round pass: checkpoint, apply a shortlex-worsening structural perturbation, reduce from the perturbed state, commit if the result beats the checkpoint.
     ///
     /// - Returns: True if the relax round produced a net improvement (committed).
-    // swiftlint:disable function_parameter_count
-    static func runRelaxRound(
-        sequence: inout ChoiceSequence,
-        tree: inout ChoiceTree,
-        output: inout Any,
-        graph: inout ChoiceGraph,
-        gen: ReflectiveGenerator<Any>,
-        property: @escaping (Any) -> Bool,
-        rejectCache: inout Set<UInt64>,
-        stats: inout ReductionStats,
-        collectStats: Bool,
-        isInstrumented: Bool
-    ) throws -> Bool {
-        let checkpointSequence = sequence
-        let checkpointTree = tree
-        let checkpointOutput = output
-        let checkpointConvergence = extractAllConvergence(from: graph)
+    static func runRelaxRound(state: inout ReductionState) throws -> Bool {
+        let checkpointSequence = state.sequence
+        let checkpointTree = state.tree
+        let checkpointOutput = state.output
+        let checkpointConvergence = extractAllConvergence(from: state.graph)
 
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "relax_round_start",
-                metadata: ["seq_len": "\(sequence.count)"]
-            )
-        }
+        Self.logReducer("relax_round_start", isInstrumented: state.isInstrumented, metadata: [
+            "seq_len": "\(state.sequence.count)",
+        ])
 
         let candidates = buildRelaxCandidates(
-            sequence: sequence,
-            graph: graph
+            sequence: state.sequence,
+            graph: state.graph
         )
 
         guard candidates.isEmpty == false else {
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "relax_round_no_candidates",
-                    metadata: [:]
-                )
-            }
+            Self.logReducer("relax_round_no_candidates", isInstrumented: state.isInstrumented, metadata: [:])
             return false
         }
 
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "relax_round_candidates",
-                metadata: ["count": "\(candidates.count)"]
-            )
-        }
+        Self.logReducer("relax_round_candidates", isInstrumented: state.isInstrumented, metadata: [
+            "count": "\(candidates.count)",
+        ])
 
-        // Try perturbation candidates until one fails the property or the budget is exhausted.
         let materializationBudget = 10
         var perturbationAccepted = false
         var materializationsUsed = 0
@@ -74,60 +43,43 @@ extension ChoiceGraphScheduler {
 
             if let result = try decoder.decodeAny(
                 candidate: candidate,
-                gen: gen,
-                tree: tree,
-                originalSequence: sequence,
-                property: property,
+                gen: state.gen,
+                tree: state.tree,
+                originalSequence: state.sequence,
+                property: state.property,
                 filterObservations: &filterObservations
             ) {
-                sequence = result.sequence
-                tree = result.tree
-                output = result.output
+                state.sequence = result.sequence
+                state.tree = result.tree
+                state.output = result.output
                 perturbationAccepted = true
 
-                if isInstrumented {
-                    ExhaustLog.debug(
-                        category: .reducer,
-                        event: "relax_round_perturbation_accepted",
-                        metadata: ["seq_len": "\(sequence.count)"]
-                    )
-                }
+                Self.logReducer("relax_round_perturbation_accepted", isInstrumented: state.isInstrumented, metadata: [
+                    "seq_len": "\(state.sequence.count)",
+                ])
                 break
             }
 
             materializationsUsed += 1
-            if collectStats {
-                stats.totalMaterializations += 1
+            if state.collectStats {
+                state.stats.totalMaterializations += 1
             }
         }
 
         guard perturbationAccepted else {
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "relax_round_no_perturbation",
-                    metadata: [:]
-                )
-            }
+            Self.logReducer("relax_round_no_perturbation", isInstrumented: state.isInstrumented, metadata: [:])
             return false
         }
 
-        // Exploitation: rebuild graph and run full source loop on the perturbed state.
-        graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-        var exploitSources = CandidateSourceBuilder.buildSources(from: graph)
+        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+        var exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
 
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "relax_round_exploitation_start",
-                metadata: [
-                    "seq_len": "\(sequence.count)",
-                    "sources": "\(exploitSources.count)",
-                ]
-            )
-        }
+        Self.logReducer("relax_round_exploitation_start", isInstrumented: state.isInstrumented, metadata: [
+            "seq_len": "\(state.sequence.count)", "sources": "\(exploitSources.count)",
+        ])
 
-        var relaxCache = Set<UInt64>()
+        let savedRejectCache = state.rejectCache
+        state.rejectCache = []
         while true {
             guard let sourceIndex = highestPrioritySourceIndex(exploitSources) else {
                 break
@@ -137,19 +89,19 @@ extension ChoiceGraphScheduler {
                 exploitSources.removeLast()
                 continue
             }
-            guard exploitTransformation.operation.isValid(in: graph) else {
+            guard exploitTransformation.operation.isValid(in: state.graph) else {
                 continue
             }
             if case .minimize(.boundValue) = exploitTransformation.operation {
                 continue
             }
 
-            let warmStarts = extractWarmStarts(from: graph)
+            let warmStarts = extractWarmStarts(from: state.graph)
             let exploitScope = EncoderInput(
                 transformation: exploitTransformation,
-                baseSequence: sequence,
-                tree: tree,
-                graph: graph,
+                baseSequence: state.sequence,
+                tree: state.tree,
+                graph: state.graph,
                 warmStartRecords: warmStarts
             )
 
@@ -157,76 +109,46 @@ extension ChoiceGraphScheduler {
             let outcome = try runProbeLoop(
                 encoder: &exploitEncoder,
                 scope: exploitScope,
-                graph: graph,
-                sequence: &sequence,
-                tree: &tree,
-                output: &output,
-                gen: gen,
-                property: property,
-                rejectCache: &relaxCache,
-                stats: &stats,
-                collectStats: collectStats,
-                isInstrumented: isInstrumented
+                state: &state
             )
 
             let convergence = exploitEncoder.convergenceRecords
             if convergence.isEmpty == false {
-                graph.recordConvergence(byNodeID: convergence)
+                state.graph.recordConvergence(byNodeID: convergence)
             }
 
             if outcome.accepted {
                 if outcome.requiresRebuild {
-                    graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-                    exploitSources = CandidateSourceBuilder.buildSources(from: graph)
+                    state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                    exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
                 } else if outcome.requiresSourceRebuild {
-                    exploitSources = CandidateSourceBuilder.buildSources(from: graph)
+                    exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
                 }
             }
         }
+        state.rejectCache = savedRejectCache
 
-        if sequence.shortLexPrecedes(checkpointSequence) {
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "relax_round_committed",
-                    metadata: [
-                        "old_seq_len": "\(checkpointSequence.count)",
-                        "new_seq_len": "\(sequence.count)",
-                    ]
-                )
-            }
+        if state.sequence.shortLexPrecedes(checkpointSequence) {
+            Self.logReducer("relax_round_committed", isInstrumented: state.isInstrumented, metadata: [
+                "old_seq_len": "\(checkpointSequence.count)", "new_seq_len": "\(state.sequence.count)",
+            ])
             return true
         }
 
-        // Rollback: restore checkpoint state.
-        sequence = checkpointSequence
-        tree = checkpointTree
-        output = checkpointOutput
-        graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-        transferConvergence(checkpointConvergence, to: graph)
+        state.sequence = checkpointSequence
+        state.tree = checkpointTree
+        state.output = checkpointOutput
+        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+        transferConvergence(checkpointConvergence, to: state.graph)
 
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "relax_round_rolled_back",
-                metadata: ["seq_len": "\(sequence.count)"]
-            )
-        }
+        Self.logReducer("relax_round_rolled_back", isInstrumented: state.isInstrumented, metadata: [
+            "seq_len": "\(state.sequence.count)",
+        ])
         return false
     }
 
-    // swiftlint:enable function_parameter_count
-
     // MARK: - Perturbation Candidate Construction
 
-    /// Builds structural perturbation candidates from replacement scopes without the shortlex gate.
-    ///
-    /// Generates candidates from three sources:
-    /// - Branch pivots with leaves zeroed (crosses the two-step barrier where the minimized pivot passes but zeroed values under the new branch fail)
-    /// - Self-similar substitutions where donor is larger than target (normally rejected by shortlex because the candidate grows)
-    /// - Descendant promotions (these should already be tried by the standard encoder, but may have been rejected by shortlex due to expanded depth-0 leaves)
-    ///
-    /// Candidates are ordered by sequence length (shorter first) so the exploitation phase starts from the most promising perturbation.
     private static func buildRelaxCandidates(
         sequence: ChoiceSequence,
         graph: some ReadOnlyChoiceGraph
@@ -268,7 +190,6 @@ extension ChoiceGraphScheduler {
         return candidates
     }
 
-    /// Builds a branch pivot candidate with all target branch leaves zeroed. No shortlex gate.
     private static func buildUnguardedBranchPivot(
         scope: BranchPivotScope,
         sequence: ChoiceSequence,
@@ -305,7 +226,6 @@ extension ChoiceGraphScheduler {
         return candidate
     }
 
-    /// Builds a self-similar substitution candidate without shortlex gate.
     private static func buildUnguardedSelfSimilar(
         scope: SelfSimilarReplacementScope,
         sequence: ChoiceSequence,
@@ -327,7 +247,6 @@ extension ChoiceGraphScheduler {
         return candidate
     }
 
-    /// Builds a descendant promotion candidate without shortlex gate.
     private static func buildUnguardedDescendantPromotion(
         scope: DescendantPromotionScope,
         sequence: ChoiceSequence,

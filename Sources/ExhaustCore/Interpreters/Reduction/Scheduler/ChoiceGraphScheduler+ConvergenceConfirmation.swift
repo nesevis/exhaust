@@ -1,178 +1,141 @@
 // MARK: - Convergence Confirmation
 
 extension ChoiceGraphScheduler {
-    // swiftlint:disable function_parameter_count
     /// Probes each converged leaf at `floor - 1` to detect stale convergence bounds.
     ///
     /// If the property still fails at floor - 1, the convergence record was stale — the previous search stopped too early. Clears the stale record so minimization can re-enter for that leaf.
     ///
     /// - Returns: True if any stale floors were found and cleared.
-    static func confirmConvergence(
-        sequence: inout ChoiceSequence,
-        tree: inout ChoiceTree,
-        output _: inout Any,
-        graph: ChoiceGraph,
-        gen: ReflectiveGenerator<Any>,
-        property: @escaping (Any) -> Bool,
-        rejectCache: inout Set<UInt64>,
-        stats: inout ReductionStats,
-        collectStats: Bool,
-        isInstrumented: Bool
-    ) throws -> Bool {
+    static func confirmConvergence(state: inout ReductionState) throws -> Bool {
         var anyStale = false
         var probeCount = 0
         var acceptCount = 0
         var cacheHitCount = 0
         var decoderRejectCount = 0
         defer {
-            if collectStats {
-                stats.encoderProbes[.convergenceConfirmation, default: 0] += probeCount
-                stats.encoderProbesAccepted[.convergenceConfirmation, default: 0] += acceptCount
-                stats.encoderProbesRejectedByCache[.convergenceConfirmation, default: 0] += cacheHitCount
-                stats.encoderProbesRejectedByDecoder[.convergenceConfirmation, default: 0] += decoderRejectCount
+            if state.collectStats {
+                state.stats.encoderProbes[.convergenceConfirmation, default: 0] += probeCount
+                state.stats.encoderProbesAccepted[.convergenceConfirmation, default: 0] += acceptCount
+                state.stats.encoderProbesRejectedByCache[.convergenceConfirmation, default: 0] += cacheHitCount
+                state.stats.encoderProbesRejectedByDecoder[.convergenceConfirmation, default: 0] += decoderRejectCount
             }
         }
 
-        // Bind status is structural — convergence probes are value-only and cannot add or remove bind markers. Hoisted to avoid an O(N) scan on every converged leaf.
-        let hasBind = sequence.contains { entry in
+        let hasBind = state.sequence.contains { entry in
             if case .bind = entry { return true }
             return false
         }
 
-        for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+        for nodeID in state.graph.leafNodes {
+            guard case let .chooseBits(metadata) = state.graph.nodes[nodeID].kind else { continue }
             guard let origin = metadata.convergedOrigin else { continue }
-            guard let range = graph.nodes[nodeID].positionRange else { continue }
+            guard let range = state.graph.nodes[nodeID].positionRange else { continue }
 
-            // Probe floor - 1 in bit-pattern space. The minimization encoder searches in bit-pattern space (directional), so convergence bounds are bit patterns and floor - 1 is the next adjacent value in the same search direction.
             let minBound: UInt64 = metadata.validRange?.lowerBound ?? 0
             guard origin.bound > minBound else { continue }
 
             let probeValue = origin.bound - 1
-            var candidate = sequence
+            var candidate = state.sequence
             candidate[range.lowerBound] = candidate[range.lowerBound]
                 .withBitPattern(probeValue)
-            guard candidate.shortLexPrecedes(sequence) else { continue }
+            guard candidate.shortLexPrecedes(state.sequence) else { continue }
 
             probeCount += 1
 
             let probeHash = ZobristHash.incrementalHash(
-                baseHash: ZobristHash.hash(of: sequence),
-                baseSequence: sequence,
+                baseHash: ZobristHash.hash(of: state.sequence),
+                baseSequence: state.sequence,
                 probe: candidate
             )
-            if rejectCache.contains(probeHash) {
+            if state.rejectCache.contains(probeHash) {
                 cacheHitCount += 1
                 continue
             }
 
-            // Convergence confirmation rewrites a single converged leaf's bit pattern at `floor - 1` and re-runs the materializer.
-            // By construction this is a pure value-only probe — no bind reshape, no structural pivot — so `materializePicks: false`
-            // is safe and avoids the per-probe cost of re-materializing non-selected pick branches. The lazy rematerialize check in the cycle loop covers any path-changing operation that needs full branch metadata after a stale acceptance.
             let decoder: SequenceDecoder = hasBind
-                ? .guided(fallbackTree: tree, materializePicks: false)
+                ? .guided(fallbackTree: state.tree, materializePicks: false)
                 : .exact(materializePicks: false)
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
             if try decoder.decodeAny(
                 candidate: candidate,
-                gen: gen,
-                tree: tree,
-                originalSequence: sequence,
-                property: property,
+                gen: state.gen,
+                tree: state.tree,
+                originalSequence: state.sequence,
+                property: state.property,
                 filterObservations: &filterObservations,
                 precomputedHash: probeHash
             ) != nil {
-                // Validation only: discard the probe's sequence even though it succeeded. Perturbing the leaf to `bound - 1` here would shift the leaf's value out from under ``GraphValueEncoder``, bypassing its cross-zero phase and trapping the leaf at a non-canonical local minimum. Clearing the convergence record alone lets value search re-enter the leaf next cycle from the same starting state it converged on originally.
                 anyStale = true
                 acceptCount += 1
 
-                if case var .chooseBits(md) = graph.nodes[nodeID].kind {
-                    md.convergedOrigin = nil
-                    graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(md))
+                if case var .chooseBits(leafMetadata) = state.graph.nodes[nodeID].kind {
+                    leafMetadata.convergedOrigin = nil
+                    state.graph.nodes[nodeID] = state.graph.nodes[nodeID].with(kind: .chooseBits(leafMetadata))
                 }
 
-                if isInstrumented {
-                    ExhaustLog.debug(
-                        category: .reducer,
-                        event: "stale_convergence_detected",
-                        metadata: [
-                            "position": "\(range.lowerBound)",
-                            "old_floor": "\(origin.bound)",
-                            "probe_succeeded_at": "\(probeValue)",
-                        ]
-                    )
-                }
+                Self.logReducer("stale_convergence_detected", isInstrumented: state.isInstrumented, metadata: [
+                    "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(probeValue)",
+                ])
             } else {
-                rejectCache.insert(probeHash)
+                state.rejectCache.insert(probeHash)
                 decoderRejectCount += 1
 
-                // Non-monotonicity check: the floor is genuine at floor - 1 (property passed), but there may be a failing region below a one-wide gap. Probe floor - 2 to detect non-monotone convergence landscapes.
                 if origin.bound >= minBound + 2 {
                     let gapProbeValue = origin.bound - 2
-                    var gapCandidate = sequence
+                    var gapCandidate = state.sequence
                     gapCandidate[range.lowerBound] = gapCandidate[range.lowerBound]
                         .withBitPattern(gapProbeValue)
 
-                    if gapCandidate.shortLexPrecedes(sequence) {
+                    if gapCandidate.shortLexPrecedes(state.sequence) {
                         probeCount += 1
 
                         let gapHash = ZobristHash.incrementalHash(
-                            baseHash: ZobristHash.hash(of: sequence),
-                            baseSequence: sequence,
+                            baseHash: ZobristHash.hash(of: state.sequence),
+                            baseSequence: state.sequence,
                             probe: gapCandidate
                         )
 
-                        if rejectCache.contains(gapHash) {
+                        if state.rejectCache.contains(gapHash) {
                             cacheHitCount += 1
                         } else if try decoder.decodeAny(
                             candidate: gapCandidate,
-                            gen: gen,
-                            tree: tree,
-                            originalSequence: sequence,
-                            property: property,
+                            gen: state.gen,
+                            tree: state.tree,
+                            originalSequence: state.sequence,
+                            property: state.property,
                             filterObservations: &filterObservations,
                             precomputedHash: gapHash
                         ) != nil {
                             anyStale = true
                             acceptCount += 1
 
-                            if case var .chooseBits(md) = graph.nodes[nodeID].kind {
-                                md.convergedOrigin = nil
-                                graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(md))
+                            if case var .chooseBits(leafMetadata) = state.graph.nodes[nodeID].kind {
+                                leafMetadata.convergedOrigin = nil
+                                state.graph.nodes[nodeID] = state.graph.nodes[nodeID].with(kind: .chooseBits(leafMetadata))
                             }
 
-                            if isInstrumented {
-                                ExhaustLog.debug(
-                                    category: .reducer,
-                                    event: "non_monotone_convergence_detected",
-                                    metadata: [
-                                        "position": "\(range.lowerBound)",
-                                        "floor": "\(origin.bound)",
-                                        "gap_probe_succeeded_at": "\(gapProbeValue)",
-                                    ]
-                                )
-                            }
+                            Self.logReducer("non_monotone_convergence_detected", isInstrumented: state.isInstrumented, metadata: [
+                                "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(gapProbeValue)",
+                            ])
                         } else {
-                            rejectCache.insert(gapHash)
+                            state.rejectCache.insert(gapHash)
                             decoderRejectCount += 1
                         }
 
-                        if collectStats {
-                            stats.totalMaterializations += 1
+                        if state.collectStats {
+                            state.stats.totalMaterializations += 1
                         }
                     }
                 }
             }
 
-            if collectStats {
-                stats.totalMaterializations += 1
+            if state.collectStats {
+                state.stats.totalMaterializations += 1
             }
         }
 
         return anyStale
     }
-
-    // swiftlint:enable function_parameter_count
 }

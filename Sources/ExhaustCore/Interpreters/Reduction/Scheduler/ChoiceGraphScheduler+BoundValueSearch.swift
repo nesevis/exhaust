@@ -109,16 +109,10 @@ extension ChoiceGraphScheduler {
             fallbackTree: parent.tree,
             materializePicks: true
         ) else {
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "bound_value_lift_failed",
-                    metadata: [
-                        "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
-                        "candidate_len": "\(upstreamCandidate.count)",
-                    ]
-                )
-            }
+            Self.logReducer("bound_value_lift_failed", isInstrumented: isInstrumented, metadata: [
+                "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
+                "candidate_len": "\(upstreamCandidate.count)",
+            ])
             return nil
         }
 
@@ -150,19 +144,13 @@ extension ChoiceGraphScheduler {
         guard downstreamLeaves.isEmpty == false else { return nil }
 
         // 6. Build the downstream scope as a plain integer-leaves minimization on the lifted graph. The downstream encoder doesn't know it's downstream.
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "bound_value_lift_built",
-                metadata: [
-                    "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
-                    "parent_seq_len": "\(parent.baseSequence.count)",
-                    "lifted_seq_len": "\(liftedSequence.count)",
-                    "downstream_leaves": "\(downstreamLeaves.count)",
-                    "bound_range": "\(boundRange.lowerBound)...\(boundRange.upperBound)",
-                ]
-            )
-        }
+        Self.logReducer("bound_value_lift_built", isInstrumented: isInstrumented, metadata: [
+            "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
+            "parent_seq_len": "\(parent.baseSequence.count)",
+            "lifted_seq_len": "\(liftedSequence.count)",
+            "downstream_leaves": "\(downstreamLeaves.count)",
+            "bound_range": "\(boundRange.lowerBound)...\(boundRange.upperBound)",
+        ])
         return EncoderInput(
             transformation: GraphTransformation(
                 operation: .minimize(.valueLeaves(ValueMinimizationScope(

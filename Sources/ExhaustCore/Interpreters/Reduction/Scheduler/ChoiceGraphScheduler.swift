@@ -21,6 +21,22 @@
 ///
 /// - SeeAlso: ``CandidateSource``, ``CandidateSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
+    /// Shared mutable state threaded through the reduction pipeline.
+    ///
+    /// Bundles the fields that every helper method (probe loop, convergence confirmation, relax round, reorder pass) previously took as separate parameters. Scheduler-level loop control (stall budget, cycle count, gate, deferral flags) stays local to ``runCore`` because no helper reads or writes them.
+    struct ReductionState {
+        var sequence: ChoiceSequence
+        var tree: ChoiceTree
+        var output: Any
+        var graph: ChoiceGraph
+        var stats: ReductionStats
+        var rejectCache: Set<UInt64>
+        let gen: ReflectiveGenerator<Any>
+        let property: (Any) -> Bool
+        let collectStats: Bool
+        let isInstrumented: Bool
+    }
+
     // MARK: - Entry Points
 
     /// Runs the graph-based reduction pipeline to a fixed point or budget exhaustion.
@@ -70,11 +86,10 @@ enum ChoiceGraphScheduler {
         collectStats: Bool,
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
-        let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
-        var sequence = ChoiceSequence.flatten(initialTree)
-        var tree = initialTree
         let erasedGen = gen.erase()
         let wrappedProperty: (Any) -> Bool = { property($0 as! Output) }
+        var sequence = ChoiceSequence.flatten(initialTree)
+        var tree = initialTree
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             erasedGen,
             prefix: sequence,
@@ -85,63 +100,53 @@ enum ChoiceGraphScheduler {
             tree = fullTree
             sequence = ChoiceSequence(fullTree)
         }
-        var output: Any = initialOutput
-        var stats = ReductionStats()
-        var cycles = 0
-        var stallBudget = config.maxStalls
-        var rejectCache = Set<UInt64>()
 
         var graph = ChoiceGraph.build(from: tree)
         graph.observeBindTopologies(tree: tree)
 
-        // Tracks whether the current graph was rebuilt from a stripped tree (materializePicks: false).
-        // False at scheduler entry because the initial tree was just re-materialized with materializePicks: true above.
+        var state = ReductionState(
+            sequence: sequence,
+            tree: tree,
+            output: initialOutput,
+            graph: graph,
+            stats: ReductionStats(),
+            rejectCache: [],
+            gen: erasedGen,
+            property: wrappedProperty,
+            collectStats: collectStats,
+            isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer)
+        )
+        var cycles = 0
+        var stallBudget = config.maxStalls
+
         var graphIsStripped = false
 
-        if collectStats {
-            stats.graphStats = ChoiceGraphStats.from(graph)
+        if state.collectStats {
+            state.stats.graphStats = ChoiceGraphStats.from(state.graph)
         }
 
-        if isInstrumented {
-            ExhaustLog.debug(
-                category: .reducer,
-                event: "graph_reducer_start",
-                metadata: [
-                    "seq_len": "\(sequence.count)",
-                    "max_stalls": "\(config.maxStalls)",
-                    "nodes": "\(graph.nodes.count)",
-                ]
-            )
-        }
+        Self.logReducer("graph_reducer_start", isInstrumented: state.isInstrumented, metadata: [
+            "seq_len": "\(state.sequence.count)", "max_stalls": "\(config.maxStalls)", "nodes": "\(state.graph.nodes.count)",
+        ])
 
         var scopeRejectionCache = CandidateRejectionCache()
         var gate = BoundValueGate()
         var hadReplacementShortlexRejection = false
-
-        // Defer bind-inner value search until structural reduction converges. This avoids probing values on nodes that will be structurally removed, and avoids the cascade where bind-inner value acceptances reshape the graph and invalidate other in-progress structural operations. Only active when the graph has bind-inner leaves.
-        var deferBindInner = graph.reductionEdges.isEmpty == false
+        var deferBindInner = state.graph.reductionEdges.isEmpty == false
 
         while stallBudget > 0 {
             cycles += 1
             gate.resetForNewCycle()
             scopeRejectionCache.clearCoarse()
             hadReplacementShortlexRejection = false
-            let sequenceBeforeCycle = sequence
+            let sequenceBeforeCycle = state.sequence
 
-            var sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+            var sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
 
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "graph_cycle_start",
-                    metadata: [
-                        "cycle": "\(cycles)",
-                        "seq_len": "\(sequence.count)",
-                        "sources": "\(sources.count)",
-                        "stall_budget": "\(stallBudget)",
-                    ]
-                )
-            }
+            Self.logReducer("graph_cycle_start", isInstrumented: state.isInstrumented, metadata: [
+                "cycle": "\(cycles)", "seq_len": "\(state.sequence.count)",
+                "sources": "\(sources.count)", "stall_budget": "\(stallBudget)",
+            ])
 
             var anyAccepted = false
 
@@ -156,22 +161,21 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                guard transformation.operation.isValid(in: graph) else {
+                guard transformation.operation.isValid(in: state.graph) else {
                     continue
                 }
 
                 if scopeRejectionCache.isRejected(
                     operation: transformation.operation,
-                    sequence: sequence,
-                    graph: graph
+                    sequence: state.sequence,
+                    graph: state.graph
                 ) {
                     continue
                 }
 
-                // Bound value gating — keyed by fingerprint so verdicts survive rebuilds.
                 var boundValueFingerprint: UInt64?
                 if case let .minimize(.boundValue(bindScope)) = transformation.operation {
-                    guard case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind else {
+                    guard case let .bind(bindMetadata) = state.graph.nodes[bindScope.bindNodeID].kind else {
                         continue
                     }
                     let fingerprint = bindMetadata.fingerprint
@@ -181,17 +185,17 @@ enum ChoiceGraphScheduler {
                         continue
                     case .classifyFirst:
                         let classification: BindClassification
-                        if let cached = graph.bindClassifications[fingerprint] {
+                        if let cached = state.graph.bindClassifications[fingerprint] {
                             classification = cached
                         } else {
-                            graph.classifyBind(
+                            state.graph.classifyBind(
                                 at: bindScope.bindNodeID,
-                                gen: erasedGen,
-                                baseSequence: sequence,
-                                fallbackTree: tree,
+                                gen: state.gen,
+                                baseSequence: state.sequence,
+                                fallbackTree: state.tree,
                                 upstreamLeafNodeID: bindScope.upstreamLeafNodeID
                             )
-                            guard case let .bind(updatedMetadata) = graph.nodes[bindScope.bindNodeID].kind,
+                            guard case let .bind(updatedMetadata) = state.graph.nodes[bindScope.bindNodeID].kind,
                                   let verdict = updatedMetadata.classification
                             else {
                                 continue
@@ -207,34 +211,31 @@ enum ChoiceGraphScheduler {
                     }
                 }
 
-                // Lazy rematerialize for stripped graphs before path-changing operations.
                 if graphIsStripped, transformation.operation.isPathChanging {
                     if case let .success(_, fullTree, _) = Materializer.materializeAny(
-                        erasedGen,
-                        prefix: sequence,
+                        state.gen,
+                        prefix: state.sequence,
                         mode: .exact,
-                        fallbackTree: tree,
+                        fallbackTree: state.tree,
                         materializePicks: true
                     ) {
-                        tree = fullTree
+                        state.tree = fullTree
                     }
-                    graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-                    sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+                    state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                    sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
                     graphIsStripped = false
                     continue
                 }
 
-                // Construct self-contained scope.
-                let warmStarts = extractWarmStarts(from: graph)
+                let warmStarts = extractWarmStarts(from: state.graph)
                 let scope = EncoderInput(
                     transformation: transformation,
-                    baseSequence: sequence,
-                    tree: tree,
-                    graph: graph,
+                    baseSequence: state.sequence,
+                    tree: state.tree,
+                    graph: state.graph,
                     warmStartRecords: warmStarts
                 )
 
-                // Select encoder and dispatch.
                 var encoder: any GraphEncoder
                 if case let .minimize(.boundValue(bindScope)) = transformation.operation,
                    let fingerprint = boundValueFingerprint
@@ -242,8 +243,8 @@ enum ChoiceGraphScheduler {
                     encoder = Self.makeBoundValueComposition(
                         bindScope: bindScope,
                         scope: scope,
-                        graph: graph,
-                        gen: erasedGen,
+                        graph: state.graph,
+                        gen: state.gen,
                         upstreamBudget: gate.decayedBudget(fingerprint: fingerprint)
                     )
                     gate.markDispatched(fingerprint)
@@ -253,27 +254,18 @@ enum ChoiceGraphScheduler {
                 let outcome = try runProbeLoop(
                     encoder: &encoder,
                     scope: scope,
-                    graph: graph,
-                    sequence: &sequence,
-                    tree: &tree,
-                    output: &output,
-                    gen: erasedGen,
-                    property: wrappedProperty,
-                    rejectCache: &rejectCache,
-                    stats: &stats,
-                    collectStats: collectStats,
-                    isInstrumented: isInstrumented
+                    state: &state
                 )
 
                 encoder.flushPartialConvergence()
 
                 let convergence = encoder.convergenceRecords
                 if convergence.isEmpty == false {
-                    graph.recordConvergence(byNodeID: convergence)
+                    state.graph.recordConvergence(byNodeID: convergence)
                 }
 
                 if let fingerprint = boundValueFingerprint {
-                    gate.recordOutcome(fingerprint: fingerprint, accepted: outcome.acceptCount > 0)
+                    gate.recordOutcome(fingerprint: fingerprint, accepted: outcome.accepted)
                 }
 
                 if hadReplacementShortlexRejection == false,
@@ -294,190 +286,119 @@ enum ChoiceGraphScheduler {
                     }
 
                     if outcome.requiresRebuild || isBoundValue {
-                        // Save bound subtree's position range before rebuild for stale convergence clearing.
                         var boundPositionRange: ClosedRange<Int>?
                         if isBoundValue,
                            case let .minimize(.boundValue(bindScope)) = transformation.operation,
-                           bindScope.bindNodeID < graph.nodes.count,
-                           case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind,
-                           graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
+                           bindScope.bindNodeID < state.graph.nodes.count,
+                           case let .bind(bindMetadata) = state.graph.nodes[bindScope.bindNodeID].kind,
+                           state.graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
                         {
-                            let boundChildID = graph.nodes[bindScope.bindNodeID].children[bindMetadata.boundChildIndex]
-                            boundPositionRange = graph.nodes[boundChildID].positionRange
+                            let boundChildID = state.graph.nodes[bindScope.bindNodeID].children[bindMetadata.boundChildIndex]
+                            boundPositionRange = state.graph.nodes[boundChildID].positionRange
                         }
 
-                        graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
+                        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
                         graphIsStripped = outcome.treeIsStripped
 
-                        // Clear stale downstream convergence after bound value rebuild.
                         if let boundRange = boundPositionRange {
-                            for nodeID in graph.leafNodes {
-                                guard let nodeRange = graph.nodes[nodeID].positionRange else { continue }
+                            for nodeID in state.graph.leafNodes {
+                                guard let nodeRange = state.graph.nodes[nodeID].positionRange else { continue }
                                 guard boundRange.contains(nodeRange.lowerBound) else { continue }
-                                guard case var .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+                                guard case var .chooseBits(metadata) = state.graph.nodes[nodeID].kind else { continue }
                                 guard metadata.convergedOrigin != nil else { continue }
                                 metadata.convergedOrigin = nil
-                                graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(metadata))
+                                state.graph.nodes[nodeID] = state.graph.nodes[nodeID].with(kind: .chooseBits(metadata))
                             }
                         }
                         scopeRejectionCache.clear()
-                        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
 
-                        if isInstrumented {
-                            ExhaustLog.debug(
-                                category: .reducer,
-                                event: "graph_structural_rebuild",
-                                metadata: [
-                                    "seq_len": "\(sequence.count)",
-                                    "nodes": "\(graph.nodes.count)",
-                                    "sources": "\(sources.count)",
-                                ]
-                            )
-                        }
+                        Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
+                            "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
+                        ])
                     } else if outcome.requiresSourceRebuild {
-                        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
 
-                        if isInstrumented {
-                            ExhaustLog.debug(
-                                category: .reducer,
-                                event: "graph_inplace_reshape",
-                                metadata: [
-                                    "seq_len": "\(sequence.count)",
-                                    "nodes": "\(graph.nodes.count)",
-                                    "sources": "\(sources.count)",
-                                ]
-                            )
-                        }
+                        Self.logReducer("graph_inplace_reshape", isInstrumented: state.isInstrumented, metadata: [
+                            "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
+                        ])
                     }
                 } else {
                     scopeRejectionCache.recordRejection(
                         operation: transformation.operation,
-                        sequence: sequence,
-                        graph: graph
+                        sequence: state.sequence,
+                        graph: state.graph
                     )
                 }
             }
 
-            if anyAccepted == false, allValuesConverged(in: sequence, graph: graph) {
-                _ = try confirmConvergence(
-                    sequence: &sequence,
-                    tree: &tree,
-                    output: &output,
-                    graph: graph,
-                    gen: erasedGen,
-                    property: wrappedProperty,
-                    rejectCache: &rejectCache,
-                    stats: &stats,
-                    collectStats: collectStats,
-                    isInstrumented: isInstrumented
-                )
+            if anyAccepted == false, allValuesConverged(in: state.sequence, graph: state.graph) {
+                _ = try confirmConvergence(state: &state)
             }
 
             if anyAccepted == false, hadReplacementShortlexRejection {
-                let relaxResult = try runRelaxRound(
-                    sequence: &sequence,
-                    tree: &tree,
-                    output: &output,
-                    graph: &graph,
-                    gen: erasedGen,
-                    property: wrappedProperty,
-                    rejectCache: &rejectCache,
-                    stats: &stats,
-                    collectStats: collectStats,
-                    isInstrumented: isInstrumented
-                )
+                let relaxResult = try runRelaxRound(state: &state)
                 if relaxResult {
                     anyAccepted = true
                     scopeRejectionCache.clear()
                 }
             }
 
-            let improved = sequence != sequenceBeforeCycle
+            let improved = state.sequence != sequenceBeforeCycle
             if improved {
                 stallBudget = config.maxStalls
             } else {
                 stallBudget -= 1
             }
 
-            let structurallyImproved = sequence.count < sequenceBeforeCycle.count
+            let structurallyImproved = state.sequence.count < sequenceBeforeCycle.count
 
-            // Release bind-inner value search once structural reduction has converged. Once released, the flag stays false for the remainder of the reduction — the greedy yield scheduler already prioritises structural operations over value operations, so any structural opportunities unlocked by bind-inner reshapes will be picked up naturally.
             if deferBindInner, structurallyImproved == false {
                 deferBindInner = false
-                if isInstrumented {
-                    ExhaustLog.debug(
-                        category: .reducer,
-                        event: "bind_inner_deferral_released",
-                        metadata: [
-                            "cycle": "\(cycles)",
-                            "seq_len": "\(sequence.count)",
-                        ]
-                    )
-                }
+                Self.logReducer("bind_inner_deferral_released", isInstrumented: state.isInstrumented, metadata: [
+                    "cycle": "\(cycles)", "seq_len": "\(state.sequence.count)",
+                ])
             }
 
             if structurallyImproved == false,
                anyAccepted == false,
-               allValuesConverged(in: sequence, graph: graph)
+               allValuesConverged(in: state.sequence, graph: state.graph)
             {
                 break
             }
 
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "graph_cycle_end",
-                    metadata: [
-                        "cycle": "\(cycles)",
-                        "improved": "\(improved)",
-                        "seq_len": "\(sequence.count)",
-                        "total_mats": "\(stats.totalMaterializations)",
-                    ]
-                )
-            }
+            Self.logReducer("graph_cycle_end", isInstrumented: state.isInstrumented, metadata: [
+                "cycle": "\(cycles)", "improved": "\(improved)",
+                "seq_len": "\(state.sequence.count)", "total_mats": "\(state.stats.totalMaterializations)",
+            ])
         }
 
-        if isInstrumented {
+        if state.isInstrumented {
             ExhaustLog.notice(
                 category: .reducer,
                 event: "graph_reducer_complete",
                 metadata: [
                     "cycles": "\(cycles)",
-                    "seq_len": "\(sequence.count)",
-                    "total_mats": "\(stats.totalMaterializations)",
+                    "seq_len": "\(state.sequence.count)",
+                    "total_mats": "\(state.stats.totalMaterializations)",
                 ]
             )
         }
 
-        try runReorderPass(
-            graph: graph,
-            sequence: &sequence,
-            tree: &tree,
-            output: &output,
-            gen: erasedGen,
-            property: wrappedProperty,
-            stats: &stats,
-            collectStats: collectStats,
-            isInstrumented: isInstrumented
-        )
+        try runReorderPass(state: &state)
 
-        stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
-        stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
-        stats.cycles = cycles
+        state.stats.graphStats.dynamicRegionRebuilds += state.graph.graphStats.dynamicRegionRebuilds
+        state.stats.graphStats.dynamicRegionNodesRebuilt += state.graph.graphStats.dynamicRegionNodesRebuilt
+        state.stats.cycles = cycles
         // swiftlint:disable:next force_cast
-        let typedOutput = output as! Output
-        return (reduced: (sequence, typedOutput), stats: stats)
+        let typedOutput = state.output as! Output
+        return (reduced: (state.sequence, typedOutput), stats: state.stats)
     }
 
     // swiftlint:enable function_parameter_count
 
     // MARK: - Graph Rebuild
 
-    /// Rebuilds the graph from a tree, inheriting classification and convergence caches from the old graph.
-    ///
-    /// Consolidates the 9-step rebuild sequence used by both the lazy rematerialize path and the post-acceptance rebuild path: accumulate dynamic stats, extract convergence, capture classifications and observations, build the new graph with inherited caches, observe bind topologies, transfer convergence, and increment the rebuild counter.
-    ///
-    /// Post-rebuild actions that differ between call sites (clearing the rejection cache, resetting the bound value gate, rebuilding sources, clearing downstream convergence) stay at each call site.
     static func rebuildGraph(
         from tree: ChoiceTree,
         replacing oldGraph: ChoiceGraph,
@@ -501,49 +422,29 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Reorder Pass
 
-    /// Runs the human-readable ordering pass after all other reduction is complete.
-    ///
-    /// Reorders type-homogeneous sibling groups into natural numeric order so seeds with the same multiset of values converge to the same canonical counterexample.
-    private static func runReorderPass(
-        graph: ChoiceGraph,
-        sequence: inout ChoiceSequence,
-        tree: inout ChoiceTree,
-        output: inout Any,
-        gen: ReflectiveGenerator<Any>,
-        property: @escaping (Any) -> Bool,
-        stats: inout ReductionStats,
-        collectStats: Bool,
-        isInstrumented: Bool
-    ) throws {
-        guard let reorderScope = ReorderingQuery.build(graph: graph) else { return }
+    private static func runReorderPass(state: inout ReductionState) throws {
+        guard let reorderScope = ReorderingQuery.build(graph: state.graph) else { return }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
             priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1),
         )
         let reorderScopeBundle = EncoderInput(
             transformation: reorderTransformation,
-            baseSequence: sequence,
-            tree: tree,
-            graph: graph,
+            baseSequence: state.sequence,
+            tree: state.tree,
+            graph: state.graph,
             warmStartRecords: [:]
         )
         var reorderEncoder: any GraphEncoder = GraphReorderEncoder()
-        var reorderCache = Set<UInt64>()
-        let reorderOutcome = try ChoiceGraphScheduler.runProbeLoop(
+        let savedRejectCache = state.rejectCache
+        state.rejectCache = []
+        let reorderOutcome = try runProbeLoop(
             encoder: &reorderEncoder,
             scope: reorderScopeBundle,
-            graph: graph,
-            sequence: &sequence,
-            tree: &tree,
-            output: &output,
-            gen: gen,
-            property: property,
-            rejectCache: &reorderCache,
-            stats: &stats,
-            collectStats: collectStats,
-            isInstrumented: isInstrumented
+            state: &state
         )
-        if isInstrumented, reorderOutcome.accepted {
+        state.rejectCache = savedRejectCache
+        if state.isInstrumented, reorderOutcome.accepted {
             ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
         }
     }
@@ -569,6 +470,18 @@ enum ChoiceGraphScheduler {
             }
         }
         return bestIndex
+    }
+
+    // MARK: - Instrumentation
+
+    @inline(__always)
+    static func logReducer(
+        _ event: String,
+        isInstrumented: Bool,
+        metadata: @autoclosure () -> [String: String]
+    ) {
+        guard isInstrumented else { return }
+        ExhaustLog.debug(category: .reducer, event: event, metadata: metadata())
     }
 
     // MARK: - Encoder Selection
