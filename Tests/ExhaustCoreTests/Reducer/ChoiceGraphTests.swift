@@ -94,7 +94,7 @@ struct ChoiceGraphTests {
             fingerprint: 1000, weight: 1, id: 1, branchCount: 2,
             choice: .choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
         )
-        let tree = ChoiceTree.group([branchA, .selected(branchB)])
+        let tree = ChoiceTree.group([branchA, branchB.selecting()])
 
         let graph = ChoiceGraph.build(from: tree)
 
@@ -230,14 +230,16 @@ struct ChoiceGraphTests {
         let pickA = ChoiceTree.group([
             .branch(fingerprint: 42, weight: 1, id: 0, branchCount: 2,
                     choice: .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchCount: 2,
-                              choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
+            .branch(fingerprint: 42, weight: 1, id: 1, branchCount: 2,
+                    choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+                    isSelected: true),
         ])
         let pickB = ChoiceTree.group([
             .branch(fingerprint: 42, weight: 1, id: 0, branchCount: 2,
                     choice: .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(fingerprint: 42, weight: 1, id: 1, branchCount: 2,
-                              choice: .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
+            .branch(fingerprint: 42, weight: 1, id: 1, branchCount: 2,
+                    choice: .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+                    isSelected: true),
         ])
         let tree = ChoiceTree.group([pickA, pickB])
 
@@ -254,8 +256,9 @@ struct ChoiceGraphTests {
         let tree = ChoiceTree.group([
             .branch(fingerprint: 1000, weight: 1, id: 0, branchCount: 2,
                     choice: .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))),
-            .selected(.branch(fingerprint: 1000, weight: 1, id: 1, branchCount: 2,
-                              choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)))),
+            .branch(fingerprint: 1000, weight: 1, id: 1, branchCount: 2,
+                    choice: .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+                    isSelected: true),
         ])
 
         let graph = ChoiceGraph.build(from: tree)

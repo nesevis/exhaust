@@ -551,7 +551,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 branchCount: branchCount,
                 choice: final.1
             )
-            return (final.0, .group([.selected(tree)]))
+            return (final.0, .group([tree.selecting()]))
         }
 
         var branches = [ChoiceTree]()
@@ -614,7 +614,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             if isSelected, let branch {
                 finalValue = value
-                branches.append(.selected(branch))
+                branches.append(branch.selecting())
             } else if let branch {
                 branches.append(branch)
             }

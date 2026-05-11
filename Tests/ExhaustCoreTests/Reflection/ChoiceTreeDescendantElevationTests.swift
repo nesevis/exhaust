@@ -16,7 +16,7 @@ struct ChoiceTreeDescendantElevationTests {
         let nested = ChoiceTree.group([ChoiceTree.just, deepDescendant])
 
         return .group([
-            .selected(.branch(fingerprint: 0, weight: 1, id: 22, branchCount: 23, choice: nested)),
+            .branch(fingerprint: 0, weight: 1, id: 22, branchCount: 23, choice: nested, isSelected: true),
             .branch(fingerprint: 0, weight: 1, id: 11, branchCount: 23, choice: .just),
             .branch(fingerprint: 0, weight: 1, id: 33, branchCount: 23, choice: .just),
         ])
@@ -29,31 +29,34 @@ struct ChoiceTreeDescendantElevationTests {
         let c = ChoiceTree.choice(ChoiceValue(5 as UInt64, tag: .uint64), meta)
 
         let deepestLeafGroup = ChoiceTree.group([a, b, c])
-        let deepSelected = ChoiceTree.selected(.branch(
+        let deepSelected = ChoiceTree.branch(
             fingerprint: 0,
             weight: 1,
             id: 302,
             branchCount: 2,
-            choice: .group([ChoiceTree.just, deepestLeafGroup])
-        ))
+            choice: .group([ChoiceTree.just, deepestLeafGroup]),
+            isSelected: true
+        )
         let deepOther = ChoiceTree.branch(fingerprint: 0, weight: 1, id: 301, branchCount: 2, choice: .just)
 
-        let midSelected = ChoiceTree.selected(.branch(
+        let midSelected = ChoiceTree.branch(
             fingerprint: 0,
             weight: 1,
             id: 202,
             branchCount: 2,
-            choice: .group([deepSelected, deepOther])
-        ))
+            choice: .group([deepSelected, deepOther]),
+            isSelected: true
+        )
         let midOther = ChoiceTree.branch(fingerprint: 0, weight: 1, id: 201, branchCount: 2, choice: .just)
 
-        let rootSelected = ChoiceTree.selected(.branch(
+        let rootSelected = ChoiceTree.branch(
             fingerprint: 0,
             weight: 1,
             id: 102,
             branchCount: 3,
-            choice: .group([midSelected, midOther, ChoiceTree.just])
-        ))
+            choice: .group([midSelected, midOther, ChoiceTree.just]),
+            isSelected: true
+        )
         let rootLeft = ChoiceTree.branch(fingerprint: 0, weight: 1, id: 101, branchCount: 3, choice: .just)
         let rootRight = ChoiceTree.branch(fingerprint: 0, weight: 1, id: 103, branchCount: 3, choice: .just)
 

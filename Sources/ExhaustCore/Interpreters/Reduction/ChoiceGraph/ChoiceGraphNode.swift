@@ -113,7 +113,7 @@ package struct PickMetadata {
     /// Index into the parent node's ``ChoiceGraphNode/children`` identifying the active branch child.
     public let selectedChildIndex: Int
 
-    /// Per-branch tree elements at this pick site, in the same order as the parent ``ChoiceGraphNode/children``. Each entry is the original `.branch(...)` element (or `.selected(.branch(...))` for the active branch) as it existed in the tree at graph construction time. The graph stores these so that ``GraphReplacementEncoder`` can enumerate branch alternatives without reading from the live tree, which may have been stripped by ``Materializer`` calls with `materializePicks: false`.
+    /// Per-branch tree elements at this pick site, in the same order as the parent ``ChoiceGraphNode/children``. Each entry is the original `.branch(...)` element (with `isSelected: true` for the active branch) as it existed in the tree at graph construction time. The graph stores these so that ``GraphReplacementEncoder`` can enumerate branch alternatives without reading from the live tree, which may have been stripped by ``Materializer`` calls with `materializePicks: false`.
     public let branchElements: [ChoiceTree]
 }
 

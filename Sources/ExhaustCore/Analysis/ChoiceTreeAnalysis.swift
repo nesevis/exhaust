@@ -183,9 +183,6 @@ package enum ChoiceTreeAnalysis {
             guard walkTree(inner, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
             return walkTreeValidateOnly(bound)
 
-        case let .selected(inner):
-            return walkTree(inner, expandSequencePairs: expandSequencePairs, parameters: &parameters)
-
         case let .sequence(length, elements, metadata):
             return walkSequence(
                 length: length,
@@ -226,11 +223,9 @@ package enum ChoiceTreeAnalysis {
             children.allSatisfy { walkTreeValidateOnly($0) }
         case let .bind(_, inner, bound):
             walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
-        case let .selected(inner):
-            walkTreeValidateOnly(inner)
         case let .sequence(_, elements, _):
             elements.allSatisfy { walkTreeValidateOnly($0) }
-        case let .branch(_, _, _, _, choice):
+        case let .branch(_, _, _, _, choice, _):
             walkTreeValidateOnly(choice)
         }
     }
@@ -319,16 +314,14 @@ package enum ChoiceTreeAnalysis {
         guard domainSize <= finiteDomainThreshold else { return false }
 
         for child in children {
-            let unwrapped = child.unwrapped
-            guard case let .branch(_, _, _, _, choice) = unwrapped else { return false }
+            guard case let .branch(_, _, _, _, choice, _) = child else { return false }
             guard walkTreeValidateOnly(choice) else { return false }
         }
 
         // Create synthetic PickTuples from branch metadata for replay compatibility
         var pickTuples = ContiguousArray<ReflectiveOperation.PickTuple>()
         for child in children {
-            let unwrapped = child.unwrapped
-            guard case let .branch(fingerprint, weight, id, _, _) = unwrapped else { return false }
+            guard case let .branch(fingerprint, weight, id, _, _, _) = child else { return false }
             pickTuples.append(ReflectiveOperation.PickTuple(
                 fingerprint: fingerprint,
                 id: id,
@@ -465,9 +458,6 @@ package enum ChoiceTreeAnalysis {
                 ) else { return false }
             }
             return true
-
-        case let .selected(inner):
-            return walkElementTree(inner, elementIndex: elementIndex, parameters: &parameters)
 
         case .bind:
             // Bind inside a sequence element — treat as opaque (dependent parameters)

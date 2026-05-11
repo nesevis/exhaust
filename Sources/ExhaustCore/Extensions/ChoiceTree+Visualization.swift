@@ -142,10 +142,7 @@ private enum TreeVisualization {
         case .getSize:
             return RenderTree(symbol: nil, children: [])
 
-        case let .selected(inner):
-            return buildRenderNode(from: inner)
-
-        case let .branch(_, _, _, _, choice):
+        case let .branch(_, _, _, _, choice, _):
             return collapseChain(
                 RenderTree(symbol: nil, children: [buildRenderNode(from: choice)])
             )
@@ -502,9 +499,7 @@ private extension ChoiceTree {
             true
         case .getSize:
             false
-        case let .selected(inner):
-            inner.hasVisibleContent
-        case let .branch(_, _, _, _, choice):
+        case let .branch(_, _, _, _, choice, _):
             choice.hasVisibleContent
         case let .group(children, _):
             children.contains(where: \.hasVisibleContent)

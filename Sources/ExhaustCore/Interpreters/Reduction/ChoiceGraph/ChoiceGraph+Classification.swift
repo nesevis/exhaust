@@ -245,7 +245,7 @@ extension ChoiceGraph {
     /// Same node kind at each corresponding position, and same child counts at every non-leaf position, with these relaxations:
     /// - Leaf-level descriptors on ``ChoiceTree/choice(_:_:)`` (tag, width, range) are not compared — they are the signal expensive encoders operate on.
     /// - ``ChoiceTree/sequence(length:elements:_:)`` element counts may differ; elements are compared pairwise up to the shared prefix. A sequence that shifts length but keeps element shape stable (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`) remains ``BindTopology/identical``.
-    /// - Transparent wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:)``, ``ChoiceTree/selected(_:)``) pass through without requiring a matching wrapper on the other side.
+    /// - Transparent wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:isSelected:)``) pass through without requiring a matching wrapper on the other side.
     static func sameTopology(_ low: ChoiceTree, _ high: ChoiceTree) -> Bool {
         // Strip transparent wrappers symmetrically before comparing.
         let lhs = unwrapTransparent(low)
@@ -294,13 +294,11 @@ extension ChoiceGraph {
         }
     }
 
-    /// Strips through transparent tree wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:)`` and ``ChoiceTree/selected(_:)``) so the caller can compare the underlying structure without tripping on wrapper asymmetry.
+    /// Strips through transparent tree wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:isSelected:)``) so the caller can compare the underlying structure without tripping on wrapper asymmetry.
     private static func unwrapTransparent(_ tree: ChoiceTree) -> ChoiceTree {
         switch tree {
-        case let .branch(_, _, _, _, choice):
+        case let .branch(_, _, _, _, choice, _):
             unwrapTransparent(choice)
-        case let .selected(inner):
-            unwrapTransparent(inner)
         default:
             tree
         }
@@ -325,7 +323,6 @@ extension ChoiceGraph {
         case .group: 6
         case .resize: 7
         case .bind: 8
-        case .selected: 9
         }
         hash = (hash ^ marker) &* 1_099_511_628_211
         switch tree {
@@ -336,7 +333,7 @@ extension ChoiceGraph {
             for element in elements {
                 fold(element, into: &hash)
             }
-        case let .branch(_, _, _, _, choice):
+        case let .branch(_, _, _, _, choice, _):
             fold(choice, into: &hash)
         case let .group(array, _):
             hash = (hash ^ UInt64(array.count)) &* 1_099_511_628_211
@@ -351,8 +348,6 @@ extension ChoiceGraph {
         case let .bind(_, inner, bound):
             fold(inner, into: &hash)
             fold(bound, into: &hash)
-        case let .selected(inner):
-            fold(inner, into: &hash)
         }
     }
 }

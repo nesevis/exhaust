@@ -86,10 +86,13 @@ struct ChoiceTreeVisualizationTests {
         #expect(lines.count >= 3)
     }
 
-    @Test("Selected wrapper is transparent")
+    @Test("Selected branch is transparent")
     func selectedTransparent() {
         let inner = ChoiceTree.choice(ChoiceValue(UInt64(42), tag: .uint), meta100)
-        let selected = ChoiceTree.selected(inner)
+        let selected = ChoiceTree.branch(
+            fingerprint: 0, weight: 1, id: 0, branchCount: 1,
+            choice: inner, isSelected: true
+        )
         let resultInner = inner.visualization(width: 20)
         let resultSelected = selected.visualization(width: 20)
         #expect(resultInner == resultSelected)

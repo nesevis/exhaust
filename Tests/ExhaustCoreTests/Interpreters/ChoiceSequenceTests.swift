@@ -146,10 +146,12 @@ struct ChoiceSequenceTests {
         }
     }
 
-    @Test("Flatten selected marker is transparent")
+    @Test("Flatten selected branch is transparent")
     func flattenSelected() {
-        let tree = ChoiceTree.selected(
-            .choice(ChoiceValue(UInt64(42), tag: .uint64), ChoiceMetadata(validRange: 0 ... 100))
+        let tree = ChoiceTree.branch(
+            fingerprint: 0, weight: 1, id: 0, branchCount: 1,
+            choice: .choice(ChoiceValue(UInt64(42), tag: .uint64), ChoiceMetadata(validRange: 0 ... 100)),
+            isSelected: true
         )
 
         let flattened = ChoiceSequence.flatten(tree)

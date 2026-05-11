@@ -37,12 +37,15 @@ struct ChoiceTreeTests {
             #expect(!groupNode.isJust)
         }
 
-        @Test("isSelected returns true only for .selected")
+        @Test("isSelected returns true only for branch with isSelected: true")
         func isSelected() {
-            let selected = ChoiceTree.selected(justNode)
+            let selected = ChoiceTree.branch(
+                fingerprint: 0, weight: 1, id: 0, branchCount: 1,
+                choice: justNode, isSelected: true
+            )
             #expect(selected.isSelected)
-            #expect(!justNode.isSelected)
-            #expect(!choiceNode.isSelected)
+            #expect(justNode.isSelected == false)
+            #expect(choiceNode.isSelected == false)
         }
     }
 
@@ -87,7 +90,7 @@ struct ChoiceTreeTests {
                 fingerprint: 0, weight: 1, id: 0, branchCount: 1,
                 choice: .just
             )
-            #expect(ChoiceTree.selected(branch).containsPicks)
+            #expect(branch.selecting().containsPicks)
         }
 
         @Test("Sequence without picks returns false")
@@ -227,14 +230,20 @@ struct ChoiceTreeTests {
             }
         }
 
-        @Test("Transforms through selected wrapper")
-        func transformsSelected() {
-            let tree = ChoiceTree.selected(.just)
+        @Test("Transforms through branch with isSelected")
+        func transformsSelectedBranch() {
+            let tree = ChoiceTree.branch(
+                fingerprint: 0, weight: 1, id: 0, branchCount: 1,
+                choice: .just, isSelected: true
+            )
             let result = tree.map { node in
                 if case .just = node { return .getSize(2) }
                 return node
             }
-            #expect(result == .selected(.getSize(2)))
+            #expect(result == .branch(
+                fingerprint: 0, weight: 1, id: 0, branchCount: 1,
+                choice: .getSize(2), isSelected: true
+            ))
         }
 
         @Test("Transforms through resize")
@@ -293,31 +302,6 @@ struct ChoiceTreeTests {
         }
     }
 
-    // MARK: - unwrapped
-
-    @Suite("unwrapped")
-    struct Unwrapped {
-        @Test("Selected is unwrapped")
-        func selectedUnwrapped() {
-            let inner = ChoiceTree.just
-            let tree = ChoiceTree.selected(inner)
-            #expect(tree.unwrapped == inner)
-        }
-
-        @Test("Nested selected is fully unwrapped")
-        func nestedSelectedUnwrapped() {
-            let inner = ChoiceTree.just
-            let tree = ChoiceTree.selected(.selected(inner))
-            #expect(tree.unwrapped == inner)
-        }
-
-        @Test("Non-selected returns self")
-        func nonSelectedReturnsSelf() {
-            let tree = ChoiceTree.just
-            #expect(tree.unwrapped == tree)
-        }
-    }
-
     // MARK: - branchId
 
     @Suite("branchId")
@@ -335,9 +319,9 @@ struct ChoiceTreeTests {
         func extractsFromSelectedBranch() {
             let branch = ChoiceTree.branch(
                 fingerprint: 0, weight: 1, id: 7, branchCount: 1,
-                choice: .just
+                choice: .just, isSelected: true
             )
-            #expect(ChoiceTree.selected(branch).branchId == 7)
+            #expect(branch.branchId == 7)
         }
 
         @Test("Returns nil for non-branch")

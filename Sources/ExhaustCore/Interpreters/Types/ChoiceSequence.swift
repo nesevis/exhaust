@@ -61,20 +61,20 @@ package extension ChoiceSequence {
                 eIdx += 1
             }
             output.append(.sequence(false))
-        case let .branch(_, _, _, _, gen):
+        case let .branch(_, _, _, _, gen, _):
             flatten(gen, includingAllBranches: includingAllBranches, into: &output)
         case let .group(array, _):
             var i = 0
             var selectedBranchTree: ChoiceTree?
             while i < array.count {
                 let candidate = array[i]
-                if candidate.isSelected, candidate.unwrapped.isBranch {
+                if candidate.isSelected, candidate.isBranch {
                     selectedBranchTree = candidate
                     break
                 }
                 i += 1
             }
-            if case let .selected(.branch(_, _, id, branchCount, choice)) = selectedBranchTree {
+            if case let .branch(_, _, id, branchCount, choice, true) = selectedBranchTree {
                 output.append(.group(true))
                 output.append(.branch(.init(id: id, branchCount: branchCount)))
                 let children = includingAllBranches ? array : [choice]
@@ -121,8 +121,6 @@ package extension ChoiceSequence {
                 rIdx += 1
             }
             output.append(.group(false))
-        case let .selected(tree):
-            flatten(tree, includingAllBranches: includingAllBranches, into: &output)
         }
     }
 

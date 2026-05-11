@@ -20,7 +20,7 @@ extension ChoiceGraph {
 
     /// Recursive walk used by ``extractBoundSubtree(from:matchingPath:)``. Returns the bound child subtree when `remainingPath` is fully consumed at a non-getSize bind, or nil on mismatch.
     ///
-    /// Transparent variants (``ChoiceTree/branch``, ``ChoiceTree/selected``, getSize-inner ``ChoiceTree/bind``) descend without consuming a step. All other structural descents must match the next step in `remainingPath`.
+    /// Transparent variants (``ChoiceTree/branch``, getSize-inner ``ChoiceTree/bind``) descend without consuming a step. All other structural descents must match the next step in `remainingPath`.
     private static func walkForPathMatch(
         tree: ChoiceTree,
         remainingPath: ArraySlice<BindPathStep>
@@ -40,7 +40,7 @@ extension ChoiceGraph {
                 remainingPath: remainingPath.dropFirst()
             )
 
-        case let .branch(_, _, _, _, choice):
+        case let .branch(_, _, _, _, choice, _):
             // Transparent wrapper — pass through without consuming a step.
             return walkForPathMatch(tree: choice, remainingPath: remainingPath)
 
@@ -50,9 +50,8 @@ extension ChoiceGraph {
                       case let .pickBranch(targetID) = step
                 else { return nil }
                 for element in array {
-                    // The selected element wraps the originally-picked branch.
-                    if case let .selected(inner) = element,
-                       case let .branch(_, _, id, _, _) = inner,
+                    // The selected element carries the originally-picked branch.
+                    if case let .branch(_, _, id, _, _, true) = element,
                        id == targetID
                     {
                         return walkForPathMatch(
@@ -100,15 +99,12 @@ extension ChoiceGraph {
                 remainingPath: remainingPath.dropFirst()
             )
 
-        case let .selected(inner):
-            // Transparent wrapper — pass through without consuming a step.
-            return walkForPathMatch(tree: inner, remainingPath: remainingPath)
         }
     }
 
-    /// Pick-site detection that mirrors ``ChoiceGraphBuilder/detectPickSite(_:)``: every child must be `.branch` or `.selected`, and at least one must be `.selected`.
+    /// Pick-site detection that mirrors ``ChoiceGraphBuilder/detectPickSite(_:)``: every child must be `.branch`, and at least one must be selected.
     private static func isPickSite(_ array: [ChoiceTree]) -> Bool {
-        guard array.allSatisfy({ $0.isBranch || $0.isSelected }) else {
+        guard array.allSatisfy({ $0.isBranch }) else {
             return false
         }
         return array.contains(where: \.isSelected)
