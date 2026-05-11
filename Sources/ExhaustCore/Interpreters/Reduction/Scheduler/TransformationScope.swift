@@ -71,7 +71,7 @@ struct CoveringAlignedRemovalScope {
     /// Per-parameter domain value that encodes "skip this sibling." Equal to the sibling's element count (one past the last valid element index).
     let skipValues: [UInt64]
 
-    /// Maximum single-element yield across all siblings. Used for the scope source's ``TransformationYield/structural`` estimate.
+    /// Maximum single-element yield across all siblings. Used for the scope source's ``DispatchPriority/structuralBenefit`` estimate.
     let maxElementYield: Int
 
     /// One sibling sequence in the aligned deletion group.

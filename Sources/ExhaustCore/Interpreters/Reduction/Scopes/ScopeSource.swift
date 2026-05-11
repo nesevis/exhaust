@@ -7,7 +7,7 @@
 
 /// A pull-based iterator that lazily produces scopes in yield-descending order.
 ///
-/// Each source represents one structural search space (a sequence to empty, a batch removal range, an aligned sibling set, a replacement candidate). It emits one fully specified scope at a time via ``next(lastAccepted:)``. The scheduler merges sources by ``peekYield``, pulling from whichever has the highest-yield next scope.
+/// Each source represents one structural search space (a sequence to empty, a batch removal range, an aligned sibling set, a replacement candidate). It emits one fully specified scope at a time via ``next(lastAccepted:)``. The scheduler merges sources by ``peekPriority``, pulling from whichever has the highest-yield next scope.
 ///
 /// This is a graph-aware variant of the pull-based density algorithm used by ``PullBasedCoveringArrayGenerator``. The same pattern — lazy, greedy, demand-driven — applies to scope generation, with graph-specific advantages: heterogeneous unit sizes weighted by exact yield, independence structure from the antichain, constraint-aware pruning via length constraints, and hierarchical decomposition from the containment tree.
 ///
@@ -20,7 +20,7 @@
 /// - `ScopeSource+ValueSearch.swift`: minimization and exchange (search-based).
 protocol ScopeSource {
     /// The yield of the scope that would be returned by the next call to ``next(lastAccepted:)``. Nil when exhausted.
-    var peekYield: TransformationYield? { get }
+    var peekPriority: DispatchPriority? { get }
 
     /// Produces the next scope, incorporating feedback from the prior probe.
     mutating func next(lastAccepted: Bool) -> GraphTransformation?
@@ -30,7 +30,7 @@ protocol ScopeSource {
 
 /// Builds the collection of scope sources from a graph.
 ///
-/// Creates one source per search space. The scheduler merges them by ``ScopeSource/peekYield``.
+/// Creates one source per search space. The scheduler merges them by ``ScopeSource/peekPriority``.
 enum ScopeSourceBuilder {
     /// Builds all scope sources from the current graph.
     ///
@@ -40,13 +40,13 @@ enum ScopeSourceBuilder {
 
         // Batched cross-sequence removal — most drastic structural reduction.
         let batchedSource = BatchedCrossSequenceRemovalSource(graph: graph)
-        if batchedSource.peekYield != nil {
+        if batchedSource.peekPriority != nil {
             sources.append(batchedSource)
         }
 
         // Sequence emptying — per-sequence emptying.
         let emptyingSource = SequenceEmptyingSource(graph: graph)
-        if emptyingSource.peekYield != nil {
+        if emptyingSource.peekPriority != nil {
             sources.append(emptyingSource)
         }
 
@@ -58,7 +58,7 @@ enum ScopeSourceBuilder {
                 sequenceNodeID: target.sequenceNodeID,
                 graph: graph
             )
-            if source.peekYield != nil {
+            if source.peekPriority != nil {
                 sources.append(source)
             }
         }
@@ -66,43 +66,43 @@ enum ScopeSourceBuilder {
         // Migration — move elements between antichain-independent sequences.
         // Runs before per-element deletion: migrating all elements out of a source sequence and removing it is more powerful than deleting individual elements, and its low per-element yield would otherwise be starved by the stall budget.
         let migrationSource = MigrationSource(graph: graph)
-        if migrationSource.peekYield != nil {
+        if migrationSource.peekPriority != nil {
             sources.append(migrationSource)
         }
 
         // Per-element removal.
         let perElementSource = PerElementRemovalSource(graph: graph)
-        if perElementSource.peekYield != nil {
+        if perElementSource.peekPriority != nil {
             sources.append(perElementSource)
         }
 
         // Aligned removal — only if at least one participating sibling is dirty.
         let alignedSource = AlignedRemovalSource(graph: graph)
-        if alignedSource.peekYield != nil {
+        if alignedSource.peekPriority != nil {
             sources.append(alignedSource)
         }
 
         // Replacement.
         let replacementSource = ReplacementSource(graph: graph)
-        if replacementSource.peekYield != nil {
+        if replacementSource.peekPriority != nil {
             sources.append(replacementSource)
         }
 
         // Permutation.
         let permutationSource = PermutationSource(graph: graph)
-        if permutationSource.peekYield != nil {
+        if permutationSource.peekPriority != nil {
             sources.append(permutationSource)
         }
 
         // Minimization (search-based).
         let minimizationSource = MinimizationSource(graph: graph, deferBindInner: deferBindInner)
-        if minimizationSource.peekYield != nil {
+        if minimizationSource.peekPriority != nil {
             sources.append(minimizationSource)
         }
 
         // Exchange (search-based).
         let exchangeSource = ExchangeSource(graph: graph)
-        if exchangeSource.peekYield != nil {
+        if exchangeSource.peekPriority != nil {
             sources.append(exchangeSource)
         }
 

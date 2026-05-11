@@ -6,108 +6,108 @@
 import Testing
 @testable import ExhaustCore
 
-// MARK: - Transformation Yield Tests
+// MARK: - Dispatch Priority Tests
 
-@Suite("TransformationYield")
-struct TransformationYieldTests {
-    @Test("Ordering: structural yield dominates value yield")
+@Suite("DispatchPriority")
+struct DispatchPriorityTests {
+    @Test("Ordering: structural benefit dominates value benefit")
     func structuralDominatesValue() {
-        let highStructural = TransformationYield(
-            structural: 10,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 100
+        let highStructural = DispatchPriority(
+            structuralBenefit: 10,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 100
         )
-        let highValue = TransformationYield(
-            structural: 0,
-            value: 100,
-            maxSourceDistance: 0,
-            estimatedProbes: 1
+        let highValue = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 100,
+            reductionMagnitude: 0,
+            estimatedCost: 1
         )
         #expect(highStructural > highValue)
     }
 
-    @Test("Ordering: higher structural yield is higher priority")
+    @Test("Ordering: higher structural benefit is higher priority")
     func higherStructuralWins() {
-        let larger = TransformationYield(
-            structural: 20,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 5
+        let larger = DispatchPriority(
+            structuralBenefit: 20,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
-        let smaller = TransformationYield(
-            structural: 5,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 5
+        let smaller = DispatchPriority(
+            structuralBenefit: 5,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
         #expect(larger > smaller)
     }
 
-    @Test("Ordering: at equal structural, higher value yield wins")
+    @Test("Ordering: at equal structural benefit, higher value benefit wins")
     func valueBreaksTie() {
-        let highValue = TransformationYield(
-            structural: 0,
-            value: 15,
-            maxSourceDistance: 0,
-            estimatedProbes: 5
+        let highValue = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 15,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
-        let lowValue = TransformationYield(
-            structural: 0,
-            value: 3,
-            maxSourceDistance: 0,
-            estimatedProbes: 5
+        let lowValue = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 3,
+            reductionMagnitude: 0,
+            estimatedCost: 5
         )
         #expect(highValue > lowValue)
     }
 
-    @Test("Ordering: at equal yield, exact preferred over approximate")
+    @Test("Ordering: at equal benefit, exact preferred over approximate")
     func exactPreferred() {
-        let exact = TransformationYield(
-            structural: 0,
-            value: 5,
-            maxSourceDistance: 0,
-            estimatedProbes: 10
+        let exact = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 5,
+            reductionMagnitude: 0,
+            estimatedCost: 10
         )
-        let approximate = TransformationYield(
-            structural: 0,
-            value: 5,
-            maxSourceDistance: 100,
-            estimatedProbes: 10
+        let approximate = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 5,
+            reductionMagnitude: 100,
+            estimatedCost: 10
         )
         #expect(exact > approximate)
     }
 
-    @Test("Ordering: at equal yield, closer source distance preferred")
+    @Test("Ordering: at equal benefit, smaller reduction magnitude preferred")
     func closerDistancePreferred() {
-        let close = TransformationYield(
-            structural: 0,
-            value: 0,
-            maxSourceDistance: 5,
-            estimatedProbes: 10
+        let close = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 0,
+            reductionMagnitude: 5,
+            estimatedCost: 10
         )
-        let far = TransformationYield(
-            structural: 0,
-            value: 0,
-            maxSourceDistance: 5000,
-            estimatedProbes: 10
+        let far = DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 0,
+            reductionMagnitude: 5000,
+            estimatedCost: 10
         )
         #expect(close > far)
     }
 
-    @Test("Ordering: at equal yield and distance, lower cost wins")
+    @Test("Ordering: at equal benefit and magnitude, lower cost wins")
     func lowerCostWins() {
-        let cheap = TransformationYield(
-            structural: 5,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 2
+        let cheap = DispatchPriority(
+            structuralBenefit: 5,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 2
         )
-        let expensive = TransformationYield(
-            structural: 5,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 20
+        let expensive = DispatchPriority(
+            structuralBenefit: 5,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 20
         )
         #expect(cheap > expensive)
     }

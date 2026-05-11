@@ -197,11 +197,11 @@ struct ChoiceGraphScopeQueryTests {
 
         let transformation = GraphTransformation(
             operation: .remove(.coveringAligned(coveringScope)),
-            yield: TransformationYield(
-                structural: coveringScope.maxElementYield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: coveringScope.generator.totalRemaining
+            priority: DispatchPriority(
+                structuralBenefit: coveringScope.maxElementYield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: coveringScope.generator.totalRemaining
             ),
             precondition: .unconditional
         )

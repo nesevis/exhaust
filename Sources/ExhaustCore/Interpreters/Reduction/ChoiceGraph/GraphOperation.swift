@@ -184,8 +184,8 @@ struct GraphTransformation {
     /// The graph operation this transformation enacts.
     let operation: GraphOperation
 
-    /// Graph-computable yield estimate.
-    let yield: TransformationYield
+    /// Graph-computable scheduling priority.
+    let priority: DispatchPriority
 
     /// Preconditions on graph node state.
     let precondition: TransformationPrecondition

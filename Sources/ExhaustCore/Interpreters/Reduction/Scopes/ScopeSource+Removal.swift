@@ -76,16 +76,16 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
         }
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard exhausted == false else { return nil }
         // Active pending range — the normal case where the next ``next(lastAccepted:)`` call will pop ``pendingRanges.last`` and emit a probe for that range.
         if let range = pendingRanges.last {
             let totalYield = sequences[range.start ..< range.end].reduce(0) { $0 + $1.yield }
-            return TransformationYield(
-                structural: totalYield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            return DispatchPriority(
+                structuralBenefit: totalYield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             )
         }
         // Deferred bisection — the previous ``next(lastAccepted:)`` call emitted a probe whose rejection feedback has not yet been consumed. The next call will bisect ``lastEmittedRange`` into two halves and pop the higher-yield half (``[emitted.start, mid)``) first. Report that half's yield so the scheduler sees non-nil yield and dispatches ``next`` to actually perform the bisection. Without this branch, the scheduler drops the source from its merge the moment ``pendingRanges`` drains post-root, and the bisection code in ``next`` is never reached — making the halving tree functionally dead code in the current architecture.
@@ -94,11 +94,11 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
             guard count >= 2 else { return nil }
             let mid = emitted.start + count / 2
             let firstHalfYield = sequences[emitted.start ..< mid].reduce(0) { $0 + $1.yield }
-            return TransformationYield(
-                structural: firstHalfYield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            return DispatchPriority(
+                structuralBenefit: firstHalfYield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             )
         }
         return nil
@@ -144,11 +144,11 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
 //        print("\(Self.self) returning \(scope)")
         return GraphTransformation(
             operation: .remove(.elements(scope)),
-            yield: TransformationYield(
-                structural: totalYield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            priority: DispatchPriority(
+                structuralBenefit: totalYield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             ),
             precondition: .all(targets.map {
                 .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)
@@ -189,13 +189,13 @@ struct SequenceEmptyingSource: ScopeSource {
         candidates = entries.sorted { $0.yield > $1.yield }
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < candidates.count else { return nil }
-        return TransformationYield(
-            structural: candidates[index].yield,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 1
+        return DispatchPriority(
+            structuralBenefit: candidates[index].yield,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 1
         )
     }
 
@@ -215,11 +215,11 @@ struct SequenceEmptyingSource: ScopeSource {
 
         return GraphTransformation(
             operation: .remove(.elements(scope)),
-            yield: TransformationYield(
-                structural: candidate.yield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            priority: DispatchPriority(
+                structuralBenefit: candidate.yield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             ),
             precondition: .sequenceLengthAboveMinimum(sequenceNodeID: candidate.sequenceNodeID)
         )
@@ -269,14 +269,14 @@ struct BatchRemovalSource: ScopeSource {
         exhausted = startBatch <= 0
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard exhausted == false, currentBatch > 0 else { return nil }
         let batchYield = computeYield(batchSize: currentBatch, anchor: triedTail ? .head : .tail)
-        return TransformationYield(
-            structural: batchYield,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 1
+        return DispatchPriority(
+            structuralBenefit: batchYield,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 1
         )
     }
 
@@ -309,11 +309,11 @@ struct BatchRemovalSource: ScopeSource {
 
         let transformation = GraphTransformation(
             operation: .remove(.elements(scope)),
-            yield: TransformationYield(
-                structural: batchYield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            priority: DispatchPriority(
+                structuralBenefit: batchYield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             ),
             precondition: .sequenceLengthAboveMinimum(sequenceNodeID: sequenceNodeID)
         )
@@ -387,13 +387,13 @@ struct PerElementRemovalSource: ScopeSource {
         elements = entries
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < elements.count else { return nil }
-        return TransformationYield(
-            structural: elements[index].positionRange.count,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 1
+        return DispatchPriority(
+            structuralBenefit: elements[index].positionRange.count,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 1
         )
     }
 
@@ -413,11 +413,11 @@ struct PerElementRemovalSource: ScopeSource {
 
         return GraphTransformation(
             operation: .remove(.elements(scope)),
-            yield: TransformationYield(
-                structural: element.positionRange.count,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            priority: DispatchPriority(
+                structuralBenefit: element.positionRange.count,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             ),
             precondition: .sequenceLengthAboveMinimum(sequenceNodeID: element.sequenceNodeID)
         )
@@ -440,13 +440,13 @@ struct AlignedRemovalSource: ScopeSource {
             }
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < scopes.count else { return nil }
-        return TransformationYield(
-            structural: scopes[index].maxElementYield,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: scopes[index].generator.totalRemaining
+        return DispatchPriority(
+            structuralBenefit: scopes[index].maxElementYield,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: scopes[index].generator.totalRemaining
         )
     }
 
@@ -457,11 +457,11 @@ struct AlignedRemovalSource: ScopeSource {
 
         return GraphTransformation(
             operation: .remove(.coveringAligned(scope)),
-            yield: TransformationYield(
-                structural: scope.maxElementYield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: scope.generator.totalRemaining
+            priority: DispatchPriority(
+                structuralBenefit: scope.maxElementYield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: scope.generator.totalRemaining
             ),
             precondition: .all(scope.siblings.map {
                 .sequenceLengthAboveMinimum(sequenceNodeID: $0.sequenceNodeID)

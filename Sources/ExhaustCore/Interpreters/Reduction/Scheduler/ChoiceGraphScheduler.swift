@@ -146,7 +146,7 @@ enum ChoiceGraphScheduler {
             var anyAccepted = false
 
             while true {
-                guard let sourceIndex = Self.highestYieldSourceIndex(sources) else {
+                guard let sourceIndex = Self.highestPrioritySourceIndex(sources) else {
                     break
                 }
 
@@ -517,7 +517,7 @@ enum ChoiceGraphScheduler {
         guard let reorderScope = ReorderingScopeQuery.build(graph: graph) else { return }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
-            yield: TransformationYield(structural: 0, value: 0, maxSourceDistance: 0, estimatedProbes: 1),
+            priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1),
             precondition: .unconditional
         )
         let reorderScopeBundle = TransformationScope(
@@ -550,22 +550,22 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Source Selection
 
-    /// Returns the index of the source with the highest peekYield, or nil if all are exhausted.
-    static func highestYieldSourceIndex(
+    /// Returns the index of the source with the highest peekPriority, or nil if all are exhausted.
+    static func highestPrioritySourceIndex(
         _ sources: [any ScopeSource]
     ) -> Int? {
         var bestIndex: Int?
-        var bestYield: TransformationYield?
+        var bestPriority: DispatchPriority?
         for (index, source) in sources.enumerated() {
-            guard let yield = source.peekYield else { continue }
-            if let currentBest = bestYield {
-                if yield > currentBest {
+            guard let priority = source.peekPriority else { continue }
+            if let currentBest = bestPriority {
+                if priority > currentBest {
                     bestIndex = index
-                    bestYield = yield
+                    bestPriority = priority
                 }
             } else {
                 bestIndex = index
-                bestYield = yield
+                bestPriority = priority
             }
         }
         return bestIndex

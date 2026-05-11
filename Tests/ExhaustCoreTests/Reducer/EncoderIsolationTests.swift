@@ -164,11 +164,11 @@ private func minimizationScope(
     guard let firstScope = scopes.first else { return nil }
     let transformation = GraphTransformation(
         operation: .minimize(firstScope),
-        yield: TransformationYield(
-            structural: 0,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 10
+        priority: DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 10
         ),
         precondition: .unconditional
     )
@@ -190,11 +190,11 @@ private func removalScope(
     guard let firstScope = scopes.first else { return nil }
     let transformation = GraphTransformation(
         operation: .remove(.elements(firstScope)),
-        yield: TransformationYield(
-            structural: firstScope.maxBatch,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: firstScope.maxBatch
+        priority: DispatchPriority(
+            structuralBenefit: firstScope.maxBatch,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: firstScope.maxBatch
         ),
         precondition: .unconditional
     )

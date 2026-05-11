@@ -9,12 +9,12 @@
 ///
 /// Produces one scope per leaf type (integer, float) and one per bound value edge, ordered by value yield descending.
 struct MinimizationSource: ScopeSource {
-    private var scopes: [(scope: MinimizationScope, yield: TransformationYield)]
+    private var scopes: [(scope: MinimizationScope, priority: DispatchPriority)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) {
         let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
-        var entries: [(scope: MinimizationScope, yield: TransformationYield)] = []
+        var entries: [(scope: MinimizationScope, priority: DispatchPriority)] = []
 
         for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind, deferBindInner: deferBindInner) {
             let valueYield: Int = switch scope {
@@ -30,7 +30,7 @@ struct MinimizationSource: ScopeSource {
                 bindScope.boundSubtreeSize
             }
 
-            let estimatedProbes: Int = switch scope {
+            let estimatedCost: Int = switch scope {
             case let .valueLeaves(integerScope):
                 1 + integerScope.leaves.count * 16
             case let .floatLeaves(floatScope):
@@ -43,20 +43,20 @@ struct MinimizationSource: ScopeSource {
 
             entries.append((
                 scope: scope,
-                yield: TransformationYield(
-                    structural: 0,
-                    value: valueYield,
-                    maxSourceDistance: 0,
-                    estimatedProbes: estimatedProbes
+                priority: DispatchPriority(
+                    structuralBenefit: 0,
+                    valueBenefit: valueYield,
+                    reductionMagnitude: 0,
+                    estimatedCost: estimatedCost
                 )
             ))
         }
-        scopes = entries.sorted { $0.yield > $1.yield }
+        scopes = entries.sorted { $0.priority > $1.priority }
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < scopes.count else { return nil }
-        return scopes[index].yield
+        return scopes[index].priority
     }
 
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
@@ -66,7 +66,7 @@ struct MinimizationSource: ScopeSource {
 
         return GraphTransformation(
             operation: .minimize(entry.scope),
-            yield: entry.yield,
+            priority: entry.priority,
             precondition: .unconditional
         )
     }
@@ -87,13 +87,13 @@ struct MinimizationSource: ScopeSource {
 ///
 /// Search-based — the encoder handles multi-probe magnitude search internally.
 struct ExchangeSource: ScopeSource {
-    private var scopes: [(scope: ExchangeScope, yield: TransformationYield)]
+    private var scopes: [(scope: ExchangeScope, priority: DispatchPriority)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
-        var entries: [(scope: ExchangeScope, yield: TransformationYield)] = []
+        var entries: [(scope: ExchangeScope, priority: DispatchPriority)] = []
         for scope in ExchangeScopeQuery.build(graph: graph) {
-            let estimatedProbes: Int
+            let estimatedCost: Int
             let sourceDistance: Int
             switch scope {
             case let .redistribution(redistScope):
@@ -108,7 +108,7 @@ struct ExchangeSource: ScopeSource {
                     return max(maxSoFar, distance)
                 }
                 sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
-                estimatedProbes = min(24, redistScope.pairs.count)
+                estimatedCost = min(24, redistScope.pairs.count)
             case let .tandem(tandemScope):
                 let maxDistance = tandemScope.groups.reduce(UInt64(0)) { maxSoFar, group in
                     let groupMax = group.leaves.reduce(UInt64(0)) { leafMax, leaf in
@@ -124,25 +124,25 @@ struct ExchangeSource: ScopeSource {
                     return max(maxSoFar, groupMax)
                 }
                 sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
-                estimatedProbes = tandemScope.groups.count * 8
+                estimatedCost = tandemScope.groups.count * 8
             }
 
             entries.append((
                 scope: scope,
-                yield: TransformationYield(
-                    structural: 0,
-                    value: 0,
-                    maxSourceDistance: sourceDistance,
-                    estimatedProbes: estimatedProbes
+                priority: DispatchPriority(
+                    structuralBenefit: 0,
+                    valueBenefit: 0,
+                    reductionMagnitude: sourceDistance,
+                    estimatedCost: estimatedCost
                 )
             ))
         }
-        scopes = entries.sorted { $0.yield > $1.yield }
+        scopes = entries.sorted { $0.priority > $1.priority }
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < scopes.count else { return nil }
-        return scopes[index].yield
+        return scopes[index].priority
     }
 
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
@@ -152,7 +152,7 @@ struct ExchangeSource: ScopeSource {
 
         return GraphTransformation(
             operation: .exchange(entry.scope),
-            yield: entry.yield,
+            priority: entry.priority,
             precondition: .unconditional
         )
     }

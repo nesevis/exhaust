@@ -129,7 +129,7 @@ extension ChoiceGraphScheduler {
 
         var relaxCache = Set<UInt64>()
         while true {
-            guard let sourceIndex = highestYieldSourceIndex(exploitSources) else {
+            guard let sourceIndex = highestPrioritySourceIndex(exploitSources) else {
                 break
             }
             guard let exploitTransformation = exploitSources[sourceIndex].next(lastAccepted: false) else {

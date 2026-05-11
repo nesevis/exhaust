@@ -17,11 +17,11 @@ import Musl
 ///
 /// Includes self-similar substitutions, branch pivots, and descendant promotions. Each scope fully specifies the donor and target. One probe per scope.
 struct ReplacementSource: ScopeSource {
-    private var candidates: [(scope: ReplacementScope, yield: TransformationYield)]
+    private var candidates: [(scope: ReplacementScope, priority: DispatchPriority)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
-        var entries: [(scope: ReplacementScope, yield: TransformationYield)] = []
+        var entries: [(scope: ReplacementScope, priority: DispatchPriority)] = []
 
         for scope in ReplacementScopeQuery.build(graph: graph) {
             let structuralYield: Int = switch scope {
@@ -34,20 +34,20 @@ struct ReplacementSource: ScopeSource {
             }
             entries.append((
                 scope: scope,
-                yield: TransformationYield(
-                    structural: structuralYield,
-                    value: 0,
-                    maxSourceDistance: 0,
-                    estimatedProbes: 1
+                priority: DispatchPriority(
+                    structuralBenefit: structuralYield,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
                 )
             ))
         }
-        candidates = entries.sorted { $0.yield > $1.yield }
+        candidates = entries.sorted { $0.priority > $1.priority }
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < candidates.count else { return nil }
-        return candidates[index].yield
+        return candidates[index].priority
     }
 
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
@@ -72,7 +72,7 @@ struct ReplacementSource: ScopeSource {
 
         return GraphTransformation(
             operation: .replace(entry.scope),
-            yield: entry.yield,
+            priority: entry.priority,
             precondition: precondition
         )
     }
@@ -105,15 +105,15 @@ struct PermutationSource: ScopeSource {
         candidates = entries
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < candidates.count else { return nil }
         let groupSize = candidates[index].group.count
-        let estimatedProbes = groupSize <= 2 ? 1 : (1 + Int(log2(Double(groupSize))))
-        return TransformationYield(
-            structural: 0,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: estimatedProbes
+        let estimatedCost = groupSize <= 2 ? 1 : (1 + Int(log2(Double(groupSize))))
+        return DispatchPriority(
+            structuralBenefit: 0,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: estimatedCost
         )
     }
 
@@ -127,14 +127,14 @@ struct PermutationSource: ScopeSource {
             swappableGroups: [entry.group]
         )
 
-        let estimatedProbes = entry.group.count <= 2 ? 1 : (1 + Int(log2(Double(entry.group.count))))
+        let estimatedCost = entry.group.count <= 2 ? 1 : (1 + Int(log2(Double(entry.group.count))))
         return GraphTransformation(
             operation: .permute(.siblingPermutation(scope)),
-            yield: TransformationYield(
-                structural: 0,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: estimatedProbes
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: estimatedCost
             ),
             precondition: .nodeActive(entry.parentNodeID)
         )

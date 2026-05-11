@@ -38,7 +38,7 @@ extension ChoiceGraphScheduler {
                     leaves: [upstreamLeafEntry],
                     batchZeroEligible: false
                 ))),
-                yield: scope.transformation.yield,
+                priority: scope.transformation.priority,
                 precondition: .unconditional
             ),
             baseSequence: scope.baseSequence,
@@ -172,7 +172,7 @@ extension ChoiceGraphScheduler {
                     },
                     batchZeroEligible: downstreamLeaves.count > 1
                 ))),
-                yield: parent.transformation.yield,
+                priority: parent.transformation.priority,
                 precondition: .unconditional
             ),
             baseSequence: liftedSequence,

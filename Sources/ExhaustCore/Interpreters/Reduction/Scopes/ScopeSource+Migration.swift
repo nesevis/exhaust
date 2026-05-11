@@ -94,13 +94,13 @@ struct MigrationSource: ScopeSource {
         candidates = entries
     }
 
-    var peekYield: TransformationYield? {
+    var peekPriority: DispatchPriority? {
         guard index < candidates.count else { return nil }
-        return TransformationYield(
-            structural: candidates[index].yield,
-            value: 0,
-            maxSourceDistance: 0,
-            estimatedProbes: 1
+        return DispatchPriority(
+            structuralBenefit: candidates[index].yield,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 1
         )
     }
 
@@ -119,11 +119,11 @@ struct MigrationSource: ScopeSource {
 
         return GraphTransformation(
             operation: .migrate(scope),
-            yield: TransformationYield(
-                structural: entry.yield,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            priority: DispatchPriority(
+                structuralBenefit: entry.yield,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             ),
             precondition: {
                 // When migration empties the source entirely and the source's parent is a sequence, the constraint is on the parent's ability to lose a child, not the source's own element count.

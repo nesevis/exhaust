@@ -22,11 +22,11 @@ struct GraphEncoderTests {
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
             operation: .remove(.elements(firstScope)),
-            yield: TransformationYield(
-                structural: firstScope.maxBatch,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: firstScope.maxBatch
+            priority: DispatchPriority(
+                structuralBenefit: firstScope.maxBatch,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: firstScope.maxBatch
             ),
             precondition: .unconditional
         )
@@ -49,11 +49,11 @@ struct GraphEncoderTests {
         guard let firstScope = scopes.first else { return nil }
         let transformation = GraphTransformation(
             operation: .minimize(firstScope),
-            yield: TransformationYield(
-                structural: 0,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 10
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 10
             ),
             precondition: .unconditional
         )
@@ -211,11 +211,11 @@ struct GraphEncoderTests {
         )
         let transformation = GraphTransformation(
             operation: .migrate(migrationScope),
-            yield: TransformationYield(
-                structural: 1,
-                value: 0,
-                maxSourceDistance: 0,
-                estimatedProbes: 1
+            priority: DispatchPriority(
+                structuralBenefit: 1,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
             ),
             precondition: .unconditional
         )
