@@ -219,9 +219,9 @@ extension ChoiceGraph {
     /// Returns nil when the clamped window does not intersect the valid range.
     static func clampedEndpoints(
         range: ClosedRange<UInt64>,
-        typeTag: TypeTag
+        typeTag: TypeTag,
+        windowRadius: UInt64 = 10_000
     ) -> (low: UInt64, high: UInt64)? {
-        let windowRadius: UInt64 = 10000
         let clampLow: UInt64
         let clampHigh: UInt64
         if typeTag.isSigned {

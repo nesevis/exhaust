@@ -33,7 +33,7 @@ extension ChoiceGraphScheduler {
             "count": "\(candidates.count)",
         ])
 
-        let materializationBudget = 10
+        let materializationBudget = state.tuning.relaxMaterializationBudget
         var perturbationAccepted = false
         var materializationsUsed = 0
         for candidate in candidates {

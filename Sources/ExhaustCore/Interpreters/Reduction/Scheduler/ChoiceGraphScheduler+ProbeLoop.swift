@@ -55,25 +55,14 @@ extension ChoiceGraphScheduler {
                 continue
             }
 
-            let picksUnchanged = switch mutation {
-            case let .leafValues(changes):
-                changes.contains(where: \.mayReshape) == false
-            case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped, .sequenceReordered:
-                true
-            case .branchSelected, .selfSimilarReplaced, .descendantPromoted:
-                false
-            }
-            let materializePicks = picksUnchanged == false
-            let probeCanReshape = switch mutation {
-            case let .leafValues(changes):
-                changes.contains(where: \.mayReshape)
-            default:
-                hasBind
-            }
-            let preferExact = encoder.requiresExactDecoder || probeCanReshape == false
-            let decoder: SequenceDecoder = preferExact
-                ? .exact(materializePicks: materializePicks)
-                : .guided(fallbackTree: state.tree, materializePicks: materializePicks)
+            let selection = Self.selectDecoder(
+                for: mutation,
+                requiresExactDecoder: encoder.requiresExactDecoder,
+                hasBind: hasBind
+            )
+            let decoder: SequenceDecoder = selection.preferExact
+                ? .exact(materializePicks: selection.materializePicks)
+                : .guided(fallbackTree: state.tree, materializePicks: selection.materializePicks)
 
             var filterObservations: [UInt64: FilterObservation] = [:]
 
@@ -97,7 +86,7 @@ extension ChoiceGraphScheduler {
                 if state.collectStats {
                     state.stats.totalMaterializations += 1
                 }
-                latestAcceptedTreeIsStripped = picksUnchanged
+                latestAcceptedTreeIsStripped = selection.materializePicks == false
 
                 if encoder.requiresExactDecoder {
                     anyRequiresRebuild = true
@@ -152,6 +141,43 @@ extension ChoiceGraphScheduler {
             accepted: anyAccepted,
             requiresRebuild: anyRequiresRebuild,
             treeIsStripped: latestAcceptedTreeIsStripped
+        )
+    }
+
+    // MARK: - Decoder Selection
+
+    /// Determines the decoder mode for a given probe mutation.
+    ///
+    /// Pure function of the mutation type, the encoder's decoder requirement, and whether the sequence contains binds. Returns two flags:
+    /// - `preferExact`: true when the probe should use exact (non-guided) decoding.
+    /// - `materializePicks`: true when the probe changes the active branch path and the decoder must reconstruct all branch alternatives.
+    struct DecoderSelection {
+        let preferExact: Bool
+        let materializePicks: Bool
+    }
+
+    static func selectDecoder(
+        for mutation: ProjectedMutation,
+        requiresExactDecoder: Bool,
+        hasBind: Bool
+    ) -> DecoderSelection {
+        let picksUnchanged = switch mutation {
+        case let .leafValues(changes):
+            changes.contains(where: \.mayReshape) == false
+        case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped, .sequenceReordered:
+            true
+        case .branchSelected, .selfSimilarReplaced, .descendantPromoted:
+            false
+        }
+        let probeCanReshape = switch mutation {
+        case let .leafValues(changes):
+            changes.contains(where: \.mayReshape)
+        default:
+            hasBind
+        }
+        return DecoderSelection(
+            preferExact: requiresExactDecoder || probeCanReshape == false,
+            materializePicks: picksUnchanged == false
         )
     }
 
