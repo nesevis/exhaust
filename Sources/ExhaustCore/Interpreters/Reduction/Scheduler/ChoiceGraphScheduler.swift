@@ -168,17 +168,20 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                // Bound value gating.
+                // Bound value gating — keyed by fingerprint so verdicts survive rebuilds.
+                var boundValueFingerprint: UInt64?
                 if case let .minimize(.boundValue(bindScope)) = transformation.operation {
-                    switch gate.shouldDispatch(bindNodeID: bindScope.bindNodeID, anyAcceptedThisCycle: anyAccepted) {
+                    guard case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind else {
+                        continue
+                    }
+                    let fingerprint = bindMetadata.fingerprint
+                    boundValueFingerprint = fingerprint
+                    switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
                     case .skip:
                         continue
                     case .classifyFirst:
-                        guard case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind else {
-                            continue
-                        }
                         let classification: BindClassification
-                        if let cached = graph.bindClassifications[bindMetadata.fingerprint] {
+                        if let cached = graph.bindClassifications[fingerprint] {
                             classification = cached
                         } else {
                             graph.classifyBind(
@@ -196,7 +199,7 @@ enum ChoiceGraphScheduler {
                             classification = verdict
                         }
                         if classification.topology != .identical || classification.liftability != .both {
-                            gate.markFruitless(bindScope.bindNodeID)
+                            gate.markFruitless(fingerprint)
                             continue
                         }
                     case .dispatch:
@@ -233,19 +236,19 @@ enum ChoiceGraphScheduler {
 
                 // Select encoder and dispatch.
                 var encoder: any GraphEncoder
-                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
+                if case let .minimize(.boundValue(bindScope)) = transformation.operation,
+                   let fingerprint = boundValueFingerprint
+                {
                     encoder = Self.makeBoundValueComposition(
                         bindScope: bindScope,
                         scope: scope,
                         graph: graph,
                         gen: erasedGen,
-                        upstreamBudget: gate.decayedBudget(bindNodeID: bindScope.bindNodeID)
+                        upstreamBudget: gate.decayedBudget(fingerprint: fingerprint)
                     )
+                    gate.markDispatched(fingerprint)
                 } else {
                     encoder = Self.selectEncoder(for: transformation.operation)
-                }
-                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
-                    gate.markDispatched(bindScope.bindNodeID)
                 }
                 let outcome = try runProbeLoop(
                     encoder: &encoder,
@@ -269,8 +272,8 @@ enum ChoiceGraphScheduler {
                     graph.recordConvergence(byNodeID: convergence)
                 }
 
-                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
-                    gate.recordOutcome(bindNodeID: bindScope.bindNodeID, accepted: outcome.acceptCount > 0)
+                if let fingerprint = boundValueFingerprint {
+                    gate.recordOutcome(fingerprint: fingerprint, accepted: outcome.acceptCount > 0)
                 }
 
                 if hadReplacementShortlexRejection == false,
@@ -318,7 +321,6 @@ enum ChoiceGraphScheduler {
                             }
                         }
                         scopeRejectionCache.clear()
-                        gate.resetAfterRebuild()
                         sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
                         if isInstrumented {
@@ -387,7 +389,6 @@ enum ChoiceGraphScheduler {
                 if relaxResult {
                     anyAccepted = true
                     scopeRejectionCache.clear()
-                    gate.resetAfterRebuild()
                 }
             }
 

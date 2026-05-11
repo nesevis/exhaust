@@ -7,91 +7,66 @@
 
 /// Controls dispatch of bound value composition encoders within the scheduler's cycle loop.
 ///
-/// Bound value compositions are expensive: each dispatch runs a generator lift per upstream probe and a bound subtree search per lift. The gate enforces three skip rules that prevent redundant or futile dispatches:
+/// Keyed by ``BindMetadata/fingerprint`` (stable across graph rebuilds) so that fruitless verdicts and stall budgets survive structural rebuilds without re-probing bind sites that have already been determined unproductive.
 ///
-/// 1. **Per-cycle dedup**: after the first dispatch for a given bind node within a cycle, subsequent dispatches are skipped. The upstream encoder has already explored its full search space.
-/// 2. **Acceptance deferral**: bound value dispatches are skipped when any encoder has already accepted a probe this cycle. Structural changes from the acceptance may invalidate the bound value search.
-/// 3. **Fruitless tracking**: bind nodes whose last dispatch produced zero accepts are skipped until a structural rebuild clears the set.
+/// Three skip rules:
 ///
-/// The classification check (which may mutate the graph via ``ChoiceGraph/classifyBind``) is NOT handled by the gate. When `shouldDispatch` returns `.classifyFirst`, the caller performs classification and either proceeds or calls ``markFruitless(_:)``.
+/// 1. **Per-cycle dedup**: after the first dispatch for a given bind within a cycle, subsequent dispatches are skipped.
+/// 2. **Acceptance deferral**: bound value dispatches are skipped when any encoder has already accepted a probe this cycle.
+/// 3. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds because fingerprints are source-location-stable.
 struct BoundValueGate {
-    /// Result of the ``shouldDispatch(bindNodeID:anyAcceptedThisCycle:)`` check.
     enum Decision {
-        /// The bind node passes all gate checks. The caller should proceed to classification (if not already cached) and then dispatch.
         case dispatch
-        /// The bind node fails a gate check and should be skipped without further work.
         case skip
-        /// The bind node passes the gate's own checks but has not been classified yet. The caller must run the classification check and either proceed to dispatch or call ``markFruitless(_:)``.
         case classifyFirst
     }
 
-    private var dispatchedThisCycle = Set<Int>()
-    private var stallCount: [Int: Int] = [:]
-    private var fruitlessNodes = Set<Int>()
+    private var dispatchedThisCycle = Set<UInt64>()
+    private var stallCount: [UInt64: Int] = [:]
+    private var fruitless = Set<UInt64>()
 
-    /// Maximum upstream probes before any stall decay.
     private static let baseBudget = 15
 
-    /// Clears per-cycle state at the start of each cycle.
     mutating func resetForNewCycle() {
         dispatchedThisCycle.removeAll(keepingCapacity: true)
     }
 
-    /// Clears fruitless tracking after a structural graph rebuild.
-    mutating func resetAfterRebuild() {
-        fruitlessNodes.removeAll(keepingCapacity: true)
-    }
-
-    /// Checks whether a bound value composition should be dispatched for `bindNodeID`.
-    ///
-    /// - Parameters:
-    ///   - bindNodeID: The bind node to consider dispatching.
-    ///   - anyAcceptedThisCycle: Whether any encoder has accepted a probe in the current cycle.
-    /// - Returns: `.dispatch` if the node passes all checks, `.skip` if it should be skipped, `.classifyFirst` if the caller must run classification before dispatching.
     func shouldDispatch(
-        bindNodeID: Int,
+        fingerprint: UInt64,
         anyAcceptedThisCycle: Bool
     ) -> Decision {
-        if dispatchedThisCycle.contains(bindNodeID) {
+        if dispatchedThisCycle.contains(fingerprint) {
             return .skip
         }
         if anyAcceptedThisCycle {
             return .skip
         }
-        if fruitlessNodes.contains(bindNodeID) {
+        if fruitless.contains(fingerprint) {
             return .skip
         }
         return .classifyFirst
     }
 
-    /// Records that a bound value composition has been dispatched for `bindNodeID` this cycle.
-    mutating func markDispatched(_ bindNodeID: Int) {
-        dispatchedThisCycle.insert(bindNodeID)
+    mutating func markDispatched(_ fingerprint: UInt64) {
+        dispatchedThisCycle.insert(fingerprint)
     }
 
-    /// Records that a bind node's classification is incompatible with bound value search.
-    mutating func markFruitless(_ bindNodeID: Int) {
-        fruitlessNodes.insert(bindNodeID)
+    mutating func markFruitless(_ fingerprint: UInt64) {
+        fruitless.insert(fingerprint)
     }
 
-    /// Returns the decay-adjusted upstream probe budget for a bind node.
-    ///
-    /// Decays exponentially with consecutive fruitless dispatches: 15, 7, 3, 1.
-    func decayedBudget(bindNodeID: Int) -> Int {
-        let stalls = stallCount[bindNodeID, default: 0]
+    func decayedBudget(fingerprint: UInt64) -> Int {
+        let stalls = stallCount[fingerprint, default: 0]
         return max(1, Self.baseBudget >> stalls)
     }
 
-    /// Records the outcome of a bound value dispatch.
-    ///
-    /// Accepted dispatches reset the stall counter and remove the node from the fruitless set. Rejected dispatches increment the stall counter and add the node to the fruitless set.
-    mutating func recordOutcome(bindNodeID: Int, accepted: Bool) {
+    mutating func recordOutcome(fingerprint: UInt64, accepted: Bool) {
         if accepted {
-            stallCount[bindNodeID] = 0
-            fruitlessNodes.remove(bindNodeID)
+            stallCount[fingerprint] = 0
+            fruitless.remove(fingerprint)
         } else {
-            stallCount[bindNodeID, default: 0] += 1
-            fruitlessNodes.insert(bindNodeID)
+            stallCount[fingerprint, default: 0] += 1
+            fruitless.insert(fingerprint)
         }
     }
 }
