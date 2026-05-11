@@ -15,7 +15,7 @@ import Foundation
 /// A tree of choices that captures every decision made during generation.
 ///
 /// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, reduce, or analyze generated values.
-package enum ChoiceTree: Hashable, Equatable, Sendable {
+indirect package enum ChoiceTree: Hashable, Equatable, Sendable { // NOTE: The entire enum is marked as `indirect` for performance reasons
     /// A single randomness decision. Produces one entry in the ``ChoiceSequence`` whose ``ChoiceValue`` the reducer can minimize toward semantic simplest. The ``ChoiceMetadata`` records the valid range so the reducer never proposes an out-of-bounds value.
     case choice(ChoiceValue, ChoiceMetadata)
 
@@ -23,10 +23,10 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
     case just
 
     /// A variable-length collection. Flattened as open-marker, then one subtree per element, then close-marker. The length and the element values are independently reducible: structural encoders can delete elements, and value encoders can minimize within them.
-    indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
+    case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
     /// A branching decision. The `fingerprint` identifies the pick site's recursive template: the ``ChoiceGraph`` uses matching fingerprints to build self-similarity edges, enabling substitution of one branch's subtree into another. Inactive (unselected) branches retain full structural metadata so coverage analysis can reason about alternatives without regenerating.
-    indirect case branch(
+    case branch(
         fingerprint: UInt64,
         weight: UInt64,
         id: UInt64,
@@ -38,20 +38,20 @@ package enum ChoiceTree: Hashable, Equatable, Sendable {
     /// Represents a nested group of choices that usually represent objects or tuples.
     ///
     /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents high-lane compositions (for example SIMD8+) from exploding the parameter count in covering arrays, and isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
-    indirect case group([ChoiceTree], isOpaque: Bool = false)
+    case group([ChoiceTree], isOpaque: Bool = false)
 
     /// Records the generation-time size parameter. Produces no entry in the ``ChoiceSequence``: the value is consumed during replay to restore the correct size context but is invisible to the reducer.
     case getSize(UInt64)
 
     /// Scopes a temporary size override for its children. Flattened identically to a regular group; the override is consumed during generation and replay but leaves no trace in the ``ChoiceSequence``.
-    indirect case resize(newSize: UInt64, choices: [ChoiceTree])
+    case resize(newSize: UInt64, choices: [ChoiceTree])
 
     /// A bind node: the bound subtree's structure depends on the inner subtree's value.
     ///
     /// Produced by VACTI, reflection, and materialization for `.transform(.bind(...))` operations.
     ///
     /// `fingerprint` is the source-location hash carried from the originating ``ReflectiveOperation/transform(kind:inner:)`` (`TransformKind.bind.fingerprint`). It survives every materialization round-trip and is read by ``ChoiceGraphBuilder`` to populate ``BindMetadata/fingerprint`` for the classification cache.
-    indirect case bind(fingerprint: UInt64, inner: ChoiceTree, bound: ChoiceTree)
+    case bind(fingerprint: UInt64, inner: ChoiceTree, bound: ChoiceTree)
 
 }
 
