@@ -422,7 +422,7 @@ enum ChoiceGraphScheduler {
         guard let reorderScope = ReorderingQuery.build(graph: state.graph) else { return }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
-            priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1),
+            priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
         )
         let reorderScopeBundle = EncoderInput(
             transformation: reorderTransformation,

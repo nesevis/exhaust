@@ -90,5 +90,4 @@ package struct GenerationContext: ~Copyable {
     public static func scaledSize(forRun runIndex: UInt64) -> UInt64 {
         (runIndex % 100) + 1
     }
-
 }

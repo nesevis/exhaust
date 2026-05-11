@@ -207,8 +207,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
-    func unique<Key: Hashable>(
-        by path: KeyPath<Value, Key> & Sendable,
+    func unique(
+        by path: KeyPath<Value, some Hashable> & Sendable,
         fileID: String = #fileID,
         line: UInt = #line
     ) -> ReflectiveGenerator<Value> {

@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
-
 /// Online Choice Gradient Sampling interpreter that generates values directly.
 ///
 /// Unlike the eager ``GeneratorTuning`` tuner (which pre-computes all pick weights in a single top-down pass), this interpreter implements the paper's **online, per-value** algorithm (Figure 3.3). At each `pick` encountered during generation, it computes "derivatives" (residual generators after choosing each branch), samples from each derivative to measure fitness, and selects based on those fitness scores.

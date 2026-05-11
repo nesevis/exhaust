@@ -38,7 +38,7 @@ extension ChoiceGraphScheduler {
                     leaves: [upstreamLeafEntry],
                     batchZeroEligible: false
                 ))),
-                priority: scope.transformation.priority,
+                priority: scope.transformation.priority
             ),
             baseSequence: scope.baseSequence,
             tree: scope.tree,
@@ -83,9 +83,9 @@ extension ChoiceGraphScheduler {
     /// 4. Constructs an integer-leaves minimization scope on the lifted graph; the downstream encoder operates on it without knowing it is downstream.
     static func boundValueLift(
         upstreamCandidate: ChoiceSequence,
-        upstreamMutation: EncoderProbe,
+        upstreamMutation _: EncoderProbe,
         parent: EncoderInput,
-        graph: ChoiceGraph,
+        graph _: ChoiceGraph,
         bindScope: BoundValueScope,
         gen: ReflectiveGenerator<Any>
     ) -> EncoderInput? {
@@ -159,7 +159,7 @@ extension ChoiceGraphScheduler {
                     },
                     batchZeroEligible: downstreamLeaves.count > 1
                 ))),
-                priority: parent.transformation.priority,
+                priority: parent.transformation.priority
             ),
             baseSequence: liftedSequence,
             tree: freshTree,

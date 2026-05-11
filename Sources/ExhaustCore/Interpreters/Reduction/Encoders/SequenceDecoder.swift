@@ -280,6 +280,7 @@ package enum SequenceDecoder {
             mergeFilterObservations(from: decodingReport, into: &filterObservations)
             logDecoderRejection(reason: "materialization_rejected", probeHash: precomputedHash)
             return nil
+
         case let .failed(decodingReport):
             mergeFilterObservations(from: decodingReport, into: &filterObservations)
             logDecoderRejection(reason: "materialization_failed", probeHash: precomputedHash)

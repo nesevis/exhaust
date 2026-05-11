@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-
 /// Adaptive probes for efficient reduction, based on David MacIver's Hypothesis reducer (MacIver & Donaldson, "Reduction via Generation", ECOOP 2020, §3.1).
 ///
 /// Their cost is logarithmic in the size of the *output* (or the error of the guess), not the size of the input range.

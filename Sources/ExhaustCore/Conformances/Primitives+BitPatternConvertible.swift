@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
-
 extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
     public static var tag: TypeTag {
         Wrapped.tag

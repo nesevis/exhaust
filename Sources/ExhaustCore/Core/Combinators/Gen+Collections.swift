@@ -346,9 +346,9 @@ package extension Gen {
     ///   - collection: The collection to pick elements from.
     ///   - id: A key path to an equatable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
-    static func element<C: Collection, Key: Equatable>(
+    static func element<C: Collection>(
         from collection: C,
-        id path: KeyPath<C.Element, Key>
+        id path: KeyPath<C.Element, some Equatable>
     ) -> ReflectiveGenerator<C.Element> {
         precondition(
             collection.isEmpty == false,
@@ -364,5 +364,4 @@ package extension Gen {
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
-
 }

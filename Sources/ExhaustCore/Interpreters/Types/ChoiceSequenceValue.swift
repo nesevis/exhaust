@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-
 /// An element in a flattened ``ChoiceSequence``, representing one entry from a ``ChoiceTree``.
 ///
 /// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` and ``reduced`` carry the actual numeric choices.

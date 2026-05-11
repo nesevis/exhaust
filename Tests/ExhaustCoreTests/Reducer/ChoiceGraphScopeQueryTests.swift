@@ -232,7 +232,6 @@ struct ChoiceGraphScopeQueryTests {
         }
     }
 
-
     // MARK: - Inner Descendant Index
 
     @Test("Scalar bind-inner leaf is indexed to its bind")

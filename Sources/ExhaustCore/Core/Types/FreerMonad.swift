@@ -1,4 +1,5 @@
 // MARK: - Academic Provenance
+
 //
 // Freer Monad from Kiselyov and Ishii, "Freer Monads, More Extensible Effects" (Haskell Symposium 2015). Goldstein et al., "Reflecting on Random Generation" (ICFP 2023), §3.2 chose it as the encoding for reflective generators.
 //

@@ -115,29 +115,6 @@ package struct ChoiceGraph {
             nodes[nodeID] = nodes[nodeID].with(kind: .chooseBits(metadata))
         }
     }
-
-    // MARK: - Init
-
-    init(
-        nodes: [ChoiceGraphNode],
-        containmentEdges: [ContainmentEdge],
-        dependencyEdges: [DependencyEdge],
-        selfSimilarityGroups: [UInt64: [Int]],
-        liveNodeIDs: [Int],
-        leafNodes: [Int],
-        topologicalOrder: [Int],
-        dependencyAdjacency: [[Int]]
-    ) {
-        self.nodes = nodes
-        self.containmentEdges = containmentEdges
-        self.dependencyEdges = dependencyEdges
-        self.selfSimilarityGroups = selfSimilarityGroups
-        self.liveNodeIDs = liveNodeIDs
-        self.leafNodes = leafNodes
-        self.topologicalOrder = topologicalOrder
-        self.dependencyAdjacency = dependencyAdjacency
-    }
-
 }
 
 // MARK: - Construction
@@ -170,5 +147,4 @@ package extension ChoiceGraph {
         graph.bindTopologyObservations = cachedObservations
         return graph
     }
-
 }

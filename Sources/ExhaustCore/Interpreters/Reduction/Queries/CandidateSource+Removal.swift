@@ -241,7 +241,7 @@ struct BatchRemovalSource: CandidateSource {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: 1
-            ),
+            )
         )
 
         // Advance state for next call.

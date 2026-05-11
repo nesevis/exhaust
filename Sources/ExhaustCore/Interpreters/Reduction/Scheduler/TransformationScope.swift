@@ -1,5 +1,5 @@
 //
-//  EncoderInput.swift
+//  TransformationScope.swift
 //  Exhaust
 //
 
@@ -42,9 +42,7 @@ struct SequenceRemovalTarget {
     let elementNodeIDs: [Int]
 }
 
-
 // MARK: - Covering Aligned Removal
-
 
 /// Aligned removal scope backed by a strength-2 covering array over sibling sequence elements.
 ///

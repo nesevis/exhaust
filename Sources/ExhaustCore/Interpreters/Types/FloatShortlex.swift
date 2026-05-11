@@ -13,7 +13,7 @@ package enum FloatShortlex {
 
     public static let mantissaMask: UInt64 = FloatReduction.doubleMantissaMask
 
-    public static let exponentBias: UInt64 = UInt64(FloatReduction.doubleExponentBias)
+    public static let exponentBias: UInt64 = .init(FloatReduction.doubleExponentBias)
 
     public static let nonSimpleTagMask: UInt64 = .init(1) << 63
 

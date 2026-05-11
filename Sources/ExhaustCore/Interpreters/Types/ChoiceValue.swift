@@ -16,13 +16,13 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
 
     /// Creates a choice value from a raw bit pattern and type tag.
     package init(_ bitPattern: UInt64, tag: TypeTag) {
-        self.bitPattern64 = bitPattern
+        bitPattern64 = bitPattern
         self.tag = tag
     }
 
     /// Creates a choice value from a ``BitPatternConvertible`` value and its type tag.
     public init(_ value: any BitPatternConvertible, tag: TypeTag) {
-        self.bitPattern64 = value.bitPattern64
+        bitPattern64 = value.bitPattern64
         self.tag = tag
     }
 

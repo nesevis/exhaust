@@ -8,11 +8,11 @@ import Foundation
 import IssueReporting
 
 #if canImport(XCTest)
-@preconcurrency @_weakLinked import XCTest
+    @preconcurrency @_weakLinked import XCTest
 #endif
 
 #if canImport(Testing)
-@_weakLinked import Testing
+    @_weakLinked import Testing
 #endif
 
 /// Runtime support namespace for `#exhaust`, `#explore`, and `#examine` macro expansions.
@@ -22,7 +22,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// This is a plain error — not a Swift Testing issue — so it produces no test output.
     /// The pipeline's try/catch detects it as a property failure without any console noise.
     public struct DetectionFailure: Error {}
-    
+
     /// Detection replacement for `#expect(_ condition: Bool)` and `#require(_ condition: Bool)`.
     ///
     /// Throws ``DetectionFailure`` when the condition is `false`.
@@ -32,7 +32,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             throw DetectionFailure()
         }
     }
-    
+
     /// Detection replacement for `#require<T>(_ optionalValue: T?)`.
     ///
     /// Throws ``DetectionFailure`` when the value is `nil`. Returns the unwrapped value otherwise.
@@ -43,7 +43,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
         return unwrapped
     }
-    
+
     /// Runs a property test with the given generator, settings, and property.
     /// This is the runtime target of the `#exhaust` macro expansion.
     ///
@@ -75,7 +75,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 let property: @Sendable (Output) -> Bool = { value in
                     (try? property(value)) ?? false
                 }
-                
+
                 var budget = ExhaustBudget.expedient
                 var seed: UInt64?
                 var suppressIssueReporting = false
@@ -87,7 +87,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 var collectOpenPBTStats = false
                 var logLevel: LogLevel = .error
                 var logFormat: LogFormat = .keyValue
-                
+
                 for setting in settings {
                     switch setting {
                     case let .budget(b):
@@ -137,27 +137,27 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         logFormat = format
                     }
                 }
-                
+
                 return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
-#if canImport(Testing)
-                    if let traitConfig = ExhaustTraitConfiguration.current {
-                        let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
-                        if hasInlineBudget == false, let traitBudget = traitConfig.budget {
-                            budget = traitBudget
+                    #if canImport(Testing)
+                        if let traitConfig = ExhaustTraitConfiguration.current {
+                            let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                                budget = traitBudget
+                            }
                         }
-                    }
-#endif
-                    
+                    #endif
+
                     let samplingBudget = budget.samplingBudget
                     let coverageBudget = budget.coverageBudget
                     let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-                    
+
                     var report = ExhaustReport()
                     defer { onReportClosure?(report) }
-                    
+
                     let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
-                    ? OpenPBTStatsAccumulator(propertyName: "\(function)")
-                    : nil
+                        ? OpenPBTStatsAccumulator(propertyName: "\(function)")
+                        : nil
                     defer {
                         if let statsAccumulator {
                             let lines = statsAccumulator.finalize()
@@ -165,27 +165,27 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 report.openPBTStatsLines = lines
                                 let attachmentName = "\(function)-openpbtstats.jsonl"
                                 switch TestContext.current {
-#if canImport(Testing)
-                                case .swiftTesting:
-                                    Attachment.record(lines.jsonlString(), named: attachmentName)
-#endif
-#if canImport(ObjectiveC)
-                                case .xcTest:
-                                    let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
-                                    xctAttachment.name = attachmentName
-                                    MainActor.assumeIsolated {
-                                        XCTContext.runActivity(named: "OpenPBTStats") { activity in
-                                            activity.add(xctAttachment)
+                                #if canImport(Testing)
+                                    case .swiftTesting:
+                                        Attachment.record(lines.jsonlString(), named: attachmentName)
+                                #endif
+                                #if canImport(ObjectiveC)
+                                    case .xcTest:
+                                        let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
+                                        xctAttachment.name = attachmentName
+                                        MainActor.assumeIsolated {
+                                            XCTContext.runActivity(named: "OpenPBTStats") { activity in
+                                                activity.add(xctAttachment)
+                                            }
                                         }
-                                    }
-#endif
+                                #endif
                                 default:
                                     break
                                 }
                             }
                         }
                     }
-                    
+
                     let context = PipelineContext(
                         gen: gen,
                         property: property,
@@ -201,7 +201,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         column: column,
                         statsAccumulator: statsAccumulator
                     )
-                    
+
                     if let reflectingValue {
                         do {
                             return try __reduceReflected(
@@ -223,7 +223,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             return reflectingValue
                         }
                     }
-                    
+
                     let phaseTimingStart = monotonicNanoseconds()
                     var coverageIterations = 0
                     if useRandomOnly {
@@ -253,18 +253,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         }
                     }
                     let coveragePhaseEndTime = monotonicNanoseconds()
-                    
+
                     let samplingResult = runSamplingPhase(
                         context: context,
                         seed: seed,
                         coverageIterations: coverageIterations,
                         report: &report
                     )
-                    
+
                     let endTime = monotonicNanoseconds()
                     report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
                     report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
-                    
+
                     if samplingResult == nil {
                         report.generationMilliseconds = Double(endTime - coveragePhaseEndTime) / 1_000_000
                         let totalPropertyCalls = coverageIterations + report.randomSamplingInvocations
@@ -285,7 +285,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             metadata: passMetadata
                         )
                     }
-                    
+
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "phase_timing",
@@ -296,79 +296,79 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             "total_ms": String(format: "%.1f", report.totalMilliseconds),
                         ]
                     )
-                    
+
                     return samplingResult
                 }
             }
         }
     }
-    
+
     // MARK: - Void Property (Swift Testing #expect / #require)
-    
+
     // Replays regression seeds from the test trait and returns the first failing counterexample, if any.
-#if canImport(Testing)
-    private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
-        gen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
-        sourceCode: String?,
-        fileID: StaticString,
-        filePath: StaticString,
-        line: UInt,
-        column: UInt,
-        function: StaticString,
-        property: @Sendable (Output) -> Bool
-    ) -> (counterexample: Output, seed: UInt64)? {
-        let suppressIssueReporting = settings.contains { setting in
-            if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
-            return false
-        }
-        guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
-        for encodedSeed in traitConfig.regressions {
-            guard let seed = CrockfordBase32.decode(encodedSeed) else {
-                reportIssue(
-                    "Invalid regression seed: \(encodedSeed)",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-                continue
+    #if canImport(Testing)
+        private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
+            gen: ReflectiveGenerator<Output>,
+            settings: [ExhaustSettings<Output>],
+            sourceCode: String?,
+            fileID: StaticString,
+            filePath: StaticString,
+            line: UInt,
+            column: UInt,
+            function: StaticString,
+            property: @Sendable (Output) -> Bool
+        ) -> (counterexample: Output, seed: UInt64)? {
+            let suppressIssueReporting = settings.contains { setting in
+                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                return false
             }
-            let replayResult = __exhaust(
-                gen,
-                settings: [
-                    .replay(.numeric(seed)),
-                    .suppress(.issueReporting),
-                ] + settings.filter { setting in
-                    if case .budget = setting { return true }
-                    return false
-                },
-                sourceCode: sourceCode,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column,
-                function: function,
-                property: property
-            )
-            if replayResult == nil {
-                if suppressIssueReporting == false {
+            guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
+            for encodedSeed in traitConfig.regressions {
+                guard let seed = CrockfordBase32.decode(encodedSeed) else {
                     reportIssue(
-                        "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                        "Invalid regression seed: \(encodedSeed)",
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
                         column: column
                     )
+                    continue
                 }
-            } else if let counterexample = replayResult {
-                return (counterexample, seed)
+                let replayResult = __exhaust(
+                    gen,
+                    settings: [
+                        .replay(.numeric(seed)),
+                        .suppress(.issueReporting),
+                    ] + settings.filter { setting in
+                        if case .budget = setting { return true }
+                        return false
+                    },
+                    sourceCode: sourceCode,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    function: function,
+                    property: property
+                )
+                if replayResult == nil {
+                    if suppressIssueReporting == false {
+                        reportIssue(
+                            "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                    }
+                } else if let counterexample = replayResult {
+                    return (counterexample, seed)
+                }
             }
+            return nil
         }
-        return nil
-    }
-#endif
-    
+    #endif
+
     /// Runs a property test with a `Void`-returning property that uses `#expect`/`#require` for assertions.
     ///
     /// Wraps the property into a `Bool`-returning form via `withExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
@@ -404,36 +404,36 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 break
             }
         }
-        
+
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
             withoutActuallyEscaping(detection) { detection in
                 let boolProperty = wrapDetectionProperty(detection)
-                
+
                 // Suppress assertion issues during coverage/sampling/reduction.
                 // The final re-run (outside this scope) produces the user-facing assertion output.
                 nonisolated(unsafe) var pipelineResult: Output?
                 nonisolated(unsafe) var capturedSeed: UInt64?
                 nonisolated(unsafe) var capturedRenderedFailure: String?
                 withExpectedIssue(isIntermittent: true) {
-#if canImport(Testing)
-                    if let regression = replayRegressionSeeds(
-                        gen: gen, settings: settings, sourceCode: sourceCode,
-                        fileID: fileID, filePath: filePath, line: line, column: column,
-                        function: function, property: boolProperty
-                    ) {
-                        pipelineResult = regression.counterexample
-                        capturedSeed = regression.seed
-                        return
-                    }
-#endif
-                    
+                    #if canImport(Testing)
+                        if let regression = replayRegressionSeeds(
+                            gen: gen, settings: settings, sourceCode: sourceCode,
+                            fileID: fileID, filePath: filePath, line: line, column: column,
+                            function: function, property: boolProperty
+                        ) {
+                            pipelineResult = regression.counterexample
+                            capturedSeed = regression.seed
+                            return
+                        }
+                    #endif
+
                     // Capture seed and rendered failure from the Bool pipeline.
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
                     augmentedSettings.append(.onReport { report in
                         capturedSeed = report.seed
                         capturedRenderedFailure = report.renderedFailure
                     })
-                    
+
                     // Delegate to the Bool pipeline with suppressed issue reporting.
                     pipelineResult = __exhaust(
                         gen,
@@ -447,9 +447,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         property: boolProperty
                     )
                 }
-                
+
                 guard let counterexample = pipelineResult else { return nil }
-                
+
                 // When suppress(.issueReporting) is set, the caller is asserting on the return value.
                 // Skip the final re-run and replay message.
                 let suppressIssueReporting = settings.contains { setting in
@@ -460,27 +460,27 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     if let rendered = capturedRenderedFailure {
                         reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                     }
-                    
+
                     // Re-run without suppression so #expect failures record with reduced values.
                     do {
                         try property(counterexample)
                     } catch {
                         // Error propagates to Swift Testing naturally.
                     }
-                    
+
                     if let seed = capturedSeed {
                         let encoded = CrockfordBase32.encode(seed)
                         print("exhaust:\(function):replay:\(encoded)")
                     }
                 }
-                
+
                 return counterexample
             }
         } // withConfiguration
     }
-    
+
     // MARK: - Async Property
-    
+
     /// Runs a property test with an async `Bool`-returning property closure.
     ///
     /// Bridges the async property to sync, then dispatches the synchronous core onto a GCD thread where semaphore-blocking is safe.
@@ -511,7 +511,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             )
         }
     }
-    
+
     /// Runs a property test with an async `Void`-returning property that uses `#expect`/`#require` for assertions.
     ///
     /// Bridges the async detection to sync, dispatches the pipeline onto a GCD thread, then re-runs the async property in the original context so `#expect` failures record with reduced values.
@@ -536,34 +536,53 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 logFormat = format
             }
         }
-        
+
         return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
             let syncDetection = bridgeAsyncDetection(detection)
-            
+
             nonisolated(unsafe) var pipelineResult: Output?
             nonisolated(unsafe) var capturedSeed: UInt64?
             nonisolated(unsafe) var capturedRenderedFailure: String?
-            
+
             await dispatchToGCD {
                 // withExpectedIssue cannot be used inside dispatchToGCD because Test.current is nil on the GCD thread, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
-#if canImport(Testing)
-                withKnownIssue(isIntermittent: true) {
-                    if let regression = replayRegressionSeeds(
-                        gen: gen, settings: settings, sourceCode: sourceCode,
-                        fileID: fileID, filePath: filePath, line: line, column: column,
-                        function: function, property: syncDetection
-                    ) {
-                        pipelineResult = regression.counterexample
-                        capturedSeed = regression.seed
-                        return
+                #if canImport(Testing)
+                    withKnownIssue(isIntermittent: true) {
+                        if let regression = replayRegressionSeeds(
+                            gen: gen, settings: settings, sourceCode: sourceCode,
+                            fileID: fileID, filePath: filePath, line: line, column: column,
+                            function: function, property: syncDetection
+                        ) {
+                            pipelineResult = regression.counterexample
+                            capturedSeed = regression.seed
+                            return
+                        }
+
+                        var augmentedSettings = settings + [.suppress(.issueReporting)]
+                        augmentedSettings.append(.onReport { report in
+                            capturedSeed = report.seed
+                            capturedRenderedFailure = report.renderedFailure
+                        })
+
+                        pipelineResult = __exhaust(
+                            gen,
+                            settings: augmentedSettings,
+                            sourceCode: sourceCode,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            function: function,
+                            property: syncDetection
+                        )
                     }
-                    
+                #else
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
                     augmentedSettings.append(.onReport { report in
                         capturedSeed = report.seed
                         capturedRenderedFailure = report.renderedFailure
                     })
-                    
+
                     pipelineResult = __exhaust(
                         gen,
                         settings: augmentedSettings,
@@ -575,30 +594,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         function: function,
                         property: syncDetection
                     )
-                }
-#else
-                var augmentedSettings = settings + [.suppress(.issueReporting)]
-                augmentedSettings.append(.onReport { report in
-                    capturedSeed = report.seed
-                    capturedRenderedFailure = report.renderedFailure
-                })
-                
-                pipelineResult = __exhaust(
-                    gen,
-                    settings: augmentedSettings,
-                    sourceCode: sourceCode,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column,
-                    function: function,
-                    property: syncDetection
-                )
-#endif
+                #endif
             }
-            
+
             guard let counterexample = pipelineResult else { return nil }
-            
+
             let suppressIssueReporting = settings.contains { setting in
                 if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
                 return false
@@ -607,25 +607,25 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 if let rendered = capturedRenderedFailure {
                     reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                 }
-                
+
                 do {
                     try await property(counterexample)
                 } catch {
                     // Error propagates to Swift Testing naturally.
                 }
-                
+
                 if let seed = capturedSeed {
                     let encoded = CrockfordBase32.encode(seed)
                     print("exhaust:\(function):replay:\(encoded)")
                 }
             }
-            
+
             return counterexample
         }
     }
-    
+
     // MARK: - Example
-    
+
     /// Generates a single value from a generator. Runtime target of `#example` expansion.
     public static func __example<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -639,7 +639,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             return value
         }
     }
-    
+
     /// Generates an array of values from a generator. Runtime target of `#example` expansion.
     public static func __exampleArray<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -655,9 +655,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             return results
         }
     }
-    
+
     // MARK: - Examination
-    
+
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     ///
     /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
@@ -682,7 +682,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             )
         }
     }
-    
+
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     ///
     /// Falls back to choice-sequence comparison for non-`Equatable` types.

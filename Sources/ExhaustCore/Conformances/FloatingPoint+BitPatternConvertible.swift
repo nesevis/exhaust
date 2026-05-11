@@ -28,8 +28,8 @@
             // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear.
             // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set.
             let rawBitPattern: UInt16 = bitPattern16 & Self.signBitMask == 0
-                ? ~bitPattern16              // This was a negative number: flip all bits back
-                : bitPattern16 ^ Self.signBitMask  // This was a positive number: flip sign bit back
+                ? ~bitPattern16 // This was a negative number: flip all bits back
+                : bitPattern16 ^ Self.signBitMask // This was a positive number: flip sign bit back
             self = Float16(bitPattern: rawBitPattern)
         }
 
@@ -71,8 +71,8 @@ extension Float: BitPatternConvertible {
         // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear.
         // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set.
         let rawBitPattern: UInt32 = bitPattern32 & Self.signBitMask == 0
-            ? ~bitPattern32              // This was a negative number: flip all bits back
-            : bitPattern32 ^ Self.signBitMask  // This was a positive number: flip sign bit back
+            ? ~bitPattern32 // This was a negative number: flip all bits back
+            : bitPattern32 ^ Self.signBitMask // This was a positive number: flip sign bit back
         self = Float(bitPattern: rawBitPattern)
     }
 
@@ -112,8 +112,8 @@ extension Double: BitPatternConvertible {
         // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear.
         // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set.
         let rawBitPattern: UInt64 = bitPattern64 & Self.signBitMask == 0
-            ? ~bitPattern64              // This was a negative number: flip all bits back
-            : bitPattern64 ^ Self.signBitMask  // This was a positive number: flip sign bit back
+            ? ~bitPattern64 // This was a negative number: flip all bits back
+            : bitPattern64 ^ Self.signBitMask // This was a positive number: flip sign bit back
         self = Double(bitPattern: rawBitPattern)
     }
 

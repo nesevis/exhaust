@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
-
 /// Offline, one-shot tuning that transforms a generator's pick structure using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
 ///
 /// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal ``ReflectiveGenerator`` with synthesised pick structure whose weights reflect predicate satisfaction rates. Reduction is unaffected because the reducer operates on ``ChoiceTree``/``ChoiceSequence`` and is weight-agnostic.
@@ -156,7 +155,6 @@ package enum GeneratorTuning {
 
         case let .impure(op, continuation):
             switch op {
-
             // Tunable sites: operations that consume randomness and can be probed directly.
             case let .pick(choices, branchCount):
                 return try measureAndTunePick(

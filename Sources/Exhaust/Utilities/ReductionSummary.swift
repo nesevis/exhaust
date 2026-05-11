@@ -16,7 +16,8 @@ private func extractSequenceFloors(from sequence: ChoiceSequence) -> Set<UInt64>
     var floors = Set<UInt64>()
     for entry in sequence {
         if case let .sequence(true, validRange: range, isLengthExplicit: _) = entry,
-           let range {
+           let range
+        {
             floors.insert(range.lowerBound)
         }
     }
@@ -26,7 +27,6 @@ private func extractSequenceFloors(from sequence: ChoiceSequence) -> Set<UInt64>
 // MARK: - Change Collector
 
 private struct ReductionChangeCollector {
-
     private let maxDepth = 3
     private let itemCap = 5
 
@@ -75,7 +75,7 @@ private struct ReductionChangeCollector {
             return
         }
 
-        if originalMirror.displayStyle == .collection && reducedMirror.displayStyle == .collection {
+        if originalMirror.displayStyle == .collection, reducedMirror.displayStyle == .collection {
             let originalCount = originalMirror.children.count
             let reducedCount = reducedMirror.children.count
             let atFloor = mayBeAtGeneratorFloor(count: reducedCount)
@@ -85,12 +85,12 @@ private struct ReductionChangeCollector {
             return
         }
 
-        if originalMirror.displayStyle == .dictionary && reducedMirror.displayStyle == .dictionary {
+        if originalMirror.displayStyle == .dictionary, reducedMirror.displayStyle == .dictionary {
             walkDictionary(originalMirror, reducedMirror, path: path, depth: depth)
             return
         }
 
-        if originalMirror.displayStyle == .set && reducedMirror.displayStyle == .set {
+        if originalMirror.displayStyle == .set, reducedMirror.displayStyle == .set {
             let originalCount = originalMirror.children.count
             let reducedCount = reducedMirror.children.count
             let atFloor = mayBeAtGeneratorFloor(count: reducedCount)
@@ -100,12 +100,12 @@ private struct ReductionChangeCollector {
             return
         }
 
-        if originalMirror.displayStyle == .enum && reducedMirror.displayStyle == .enum {
+        if originalMirror.displayStyle == .enum, reducedMirror.displayStyle == .enum {
             walkEnum(original, reduced, originalMirror, reducedMirror, path: path, depth: depth)
             return
         }
 
-        if originalMirror.displayStyle == .tuple && reducedMirror.displayStyle == .tuple {
+        if originalMirror.displayStyle == .tuple, reducedMirror.displayStyle == .tuple {
             if depth < maxDepth {
                 walkTuple(originalMirror, reducedMirror, path: path, depth: depth)
             }
@@ -115,7 +115,7 @@ private struct ReductionChangeCollector {
         let hasChildren = { (mirror: Mirror) in
             (mirror.displayStyle == .struct || mirror.displayStyle == .class) && mirror.children.isEmpty == false
         }
-        if hasChildren(originalMirror) && hasChildren(reducedMirror) && depth < maxDepth {
+        if hasChildren(originalMirror), hasChildren(reducedMirror), depth < maxDepth {
             walkCompound(originalMirror, reducedMirror, path: path, depth: depth)
             return
         }
@@ -299,7 +299,7 @@ private struct ReductionChangeCollector {
         let reducedDescription = briefDescription(reduced)
 
         if originalDescription == reducedDescription {
-            if isAtFloor(reduced) == false && depth <= 2 {
+            if isAtFloor(reduced) == false, depth <= 2 {
                 unchangedNonTrivial.append((path: path, value: reducedDescription))
             }
         } else if isAtFloor(reduced) {
@@ -336,8 +336,8 @@ private struct ReductionChangeCollector {
         // Structural changes: dictionaries and collections
         for change in dictionaryChanges {
             let verb = change.reducedCount < change.originalCount ? "simplified" : "changed"
-            var parts: [String] = [
-                "\(backticked(change.path + ".count")) \(verb) (\(change.originalCount) \u{2192} \(change.reducedCount))"
+            var parts = [
+                "\(backticked(change.path + ".count")) \(verb) (\(change.originalCount) \u{2192} \(change.reducedCount))",
             ]
             if change.removedKeys.isEmpty == false {
                 parts.append("removed \(cappedNaturalList(change.removedKeys.map(quoted)))")
@@ -345,7 +345,7 @@ private struct ReductionChangeCollector {
             if change.addedKeys.isEmpty == false {
                 parts.append("\(cappedNaturalList(change.addedKeys.map(quoted))) added")
             }
-            if change.survivedKeys.isEmpty == false && (change.removedKeys.isEmpty == false || change.addedKeys.isEmpty == false) {
+            if change.survivedKeys.isEmpty == false, change.removedKeys.isEmpty == false || change.addedKeys.isEmpty == false {
                 parts.append("\(cappedNaturalList(change.survivedKeys.map(quoted))) survived")
             }
             sentences.append("- \(parts.joined(separator: "; "))")
@@ -413,7 +413,7 @@ private func shouldInclude(_ child: Mirror.Child) -> Bool {
     return true
 }
 
-// Very naive kludge for `semanticSimplest` given we are unable to correlate the ChoiceSequence with the positioning of the final values in the object
+/// Very naive kludge for `semanticSimplest` given we are unable to correlate the ChoiceSequence with the positioning of the final values in the object
 private func isAtFloor(_ value: Any) -> Bool {
     let mirror = Mirror(reflecting: value)
 

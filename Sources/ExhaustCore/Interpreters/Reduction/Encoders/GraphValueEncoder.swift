@@ -23,7 +23,6 @@ struct GraphValueEncoder: GraphEncoder {
     var mode: Mode = .idle
     var convergenceStore: [Int: ConvergedOrigin] = [:]
 
-
     enum Mode {
         case idle
         case valueLeaves(IntegerState)

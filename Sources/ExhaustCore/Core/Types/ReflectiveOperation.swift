@@ -1,4 +1,5 @@
 // MARK: - Academic Provenance
+
 //
 // Based on the `R b a` effect type (Goldstein §4.3, Fig 4.2). The dissertation defines six primitive operations; Exhaust maps them as follows:
 //
@@ -14,6 +15,7 @@
 //
 // The remaining seven cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`, `transform`.
 
+// swiftlint:disable:next orphaned_doc_comment
 /// The primitive operations that enable bidirectional property-based testing.
 ///
 /// ReflectiveOperation defines the fundamental operations that make reflective generators bidirectional.
@@ -52,6 +54,7 @@
 ///
 /// - SeeAlso: ``ReflectiveGenerator``, ``Gen``, ``Interpreters``
 // MARK: - Interpretation Sites
+
 //
 // Case              Generate                      Reflect           Replay            Adapt / Analyze
 // chooseBits        VACTI / VI                    Reflect.swift     Replay.swift      ChoiceTreeAnalysis
@@ -410,53 +413,52 @@ public enum TransformKind {
     )
 }
 
-extension ReflectiveOperation {
-
+package extension ReflectiveOperation {
     // MARK: - Inner Generator Mapping
 
     /// Applies a transform to this operation's single inner sub-generator, if it has one.
     ///
     /// Returns the rebuilt operation for wrapper operations that contain exactly one sub-generator (`contramap`, `prune`, `resize`, `filter`, `classify`, `unique`, `transform`).
     /// Returns `nil` for operations with zero or multiple sub-generators (`chooseBits`, `just`, `getSize`, `pick`, `zip`, `sequence`, `metamorphic`).
-    package func mapInnerGenerator(
+    func mapInnerGenerator(
         _ transform: (ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<Any>
     ) rethrows -> ReflectiveOperation? {
         switch self {
         case let .contramap(contramapTransform, next):
-            return .contramap(transform: contramapTransform, next: try transform(next))
+            return try .contramap(transform: contramapTransform, next: transform(next))
 
         case let .prune(next):
-            return .prune(next: try transform(next))
+            return try .prune(next: transform(next))
 
         case let .resize(newSize, next):
-            return .resize(newSize: newSize, next: try transform(next))
+            return try .resize(newSize: newSize, next: transform(next))
 
         case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
-            return .filter(
-                gen: try transform(gen),
+            return try .filter(
+                gen: transform(gen),
                 fingerprint: fingerprint,
                 filterType: filterType,
                 predicate: predicate,
-                tuned: try tuned.map(transform),
+                tuned: tuned.map(transform),
                 sourceLocation: sourceLocation
             )
 
         case let .classify(gen, fingerprint, classifiers):
-            return .classify(
-                gen: try transform(gen),
+            return try .classify(
+                gen: transform(gen),
                 fingerprint: fingerprint,
                 classifiers: classifiers
             )
 
         case let .unique(gen, fingerprint, keyExtractor):
-            return .unique(
-                gen: try transform(gen),
+            return try .unique(
+                gen: transform(gen),
                 fingerprint: fingerprint,
                 keyExtractor: keyExtractor
             )
 
         case let .transform(kind, inner):
-            return .transform(kind: kind, inner: try transform(inner))
+            return try .transform(kind: kind, inner: transform(inner))
 
         case .chooseBits, .just, .getSize, .pick, .zip, .sequence:
             return nil
