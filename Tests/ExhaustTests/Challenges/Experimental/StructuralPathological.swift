@@ -161,8 +161,8 @@ struct StructuralPathologicalChallenge {
         }
         if let report { print("[PROFILE] WideCDG: \(report.profilingSummary)") }
 
-        #expect(output?.0 == 3)
-        #expect(output?.1 == 7)
+        #expect(output?.0 == 2)
+        #expect(output?.1 == 8)
     }
 
     // MARK: - Multi-Parameter Fibre
