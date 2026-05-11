@@ -125,7 +125,11 @@ extension ValueAndChoiceTreeInterpreter {
                         context: &context
                     )
                 default:
-                    return try generateRecursive(gen, with: (), context: &context)
+                    guard let (value, tree) = try generateRecursiveAny(
+                        gen.erase(), with: (), context: &context
+                    ) else { return nil }
+                    // swiftlint:disable:next force_cast
+                    return (value as! UInt64, tree)
                 }
 
             default:
