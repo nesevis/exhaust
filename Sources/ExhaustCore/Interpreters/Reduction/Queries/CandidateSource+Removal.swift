@@ -163,9 +163,9 @@ struct SequenceEmptyingSource: CandidateSource {
     private var candidates: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)]
     private var index = 0
 
-    init(graph: some ReadOnlyChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) {
         var entries: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)] = []
-        for scope in RemovalQuery.elementRemovalScopes(graph: graph) {
+        for scope in elementScopes {
             // Only consider single-target (per-parent) scopes for emptying.
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else {
@@ -350,9 +350,9 @@ struct PerElementRemovalSource: CandidateSource {
     private var elements: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)]
     private var index = 0
 
-    init(graph: some ReadOnlyChoiceGraph) {
+    init(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
-        for scope in RemovalQuery.elementRemovalScopes(graph: graph) {
+        for scope in elementScopes {
             // Per-element source only handles single-target scopes.
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             for elementNodeID in target.elementNodeIDs {

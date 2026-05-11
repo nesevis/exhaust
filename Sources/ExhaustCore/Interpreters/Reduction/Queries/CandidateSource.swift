@@ -38,6 +38,8 @@ enum CandidateSourceBuilder {
     static func buildSources(from graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [any CandidateSource] {
         var sources: [any CandidateSource] = []
 
+        let elementScopes = RemovalQuery.elementRemovalScopes(graph: graph)
+
         // Batched cross-sequence removal — most drastic structural reduction.
         let batchedSource = BatchedCrossSequenceRemovalSource(graph: graph)
         if batchedSource.peekPriority != nil {
@@ -45,14 +47,14 @@ enum CandidateSourceBuilder {
         }
 
         // Sequence emptying — per-sequence emptying.
-        let emptyingSource = SequenceEmptyingSource(graph: graph)
+        let emptyingSource = SequenceEmptyingSource(graph: graph, elementScopes: elementScopes)
         if emptyingSource.peekPriority != nil {
             sources.append(emptyingSource)
         }
 
         // Batch removal — one source per sequence with deletable elements.
         // Geometric halving within each sequence (half → quarter → eighth).
-        for scope in RemovalQuery.elementRemovalScopes(graph: graph) {
+        for scope in elementScopes {
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             let source = BatchRemovalSource(
                 sequenceNodeID: target.sequenceNodeID,
@@ -71,7 +73,7 @@ enum CandidateSourceBuilder {
         }
 
         // Per-element removal.
-        let perElementSource = PerElementRemovalSource(graph: graph)
+        let perElementSource = PerElementRemovalSource(graph: graph, elementScopes: elementScopes)
         if perElementSource.peekPriority != nil {
             sources.append(perElementSource)
         }
