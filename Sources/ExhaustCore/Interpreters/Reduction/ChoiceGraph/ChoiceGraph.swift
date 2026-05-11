@@ -38,10 +38,6 @@ package final class ChoiceGraph {
     /// Active pick nodes grouped by fingerprint. Picks in the same group are structurally exchangeable — any pair is a candidate for self-similar replacement. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
     public var selfSimilarityGroups: [UInt64: [Int]]
 
-    /// Node IDs that have been removed from the graph by an in-place mutation but whose array slots are retained for ID stability. Iteration sites must skip these via ``isTombstoned(_:)``.
-    var removedNodeIDs: Set<Int> = []
-
-    /// Lifecycle statistics accumulated on this graph instance. Dynamic fields (``ChoiceGraphStats/dynamicRegionRebuilds``, ``ChoiceGraphStats/dynamicRegionNodesRebuilt``) are incremented by ``applyBindReshape(forLeaf:freshTree:into:)``; construction-time fields are zero until the scheduler calls ``ChoiceGraphStats/from(_:)`` and merges them into ``ReductionStats/graphStats``.
     var graphStats = ChoiceGraphStats()
 
     /// Cached classification verdicts keyed by `BindMetadata.fingerprint`. Survives full graph rebuilds via ``build(from:inheriting:)`` because the fingerprint is derived from the originating `.bind` source location, which is stable for the program's lifetime — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds. Read by the scheduler before dispatching expensive dependent-node encoders so a previously-classified bind site does not re-pay the two materializations that ``classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` would otherwise run.
@@ -49,11 +45,6 @@ package final class ChoiceGraph {
 
     /// Last-observed upstream bit pattern and downstream topology fingerprint per bind site. Keyed by `BindMetadata.fingerprint`. Survives rebuilds so the scheduler can passively classify binds by comparing topology across natural upstream variation without materialisation probes.
     var bindTopologyObservations: [UInt64: BindTopologyObservation] = [:]
-
-    /// Returns true when `nodeID` has been removed from the graph but its array slot is retained. Used by every iteration site on ``ChoiceGraph`` to skip removed nodes.
-    package func isTombstoned(_ nodeID: Int) -> Bool {
-        removedNodeIDs.contains(nodeID)
-    }
 
     // MARK: - Lazy Edge State
 
@@ -190,7 +181,6 @@ package final class ChoiceGraph {
     func recordConvergence(byNodeID records: [Int: ConvergedOrigin]) {
         for (nodeID, origin) in records {
             guard nodeID < nodes.count else { continue }
-            guard isTombstoned(nodeID) == false else { continue }
             guard case var .chooseBits(metadata) = nodes[nodeID].kind else { continue }
             metadata.convergedOrigin = origin
             nodes[nodeID] = nodes[nodeID].with(kind: .chooseBits(metadata))
@@ -200,7 +190,6 @@ package final class ChoiceGraph {
     /// Clears convergence data from all leaf nodes.
     private func clearConvergenceData() {
         for index in nodes.indices {
-            guard isTombstoned(index) == false else { continue }
             guard case var .chooseBits(metadata) = nodes[index].kind else { continue }
             guard metadata.convergedOrigin != nil else { continue }
             metadata.convergedOrigin = nil
@@ -222,31 +211,6 @@ package final class ChoiceGraph {
         self.selfSimilarityGroups = selfSimilarityGroups
     }
 
-    // MARK: - Copy
-
-    /// Returns a structurally independent clone with all field state shared via Swift's COW semantics.
-    ///
-    /// All stored properties are value types (arrays, sets, dictionaries, optionals of those), so the copy is `O(1)` until any subsequent mutation triggers COW on the touched buffer. Used by composed encoders that need to preview a speculative mutation against a throwaway graph — for example, the bound value composition lift closure that applies a bind reshape on a copy via ``apply(_:freshTree:)`` instead of paying the cost of a full ``ChoiceGraph/build(from:)`` rebuild.
-    ///
-    /// The cached lazy fields (``cachedTypeCompatibilityEdges``, ``cachedSourceSinkStatus``, ``cachedTopologicalOrder``, ``cachedDependencyAdjacency``) are also carried over. Any subsequent mutation that calls ``invalidateDerivedEdges()`` or ``invalidateTopologicalCaches()`` on the copy drops them on the copy alone, leaving the parent's caches intact via COW.
-    func copy() -> ChoiceGraph {
-        let result = ChoiceGraph(
-            nodes: nodes,
-            containmentEdges: containmentEdges,
-            dependencyEdges: dependencyEdges,
-            selfSimilarityGroups: selfSimilarityGroups
-        )
-        result.removedNodeIDs = removedNodeIDs
-        result.graphStats = graphStats
-        result.cachedTypeCompatibilityEdges = cachedTypeCompatibilityEdges
-        result.cachedSourceSinkStatus = cachedSourceSinkStatus
-        result.cachedTopologicalOrder = cachedTopologicalOrder
-        result.cachedDependencyAdjacency = cachedDependencyAdjacency
-        result.cachedLiveNodeIDs = cachedLiveNodeIDs
-        result.cachedLeafNodes = cachedLeafNodes
-        result.cachedInnerDescendantToBind = cachedInnerDescendantToBind
-        return result
-    }
 }
 
 // MARK: - Construction
@@ -280,48 +244,4 @@ package extension ChoiceGraph {
         return graph
     }
 
-    /// Returns a diagnostic description if any `chooseBits` node's position range fails to point to a value entry in `sequence`, or `nil` if every leaf position is consistent.
-    ///
-    /// Used after an in-place mutation to detect graph/freshTree structural divergence: when the materializer reshapes the freshTree behind the encoder's back (for example low-fidelity PRNG fallback), the graph's stored positionRanges go stale relative to freshTree. The caller is expected to force a full rebuild on a non-`nil` return.
-    package func leafPositionsDivergence(in sequence: ChoiceSequence) -> String? {
-        for nodeID in liveNodeIDs {
-            let node = nodes[nodeID]
-            guard case .chooseBits = node.kind else { continue }
-            guard let range = node.positionRange else { continue }
-            let position = range.lowerBound
-            if position >= sequence.count {
-                return "chooseBits node \(node.id) positionRange \(range.lowerBound)...\(range.upperBound) exceeds sequence length \(sequence.count). Parents: \(parentChainSummary(of: node.id))"
-            }
-            if sequence[position].value == nil {
-                let neighborStart = Swift.max(0, position - 2)
-                let neighborEnd = Swift.min(sequence.count - 1, position + 2)
-                let neighbors = (neighborStart ... neighborEnd)
-                    .map { "[\($0)]=\(sequence[$0])" }
-                    .joined(separator: " ")
-                return """
-                chooseBits node \(node.id) at position \(position) points to non-value entry: \(sequence[position]). Full positionRange: \(range.lowerBound)...\(range.upperBound). Sequence (\(sequence.count) entries) neighbors: \(neighbors). Parents: \(parentChainSummary(of: node.id))
-                """
-            }
-        }
-        return nil
-    }
-
-    private func parentChainSummary(of nodeID: Int) -> String {
-        var chain: [String] = []
-        var current: Int? = nodeID
-        while let id = current, id < nodes.count, chain.count < 8 {
-            let kindLabel = switch nodes[id].kind {
-            case .chooseBits: "chooseBits"
-            case .pick: "pick"
-            case .bind: "bind"
-            case .zip: "zip"
-            case .sequence: "sequence"
-            case .just: "just"
-            }
-            let rangeLabel = nodes[id].positionRange.map { "\($0.lowerBound)...\($0.upperBound)" } ?? "nil"
-            chain.append("\(id):\(kindLabel)@\(rangeLabel)")
-            current = nodes[id].parent
-        }
-        return chain.joined(separator: " → ")
-    }
 }

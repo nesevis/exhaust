@@ -37,7 +37,6 @@ package extension ChoiceGraph {
         var bindInnerInfo: [Int: Int] = [:]
 
         for node in nodes {
-            guard isTombstoned(node.id) == false else { continue }
             guard case let .bind(metadata) = node.kind else { continue }
             guard node.children.count >= 2 else { continue }
             let innerChildID = node.children[metadata.innerChildIndex]

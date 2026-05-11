@@ -39,7 +39,6 @@ extension ChoiceGraph {
         into application: inout ChangeApplication
     ) {
         guard change.leafNodeID < nodes.count else { return }
-        guard isTombstoned(change.leafNodeID) == false else { return }
         guard case let .chooseBits(metadata) = nodes[change.leafNodeID].kind else { return }
         let updatedMetadata = ChooseBitsMetadata(
             typeTag: metadata.typeTag,

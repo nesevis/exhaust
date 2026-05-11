@@ -342,8 +342,8 @@ struct EncoderInput {
     /// The generator's compositional structure. Required for path-changing operations (replacement with inactive donor) where the encoder must edit the tree and flatten. Also used by permutation for tree-based child swapping.
     let tree: ChoiceTree
 
-    /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction. Typed as ``ReadOnlyChoiceGraph`` to enforce at compile time that encoders read from the graph but never mutate it.
-    let graph: any ReadOnlyChoiceGraph
+    /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction.
+    let graph: ReadOnlyChoiceGraph
 
     /// Warm-start convergence records for leaves in this scope, keyed by graph **nodeID**.
     ///

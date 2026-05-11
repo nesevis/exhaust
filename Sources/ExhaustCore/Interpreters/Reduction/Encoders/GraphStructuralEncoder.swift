@@ -35,7 +35,7 @@ struct GraphStructuralEncoder: GraphEncoder {
     struct CoveringAlignedState {
         let scope: CoveringAlignedRemovalScope
         let baseSequence: ChoiceSequence
-        let graph: any ReadOnlyChoiceGraph
+        let graph: ReadOnlyChoiceGraph
     }
 
     mutating func start(scope: EncoderInput) {

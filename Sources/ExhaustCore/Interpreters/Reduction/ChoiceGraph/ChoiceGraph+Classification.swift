@@ -25,7 +25,7 @@ extension ChoiceGraph {
         fallbackTree: ChoiceTree,
         upstreamLeafNodeID: Int
     ) {
-        guard bindNodeID < nodes.count, isTombstoned(bindNodeID) == false else { return }
+        guard bindNodeID < nodes.count else { return }
         guard case let .bind(bindMetadata) = nodes[bindNodeID].kind else { return }
         if bindMetadata.classification != nil { return }
 
@@ -48,7 +48,7 @@ extension ChoiceGraph {
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree
     ) -> (classification: BindClassification, fingerprint: UInt64?) {
-        guard upstreamLeafNodeID < nodes.count, isTombstoned(upstreamLeafNodeID) == false else {
+        guard upstreamLeafNodeID < nodes.count else {
             return (BindClassification(topology: .unclassifiable, liftability: .neither), nil)
         }
         guard case let .chooseBits(leafMetadata) = nodes[upstreamLeafNodeID].kind else {
