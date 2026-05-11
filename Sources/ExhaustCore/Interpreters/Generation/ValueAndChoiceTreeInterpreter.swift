@@ -63,7 +63,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             return nil
         }
 
-        // Per-run seed derivation: each run gets an independent PRNG
         if !context.isFixed {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
@@ -71,8 +70,19 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         defer {
             context.runs += 1
         }
+
+        if erasedGenerator == nil {
+            erasedGenerator = generator.erase()
+        }
+
         do {
-            return try Self.generateRecursive(generator, with: (), context: &context)
+            guard let (value, tree) = try Self.generateRecursiveAny(
+                erasedGenerator!, with: (), context: &context
+            ) else {
+                return nil
+            }
+            // swiftlint:disable:next force_cast
+            return (value as! FinalOutput, tree)
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
                 category: .generation,
@@ -158,7 +168,17 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         context.runs = failingRunIndex
         defer { context.runs = savedRuns }
 
-        return try Self.generateRecursive(generator, with: (), context: &context)
+        if erasedGenerator == nil {
+            erasedGenerator = generator.erase()
+        }
+
+        guard let (value, tree) = try Self.generateRecursiveAny(
+            erasedGenerator!, with: (), context: &context
+        ) else {
+            return nil
+        }
+        // swiftlint:disable:next force_cast
+        return (value as! FinalOutput, tree)
     }
 
     /// Used to generate results around a similar level of complexity. Intended to be used to increase pool of results to compare against.
@@ -174,22 +194,37 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         return fixed
     }
 
-    // MARK: - Recursive Engine
+    // MARK: - Generic Wrapper
 
-    /// Interprets a generator in the forward direction, producing a value and the corresponding ``ChoiceTree``.
-    ///
-    /// Walks the ``FreerMonad`` spine: `.pure` returns immediately; `.impure` dispatches the ``ReflectiveOperation`` to the appropriate handler (chooseBits, pick, sequence, filter, and so on), then feeds the result into the continuation. The `inputValue` carries the contramap input for prune/contramap operations; it is `()` at the top-level call.
-    ///
-    /// - Returns: The generated value paired with its choice tree, or `nil` if generation fails (for example, filter exhaustion or PRNG budget exceeded).
+    /// Typed entry point that erases to ``generateRecursiveAny`` and casts the result back.
     static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
         context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
-        // Size override only affects the first call, not all subsequent ones
+        guard let (value, tree) = try generateRecursiveAny(
+            gen.erase(), with: inputValue as Any, context: &context
+        ) else {
+            return nil
+        }
+        // swiftlint:disable:next force_cast
+        return (value as! Output, tree)
+    }
+
+    // MARK: - Recursive Engine
+
+    /// Non-generic recursive engine operating entirely on type-erased generators and values.
+    ///
+    /// Walks the ``FreerMonad`` spine: `.pure` returns immediately; `.impure` dispatches the ``ReflectiveOperation`` to the appropriate handler (chooseBits, pick, sequence, filter, and so on), then feeds the result into the continuation. The `inputValue` carries the contramap input for prune/contramap operations; it is `()` at the top-level call.
+    ///
+    /// - Returns: The generated value paired with its choice tree, or `nil` if generation fails (for example, filter exhaustion or PRNG budget exceeded).
+    static func generateRecursiveAny(
+        _ gen: ReflectiveGenerator<Any>,
+        with inputValue: Any,
+        context: inout GenerationContext
+    ) throws -> (Any, ChoiceTree)? {
         switch gen {
         case let .pure(value):
-            // The ChoiceTree value will be discarded from the caller if it's coming from .chooseBits
             return (value, .just)
 
         case let .impure(operation, continuation):
@@ -313,7 +348,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
-                    guard let (result, tree) = try Self.generateRecursive(
+                    guard let (result, tree) = try Self.generateRecursiveAny(
                         filteredGen,
                         with: inputValue,
                         context: &context
@@ -339,7 +374,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
                 throw GeneratorError.sparseValidityCondition
 
-                    // MARK: - Classify
+                // MARK: - Classify
 
             case let .classify(gen, fingerprint, classifiers):
                 return try handleClassify(
@@ -365,7 +400,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             case let .unique(gen, fingerprint, keyExtractor):
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
-                    guard let (result, tree) = try Self.generateRecursive(
+                    guard let (result, tree) = try Self.generateRecursiveAny(
                         gen,
                         with: inputValue,
                         context: &context
@@ -400,20 +435,20 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     // MARK: - Run Continuation
 
     @inline(__always)
-    private static func runContinuation<Output>(
+    private static func runContinuation(
         result: Any,
         calleeChoiceTree: ChoiceTree,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let nextGen = try continuation(result)
 
         // Optimisation! Do not remove. This early return cuts 70% of the time for string generators
         if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
             return (value, calleeChoiceTree)
         }
-        if let (continuationResult, innerChoiceTree) = try generateRecursive(
+        if let (continuationResult, innerChoiceTree) = try generateRecursiveAny(
             nextGen,
             with: inputValue,
             context: &context
@@ -427,17 +462,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         return nil
     }
 
-    /// Generates the inner value of a contramap operation, then feeds it through the continuation.
-    ///
-    /// Contramap does not produce its own choice tree node — the inner generator's tree is passed through unchanged. The `inputValue` is forwarded to the inner generator so that prune/contramap chains compose correctly.
     @inline(__always)
-    private static func handleContramap<Output>(
+    private static func handleContramap(
         _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
-        guard let (result, tree) = try generateRecursive(
+    ) throws -> (Any, ChoiceTree)? {
+        guard let (result, tree) = try generateRecursiveAny(
             nextGen,
             with: inputValue,
             context: &context
@@ -454,16 +486,16 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handlePrune<Output>(
+    private static func handlePrune(
         _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
         }
-        guard let (result, tree) = try Self.generateRecursive(
+        guard let (result, tree) = try Self.generateRecursiveAny(
             nextGen,
             with: wrappedValue,
             context: &context
@@ -480,13 +512,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handlePick<Output>(
+    private static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         branchCount: UInt64,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         guard let selectedChoice = WeightedPickSelection.draw(
             from: choices,
             using: &context.prng
@@ -497,7 +529,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let fingerprint = choices[0].fingerprint
 
         if context.materializePicks == false {
-            guard let result = try generateRecursive(
+            guard let result = try generateRecursiveAny(
                 selectedChoice.generator,
                 with: inputValue,
                 context: &context
@@ -524,15 +556,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)
-        var finalValue: Output?
+        var finalValue: Any?
 
         for choice in choices {
             let isSelected = choice.id == selectedChoice.id
-            var value: Output?
+            var value: Any?
             var branch: ChoiceTree?
 
             if isSelected {
-                if let result = try generateRecursive(
+                if let result = try generateRecursiveAny(
                     choice.generator,
                     with: inputValue,
                     context: &context
@@ -556,7 +588,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
             } else {
                 var branchContext = context.jump(seed: jumpSeed)
-                if let result = try generateRecursive(
+                if let result = try generateRecursiveAny(
                     choice.generator,
                     with: inputValue,
                     context: &branchContext
@@ -596,16 +628,16 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handleChooseBits<Output>(
+    private static func handleChooseBits(
         min: UInt64,
         max: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling?,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let effectiveRange: ClosedRange<UInt64>
         if let scaling {
             let size = consumeSize(&context)
@@ -646,20 +678,22 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handleSequence<Output>(
+    private static func handleSequence(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
-        guard let (length, lengthTrees) = try generateRecursive(
-            lengthGen,
+    ) throws -> (Any, ChoiceTree)? {
+        guard let (lengthAny, lengthTrees) = try generateRecursiveAny(
+            lengthGen.erase(),
             with: inputValue,
             context: &context
         ) else {
             return nil
         }
+        // swiftlint:disable:next force_cast
+        let length = lengthAny as! UInt64
 
         var results: [Any] = []
         var elements: [ChoiceTree] = []
@@ -667,7 +701,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         elements.reserveCapacity(Int(length))
 
         for _ in 0 ..< length {
-            guard let (result, element) = try generateRecursive(
+            guard let (result, element) = try generateRecursiveAny(
                 elementGen,
                 with: inputValue,
                 context: &context
@@ -697,20 +731,20 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handleZip<Output>(
+    private static func handleZip(
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
         isOpaque: Bool,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
         var choiceTrees = [ChoiceTree]()
         choiceTrees.reserveCapacity(generators.count)
 
         for gen in generators {
-            guard let (result, tree) = try generateRecursive(
+            guard let (result, tree) = try generateRecursiveAny(
                 gen,
                 with: inputValue,
                 context: &context
@@ -730,15 +764,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handleResize<Output>(
+    private static func handleResize(
         newSize: UInt64,
         gen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         context.sizeOverride = newSize
-        guard let result = try generateRecursive(gen, with: inputValue, context: &context) else {
+        guard let result = try generateRecursiveAny(gen, with: inputValue, context: &context) else {
             return nil
         }
         let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [result.1])
@@ -752,18 +786,18 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handleTransform<Output>(
+    private static func handleTransform(
         kind: TransformKind,
         inner: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> (Any, ChoiceTree)? {
         let result: Any
         let resultTree: ChoiceTree
         switch kind {
         case let .map(forward, _, _):
-            guard let (innerValue, innerTree) = try generateRecursive(
+            guard let (innerValue, innerTree) = try generateRecursiveAny(
                 inner, with: inputValue, context: &context
             ) else {
                 return nil
@@ -771,7 +805,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             result = try forward(innerValue)
             resultTree = innerTree
         case let .bind(fingerprint, forward, _, _, _):
-            guard let (innerValue, innerTree) = try generateRecursive(
+            guard let (innerValue, innerTree) = try generateRecursiveAny(
                 inner, with: inputValue, context: &context
             ) else {
                 return nil
@@ -780,7 +814,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             let savedMaterializePicks = context.materializePicks
             context.materializePicks = false
             defer { context.materializePicks = savedMaterializePicks }
-            guard let (boundValue, boundTree) = try generateRecursive(
+            guard let (boundValue, boundTree) = try generateRecursiveAny(
                 boundGen, with: inputValue, context: &context
             ) else {
                 return nil
@@ -789,7 +823,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             resultTree = .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
         case let .metamorphic(transforms, _):
             let savedState = (context.prng.seed, context.prng.currentState)
-            guard let (original, innerTree) = try generateRecursive(
+            guard let (original, innerTree) = try generateRecursiveAny(
                 inner, with: inputValue, context: &context
             ) else {
                 return nil
@@ -798,7 +832,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             results.reserveCapacity(transforms.count + 1)
             for transform in transforms {
                 context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
-                guard let (copy, _) = try generateRecursive(
+                guard let (copy, _) = try generateRecursiveAny(
                     inner, with: inputValue, context: &context
                 ) else {
                     return nil
@@ -818,15 +852,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    private static func handleClassify<Output>(
+    private static func handleClassify(
         _ gen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
         classifiers: [(label: String, predicate: (Any) -> Bool)],
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
+        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inputValue: Any,
         context: inout GenerationContext
-    ) throws -> (Output, ChoiceTree)? {
-        guard let (result, tree) = try generateRecursive(
+    ) throws -> (Any, ChoiceTree)? {
+        guard let (result, tree) = try generateRecursiveAny(
             gen,
             with: inputValue,
             context: &context
@@ -834,13 +868,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             return nil
         }
         for (label, classifier) in classifiers where classifier(result) {
-            if context.classifications[fingerprint] == nil {
-                context.classifications[fingerprint] = [:]
-            }
-            if context.classifications[fingerprint]![label] == nil {
-                context.classifications[fingerprint]![label] = []
-            }
-            context.classifications[fingerprint]![label]!.insert(context.runs)
+            context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
         }
         return try runContinuation(
             result: result,
