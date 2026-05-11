@@ -140,6 +140,9 @@ extension ChoiceGraphScheduler {
             guard exploitTransformation.precondition.isSatisfied(in: graph) else {
                 continue
             }
+            if case .minimize(.boundValue) = exploitTransformation.operation {
+                continue
+            }
 
             let warmStarts = extractWarmStarts(from: graph)
             let exploitScope = TransformationScope(
