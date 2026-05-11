@@ -117,13 +117,9 @@ extension ChoiceGraphScheduler {
                 state.graph.recordConvergence(byNodeID: convergence)
             }
 
-            if outcome.accepted {
-                if outcome.requiresRebuild {
-                    state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
-                    exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
-                } else if outcome.requiresSourceRebuild {
-                    exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
-                }
+            if outcome.accepted, outcome.requiresRebuild {
+                state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
             }
         }
         state.rejectCache = savedRejectCache

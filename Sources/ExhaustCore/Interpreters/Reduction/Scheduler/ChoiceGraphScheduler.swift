@@ -316,12 +316,6 @@ enum ChoiceGraphScheduler {
                         Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
                             "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
                         ])
-                    } else if outcome.requiresSourceRebuild {
-                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
-
-                        Self.logReducer("graph_inplace_reshape", isInstrumented: state.isInstrumented, metadata: [
-                            "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
-                        ])
                     }
                 } else {
                     scopeRejectionCache.recordRejection(

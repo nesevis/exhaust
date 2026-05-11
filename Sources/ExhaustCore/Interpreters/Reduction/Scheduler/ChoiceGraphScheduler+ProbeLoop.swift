@@ -8,17 +8,12 @@
 extension ChoiceGraphScheduler {
     /// Outcome of a single ``runProbeLoop`` invocation.
     ///
-    /// Three accepted states:
+    /// ``requiresRebuild`` is true when at least one accepted probe triggered a structural change (reshape, removal, pivot). The scheduler must rebuild the graph from the tree before the next dispatch. When false, all accepted probes were value-only and the graph remains structurally valid.
     ///
-    /// - ``requiresRebuild`` true: at least one accepted probe set ``ChangeApplication/requiresFullRebuild``. The graph is stale; the cycle loop must do a full rebuild + source rebuild before the next dispatch.
-    /// - ``requiresSourceRebuild`` true (and ``requiresRebuild`` false): at least one accepted probe was a successful in-place reshape that added or removed graph nodes. The graph is in sync via ``ChoiceGraph/apply(_:freshTree:)``, but the existing scope sources captured node IDs at construction time and do not know about the new nodes. The cycle loop must rebuild sources from the (already up-to-date) graph; the graph itself does not need a full rebuild.
-    /// - both false: every accepted probe was a pure value-only fast-path application that touched no node-set membership. The graph and the existing sources are both still valid.
-    ///
-    /// ``treeIsStripped`` reports whether the *latest* accepted probe used `materializePicks: false`. The cycle loop reads it before any rebuild path: when true, the carried `tree` is missing inactive pick branches and must be re-materialized with `materializePicks: true` before ``ChoiceGraph/build(from:)``, otherwise the rebuilt graph's ``PickMetadata/branchElements`` would contain only the selected branch and silently break ``GraphReplacementEncoder``'s branch enumeration on the next cycle. False when no probe accepted, when only `materializePicks: true` probes accepted, or when the latest acceptance happened to be a non-stripped one.
+    /// ``treeIsStripped`` reports whether the latest accepted probe used `materializePicks: false`. When true and a rebuild is needed, the scheduler must re-materialize with `materializePicks: true` first.
     struct ProbeLoopOutcome {
         let accepted: Bool
         let requiresRebuild: Bool
-        let requiresSourceRebuild: Bool
         let treeIsStripped: Bool
     }
 
@@ -33,7 +28,6 @@ extension ChoiceGraphScheduler {
         var lastAccepted = false
         var anyAccepted = false
         var anyRequiresRebuild = false
-        var anyRequiresSourceRebuild = false
         var latestAcceptedTreeIsStripped = false
         var probeCount = 0
         var acceptCount = 0
@@ -105,36 +99,14 @@ extension ChoiceGraphScheduler {
                 }
                 latestAcceptedTreeIsStripped = picksUnchanged
 
-                let application: ChangeApplication
                 if encoder.requiresExactDecoder {
-                    application = ChangeApplication()
                     anyRequiresRebuild = true
                     mutatedStructurally = true
                 } else {
-                    application = state.graph.apply(mutation, freshTree: state.tree)
+                    let application = state.graph.apply(mutation, freshTree: state.tree)
                     if application.requiresFullRebuild {
                         anyRequiresRebuild = true
                         break
-                    }
-                }
-                if application.addedNodeIDs.isEmpty == false
-                    || application.removedNodeIDs.isEmpty == false
-                {
-                    anyRequiresSourceRebuild = true
-                    mutatedStructurally = true
-                }
-                if state.isInstrumented, application.requiresFullRebuild == false {
-                    let fresh = ChoiceGraph.build(from: state.tree)
-                    if state.graph.structuralFingerprint != fresh.structuralFingerprint {
-                        ExhaustLog.warning(
-                            category: .reducer,
-                            event: "graph_apply_shadow_mismatch",
-                            metadata: [
-                                "encoder": encoder.name.rawValue,
-                                "live_fp": "\(state.graph.structuralFingerprint)",
-                                "fresh_fp": "\(fresh.structuralFingerprint)",
-                            ]
-                        )
                     }
                 }
             } else {
@@ -179,7 +151,6 @@ extension ChoiceGraphScheduler {
         return ProbeLoopOutcome(
             accepted: anyAccepted,
             requiresRebuild: anyRequiresRebuild,
-            requiresSourceRebuild: anyRequiresSourceRebuild,
             treeIsStripped: latestAcceptedTreeIsStripped
         )
     }

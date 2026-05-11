@@ -127,8 +127,8 @@ struct ChoiceGraphClassificationTests {
 
     // MARK: - Reshape clears classification
 
-    @Test("Applying a bind-inner reshape clears classification")
-    func bindReshapeClearsClassification() throws {
+    @Test("Applying a bind-inner reshape signals full rebuild")
+    func bindReshapeSignalsRebuild() throws {
         let gen = makeCouplingLikeGen()
         let tree = try generateTree(from: gen, seed: 12)
         let graph = ChoiceGraph.build(from: tree)
@@ -136,49 +136,20 @@ struct ChoiceGraphClassificationTests {
         let bindNodeID = try #require(firstActiveBindNodeID(in: graph))
         let upstreamLeafNodeID = try #require(innerLeafNodeID(ofBind: bindNodeID, in: graph))
 
-        graph.classifyBind(
-            at: bindNodeID,
-            gen: gen.erase(),
-            baseSequence: sequence,
-            fallbackTree: tree,
-            upstreamLeafNodeID: upstreamLeafNodeID
-        )
-        #expect(bindClassification(at: bindNodeID, in: graph) != nil)
-
-        // Rematerialize with a different upstream value to produce a freshTree whose
-        // bind-inner differs from the live graph, then apply as a reshape change.
         let currentLeafMetadata = try #require(chooseBitsMetadata(ofNodeID: upstreamLeafNodeID, in: graph))
-        let currentBitPattern = currentLeafMetadata.value.bitPattern64
-        let shiftedBitPattern: UInt64 = currentBitPattern == 0 ? 3 : 0
+        let shiftedBitPattern: UInt64 = currentLeafMetadata.value.bitPattern64 == 0 ? 3 : 0
         let shiftedChoice = ChoiceValue(
             currentLeafMetadata.typeTag.makeConvertible(bitPattern64: shiftedBitPattern),
             tag: currentLeafMetadata.typeTag
         )
-        var candidate = sequence
-        let upstreamPosition = try #require(graph.nodes[upstreamLeafNodeID].positionRange?.lowerBound)
-        candidate[upstreamPosition] = .value(.init(
-            choice: shiftedChoice,
-            validRange: currentLeafMetadata.validRange,
-            isRangeExplicit: currentLeafMetadata.isRangeExplicit
-        ))
-        guard case let .success(_, freshTree, _) = Materializer.materializeAny(
-            gen.erase(),
-            prefix: candidate,
-            mode: .guided(seed: 0, fallbackTree: tree),
-            fallbackTree: tree,
-            materializePicks: true
-        ) else {
-            Issue.record("reshape materialization failed")
-            return
-        }
         let reshapeChange = LeafChange(
             leafNodeID: upstreamLeafNodeID,
             newValue: shiftedChoice,
             mayReshape: true
         )
-        _ = graph.apply(.leafValues([reshapeChange]), freshTree: freshTree)
+        let application = graph.apply(.leafValues([reshapeChange]), freshTree: tree)
 
-        #expect(bindClassification(at: bindNodeID, in: graph) == nil)
+        #expect(application.requiresFullRebuild)
     }
 
     // MARK: - Topology Walker (pure)
