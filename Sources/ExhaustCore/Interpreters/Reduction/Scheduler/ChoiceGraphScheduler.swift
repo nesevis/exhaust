@@ -33,6 +33,7 @@ enum ChoiceGraphScheduler {
         var rejectCache: Set<UInt64>
         let gen: ReflectiveGenerator<Any>
         let property: (Any) -> Bool
+        let tuning: SchedulerTuning
         let collectStats: Bool
         let isInstrumented: Bool
     }
@@ -113,6 +114,7 @@ enum ChoiceGraphScheduler {
             rejectCache: [],
             gen: erasedGen,
             property: wrappedProperty,
+            tuning: config.tuning,
             collectStats: collectStats,
             isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer)
         )
@@ -130,7 +132,7 @@ enum ChoiceGraphScheduler {
         ])
 
         var scopeRejectionCache = CandidateRejectionCache()
-        var gate = BoundValueGate()
+        var gate = BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
         var hadReplacementShortlexRejection = false
         var deferBindInner = state.graph.reductionEdges.isEmpty == false
 
@@ -161,57 +163,47 @@ enum ChoiceGraphScheduler {
                     continue
                 }
 
-                guard transformation.operation.isValid(in: state.graph) else {
-                    continue
-                }
-
-                if scopeRejectionCache.isRejected(
-                    operation: transformation.operation,
+                var decision = Self.evaluateDispatch(
+                    transformation: transformation,
+                    graph: state.graph,
                     sequence: state.sequence,
-                    graph: state.graph
-                ) {
+                    gate: gate,
+                    scopeCache: scopeRejectionCache,
+                    graphIsStripped: graphIsStripped,
+                    anyAccepted: anyAccepted
+                )
+
+                if case let .classifyBind(bindNodeID, fingerprint) = decision {
+                    guard case let .minimize(.boundValue(bindScope)) = transformation.operation else {
+                        continue
+                    }
+                    state.graph.classifyBind(
+                        at: bindNodeID,
+                        gen: state.gen,
+                        baseSequence: state.sequence,
+                        fallbackTree: state.tree,
+                        upstreamLeafNodeID: bindScope.upstreamLeafNodeID
+                    )
+                    guard case let .bind(updatedMetadata) = state.graph.nodes[bindNodeID].kind,
+                          let classification = updatedMetadata.classification
+                    else {
+                        continue
+                    }
+                    if classification.topology != .identical || classification.liftability != .both {
+                        gate.markFruitless(fingerprint)
+                        continue
+                    }
+                    decision = .readyToDispatch(boundValueFingerprint: fingerprint)
+                }
+
+                switch decision {
+                case .skip:
                     continue
-                }
 
-                var boundValueFingerprint: UInt64?
-                if case let .minimize(.boundValue(bindScope)) = transformation.operation {
-                    guard case let .bind(bindMetadata) = state.graph.nodes[bindScope.bindNodeID].kind else {
-                        continue
-                    }
-                    let fingerprint = bindMetadata.fingerprint
-                    boundValueFingerprint = fingerprint
-                    switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
-                    case .skip:
-                        continue
-                    case .classifyFirst:
-                        let classification: BindClassification
-                        if let cached = state.graph.bindClassifications[fingerprint] {
-                            classification = cached
-                        } else {
-                            state.graph.classifyBind(
-                                at: bindScope.bindNodeID,
-                                gen: state.gen,
-                                baseSequence: state.sequence,
-                                fallbackTree: state.tree,
-                                upstreamLeafNodeID: bindScope.upstreamLeafNodeID
-                            )
-                            guard case let .bind(updatedMetadata) = state.graph.nodes[bindScope.bindNodeID].kind,
-                                  let verdict = updatedMetadata.classification
-                            else {
-                                continue
-                            }
-                            classification = verdict
-                        }
-                        if classification.topology != .identical || classification.liftability != .both {
-                            gate.markFruitless(fingerprint)
-                            continue
-                        }
-                    case .dispatch:
-                        break
-                    }
-                }
+                case .classifyBind:
+                    continue
 
-                if graphIsStripped, transformation.operation.isPathChanging {
+                case .rematerialize:
                     if case let .success(_, fullTree, _) = Materializer.materializeAny(
                         state.gen,
                         prefix: state.sequence,
@@ -226,70 +218,78 @@ enum ChoiceGraphScheduler {
                     sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
                     graphIsStripped = false
                     continue
-                }
 
-                let warmStarts = extractWarmStarts(from: state.graph)
-                let scope = EncoderInput(
-                    transformation: transformation,
-                    baseSequence: state.sequence,
-                    tree: state.tree,
-                    graph: state.graph,
-                    warmStartRecords: warmStarts
-                )
-
-                var encoder: any GraphEncoder
-                if case let .minimize(.boundValue(bindScope)) = transformation.operation,
-                   let fingerprint = boundValueFingerprint
-                {
-                    encoder = Self.makeBoundValueComposition(
-                        bindScope: bindScope,
-                        scope: scope,
+                case let .readyToDispatch(boundValueFingerprint):
+                    let warmStarts = extractWarmStarts(from: state.graph)
+                    let scope = EncoderInput(
+                        transformation: transformation,
+                        baseSequence: state.sequence,
+                        tree: state.tree,
                         graph: state.graph,
-                        gen: state.gen,
-                        upstreamBudget: gate.decayedBudget(fingerprint: fingerprint)
+                        warmStartRecords: warmStarts
                     )
-                    gate.markDispatched(fingerprint)
-                } else {
-                    encoder = Self.selectEncoder(for: transformation.operation)
-                }
-                let outcome = try runProbeLoop(
-                    encoder: &encoder,
-                    scope: scope,
-                    state: &state
-                )
 
-                encoder.flushPartialConvergence()
+                    var encoder: any GraphEncoder
+                    if case let .minimize(.boundValue(bindScope)) = transformation.operation,
+                       let fingerprint = boundValueFingerprint
+                    {
+                        encoder = Self.makeBoundValueComposition(
+                            bindScope: bindScope,
+                            scope: scope,
+                            graph: state.graph,
+                            gen: state.gen,
+                            upstreamBudget: gate.decayedBudget(fingerprint: fingerprint)
+                        )
+                        gate.markDispatched(fingerprint)
+                    } else {
+                        encoder = Self.selectEncoder(for: transformation.operation)
+                    }
+                    let outcome = try runProbeLoop(
+                        encoder: &encoder,
+                        scope: scope,
+                        state: &state
+                    )
 
-                let convergence = encoder.convergenceRecords
-                if convergence.isEmpty == false {
-                    state.graph.recordConvergence(byNodeID: convergence)
-                }
+                    encoder.flushPartialConvergence()
 
-                if let fingerprint = boundValueFingerprint {
-                    gate.recordOutcome(fingerprint: fingerprint, accepted: outcome.accepted)
-                }
-
-                if hadReplacementShortlexRejection == false,
-                   let structuralEncoder = encoder as? GraphStructuralEncoder,
-                   structuralEncoder.hadReplacementShortlexRejection
-                {
-                    hadReplacementShortlexRejection = true
-                }
-
-                if outcome.accepted {
-                    anyAccepted = true
-
-                    let isBoundValue = switch transformation.operation {
-                    case .minimize(.boundValue):
-                        true
-                    default:
-                        false
+                    let convergence = encoder.convergenceRecords
+                    if convergence.isEmpty == false {
+                        state.graph.recordConvergence(byNodeID: convergence)
                     }
 
-                    if outcome.requiresRebuild || isBoundValue {
+                    if let fingerprint = boundValueFingerprint {
+                        gate.recordOutcome(fingerprint: fingerprint, accepted: outcome.accepted)
+                    }
+
+                    if hadReplacementShortlexRejection == false,
+                       let structuralEncoder = encoder as? GraphStructuralEncoder,
+                       structuralEncoder.hadReplacementShortlexRejection
+                    {
+                        hadReplacementShortlexRejection = true
+                    }
+
+                    let acceptanceAction = Self.evaluateAcceptance(
+                        outcome: outcome,
+                        operation: transformation.operation
+                    )
+
+                    if outcome.accepted {
+                        anyAccepted = true
+                    }
+
+                    switch acceptanceAction {
+                    case .continueDispatching:
+                        if outcome.accepted == false {
+                            scopeRejectionCache.recordRejection(
+                                operation: transformation.operation,
+                                sequence: state.sequence,
+                                graph: state.graph
+                            )
+                        }
+
+                    case let .rebuildAndResume(treeIsStripped):
                         var boundPositionRange: ClosedRange<Int>?
-                        if isBoundValue,
-                           case let .minimize(.boundValue(bindScope)) = transformation.operation,
+                        if case let .minimize(.boundValue(bindScope)) = transformation.operation,
                            bindScope.bindNodeID < state.graph.nodes.count,
                            case let .bind(bindMetadata) = state.graph.nodes[bindScope.bindNodeID].kind,
                            state.graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
@@ -300,7 +300,7 @@ enum ChoiceGraphScheduler {
 
                         let graphBeforeRebuild = state.graph
                         state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
-                        graphIsStripped = outcome.treeIsStripped
+                        graphIsStripped = treeIsStripped
 
                         if let boundRange = boundPositionRange {
                             for nodeID in state.graph.leafNodes {
@@ -319,43 +319,43 @@ enum ChoiceGraphScheduler {
                             "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
                         ])
                     }
-                } else {
-                    scopeRejectionCache.recordRejection(
-                        operation: transformation.operation,
-                        sequence: state.sequence,
-                        graph: state.graph
-                    )
                 }
             }
 
-            if anyAccepted == false, allValuesConverged(in: state.sequence, graph: state.graph) {
-                _ = try confirmConvergence(state: &state)
-            }
+            let postCycle = evaluatePostCycle(
+                outcome: CycleOutcome(
+                    anyAccepted: anyAccepted,
+                    hadReplacementShortlexRejection: hadReplacementShortlexRejection,
+                    allConverged: allValuesConverged(in: state.sequence, graph: state.graph),
+                    improved: state.sequence != sequenceBeforeCycle,
+                    structurallyImproved: state.sequence.count < sequenceBeforeCycle.count
+                ),
+                stallBudget: stallBudget,
+                maxStalls: config.maxStalls,
+                deferBindInner: deferBindInner
+            )
 
-            if anyAccepted == false, hadReplacementShortlexRejection {
-                let relaxResult = try runRelaxRound(state: &state)
-                if relaxResult {
-                    anyAccepted = true
-                    scopeRejectionCache.clear()
+            for action in postCycle.actions {
+                switch action {
+                case .confirmConvergence:
+                    _ = try confirmConvergence(state: &state)
+                case .relaxRound:
+                    let relaxResult = try runRelaxRound(state: &state)
+                    if relaxResult {
+                        anyAccepted = true
+                        scopeRejectionCache.clear()
+                    }
+                case .releaseDeferral:
+                    Self.logReducer("bind_inner_deferral_released", isInstrumented: state.isInstrumented, metadata: [
+                        "cycle": "\(cycles)", "seq_len": "\(state.sequence.count)",
+                    ])
                 }
             }
 
-            let improved = state.sequence != sequenceBeforeCycle
-            if improved {
-                stallBudget = config.maxStalls
-            } else {
-                stallBudget -= 1
-            }
+            stallBudget = postCycle.newStallBudget
+            deferBindInner = postCycle.newDeferBindInner
 
             let structurallyImproved = state.sequence.count < sequenceBeforeCycle.count
-
-            if deferBindInner, structurallyImproved == false {
-                deferBindInner = false
-                Self.logReducer("bind_inner_deferral_released", isInstrumented: state.isInstrumented, metadata: [
-                    "cycle": "\(cycles)", "seq_len": "\(state.sequence.count)",
-                ])
-            }
-
             if structurallyImproved == false,
                anyAccepted == false,
                allValuesConverged(in: state.sequence, graph: state.graph)
@@ -364,7 +364,7 @@ enum ChoiceGraphScheduler {
             }
 
             Self.logReducer("graph_cycle_end", isInstrumented: state.isInstrumented, metadata: [
-                "cycle": "\(cycles)", "improved": "\(improved)",
+                "cycle": "\(cycles)", "improved": "\(postCycle.newStallBudget == config.maxStalls ? "true" : "false")",
                 "seq_len": "\(state.sequence.count)", "total_mats": "\(state.stats.totalMaterializations)",
             ])
         }
@@ -480,6 +480,113 @@ enum ChoiceGraphScheduler {
         ExhaustLog.debug(category: .reducer, event: event, metadata: metadata())
     }
 
+    // MARK: - Post-Acceptance Evaluation
+
+    /// What the scheduler should do after a probe loop completes.
+    enum PostAcceptanceAction: Equatable {
+        /// Value-only change. The graph is still structurally valid; continue dispatching from the current source set.
+        case continueDispatching
+
+        /// Structural change or bound value acceptance. The graph must be rebuilt from the tree before the next dispatch.
+        case rebuildAndResume(treeIsStripped: Bool)
+    }
+
+    /// Determines whether the scheduler should rebuild the graph after an accepted probe.
+    ///
+    /// Pure function of the probe outcome and the operation type. Does not perform the rebuild or any other effect.
+    static func evaluateAcceptance(
+        outcome: ProbeLoopOutcome,
+        operation: GraphOperation
+    ) -> PostAcceptanceAction {
+        guard outcome.accepted else {
+            return .continueDispatching
+        }
+        let isBoundValue = switch operation {
+        case .minimize(.boundValue):
+            true
+        default:
+            false
+        }
+        if outcome.requiresRebuild || isBoundValue {
+            return .rebuildAndResume(treeIsStripped: outcome.treeIsStripped)
+        }
+        return .continueDispatching
+    }
+
+    // MARK: - Dispatch Evaluation
+
+    /// Decision returned by ``evaluateDispatch`` indicating what the inner loop should do with a candidate transformation.
+    enum DispatchDecision: Equatable {
+        /// Skip this transformation and continue to the next candidate.
+        case skip
+
+        /// The operation targets a bound value scope whose bind has not been classified yet. The scheduler must run the classification effect and then re-evaluate with the classification result.
+        case classifyBind(bindNodeID: Int, fingerprint: UInt64)
+
+        /// The graph is stripped (picks not materialized) and the operation is path-changing. The scheduler must rematerialize and rebuild before continuing.
+        case rematerialize
+
+        /// The transformation passed all gates and is ready to dispatch.
+        case readyToDispatch(boundValueFingerprint: UInt64?)
+    }
+
+    /// Determines whether a candidate transformation should be dispatched, skipped, or requires an effect before proceeding.
+    ///
+    /// Pure function of the transformation, graph state, caches, and flags. Does not mutate the graph, gate, or caches.
+    static func evaluateDispatch(
+        transformation: GraphTransformation,
+        graph: ChoiceGraph,
+        sequence: ChoiceSequence,
+        gate: BoundValueGate,
+        scopeCache: CandidateRejectionCache,
+        graphIsStripped: Bool,
+        anyAccepted: Bool
+    ) -> DispatchDecision {
+        guard transformation.operation.isValid(in: graph) else {
+            return .skip
+        }
+
+        if scopeCache.isRejected(
+            operation: transformation.operation,
+            sequence: sequence,
+            graph: graph
+        ) {
+            return .skip
+        }
+
+        if case let .minimize(.boundValue(bindScope)) = transformation.operation {
+            guard bindScope.bindNodeID < graph.nodes.count,
+                  case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind
+            else {
+                return .skip
+            }
+            let fingerprint = bindMetadata.fingerprint
+
+            switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
+            case .skip:
+                return .skip
+            case .classifyFirst:
+                if let cached = graph.bindClassifications[fingerprint] {
+                    if cached.topology != .identical || cached.liftability != .both {
+                        return .skip
+                    }
+                } else {
+                    return .classifyBind(bindNodeID: bindScope.bindNodeID, fingerprint: fingerprint)
+                }
+            case .dispatch:
+                break
+            }
+
+            return .readyToDispatch(boundValueFingerprint: fingerprint)
+        }
+
+        if graphIsStripped, transformation.operation.isPathChanging {
+            return .rematerialize
+        }
+
+        return .readyToDispatch(boundValueFingerprint: nil)
+    }
+
     // MARK: - Encoder Selection
 
     /// Selects the appropriate encoder for a graph operation type.
@@ -500,5 +607,66 @@ enum ChoiceGraphScheduler {
         case .reorder:
             GraphReorderEncoder()
         }
+    }
+
+    // MARK: - Post-Cycle Evaluation
+
+    /// Snapshot of what happened during a single reduction cycle, used by ``evaluatePostCycle`` to determine the next action.
+    struct CycleOutcome: Sendable {
+        let anyAccepted: Bool
+        let hadReplacementShortlexRejection: Bool
+        let allConverged: Bool
+        let improved: Bool
+        let structurallyImproved: Bool
+    }
+
+    /// Actions the scheduler should take after a reduction cycle completes.
+    ///
+    /// Termination is not an action — it depends on post-effect state (a successful relax round prevents termination; convergence confirmation can clear stale floors that change the `allValuesConverged` result). The caller re-checks termination conditions after executing all actions.
+    enum PostCycleAction: Equatable, Sendable {
+        case confirmConvergence
+        case relaxRound
+        case releaseDeferral
+    }
+
+    /// Result of evaluating a cycle's outcome, containing the actions to take and updated loop control state.
+    struct PostCycleEvaluation: Equatable, Sendable {
+        let actions: [PostCycleAction]
+        let newStallBudget: Int
+        let newDeferBindInner: Bool
+    }
+
+    /// Determines what should happen after a reduction cycle completes.
+    ///
+    /// Pure function of the cycle outcome, current stall budget, deferral state, and max stalls. Returns the ordered list of actions to attempt and the updated loop control values.
+    static func evaluatePostCycle(
+        outcome: CycleOutcome,
+        stallBudget: Int,
+        maxStalls: Int,
+        deferBindInner: Bool
+    ) -> PostCycleEvaluation {
+        var actions: [PostCycleAction] = []
+
+        if outcome.anyAccepted == false, outcome.allConverged {
+            actions.append(.confirmConvergence)
+        }
+
+        if outcome.anyAccepted == false, outcome.hadReplacementShortlexRejection {
+            actions.append(.relaxRound)
+        }
+
+        let newStallBudget = outcome.improved ? maxStalls : stallBudget - 1
+
+        var newDeferBindInner = deferBindInner
+        if deferBindInner, outcome.structurallyImproved == false {
+            newDeferBindInner = false
+            actions.append(.releaseDeferral)
+        }
+
+        return PostCycleEvaluation(
+            actions: actions,
+            newStallBudget: newStallBudget,
+            newDeferBindInner: newDeferBindInner
+        )
     }
 }

@@ -25,7 +25,11 @@ struct BoundValueGate {
     private var stallCount: [UInt64: Int] = [:]
     private var fruitless = Set<UInt64>()
 
-    private static let baseBudget = 15
+    private let baseBudget: Int
+
+    init(baseBudget: Int) {
+        self.baseBudget = baseBudget
+    }
 
     mutating func resetForNewCycle() {
         dispatchedThisCycle.removeAll(keepingCapacity: true)
@@ -57,7 +61,7 @@ struct BoundValueGate {
 
     func decayedBudget(fingerprint: UInt64) -> Int {
         let stalls = stallCount[fingerprint, default: 0]
-        return max(1, Self.baseBudget >> stalls)
+        return max(1, baseBudget >> stalls)
     }
 
     mutating func recordOutcome(fingerprint: UInt64, accepted: Bool) {
