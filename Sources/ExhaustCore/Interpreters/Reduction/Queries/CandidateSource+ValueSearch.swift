@@ -6,7 +6,7 @@
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
-    static func buildMinimizationCandidates(graph: some ReadOnlyChoiceGraph, deferBindInner: Bool) -> [GraphTransformation] {
+    static func buildMinimizationCandidates(graph: ChoiceGraph, deferBindInner: Bool) -> [GraphTransformation] {
         let innerDescendantToBind = QueryHelpers.buildInnerDescendantToBind(graph: graph)
         var results: [GraphTransformation] = []
 
@@ -50,7 +50,7 @@ extension CandidateSourceBuilder {
         return results
     }
 
-    static func buildExchangeCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+    static func buildExchangeCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
 
         for scope in ExchangeQuery.build(graph: graph) {
@@ -103,7 +103,7 @@ extension CandidateSourceBuilder {
         return results
     }
 
-    private static func computeValueYield(leafNodeID: Int, graph: some ReadOnlyChoiceGraph, innerDescendantToBind: [Int: Int]) -> Int {
+    private static func computeValueYield(leafNodeID: Int, graph: ChoiceGraph, innerDescendantToBind: [Int: Int]) -> Int {
         guard let bindNodeID = innerDescendantToBind[leafNodeID] else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
         guard metadata.isStructurallyConstant == false else { return 0 }

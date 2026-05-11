@@ -68,7 +68,7 @@ struct GraphLockstepEncoder: GraphEncoder {
         startLockstep(scope: tandemScope, graph: graph)
     }
 
-    mutating func refreshState(graph: some ReadOnlyChoiceGraph, sequence newSequence: ChoiceSequence) {
+    mutating func refreshState(graph: ChoiceGraph, sequence newSequence: ChoiceSequence) {
         valueState.reset(sequence: newSequence)
         mode = .idle
 

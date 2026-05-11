@@ -9,7 +9,7 @@ extension GraphValueEncoder {
     mutating func startInteger(
         scope: ValueMinimizationScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph,
+        graph: ChoiceGraph,
         warmStarts: [Int: ConvergedOrigin],
         preservingConvergence: [Int: ConvergedOrigin] = [:],
         armBatchZero: Bool = true

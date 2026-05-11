@@ -11,13 +11,25 @@
 enum ReplacementQuery {
     /// Computes replacement scopes from self-similarity groups, pick nodes, and descendant promotion candidates.
     ///
-    /// - Returns: All replacement scopes across the three sub-types.
-    static func build(graph: some ReadOnlyChoiceGraph) -> [ReplacementScope] {
+    /// When `previousGraph` is provided (mid-cycle incremental rebuild), groups whose membership and subtree sizes are unchanged are skipped — their candidates were already available in the previous source build and will be re-enumerated at the next cycle start.
+    ///
+    /// - Parameters:
+    ///   - graph: The current choice graph.
+    ///   - previousGraph: The graph from before the most recent rebuild. When non-nil, unchanged self-similarity groups are skipped.
+    /// - Returns: Replacement scopes for changed (or all, if `previousGraph` is nil) groups.
+    static func build(graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil) -> [ReplacementScope] {
         var scopes: [ReplacementScope] = []
 
+        let unchangedFingerprints: Set<UInt64> = computeUnchangedFingerprints(
+            graph: graph,
+            previousGraph: previousGraph
+        )
+
         // Self-similar substitution: for each group of picks with the same fingerprint, generate one scope per ordered pair where the target is larger than the donor (positive size delta), plus one scope per zero-delta pair.
-        for (_, group) in graph.selfSimilarityGroups {
+        for (fingerprint, group) in graph.selfSimilarityGroups {
             guard group.count >= 2 else { continue }
+            if unchangedFingerprints.contains(fingerprint) { continue }
+
             var indexA = 0
             while indexA < group.count {
                 let nodeA = group[indexA]
@@ -28,23 +40,23 @@ enum ReplacementQuery {
                     let sizeB = graph.nodes[nodeB].positionRange?.count ?? 0
                     let sizeDelta = sizeA - sizeB
                     if sizeDelta > 0 {
-                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                        scopes.append(.selfSimilar(
                             targetNodeID: nodeA,
                             donorNodeID: nodeB,
                             sizeDelta: sizeDelta
-                        )))
+                        ))
                     } else if sizeDelta < 0 {
-                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                        scopes.append(.selfSimilar(
                             targetNodeID: nodeB,
                             donorNodeID: nodeA,
                             sizeDelta: -sizeDelta
-                        )))
+                        ))
                     } else {
-                        scopes.append(.selfSimilar(SelfSimilarReplacementScope(
+                        scopes.append(.selfSimilar(
                             targetNodeID: nodeA,
                             donorNodeID: nodeB,
                             sizeDelta: 0
-                        )))
+                        ))
                     }
                     indexB += 1
                 }
@@ -65,14 +77,13 @@ enum ReplacementQuery {
                 let branchID = UInt64(index)
                 guard branchID != metadata.selectedID else { continue }
 
-                // Leaf-count gate: skip branches with more leaves than the current selection.
                 let candidateLeafCount = leafCount(in: metadata.branchElements[index])
                 guard candidateLeafCount <= selectedLeafCount else { continue }
 
-                scopes.append(.branchPivot(BranchPivotScope(
+                scopes.append(.branchPivot(
                     pickNodeID: nodeID,
                     targetBranchID: branchID
-                )))
+                ))
             }
         }
 
@@ -81,6 +92,7 @@ enum ReplacementQuery {
             let node = graph.nodes[nodeID]
             guard case let .pick(ancestorMetadata) = node.kind else { continue }
             guard let ancestorRange = node.positionRange else { continue }
+            if unchangedFingerprints.contains(ancestorMetadata.fingerprint) { continue }
             guard let group = graph.selfSimilarityGroups[ancestorMetadata.fingerprint] else { continue }
             for descendantID in group {
                 guard descendantID != nodeID else { continue }
@@ -90,15 +102,38 @@ enum ReplacementQuery {
                 let reachable = graph.isReachable(from: nodeID, to: descendantID)
                     || isContainmentDescendant(descendantID, of: nodeID, graph: graph)
                 guard reachable else { continue }
-                scopes.append(.descendantPromotion(DescendantPromotionScope(
+                scopes.append(.descendantPromotion(
                     ancestorPickNodeID: nodeID,
                     descendantPickNodeID: descendantID,
                     sizeDelta: sizeDelta
-                )))
+                ))
             }
         }
 
         return scopes
+    }
+
+    // MARK: - Incremental Comparison
+
+    /// Returns the set of fingerprints whose self-similarity groups are unchanged between `previousGraph` and `graph`.
+    ///
+    /// A group is unchanged when it has the same member count and the same sorted multiset of subtree sizes (position range counts). Unchanged groups produce identical replacement scopes, so mid-cycle rebuilds can skip them.
+    private static func computeUnchangedFingerprints(
+        graph: ChoiceGraph,
+        previousGraph: ChoiceGraph?
+    ) -> Set<UInt64> {
+        guard let previousGraph else { return [] }
+        var unchanged = Set<UInt64>()
+        for (fingerprint, newGroup) in graph.selfSimilarityGroups {
+            guard let oldGroup = previousGraph.selfSimilarityGroups[fingerprint] else { continue }
+            guard oldGroup.count == newGroup.count else { continue }
+            let oldSizes = oldGroup.map { previousGraph.nodes[$0].positionRange?.count ?? 0 }.sorted()
+            let newSizes = newGroup.map { graph.nodes[$0].positionRange?.count ?? 0 }.sorted()
+            if oldSizes == newSizes {
+                unchanged.insert(fingerprint)
+            }
+        }
+        return unchanged
     }
 
     // MARK: - Private Helpers
@@ -121,7 +156,7 @@ enum ReplacementQuery {
     private static func isContainmentDescendant(
         _ descendant: Int,
         of ancestor: Int,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> Bool {
         var current = descendant
         while let parentID = graph.nodes[current].parent {

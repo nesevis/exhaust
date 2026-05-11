@@ -55,7 +55,7 @@ enum GraphOperation {
     /// Collects node IDs whose position ranges are affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
     ///
     /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
-    func affectedNodeIDs(in _: some ReadOnlyChoiceGraph) -> [Int]? {
+    func affectedNodeIDs(in _: ChoiceGraph) -> [Int]? {
         switch self {
         case let .remove(scope):
             switch scope {
@@ -94,7 +94,7 @@ enum GraphOperation {
 
 extension GraphOperation {
     /// Whether this operation can be dispatched against the current graph state.
-    func isValid(in graph: some ReadOnlyChoiceGraph) -> Bool {
+    func isValid(in graph: ChoiceGraph) -> Bool {
         switch self {
         case let .remove(.elements(scope)):
             return scope.targets.allSatisfy { target in

@@ -9,7 +9,7 @@ extension GraphStructuralEncoder {
         into candidate: inout ChoiceSequence,
         scope: RemovalScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ProjectedMutation? {
         switch scope {
         case let .elements(elementScope):
@@ -23,13 +23,13 @@ extension GraphStructuralEncoder {
                 }
             )
 
-        case let .subtree(subtreeScope):
-            guard let built = buildSubtreeCandidate(scope: subtreeScope, sequence: sequence, graph: graph) else {
+        case let .subtree(nodeID, _):
+            guard let built = buildSubtreeCandidate(nodeID: nodeID, sequence: sequence, graph: graph) else {
                 return nil
             }
             candidate = built
             return .sequenceElementsRemoved(
-                [(seqNodeID: graph.nodes[subtreeScope.nodeID].parent ?? -1, removedNodeIDs: [subtreeScope.nodeID])]
+                [(seqNodeID: graph.nodes[nodeID].parent ?? -1, removedNodeIDs: [nodeID])]
             )
 
         case .coveringAligned:
@@ -42,7 +42,7 @@ extension GraphStructuralEncoder {
     private func buildElementCandidate(
         scope: ElementRemovalScope,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
         var rangeSet = RangeSet<Int>()
         for target in scope.targets {
@@ -64,7 +64,7 @@ extension GraphStructuralEncoder {
     private func elementExtent(
         for elementNodeID: Int,
         inSequence sequenceNodeID: Int,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ClosedRange<Int>? {
         guard sequenceNodeID < graph.nodes.count else { return nil }
         guard case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind
@@ -81,11 +81,11 @@ extension GraphStructuralEncoder {
 
     /// Removes a structural subtree.
     private func buildSubtreeCandidate(
-        scope: SubtreeRemovalScope,
+        nodeID: Int,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        guard let range = graph.nodes[scope.nodeID].positionRange else { return nil }
+        guard let range = graph.nodes[nodeID].positionRange else { return nil }
         var rangeSet = RangeSet<Int>()
         rangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
         var candidate = sequence

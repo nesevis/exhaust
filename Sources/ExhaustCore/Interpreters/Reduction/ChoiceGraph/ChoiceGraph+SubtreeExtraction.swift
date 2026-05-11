@@ -206,7 +206,6 @@ extension ChoiceGraph {
         var steps: [BindPathStep] = []
         var current = nodeID
         while let parentID = nodes[current].parent {
-            guard isTombstoned(parentID) == false else { return nil }
             let parent = nodes[parentID]
             switch parent.kind {
             case let .sequence(metadata):

@@ -19,7 +19,7 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
     private var lastEmittedRange: (start: Int, end: Int)?
     private var exhausted: Bool
 
-    init(graph: some ReadOnlyChoiceGraph) {
+    init(graph: ChoiceGraph) {
         // Group antichain members by parent sequence.
         var parentToElements: [Int: [Int]] = [:]
         for nodeID in graph.deletionAntichain {
@@ -166,7 +166,7 @@ struct BatchRemovalSource: CandidateSource {
     private var triedTail: Bool
     private var exhausted: Bool
 
-    init(sequenceNodeID: Int, graph: some ReadOnlyChoiceGraph) {
+    init(sequenceNodeID: Int, graph: ChoiceGraph) {
         self.sequenceNodeID = sequenceNodeID
         var elementList: [(nodeID: Int, positionRange: ClosedRange<Int>)] = []
         let node = graph.nodes[sequenceNodeID]
@@ -275,7 +275,7 @@ struct BatchRemovalSource: CandidateSource {
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
-    static func buildEmptyingCandidates(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
+    static func buildEmptyingCandidates(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
         for scope in elementScopes {
             // Only consider single-target (per-parent) scopes for emptying.
@@ -313,7 +313,7 @@ extension CandidateSourceBuilder {
         return results
     }
 
-    static func buildPerElementCandidates(graph: some ReadOnlyChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
+    static func buildPerElementCandidates(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
         for scope in elementScopes {
             // Per-element source only handles single-target scopes.
@@ -364,7 +364,7 @@ extension CandidateSourceBuilder {
         }
     }
 
-    static func buildAlignedCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+    static func buildAlignedCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         let scopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
             .sorted { $0.maxElementYield > $1.maxElementYield }
 

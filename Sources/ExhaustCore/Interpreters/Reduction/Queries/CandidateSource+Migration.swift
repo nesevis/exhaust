@@ -6,7 +6,7 @@
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
-    static func buildMigrationCandidates(graph: some ReadOnlyChoiceGraph) -> [GraphTransformation] {
+    static func buildMigrationCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var entries: [(scope: MigrationScope, yield: Int)] = []
 
         // Find all sequence node pairs where source is earlier than receiver.

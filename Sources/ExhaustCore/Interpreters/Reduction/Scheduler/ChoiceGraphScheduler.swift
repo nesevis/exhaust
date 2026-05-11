@@ -221,8 +221,9 @@ enum ChoiceGraphScheduler {
                     ) {
                         state.tree = fullTree
                     }
+                    let graphBeforeRebuild = state.graph
                     state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
-                    sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
+                    sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
                     graphIsStripped = false
                     continue
                 }
@@ -297,6 +298,7 @@ enum ChoiceGraphScheduler {
                             boundPositionRange = state.graph.nodes[boundChildID].positionRange
                         }
 
+                        let graphBeforeRebuild = state.graph
                         state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
                         graphIsStripped = outcome.treeIsStripped
 
@@ -311,15 +313,9 @@ enum ChoiceGraphScheduler {
                             }
                         }
                         scopeRejectionCache.clear()
-                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
+                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
 
                         Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
-                            "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
-                        ])
-                    } else if outcome.requiresSourceRebuild {
-                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
-
-                        Self.logReducer("graph_inplace_reshape", isInstrumented: state.isInstrumented, metadata: [
                             "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
                         ])
                     }
@@ -409,13 +405,13 @@ enum ChoiceGraphScheduler {
         let oldConvergence = extractAllConvergence(from: oldGraph)
         let inheritedClassifications = oldGraph.bindClassifications
         let inheritedObservations = oldGraph.bindTopologyObservations
-        let newGraph = ChoiceGraph.build(
+        var newGraph = ChoiceGraph.build(
             from: tree,
             inheriting: inheritedClassifications,
             observations: inheritedObservations
         )
         newGraph.observeBindTopologies(tree: tree)
-        transferConvergence(oldConvergence, to: newGraph)
+        transferConvergence(oldConvergence, to: &newGraph)
         stats.graphStats.fullGraphRebuilds += 1
         return newGraph
     }

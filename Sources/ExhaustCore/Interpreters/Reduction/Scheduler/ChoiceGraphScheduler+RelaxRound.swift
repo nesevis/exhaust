@@ -117,13 +117,9 @@ extension ChoiceGraphScheduler {
                 state.graph.recordConvergence(byNodeID: convergence)
             }
 
-            if outcome.accepted {
-                if outcome.requiresRebuild {
-                    state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
-                    exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
-                } else if outcome.requiresSourceRebuild {
-                    exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
-                }
+            if outcome.accepted, outcome.requiresRebuild {
+                state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
             }
         }
         state.rejectCache = savedRejectCache
@@ -139,7 +135,7 @@ extension ChoiceGraphScheduler {
         state.tree = checkpointTree
         state.output = checkpointOutput
         state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
-        transferConvergence(checkpointConvergence, to: state.graph)
+        transferConvergence(checkpointConvergence, to: &state.graph)
 
         Self.logReducer("relax_round_rolled_back", isInstrumented: state.isInstrumented, metadata: [
             "seq_len": "\(state.sequence.count)",
@@ -151,33 +147,36 @@ extension ChoiceGraphScheduler {
 
     private static func buildRelaxCandidates(
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
 
         for scope in ReplacementQuery.build(graph: graph) {
             switch scope {
-            case let .branchPivot(pivotScope):
+            case let .branchPivot(pickNodeID, targetBranchID):
                 if let candidate = buildUnguardedBranchPivot(
-                    scope: pivotScope,
+                    pickNodeID: pickNodeID,
+                    targetBranchID: targetBranchID,
                     sequence: sequence,
                     graph: graph
                 ) {
                     candidates.append(candidate)
                 }
 
-            case let .selfSimilar(selfSimilarScope):
+            case let .selfSimilar(targetNodeID, donorNodeID, _):
                 if let candidate = buildUnguardedSelfSimilar(
-                    scope: selfSimilarScope,
+                    targetNodeID: targetNodeID,
+                    donorNodeID: donorNodeID,
                     sequence: sequence,
                     graph: graph
                 ) {
                     candidates.append(candidate)
                 }
 
-            case let .descendantPromotion(promotionScope):
+            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
                 if let candidate = buildUnguardedDescendantPromotion(
-                    scope: promotionScope,
+                    ancestorPickNodeID: ancestorPickNodeID,
+                    descendantPickNodeID: descendantPickNodeID,
                     sequence: sequence,
                     graph: graph
                 ) {
@@ -191,13 +190,14 @@ extension ChoiceGraphScheduler {
     }
 
     private static func buildUnguardedBranchPivot(
-        scope: BranchPivotScope,
+        pickNodeID: Int,
+        targetBranchID: UInt64,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        guard scope.pickNodeID < graph.nodes.count else { return nil }
-        guard case let .pick(pickMetadata) = graph.nodes[scope.pickNodeID].kind else { return nil }
-        guard let pickRange = graph.nodes[scope.pickNodeID].positionRange else { return nil }
+        guard pickNodeID < graph.nodes.count else { return nil }
+        guard case let .pick(pickMetadata) = graph.nodes[pickNodeID].kind else { return nil }
+        guard let pickRange = graph.nodes[pickNodeID].positionRange else { return nil }
 
         let elements = pickMetadata.branchElements
         guard pickMetadata.selectedChildIndex < elements.count else { return nil }
@@ -205,7 +205,7 @@ extension ChoiceGraphScheduler {
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
             case let .branch(_, _, candidateID, _, _):
-                candidateID == scope.targetBranchID
+                candidateID == targetBranchID
             default:
                 false
             }
@@ -217,7 +217,7 @@ extension ChoiceGraphScheduler {
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
         replacement.append(.group(true))
-        replacement.append(.branch(.init(id: scope.targetBranchID, branchCount: pickMetadata.branchCount)))
+        replacement.append(.branch(.init(id: targetBranchID, branchCount: pickMetadata.branchCount)))
         replacement.append(contentsOf: targetContent)
         replacement.append(.group(false))
 
@@ -227,17 +227,18 @@ extension ChoiceGraphScheduler {
     }
 
     private static func buildUnguardedSelfSimilar(
-        scope: SelfSimilarReplacementScope,
+        targetNodeID: Int,
+        donorNodeID: Int,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        guard let targetRange = graph.nodes[scope.targetNodeID].positionRange,
-              let donorRange = graph.nodes[scope.donorNodeID].positionRange
+        guard let targetRange = graph.nodes[targetNodeID].positionRange,
+              let donorRange = graph.nodes[donorNodeID].positionRange
         else { return nil }
         let donorEntries = Array(sequence[donorRange.lowerBound ... donorRange.upperBound])
         let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
             donorEntries,
-            donorNodeID: scope.donorNodeID,
+            donorNodeID: donorNodeID,
             donorRangeStart: donorRange.lowerBound,
             graph: graph
         )
@@ -248,17 +249,18 @@ extension ChoiceGraphScheduler {
     }
 
     private static func buildUnguardedDescendantPromotion(
-        scope: DescendantPromotionScope,
+        ancestorPickNodeID: Int,
+        descendantPickNodeID: Int,
         sequence: ChoiceSequence,
-        graph: some ReadOnlyChoiceGraph
+        graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        guard let ancestorRange = graph.nodes[scope.ancestorPickNodeID].positionRange,
-              let descendantRange = graph.nodes[scope.descendantPickNodeID].positionRange
+        guard let ancestorRange = graph.nodes[ancestorPickNodeID].positionRange,
+              let descendantRange = graph.nodes[descendantPickNodeID].positionRange
         else { return nil }
         let descendantEntries = Array(sequence[descendantRange.lowerBound ... descendantRange.upperBound])
         let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
             descendantEntries,
-            donorNodeID: scope.descendantPickNodeID,
+            donorNodeID: descendantPickNodeID,
             donorRangeStart: descendantRange.lowerBound,
             graph: graph
         )

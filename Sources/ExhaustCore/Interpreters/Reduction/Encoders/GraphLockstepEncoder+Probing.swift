@@ -9,7 +9,7 @@ extension GraphLockstepEncoder {
     /// Builds suffix-window plans from each tandem group and dispatches the lockstep state.
     ///
     /// For each group of same-tag leaves, generates plans that drop progressively more leading entries — this prevents a near-target leader from blocking the whole set.
-    mutating func startLockstep(scope: TandemScope, graph: some ReadOnlyChoiceGraph) {
+    mutating func startLockstep(scope: TandemScope, graph: ChoiceGraph) {
         var plans: [LockstepWindowPlan] = []
 
         for group in scope.groups {

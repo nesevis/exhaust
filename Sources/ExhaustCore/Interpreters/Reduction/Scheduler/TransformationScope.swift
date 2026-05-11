@@ -13,7 +13,7 @@ enum RemovalScope {
     case elements(ElementRemovalScope)
 
     /// Remove a structural subtree (bind subtree, zip child, or other compound element in the deletion antichain).
-    case subtree(SubtreeRemovalScope)
+    case subtree(nodeID: Int, yield: Int)
 
     /// Covering-array-backed aligned removal across sibling sequences under a common zip. The encoder pulls rows from the covering array generator, decoding each into an element deletion combination with pairwise interaction coverage.
     case coveringAligned(CoveringAlignedRemovalScope)
@@ -42,16 +42,6 @@ struct SequenceRemovalTarget {
     let elementNodeIDs: [Int]
 }
 
-/// Scope for structural subtree removal.
-///
-/// Targets compound elements in the deletion antichain — bind subtrees, zip children, or other structural nodes with ``ChoiceGraphNode/positionRange`` count greater than one.
-struct SubtreeRemovalScope {
-    /// The node to remove.
-    let nodeID: Int
-
-    /// Yield: position range count.
-    let yield: Int
-}
 
 // MARK: - Covering Aligned Removal
 
@@ -91,48 +81,13 @@ struct CoveringAlignedRemovalScope {
 /// Replacement is the only operation type that changes the generator's active execution path. Active donors (non-nil position range) enable sequence surgery. Inactive donors (nil position range) require tree edit and flatten.
 enum ReplacementScope {
     /// Splice a donor subtree along a self-similarity edge.
-    case selfSimilar(SelfSimilarReplacementScope)
+    case selfSimilar(targetNodeID: Int, donorNodeID: Int, sizeDelta: Int)
 
     /// Change the selected branch at a pick node.
-    case branchPivot(BranchPivotScope)
+    case branchPivot(pickNodeID: Int, targetBranchID: UInt64)
 
     /// Collapse one recursion level via direct descendant promotion.
-    case descendantPromotion(DescendantPromotionScope)
-}
-
-/// Scope for self-similar subtree replacement.
-struct SelfSimilarReplacementScope {
-    /// Target node (larger) to be replaced.
-    let targetNodeID: Int
-
-    /// Donor node (smaller) providing replacement content.
-    let donorNodeID: Int
-
-    /// Size delta (positive = reduction).
-    let sizeDelta: Int
-}
-
-/// Scope for branch pivot at a pick node.
-///
-/// Each scope targets one pick site and one non-selected alternative. The encoder uses the pick node's position range from the graph to locate and replace the relevant entries in the sequence directly.
-struct BranchPivotScope {
-    /// The pick node.
-    let pickNodeID: Int
-
-    /// The non-selected branch to try.
-    let targetBranchID: UInt64
-}
-
-/// Scope for direct descendant promotion.
-struct DescendantPromotionScope {
-    /// The ancestor pick node.
-    let ancestorPickNodeID: Int
-
-    /// The descendant pick node to promote.
-    let descendantPickNodeID: Int
-
-    /// Estimated size reduction.
-    let sizeDelta: Int
+    case descendantPromotion(ancestorPickNodeID: Int, descendantPickNodeID: Int, sizeDelta: Int)
 }
 
 // MARK: - Minimization Scopes
@@ -258,17 +213,8 @@ struct TandemGroup {
 ///
 /// Permutation reorders children at a node without modifying structure or values. It is an exact reduction with zero structural and value yield, accepted purely on shortlex improvement.
 enum PermutationScope {
-    /// Reorder same-shaped siblings within a zip node.
-    case siblingPermutation(SiblingPermutationScope)
-}
-
-/// Scope for sibling permutation at a parent node (zip or sequence).
-struct SiblingPermutationScope {
-    /// The parent node whose children may be permuted. May be a zip or a sequence.
-    let parentNodeID: Int
-
-    /// Groups of same-shaped children that can be swapped. Each inner array contains node IDs of children with the same structural shape.
-    let swappableGroups: [[Int]]
+    /// Reorder same-shaped siblings within a zip or sequence node.
+    case siblingPermutation(parentNodeID: Int, swappableGroups: [[Int]])
 }
 
 // MARK: - Migration Scopes
@@ -342,8 +288,8 @@ struct EncoderInput {
     /// The generator's compositional structure. Required for path-changing operations (replacement with inactive donor) where the encoder must edit the tree and flatten. Also used by permutation for tree-based child swapping.
     let tree: ChoiceTree
 
-    /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction. Typed as ``ReadOnlyChoiceGraph`` to enforce at compile time that encoders read from the graph but never mutate it.
-    let graph: any ReadOnlyChoiceGraph
+    /// The current choice graph. Provides node metadata (position ranges, leaf values, type tags) for candidate construction.
+    let graph: ChoiceGraph
 
     /// Warm-start convergence records for leaves in this scope, keyed by graph **nodeID**.
     ///
