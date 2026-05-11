@@ -51,7 +51,7 @@ struct GraphLockstepEncoder: GraphEncoder {
 
     // MARK: - GraphEncoder
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         valueState.reset(sequence: scope.baseSequence)
         mode = .idle
 
@@ -68,11 +68,11 @@ struct GraphLockstepEncoder: GraphEncoder {
         startLockstep(scope: tandemScope, graph: graph)
     }
 
-    mutating func refreshScope(graph: some ReadOnlyChoiceGraph, sequence newSequence: ChoiceSequence) {
+    mutating func refreshState(graph: some ReadOnlyChoiceGraph, sequence newSequence: ChoiceSequence) {
         valueState.reset(sequence: newSequence)
         mode = .idle
 
-        let scopes = ExchangeScopeQuery.build(graph: graph)
+        let scopes = ExchangeQuery.build(graph: graph)
         guard let tandem = scopes.firstNonNil({ scope -> TandemScope? in
             if case let .tandem(inner) = scope { return inner }
             return nil

@@ -89,7 +89,7 @@ package final class ChoiceGraph {
     /// Bind-inner descendant index. Maps each chooseBits leaf inside a bind's inner subtree to the outermost enclosing bind's node ID. Computed lazily on first access and cached until invalidated by structural changes.
     public var innerDescendantToBind: [Int: Int] {
         if let cached = cachedInnerDescendantToBind { return cached }
-        let computed = ScopeQueryHelpers.buildInnerDescendantToBind(graph: self)
+        let computed = QueryHelpers.buildInnerDescendantToBind(graph: self)
         cachedInnerDescendantToBind = computed
         return computed
     }
@@ -184,7 +184,7 @@ package final class ChoiceGraph {
 
     /// Writes convergence records from an encoder pass onto leaf nodes by node ID.
     ///
-    /// Preferred over ``recordConvergence(_:)`` for harvesting from encoders within a single graph instance: node IDs are stable and the lookup is O(1) per record instead of O(N) per record (the positional version walks every node looking for a position match). Encoders' internal `convergenceStore` is keyed by node ID so that records survive in-pass position shifts triggered by ``GraphEncoder/refreshScope(graph:sequence:)``.
+    /// Preferred over ``recordConvergence(_:)`` for harvesting from encoders within a single graph instance: node IDs are stable and the lookup is O(1) per record instead of O(N) per record (the positional version walks every node looking for a position match). Encoders' internal `convergenceStore` is keyed by node ID so that records survive in-pass position shifts triggered by ``GraphEncoder/refreshState(graph:sequence:)``.
     ///
     /// - Parameter records: Map from graph node ID to the convergence floor at that node's leaf.
     func recordConvergence(byNodeID records: [Int: ConvergedOrigin]) {

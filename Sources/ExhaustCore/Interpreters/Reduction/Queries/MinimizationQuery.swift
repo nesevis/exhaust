@@ -1,5 +1,5 @@
 //
-//  MinimizationScopeQuery.swift
+//  MinimizationQuery.swift
 //  Exhaust
 //
 
@@ -7,13 +7,13 @@
 
 /// Static scope builder for minimization operations.
 ///
-/// Replaces the former `ChoiceGraph.minimizationScopes()` instance method. The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeScopeQuery`` can share a single ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` allocation.
-enum MinimizationScopeQuery {
+/// Replaces the former `ChoiceGraph.minimizationScopes()` instance method. The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeQuery`` can share a single ``QueryHelpers/buildInnerDescendantToBind(graph:)`` allocation.
+enum MinimizationQuery {
     /// Computes minimization scopes: one integer scope, one float scope, and one bound value scope per non-constant reduction edge.
     ///
     /// - Parameters:
     ///   - graph: The current choice graph.
-    ///   - innerDescendantToBind: Precomputed bind-inner index from ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)``. Pass a shared instance when also building exchange scopes so the same dictionary is reused across both families.
+    ///   - innerDescendantToBind: Precomputed bind-inner index from ``QueryHelpers/buildInnerDescendantToBind(graph:)``. Pass a shared instance when also building exchange scopes so the same dictionary is reused across both families.
     /// - Returns: All minimization scopes, each ordered by value yield descending (bind-inner leaves with large bound subtrees first).
     static func build(
         graph: some ReadOnlyChoiceGraph,
@@ -22,7 +22,7 @@ enum MinimizationScopeQuery {
     ) -> [MinimizationScope] {
         var scopes: [MinimizationScope] = []
 
-        let bindDepthByLeaf = ScopeQueryHelpers.buildBindDepthByLeaf(
+        let bindDepthByLeaf = QueryHelpers.buildBindDepthByLeaf(
             graph: graph,
             innerDescendantToBind: innerDescendantToBind
         )
@@ -79,7 +79,7 @@ enum MinimizationScopeQuery {
                 {
                     continue
                 }
-                let entry = ScopeQueryHelpers.makeLeafEntry(
+                let entry = QueryHelpers.makeLeafEntry(
                     nodeID,
                     innerDescendantToBind: innerDescendantToBind,
                     bindDepthByLeaf: bindDepthByLeaf
@@ -116,7 +116,7 @@ enum MinimizationScopeQuery {
             var bindInnerFloats: [LeafEntry] = []
             var independentFloats: [LeafEntry] = []
             for nodeID in floatLeafNodeIDs {
-                let entry = ScopeQueryHelpers.makeLeafEntry(
+                let entry = QueryHelpers.makeLeafEntry(
                     nodeID,
                     innerDescendantToBind: innerDescendantToBind,
                     bindDepthByLeaf: bindDepthByLeaf
@@ -165,11 +165,11 @@ enum MinimizationScopeQuery {
         return scopes
     }
 
-    /// Convenience overload that builds ``ScopeQueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building exchange scopes so the index is computed once and shared.
+    /// Convenience overload that builds ``QueryHelpers/buildInnerDescendantToBind(graph:)`` on the caller's behalf. Prefer the primary overload when also building exchange scopes so the index is computed once and shared.
     static func build(graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [MinimizationScope] {
         build(
             graph: graph,
-            innerDescendantToBind: ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph),
+            innerDescendantToBind: QueryHelpers.buildInnerDescendantToBind(graph: graph),
             deferBindInner: deferBindInner
         )
     }

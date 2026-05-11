@@ -7,7 +7,7 @@
 
 /// Drives scope-source-dispatched reduction until convergence or stall budget exhaustion.
 ///
-/// Merges lazy ``ScopeSource`` iterators by yield, pulling from whichever has the highest-yield next scope. Dispatches to pure structural encoders (one probe) or search-based value encoders (multiple probes). On structural acceptance, rebuilds all sources from the new graph. On rejection, only the dispatched source advances.
+/// Merges lazy ``CandidateSource`` iterators by yield, pulling from whichever has the highest-yield next scope. Dispatches to pure structural encoders (one probe) or search-based value encoders (multiple probes). On structural acceptance, rebuilds all sources from the new graph. On rejection, only the dispatched source advances.
 ///
 /// The scheduler is split across several files for readability:
 /// - This file: entry points, the cycle loop (``runCore(gen:initialTree:initialOutput:config:collectStats:property:)``), source/encoder selection.
@@ -19,7 +19,7 @@
 /// State clusters that were previously inline local variables are factored into dedicated types:
 /// - ``BoundValueGate``: per-cycle dedup, fruitless tracking, and stall-count decay for bound value composition dispatches.
 ///
-/// - SeeAlso: ``ScopeSource``, ``ScopeSourceBuilder``, ``GraphEncoder``
+/// - SeeAlso: ``CandidateSource``, ``CandidateSourceBuilder``, ``GraphEncoder``
 enum ChoiceGraphScheduler {
     // MARK: - Entry Points
 
@@ -114,7 +114,7 @@ enum ChoiceGraphScheduler {
             )
         }
 
-        var scopeRejectionCache = ScopeRejectionCache()
+        var scopeRejectionCache = CandidateRejectionCache()
         var gate = BoundValueGate()
         var hadReplacementShortlexRejection = false
 
@@ -128,7 +128,7 @@ enum ChoiceGraphScheduler {
             hadReplacementShortlexRejection = false
             let sequenceBeforeCycle = sequence
 
-            var sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+            var sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
             if isInstrumented {
                 ExhaustLog.debug(
@@ -216,14 +216,14 @@ enum ChoiceGraphScheduler {
                         tree = fullTree
                     }
                     graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-                    sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+                    sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
                     graphIsStripped = false
                     continue
                 }
 
                 // Construct self-contained scope.
                 let warmStarts = extractWarmStarts(from: graph)
-                let scope = TransformationScope(
+                let scope = EncoderInput(
                     transformation: transformation,
                     baseSequence: sequence,
                     tree: tree,
@@ -319,7 +319,7 @@ enum ChoiceGraphScheduler {
                         }
                         scopeRejectionCache.clear()
                         gate.resetAfterRebuild()
-                        sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+                        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -333,7 +333,7 @@ enum ChoiceGraphScheduler {
                             )
                         }
                     } else if outcome.requiresSourceRebuild {
-                        sources = ScopeSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+                        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -514,13 +514,13 @@ enum ChoiceGraphScheduler {
         collectStats: Bool,
         isInstrumented: Bool
     ) throws {
-        guard let reorderScope = ReorderingScopeQuery.build(graph: graph) else { return }
+        guard let reorderScope = ReorderingQuery.build(graph: graph) else { return }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
             priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1),
             precondition: .unconditional
         )
-        let reorderScopeBundle = TransformationScope(
+        let reorderScopeBundle = EncoderInput(
             transformation: reorderTransformation,
             baseSequence: sequence,
             tree: tree,
@@ -552,7 +552,7 @@ enum ChoiceGraphScheduler {
 
     /// Returns the index of the source with the highest peekPriority, or nil if all are exhausted.
     static func highestPrioritySourceIndex(
-        _ sources: [any ScopeSource]
+        _ sources: [any CandidateSource]
     ) -> Int? {
         var bestIndex: Int?
         var bestPriority: DispatchPriority?

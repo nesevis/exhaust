@@ -30,7 +30,7 @@ extension ChoiceGraphScheduler {
     /// Runs an encoder's probe loop, accepting improvements.
     static func runProbeLoop(
         encoder: inout any GraphEncoder,
-        scope: TransformationScope,
+        scope: EncoderInput,
         graph: ChoiceGraph,
         sequence: inout ChoiceSequence,
         tree: inout ChoiceTree,
@@ -69,7 +69,7 @@ extension ChoiceGraphScheduler {
             probeCount += 1
             lastAccepted = false
             // True when this probe's acceptance structurally mutated the graph (in-place reshape that added/removed nodes, or any change that forced ``ChangeApplication/requiresFullRebuild``). The encoder's
-            // ``IntegerState/leafPositions`` (and equivalent caches in float and exchange encoders) are built once at ``start(scope:)`` and are no longer valid against the live graph after such a mutation. The scheduler calls ``encoder.refreshScope`` at the bottom of the iteration when this is true so the encoder can re-derive its scope state in place against the post-mutation graph.
+            // ``IntegerState/leafPositions`` (and equivalent caches in float and exchange encoders) are built once at ``start(scope:)`` and are no longer valid against the live graph after such a mutation. The scheduler calls ``encoder.refreshState`` at the bottom of the iteration when this is true so the encoder can re-derive its scope state in place against the post-mutation graph.
             var mutatedStructurally = false
 
             let probeHash = ZobristHash.incrementalHash(
@@ -148,7 +148,7 @@ extension ChoiceGraphScheduler {
                 if encoder.requiresExactDecoder {
                     application = ChangeApplication()
                     anyRequiresRebuild = true
-                    // Signal structural mutation so refreshScope is called below.
+                    // Signal structural mutation so refreshState is called below.
                     // Encoders with requiresExactDecoder (bound value compositions) skip graph.apply, so requiresFullRebuild is never set on the ChangeApplication — but their cached state is equally stale after an acceptance and needs the same reset treatment.
                     mutatedStructurally = true
                 } else {
@@ -201,9 +201,9 @@ extension ChoiceGraphScheduler {
             // Refresh the encoder's scope on structural mutation. The encoder's cached state (for example, ``IntegerState/leafPositions``)
             // was built at ``start(scope:)`` against the pre-mutation graph and cannot be safely re-used after a reshape tombstones leaves and splices in new nodes. Continuing to iterate without a refresh would let the encoder address
             // ``state.sequence`` at stale indices and silently corrupt either the live sequence or the new spliced leaves' values, producing a position drift bug.
-            // Calling ``refreshScope`` lets the encoder re-derive its scope state from the live graph in place — preserving in-pass convergence records keyed by nodeID, picking up new leaves the splice created, and dropping tombstoned ones — without paying the full source-rebuild + dispatch overhead the earlier `break`-out fix imposed.
+            // Calling ``refreshState`` lets the encoder re-derive its scope state from the live graph in place — preserving in-pass convergence records keyed by nodeID, picking up new leaves the splice created, and dropping tombstoned ones — without paying the full source-rebuild + dispatch overhead the earlier `break`-out fix imposed.
             if mutatedStructurally {
-                encoder.refreshScope(graph: graph, sequence: sequence)
+                encoder.refreshState(graph: graph, sequence: sequence)
             }
         }
 

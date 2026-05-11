@@ -31,7 +31,7 @@ enum GraphOperation {
 
     /// Reorder sequence elements into natural numeric order as a final canonicalization pass.
     ///
-    /// Only dispatched post-loop by ``ChoiceGraphScheduler`` after all other reduction is complete. Never emitted by any ``ScopeSource``.
+    /// Only dispatched post-loop by ``ChoiceGraphScheduler`` after all other reduction is complete. Never emitted by any ``CandidateSource``.
     case reorder(ReorderingScope)
 
     /// Whether this operation changes the generator's active execution path. Only replace is path-changing.
@@ -48,7 +48,7 @@ enum GraphOperation {
         return 0
     }
 
-    /// Collects node IDs whose position ranges are affected by this operation. Used by ``ScopeRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
+    /// Collects node IDs whose position ranges are affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
     ///
     /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
     func affectedNodeIDs(in _: some ReadOnlyChoiceGraph) -> [Int]? {

@@ -1,5 +1,5 @@
 //
-//  ScopeSource+Removal.swift
+//  CandidateSource+Removal.swift
 //  Exhaust
 //
 
@@ -10,7 +10,7 @@
 /// The deletion antichain identifies element nodes that are pairwise independent (no containment or dependency path). Grouping these by parent sequence yields a set of independent sequences. The first probe attempts to remove all deletable elements from every independent sequence at once. On rejection, the target list is bisected and each half is tried independently.
 ///
 /// Runs before ``SequenceEmptyingSource`` — a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
-struct BatchedCrossSequenceRemovalSource: ScopeSource {
+struct BatchedCrossSequenceRemovalSource: CandidateSource {
     /// Each entry represents one independent sequence with its deletable elements and yield.
     private let sequences: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)]
     /// Queue of index ranges to try. Bisection appends two halves on rejection.
@@ -162,13 +162,13 @@ struct BatchedCrossSequenceRemovalSource: ScopeSource {
 /// Emits "empty this sequence entirely" scopes in yield-descending order.
 ///
 /// For each sequence that can be emptied (deletable count equals element count, or no minimum length constraint), produces one scope that removes all elements. Most drastic structural reduction — tried before batch removal and aligned windows.
-struct SequenceEmptyingSource: ScopeSource {
+struct SequenceEmptyingSource: CandidateSource {
     private var candidates: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(sequenceNodeID: Int, elementNodeIDs: [Int], yield: Int)] = []
-        for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
+        for scope in RemovalQuery.elementRemovalScopes(graph: graph) {
             // Only consider single-target (per-parent) scopes for emptying.
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else {
@@ -231,7 +231,7 @@ struct SequenceEmptyingSource: ScopeSource {
 /// Emits per-parent removal scopes at geometrically decreasing batch sizes for a single sequence.
 ///
 /// Starts at the maximum batch size (all deletable elements) and halves on rejection. Alternates head/tail anchors at each batch size. Each emitted scope fully specifies which positions to remove — the encoder applies it in one probe.
-struct BatchRemovalSource: ScopeSource {
+struct BatchRemovalSource: CandidateSource {
     private let sequenceNodeID: Int
     private let elements: [(nodeID: Int, positionRange: ClosedRange<Int>)]
     private let maxBatch: Int
@@ -351,13 +351,13 @@ struct BatchRemovalSource: ScopeSource {
 /// Emits individual element removal scopes, one per deletable element.
 ///
 /// Orders zero-valued elements first — removing a zero-valued element does not change sums, making it the cheapest deletion for sum-constrained generators. Remaining elements ordered by position.
-struct PerElementRemovalSource: ScopeSource {
+struct PerElementRemovalSource: CandidateSource {
     private var elements: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
-        for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
+        for scope in RemovalQuery.elementRemovalScopes(graph: graph) {
             // Per-element source only handles single-target scopes.
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             for elementNodeID in target.elementNodeIDs {
@@ -429,12 +429,12 @@ struct PerElementRemovalSource: ScopeSource {
 /// Emits covering-array-backed aligned removal scopes across sibling sequences under zip nodes.
 ///
 /// Each scope carries a ``PullBasedCoveringArrayGenerator`` that the encoder pulls rows from on each probe. The source emits one transformation per zip node; the encoder is multi-shot.
-struct AlignedRemovalSource: ScopeSource {
+struct AlignedRemovalSource: CandidateSource {
     private var scopes: [CoveringAlignedRemovalScope]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
-        scopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
+        scopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
             .sorted { scopeA, scopeB in
                 scopeA.maxElementYield > scopeB.maxElementYield
             }

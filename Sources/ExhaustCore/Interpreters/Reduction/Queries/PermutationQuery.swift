@@ -1,5 +1,5 @@
 //
-//  PermutationScopeQuery.swift
+//  PermutationQuery.swift
 //  Exhaust
 //
 
@@ -8,7 +8,7 @@
 /// Static scope builder for permutation operations.
 ///
 /// Replaces the former `ChoiceGraph.permutationScopes()` instance method.
-enum PermutationScopeQuery {
+enum PermutationQuery {
     /// Computes permutation scopes for zip nodes with same-shaped siblings.
     ///
     /// Groups children by structural shape derived from graph node metadata. Children with the same shape can be swapped for shortlex improvement. Only zip children are considered — sequence elements are excluded because their ordering is transient (value search minimizes them, and ``GraphReorderEncoder`` canonicalizes whatever remains). Including sequence elements caused a 6x materialization regression on NestedLists without improving the final counterexample.

@@ -18,7 +18,7 @@ extension GraphValueEncoder {
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
-            // Skip leaves the encoder has already converged in the current pass. Used by ``refreshScope(graph:sequence:)`` to avoid re-driving leaves whose binary search has already finished when the live graph yields a new full scope.
+            // Skip leaves the encoder has already converged in the current pass. Used by ``refreshState(graph:sequence:)`` to avoid re-driving leaves whose binary search has already finished when the live graph yields a new full scope.
             if preservingConvergence[nodeID] != nil { continue }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
@@ -38,7 +38,7 @@ extension GraphValueEncoder {
         }
 
         // Phase selection. ``armBatchZero`` is `true` for the initial
-        // ``start(scope:)`` call (the trivial all-targets shortcut is worth one probe at pass start) and `false` for refresh calls from ``refreshScope(graph:sequence:)``. Re-arming batch-zero on every refresh wastes one full materialisation per accepted reshape: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the new leaves the splice added rarely flip that. The waste was the dominant cost on BinaryHeap (~30k refresh-induced batchZero probes per 1000-seed run, each rejected because all-zero is a valid heap and the failing predicate requires non-heap shape).
+        // ``start(scope:)`` call (the trivial all-targets shortcut is worth one probe at pass start) and `false` for refresh calls from ``refreshState(graph:sequence:)``. Re-arming batch-zero on every refresh wastes one full materialisation per accepted reshape: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the new leaves the splice added rarely flip that. The waste was the dominant cost on BinaryHeap (~30k refresh-induced batchZero probes per 1000-seed run, each rejected because all-zero is a valid heap and the failing predicate requires non-heap shape).
         let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible) ? .batchZero : .perLeaf
 
         mode = .valueLeaves(IntegerState(

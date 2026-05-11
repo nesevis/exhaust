@@ -45,7 +45,7 @@ struct GraphSwapEncoder: GraphEncoder {
 
     // MARK: - GraphEncoder
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         initialProbe = nil
         initialProbeCandidate = nil
         extensionState = nil

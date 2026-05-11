@@ -1,5 +1,5 @@
 //
-//  ScopeSource+Migration.swift
+//  CandidateSource+Migration.swift
 //  Exhaust
 //
 
@@ -8,7 +8,7 @@
 /// Emits element migration scopes from earlier sequences to later sequences.
 ///
 /// For each pair of antichain-independent sequences where the source is at an earlier position, emits scopes at geometrically decreasing element counts. Moving elements rightward improves shortlex at earlier positions.
-struct MigrationSource: ScopeSource {
+struct MigrationSource: CandidateSource {
     private var candidates: [(sourceSeqID: Int, receiverSeqID: Int, elementNodeIDs: [Int], elementRanges: [ClosedRange<Int>], receiverRange: ClosedRange<Int>, yield: Int, isFullMigration: Bool, sourceParentSeqID: Int?)]
     private var index = 0
 

@@ -33,7 +33,7 @@ struct ChoiceGraphScopeQueryTests {
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
-        let coveringScopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
+        let coveringScopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
 
         // One covering scope per zip node with deletable sibling sequences.
         #expect(coveringScopes.count == 1)
@@ -50,7 +50,7 @@ struct ChoiceGraphScopeQueryTests {
             .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let coveringScopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
+        let coveringScopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
 
         #expect(coveringScopes.isEmpty)
     }
@@ -69,7 +69,7 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = ChoiceGraph.build(from: tree)
-        let singleTargetScopes = RemovalScopeQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
+        let singleTargetScopes = RemovalQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
 
         #expect(singleTargetScopes.count == 1)
         #expect(singleTargetScopes[0].targets[0].elementNodeIDs.count == 3)
@@ -88,7 +88,7 @@ struct ChoiceGraphScopeQueryTests {
             .init(validRange: 2 ... 5, isRangeExplicit: true)
         )
         let graph = ChoiceGraph.build(from: tree)
-        let singleTargetScopes = RemovalScopeQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
+        let singleTargetScopes = RemovalQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
 
         #expect(singleTargetScopes.count == 1)
         #expect(singleTargetScopes[0].maxBatch == 1)
@@ -103,7 +103,7 @@ struct ChoiceGraphScopeQueryTests {
             .choice(ChoiceValue(99 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = MinimizationScopeQuery.build(graph: graph)
+        let scopes = MinimizationQuery.build(graph: graph)
 
         let integerScopes = scopes.filter {
             if case .valueLeaves = $0 { return true }
@@ -123,7 +123,7 @@ struct ChoiceGraphScopeQueryTests {
             .choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = MinimizationScopeQuery.build(graph: graph)
+        let scopes = MinimizationQuery.build(graph: graph)
 
         // Both leaves are at their reduction target (0) — no minimization scope.
         let integerScopes = scopes.filter {
@@ -153,7 +153,7 @@ struct ChoiceGraphScopeQueryTests {
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = PermutationScopeQuery.build(graph: graph)
+        let scopes = PermutationQuery.build(graph: graph)
 
         #expect(scopes.count == 1)
         if case let .siblingPermutation(scope) = scopes.first {
@@ -189,7 +189,7 @@ struct ChoiceGraphScopeQueryTests {
         let sequence = ChoiceSequence.flatten(tree)
         let graph = ChoiceGraph.build(from: tree)
 
-        let alignedScopes = RemovalScopeQuery.coveringAlignedRemovalScopes(graph: graph)
+        let alignedScopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
         guard let coveringScope = alignedScopes.first else {
             Issue.record("No covering aligned removal scope found")
             return
@@ -205,7 +205,7 @@ struct ChoiceGraphScopeQueryTests {
             ),
             precondition: .unconditional
         )
-        let scope = TransformationScope(
+        let scope = EncoderInput(
             transformation: transformation,
             baseSequence: sequence,
             tree: tree,
@@ -242,7 +242,7 @@ struct ChoiceGraphScopeQueryTests {
         let bound = ChoiceTree.choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
-        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+        let index = QueryHelpers.buildInnerDescendantToBind(graph: graph)
 
         let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
         #expect(bindNodeID != nil)
@@ -254,8 +254,8 @@ struct ChoiceGraphScopeQueryTests {
 
         #expect(index[innerLeafID] == bindNodeID)
         #expect(index[boundLeafID] == nil)
-        #expect(ScopeQueryHelpers.isBindInner(innerLeafID, innerDescendantToBind: index))
-        #expect(ScopeQueryHelpers.isBindInner(boundLeafID, innerDescendantToBind: index) == false)
+        #expect(QueryHelpers.isBindInner(innerLeafID, innerDescendantToBind: index))
+        #expect(QueryHelpers.isBindInner(boundLeafID, innerDescendantToBind: index) == false)
     }
 
     @Test("Multi-leaf bind-inner leaves are all indexed to the bind")
@@ -273,7 +273,7 @@ struct ChoiceGraphScopeQueryTests {
         let bound = ChoiceTree.choice(ChoiceValue(7 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
-        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+        let index = QueryHelpers.buildInnerDescendantToBind(graph: graph)
 
         let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
         #expect(bindNodeID != nil)
@@ -298,7 +298,7 @@ struct ChoiceGraphScopeQueryTests {
         // Every inner-subtree leaf maps to the bind.
         for leafID in innerLeafIDs {
             #expect(index[leafID] == bindNodeID, "Inner leaf \(leafID) should map to bind \(bindNodeID)")
-            #expect(ScopeQueryHelpers.isBindInner(leafID, innerDescendantToBind: index))
+            #expect(QueryHelpers.isBindInner(leafID, innerDescendantToBind: index))
         }
         // The container itself is not indexed (only chooseBits leaves are).
         #expect(index[innerContainerID] == nil)
@@ -319,9 +319,9 @@ struct ChoiceGraphScopeQueryTests {
         let bound = ChoiceTree.choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
-        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+        let index = QueryHelpers.buildInnerDescendantToBind(graph: graph)
 
-        let scopes = MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: index)
+        let scopes = MinimizationQuery.build(graph: graph, innerDescendantToBind: index)
         guard case let .valueLeaves(integerScope) = scopes.first(where: { if case .valueLeaves = $0 { true } else { false } }) else {
             Issue.record("Expected integer-leaves scope")
             return
@@ -358,7 +358,7 @@ struct ChoiceGraphScopeQueryTests {
         let outerBind = ChoiceTree.bind(fingerprint: 0, inner: innerBind, bound: leafOuterBound)
 
         let graph = ChoiceGraph.build(from: outerBind)
-        let index = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+        let index = QueryHelpers.buildInnerDescendantToBind(graph: graph)
 
         // Identify the two bind nodes; outer appears first (lower ID).
         let bindIDs = graph.nodes.compactMap { node -> Int? in

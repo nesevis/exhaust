@@ -38,7 +38,7 @@ struct GraphStructuralEncoder: GraphEncoder {
         let graph: any ReadOnlyChoiceGraph
     }
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         probe = nil
         probeCandidate = nil
         coveringAlignedState = nil

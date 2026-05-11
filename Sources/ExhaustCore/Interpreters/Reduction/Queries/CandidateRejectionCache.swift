@@ -1,5 +1,5 @@
 //
-//  ScopeRejectionCache.swift
+//  CandidateRejectionCache.swift
 //  Exhaust
 //
 
@@ -10,7 +10,7 @@
 /// For each rejected structural operation, computes a hash from the operation discriminator and the ``ZobristHash`` contributions at the targeted positions. The hash naturally invalidates when any targeted value changes — no explicit dirty tracking needed.
 ///
 /// Cleared on structural acceptance (graph rebuild changes positions). Persists across cycles for value-only changes.
-struct ScopeRejectionCache {
+struct CandidateRejectionCache {
     private var rejectedHashes = Set<UInt64>()
 
     /// Value-independent hash for replacement operations only. Keyed by (operation type, targeted node IDs) without leaf values. Branch pivot is genuinely value-independent because the encoder speculatively minimizes all leaves via ``GraphStructuralEncoder/minimizingLeaves(in:)``. Self-similar substitution and descendant promotion copy donor entries verbatim, so they are technically value-dependent — but the coarse cache is cleared per-cycle via ``clearCoarse()``, which limits stale rejections to within a single cycle. Deletion and migration are excluded because their acceptance depends on leaf values: a deletion rejected when the element had value 5 may succeed after value search minimizes it to 0.

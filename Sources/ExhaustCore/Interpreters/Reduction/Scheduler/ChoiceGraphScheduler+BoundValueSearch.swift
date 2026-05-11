@@ -16,12 +16,12 @@ extension ChoiceGraphScheduler {
     ///
     /// - Parameters:
     ///   - bindScope: The bound value scope from the source pipeline.
-    ///   - scope: The dispatched ``TransformationScope``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
+    ///   - scope: The dispatched ``EncoderInput``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
     ///   - gen: The generator. Captured by the lift closure for materialisation.
     ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``ChoiceGraphScheduler/runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` based on per-bind stall counts.
     static func makeBoundValueComposition(
         bindScope: BoundValueScope,
-        scope: TransformationScope,
+        scope: EncoderInput,
         graph: ChoiceGraph,
         gen: ReflectiveGenerator<Any>,
         upstreamBudget: Int = 15
@@ -32,7 +32,7 @@ extension ChoiceGraphScheduler {
             nodeID: bindScope.upstreamLeafNodeID,
             mayReshapeOnAcceptance: false
         )
-        let upstreamScope = TransformationScope(
+        let upstreamScope = EncoderInput(
             transformation: GraphTransformation(
                 operation: .minimize(.valueLeaves(ValueMinimizationScope(
                     leaves: [upstreamLeafEntry],
@@ -55,7 +55,7 @@ extension ChoiceGraphScheduler {
             ? GraphBinarySearchEncoder()
             : GraphBoundValueCoveringEncoder()
 
-        let lift: (ChoiceSequence, EncoderProbe, TransformationScope) -> TransformationScope? = { upstreamCandidate, upstreamMutation, parent in
+        let lift: (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput? = { upstreamCandidate, upstreamMutation, parent in
             Self.boundValueLift(
                 upstreamCandidate: upstreamCandidate,
                 upstreamMutation: upstreamMutation,
@@ -76,7 +76,7 @@ extension ChoiceGraphScheduler {
         )
     }
 
-    /// Lifts an upstream probe into a downstream ``TransformationScope`` for the bound value composition.
+    /// Lifts an upstream probe into a downstream ``EncoderInput`` for the bound value composition.
     ///
     /// 1. Materialises the upstream candidate through `gen` to obtain the new bound subtree's choice tree.
     /// 2. Copies the parent graph and applies the upstream change to the copy as a reshape (`mayReshape: true`), so ``ChoiceGraph/applyBindReshape(forLeaf:freshTree:into:)`` splices the rebuilt bound subtree from the freshTree on the throwaway copy. Falls back to a full ``ChoiceGraph/build(from:)`` if the partial path bails.
@@ -85,11 +85,11 @@ extension ChoiceGraphScheduler {
     static func boundValueLift(
         upstreamCandidate: ChoiceSequence,
         upstreamMutation: EncoderProbe,
-        parent: TransformationScope,
+        parent: EncoderInput,
         graph: ChoiceGraph,
         bindScope: BoundValueScope,
         gen: ReflectiveGenerator<Any>
-    ) -> TransformationScope? {
+    ) -> EncoderInput? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
 
         // Read the proposed upstream value for instrumentation.
@@ -164,7 +164,7 @@ extension ChoiceGraphScheduler {
                 ]
             )
         }
-        return TransformationScope(
+        return EncoderInput(
             transformation: GraphTransformation(
                 operation: .minimize(.valueLeaves(ValueMinimizationScope(
                     leaves: downstreamLeaves.map {

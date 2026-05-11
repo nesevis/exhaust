@@ -54,7 +54,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
 
     // MARK: - GraphEncoder
 
-    mutating func start(scope: TransformationScope) {
+    mutating func start(scope: EncoderInput) {
         valueState.reset(sequence: scope.baseSequence)
         mode = .idle
 
@@ -70,11 +70,11 @@ struct GraphRedistributionEncoder: GraphEncoder {
         startRedistribution(scope: redistScope, graph: graph)
     }
 
-    mutating func refreshScope(graph: some ReadOnlyChoiceGraph, sequence newSequence: ChoiceSequence) {
+    mutating func refreshState(graph: some ReadOnlyChoiceGraph, sequence newSequence: ChoiceSequence) {
         valueState.reset(sequence: newSequence)
         mode = .idle
 
-        let scopes = ExchangeScopeQuery.build(graph: graph)
+        let scopes = ExchangeQuery.build(graph: graph)
         guard let redistribution = scopes.firstNonNil({ scope -> RedistributionScope? in
             if case let .redistribution(inner) = scope { return inner }
             return nil

@@ -1,5 +1,5 @@
 //
-//  TransformationScope.swift
+//  EncoderInput.swift
 //  Exhaust
 //
 
@@ -331,7 +331,7 @@ struct ReorderableGroup {
 /// For simple transformations, ``baseSequence`` is the current sequence. For bound value composition, the downstream scope's ``baseSequence`` is the lifted result from the upstream probe — the encoder does not know or care that it is downstream.
 ///
 /// - Note: The graph is carried temporarily for node metadata access (position ranges, leaf values). A future refinement will pre-resolve all needed metadata into the scope types and remove the graph dependency.
-struct TransformationScope {
+struct EncoderInput {
     /// The transformation to execute (operation, yield, precondition).
     let transformation: GraphTransformation
 
@@ -346,6 +346,6 @@ struct TransformationScope {
 
     /// Warm-start convergence records for leaves in this scope, keyed by graph **nodeID**.
     ///
-    /// Extracted from graph nodes at scope construction time via ``ChoiceGraphScheduler/extractWarmStarts(from:)``. NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survive any in-pass position shift triggered by ``GraphEncoder/refreshScope(graph:sequence:)``. The encoder never accesses the graph directly for convergence data.
+    /// Extracted from graph nodes at scope construction time via ``ChoiceGraphScheduler/extractWarmStarts(from:)``. NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survive any in-pass position shift triggered by ``GraphEncoder/refreshState(graph:sequence:)``. The encoder never accesses the graph directly for convergence data.
     let warmStartRecords: [Int: ConvergedOrigin]
 }

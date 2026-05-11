@@ -1,5 +1,5 @@
 //
-//  ScopeSource.swift
+//  CandidateSource.swift
 //  Exhaust
 //
 
@@ -14,11 +14,11 @@
 /// On structural acceptance, all sources are rebuilt from the new graph. On rejection, only the dispatched source advances.
 ///
 /// Concrete sources live in sibling files grouped by domain:
-/// - `ScopeSource+Removal.swift`: deletion-based sources (batched cross-sequence, emptying, batch, per-element, aligned).
-/// - `ScopeSource+Migration.swift`: element migration between independent sequences.
-/// - `ScopeSource+Restructuring.swift`: replacement and permutation.
-/// - `ScopeSource+ValueSearch.swift`: minimization and exchange (search-based).
-protocol ScopeSource {
+/// - `CandidateSource+Removal.swift`: deletion-based sources (batched cross-sequence, emptying, batch, per-element, aligned).
+/// - `CandidateSource+Migration.swift`: element migration between independent sequences.
+/// - `CandidateSource+Restructuring.swift`: replacement and permutation.
+/// - `CandidateSource+ValueSearch.swift`: minimization and exchange (search-based).
+protocol CandidateSource {
     /// The yield of the scope that would be returned by the next call to ``next(lastAccepted:)``. Nil when exhausted.
     var peekPriority: DispatchPriority? { get }
 
@@ -30,13 +30,13 @@ protocol ScopeSource {
 
 /// Builds the collection of scope sources from a graph.
 ///
-/// Creates one source per search space. The scheduler merges them by ``ScopeSource/peekPriority``.
-enum ScopeSourceBuilder {
+/// Creates one source per search space. The scheduler merges them by ``CandidateSource/peekPriority``.
+enum CandidateSourceBuilder {
     /// Builds all scope sources from the current graph.
     ///
     /// - Parameter deferBindInner: When true, bind-inner value leaves and bound value scopes are excluded from the minimization source. The scheduler sets this while structural reduction is still active to avoid probing values on nodes that will be structurally removed.
-    static func buildSources(from graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [any ScopeSource] {
-        var sources: [any ScopeSource] = []
+    static func buildSources(from graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) -> [any CandidateSource] {
+        var sources: [any CandidateSource] = []
 
         // Batched cross-sequence removal — most drastic structural reduction.
         let batchedSource = BatchedCrossSequenceRemovalSource(graph: graph)
@@ -52,7 +52,7 @@ enum ScopeSourceBuilder {
 
         // Batch removal — one source per sequence with deletable elements.
         // Geometric halving within each sequence (half → quarter → eighth).
-        for scope in RemovalScopeQuery.elementRemovalScopes(graph: graph) {
+        for scope in RemovalQuery.elementRemovalScopes(graph: graph) {
             guard scope.targets.count == 1, let target = scope.targets.first else { continue }
             let source = BatchRemovalSource(
                 sequenceNodeID: target.sequenceNodeID,

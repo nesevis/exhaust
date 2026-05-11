@@ -1,5 +1,5 @@
 //
-//  ScopeSource+ValueSearch.swift
+//  CandidateSource+ValueSearch.swift
 //  Exhaust
 //
 
@@ -8,15 +8,15 @@
 /// Emits minimization scopes for value search. These are search-based — the encoder handles multi-probe internally.
 ///
 /// Produces one scope per leaf type (integer, float) and one per bound value edge, ordered by value yield descending.
-struct MinimizationSource: ScopeSource {
+struct MinimizationSource: CandidateSource {
     private var scopes: [(scope: MinimizationScope, priority: DispatchPriority)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph, deferBindInner: Bool = false) {
-        let innerDescendantToBind = ScopeQueryHelpers.buildInnerDescendantToBind(graph: graph)
+        let innerDescendantToBind = QueryHelpers.buildInnerDescendantToBind(graph: graph)
         var entries: [(scope: MinimizationScope, priority: DispatchPriority)] = []
 
-        for scope in MinimizationScopeQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind, deferBindInner: deferBindInner) {
+        for scope in MinimizationQuery.build(graph: graph, innerDescendantToBind: innerDescendantToBind, deferBindInner: deferBindInner) {
             let valueYield: Int = switch scope {
             case let .valueLeaves(integerScope):
                 integerScope.leaves.reduce(0) { maxSoFar, leaf in
@@ -86,13 +86,13 @@ struct MinimizationSource: ScopeSource {
 /// Emits exchange scopes for value redistribution and tandem reduction.
 ///
 /// Search-based — the encoder handles multi-probe magnitude search internally.
-struct ExchangeSource: ScopeSource {
+struct ExchangeSource: CandidateSource {
     private var scopes: [(scope: ExchangeScope, priority: DispatchPriority)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(scope: ExchangeScope, priority: DispatchPriority)] = []
-        for scope in ExchangeScopeQuery.build(graph: graph) {
+        for scope in ExchangeQuery.build(graph: graph) {
             let estimatedCost: Int
             let sourceDistance: Int
             switch scope {

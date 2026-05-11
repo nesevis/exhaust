@@ -1,5 +1,5 @@
 //
-//  RemovalScopeQuery.swift
+//  RemovalQuery.swift
 //  Exhaust
 //
 
@@ -8,7 +8,7 @@
 /// Static scope builder for removal operations (element removal, covering-array-backed aligned removal, and structural subtree removal).
 ///
 /// Replaces the former `ChoiceGraph.elementRemovalScopes()`, `coveringAlignedRemovalScopes()`, and `subtreeRemovalScopes()` instance methods.
-enum RemovalScopeQuery {
+enum RemovalQuery {
     /// Computes element removal scopes for all sequence nodes with deletable elements.
     ///
     /// Returns per-parent scopes (single target) only. Aligned removal across sibling sequences under zip nodes is handled separately by ``coveringAlignedRemovalScopes(graph:)``, which uses a covering array generator instead of exponential subset enumeration.
@@ -76,7 +76,7 @@ enum RemovalScopeQuery {
             guard case .zip = node.kind else { continue }
 
             let allSequenceChildren = node.children.compactMap { childID -> CoveringAlignedRemovalScope.AlignedSibling? in
-                guard let sequenceNodeID = ScopeQueryHelpers.findSequenceBeneath(childID, graph: graph) else { return nil }
+                guard let sequenceNodeID = QueryHelpers.findSequenceBeneath(childID, graph: graph) else { return nil }
                 let sequenceNode = graph.nodes[sequenceNodeID]
                 guard case let .sequence(metadata) = sequenceNode.kind else { return nil }
                 let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)

@@ -1,5 +1,5 @@
 //
-//  ScopeSource+Restructuring.swift
+//  CandidateSource+Restructuring.swift
 //  Exhaust
 //
 
@@ -16,14 +16,14 @@ import Musl
 /// Emits replacement scopes in size-delta-descending order.
 ///
 /// Includes self-similar substitutions, branch pivots, and descendant promotions. Each scope fully specifies the donor and target. One probe per scope.
-struct ReplacementSource: ScopeSource {
+struct ReplacementSource: CandidateSource {
     private var candidates: [(scope: ReplacementScope, priority: DispatchPriority)]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(scope: ReplacementScope, priority: DispatchPriority)] = []
 
-        for scope in ReplacementScopeQuery.build(graph: graph) {
+        for scope in ReplacementQuery.build(graph: graph) {
             let structuralYield: Int = switch scope {
             case let .selfSimilar(selfSimilar):
                 max(0, selfSimilar.sizeDelta)
@@ -83,13 +83,13 @@ struct ReplacementSource: ScopeSource {
 /// Emits sibling swap scopes with full same-shaped groups, ordered by zip position (earlier = more shortlex impact).
 ///
 /// Each scope carries the complete group of same-shaped siblings. The encoder picks the first improving pair internally, then adaptively extends on success (pushing the moved content further rightward via doubling). This replaces the prior O(N^2) pairwise decomposition in the source with O(1) emission per group plus O(log N) adaptive probes in the encoder.
-struct PermutationSource: ScopeSource {
+struct PermutationSource: CandidateSource {
     private var candidates: [(parentNodeID: Int, group: [Int])]
     private var index = 0
 
     init(graph: some ReadOnlyChoiceGraph) {
         var entries: [(parentNodeID: Int, group: [Int])] = []
-        for scope in PermutationScopeQuery.build(graph: graph) {
+        for scope in PermutationQuery.build(graph: graph) {
             guard case let .siblingPermutation(permScope) = scope else { continue }
             for group in permScope.swappableGroups {
                 guard group.count >= 2 else { continue }

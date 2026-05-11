@@ -158,9 +158,9 @@ struct EncoderIsolationTests {
 private func minimizationScope(
     tree: ChoiceTree,
     graph: ChoiceGraph
-) -> TransformationScope? {
+) -> EncoderInput? {
     let sequence = ChoiceSequence.flatten(tree)
-    let scopes = MinimizationScopeQuery.build(graph: graph)
+    let scopes = MinimizationQuery.build(graph: graph)
     guard let firstScope = scopes.first else { return nil }
     let transformation = GraphTransformation(
         operation: .minimize(firstScope),
@@ -172,7 +172,7 @@ private func minimizationScope(
         ),
         precondition: .unconditional
     )
-    return TransformationScope(
+    return EncoderInput(
         transformation: transformation,
         baseSequence: sequence,
         tree: tree,
@@ -184,9 +184,9 @@ private func minimizationScope(
 private func removalScope(
     tree: ChoiceTree,
     graph: ChoiceGraph
-) -> TransformationScope? {
+) -> EncoderInput? {
     let sequence = ChoiceSequence.flatten(tree)
-    let scopes = RemovalScopeQuery.elementRemovalScopes(graph: graph)
+    let scopes = RemovalQuery.elementRemovalScopes(graph: graph)
     guard let firstScope = scopes.first else { return nil }
     let transformation = GraphTransformation(
         operation: .remove(.elements(firstScope)),
@@ -198,7 +198,7 @@ private func removalScope(
         ),
         precondition: .unconditional
     )
-    return TransformationScope(
+    return EncoderInput(
         transformation: transformation,
         baseSequence: sequence,
         tree: tree,

@@ -114,7 +114,7 @@ extension ChoiceGraphScheduler {
 
         // Exploitation: rebuild graph and run full source loop on the perturbed state.
         graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-        var exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+        var exploitSources = CandidateSourceBuilder.buildSources(from: graph)
 
         if isInstrumented {
             ExhaustLog.debug(
@@ -145,7 +145,7 @@ extension ChoiceGraphScheduler {
             }
 
             let warmStarts = extractWarmStarts(from: graph)
-            let exploitScope = TransformationScope(
+            let exploitScope = EncoderInput(
                 transformation: exploitTransformation,
                 baseSequence: sequence,
                 tree: tree,
@@ -177,9 +177,9 @@ extension ChoiceGraphScheduler {
             if outcome.accepted {
                 if outcome.requiresRebuild {
                     graph = rebuildGraph(from: tree, replacing: graph, stats: &stats)
-                    exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+                    exploitSources = CandidateSourceBuilder.buildSources(from: graph)
                 } else if outcome.requiresSourceRebuild {
-                    exploitSources = ScopeSourceBuilder.buildSources(from: graph)
+                    exploitSources = CandidateSourceBuilder.buildSources(from: graph)
                 }
             }
         }
@@ -233,7 +233,7 @@ extension ChoiceGraphScheduler {
     ) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
 
-        for scope in ReplacementScopeQuery.build(graph: graph) {
+        for scope in ReplacementQuery.build(graph: graph) {
             switch scope {
             case let .branchPivot(pivotScope):
                 if let candidate = buildUnguardedBranchPivot(
