@@ -12,6 +12,7 @@
 
 package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     let generator: ReflectiveGenerator<Element>
+    private var erasedGenerator: ReflectiveGenerator<Any>?
     private var context: GenerationContext
 
     /// Creates a value-only interpreter for the given generator with optional seed, run cap, and size override.
@@ -49,8 +50,13 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         }
 
         defer { context.runs += 1 }
+        if erasedGenerator == nil {
+            erasedGenerator = generator.erase()
+        }
+
         do {
-            return try Self.generateRecursive(generator, with: (), context: &context)
+            // swiftlint:disable:next force_cast
+            return try Self.generateRecursiveAny(erasedGenerator!, with: (), context: &context) as! Element?
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
                 category: .generation,
@@ -169,9 +175,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 result = randomBits
 
             case let .sequence(lengthGen, elementGen):
-                guard let length = try generateRecursiveAny(
-                    lengthGen.erase(), with: inputValue, context: &context
-                ) as? UInt64 else {
+                guard let length = try interpretLength(
+                    lengthGen, context: &context
+                ) else {
                     return nil
                 }
                 var results: [Any] = []
@@ -361,7 +367,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     }
 
     @inline(__always)
-    private static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
+    static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
         if let override = context.sizeOverride {
             context.sizeOverride = nil
             return override

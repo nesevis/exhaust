@@ -666,7 +666,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     /// Reads the active generation size in precedence order: a one-shot `.resize` override, then the persistent `context.size` baseline (set via the `sizeOverride` init arg — used by ``ChoiceTreeAnalysis`` to force size 100 so size-scaled sequences produce non-empty element subtrees during parameter extraction), then the per-run scaled size cycle.
     @inline(__always)
-    private static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
+    static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
         if let override = context.sizeOverride {
             context.sizeOverride = nil
             return override
@@ -685,15 +685,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
-        guard let (lengthAny, lengthTrees) = try generateRecursiveAny(
-            lengthGen.erase(),
-            with: inputValue,
-            context: &context
+        guard let (length, lengthTrees) = try interpretLength(
+            lengthGen, context: &context
         ) else {
             return nil
         }
-        // swiftlint:disable:next force_cast
-        let length = lengthAny as! UInt64
 
         var results: [Any] = []
         var elements: [ChoiceTree] = []
