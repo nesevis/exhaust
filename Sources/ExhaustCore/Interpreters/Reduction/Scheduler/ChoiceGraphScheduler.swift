@@ -221,8 +221,9 @@ enum ChoiceGraphScheduler {
                     ) {
                         state.tree = fullTree
                     }
+                    let graphBeforeRebuild = state.graph
                     state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
-                    sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
+                    sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
                     graphIsStripped = false
                     continue
                 }
@@ -297,6 +298,7 @@ enum ChoiceGraphScheduler {
                             boundPositionRange = state.graph.nodes[boundChildID].positionRange
                         }
 
+                        let graphBeforeRebuild = state.graph
                         state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
                         graphIsStripped = outcome.treeIsStripped
 
@@ -311,7 +313,7 @@ enum ChoiceGraphScheduler {
                             }
                         }
                         scopeRejectionCache.clear()
-                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner)
+                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
 
                         Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
                             "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",

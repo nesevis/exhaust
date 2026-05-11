@@ -14,10 +14,10 @@ import Musl
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
-    static func buildReplacementCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
+    static func buildReplacementCandidates(graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
 
-        for scope in ReplacementQuery.build(graph: graph) {
+        for scope in ReplacementQuery.build(graph: graph, previousGraph: previousGraph) {
             let structuralYield: Int = switch scope {
             case let .selfSimilar(selfSimilar):
                 max(0, selfSimilar.sizeDelta)
