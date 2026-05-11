@@ -12,14 +12,15 @@ package enum ZobristHash {
     /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
     /// Enables O(1) incremental updates when single elements change.
     static func hash(of sequence: ChoiceSequence) -> UInt64 {
-        var hash: UInt64 = 0
-        // while-loop: avoiding IteratorProtocol overhead in debug builds.
-        var i = 0
-        while i < sequence.count {
-            hash ^= contribution(at: i, sequence[i])
-            i += 1
+        sequence.withUnsafeBufferPointer { buffer in
+            var hash: UInt64 = 0
+            var i = 0
+            while i < buffer.count {
+                hash ^= contribution(at: i, buffer[i])
+                i += 1
+            }
+            return hash
         }
-        return hash
     }
 
     /// Computes the hash of `probe` incrementally from a cached `baseHash` and `baseSequence`.
@@ -30,27 +31,29 @@ package enum ZobristHash {
         baseSequence: ChoiceSequence,
         probe: ChoiceSequence
     ) -> UInt64 {
-        var hash = baseHash
-        let commonCount = min(baseSequence.count, probe.count)
-        var i = 0
-        while i < commonCount {
-            if baseSequence[i] != probe[i] {
-                hash ^= contribution(at: i, baseSequence[i])
-                hash ^= contribution(at: i, probe[i])
+        baseSequence.withUnsafeBufferPointer { baseBuffer in
+            probe.withUnsafeBufferPointer { probeBuffer in
+                var hash = baseHash
+                let commonCount = min(baseBuffer.count, probeBuffer.count)
+                var i = 0
+                while i < commonCount {
+                    if baseBuffer[i] != probeBuffer[i] {
+                        hash ^= contribution(at: i, baseBuffer[i])
+                        hash ^= contribution(at: i, probeBuffer[i])
+                    }
+                    i += 1
+                }
+                while i < baseBuffer.count {
+                    hash ^= contribution(at: i, baseBuffer[i])
+                    i += 1
+                }
+                while i < probeBuffer.count {
+                    hash ^= contribution(at: i, probeBuffer[i])
+                    i += 1
+                }
+                return hash
             }
-            i += 1
         }
-        // Tail of base (probe is shorter): remove trailing contributions.
-        while i < baseSequence.count {
-            hash ^= contribution(at: i, baseSequence[i])
-            i += 1
-        }
-        // Tail of probe (probe is longer): add trailing contributions.
-        while i < probe.count {
-            hash ^= contribution(at: i, probe[i])
-            i += 1
-        }
-        return hash
     }
 
     /// Position-dependent hash contribution of a single element.
