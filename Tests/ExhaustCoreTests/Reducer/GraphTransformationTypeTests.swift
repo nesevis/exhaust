@@ -153,20 +153,6 @@ struct WithBitPatternTests {
         #expect(resultValue.choice.bitPattern64 == targetBitPattern)
     }
 
-    @Test("Converts .reduced to .value on replacement")
-    func reducedBecomesValue() {
-        let original = ChoiceSequenceValue.reduced(.init(
-            choice: ChoiceValue(UInt64(50), tag: .uint64),
-            validRange: 0 ... 100,
-            isRangeExplicit: true
-        ))
-        let result = original.withBitPattern(0)
-        guard case .value = result else {
-            Issue.record("Expected .value after replacing .reduced, got \(result)")
-            return
-        }
-    }
-
     @Test("Preserves valid range through replacement")
     func preservesValidRange() {
         let original = ChoiceSequenceValue.value(.init(

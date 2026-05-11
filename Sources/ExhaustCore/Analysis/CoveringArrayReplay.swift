@@ -102,22 +102,11 @@ package enum CoveringArrayReplay {
             }
             return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
-        case let .selected(inner):
-            guard let newInner = substituteParameters(
-                in: inner,
-                row: row,
-                profile: profile,
-                paramIndex: &paramIndex
-            ) else {
-                return nil
-            }
-            return .selected(newInner)
-
         case .sequence:
             // Sequences produce boundary parameters (sequenceLength/sequenceElement), not finite parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume finite parameters.
             return tree
 
-        case let .branch(fingerprint, weight, id, branchCount, choice):
+        case let .branch(fingerprint, weight, id, branchCount, choice, isSelected):
             guard let newChoice = substituteParameters(
                 in: choice,
                 row: row,
@@ -131,7 +120,8 @@ package enum CoveringArrayReplay {
                 weight: weight,
                 id: id,
                 branchCount: branchCount,
-                choice: newChoice
+                choice: newChoice,
+                isSelected: isSelected
             )
         }
     }
@@ -163,9 +153,10 @@ package enum CoveringArrayReplay {
                 weight: chosen.weight,
                 id: chosen.id,
                 branchCount: UInt64(choices.count),
-                choice: subTree
+                choice: subTree,
+                isSelected: true
             )
-            return .group([.selected(branch)])
+            return .group([branch])
         }
     }
 

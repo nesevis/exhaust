@@ -14,12 +14,12 @@
 /// `.pure` carries a final value with no remaining decisions. `.impure` carries the next decision and a continuation that consumes the interpreter's answer.
 ///   - Operation: The type of effects this monad can represent.
 ///   - Value: The type of values this computation ultimately produces.
-public enum FreerMonad<Operation, Value> {
+public indirect enum FreerMonad<Operation, Value> { // NOTE: The entire enum is marked as `indirect` for performance reasons
     /// The terminal state. Interpreters return the contained value directly without further traversal. Pure nodes produce no entries in the ``ChoiceSequence``: they carry the result but no randomness.
     case pure(Value)
 
     /// A suspended effect awaiting interpretation. The `operation` describes what randomness to consume or what structural choice to make; the `continuation` transforms the interpreter's result into the next step. The continuation takes `Any` because operations are type-erased: each case carries heterogeneous associated values that the continuation casts back to the expected type.
-    indirect case impure(
+    case impure(
         operation: Operation,
         continuation: (Any) throws -> FreerMonad<Operation, Value>
     )

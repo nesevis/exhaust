@@ -412,10 +412,10 @@ struct GraphValueEncoder: GraphEncoder {
 extension ChoiceSequenceValue {
     /// Returns a copy of this entry with the value's bit pattern replaced, preserving range metadata and type tag.
     ///
-    /// - Precondition: The entry must be a `.value` or `.reduced` case. Calling on structural markers (`.group`, `.sequence`, `.bind`, `.branch`, `.just`) triggers a precondition failure.
+    /// - Precondition: The entry must be a `.value` case. Calling on structural markers (`.group`, `.sequence`, `.bind`, `.branch`, `.just`) triggers a precondition failure.
     func withBitPattern(_ bitPattern: UInt64) -> ChoiceSequenceValue {
         switch self {
-        case let .value(value), let .reduced(value):
+        case let .value(value):
             let newChoice = ChoiceValue(
                 bitPattern,
                 tag: value.choice.tag

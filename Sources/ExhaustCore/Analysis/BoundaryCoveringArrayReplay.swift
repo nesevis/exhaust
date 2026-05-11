@@ -88,17 +88,6 @@ package enum BoundaryCoveringArrayReplay {
             }
             return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
-        case let .selected(inner):
-            guard let newInner = substituteParameters(
-                in: inner,
-                row: row,
-                profile: profile,
-                paramIndex: &paramIndex
-            ) else {
-                return nil
-            }
-            return .selected(newInner)
-
         case let .sequence(_, elements, metadata):
             guard paramIndex < profile.parameters.count else { return nil }
             let param = profile.parameters[paramIndex]
@@ -157,7 +146,7 @@ package enum BoundaryCoveringArrayReplay {
             }
             return .sequence(length: newLength, elements: newElements, metadata)
 
-        case let .branch(fingerprint, weight, id, branchCount, choice):
+        case let .branch(fingerprint, weight, id, branchCount, choice, isSelected):
             guard let newChoice = substituteParameters(
                 in: choice,
                 row: row,
@@ -171,7 +160,8 @@ package enum BoundaryCoveringArrayReplay {
                 weight: weight,
                 id: id,
                 branchCount: branchCount,
-                choice: newChoice
+                choice: newChoice,
+                isSelected: isSelected
             )
         }
     }
@@ -335,9 +325,10 @@ package enum BoundaryCoveringArrayReplay {
             weight: chosen.weight,
             id: chosen.id,
             branchCount: UInt64(choices.count),
-            choice: subTree
+            choice: subTree,
+            isSelected: true
         )
-        return .group([.selected(branch)])
+        return .group([branch])
     }
 
     // MARK: - Composite Sequence Helpers

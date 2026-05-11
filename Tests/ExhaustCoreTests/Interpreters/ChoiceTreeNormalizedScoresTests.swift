@@ -132,7 +132,10 @@ struct ChoiceTreeNormalizedScoresTests {
             ChoiceValue(UInt64(50), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
-        let tree = ChoiceTree.selected(inner)
+        let tree = ChoiceTree.branch(
+            fingerprint: 0, weight: 1, id: 0, branchCount: 1,
+            choice: inner, isSelected: true
+        )
         let scores = tree.normalizedScores()
         #expect(scores.count == 1)
         #expect(scores[0] == 0.5)

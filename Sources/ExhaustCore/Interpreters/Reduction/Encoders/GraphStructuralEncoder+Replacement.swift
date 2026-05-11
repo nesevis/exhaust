@@ -85,7 +85,7 @@ extension GraphStructuralEncoder {
 
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
-            case let .branch(_, _, candidateID, _, _):
+            case let .branch(_, _, candidateID, _, _, _):
                 candidateID == targetBranchID
             default:
                 false
@@ -93,7 +93,7 @@ extension GraphStructuralEncoder {
         }) else { return nil }
 
         let minimizedTarget = Self.minimizingLeaves(in: elements[targetElementIndex])
-        let targetContent = ChoiceSequence.flatten(.selected(minimizedTarget))
+        let targetContent = ChoiceSequence.flatten(minimizedTarget.selecting())
 
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
@@ -164,13 +164,14 @@ extension GraphStructuralEncoder {
                 elements: elements.map { minimizingLeaves(in: $0) },
                 metadata
             )
-        case let .branch(fingerprint, weight, id, branchCount, choice):
+        case let .branch(fingerprint, weight, id, branchCount, choice, isSelected):
             return .branch(
                 fingerprint: fingerprint,
                 weight: weight,
                 id: id,
                 branchCount: branchCount,
-                choice: minimizingLeaves(in: choice)
+                choice: minimizingLeaves(in: choice),
+                isSelected: isSelected
             )
         case let .group(children, isOpaque):
             return .group(
@@ -188,8 +189,6 @@ extension GraphStructuralEncoder {
                 inner: minimizingLeaves(in: inner),
                 bound: minimizingLeaves(in: bound)
             )
-        case let .selected(inner):
-            return .selected(minimizingLeaves(in: inner))
         }
     }
 
@@ -423,8 +422,7 @@ extension GraphStructuralEncoder {
     private static func findLeafBranchID(in metadata: PickMetadata) -> UInt64? {
         for (index, element) in metadata.branchElements.enumerated() {
             guard index < Int(metadata.branchCount) else { break }
-            let inner = element.isSelected ? element.unwrapped : element
-            if case let .branch(_, _, _, _, content) = inner {
+            if case let .branch(_, _, _, _, content, _) = element {
                 switch content {
                 case .just, .choice:
                     return UInt64(index)

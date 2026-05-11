@@ -109,7 +109,7 @@ extension Materializer {
                 return nil
             }
             switch entries[position] {
-            case let .value(v), let .reduced(v):
+            case let .value(v):
                 position &+= 1
                 return v
             default:
@@ -180,7 +180,7 @@ extension Materializer {
                     depth &+= 1
                 case .group(false), .bind(false), .sequence(false, _, _):
                     depth -= 1
-                case .value, .reduced, .just:
+                case .value, .just:
                     if depth == 0 { count &+= 1 }
                 case .branch:
                     break

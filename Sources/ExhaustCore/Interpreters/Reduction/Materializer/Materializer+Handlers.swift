@@ -165,8 +165,7 @@ extension Materializer {
         }
         if let effectiveFallback,
            case let .group(children, _) = effectiveFallback,
-           let selected = children.first(where: \.isSelected)?.unwrapped,
-           case let .branch(_, _, id, _, choice) = selected
+           case let .branch(_, _, id, _, choice, true) = children.first(where: \.isSelected)
         {
             fbBranchId = id
             branchChoiceTree = choice
@@ -250,10 +249,11 @@ extension Materializer {
                     ) else { return nil }
 
                     finalValue = contValue
-                    branches.append(.selected(.branch(
+                    branches.append(.branch(
                         fingerprint: fingerprint, weight: choice.weight,
-                        id: choice.id, branchCount: branchCount, choice: contTree
-                    )))
+                        id: choice.id, branchCount: branchCount, choice: contTree,
+                        isSelected: true
+                    ))
                 } else {
                     // Non-selected branch: minimize to produce the shortlex-simplest content. Values use reductionTarget (semantic zero when in range), nested picks select the first branch, and sequence lengths minimize.
                     // The PRNG is only a fallback for operations without minimize-specific handling (filters, recursive unfolds).
@@ -296,10 +296,11 @@ extension Materializer {
             ) else { return nil }
 
             finalValue = contValue
-            branches.append(.selected(.branch(
+            branches.append(.branch(
                 fingerprint: fingerprint, weight: selectedChoice.weight,
-                id: selectedChoice.id, branchCount: branchCount, choice: contTree
-            )))
+                id: selectedChoice.id, branchCount: branchCount, choice: contTree,
+                isSelected: true
+            ))
         }
 
         guard let value = finalValue else { return nil }

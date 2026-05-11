@@ -86,7 +86,7 @@ struct ChoiceGraphBuilder {
                 parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
             )
 
-        case let .branch(_, _, _, _, choice):
+        case let .branch(_, _, _, _, choice, _):
             return walk(choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
 
         case let .group(array, isOpaque):
@@ -110,8 +110,6 @@ struct ChoiceGraphBuilder {
             }
             return 0
 
-        case let .selected(inner):
-            return walk(inner, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
         }
     }
 
@@ -506,15 +504,12 @@ struct ChoiceGraphBuilder {
 
     /// Detects whether a group's children form a pick site.
     ///
-    /// A pick site is a group where all children are `.branch` or `.selected`, with exactly one `.selected(.branch(...))`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)``.
+    /// A pick site is a group where all children are `.branch`, with exactly one having `isSelected: true`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)``.
     func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
-        guard array.allSatisfy({ $0.isBranch || $0.isSelected }) else {
+        guard array.allSatisfy({ $0.isBranch }) else {
             return nil
         }
-        guard let selected = array.first(where: \.isSelected) else {
-            return nil
-        }
-        guard case let .selected(.branch(fingerprint, _, id, branchCount, _)) = selected else {
+        guard case let .branch(fingerprint, _, id, branchCount, _, true) = array.first(where: \.isSelected) else {
             return nil
         }
         return PickSiteInfo(fingerprint: fingerprint, selectedID: id, branchCount: branchCount)

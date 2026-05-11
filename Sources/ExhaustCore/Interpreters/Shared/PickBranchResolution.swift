@@ -17,17 +17,13 @@ package enum PickBranchResolution {
         public let isSelected: Bool
     }
 
-    /// Extracts a ``Branch`` from a ``ChoiceTree/branch`` or ``ChoiceTree/selected`` node, returning `nil` for other node kinds.
+    /// Extracts a ``Branch`` from a ``ChoiceTree/branch`` node, returning `nil` for other node kinds.
     @inline(__always)
     public static func unpack(_ branch: ChoiceTree) -> Branch? {
-        switch branch {
-        case let .branch(_, _, id, _, choice):
-            Branch(id: id, choice: choice, isSelected: false)
-        case let .selected(.branch(_, _, id, _, choice)):
-            Branch(id: id, choice: choice, isSelected: true)
-        default:
-            nil
+        guard case let .branch(_, _, id, _, choice, isSelected) = branch else {
+            return nil
         }
+        return Branch(id: id, choice: choice, isSelected: isSelected)
     }
 
     /// Returns the generator for the branch with the given identifier, or `nil` if the identifier is out of range.

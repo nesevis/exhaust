@@ -286,7 +286,7 @@ package enum Interpreters {
             )
             if hasSelected == false {
                 hasSelected = true
-                return ChoiceTree.selected(branch)
+                return branch.selecting()
             }
             return branch
         }

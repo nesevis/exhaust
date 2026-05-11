@@ -105,7 +105,7 @@ package enum SequenceCoveringArray {
                 choice: .just
             )
 
-            elementTrees.append(.group([.selected(branch)]))
+            elementTrees.append(.group([branch.selecting()]))
         }
 
         return .sequence(
@@ -266,7 +266,7 @@ package enum SequenceCoveringArray {
                 choice: subTree
             )
 
-            elementTrees.append(.group([.selected(branch)]))
+            elementTrees.append(.group([branch.selecting()]))
         }
 
         return .sequence(

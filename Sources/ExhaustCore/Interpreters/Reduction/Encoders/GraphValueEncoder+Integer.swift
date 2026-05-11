@@ -705,7 +705,7 @@ extension GraphValueEncoder {
             state.crossZero = crossZero
 
             var candidate = state.sequence
-            candidate[crossZero.seqIdx] = .reduced(.init(
+            candidate[crossZero.seqIdx] = .value(.init(
                 choice: probeChoice,
                 validRange: crossZero.validRange,
                 isRangeExplicit: crossZero.isRangeExplicit
