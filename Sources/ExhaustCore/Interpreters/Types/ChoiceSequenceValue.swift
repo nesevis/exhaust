@@ -7,7 +7,7 @@
 
 /// An element in a flattened ``ChoiceSequence``, representing one entry from a ``ChoiceTree``.
 ///
-/// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` and ``reduced`` carry the actual numeric choices.
+/// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` carries the actual numeric choices.
 package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`--`false` range are logically grouped.
     case group(Bool)
@@ -17,21 +17,17 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     case branch(Branch)
     /// An individual numeric value.
     case value(Value)
-    /// A value that has been set to its semantically simplest form and should not be individually reduced further.
-    case reduced(Value)
     /// Bind scope markers (`true` = open, `false` = close).
     /// The first child is the inner subtree; the second is the bound subtree.
     case bind(Bool)
     /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``GuidedMaterializer``).
     case just
 
-    /// Extracts the numeric ``Value`` payload from a ``value`` or ``reduced`` entry, returning `nil` for structural markers.
+    /// Extracts the numeric ``Value`` payload from a ``value`` entry, returning `nil` for structural markers.
     @inline(__always)
     public var value: Value? {
         switch self {
         case let .value(value):
-            value
-        case let .reduced(value):
             value
         default:
             nil
@@ -51,14 +47,11 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
              (.sequence(true, validRange: _, isLengthExplicit: _), .sequence(false, validRange: _, isLengthExplicit: _)),
              (.bind(true), .bind(false)):
             .gt
-        case (.just, .value), (.just, .reduced):
+        case (.just, .value):
             .lt
-        case (.value, .just), (.reduced, .just):
+        case (.value, .just):
             .gt
-        case let (.value(a), .value(b)),
-             let (.reduced(a), .reduced(b)),
-             let (.value(a), .reduced(b)),
-             let (.reduced(a), .value(b)):
+        case let (.value(a), .value(b)):
             a.shortLexCompare(b)
         default:
             .eq
@@ -84,8 +77,6 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return "]"
         case .value:
             return "V"
-        case .reduced:
-            return "_"
         case let .branch(value):
             return "B\(value.id):"
         }

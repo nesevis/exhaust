@@ -282,7 +282,7 @@ struct ChoiceGraphTests {
 
         for position in 0 ..< sequence.count {
             switch sequence[position] {
-            case .value, .reduced:
+            case .value:
                 let depth = graph.bindDepth(at: position)
                 // A is outer-inner: depth 0. B is inner-inner inside outer-bound: depth 1.
                 // C is inner-bound inside outer-bound: depth 2.
@@ -312,7 +312,7 @@ struct ChoiceGraphTests {
 
         for position in 0 ..< sequence.count {
             switch sequence[position] {
-            case .value, .reduced:
+            case .value:
                 let inBound = graph.isInBoundSubtree(position)
                 let value = sequence[position].value!.choice
                 switch value.bitPattern64 {

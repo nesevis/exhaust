@@ -144,7 +144,7 @@ package extension ChoiceSequence {
                 bindCount += 1
             case .bind(false):
                 bindCount -= 1
-            case .value, .reduced, .branch, .just:
+            case .value, .branch, .just:
                 break
             }
         }
@@ -162,7 +162,7 @@ package extension ChoiceSequence {
         var i = range.lowerBound
         while i <= range.upperBound {
             switch sequence[i] {
-            case let .value(v), let .reduced(v):
+            case let .value(v):
                 keys.append(v.choice)
             case .branch, .sequence, .group, .bind, .just:
                 break

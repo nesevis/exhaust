@@ -62,8 +62,6 @@ package enum ZobristHash {
         var bits: UInt64 = switch value {
         case let .value(v):
             v.choice.bitPattern64 ^ (tagBits(v.choice.tag) << 48)
-        case let .reduced(v):
-            v.choice.bitPattern64 ^ (tagBits(v.choice.tag) << 48) ^ 0xFF00_FF00_FF00_FF00
         case .sequence(true, validRange: _, isLengthExplicit: true):
             1
         case .sequence(true, validRange: _, isLengthExplicit: false):
