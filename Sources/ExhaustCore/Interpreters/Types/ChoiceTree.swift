@@ -26,14 +26,7 @@ indirect package enum ChoiceTree: Hashable, Equatable, Sendable { // NOTE: The e
     case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
     /// A branching decision. The `fingerprint` identifies the pick site's recursive template: the ``ChoiceGraph`` uses matching fingerprints to build self-similarity edges, enabling substitution of one branch's subtree into another. Inactive (unselected) branches retain full structural metadata so coverage analysis can reason about alternatives without regenerating.
-    case branch(
-        fingerprint: UInt64,
-        weight: UInt64,
-        id: UInt64,
-        branchCount: UInt64,
-        choice: ChoiceTree,
-        isSelected: Bool = false
-    )
+    case branch(BranchData)
 
     /// Represents a nested group of choices that usually represent objects or tuples.
     ///
@@ -53,6 +46,24 @@ indirect package enum ChoiceTree: Hashable, Equatable, Sendable { // NOTE: The e
     /// `fingerprint` is the source-location hash carried from the originating ``ReflectiveOperation/transform(kind:inner:)`` (`TransformKind.bind.fingerprint`). It survives every materialization round-trip and is read by ``ChoiceGraphBuilder`` to populate ``BindMetadata/fingerprint`` for the classification cache.
     case bind(fingerprint: UInt64, inner: ChoiceTree, bound: ChoiceTree)
 
+    /// Convenience factory for constructing a `.branch` case without explicitly creating a ``BranchData``.
+    package static func branch(
+        fingerprint: UInt64,
+        weight: UInt64,
+        id: UInt64,
+        branchCount: UInt64,
+        choice: ChoiceTree,
+        isSelected: Bool = false
+    ) -> ChoiceTree {
+        .branch(BranchData(
+            fingerprint: fingerprint,
+            weight: weight,
+            id: id,
+            branchCount: branchCount,
+            choice: choice,
+            isSelected: isSelected
+        ))
+    }
 }
 
 package extension ChoiceTree {
@@ -67,14 +78,14 @@ package extension ChoiceTree {
         case .getSize: 0
         case let .sequence(_, elements, _):
             2 + elements.reduce(0) { $0 + $1.flattenedEntryCount } // open + elements + close
-        case let .branch(_, _, _, _, choice, _):
-            choice.flattenedEntryCount
+        case let .branch(b):
+            b.choice.flattenedEntryCount
         case let .group(array, _):
             if array.allSatisfy({ $0.isBranch }),
-               case let .branch(_, _, _, _, choice, true) = array.first(where: \.isSelected)
+               case let .branch(b) = array.first(where: \.isSelected), b.isSelected
             {
                 // group open + branch entry + choice + group close
-                2 + 1 + choice.flattenedEntryCount
+                2 + 1 + b.choice.flattenedEntryCount
             } else {
                 // group open + children + group close
                 2 + array.reduce(0) { $0 + $1.flattenedEntryCount }
@@ -98,7 +109,7 @@ package extension ChoiceTree {
 
     /// Whether this node is a selected `.branch`.
     var isSelected: Bool {
-        if case .branch(_, _, _, _, _, isSelected: true) = self {
+        if case let .branch(b) = self, b.isSelected {
             return true
         }
         return false
@@ -108,15 +119,15 @@ package extension ChoiceTree {
     ///
     /// Traps if called on a non-branch node.
     func selecting(_ selected: Bool = true) -> ChoiceTree {
-        guard case let .branch(fingerprint, weight, id, branchCount, choice, _) = self else {
+        guard case let .branch(b) = self else {
             preconditionFailure("selecting() called on non-branch node")
         }
         return .branch(
-            fingerprint: fingerprint,
-            weight: weight,
-            id: id,
-            branchCount: branchCount,
-            choice: choice,
+            fingerprint: b.fingerprint,
+            weight: b.weight,
+            id: b.id,
+            branchCount: b.branchCount,
+            choice: b.choice,
             isSelected: selected
         )
     }
@@ -149,8 +160,8 @@ package extension ChoiceTree {
             return true
         case .choice, .just, .getSize:
             return false
-        case let .branch(_, _, _, _, choice, _):
-            return choice.containsBind
+        case let .branch(b):
+            return b.choice.containsBind
         case let .sequence(_, elements, _):
             return elements.contains(where: \.containsBind)
         case let .group(array, _):
@@ -170,8 +181,8 @@ package extension ChoiceTree {
 
     /// The pick site fingerprint, or `nil` if this node is not a `.branch`.
     var pickFingerprint: UInt64? {
-        guard case let .branch(fingerprint, _, _, _, _, _) = self else { return nil }
-        return fingerprint
+        guard case let .branch(b) = self else { return nil }
+        return b.fingerprint
     }
 
     /// Whether this tree contains any pick sites (`.branch` nodes).
@@ -202,9 +213,9 @@ package extension ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             return 0
-        case let .branch(_, _, _, branchCount, choice, _):
-            let here = branchCount * (1 << pickDepth)
-            let deeper = choice.pickComplexityHelper(pickDepth: pickDepth + 1)
+        case let .branch(b):
+            let here = b.branchCount * (1 << pickDepth)
+            let deeper = b.choice.pickComplexityHelper(pickDepth: pickDepth + 1)
             return max(here, deeper)
         case let .sequence(_, elements, _):
             return elements.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
@@ -241,14 +252,14 @@ package extension ChoiceTree {
                 elements: mapped,
                 metadata
             )
-        case let .branch(fingerprint, weight, id, branchCount, choice, isSelected):
+        case let .branch(b):
             return try .branch(
-                fingerprint: fingerprint,
-                weight: weight,
-                id: id,
-                branchCount: branchCount,
-                choice: choice.map(transform),
-                isSelected: isSelected
+                fingerprint: b.fingerprint,
+                weight: b.weight,
+                id: b.id,
+                branchCount: b.branchCount,
+                choice: b.choice.map(transform),
+                isSelected: b.isSelected
             )
         case let .group(children, isOpaque: isOpaque):
             // For a group, recursively map over its children.
@@ -290,8 +301,8 @@ package extension ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             return selfResult
-        case let .branch(_, _, _, _, gen, _):
-            return gen.contains(predicate)
+        case let .branch(b):
+            return b.choice.contains(predicate)
         case let .sequence(_, elements, _), let .group(elements, _):
             // For a sequence, recursively map over its elements.
             return elements.contains { $0.contains(predicate) }
@@ -339,12 +350,12 @@ extension ChoiceTree: CustomDebugStringConvertible {
             }
             return result
 
-        case let .branch(fingerprint, weight, id, branchCount, gen, branchIsSelected):
-            let index = id + 1
-            let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            let effectiveSelected = branchIsSelected ? "✅" : ""
-            var result = prefix + connector + "\(effectiveSelected)branch(fingerprint: \(fingerprintShort), id: \(id), index: \(index), weight: \(weight), count: \(branchCount))"
-            result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
+        case let .branch(b):
+            let index = b.id + 1
+            let fingerprintShort = String(format: "%08X", b.fingerprint & 0xFFFF_FFFF)
+            let effectiveSelected = b.isSelected ? "✅" : ""
+            var result = prefix + connector + "\(effectiveSelected)branch(fingerprint: \(fingerprintShort), id: \(b.id), index: \(index), weight: \(b.weight), count: \(b.branchCount))"
+            result += "\n" + b.choice.treeDescription(prefix: childPrefix, isLast: true)
             return result
 
         case let .group(children, _):
@@ -389,8 +400,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
             "just"
         case let .sequence(_, elements, _):
             "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
-        case let .branch(_, weight, id, _, gen, _):
-            "\(weight),\(id): \(gen.elementDescription)"
+        case let .branch(b):
+            "\(b.weight),\(b.id): \(b.choice.elementDescription)"
         case let .group(array, _):
             "{" + array.map(\.elementDescription).joined() + "}"
         case let .bind(_, inner, bound):
@@ -405,8 +416,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
 
     /// Returns the branch identifier if this node is a `.branch`, or `nil` otherwise.
     public var branchId: UInt64? {
-        if case let .branch(_, _, id, _, _, _) = self {
-            return id
+        if case let .branch(b) = self {
+            return b.id
         }
         return nil
     }
@@ -474,8 +485,8 @@ package extension ChoiceTree {
                 element.collectNormalizedScores(into: &scores)
             }
 
-        case let .branch(_, _, _, _, choice, _):
-            choice.collectNormalizedScores(into: &scores)
+        case let .branch(b):
+            b.choice.collectNormalizedScores(into: &scores)
 
         case let .group(children, _):
             for child in children {

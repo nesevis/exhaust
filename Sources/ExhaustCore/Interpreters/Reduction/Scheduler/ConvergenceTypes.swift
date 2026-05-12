@@ -10,19 +10,19 @@
 /// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored per graph node in ``ChoiceGraphNode/convergedOrigin`` and harvested by the scheduler after each probe loop.
 package struct ConvergedOrigin: Sendable {
     /// The bit-pattern value at which the search converged. Warm-start data.
-    public let bound: UInt64
+    package let bound: UInt64
 
     /// Describes what the encoder observed at convergence. Factory decision data.
-    public let signal: ConvergenceSignal
+    package let signal: ConvergenceSignal
 
     /// Identifies which encoder configuration produced this entry. Staleness discriminant.
-    public let configuration: EncoderConfiguration
+    package let configuration: EncoderConfiguration
 
     /// The cycle in which this observation was recorded. Staleness detection.
-    public let cycle: Int
+    package let cycle: Int
 
     /// Creates a convergence record with the given warm-start bound, signal, configuration, and cycle.
-    public init(
+    package init(
         bound: UInt64,
         signal: ConvergenceSignal,
         configuration: EncoderConfiguration,

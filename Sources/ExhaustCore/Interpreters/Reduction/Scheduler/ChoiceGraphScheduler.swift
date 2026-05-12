@@ -40,7 +40,7 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Entry Points
 
-    /// Runs the graph-based reduction pipeline to a fixed point or budget exhaustion.
+    /// Orchestrates the full reduction loop: builds the initial choice graph, runs scope-based encoding passes until convergence or budget exhaustion, and returns the minimal counterexample.
     static func run<Output>(
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
@@ -58,7 +58,7 @@ enum ChoiceGraphScheduler {
         ).reduced
     }
 
-    /// Runs the graph-based reduction pipeline and returns both the result and accumulated statistics.
+    /// Wraps ``run(gen:initialTree:initialOutput:config:property:)`` with statistics collection, returning both the reduced result and accumulated ``ReductionStats``.
     static func runCollectingStats<Output>(
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
@@ -264,8 +264,7 @@ enum ChoiceGraphScheduler {
                     }
 
                     if hadReplacementShortlexRejection == false,
-                       let structuralEncoder = encoder as? GraphStructuralEncoder,
-                       structuralEncoder.hadReplacementShortlexRejection
+                       encoder.hadReplacementShortlexRejection
                     {
                         hadReplacementShortlexRejection = true
                     }

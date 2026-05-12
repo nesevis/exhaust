@@ -10,6 +10,9 @@
 //
 // Implements the `generate` interpretation G⟦·⟧ (Goldstein §3.3.3, Fig 4.3 for the reflective version). Pure forward pass that consumes PRNG entropy to produce values — no randomness capture.
 
+/// Produces only a value (no ``ChoiceTree``), used by ``ValueAndChoiceTreeInterpreter/nextValueOnly()`` for tree-free sampling when only the output is needed.
+///
+/// PRNG consumption is identical to ``ValueAndChoiceTreeInterpreter`` so a failing run can be reproduced with full tree construction.
 package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     let generator: ReflectiveGenerator<Element>
     private var erasedGenerator: ReflectiveGenerator<Any>?
@@ -259,15 +262,11 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 ) else {
                     return nil
                 }
+                var bucket = context.classifications[fingerprint, default: [:]]
                 for (label, classifier) in classifiers where classifier(inner) {
-                    if context.classifications[fingerprint] == nil {
-                        context.classifications[fingerprint] = [:]
-                    }
-                    if context.classifications[fingerprint]![label] == nil {
-                        context.classifications[fingerprint]![label] = []
-                    }
-                    context.classifications[fingerprint]![label]!.insert(context.runs)
+                    bucket[label, default: []].insert(context.runs)
                 }
+                context.classifications[fingerprint] = bucket
                 result = inner
 
             case let .transform(kind, inner):
@@ -368,13 +367,6 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
     @inline(__always)
     static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
-        if let override = context.sizeOverride {
-            context.sizeOverride = nil
-            return override
-        }
-        if context.size > 0 {
-            return context.size
-        }
-        return GenerationContext.scaledSize(forRun: context.runs)
+        SharedInterpreterHelpers.consumeSize(&context)
     }
 }

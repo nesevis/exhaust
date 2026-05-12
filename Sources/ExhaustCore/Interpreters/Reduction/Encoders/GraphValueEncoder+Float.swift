@@ -6,6 +6,7 @@
 // MARK: - Float Mode
 
 extension GraphValueEncoder {
+    /// Initializes float reduction by collecting all float-typed leaf nodes from the scope and preparing the first stage.
     mutating func startFloat(
         scope: FloatMinimizationScope,
         sequence: ChoiceSequence,
@@ -53,6 +54,7 @@ extension GraphValueEncoder {
         ))
     }
 
+    /// Advances through the four-stage float pipeline, returning the next probe candidate or nil when all stages and targets are exhausted.
     mutating func nextFloatProbe(
         state: inout FloatState,
         lastAccepted: Bool
@@ -89,6 +91,7 @@ extension GraphValueEncoder {
 
     // MARK: - Float Stage Preparation
 
+    /// Transitions to the next float reduction stage by dispatching to the appropriate stage-specific preparation method.
     mutating func prepareFloatStage(state: inout FloatState) {
         guard state.currentTargetIndex < state.targets.count else { return }
         let target = state.targets[state.currentTargetIndex]
@@ -107,6 +110,7 @@ extension GraphValueEncoder {
         }
     }
 
+    /// Sets up probes for special float values (zero, smallest subnormal, smallest normal) that are common reduction targets, skipping any that match the current bit pattern.
     mutating func prepareFloatSpecialValues(state: inout FloatState, target: FloatTarget) {
         var seen = Set<UInt64>()
         seen.insert(target.currentBitPattern)
@@ -136,6 +140,7 @@ extension GraphValueEncoder {
         state.batchCandidates = candidates
     }
 
+    /// Sets up probes that truncate mantissa bits at increasing power-of-two scales, searching for the simplest representable value near the current one.
     mutating func prepareFloatTruncation(state: inout FloatState, target: FloatTarget) {
         guard target.currentValue.isFinite else {
             state.batchCandidates = []
@@ -166,6 +171,7 @@ extension GraphValueEncoder {
         state.batchCandidates = candidates
     }
 
+    /// Sets up binary search over the integral part of the float value, computing the ULP-aligned step size and maximum quantum for the target's type width.
     mutating func prepareFloatIntegralBinarySearch(state: inout FloatState, target: FloatTarget) {
         guard target.currentValue.isFinite,
               target.currentValue == target.currentValue.rounded(.towardZero),
@@ -200,6 +206,7 @@ extension GraphValueEncoder {
         state.binarySearchCurrentInt = currentInt
     }
 
+    /// Sets up binary search over the integer part of the float's rational decomposition, preserving the fractional remainder so the search moves through exact rational multiples.
     mutating func prepareFloatRatioBinarySearch(state: inout FloatState, target: FloatTarget) {
         guard target.currentValue.isFinite,
               abs(target.currentValue) <= FloatReduction.maxPreciseInteger(for: target.typeTag),
@@ -226,6 +233,7 @@ extension GraphValueEncoder {
 
     // MARK: - Float Candidate Generation
 
+    /// Dispatches to the current stage's candidate generator, returning the next probe or nil when the stage is exhausted.
     mutating func nextFloatCandidateForCurrentStage(
         state: inout FloatState,
         lastAccepted: Bool
@@ -240,6 +248,7 @@ extension GraphValueEncoder {
         }
     }
 
+    /// Generates a batch candidate by applying the next pre-computed bit pattern from ``FloatState/batchCandidates`` to the current target, skipping candidates that are out of range or not shortlex-smaller.
     mutating func nextFloatBatchCandidate(state: inout FloatState) -> ChoiceSequence? {
         guard state.currentTargetIndex < state.targets.count else { return nil }
         let target = state.targets[state.currentTargetIndex]
@@ -270,6 +279,7 @@ extension GraphValueEncoder {
         return nil
     }
 
+    /// Generates the next binary search probe for integral reduction, stepping through ULP-aligned quanta via ``FindIntegerStepper`` and recording convergence when the stepper is exhausted.
     mutating func nextFloatIntegralBinarySearchCandidate(
         state: inout FloatState,
         lastAccepted: Bool
@@ -277,67 +287,76 @@ extension GraphValueEncoder {
         guard state.binarySearchMaxQuantum > 0 else { return nil }
         let target = state.targets[state.currentTargetIndex]
 
-        let quantum: Int?
-        if state.batchIndex == 0 {
-            state.batchIndex = 1
-            quantum = state.stepper.start()
-        } else {
-            quantum = state.stepper.advance(lastAccepted: lastAccepted)
-        }
-
-        guard let k = quantum else {
-            // Converged — apply best accepted if any.
-            if state.stepper.bestAccepted > 0 {
-                applyFloatIntegralBinarySearchBest(state: &state)
+        var accepted = lastAccepted
+        while true {
+            let quantum: Int?
+            if state.batchIndex == 0 {
+                state.batchIndex = 1
+                quantum = state.stepper.start()
+            } else {
+                quantum = state.stepper.advance(lastAccepted: accepted)
             }
-            convergenceStore[target.nodeID] = ConvergedOrigin(
-                bound: state.targets[state.currentTargetIndex].currentBitPattern,
-                signal: .monotoneConvergence,
-                configuration: .binarySearchSemanticSimplest,
-                cycle: 0
-            )
-            return nil
-        }
 
-        let kU64 = UInt64(k)
-        guard kU64 <= state.binarySearchMaxQuantum else {
-            return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
-        let delta = kU64 * state.binarySearchMinDelta
-        guard delta <= UInt64(Int64.max) else {
-            return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
-        let signedDelta = Int64(delta)
-        let candidateInt = state.binarySearchMovesUp
-            ? state.binarySearchCurrentInt + signedDelta
-            : state.binarySearchCurrentInt - signedDelta
-        let candidateDouble = Double(candidateInt)
-        guard let candidateChoice = target.typeTag.floatingChoice(from: candidateDouble) else {
-            return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
+            guard let k = quantum else {
+                if state.stepper.bestAccepted > 0 {
+                    applyFloatIntegralBinarySearchBest(state: &state)
+                }
+                convergenceStore[target.nodeID] = ConvergedOrigin(
+                    bound: state.targets[state.currentTargetIndex].currentBitPattern,
+                    signal: .monotoneConvergence,
+                    configuration: .binarySearchSemanticSimplest,
+                    cycle: 0
+                )
+                return nil
+            }
 
-        if candidateChoice.bitPattern64 == target.currentBitPattern {
-            return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: true)
-        }
+            let kU64 = UInt64(k)
+            guard kU64 <= state.binarySearchMaxQuantum else {
+                accepted = false
+                continue
+            }
+            let delta = kU64 * state.binarySearchMinDelta
+            guard delta <= UInt64(Int64.max) else {
+                accepted = false
+                continue
+            }
+            let signedDelta = Int64(delta)
+            let candidateInt = state.binarySearchMovesUp
+                ? state.binarySearchCurrentInt + signedDelta
+                : state.binarySearchCurrentInt - signedDelta
+            let candidateDouble = Double(candidateInt)
+            guard let candidateChoice = target.typeTag.floatingChoice(from: candidateDouble) else {
+                accepted = false
+                continue
+            }
 
-        if target.isRangeExplicit, candidateChoice.fits(in: target.validRange) == false {
-            return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
+            if candidateChoice.bitPattern64 == target.currentBitPattern {
+                accepted = true
+                continue
+            }
 
-        let candidateEntry = ChoiceSequenceValue.value(.init(
-            choice: candidateChoice,
-            validRange: target.validRange,
-            isRangeExplicit: target.isRangeExplicit
-        ))
-        guard candidateEntry.shortLexCompare(state.sequence[target.sequenceIndex]) == .lt else {
-            return nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
+            if target.isRangeExplicit, candidateChoice.fits(in: target.validRange) == false {
+                accepted = false
+                continue
+            }
 
-        var candidate = state.sequence
-        candidate[target.sequenceIndex] = candidateEntry
-        return candidate
+            let candidateEntry = ChoiceSequenceValue.value(.init(
+                choice: candidateChoice,
+                validRange: target.validRange,
+                isRangeExplicit: target.isRangeExplicit
+            ))
+            guard candidateEntry.shortLexCompare(state.sequence[target.sequenceIndex]) == .lt else {
+                accepted = false
+                continue
+            }
+
+            var candidate = state.sequence
+            candidate[target.sequenceIndex] = candidateEntry
+            return candidate
+        }
     }
 
+    /// Commits the best integral binary search result by writing the accepted value into both the sequence and the target's mutable state.
     mutating func applyFloatIntegralBinarySearchBest(state: inout FloatState) {
         let target = state.targets[state.currentTargetIndex]
         let bestK = UInt64(state.stepper.bestAccepted)
@@ -360,6 +379,7 @@ extension GraphValueEncoder {
         state.targets[state.currentTargetIndex].currentBitPattern = candidateChoice.bitPattern64
     }
 
+    /// Generates the next binary search probe for ratio-based reduction, reconstructing exact rational values from the stepped integer part and fixed remainder.
     mutating func nextFloatRatioBinarySearchCandidate(
         state: inout FloatState,
         lastAccepted: Bool
@@ -367,74 +387,85 @@ extension GraphValueEncoder {
         guard state.ratioDistance > 0 else { return nil }
         let target = state.targets[state.currentTargetIndex]
 
-        let quantum: Int?
-        if state.batchIndex == 0 {
-            state.batchIndex = 1
-            quantum = state.stepper.start()
-        } else {
-            quantum = state.stepper.advance(lastAccepted: lastAccepted)
-        }
-
-        guard let k = quantum else {
-            if state.stepper.bestAccepted > 0 {
-                applyFloatRatioBinarySearchBest(state: &state)
+        var accepted = lastAccepted
+        while true {
+            let quantum: Int?
+            if state.batchIndex == 0 {
+                state.batchIndex = 1
+                quantum = state.stepper.start()
+            } else {
+                quantum = state.stepper.advance(lastAccepted: accepted)
             }
-            convergenceStore[target.nodeID] = ConvergedOrigin(
-                bound: state.targets[state.currentTargetIndex].currentBitPattern,
-                signal: .monotoneConvergence,
-                configuration: .binarySearchSemanticSimplest,
-                cycle: 0
-            )
-            return nil
-        }
 
-        let kU64 = UInt64(k)
-        guard kU64 <= state.ratioDistance, kU64 <= UInt64(Int64.max) else {
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
-        let signedDelta = Int64(kU64)
-        let candidateInteger = state.binarySearchMovesUp
-            ? state.ratioIntegerPart + signedDelta
-            : state.ratioIntegerPart - signedDelta
+            guard let k = quantum else {
+                if state.stepper.bestAccepted > 0 {
+                    applyFloatRatioBinarySearchBest(state: &state)
+                }
+                convergenceStore[target.nodeID] = ConvergedOrigin(
+                    bound: state.targets[state.currentTargetIndex].currentBitPattern,
+                    signal: .monotoneConvergence,
+                    configuration: .binarySearchSemanticSimplest,
+                    cycle: 0
+                )
+                return nil
+            }
 
-        let (scaledNumerator, multiplyOverflow) =
-            candidateInteger.multipliedReportingOverflow(by: state.ratioDenominator)
-        guard multiplyOverflow == false else {
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
-        let (candidateNumerator, addOverflow) =
-            scaledNumerator.addingReportingOverflow(state.ratioRemainder)
-        guard addOverflow == false else {
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
+            let kU64 = UInt64(k)
+            guard kU64 <= state.ratioDistance, kU64 <= UInt64(Int64.max) else {
+                accepted = false
+                continue
+            }
+            let signedDelta = Int64(kU64)
+            let candidateInteger = state.binarySearchMovesUp
+                ? state.ratioIntegerPart + signedDelta
+                : state.ratioIntegerPart - signedDelta
 
-        let candidateValue = Double(candidateNumerator) / Double(state.ratioDenominator)
-        guard let candidateChoice = target.typeTag.floatingChoice(from: candidateValue) else {
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
+            let (scaledNumerator, multiplyOverflow) =
+                candidateInteger.multipliedReportingOverflow(by: state.ratioDenominator)
+            guard multiplyOverflow == false else {
+                accepted = false
+                continue
+            }
+            let (candidateNumerator, addOverflow) =
+                scaledNumerator.addingReportingOverflow(state.ratioRemainder)
+            guard addOverflow == false else {
+                accepted = false
+                continue
+            }
 
-        if candidateChoice.bitPattern64 == target.currentBitPattern {
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: true)
-        }
+            let candidateValue = Double(candidateNumerator) / Double(state.ratioDenominator)
+            guard let candidateChoice = target.typeTag.floatingChoice(from: candidateValue) else {
+                accepted = false
+                continue
+            }
 
-        if target.isRangeExplicit, candidateChoice.fits(in: target.validRange) == false {
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
+            if candidateChoice.bitPattern64 == target.currentBitPattern {
+                accepted = true
+                continue
+            }
 
-        let candidateEntry = ChoiceSequenceValue.value(.init(
-            choice: candidateChoice,
-            validRange: target.validRange,
-            isRangeExplicit: target.isRangeExplicit
-        ))
-        guard candidateEntry.shortLexCompare(state.sequence[target.sequenceIndex]) == .lt else {
-            return nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: false)
-        }
+            if target.isRangeExplicit, candidateChoice.fits(in: target.validRange) == false {
+                accepted = false
+                continue
+            }
 
-        var candidate = state.sequence
-        candidate[target.sequenceIndex] = candidateEntry
-        return candidate
+            let candidateEntry = ChoiceSequenceValue.value(.init(
+                choice: candidateChoice,
+                validRange: target.validRange,
+                isRangeExplicit: target.isRangeExplicit
+            ))
+            guard candidateEntry.shortLexCompare(state.sequence[target.sequenceIndex]) == .lt else {
+                accepted = false
+                continue
+            }
+
+            var candidate = state.sequence
+            candidate[target.sequenceIndex] = candidateEntry
+            return candidate
+        }
     }
 
+    /// Commits the best ratio binary search result by writing the accepted rational value into both the sequence and the target's mutable state.
     mutating func applyFloatRatioBinarySearchBest(state: inout FloatState) {
         let target = state.targets[state.currentTargetIndex]
         let bestK = UInt64(state.stepper.bestAccepted)
@@ -461,6 +492,7 @@ extension GraphValueEncoder {
 
     // MARK: - Float Acceptance & Advancement
 
+    /// Processes an accepted probe by updating the current target's value and bit pattern, then advancing to the next target for batch stages or deferring to the stepper for binary search stages.
     mutating func handleFloatAcceptance(state: inout FloatState) {
         let target = state.targets[state.currentTargetIndex]
         switch state.stage {
@@ -489,6 +521,7 @@ extension GraphValueEncoder {
         }
     }
 
+    /// Moves to the next stage for the current target, or advances to the next leaf target when all four stages are exhausted, returning false when no targets remain.
     @discardableResult
     mutating func advanceFloatStageOrTarget(state: inout FloatState) -> Bool {
         let nextStage: FloatStage? = switch state.stage {

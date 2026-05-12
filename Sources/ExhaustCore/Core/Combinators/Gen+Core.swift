@@ -5,14 +5,24 @@
 ///
 /// ``Gen`` provides a unified entry point to all generator construction. Import `Exhaust` and use `Gen.int(in:)`, `Gen.string()`, `Gen.pick(choices:)`, and so on, or use the ``#gen(_:transform:)`` macro for composing generators from existing ones.
 package enum Gen {
-    /// Set by the generation pipeline to signal that `.filter` is being constructed during interpretation (inside a bind continuation) rather than at top level. When true, `.filter` defers CGS tuning to the interpreter's fingerprint-keyed cache instead of tuning eagerly.
+    /// Set by the generation pipeline to signal that ``.filter`` is being constructed during interpretation (inside a bind continuation) rather than at top level. When true, ``.filter`` defers CGS tuning to the interpreter's fingerprint-keyed cache instead of tuning eagerly.
     @TaskLocal package static var isInterpreting: Bool = false
+
+    /// Computes a per-site fingerprint from source location components.
+    @inline(__always)
+    static func sourceFingerprint(
+        fileID: String,
+        line: UInt,
+        column: UInt = 0
+    ) -> UInt64 {
+        fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+    }
 }
 
 package extension Gen {
     /// Lifts a reflective operation into a generator with type-safe result handling.
     ///
-    /// This is the fundamental operation that bridges between raw reflective operations and type-safe generators. It handles the unsafe casting and error reporting when the reflection system returns unexpected types.
+    /// Wraps a ``ReflectiveOperation`` in a type-safe generator by injecting it into the ``FreerMonad`` spine as an impure step. The returned generator handles the unsafe casting and reports an error when the reflection system returns an unexpected type.
     ///
     /// - Parameter operation: The low-level reflective operation to lift.
     /// - Returns: A generator that executes the operation and validates the result type.
@@ -23,9 +33,9 @@ package extension Gen {
             if let typedResult = result as? Output {
                 return .pure(typedResult)
             }
-            throw Interpreters.ReflectionError.reflectedNil(
-                type: String(describing: Output.self),
-                resultType: String(describing: result.self)
+            throw GeneratorError.typeMismatch(
+                expected: String(describing: Output.self),
+                actual: String(describing: type(of: result))
             )
         }
     }
@@ -44,7 +54,7 @@ package extension Gen {
 
     /// Applies a contravariant transformation to a generator's input during reflection.
     ///
-    /// This is the fundamental operation for transforming inputs in the backward direction during reflection. It allows a generator expecting one input type to work with a different input type via a transformation function.
+    /// Attaches a backward transformation that the reflection interpreter applies when walking the generator in reverse. This allows a generator expecting one input type to work with a different input type via a transformation function.
     ///
     /// - Parameters:
     ///   - transform: A function that transforms the new input type to the expected input type.
@@ -69,12 +79,6 @@ package extension Gen {
                 // Backward pass - direct value
                 return .pure(typed)
             }
-            if let optional = result as? Output?, optional == nil {
-                throw Interpreters.ReflectionError.reflectedNil(
-                    type: String(describing: Output.self),
-                    resultType: String(describing: type(of: result))
-                )
-            }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),
                 actual: String(describing: type(of: result))
@@ -84,7 +88,7 @@ package extension Gen {
 
     /// Applies a contravariant transformation with optional failure handling.
     ///
-    /// This is a specialized version of `contramap` that combines transformation with pruning.
+    /// This is a specialized version of ``contramap`` that combines transformation with pruning.
     /// If the transformation returns nil, the generator branch is pruned during reflection.
     /// This is useful for generators that should only succeed under certain conditions.
     ///

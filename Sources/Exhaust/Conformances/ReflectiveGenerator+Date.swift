@@ -10,12 +10,19 @@ import Foundation
 ///
 /// All cases resolve to a fixed number of seconds. Months are treated as 30 days and years as 365 days.
 public enum DateSpan: Sendable, Comparable, Equatable {
+    /// Specifies an interval measured in seconds.
     case seconds(Int)
+    /// Specifies an interval measured in minutes.
     case minutes(Int)
+    /// Specifies an interval measured in hours.
     case hours(Int)
+    /// Specifies an interval measured in days.
     case days(Int)
+    /// Specifies an interval measured in weeks.
     case weeks(Int)
+    /// Specifies an interval measured in calendar months.
     case months(Int)
+    /// Specifies an interval measured in calendar years.
     case years(Int)
 
     /// The number of seconds represented by this span.

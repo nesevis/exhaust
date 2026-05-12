@@ -163,9 +163,10 @@ extension GraphRedistributionEncoder {
                 }
 
                 // Fall back to binary search on delta magnitude.
-                state.stepper = MaxBinarySearchStepper(
+                state.stepper = BinarySearchStepper(
                     lo: 0,
-                    hi: currentMax
+                    hi: currentMax,
+                    direction: .findLargest
                 )
                 state.didEmitCandidate = false
 

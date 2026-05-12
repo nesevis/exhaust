@@ -87,7 +87,7 @@ extension ChoiceGraphScheduler {
         }
     }
 
-    /// Checks whether a leaf node is in a structurally-constant context (all ancestor binds are structurally constant, or not in any bind).
+    /// Checks whether a leaf node sits inside a structurally-constant bind context, meaning every ancestor bind either is structurally constant or the leaf is not in that bind's bound subtree. Convergence records from structurally-constant contexts can be transferred across rebuilds without validating the valid range, because the bound subtree's shape does not depend on the inner leaf's value.
     static func isInStructurallyConstantContext(nodeID: Int, graph: ChoiceGraph) -> Bool {
         var current = nodeID
         while let parentID = graph.nodes[current].parent {

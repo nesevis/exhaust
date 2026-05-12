@@ -5,7 +5,7 @@ package extension Gen {
     /// Creates a generator for an array of random values.
     ///
     /// This implementation is stack-safe and can generate very large arrays without overflowing.
-    /// It works by first generating a random length, then using a primitive `.sequence` operation which the interpreter can execute iteratively.
+    /// It works by first generating a random length, then using a primitive ``.sequence`` operation which the interpreter can execute iteratively.
     ///
     /// The array length is controlled by the provided length generator, which defaults to a size-based range if not specified.
     ///
@@ -163,7 +163,7 @@ package extension Gen {
 
     /// Shuffles the output of an array generator into a random permutation.
     ///
-    /// Uses a sort-key approach: generates one random `UInt64` per element, then sorts the array by those keys. This produces a uniform permutation and reduces cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
+    /// Uses a sort-key approach: generates one random ``UInt64`` per element, then sorts the array by those keys. This produces a uniform permutation and reduces cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
     ///
     /// - Parameter gen: An array generator whose output should be shuffled.
     /// - Returns: A generator that produces a randomly permuted array.
@@ -186,7 +186,7 @@ package extension Gen {
 
     /// Creates an array generator whose length is controlled by the current size parameter.
     ///
-    /// This is a convenience method that combines `getSize` with `arrayOf` to create arrays that grow in complexity as tests progress. The size parameter acts as an upper bound, with the actual length chosen randomly within the constraint.
+    /// This is a convenience method that combines ``getSize`` with ``arrayOf`` to create arrays that grow in complexity as tests progress. The size parameter acts as an upper bound, with the actual length chosen randomly within the constraint.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements.
@@ -259,7 +259,7 @@ package extension Gen {
 
     /// Creates a generator that picks a random element from a collection.
     ///
-    /// Reflection uses hash-based O(1) lookup to find the element's index.
+    /// Reflection uses hash-based O(1) lookup to find the element's first index in the collection.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.
@@ -278,7 +278,14 @@ package extension Gen {
         }
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in indexMap[element] ?? 0 },
+            { (element: C.Element) throws -> Int in
+                guard let index = indexMap[element] else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element not found in collection during reflection"
+                    )
+                }
+                return index
+            },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
@@ -299,7 +306,14 @@ package extension Gen {
         let elements = ContiguousArray(collection)
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in elements.firstIndex(of: element) ?? 0 },
+            { (element: C.Element) throws -> Int in
+                guard let index = elements.firstIndex(of: element) else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element not found in collection during reflection"
+                    )
+                }
+                return index
+            },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
@@ -331,8 +345,13 @@ package extension Gen {
         }
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in
-                indexMap[element[keyPath: path]] ?? 0
+            { (element: C.Element) throws -> Int in
+                guard let index = indexMap[element[keyPath: path]] else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element key not found in collection during reflection"
+                    )
+                }
+                return index
             },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
@@ -357,9 +376,14 @@ package extension Gen {
         let elements = ContiguousArray(collection)
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in
+            { (element: C.Element) throws -> Int in
                 let key = element[keyPath: path]
-                return elements.firstIndex { $0[keyPath: path] == key } ?? 0
+                guard let index = elements.firstIndex(where: { $0[keyPath: path] == key }) else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element key not found in collection during reflection"
+                    )
+                }
+                return index
             },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )

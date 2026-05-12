@@ -6,6 +6,7 @@
 // MARK: - Integer Mode
 
 extension GraphValueEncoder {
+    /// Initializes integer reduction by collecting integer-typed leaf nodes that have not yet reached their reduction targets and entering the batch-zero phase (when eligible). Leaves with preserved convergence from a prior ``refreshState(graph:sequence:)`` call are excluded so their completed binary searches are not re-driven.
     mutating func startInteger(
         scope: ValueMinimizationScope,
         sequence: ChoiceSequence,
@@ -14,7 +15,7 @@ extension GraphValueEncoder {
         preservingConvergence: [Int: ConvergedOrigin] = [:],
         armBatchZero: Bool = true
     ) {
-        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)] = []
+        var leafPositions: [IntegerLeafPosition] = []
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
@@ -25,7 +26,7 @@ extension GraphValueEncoder {
             let current = metadata.value.bitPattern64
             let target = metadata.value.reductionTarget(in: metadata.validRange)
             if current != target {
-                leafPositions.append((
+                leafPositions.append(IntegerLeafPosition(
                     nodeID: nodeID,
                     sequenceIndex: range.lowerBound,
                     validRange: metadata.validRange,
@@ -57,6 +58,7 @@ extension GraphValueEncoder {
         ))
     }
 
+    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning the next candidate ``ChoiceSequence`` to probe or nil when all phases are exhausted. Updates the baseline sequence on acceptance so subsequent probes build on the improved candidate.
     mutating func nextIntegerProbe(
         state: inout IntegerState,
         lastAccepted: Bool
@@ -308,6 +310,7 @@ extension GraphValueEncoder {
 
     // MARK: - Per-Leaf Orchestrator
 
+    /// Orchestrates per-leaf reduction by iterating over leaf nodes in sequence. For each leaf, emits a direct shot at the reduction target, then drives bit-pattern binary search, then optionally runs a linear scan over any non-monotone gap, and finally enters the cross-zero phase for signed types. Returns nil when all leaves have been processed.
     mutating func nextPerLeafProbe(
         state: inout IntegerState,
         lastAccepted: Bool
@@ -450,24 +453,24 @@ extension GraphValueEncoder {
                 let effectiveLo = validWarmStart?.bound ?? targetBitPattern
                 let range = currentBitPattern - effectiveLo
                 if range < InterpolationSearchStepper.binaryThreshold {
-                    state.stepper = .downwardBinary(
+                    state.stepper = .binary(
                         BinarySearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 } else {
-                    state.stepper = .downward(
+                    state.stepper = .interpolation(
                         InterpolationSearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 }
             } else {
                 let effectiveHi = validWarmStart?.bound ?? targetBitPattern
                 let range = effectiveHi - currentBitPattern
-                if range < MaxInterpolationSearchStepper.binaryThreshold {
-                    state.stepper = .upwardBinary(
-                        MaxBinarySearchStepper(lo: currentBitPattern, hi: effectiveHi)
+                if range < InterpolationSearchStepper.binaryThreshold {
+                    state.stepper = .binary(
+                        BinarySearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
                     )
                 } else {
-                    state.stepper = .upward(
-                        MaxInterpolationSearchStepper(lo: currentBitPattern, hi: effectiveHi)
+                    state.stepper = .interpolation(
+                        InterpolationSearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
                     )
                 }
             }
@@ -486,7 +489,8 @@ extension GraphValueEncoder {
             }
         }
 
-        if let nextBitPattern = state.stepper?.advance(lastAccepted: lastAccepted) {
+        var accepted = lastAccepted
+        while let nextBitPattern = state.stepper?.advance(lastAccepted: accepted) {
             let newEntry = currentEntry.withBitPattern(nextBitPattern)
             if newEntry.shortLexCompare(currentEntry) == .lt {
                 var candidate = state.sequence
@@ -494,11 +498,7 @@ extension GraphValueEncoder {
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
-            // Probe not shortlex-smaller — re-enter to advance again.
-            return nextBitPatternSearchProbe(
-                state: &state,
-                lastAccepted: false
-            )
+            accepted = false
         }
 
         // Stepper converged — check for non-monotone gap.

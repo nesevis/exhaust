@@ -31,7 +31,7 @@ struct GraphStructuralEncoder: GraphEncoder {
     /// True if any replacement candidate was built but rejected by the shortlex gate. When true, the structural relax round may find value in trying the same candidates without the gate.
     var hadReplacementShortlexRejection = false
 
-    /// Mutable state for the covering-array-backed aligned removal encoder.
+    /// Tracks the covering-array cursor state for aligned removal probes, persisting across encoder restarts so the next restart resumes where the previous left off.
     struct CoveringAlignedState {
         let scope: CoveringAlignedRemovalScope
         let baseSequence: ChoiceSequence

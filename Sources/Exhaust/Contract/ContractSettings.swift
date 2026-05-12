@@ -6,7 +6,7 @@ public enum ContractSettings {
     /// Controls iteration budgets for coverage, random sampling, and reduction. Defaults to `.expensive` (500 coverage rows, 500 random samplings, fast reduction).
     case budget(ExhaustBudget)
 
-    /// A fixed seed for deterministic replay.
+    /// Replays a specific test run using a fixed seed.
     ///
     /// Accepts a raw `UInt64` or a Crockford Base32 string.
     case replay(ReplaySeed)

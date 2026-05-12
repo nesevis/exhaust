@@ -275,6 +275,7 @@ struct BatchRemovalSource: CandidateSource {
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
+    /// Constructs emptying removal candidates for sequences whose minimum length constraint is zero. Each candidate removes all elements from a single sequence, producing the maximal structural reduction per sequence. Sorted by yield descending.
     static func buildEmptyingCandidates(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
         for scope in elementScopes {
@@ -313,6 +314,7 @@ extension CandidateSourceBuilder {
         return results
     }
 
+    /// Constructs per-element removal candidates that delete one element at a time from each deletable sequence. Zero-valued elements are prioritized (removing an already-minimal element is more likely to preserve the property failure) and remaining elements are ordered by position.
     static func buildPerElementCandidates(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
         for scope in elementScopes {
@@ -364,6 +366,7 @@ extension CandidateSourceBuilder {
         }
     }
 
+    /// Constructs covering-aligned removal candidates that delete elements at corresponding positions across multiple same-length sequences simultaneously. Sorted by maximum element yield descending so higher-impact aligned deletions are tried first.
     static func buildAlignedCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         let scopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
             .sorted { $0.maxElementYield > $1.maxElementYield }

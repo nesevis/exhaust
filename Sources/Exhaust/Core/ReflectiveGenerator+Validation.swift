@@ -79,10 +79,15 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
 
 /// A specific validation failure detected during generator validation.
 public enum ValidationFailure: Sendable, CustomStringConvertible {
+    /// Indicates that reflecting and replaying a generated value produced a different result.
     case reflectionRoundTripMismatch(sampleIndex: Int, detail: String)
+    /// Indicates that reflecting a generated value back through the generator threw an error.
     case reflectionFailed(sampleIndex: Int, errorDescription: String?)
+    /// Indicates that replaying a reflected choice tree did not produce a value.
     case replayFailed(sampleIndex: Int)
+    /// Indicates that replaying a reflected choice tree produced a different value than the original.
     case replayNonDeterministic(sampleIndex: Int, detail: String?)
+    /// Indicates that the generator produced no values during the validation sample.
     case noValuesGenerated
     /// Reflection failed because the generator contains a forward-only `map` or `bind`.
     case forwardOnlyTransform(inputType: String, outputType: String, kind: String)
@@ -116,7 +121,7 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses choice-sequence comparison for round-trip checks.
     ///
-    /// Failures are recorded as test issues via `reportIssue`, so calling this inside a test is sufficient — no assertions needed.
+    /// Failures are recorded as test issues via ``reportIssue``, so calling this inside a test is sufficient — no assertions needed.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
@@ -148,7 +153,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 public extension ReflectiveGenerator where Operation == ReflectiveOperation, Value: Equatable {
     /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses `Equatable` conformance and `CustomDump.diff` for rich failure output.
     ///
-    /// Failures are recorded as test issues via `reportIssue`, so calling this inside a test is sufficient — no assertions needed.
+    /// Failures are recorded as test issues via ``reportIssue``, so calling this inside a test is sufficient — no assertions needed.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.

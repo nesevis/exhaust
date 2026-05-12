@@ -19,6 +19,7 @@ package struct BoundaryParameter: @unchecked Sendable {
     public let kind: BoundaryParameterKind
 }
 
+/// Classifies the generator operation that produced a boundary parameter, determining which boundary-value strategy (range endpoints, sequence lengths, pick branches, or composite encoding) applies.
 package enum BoundaryParameterKind: @unchecked Sendable {
     // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 

@@ -32,9 +32,11 @@ enum ExchangeQuery {
             innerDescendantToBind: innerDescendantToBind
         ))
         for edge in graph.typeCompatibilityEdges {
-            // Bind-inner leaves control structure — redistributing them in either direction changes the bound's shape unpredictably. Only bound and independent values participate.
+            // Bind-inner leaves control structure — redistributing them in either direction changes the bound's shape unpredictably. Depth-control leaves are independent markers for recursive depth and must not be redistributed. Only bound and independent values participate.
             guard QueryHelpers.isBindInner(edge.nodeA, innerDescendantToBind: innerDescendantToBind) == false,
-                  QueryHelpers.isBindInner(edge.nodeB, innerDescendantToBind: innerDescendantToBind) == false
+                  QueryHelpers.isBindInner(edge.nodeB, innerDescendantToBind: innerDescendantToBind) == false,
+                  QueryHelpers.isDepthControl(edge.nodeA, graph: graph) == false,
+                  QueryHelpers.isDepthControl(edge.nodeB, graph: graph) == false
             else { continue }
 
             guard case let .chooseBits(metadataA) = graph.nodes[edge.nodeA].kind,
@@ -79,11 +81,12 @@ enum ExchangeQuery {
             scopes.append(.redistribution(RedistributionScope(pairs: pairs)))
         }
 
-        // Tandem: group active leaves by TypeTag.
+        // Tandem: group active leaves by TypeTag. Depth-control leaves are excluded — they are independent recursive depth markers that must not move in lockstep with other values.
         var leafGroups: [TypeTag: [Int]] = [:]
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind else { continue }
+            if case .depthControl = metadata.typeTag { continue }
             leafGroups[metadata.typeTag, default: []].append(nodeID)
         }
         let tandemGroups = leafGroups.compactMap { tag, leafIDs -> TandemGroup? in
@@ -121,11 +124,12 @@ enum ExchangeQuery {
     ) -> [RedistributionPair] {
         var pairs: [RedistributionPair] = []
 
-        // Intra-sequence: each homogeneous sequence produces source-sink pairs among its own leaves.
+        // Intra-sequence: each homogeneous sequence produces source-sink pairs among its own leaves. Depth-control tags are excluded — they are independent markers.
         for parentNodeID in graph.liveNodeIDs {
             let parentNode = graph.nodes[parentNodeID]
             guard case let .sequence(seqMetadata) = parentNode.kind else { continue }
             guard let tag = seqMetadata.elementTypeTag else { continue }
+            if case .depthControl = tag { continue }
 
             let intraPairs = pairsFromHomogeneousLeaves(
                 childIDs: parentNode.children,

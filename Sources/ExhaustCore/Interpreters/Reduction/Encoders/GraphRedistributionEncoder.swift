@@ -25,6 +25,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
         case active(RedistributionState)
     }
 
+    /// Holds the rational-arithmetic context for a single redistribution pair, including the LCM denominator and scaled numerators needed to redistribute value between heterogeneous-type nodes.
     struct MixedRedistributionContext {
         let sourceNumerator: Int64
         let sinkNumerator: Int64
@@ -34,10 +35,11 @@ struct GraphRedistributionEncoder: GraphEncoder {
         let distanceInSteps: UInt64
     }
 
+    /// Tracks the binary search state for redistribution magnitude and the current pair iteration across probes.
     struct RedistributionState {
         let pairs: [(sourceIndex: Int, sinkIndex: Int, sourceTag: TypeTag, sinkTag: TypeTag, maxDelta: UInt64, mixedContext: MixedRedistributionContext?)]
         var pairIndex: Int
-        var stepper: MaxBinarySearchStepper?
+        var stepper: BinarySearchStepper?
         var didEmitCandidate: Bool
         var lastEmittedCandidate: ChoiceSequence?
         var triedFullDelta: Bool

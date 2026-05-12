@@ -128,7 +128,7 @@ extension ChoiceGraph {
         }
     }
 
-    /// Computes source/sink annotations from current leaf values.
+    /// Classifies each live leaf as a source (nonzero value) or sink (zero value) for scope query filtering.
     func computeSourceSinkAnnotations() -> [Int: SourceSinkStatus] {
         var status: [Int: SourceSinkStatus] = [:]
         for nodeID in liveNodeIDs {

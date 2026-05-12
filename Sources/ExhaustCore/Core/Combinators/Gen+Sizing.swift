@@ -1,10 +1,10 @@
 // Operations for controlling and accessing the size parameter in generators.
 // The size parameter is used to control the complexity and scale of generated values.
 
-extension Gen {
+package extension Gen {
     /// Retrieves the raw size parameter without a backward comap.
     ///
-    /// Internal callers that need the raw size operation should use this. All public-facing size access goes through ``getSize(_:)`` which wraps the result in a `._bound` with `backward: { _ in 100 }`, giving the reducer a usable default.
+    /// All public-facing size access goes through ``getSize(_:)`` which wraps the result in a `._bound` with `backward: { _ in 100 }`, giving the reducer a usable default.
     static func rawGetSize() -> ReflectiveGenerator<UInt64> {
         .impure(operation: .getSize) { result in
             if let typedResult = result as? UInt64 {
@@ -16,9 +16,7 @@ extension Gen {
             )
         }
     }
-}
 
-package extension Gen {
     /// Retrieves the current size parameter and feeds it into a generator-producing closure.
     ///
     /// The size parameter controls how complex generated values should be. It typically starts small and grows as tests progress, allowing the system to find simple counterexamples first before exploring more complex cases. The closure receives the current size (1-100) and returns a generator to run.

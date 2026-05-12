@@ -560,7 +560,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameters:
     ///   - forward: Function that takes the generated value and returns a new generator.
     ///   - backward: Function that extracts the inner value from the final output.
-    /// - Returns: A generator that sequences the two computations. with bidirectional support.
+    /// - Returns: A generator that sequences the two computations with bidirectional support.
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
         backward: @Sendable @escaping (NewValue) throws -> Value,

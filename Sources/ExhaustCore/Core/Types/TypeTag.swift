@@ -7,7 +7,7 @@
 
 /// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
 public enum TypeTag: Sendable {
-    /// Platform-width unsigned integer (`UInt`).
+    /// Platform-width unsigned integer (``UInt``).
     case uint
     /// 64-bit unsigned integer.
     case uint64
@@ -17,7 +17,7 @@ public enum TypeTag: Sendable {
     case uint16
     /// 8-bit unsigned integer.
     case uint8
-    /// Platform-width signed integer (`Int`).
+    /// Platform-width signed integer (``Int``).
     case int
     /// 64-bit signed integer.
     case int64
@@ -37,13 +37,13 @@ public enum TypeTag: Sendable {
     case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Boundary analysis produces only all-low / all-high values.
     case bits
-    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as `UInt32`. The bit pattern is an index, not a Unicode code point. The associated boundary indices are pre-computed by ``ScalarRangeSet`` during construction and used by ``BoundaryDomainAnalysis`` for coverage analysis.
+    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as ``UInt32``. The bit pattern is an index, not a Unicode code point. The associated boundary indices are pre-computed by ``ScalarRangeSet`` during construction and used by ``BoundaryDomainAnalysis`` for coverage analysis.
     case character(boundaryIndices: [UInt64])
     /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
     case depthControl
 
     /// Creates a type tag by matching the metatype of the given value against known numeric types.
-    public init<T>(type: T) {
+    package init<T>(type: T) {
         self = switch type {
         case is Double.Type:
             .double
@@ -127,7 +127,7 @@ package extension TypeTag {
         }
     }
 
-    /// Creates a ``ChoiceValue`` by narrowing a `Double` to this tag's floating-point type.
+    /// Creates a ``ChoiceValue`` by narrowing a ``Double`` to this tag's floating-point type.
     ///
     /// Returns `nil` if the tag is not a floating-point type, or if the narrowed result is non-finite and `allowNonFinite` is `false`.
     func floatingChoice(from value: Double, allowNonFinite: Bool = false) -> ChoiceValue? {
@@ -149,7 +149,7 @@ package extension TypeTag {
         }
     }
 
-    /// Decodes an order-preserving bit pattern to its numeric `Double` value for this tag's floating-point type.
+    /// Decodes an order-preserving bit pattern to its numeric ``Double`` value for this tag's floating-point type.
     ///
     /// For `.float` and `.float16`, narrows through the intermediate type so the encoding round-trips correctly.
     func numericDoubleValue(forBitPattern bitPattern: UInt64) -> Double {
@@ -161,7 +161,7 @@ package extension TypeTag {
         }
     }
 
-    /// Encodes a `Double` value as an order-preserving bit pattern for this tag's floating-point type.
+    /// Encodes a ``Double`` value as an order-preserving bit pattern for this tag's floating-point type.
     ///
     /// For `.float` and `.float16`, narrows to the intermediate type first so precision matches the tag's width.
     func floatingBitPattern(from value: Double) -> UInt64 {
@@ -175,15 +175,15 @@ package extension TypeTag {
 
     /// Remaps a uniformly-drawn bit pattern into a numerically-uniform floating-point bit pattern within the given range.
     ///
-    /// `chooseBits` draws a uniform `UInt64` in `[range.lowerBound, range.upperBound]`. For floating-point types, uniform bit patterns concentrate samples near zero because IEEE 754 has exponentially more representable values near zero than far from it. This method redistributes the drawn bits so the resulting float is uniformly distributed across the *numeric* range instead.
+    /// ``chooseBits`` draws a uniform ``UInt64`` in `[range.lowerBound, range.upperBound]`. For floating-point types, uniform bit patterns concentrate samples near zero because IEEE 754 has exponentially more representable values near zero than far from it. This method redistributes the drawn bits so the resulting float is uniformly distributed across the *numeric* range instead.
     ///
     /// The drawn value's position within the bit-pattern range is used as a linear interpolation fraction, which is then applied to the numeric range and encoded back to a bit pattern.
     ///
     /// Inspired by Hypothesis's `make_float_clamper` (`hypothesis-python/src/hypothesis/internal/floats.py`), which uses `min_value + range_size * (mantissa / mantissa_mask)` to achieve uniform numeric coverage within bounded float ranges.
     ///
     /// - Parameters:
-    ///   - rawBits: A uniformly-drawn `UInt64` within `range`.
-    ///   - range: The order-preserving bit-pattern range from the `chooseBits` operation.
+    ///   - rawBits: A uniformly-drawn ``UInt64`` within `range`.
+    ///   - range: The order-preserving bit-pattern range from the ``chooseBits`` operation.
     /// - Returns: A bit pattern whose decoded float is uniformly distributed in `[numericLower, numericUpper]`.
     func linearlyDistributed(rawBits: UInt64, in range: ClosedRange<UInt64>) -> UInt64 {
         let width = range.upperBound &- range.lowerBound
@@ -243,7 +243,8 @@ extension TypeTag: Equatable {
              (.int, .int), (.int64, .int64), (.int32, .int32),
              (.int16, .int16), (.int8, .int8),
              (.double, .double), (.float, .float), (.float16, .float16),
-             (.bits, .bits):
+             (.bits, .bits),
+             (.depthControl, .depthControl):
             true
         case let (.character(lhsIndices), .character(rhsIndices)):
             lhsIndices == rhsIndices

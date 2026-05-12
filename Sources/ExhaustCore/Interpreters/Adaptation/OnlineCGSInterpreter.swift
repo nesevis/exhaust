@@ -17,6 +17,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
     // MARK: - Derivative Context
 
+    /// Maximum derivative depth before handlePick skips derivative evaluation and falls back to weighted selection. Derivative composition through sequence boundaries is not supported, so deep picks cannot produce meaningful fitness signal.
+    private static var maxDerivativeDepth: Int { 4 }
+
     /// An inspectable data structure representing the composition of all outer continuations needed to produce a `FinalOutput` from a local sub-generator. Each ``handlePick`` or ``handleZip`` call pushes a frame; `apply` composes them to build a full derivative.
     ///
     /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized representation, matching the paper's treatment of CGS derivatives as syntactic transformations on the generator data structure (Goldstein, Ch. 3).
@@ -31,6 +34,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             frames.count
         }
 
+        /// Pushes a derivative frame onto the context stack for deferred CGS weight updates.
+        ///
+        /// Each frame captures the surrounding generator structure (a bind continuation, zip siblings, or sequence elements) at one level of descent into the generator tree. Callers invoke this as the interpreter recurses through ``ReflectiveOperation`` nodes so that ``apply(_:)`` can later reassemble a complete ``FinalOutput`` generator from a sub-generator at the target choice site.
         public mutating func push(_ frame: DerivativeFrame) {
             frames.append(frame)
         }
@@ -305,61 +311,33 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - ChooseBits
 
             case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
-                if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth, max >= min {
-                    let rangeSize = (min ... max).saturatingCount
-                    if rangeSize >= cgsState.subdivisionThresholds.minimumRangeSize {
-                        // Synthesize a pick over subranges, matching GeneratorTuning.tuneChooseBits
-                        let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
-                        let subranges = (min ... max).split(into: subrangeCount)
+                if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth,
+                   max >= min,
+                   (min ... max).saturatingCount >= cgsState.subdivisionThresholds.minimumRangeSize,
+                   let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+                       lower: min, upper: max, tag: tag,
+                       isRangeExplicit: isRangeExplicit, scaling: scaling,
+                       makeFingerprint: { 0 }
+                   )
+                {
+                    let synthesisedPick: ReflectiveGenerator<Output> = .impure(
+                        operation: .pick(choices: choices, branchCount: branchCount),
+                        continuation: continuation
+                    )
 
-                        let branchCount = UInt64(subranges.count)
-
-                        var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-                        subrangeChoices.reserveCapacity(subranges.count)
-
-                        for (i, subrange) in subranges.enumerated() {
-                            let subGen: ReflectiveGenerator<Any> = .impure(
-                                operation: .chooseBits(
-                                    min: subrange.lowerBound,
-                                    max: subrange.upperBound,
-                                    tag: tag,
-                                    isRangeExplicit: isRangeExplicit,
-                                    scaling: scaling
-                                ),
-                                continuation: { .pure($0) }
-                            )
-                            subrangeChoices.append(ReflectiveOperation.PickTuple(
-                                fingerprint: 0,
-                                id: UInt64(i),
-                                weight: 1,
-                                generator: subGen
-                            ))
-                        }
-
-                        let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
-                            continuation: continuation
-                        )
-
-                        return try generateRecursive(
-                            synthesisedPick,
-                            with: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
-                        )
-                    }
+                    return try generateRecursive(
+                        synthesisedPick,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        derivativeContext: derivativeContext
+                    )
                 }
                 let effectiveRange: ClosedRange<UInt64>
                 if let scaling {
-                    let size: UInt64 = switch context.sizeOverride {
-                    case let override?: override
-                    case nil where context.size > 0: context.size
-                    case nil: GenerationContext.scaledSize(forRun: context.runs)
-                    }
-                    context.sizeOverride = nil
+                    let size = SharedInterpreterHelpers.consumeSize(&context)
                     effectiveRange = Gen.applyScaling(
                         min: min, max: max, tag: tag, scaling: scaling, size: size
                     )
@@ -383,7 +361,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             case let .sequence(lengthGen, elementGen):
                 // Length generator: skip derivative evaluation — the length produces UInt64, not FinalOutput, so derivatives can't compose through. Depth >= 4 triggers handlePick's fast path.
                 var lengthDerivativeContext = DerivativeContext()
-                for _ in 0 ..< 4 {
+                for _ in 0 ..< Self.maxDerivativeDepth {
                     lengthDerivativeContext.push(.bind(continuation: { .pure($0) }))
                 }
                 guard let length = try generateRecursive(
@@ -466,12 +444,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - GetSize
 
             case .getSize:
-                let size: UInt64 = switch context.sizeOverride {
-                case let override?: override
-                case nil where context.size > 0: context.size
-                case nil: GenerationContext.scaledSize(forRun: context.runs)
-                }
-                context.sizeOverride = nil
+                let size = SharedInterpreterHelpers.consumeSize(&context)
                 return try runContinuation(
                     result: size,
                     continuation: continuation,
@@ -741,7 +714,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // Fast path: single choice or deep pick — skip derivative evaluation.
         // Without .sequenceElement frames, derivative context cannot compose through sequence boundaries, so deep picks must fall back to weighted selection.
         let effectiveSampleCount = Swift.max(2, sampleCount >> derivativeContext.depth)
-        if choices.count == 1 || derivativeContext.depth >= 4 {
+        if choices.count == 1 || derivativeContext.depth >= Self.maxDerivativeDepth {
             guard let selectedChoice = WeightedPickSelection.draw(
                 from: choices, using: &context.prng
             ) else {
@@ -845,7 +818,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             completedRounds = round + 1
             for (derivIdx, choiceIdx) in liveChoiceIndices.enumerated() {
                 do {
-                    let result = try LightweightSampler.sample(
+                    let result = try CGSDerivativeInterpreter.sample(
                         derivatives[derivIdx],
                         using: &cgsState.samplingPRNG,
                         size: currentSize

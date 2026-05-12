@@ -247,42 +247,80 @@ struct ReplayIdempotencePropertyTests {
     }
 }
 
-// MARK: - ChoiceValue Properties
+// MARK: - Replay vs Materializer Equivalence
 
-@Suite("ChoiceValue Complexity")
-struct ChoiceValuePropertyTests {
-    @Test("semanticSimplest always has complexity <= the original value")
-    func semanticSimplestMinimalComplexity() throws {
-        // Unsigned
-        try exhaustCheck(Gen.choose(in: UInt64(0) ... 100_000)) { rawValue in
-            let value = ChoiceValue(rawValue, tag: .uint64)
-            return value.semanticSimplest.complexity <= value.complexity
-        }
-
-        // Signed
-        try exhaustCheck(Gen.choose(in: Int64(-50000) ... 50000)) { rawValue in
-            let value = ChoiceValue(rawValue, tag: .int64)
-            return value.semanticSimplest.complexity <= value.complexity
-        }
-
-        // Floating
-        try exhaustCheck(Gen.choose(in: -1000.0 ... 1000.0) as ReflectiveGenerator<Double>) { rawValue in
-            let value = ChoiceValue(rawValue, tag: .double)
-            return value.semanticSimplest.complexity <= value.complexity
-        }
+@Suite("Replay-Materializer Equivalence")
+struct ReplayMaterializerEquivalenceTests {
+    @Test("Replay and Materializer produce identical values for integer generators")
+    func integerEquivalence() throws {
+        let gen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
+        try assertReplayMaterializerEquivalence(gen)
     }
 
-    @Test("Unsigned ChoiceValue complexity strictly increases with value")
-    func unsignedComplexityMonotonicity() throws {
-        try exhaustCheck(Gen.zip(
-            Gen.choose(in: UInt64(0) ... 100_000),
-            Gen.choose(in: UInt64(0) ... 100_000)
-        )) { a, b in
-            guard a < b else { return true }
-            let va = ChoiceValue(a, tag: .uint64)
-            let vb = ChoiceValue(b, tag: .uint64)
-            return va.complexity < vb.complexity
-        }
+    @Test("Replay and Materializer produce identical values for array generators")
+    func arrayEquivalence() throws {
+        let gen = Gen.arrayOf(
+            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+            within: 1 ... 5
+        )
+        try assertReplayMaterializerEquivalence(gen)
+    }
+
+    @Test("Replay and Materializer produce identical values for pick generators")
+    func pickEquivalence() throws {
+        let gen: ReflectiveGenerator<Int> = Gen.pick(choices: [
+            (1, Gen.choose(in: 0 ... 50)),
+            (1, Gen.choose(in: 100 ... 200)),
+        ])
+        try assertReplayMaterializerEquivalence(gen)
+    }
+
+    @Test("Replay and Materializer produce identical values for zip generators")
+    func zipEquivalence() throws {
+        let gen = Gen.zip(
+            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+            Gen.choose(in: -50 ... 50) as ReflectiveGenerator<Int>
+        )
+        try assertReplayMaterializerEquivalence(gen, isEqual: { $0.0 == $1.0 && $0.1 == $1.1 })
+    }
+
+    @Test("Replay and Materializer produce identical values for nested generators")
+    func nestedEquivalence() throws {
+        let gen = Gen.arrayOf(
+            Gen.pick(choices: [
+                (1, Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>),
+                (1, Gen.choose(in: 100 ... 110)),
+            ]),
+            within: 1 ... 3
+        )
+        try assertReplayMaterializerEquivalence(gen)
+    }
+}
+
+private func assertReplayMaterializerEquivalence<Output: Equatable>(
+    _ gen: ReflectiveGenerator<Output>,
+    maxIterations: Int = 200
+) throws {
+    try assertReplayMaterializerEquivalence(gen, maxIterations: maxIterations, isEqual: ==)
+}
+
+private func assertReplayMaterializerEquivalence<Output>(
+    _ gen: ReflectiveGenerator<Output>,
+    maxIterations: Int = 200,
+    isEqual: @escaping (Output, Output) -> Bool
+) throws {
+    try exhaustCheck(gen, maxIterations: UInt64(maxIterations)) { value in
+        guard let tree = try? Interpreters.reflect(gen, with: value) else { return true }
+        guard let replayed: Output = try? Interpreters.replay(gen, using: tree) else { return false }
+
+        let materializeResult = Materializer.materialize(
+            gen,
+            prefix: ChoiceSequence(),
+            mode: .guided(seed: 0, fallbackTree: tree)
+        )
+        guard case let .success(materialized, _, _) = materializeResult else { return false }
+
+        return isEqual(replayed, materialized)
     }
 }
 

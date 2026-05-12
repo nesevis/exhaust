@@ -21,7 +21,7 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
     }
 
     /// Creates a choice value from a ``BitPatternConvertible`` value and its type tag.
-    public init(_ value: any BitPatternConvertible, tag: TypeTag) {
+    package init(_ value: any BitPatternConvertible, tag: TypeTag) {
         bitPattern64 = value.bitPattern64
         self.tag = tag
     }
@@ -63,23 +63,8 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
     // MARK: - Semantic Properties
 
     /// The semantically simplest value for a human reader: zero for all numeric types.
-    public var semanticSimplest: ChoiceValue {
+    package var semanticSimplest: ChoiceValue {
         ChoiceValue(tag.simplestBitPattern, tag: tag)
-    }
-
-    /// Returns a shortlex complexity score: the absolute magnitude of this value as a `UInt64`.
-    public var complexity: UInt64 {
-        if tag.isFloatingPoint {
-            let absValue = abs(decodedDoubleValue)
-            if absValue >= Double(UInt64.max) || absValue.isNaN || absValue.isInfinite {
-                return UInt64.max
-            }
-            return UInt64(absValue)
-        } else if tag.isSigned {
-            return UInt64(abs(decodedSignedValue))
-        } else {
-            return bitPattern64
-        }
     }
 
     /// Returns whether this value's bit pattern falls within the given range.
@@ -100,13 +85,13 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
     }
 
     /// Reconstructs the original ``BitPatternConvertible`` value from this choice's bit pattern and type tag.
-    public var convertible: any BitPatternConvertible {
+    package var convertible: any BitPatternConvertible {
         tag.makeConvertible(bitPattern64: bitPattern64)
     }
 
     // MARK: - Comparable
 
-    public static func < (lhs: Self, rhs: Self) -> Bool {
+    package static func < (lhs: Self, rhs: Self) -> Bool {
         if lhs.tag.isFloatingPoint {
             return lhs.decodedDoubleValue < rhs.decodedDoubleValue
         } else if lhs.tag.isSigned {

@@ -88,8 +88,8 @@ struct ChoiceGraphBuilder {
                 parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
             )
 
-        case let .branch(_, _, _, _, choice, _):
-            return walk(choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
+        case let .branch(b):
+            return walk(b.choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
 
         case let .group(array, isOpaque):
             return walkGroup(
@@ -196,7 +196,10 @@ struct ChoiceGraphBuilder {
                 lengthConstraint: metadata.validRange,
                 elementCount: elements.count,
                 childPositionRanges: childExtents,
-                childIndexByNodeID: Dictionary(uniqueKeysWithValues: childIDs.enumerated().map { ($0.element, $0.offset) }),
+                childIndexByNodeID: childIDs.enumerated().reduce(into: [:]) { dict, pair in
+                    precondition(dict[pair.element] == nil, "duplicate child node ID \(pair.element) at index \(pair.offset)")
+                    dict[pair.element] = pair.offset
+                },
                 elementTypeTag: deriveElementTypeTag(childIDs: childIDs)
             )),
             positionRange: offset ... (offset + consumed - 1),
@@ -451,6 +454,7 @@ struct ChoiceGraphBuilder {
         return consumed
     }
 
+    /// Allocates a node ID, appends the node to the builder's array, and records containment and dependency edges.
     mutating func emitNode(
         kind: ChoiceGraphNodeKind,
         positionRange: ClosedRange<Int>?,
@@ -522,10 +526,10 @@ struct ChoiceGraphBuilder {
         guard array.allSatisfy({ $0.isBranch }) else {
             return nil
         }
-        guard case let .branch(fingerprint, _, id, branchCount, _, true) = array.first(where: \.isSelected) else {
+        guard case let .branch(b) = array.first(where: \.isSelected), b.isSelected else {
             return nil
         }
-        return PickSiteInfo(fingerprint: fingerprint, selectedID: id, branchCount: branchCount)
+        return PickSiteInfo(fingerprint: b.fingerprint, selectedID: b.id, branchCount: b.branchCount)
     }
 
     // MARK: - Assembly

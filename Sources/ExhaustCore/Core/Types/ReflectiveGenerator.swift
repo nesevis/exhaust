@@ -33,28 +33,21 @@
 public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
 
 package extension ReflectiveGenerator where Operation == ReflectiveOperation {
-    /// Monadic bind operation that sequences computations with effects.
+    /// Reifies a monadic bind as a visible `.transform(.bind(...))` operation in the generator tree.
     ///
-    /// This is the fundamental operation for chaining effectful computations. It allows you to use the result of one computation to determine the next computation, properly handling both pure values and suspended operations.
+    /// Unlike the invisible ``FreerMonad/_bind(_:)`` used by internal framework code, this method creates an inspectable node that the reflection interpreter, reducer, and coverage analysis can see and traverse. The backward function (when provided via ``_bound(forward:backward:fileID:line:column:)``) enables reflection to decompose the bound value back into the inner generator's output.
     ///
-    /// **For pure values:** Immediately applies the transform to get the next computation
-    /// **For impure values:** Extends the continuation chain to apply the transform later
-    ///
-    /// This operation is associative and follows the monad laws, enabling safe composition of complex effectful programs from simpler building blocks.
+    /// This method was renamed from `_bind` to avoid an overload-resolution conflict with ``FreerMonad/_bind(_:)``. When both methods had identical externally-visible signatures (one parameter), Swift correctly picked this constrained-extension version over the generic one. Adding defaulted parameters for `#fileID`/`#line`/`#column` changed the resolution preference, silently routing call sites to the unconstrained ``FreerMonad/_bind(_:)`` (which chains continuations natively without reifying as `.transform(.bind(...))`). Renaming to `_bindReified` eliminates the ambiguity entirely; the source-location defaults can stay because the rename guarantees there is no other `_bindReified` to compete with.
     ///
     /// - Parameter transform: A function that takes the current value and produces a new computation.
     /// - Returns: A new computation representing the sequenced effects.
-    /// - Throws: Rethrows any errors from the transform function
-    /// Reifies a `_bind` (FreerMonad-style chained continuation) as a `.transform(.bind(fingerprint:, ...))` operation that the reducer can see through.
-    ///
-    /// Renamed from `_bind` to avoid an overload-resolution conflict with ``FreerMonad/_bind(_:)``. When both methods had identical externally-visible signatures (one parameter), Swift correctly picked this constrained-extension version over the generic one. Adding defaulted parameters for `#fileID`/`#line`/`#column` changed the resolution preference, silently routing call sites to the unconstrained ``FreerMonad/_bind(_:)`` (which chains continuations natively without reifying as `.transform(.bind(...))`). Renaming to `_bindReified` eliminates the ambiguity entirely; the source-location defaults can stay because the rename guarantees there is no other `_bindReified` to compete with.
     func _bindReified<NewValue>(
         _ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> FreerMonad<Operation, NewValue> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
         return Gen.liftF(.transform(
             kind: .bind(
                 fingerprint: fingerprint,
@@ -92,7 +85,7 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
         return Gen.liftF(.transform(
             kind: .bind(
                 fingerprint: fingerprint,
@@ -105,13 +98,13 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
         ))
     }
 
-    /// Short-circuit check for the terminal case. Used as the recursion base in analysis passes (for example ``ChoiceTreeAnalysis``) and by combinators that need to detect constant generators.
+    /// Returns whether this generator is a terminal ``FreerMonad/pure`` value with no remaining operations. Used as the recursion base in analysis passes (for example ``ChoiceTreeAnalysis``) and by combinators that need to detect constant generators.
     var isPure: Bool {
         if case .pure = self { return true }
         return false
     }
 
-    /// Exposes the explicit min/max constraint of a `chooseBits` leaf without interpreting the full generator. Used by ``FiniteDomainProfile`` and coverage analysis to collect parameter ranges for covering-array construction. Returns nil for pure values, non-choice operations, or ranges derived from size scaling (which are not stable across runs).
+    /// Exposes the explicit min/max constraint of a ``chooseBits`` leaf without interpreting the full generator. Used by ``FiniteDomainProfile`` and coverage analysis to collect parameter ranges for covering-array construction. Returns nil for pure values, non-``chooseBits`` operations, or ranges derived from size scaling (which are not stable across runs).
     var associatedRange: ClosedRange<UInt64>? {
         switch self {
         case .pure:

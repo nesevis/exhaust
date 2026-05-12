@@ -10,10 +10,10 @@
 /// The bound content's structure is contingent on the bind-inner value. Reduction must be ordered — parent before child. A change upstream invalidates everything downstream. Topological sort and reachability computation operate on this edge layer.
 package struct DependencyEdge: Equatable {
     /// Node ID of the bind-inner (controlling) node.
-    public let source: Int
+    package let source: Int
 
     /// Node ID of a node within the bound subtree (controlled).
-    public let target: Int
+    package let target: Int
 }
 
 // MARK: - Containment Edge
@@ -23,10 +23,10 @@ package struct DependencyEdge: Equatable {
 /// Connects zip → children, sequence → elements, pick → branches (active and inactive), bind → inner and bound. The direction is hierarchical (parent → child) but carries no dependency semantics — siblings are structurally independent. The containment layer defines the independence structure for antichain computation.
 package struct ContainmentEdge: Equatable {
     /// Node ID of the parent.
-    public let source: Int
+    package let source: Int
 
     /// Node ID of the child.
-    public let target: Int
+    package let target: Int
 }
 
 // MARK: - Self-Similarity Edge
@@ -36,13 +36,13 @@ package struct ContainmentEdge: Equatable {
 /// These picks belong to the same recursive generator at different depths and are structurally exchangeable. The size delta determines substitution direction: a positive delta means the neighbour is smaller (the source is the substitution target, the neighbour is the donor).
 package struct SelfSimilarityEdge: Equatable {
     /// Node ID of one pick node.
-    public let nodeA: Int
+    package let nodeA: Int
 
     /// Node ID of the other pick node.
-    public let nodeB: Int
+    package let nodeB: Int
 
     /// Subtree size of nodeA minus subtree size of nodeB. Positive means nodeB is smaller (nodeA is the substitution target).
-    public let sizeDelta: Int
+    package let sizeDelta: Int
 }
 
 // MARK: - Type-Compatibility Edge
@@ -52,13 +52,13 @@ package struct SelfSimilarityEdge: Equatable {
 /// Connects `chooseBits` leaves with matching ``TypeTag``, or `sequence` nodes with matching element generator identity. The edge itself is structurally stable — it changes only when the antichain changes. Source/sink annotations are dynamic and updated on any acceptance.
 package struct TypeCompatibilityEdge: Equatable {
     /// Node ID of one endpoint.
-    public let nodeA: Int
+    package let nodeA: Int
 
     /// Node ID of the other endpoint.
-    public let nodeB: Int
+    package let nodeB: Int
 
     /// The shared ``TypeTag`` that makes these nodes compatible, or nil for sequence-to-sequence edges matched by element generator identity.
-    public let typeTag: TypeTag?
+    package let typeTag: TypeTag?
 }
 
 // MARK: - Source/Sink Status

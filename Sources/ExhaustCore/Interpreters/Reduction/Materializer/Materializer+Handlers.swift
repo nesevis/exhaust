@@ -8,6 +8,7 @@
 // MARK: - Operation Handlers
 
 extension Materializer {
+    /// Materializes a ``ReflectiveOperation/contramap`` by recursing into the inner generator and threading the result through the continuation unchanged.
     @inline(__always)
     static func handleContramap(
         _ nextGen: ReflectiveGenerator<Any>,
@@ -27,6 +28,9 @@ extension Materializer {
         )
     }
 
+    /// Materializes a ``ReflectiveOperation/prune`` by unwrapping the prune input, then recursing into the inner generator.
+    ///
+    /// Returns nil if the prune predicate rejects the input, which propagates as a materialization failure to the caller.
     @inline(__always)
     static func handlePrune(
         _ nextGen: ReflectiveGenerator<Any>,
@@ -51,6 +55,9 @@ extension Materializer {
 
     // MARK: - chooseBits
 
+    /// Reads a bit pattern from the cursor and converts it to a typed value via the ``TypeTag``.
+    ///
+    /// In exact mode the cursor must supply a value in range (or the handler rejects). In guided mode the handler falls through three tiers: cursor value, fallback tree, then PRNG. Bound values and non-explicit ranges are always clamped rather than rejected because their valid range may shift when inner values change. Float NaN and infinity bit patterns bypass clamping so boundary coverage counterexamples remain reducible.
     @inline(__always)
     static func handleChooseBits(
         min: UInt64,
@@ -143,6 +150,9 @@ extension Materializer {
 
     // MARK: - pick (with materialized alternatives)
 
+    /// Selects a branch by reading the branch index from the cursor, then materializes the selected branch's generator.
+    ///
+    /// In exact mode the cursor must supply a valid branch index or the handler rejects. In guided mode the handler tries the cursor, then the fallback tree's selected branch, then weighted random selection. When ``Context/materializePicks`` is set, non-selected branches are also materialized in minimize mode to populate the ``ChoiceTree`` with shortlex-simplest content for coverage analysis.
     @inline(__always)
     static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
@@ -165,10 +175,10 @@ extension Materializer {
         }
         if let effectiveFallback,
            case let .group(children, _) = effectiveFallback,
-           case let .branch(_, _, id, _, choice, true) = children.first(where: \.isSelected)
+           case let .branch(b) = children.first(where: \.isSelected), b.isSelected
         {
-            fbBranchId = id
-            branchChoiceTree = choice
+            fbBranchId = b.id
+            branchChoiceTree = b.choice
         } else {
             fbBranchId = nil
             branchChoiceTree = nil
@@ -309,6 +319,9 @@ extension Materializer {
 
     // MARK: - sequence
 
+    /// Materializes a variable-length sequence by resolving the length, then materializing each element in order.
+    ///
+    /// Length resolution is mode-dependent: exact mode trusts the cursor's element count, guided mode clamps cursor or fallback lengths to the generator's valid range, and generate mode runs the length generator fresh. After all elements are materialized the cursor's sequence-close marker is consumed so the caller's cursor position is consistent.
     @inline(__always)
     static func handleSequence(
         lengthGen: ReflectiveGenerator<UInt64>,
@@ -378,7 +391,7 @@ extension Materializer {
 
         var results: [Any] = []
         results.reserveCapacity(Int(length))
-        var elements: [ChoiceTree] = context.skipTree ? [] : []
+        var elements: [ChoiceTree] = []
         if context.skipTree == false {
             elements.reserveCapacity(Int(length))
         }
@@ -418,6 +431,9 @@ extension Materializer {
 
     // MARK: - zip
 
+    /// Materializes each component of a zip in declaration order, collecting results into an array for the continuation.
+    ///
+    /// When a fallback tree is available, each child is scoped to its flattened entry count so guided-mode cursor reads cannot bleed into sibling components. Scope limits are computed arithmetically from the cursor's position at the zip's group-open marker to avoid drift from transparent group markers consumed by ``Cursor/skipGroups()``.
     @inline(__always)
     static func handleZip(
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
@@ -483,6 +499,9 @@ extension Materializer {
 
     // MARK: - resize
 
+    /// Materializes the inner generator with ``Context/sizeOverride`` set to the given size, then clears the override.
+    ///
+    /// The override is cleared defensively after the inner call in case a downstream ``ReflectiveOperation/getSize`` was missing, which would leave a stale override for subsequent operations.
     @inline(__always)
     static func handleResize(
         newSize: UInt64,
@@ -518,6 +537,9 @@ extension Materializer {
 
     // MARK: - transform (map / bind)
 
+    /// Materializes a reified ``TransformKind`` (map, bind, or metamorphic) by recursing into the inner generator and applying the forward transform.
+    ///
+    /// For map transforms the forward closure is applied directly to the inner result. For bind transforms the forward closure produces a bound generator that is also materialized; ``Context/boundDepth`` is incremented so downstream ``handleChooseBits`` knows to clamp rather than reject out-of-range values. For metamorphic transforms, ``Context/skipTree`` is temporarily disabled because ``Interpreters/replay(_:using:)`` needs the real inner tree to produce independent copies.
     @inline(__always)
     static func handleTransform(
         kind: TransformKind,
@@ -645,6 +667,9 @@ extension Materializer {
         }
     }
 
+    /// Extracts ``ChoiceMetadata`` (valid range and explicitness) from a sequence's length generator without running a full materialization round-trip.
+    ///
+    /// Handles two common shapes: a bare ``ReflectiveOperation/chooseBits`` and a ``ReflectiveOperation/getSize``-wrapped chooseBits. Returns empty metadata when the generator has an unrecognized shape, which causes the caller to skip range clamping.
     private static func extractLengthMetadata(
         _ lengthGen: ReflectiveGenerator<UInt64>
     ) throws -> ChoiceMetadata {

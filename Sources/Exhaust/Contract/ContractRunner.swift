@@ -8,7 +8,7 @@ import IssueReporting
 
 /// Runs a contract property test for the given specification type.
 ///
-/// Generates command sequences using the spec's synthesized `commandGenerator`, executes each sequence against a fresh instance, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
+/// Generates command sequences using the spec's synthesized ``commandGenerator``, executes each sequence against a fresh instance, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
 ///
 /// - Parameters:
 ///   - specType: The `@Contract`-annotated specification type.
@@ -323,7 +323,7 @@ func renderFailure<Spec: ContractSpecBase>(
 
 // MARK: - Failure metadata
 
-/// Metadata about how a failing contract sequence was found, for reporting.
+/// Captures the original command sequence and the discovery method for a contract failure, used by ``renderFailure(_:failureInfo:modelDescription:)`` to build failure reports.
 struct ContractFailureInfo<Command> {
     /// The original failing command sequence before reduction, if available.
     var originalCommands: [Command]?
@@ -333,7 +333,7 @@ struct ContractFailureInfo<Command> {
 
 // MARK: - Sequence Covering Array (SCA) coverage
 
-/// Extracts pick choices from a command generator when the generator is a top-level `Gen.pick`.
+/// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.
 func extractPickChoices(
     from gen: ReflectiveGenerator<some Any>
 ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {

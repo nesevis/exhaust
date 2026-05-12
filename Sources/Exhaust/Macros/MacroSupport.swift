@@ -15,7 +15,7 @@ import IssueReporting
     @_weakLinked import Testing
 #endif
 
-/// Runtime support namespace for `#exhaust`, `#explore`, and `#examine` macro expansions.
+/// Provides runtime support for `#exhaust`, `#explore`, and `#examine` macro expansions.
 public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Thrown by the detection closure when a rewritten `#expect`/`#require` fails.
     ///

@@ -1,12 +1,20 @@
 //
-//  LightweightSampler.swift
+//  CGSDerivativeInterpreter.swift
 //  Exhaust
 //
-//  Minimal value-only evaluator for CGS derivative sampling.
-//  No ChoiceTree, no GenerationContext — just uniform generation.
+// MARK: - Why This Exists
+//
+// Minimal value-only evaluator for CGS derivative sampling. No ChoiceTree, no GenerationContext — just a PRNG and a size
+// parameter. Replacing this with ValueInterpreter.generate causes a +28% regression (473ms → 606ms on the CGS
+// filter-in-bind benchmark, 2026-05-12) because GenerationContext allocation/teardown and the erase-and-cast boundary
+// dominate when thousands of derivative samples are taken per handlePick call.
 //
 
-package enum LightweightSampler {
+/// Generates values without building a ``ChoiceTree`` or allocating a ``GenerationContext``.
+///
+/// Used by CGS derivative evaluation in ``OnlineCGSInterpreter/handlePick`` where only the output matters. The absence of ``GenerationContext`` eliminates per-sample allocation overhead that is load-bearing at the derivative sampling scale (thousands of samples per pick operation).
+package enum CGSDerivativeInterpreter {
+    /// Produces a single value from the generator using the provided PRNG, or returns `nil` if generation fails.
     @inline(__always)
     public static func sample<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -219,7 +227,7 @@ package enum LightweightSampler {
                 )
 
             case let .unique(gen, _, keyExtractor):
-                // Lightweight: skip dedup entirely — this is just for fitness estimation
+                // Skip dedup — this is just for fitness estimation
                 guard let result = try generateRecursive(
                     gen, with: inputValue, rng: &rng, size: size
                 ) else {

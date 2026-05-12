@@ -92,6 +92,18 @@ enum QueryHelpers {
         innerDescendantToBind[leafNodeID] != nil
     }
 
+    /// Returns true when a leaf carries the ``TypeTag/depthControl`` tag.
+    ///
+    /// Depth-control leaves are independent recursive depth markers. They participate in bind-inner value search (reducing depth is valid) but must not be coordinated with other leaves — no lockstep, redistribution, swap, reorder, or composed downstream.
+    static func isDepthControl(
+        _ nodeID: Int,
+        graph: ChoiceGraph
+    ) -> Bool {
+        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return false }
+        if case .depthControl = metadata.typeTag { return true }
+        return false
+    }
+
     /// Wraps a leaf node ID in a ``LeafEntry`` with the bind-inner reshape marker and bind depth populated from the supplied indices.
     static func makeLeafEntry(
         _ nodeID: Int,

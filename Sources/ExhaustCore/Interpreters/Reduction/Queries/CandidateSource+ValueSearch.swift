@@ -6,6 +6,7 @@
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
+    /// Constructs minimization candidates that drive leaf values toward their reduction targets via binary search. Covers integer leaves, float leaves, and bound-value scopes (where changing an inner leaf reshapes the bound subtree). Priority reflects the value yield — larger bound subtrees are tried first because acceptance there eliminates more structure.
     static func buildMinimizationCandidates(graph: ChoiceGraph, deferBindInner: Bool) -> [GraphTransformation] {
         let innerDescendantToBind = QueryHelpers.buildInnerDescendantToBind(graph: graph)
         var results: [GraphTransformation] = []
@@ -50,6 +51,7 @@ extension CandidateSourceBuilder {
         return results
     }
 
+    /// Constructs exchange candidates (redistribution pairs and tandem groups) that transfer value magnitude between leaves without changing the total. Redistribution pairs shuffle value from a source leaf to a sink; tandem groups move correlated leaves in lockstep. Priority reflects the source distance from its reduction target so the highest-magnitude exchanges are tried first.
     static func buildExchangeCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
 

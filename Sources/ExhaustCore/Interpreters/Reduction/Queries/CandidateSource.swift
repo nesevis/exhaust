@@ -49,6 +49,7 @@ struct SortedCandidateSource: CandidateSource {
 
 /// Builds the collection of candidate sources from a graph.
 enum CandidateSourceBuilder {
+    /// Assembles the full candidate source array by combining structural sources (removal, migration, replacement, permutation) with value sources (minimization, exchange). Structural sources are stable across structurally-identical rebuilds; value sources must be rebuilt after any leaf value change.
     static func buildSources(from graph: ChoiceGraph, deferBindInner: Bool = false, previousGraph: ChoiceGraph? = nil) -> [any CandidateSource] {
         buildStructuralSources(from: graph, previousGraph: previousGraph)
             + buildValueSources(from: graph, deferBindInner: deferBindInner)

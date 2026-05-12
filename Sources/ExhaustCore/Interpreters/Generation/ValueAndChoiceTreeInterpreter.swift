@@ -10,6 +10,9 @@
 //
 // Combines the dissertation's `generate` and `randomness` interpretations (Goldstein §3.3.3) into a single pass that produces both the value and the ChoiceTree recording every decision. The ChoiceTree is Exhaust's extension — the dissertation uses flat choice sequences. Correctness relies on the factoring theorem (§4.4): replaying the recorded randomness through the generator reproduces the original value.
 
+/// Produces both a value and a ``ChoiceTree`` by walking the ``FreerMonad`` spine and recording each choice.
+///
+/// This is the primary generation interpreter. The ``ChoiceTree`` it builds is consumed downstream by coverage analysis, reduction, and replay. When only the value is needed, ``nextValueOnly()`` delegates to ``ValueInterpreter`` to avoid tree construction overhead.
 package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 
@@ -408,15 +411,16 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                         return nil
                     }
 
-                    let isDuplicate = ChoiceTreeHandlers.checkDuplicate(
-                        result: result,
-                        tree: tree,
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor,
-                        context: &context
-                    )
+                    let isDuplicate: Bool
+                    if let keyExtractor {
+                        let key = keyExtractor(result)
+                        isDuplicate = context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted == false
+                    } else {
+                        let sequence = ChoiceSequence.flatten(tree)
+                        isDuplicate = context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted == false
+                    }
 
-                    if !isDuplicate {
+                    if isDuplicate == false {
                         return try runContinuation(
                             result: result,
                             calleeChoiceTree: tree,
@@ -664,17 +668,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         )
     }
 
-    /// Reads the active generation size in precedence order: a one-shot `.resize` override, then the persistent `context.size` baseline (set via the `sizeOverride` init arg — used by ``ChoiceTreeAnalysis`` to force size 100 so size-scaled sequences produce non-empty element subtrees during parameter extraction), then the per-run scaled size cycle.
     @inline(__always)
     static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
-        if let override = context.sizeOverride {
-            context.sizeOverride = nil
-            return override
-        }
-        if context.size > 0 {
-            return context.size
-        }
-        return GenerationContext.scaledSize(forRun: context.runs)
+        SharedInterpreterHelpers.consumeSize(&context)
     }
 
     @inline(__always)
@@ -863,9 +859,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         ) else {
             return nil
         }
+        var bucket = context.classifications[fingerprint, default: [:]]
         for (label, classifier) in classifiers where classifier(result) {
-            context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+            bucket[label, default: []].insert(context.runs)
         }
+        context.classifications[fingerprint] = bucket
         return try runContinuation(
             result: result,
             calleeChoiceTree: tree,

@@ -7,9 +7,11 @@
 package struct FiniteParameter: @unchecked Sendable {
     // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
-    /// The type of generator operation this parameter came from.
+    /// Distinguishes the two generator operations that produce finite parameters, so the coverage runner can replay values through the correct interpretation path.
     public enum Kind {
+        /// Represents a range-bounded bit-pattern choice whose domain is small enough for exhaustive enumeration.
         case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
+        /// Represents a weighted branch selection among a fixed set of alternatives.
         case pick(choices: ContiguousArray<ReflectiveOperation.PickTuple>)
     }
 

@@ -146,9 +146,9 @@ package enum BoundaryCoveringArrayReplay {
             }
             return .sequence(length: newLength, elements: newElements, metadata)
 
-        case let .branch(fingerprint, weight, id, branchCount, choice, isSelected):
+        case let .branch(b):
             guard let newChoice = substituteParameters(
-                in: choice,
+                in: b.choice,
                 row: row,
                 profile: profile,
                 paramIndex: &paramIndex
@@ -156,12 +156,12 @@ package enum BoundaryCoveringArrayReplay {
                 return nil
             }
             return .branch(
-                fingerprint: fingerprint,
-                weight: weight,
-                id: id,
-                branchCount: branchCount,
+                fingerprint: b.fingerprint,
+                weight: b.weight,
+                id: b.id,
+                branchCount: b.branchCount,
                 choice: newChoice,
-                isSelected: isSelected
+                isSelected: b.isSelected
             )
         }
     }
@@ -362,21 +362,7 @@ package enum BoundaryCoveringArrayReplay {
     }
 
     private static func buildSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
-        switch gen {
-        case .pure:
-            .just
-        case let .impure(operation, _):
-            switch operation {
-            case .just:
-                .just
-            case let .contramap(_, next), let .prune(next):
-                buildSubTree(for: next)
-            case let .transform(_, inner):
-                buildSubTree(for: inner)
-            default:
-                nil
-            }
-        }
+        SharedInterpreterHelpers.buildParameterFreeSubTree(for: gen)
     }
 }
 

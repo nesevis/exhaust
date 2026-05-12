@@ -19,6 +19,7 @@
 package enum GeneratorTuning {
     // MARK: - Context
 
+    /// Holds the mutable state for a single CGS tuning pass: depth-decaying sample budget, PRNG, and the current recursion depth. Sample count decays with depth to prevent exponential blowup in recursive generators.
     final class TuningContext {
         let baseSampleCount: UInt64
         let maxSize: UInt64

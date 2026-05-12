@@ -204,14 +204,14 @@ extension ChoiceGraphScheduler {
 
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
-            case let .branch(_, _, candidateID, _, _, _):
-                candidateID == targetBranchID
+            case let .branch(b):
+                b.id == targetBranchID
             default:
                 false
             }
         }) else { return nil }
 
-        let minimizedTarget = GraphStructuralEncoder.minimizingLeaves(in: elements[targetElementIndex])
+        let minimizedTarget = elements[targetElementIndex].minimizingLeaves
         let targetContent = ChoiceSequence.flatten(minimizedTarget.selecting())
 
         var replacement: [ChoiceSequenceValue] = []

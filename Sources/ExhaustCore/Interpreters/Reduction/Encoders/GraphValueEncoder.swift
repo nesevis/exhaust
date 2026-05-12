@@ -23,6 +23,7 @@ struct GraphValueEncoder: GraphEncoder {
     var mode: Mode = .idle
     var convergenceStore: [Int: ConvergedOrigin] = [:]
 
+    /// Controls which leaf reduction phase is active. The encoder is either idle (no scope loaded), reducing integer leaves, or reducing float leaves; each mode carries its own state type because the search strategies differ fundamentally.
     enum Mode {
         case idle
         case valueLeaves(IntegerState)
@@ -33,11 +34,34 @@ struct GraphValueEncoder: GraphEncoder {
         convergenceStore
     }
 
+    // MARK: - Leaf Mutation Source
+
+    /// Common fields needed by ``buildLeafValuesMutation`` to diff a candidate against a baseline.
+    protocol LeafMutationSource {
+        var nodeID: Int { get }
+        var sequenceIndex: Int { get }
+        var mayReshape: Bool { get }
+    }
+
+    // MARK: - Integer Leaf Position
+
+    /// Metadata for a single integer leaf under value search.
+    struct IntegerLeafPosition: LeafMutationSource {
+        let nodeID: Int
+        let sequenceIndex: Int
+        let validRange: ClosedRange<UInt64>?
+        var currentBitPattern: UInt64
+        let targetBitPattern: UInt64
+        let typeTag: TypeTag
+        let mayReshape: Bool
+    }
+
     // MARK: - Integer State
 
+    /// Tracks the state of integer leaf reduction across its sub-phases, from batch zeroing through per-leaf interpolation search. Holds the working sequence, leaf metadata, the active stepper, and auxiliary state for cross-zero and linear scan recovery.
     struct IntegerState {
         var sequence: ChoiceSequence
-        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)]
+        var leafPositions: [IntegerLeafPosition]
         var phase: IntegerPhase
         var leafIndex: Int
         var stepper: DirectionalStepper?
@@ -82,6 +106,7 @@ struct GraphValueEncoder: GraphEncoder {
     /// Maximum remaining range size for which inline linear scan is emitted after binary search convergence.
     static let linearScanThreshold: UInt64 = 64
 
+    /// Sub-phases of integer reduction, ordered from cheapest to most granular: batch zero tries all leaves at once, per-leaf zero probes each individually, batch bisect does group interpolation search, and per-leaf runs individual interpolation or binary search.
     enum IntegerPhase {
         case batchZero
         case perLeafZero
@@ -116,60 +141,40 @@ struct GraphValueEncoder: GraphEncoder {
 
     /// Directional search stepper for bit-pattern-space search.
     ///
-    /// Uses interpolation search for large ranges (`downward` / `upward`) and plain binary search for small ranges (`downwardBinary` / `upwardBinary`). The threshold is ``InterpolationSearchStepper/binaryThreshold``.
+    /// Uses interpolation search for large ranges and plain binary search for small ranges. The threshold is ``InterpolationSearchStepper/binaryThreshold``.
     enum DirectionalStepper {
-        case downward(InterpolationSearchStepper)
-        case downwardBinary(BinarySearchStepper)
-        case upward(MaxInterpolationSearchStepper)
-        case upwardBinary(MaxBinarySearchStepper)
+        case binary(BinarySearchStepper)
+        case interpolation(InterpolationSearchStepper)
 
         var bestAccepted: UInt64 {
             switch self {
-            case let .downward(stepper): stepper.bestAccepted
-            case let .downwardBinary(stepper): stepper.bestAccepted
-            case let .upward(stepper): stepper.bestAccepted
-            case let .upwardBinary(stepper): stepper.bestAccepted
+            case let .binary(stepper): stepper.bestAccepted
+            case let .interpolation(stepper): stepper.bestAccepted
             }
         }
 
         mutating func start() -> UInt64? {
             switch self {
-            case var .downward(stepper):
+            case var .binary(stepper):
                 let value = stepper.start()
-                self = .downward(stepper)
+                self = .binary(stepper)
                 return value
-            case var .downwardBinary(stepper):
+            case var .interpolation(stepper):
                 let value = stepper.start()
-                self = .downwardBinary(stepper)
-                return value
-            case var .upward(stepper):
-                let value = stepper.start()
-                self = .upward(stepper)
-                return value
-            case var .upwardBinary(stepper):
-                let value = stepper.start()
-                self = .upwardBinary(stepper)
+                self = .interpolation(stepper)
                 return value
             }
         }
 
         mutating func advance(lastAccepted: Bool) -> UInt64? {
             switch self {
-            case var .downward(stepper):
+            case var .binary(stepper):
                 let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .downward(stepper)
+                self = .binary(stepper)
                 return value
-            case var .downwardBinary(stepper):
+            case var .interpolation(stepper):
                 let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .downwardBinary(stepper)
-                return value
-            case var .upward(stepper):
-                let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .upward(stepper)
-                return value
-            case var .upwardBinary(stepper):
-                let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .upwardBinary(stepper)
+                self = .interpolation(stepper)
                 return value
             }
         }
@@ -177,7 +182,8 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - Float State
 
-    struct FloatTarget {
+    /// Tracks the reduction state for a single float leaf node, including its current value, bit pattern, type tag, and valid range constraints. Mutable fields update as probes are accepted so subsequent stages operate on the reduced value.
+    struct FloatTarget: LeafMutationSource {
         let nodeID: Int
         let sequenceIndex: Int
         let typeTag: TypeTag
@@ -188,6 +194,7 @@ struct GraphValueEncoder: GraphEncoder {
         let mayReshape: Bool
     }
 
+    /// Represents the four stages of float reduction in ascending complexity: special values (zero, subnormal, normal), mantissa truncation, integral binary search, and ratio binary search. Ordered so that cheap constant-time probes run before iterative searches.
     enum FloatStage: Int, Comparable {
         case specialValues = 0
         case truncation = 1
@@ -199,6 +206,7 @@ struct GraphValueEncoder: GraphEncoder {
         }
     }
 
+    /// Tracks the overall state of float leaf reduction across all targets and stages, including the working sequence, the list of ``FloatTarget`` nodes, the current stage and target index, and binary search context shared between the integral and ratio stages.
     struct FloatState {
         var sequence: ChoiceSequence
         var targets: [FloatTarget]
@@ -360,27 +368,12 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - Mutation Builders
 
-    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline. Each leaf in ``IntegerState/leafPositions`` is checked at its sequence index; differing values become ``LeafChange`` entries that carry the leaf's bind-inner reshape marker through to ``ChoiceGraph/apply(_:freshTree:)``.
+    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline.
     func buildIntegerLeafValuesMutation(
         candidate: ChoiceSequence,
         state: IntegerState
     ) -> ProjectedMutation {
-        var changes: [LeafChange] = []
-        for leaf in state.leafPositions {
-            guard leaf.sequenceIndex < candidate.count,
-                  leaf.sequenceIndex < state.sequence.count
-            else { continue }
-            guard let candidateChoice = candidate[leaf.sequenceIndex].value?.choice,
-                  let baselineChoice = state.sequence[leaf.sequenceIndex].value?.choice
-            else { continue }
-            guard candidateChoice != baselineChoice else { continue }
-            changes.append(LeafChange(
-                leafNodeID: leaf.nodeID,
-                newValue: candidateChoice,
-                mayReshape: leaf.mayReshape
-            ))
-        }
-        return .leafValues(changes)
+        buildLeafValuesMutation(candidate: candidate, baseline: state.sequence, leaves: state.leafPositions)
     }
 
     /// Builds a `.leafValues` mutation report by comparing the candidate against the float state's current baseline.
@@ -388,19 +381,28 @@ struct GraphValueEncoder: GraphEncoder {
         candidate: ChoiceSequence,
         state: FloatState
     ) -> ProjectedMutation {
+        buildLeafValuesMutation(candidate: candidate, baseline: state.sequence, leaves: state.targets)
+    }
+
+    /// Builds a `.leafValues` mutation by diffing candidate against baseline at each leaf's sequence index.
+    private func buildLeafValuesMutation(
+        candidate: ChoiceSequence,
+        baseline: ChoiceSequence,
+        leaves: some Sequence<LeafMutationSource>
+    ) -> ProjectedMutation {
         var changes: [LeafChange] = []
-        for target in state.targets {
-            guard target.sequenceIndex < candidate.count,
-                  target.sequenceIndex < state.sequence.count
+        for leaf in leaves {
+            guard leaf.sequenceIndex < candidate.count,
+                  leaf.sequenceIndex < baseline.count
             else { continue }
-            guard let candidateChoice = candidate[target.sequenceIndex].value?.choice,
-                  let baselineChoice = state.sequence[target.sequenceIndex].value?.choice
+            guard let candidateChoice = candidate[leaf.sequenceIndex].value?.choice,
+                  let baselineChoice = baseline[leaf.sequenceIndex].value?.choice
             else { continue }
             guard candidateChoice != baselineChoice else { continue }
             changes.append(LeafChange(
-                leafNodeID: target.nodeID,
+                leafNodeID: leaf.nodeID,
                 newValue: candidateChoice,
-                mayReshape: target.mayReshape
+                mayReshape: leaf.mayReshape
             ))
         }
         return .leafValues(changes)

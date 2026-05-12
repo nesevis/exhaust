@@ -17,7 +17,7 @@ package enum AdaptiveProbe {
     ///
     /// - Parameter predicate: A monotonic predicate where `predicate(0)` is assumed true.
     /// - Returns: The largest `k >= 0` for which `predicate(k)` holds.
-    public static func findInteger<T: FixedWidthInteger>(_ predicate: (T) -> Bool) -> T {
+    package static func findInteger<T: FixedWidthInteger>(_ predicate: (T) -> Bool) -> T {
         // Step 1: Linear scan for small answers.
         // Keep this bounded and avoid probing the same value again in step 2.
         var probe: T = 1
@@ -70,7 +70,7 @@ package enum AdaptiveProbe {
     ///   - guess: A prediction of the answer. Must satisfy `lo <= guess < hi`. If `nil`, defaults to `lo`.
     ///   - predicate: A monotonic predicate that transitions from true to false.
     /// - Returns: The largest value in `low...high` for which `predicate` holds.
-    public static func binarySearchWithGuess<T: FixedWidthInteger>(_ predicate: (T) -> Bool, low: T, high: T, guess: T? = nil) -> T {
+    package static func binarySearchWithGuess<T: FixedWidthInteger>(_ predicate: (T) -> Bool, low: T, high: T, guess: T? = nil) -> T {
         let guess = guess ?? low
         precondition(low <= guess && guess < high)
         let good = predicate(low)
