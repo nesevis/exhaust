@@ -23,6 +23,7 @@ struct GraphValueEncoder: GraphEncoder {
     var mode: Mode = .idle
     var convergenceStore: [Int: ConvergedOrigin] = [:]
 
+    /// Controls which leaf reduction phase is active. The encoder is either idle (no scope loaded), reducing integer leaves, or reducing float leaves; each mode carries its own state type because the search strategies differ fundamentally.
     enum Mode {
         case idle
         case valueLeaves(IntegerState)
@@ -35,6 +36,7 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - Integer State
 
+    /// Tracks the state of integer leaf reduction across its sub-phases, from batch zeroing through per-leaf interpolation search. Holds the working sequence, leaf metadata, the active stepper, and auxiliary state for cross-zero and linear scan recovery.
     struct IntegerState {
         var sequence: ChoiceSequence
         var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)]
@@ -82,6 +84,7 @@ struct GraphValueEncoder: GraphEncoder {
     /// Maximum remaining range size for which inline linear scan is emitted after binary search convergence.
     static let linearScanThreshold: UInt64 = 64
 
+    /// Sub-phases of integer reduction, ordered from cheapest to most granular: batch zero tries all leaves at once, per-leaf zero probes each individually, batch bisect does group interpolation search, and per-leaf runs individual interpolation or binary search.
     enum IntegerPhase {
         case batchZero
         case perLeafZero
@@ -177,6 +180,7 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - Float State
 
+    /// Tracks the reduction state for a single float leaf node, including its current value, bit pattern, type tag, and valid range constraints. Mutable fields update as probes are accepted so subsequent stages operate on the reduced value.
     struct FloatTarget {
         let nodeID: Int
         let sequenceIndex: Int
@@ -188,6 +192,7 @@ struct GraphValueEncoder: GraphEncoder {
         let mayReshape: Bool
     }
 
+    /// Represents the four stages of float reduction in ascending complexity: special values (zero, subnormal, normal), mantissa truncation, integral binary search, and ratio binary search. Ordered so that cheap constant-time probes run before iterative searches.
     enum FloatStage: Int, Comparable {
         case specialValues = 0
         case truncation = 1
@@ -199,6 +204,7 @@ struct GraphValueEncoder: GraphEncoder {
         }
     }
 
+    /// Tracks the overall state of float leaf reduction across all targets and stages, including the working sequence, the list of ``FloatTarget`` nodes, the current stage and target index, and binary search context shared between the integral and ratio stages.
     struct FloatState {
         var sequence: ChoiceSequence
         var targets: [FloatTarget]

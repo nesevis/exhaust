@@ -152,6 +152,9 @@ extension GeneratorTuning {
 
     // MARK: - Pick
 
+    /// Tunes a pick operation in two phases: Phase 1 samples each branch to measure success rate and output diversity via ``measureFitness(choices:continuation:context:predicate:)``, then Phase 2 recursively tunes each surviving branch's inner generator with a composed predicate backed by the Phase 1 cache.
+    ///
+    /// Branches with zero successes are assigned weight 0 (skipped) unless all branches scored zero, in which case uniform weights are restored. Surviving branches receive entropy-weighted fitness scores and a minimum weight floor to prevent exponential probability collapse across depth.
     static func measureAndTunePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         branchCount: UInt64,
@@ -293,6 +296,9 @@ extension GeneratorTuning {
 
     // MARK: - ChooseBits
 
+    /// Subdivides a ``ReflectiveOperation/chooseBits`` range into up to four subrange picks, then delegates to ``tuneRecursive(_:context:insideSubdividedChooseBits:predicate:)`` to weight them.
+    ///
+    /// Unlike picks, chooseBits has no natural branch structure to measure fitness against. Subdivision creates synthetic branches so the same Phase 1/Phase 2 pick-tuning pipeline can bias sampling toward productive subranges.
     static func tuneChooseBits<Output>(
         lower: UInt64,
         upper: UInt64,
@@ -350,6 +356,9 @@ extension GeneratorTuning {
 
     // MARK: - Sequence
 
+    /// Tunes a sequence generator by subdividing the length range into up to four subranges, each producing a full sequence, then weighting them via ``measureAndTunePick(_:branchCount:continuation:context:insideSubdividedChooseBits:predicate:)``.
+    ///
+    /// Handles both explicit ``ReflectiveOperation/chooseBits`` length generators and the common ``ReflectiveOperation/getSize``-then-bind pattern. Falls back to tuning only the element generator with an always-true predicate when neither pattern matches, because element fitness cannot be meaningfully evaluated without the full array context.
     static func tuneSequence<Output>(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
@@ -495,6 +504,9 @@ extension GeneratorTuning {
 
     // MARK: - GetSize
 
+    /// Subdivides the size range (0 to ``TuningContext/maxSize``) into up to four subranges and tunes them as a synthesized pick.
+    ///
+    /// The ``ReflectiveOperation/getSize`` operation itself is not a tunable choice -- it just reads the current size parameter. Subdivision converts it into a pick so that CGS can bias toward size subranges that produce more predicate-passing outputs.
     static func tuneGetSize<Output>(
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
@@ -543,6 +555,9 @@ extension GeneratorTuning {
 
     // MARK: - Zip
 
+    /// Tunes each component generator of a zip independently by composing a predicate that samples the other components randomly and tests the full tuple.
+    ///
+    /// Each component's predicate holds its candidate value fixed and draws the remaining values from the other (untuned) generators, so tuning decisions for one component are not conditioned on another component's tuned distribution.
     static func tuneZip<Output>(
         generators: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
@@ -610,6 +625,9 @@ extension GeneratorTuning {
 
     // MARK: - Filter
 
+    /// Tunes the inner generator of a filter operation using the filter predicate as the fitness function.
+    ///
+    /// Skips tuning if the filter already has a tuned generator or uses rejection sampling, since both indicate CGS has already run or is inapplicable. Only the candidate-producing generator is tuned -- the filter predicate itself is not modified.
     static func tuneFilter<Output>(
         subGen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
@@ -656,6 +674,9 @@ extension GeneratorTuning {
 
     // MARK: - Contramap
 
+    /// Tunes the inner generator of a contramap by composing the downstream predicate through the continuation.
+    ///
+    /// The backward mapping (contramap transform) is preserved unchanged -- only the generator feeding into it is tuned. The composed predicate evaluates the full continuation chain to determine whether an inner value ultimately produces a predicate-passing output.
     static func tuneContramap<Output>(
         transform: @escaping (Any) throws -> Any?,
         next: ReflectiveGenerator<Any>,
@@ -692,6 +713,9 @@ extension GeneratorTuning {
 
     // MARK: - Resize
 
+    /// Tunes the inner generator under the overridden size, preserving the resize wrapper.
+    ///
+    /// The composed predicate threads through the continuation so inner values are evaluated in the context of the full downstream pipeline. The ``insideSubdividedChooseBits`` flag propagates inward to prevent double subdivision of already-split ranges.
     static func tuneResize<Output>(
         newSize: UInt64,
         next: ReflectiveGenerator<Any>,
@@ -729,6 +753,9 @@ extension GeneratorTuning {
 
     // MARK: - Prune
 
+    /// Tunes the inner generator of a prune operation, preserving the prune wrapper.
+    ///
+    /// Pruning affects reduction behavior (marking subtrees as reducible to nil), not generation weights, so tuning passes through to the inner generator with a continuation-composed predicate.
     static func tunePrune<Output>(
         next: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
@@ -765,6 +792,9 @@ extension GeneratorTuning {
 
     // MARK: - Classify
 
+    /// Tunes the inner generator of a classify operation, preserving the classifiers.
+    ///
+    /// Classification is purely observational -- it labels outputs without affecting the generation distribution -- so tuning passes through to the inner generator with a continuation-composed predicate. The classifier predicates are not used as fitness functions.
     static func tuneClassify<Output>(
         subGen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,

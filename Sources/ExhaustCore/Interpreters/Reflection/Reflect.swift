@@ -14,8 +14,18 @@ import Foundation
 
 /// Namespace for generator interpreter entry points covering generation, reflection, replay, and adaptation.
 package enum Interpreters {
-    // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
+    // MARK: - Public-Facing Reflect Function
 
+    /// Finds the choice sequence that would cause `gen` to produce `outputValue`, performing the backward pass of the generator interpretation.
+    ///
+    /// Reflection is the inverse of ``generate(from:using:)``: given a concrete output value and a generator, it walks the generator structure in reverse to reconstruct the ``ChoiceTree`` whose forward interpretation would produce that value. Returns `nil` when the value cannot be decomposed through the generator's structure (for example, when a contramap backward function rejects the value or when a chooseBits value falls outside the declared range). The optional `check` closure filters results to only those whose output satisfies an additional predicate.
+    ///
+    /// - Parameters:
+    ///   - gen: The generator to reflect through.
+    ///   - outputValue: The target value to decompose into choices.
+    ///   - check: An optional predicate that the reflected output must satisfy. Defaults to accepting all values.
+    /// - Returns: A ``ChoiceTree`` encoding the choices that produce `outputValue`, or `nil` if no valid decomposition exists.
+    /// - Throws: ``ReflectionError`` when the value is structurally incompatible with the generator.
     public static func reflect<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with outputValue: Output,
@@ -87,7 +97,7 @@ package enum Interpreters {
         outputType _: (some Any).Type
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
-        // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
+        // A nil onFinalOutput at this point means the generator produces an Optional type.
         case let .contramap(transform, nextGen):
             return try reflectContramapOperation(
                 transform: transform,
@@ -436,14 +446,23 @@ package enum Interpreters {
 
     /// Errors thrown by the reflection interpreter when a value cannot be mapped back to its choice tree.
     public enum ReflectionError: LocalizedError, Equatable {
+        /// Indicates that the target value is `nil` but the generator does not produce an optional type.
         case reflectedNil(type: String, resultType: String)
+        /// Indicates that the contramap backward function received a value of unexpected type.
         case contramapWasWrongType
+        /// Indicates that the zip target has wrong arity or element types for the declared generators.
         case zipWasWrongLengthOrType
+        /// Indicates that none of the pick branches could produce a value matching the target.
         case couldNotMapInputToGenerator
+        /// Indicates that the target value cannot be encoded as a bit pattern for the declared ``TypeTag``.
         case chooseBitsCouldNotConvertValue(String)
+        /// Indicates that the target value for a sequence operation is not a valid collection.
         case inputWasWrongForSequence(String)
+        /// Indicates that an individual element within a sequence could not be reflected through the element generator.
         case couldNotReflectOnSequenceElement(String)
+        /// Indicates that a pick branch value lacks the ``Equatable`` conformance needed to match against the target.
         case pickValueIsNotEquatable(String)
+        /// Indicates that the reflected bit pattern falls outside the declared chooseBits range.
         case inputWasOutOfGeneratorRange(String, ClosedRange<UInt64>)
         /// Reflection failed because a forward-only `map` was detected.
         /// Use `.mapped(forward:backward:)` instead to enable bidirectional operation.

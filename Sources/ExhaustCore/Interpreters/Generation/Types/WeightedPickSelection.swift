@@ -5,7 +5,9 @@
 //  Created by Codex on 21/2/2026.
 //
 
+/// Selects a branch from a weighted pick operation using cumulative-sum binary search over the weight array.
 package enum WeightedPickSelection {
+    /// Draws a single ``ReflectiveOperation/PickTuple`` proportional to its weight, or returns `nil` if total weight is zero.
     public static func draw(
         from choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         using prng: inout Xoshiro256

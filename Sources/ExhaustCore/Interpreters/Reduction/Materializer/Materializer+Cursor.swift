@@ -74,6 +74,7 @@ extension Materializer {
 
         // MARK: - Skip transparent markers
 
+        /// Advances past group-open, bind-open, and just markers to the first content node (value, branch, or sequence marker). Called before consuming an entry so that transparent structural wrappers do not block the cursor.
         mutating func skipGroups() {
             while position < effectiveEnd {
                 switch entries[position] {
@@ -101,6 +102,7 @@ extension Materializer {
 
         // MARK: - Consume entries
 
+        /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.
         mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
             guard exhausted == false else { return nil }
             skipGroups()
@@ -118,6 +120,7 @@ extension Materializer {
             }
         }
 
+        /// Reads and returns the next branch-selection entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a branch. Marks the cursor as exhausted on type mismatch.
         mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
             guard exhausted == false else { return nil }
             skipGroups()
@@ -137,6 +140,7 @@ extension Materializer {
 
         // MARK: - Sequence markers
 
+        /// Reads the sequence-open marker and extracts the element count by scanning forward for top-level entries until the matching sequence-close. Returns nil and marks the cursor as exhausted if the next entry is not a sequence-open marker.
         mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
             guard exhausted == false else { return nil }
             skipGroups()

@@ -1,7 +1,7 @@
 // MARK: - Reducer Configuration
 
 package extension Interpreters {
-    /// Controls the reducer's pass pipeline: stall budget, beam search tuning, and visualization.
+    /// Controls the ChoiceGraph reducer's pass pipeline: stall budget, scope scheduling, and visualization.
     struct ReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
         public var maxStalls: Int

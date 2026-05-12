@@ -10,6 +10,9 @@
 //
 // Combines the dissertation's `generate` and `randomness` interpretations (Goldstein §3.3.3) into a single pass that produces both the value and the ChoiceTree recording every decision. The ChoiceTree is Exhaust's extension — the dissertation uses flat choice sequences. Correctness relies on the factoring theorem (§4.4): replaying the recorded randomness through the generator reproduces the original value.
 
+/// Produces both a value and a ``ChoiceTree`` by walking the ``FreerMonad`` spine and recording each choice.
+///
+/// This is the primary generation interpreter. The ``ChoiceTree`` it builds is consumed downstream by coverage analysis, reduction, and replay. When only the value is needed, ``nextValueOnly()`` delegates to ``ValueInterpreter`` to avoid tree construction overhead.
 package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 

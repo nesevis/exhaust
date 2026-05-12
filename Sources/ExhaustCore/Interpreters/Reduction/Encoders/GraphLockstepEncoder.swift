@@ -25,6 +25,7 @@ struct GraphLockstepEncoder: GraphEncoder {
         case active(LockstepState)
     }
 
+    /// Describes a suffix window to probe: which node indices to target, the direction of movement, and the shortlex distance to try.
     struct LockstepWindowPlan {
         let windowIndices: [Int]
         let tag: TypeTag
@@ -34,12 +35,14 @@ struct GraphLockstepEncoder: GraphEncoder {
         let usesFloatingSteps: Bool
     }
 
+    /// Tracks whether the encoder is in the direct-shot phase (full distance) or binary search refinement.
     enum LockstepProbePhase {
         case directShot
         case binarySearchStart
         case binarySearch
     }
 
+    /// Holds the per-scope mutable state for the lockstep encoder's probe loop, including plan iteration and binary search progress.
     struct LockstepState {
         var plans: [LockstepWindowPlan]
         var planIndex: Int

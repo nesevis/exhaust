@@ -1,6 +1,3 @@
-/// Controls when the online CGS interpreter synthesizes a pick over subranges for `chooseBits` sites.
-///
-/// The default thresholds are calibrated for `.filter(.choiceGradientSampling)`, where users expect fast generation against typically loose predicates. `#explore` relaxes both thresholds because the user has explicitly asked for steering and is paying tuning cost willingly.
 /// Controls when the CGS tuner synthesizes a pick over subranges for `chooseBits` sites.
 ///
 /// The default thresholds are calibrated for `.filter(.choiceGradientSampling)`, where users expect fast generation against typically loose predicates. `#explore` relaxes both thresholds because the user has explicitly asked for steering and is paying tuning cost willingly.

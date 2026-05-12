@@ -6,7 +6,7 @@ package extension Gen {
     ///
     /// This generator always succeeds during both generation and reflection phases, regardless of what target value is being reflected against. It's the most permissive constant value generator.
     ///
-    /// For validation during reflection, see `Gen.exact` instead.
+    /// For validation during reflection, see ``Gen/exact(_:)`` instead.
     ///
     /// - Parameter value: The constant value to always generate.
     /// - Returns: A generator that produces the constant value.
@@ -16,13 +16,13 @@ package extension Gen {
 
     /// Creates a generator that produces an exact constant value with validation during reflection.
     ///
-    /// **Key difference from `Gen.just`:**
-    /// - **`Gen.just`**: Always succeeds during reflection regardless of target value
-    /// - **`Gen.exact`**: Only succeeds during reflection if target value exactly matches the constant
+    /// **Key difference from ``Gen/just(_:)``:**
+    /// - **``Gen/just(_:)``**: Always succeeds during reflection regardless of target value
+    /// - **``Gen/exact(_:)``**: Only succeeds during reflection if target value exactly matches the constant
     ///
     /// **Forward pass (generation):** Always produces the constant value **Backward pass (reflection):** Fails if the target value doesn't match exactly
     ///
-    /// This validation behavior makes `Gen.exact` essential for property-based testing where you need to verify that generated structures contain specific expected values.
+    /// Without this validation, reflection would silently accept any value, masking structural mismatches between the generator and the target.
     ///
     /// - Parameter value: The constant value to generate and validate against.
     /// - Returns: A generator that produces the constant and validates during reflection.

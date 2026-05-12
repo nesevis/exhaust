@@ -361,6 +361,7 @@ package struct ClassificationExploreResult<Output> {
     package var termination: ClassificationExploreTermination
     package var seed: UInt64
 
+    /// Records the coverage outcome for a single direction: hit count, sample count, and rule-of-three upper bounds for both the warm-up and tuning phases.
     package struct DirectionCoverageEntry {
         package var name: String
         package var hits: Int
@@ -376,7 +377,10 @@ package struct ClassificationExploreResult<Output> {
 
 /// How a classification-aware exploration run terminated.
 package enum ClassificationExploreTermination: Sendable {
+    /// Terminated because a property violation was found and reduced.
     case propertyFailed
+    /// Terminated because all requested directions were hit at least once.
     case coverageAchieved
+    /// Terminated because the total sample budget was exhausted before achieving full coverage.
     case budgetExhausted
 }

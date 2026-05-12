@@ -31,6 +31,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             frames.count
         }
 
+        /// Pushes a derivative frame onto the context stack for deferred CGS weight updates.
+        ///
+        /// Each frame captures the surrounding generator structure (a bind continuation, zip siblings, or sequence elements) at one level of descent into the generator tree. Callers invoke this as the interpreter recurses through ``ReflectiveOperation`` nodes so that ``apply(_:)`` can later reassemble a complete ``FinalOutput`` generator from a sub-generator at the target choice site.
         public mutating func push(_ frame: DerivativeFrame) {
             frames.append(frame)
         }

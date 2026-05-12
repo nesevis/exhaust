@@ -5,7 +5,7 @@ package extension Gen {
     /// Creates a generator for an array of random values.
     ///
     /// This implementation is stack-safe and can generate very large arrays without overflowing.
-    /// It works by first generating a random length, then using a primitive `.sequence` operation which the interpreter can execute iteratively.
+    /// It works by first generating a random length, then using a primitive ``.sequence`` operation which the interpreter can execute iteratively.
     ///
     /// The array length is controlled by the provided length generator, which defaults to a size-based range if not specified.
     ///
@@ -163,7 +163,7 @@ package extension Gen {
 
     /// Shuffles the output of an array generator into a random permutation.
     ///
-    /// Uses a sort-key approach: generates one random `UInt64` per element, then sorts the array by those keys. This produces a uniform permutation and reduces cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
+    /// Uses a sort-key approach: generates one random ``UInt64`` per element, then sorts the array by those keys. This produces a uniform permutation and reduces cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
     ///
     /// - Parameter gen: An array generator whose output should be shuffled.
     /// - Returns: A generator that produces a randomly permuted array.
@@ -186,7 +186,7 @@ package extension Gen {
 
     /// Creates an array generator whose length is controlled by the current size parameter.
     ///
-    /// This is a convenience method that combines `getSize` with `arrayOf` to create arrays that grow in complexity as tests progress. The size parameter acts as an upper bound, with the actual length chosen randomly within the constraint.
+    /// This is a convenience method that combines ``getSize`` with ``arrayOf`` to create arrays that grow in complexity as tests progress. The size parameter acts as an upper bound, with the actual length chosen randomly within the constraint.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements.

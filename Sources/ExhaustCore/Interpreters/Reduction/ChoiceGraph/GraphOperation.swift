@@ -103,7 +103,7 @@ enum GraphOperation {
 // MARK: - Validity
 
 extension GraphOperation {
-    /// Whether this operation can be dispatched against the current graph state.
+    /// Validates whether the operation's target nodes still exist and satisfy its preconditions in the current graph state.
     func isValid(in graph: ChoiceGraph) -> Bool {
         switch self {
         case let .remove(.elements(scope)):
@@ -157,7 +157,7 @@ extension GraphOperation {
 
 // MARK: - Graph Transformation
 
-/// A graph-derived transformation with its scheduling priority.
+/// Pairs a ``GraphOperation`` with a ``DispatchPriority`` for scheduling by the scope source.
 struct GraphTransformation {
     /// The graph operation this transformation enacts.
     let operation: GraphOperation

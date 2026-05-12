@@ -9,6 +9,7 @@
     import Musl
 #endif
 
+/// Namespace for adaptive Laplace smoothing of CGS weight vectors.
 package enum AdaptiveSmoothing {
     /// Applies per-site temperature scaling based on entropy analysis.
     ///

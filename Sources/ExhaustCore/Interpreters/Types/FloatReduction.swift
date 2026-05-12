@@ -7,29 +7,40 @@
 
 /// Utilities for float-specific reduction phases used by `reduceValues`.
 package enum FloatReduction {
+    /// Number of mantissa (significand) bits in IEEE 754 binary64, used to extract the fractional part of a ``Double`` bit pattern during ratio decomposition.
     public static let doubleMantissaBits = 52
 
+    /// Exponent bias for IEEE 754 binary64, subtracted from the stored exponent to recover the true power-of-two scale.
     public static let doubleExponentBias = 1023
 
+    /// Bitmask isolating the 11-bit exponent field of a ``Double`` bit pattern after the mantissa has been shifted out.
     public static let doubleExponentMask: UInt64 = 0x7FF
 
+    /// Bitmask isolating the 52-bit mantissa field of a ``Double`` bit pattern, used by ``integerRatio(_:)-1grwi`` to separate the fractional significand.
     public static let doubleMantissaMask: UInt64 = (UInt64(1) << doubleMantissaBits) - 1
 
+    /// Number of mantissa (significand) bits in IEEE 754 binary32, used to extract the fractional part of a ``Float`` bit pattern during ratio decomposition.
     public static let floatMantissaBits = 23
 
+    /// Exponent bias for IEEE 754 binary32, subtracted from the stored exponent to recover the true power-of-two scale.
     public static let floatExponentBias = 127
 
+    /// Bitmask isolating the 8-bit exponent field of a ``Float`` bit pattern after the mantissa has been shifted out.
     public static let floatExponentMask: UInt32 = 0xFF
 
+    /// Bitmask isolating the 23-bit mantissa field of a ``Float`` bit pattern, used by ``integerRatio(_:)-48jqr`` to separate the fractional significand.
     public static let floatMantissaMask: UInt32 = (UInt32(1) << floatMantissaBits) - 1
 
+    /// Largest integer that a ``Double`` can represent exactly (2^53), above which incrementing by one produces no change in value.
     public static let maxPreciseIntegerDouble = 9_007_199_254_740_992.0 // 2^53
 
+    /// Largest integer that a ``Float`` can represent exactly (2^24), above which incrementing by one produces no change in value.
     public static let maxPreciseIntegerFloat = 16_777_216.0 // 2^24
 
-    /// Returns the cutoff above which `x + 1 == x` for a given float tag.
+    /// Largest integer that a half-precision float can represent exactly (2^11), above which incrementing by one produces no change in value.
     public static let maxPreciseIntegerFloat16 = Float16Emulation.maxPreciseInteger // 2^11
 
+    /// Returns the cutoff above which `x + 1 == x` for a given float tag, used to decide when ratio-based reduction can losslessly represent the value as an integer pair.
     public static func maxPreciseInteger(for tag: TypeTag) -> Double {
         switch tag {
         case .double:
@@ -74,6 +85,7 @@ package enum FloatReduction {
         }
     }
 
+    /// Decomposes a ``Double`` into a reduced integer ratio by extracting the IEEE 754 exponent and mantissa directly from the bit pattern.
     public static func integerRatio(
         _ value: Double
     ) -> (numerator: Int64, denominator: UInt64)? {
@@ -100,6 +112,7 @@ package enum FloatReduction {
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
     }
 
+    /// Decomposes a ``Float`` into a reduced integer ratio by extracting the IEEE 754 exponent and mantissa directly from the bit pattern.
     public static func integerRatio(
         _ value: Float
     ) -> (numerator: Int64, denominator: UInt64)? {
@@ -126,6 +139,9 @@ package enum FloatReduction {
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
     }
 
+    /// Constructs a reduced integer ratio from a decoded sign, significand, and exponent, cancelling common trailing zeros so the denominator is as small as possible.
+    ///
+    /// Returns `nil` when the significand shifted by the exponent overflows 64-bit integers.
     public static func buildRatio(
         sign: Int64,
         significand: UInt64,

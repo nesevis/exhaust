@@ -451,6 +451,7 @@ struct ChoiceGraphBuilder {
         return consumed
     }
 
+    /// Allocates a node ID, appends the node to the builder's array, and records containment and dependency edges.
     mutating func emitNode(
         kind: ChoiceGraphNodeKind,
         positionRange: ClosedRange<Int>?,

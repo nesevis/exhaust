@@ -6,6 +6,7 @@
 // MARK: - Integer Mode
 
 extension GraphValueEncoder {
+    /// Initializes integer reduction by collecting integer-typed leaf nodes that have not yet reached their reduction targets and entering the batch-zero phase (when eligible). Leaves with preserved convergence from a prior ``refreshState(graph:sequence:)`` call are excluded so their completed binary searches are not re-driven.
     mutating func startInteger(
         scope: ValueMinimizationScope,
         sequence: ChoiceSequence,
@@ -57,6 +58,7 @@ extension GraphValueEncoder {
         ))
     }
 
+    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning the next candidate ``ChoiceSequence`` to probe or nil when all phases are exhausted. Updates the baseline sequence on acceptance so subsequent probes build on the improved candidate.
     mutating func nextIntegerProbe(
         state: inout IntegerState,
         lastAccepted: Bool
@@ -308,6 +310,7 @@ extension GraphValueEncoder {
 
     // MARK: - Per-Leaf Orchestrator
 
+    /// Orchestrates per-leaf reduction by iterating over leaf nodes in sequence. For each leaf, emits a direct shot at the reduction target, then drives bit-pattern binary search, then optionally runs a linear scan over any non-monotone gap, and finally enters the cross-zero phase for signed types. Returns nil when all leaves have been processed.
     mutating func nextPerLeafProbe(
         state: inout IntegerState,
         lastAccepted: Bool

@@ -16,8 +16,11 @@
 /// 3. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds because fingerprints are source-location-stable.
 struct BoundValueGate {
     enum Decision {
+        /// Proceeds with bound-value search for this scope.
         case dispatch
+        /// Skips this scope because budget is exhausted, the bind was already dispatched this cycle, or prior attempts were fruitless.
         case skip
+        /// Runs bind classification before dispatching to determine whether the scope has non-trivial bound topology worth probing.
         case classifyFirst
     }
 
@@ -35,6 +38,7 @@ struct BoundValueGate {
         dispatchedThisCycle.removeAll(keepingCapacity: true)
     }
 
+    /// Evaluates the three skip rules (per-cycle dedup, acceptance deferral, fruitless tracking) and returns a dispatch decision for the given bind fingerprint.
     func shouldDispatch(
         fingerprint: UInt64,
         anyAcceptedThisCycle: Bool

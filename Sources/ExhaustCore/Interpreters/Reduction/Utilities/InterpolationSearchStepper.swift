@@ -11,7 +11,7 @@
 ///
 /// Transitions to pure binary search when the interval shrinks below 1024 values, where the interpolation estimate provides negligible advantage over midpoint bisection.
 ///
-/// Uses `UInt64.multipliedFullWidth(by:)` and `dividingFullWidth(_:)` for the probe-point calculation to avoid overflow on large ranges.
+/// Probe-point calculation uses `range / divisor`, which is safe from overflow because `range` fits in `UInt64` by construction.
 struct InterpolationSearchStepper {
     // MARK: - State
 
@@ -89,8 +89,8 @@ struct InterpolationSearchStepper {
             return lo + range / 2
         }
         // Interpolation phase: biased toward lo.
-        // Use full-width arithmetic to avoid overflow:
-        //   probe = lo + range / divisor For power-of-two divisors this is just a shift, but dividingFullWidth keeps the door open for non-power-of-two K.
+        //   probe = lo + range / divisor
+        // For power-of-two divisors this is just a shift.
         let step = range / divisor
         // Guard against step == 0 (divisor > range, shouldn't happen given the binaryThreshold gate, but be safe).
         if step == 0 {

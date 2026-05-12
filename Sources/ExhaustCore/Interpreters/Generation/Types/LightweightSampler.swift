@@ -6,7 +6,11 @@
 //  No ChoiceTree, no GenerationContext — just uniform generation.
 //
 
+/// Generates values without building a ``ChoiceTree``, delegating to ``ValueInterpreter`` for tree-free sampling.
+///
+/// Used by CGS derivative evaluation where only the output matters and choice tree construction would be wasted work.
 package enum LightweightSampler {
+    /// Produces a single value from the generator using the provided PRNG, or returns `nil` if generation fails.
     @inline(__always)
     public static func sample<Output>(
         _ gen: ReflectiveGenerator<Output>,

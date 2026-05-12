@@ -6,6 +6,7 @@
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
+    /// Constructs migration scopes from type-compatible sequence node pairs in the graph. For each pair where the source has elements and the receiver has capacity, builds a ``MigrationScope`` that moves elements from the earlier sequence to the later one. Sorted by yield descending so the highest-impact migrations are tried first.
     static func buildMigrationCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var entries: [(scope: MigrationScope, yield: Int)] = []
 

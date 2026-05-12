@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
+/// Holds the mutable state for a single generation pass: PRNG, size parameter, filter observations, and choice tree construction metadata.
 package struct GenerationContext: ~Copyable {
     // MARK: - Constants
 

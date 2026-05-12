@@ -6,6 +6,7 @@
 ////
 
 package extension ChoiceTree {
+    /// Extracts the ``ChoiceMetadata`` for this tree node, falling back to the first child whose valid range is non-nil for group nodes that lack their own metadata.
     var metadata: ChoiceMetadata {
         switch self {
         case let .choice(_, meta), let .sequence(_, _, meta):

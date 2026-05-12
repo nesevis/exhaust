@@ -13,8 +13,6 @@ import Foundation
 // Implements the `parse` interpretation P⟦·⟧ (Goldstein §3.3.3) from a hierarchical ChoiceTree. The dissertation parses from flat choice sequences; Exhaust adds tree-structured replay for precise structural matching.
 
 extension Interpreters {
-    // ... `generate` and `reflect` and their helpers ...
-
     // MARK: - Public-Facing Replay Function
 
     /// Deterministically reproduces a value by executing a generator with a structured ``ChoiceTree``.
@@ -735,8 +733,11 @@ extension Interpreters {
         )
     }
 
+    /// Errors thrown when replay cannot reconstruct a value from the stored choice sequence.
     enum ReplayError: LocalizedError {
+        /// The choice tree contains a different operation kind than the generator expects at this position.
         case wrongInputChoice
+        /// No branch in a pick or filter site produced a valid value during replay.
         case noSuccessfulBranch
     }
 }
