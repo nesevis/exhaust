@@ -312,40 +312,22 @@ extension GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        let rangeSize = (lower ... upper).saturatingCount
-        let subrangeCount = min(4, Int(min(rangeSize, UInt64(Int.max))))
-        let subranges = (lower ... upper).split(into: subrangeCount)
-
-        let branchCount = UInt64(subranges.count)
-
-        var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-        subrangeChoices.reserveCapacity(subranges.count)
-
-        for (index, subrange) in subranges.enumerated() {
-            let subGen: ReflectiveGenerator<Any> = .impure(
-                operation: .chooseBits(
-                    min: subrange.lowerBound,
-                    max: subrange.upperBound,
-                    tag: tag,
-                    isRangeExplicit: isRangeExplicit,
-                    scaling: scaling
-                ),
-                continuation: { .pure($0) }
+        guard let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+            lower: lower, upper: upper, tag: tag,
+            isRangeExplicit: isRangeExplicit, scaling: scaling,
+            makeFingerprint: { context.rng.next() }
+        ) else {
+            return .impure(
+                operation: .chooseBits(min: lower, max: upper, tag: tag, isRangeExplicit: isRangeExplicit, scaling: scaling),
+                continuation: continuation
             )
-            subrangeChoices.append(ReflectiveOperation.PickTuple(
-                fingerprint: context.rng.next(),
-                id: UInt64(index),
-                weight: 1,
-                generator: subGen
-            ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
+            operation: .pick(choices: choices, branchCount: branchCount),
             continuation: continuation
         )
 
-        // Re-enter tuneRecursive to weight the synthesised pick
         return try tuneRecursive(
             synthesisedPick,
             context: context,
@@ -515,33 +497,19 @@ extension GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        let subranges = (0 ... context.maxSize).split(into: min(4, Int(context.maxSize + 1)))
-
-        let branchCount = UInt64(subranges.count)
-
-        var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-        subrangeChoices.reserveCapacity(subranges.count)
-
-        for (index, subrange) in subranges.enumerated() {
-            let subGen: ReflectiveGenerator<Any> = .impure(
-                operation: .chooseBits(
-                    min: subrange.lowerBound,
-                    max: subrange.upperBound,
-                    tag: .uint64,
-                    isRangeExplicit: false
-                ),
-                continuation: { .pure($0) }
+        guard let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+            lower: 0, upper: context.maxSize, tag: .uint64,
+            isRangeExplicit: false,
+            makeFingerprint: { context.rng.next() }
+        ) else {
+            return .impure(
+                operation: .getSize,
+                continuation: continuation
             )
-            subrangeChoices.append(ReflectiveOperation.PickTuple(
-                fingerprint: context.rng.next(),
-                id: UInt64(index),
-                weight: 1,
-                generator: subGen
-            ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
+            operation: .pick(choices: choices, branchCount: branchCount),
             continuation: continuation
         )
 
@@ -684,19 +652,11 @@ extension GeneratorTuning {
         context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        let composedPredicate: (Any) -> Bool = { innerValue in
-            do {
-                let nextGen = try continuation(innerValue)
-                let output = try ValueInterpreter<Output>.generate(
-                    nextGen,
-                    maxRuns: 1,
-                    using: &context.rng
-                )
-                return output.map(predicate) ?? false
-            } catch {
-                return false
-            }
-        }
+        let composedPredicate = SharedInterpreterHelpers.composedPredicate(
+            continuation: continuation,
+            context: context,
+            predicate: predicate
+        )
 
         let tunedNext = try tuneRecursive(
             next,
@@ -724,19 +684,11 @@ extension GeneratorTuning {
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        let composedPredicate: (Any) -> Bool = { innerValue in
-            do {
-                let nextGen = try continuation(innerValue)
-                let output = try ValueInterpreter<Output>.generate(
-                    nextGen,
-                    maxRuns: 1,
-                    using: &context.rng
-                )
-                return output.map(predicate) ?? false
-            } catch {
-                return false
-            }
-        }
+        let composedPredicate = SharedInterpreterHelpers.composedPredicate(
+            continuation: continuation,
+            context: context,
+            predicate: predicate
+        )
 
         let tunedNext = try tuneRecursive(
             next,
@@ -763,19 +715,11 @@ extension GeneratorTuning {
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        let composedPredicate: (Any) -> Bool = { innerValue in
-            do {
-                let nextGen = try continuation(innerValue)
-                let output = try ValueInterpreter<Output>.generate(
-                    nextGen,
-                    maxRuns: 1,
-                    using: &context.rng
-                )
-                return output.map(predicate) ?? false
-            } catch {
-                return false
-            }
-        }
+        let composedPredicate = SharedInterpreterHelpers.composedPredicate(
+            continuation: continuation,
+            context: context,
+            predicate: predicate
+        )
 
         let tunedNext = try tuneRecursive(
             next,
@@ -804,19 +748,11 @@ extension GeneratorTuning {
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        let composedPredicate: (Any) -> Bool = { innerValue in
-            do {
-                let nextGen = try continuation(innerValue)
-                let output = try ValueInterpreter<Output>.generate(
-                    nextGen,
-                    maxRuns: 1,
-                    using: &context.rng
-                )
-                return output.map(predicate) ?? false
-            } catch {
-                return false
-            }
-        }
+        let composedPredicate = SharedInterpreterHelpers.composedPredicate(
+            continuation: continuation,
+            context: context,
+            predicate: predicate
+        )
 
         let tunedInner = try tuneRecursive(
             subGen,

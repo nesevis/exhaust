@@ -162,21 +162,6 @@ package enum CoveringArrayReplay {
 
     /// Builds a ChoiceTree for a pure sub-generator (one with no random choices).
     private static func buildSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
-        switch gen {
-        case .pure:
-            .just
-
-        case let .impure(operation, _):
-            switch operation {
-            case .just:
-                .just
-            case let .contramap(_, next), let .prune(next):
-                buildSubTree(for: next)
-            case let .transform(_, inner):
-                buildSubTree(for: inner)
-            default:
-                nil
-            }
-        }
+        SharedInterpreterHelpers.buildParameterFreeSubTree(for: gen)
     }
 }

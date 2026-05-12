@@ -308,61 +308,33 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - ChooseBits
 
             case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
-                if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth, max >= min {
-                    let rangeSize = (min ... max).saturatingCount
-                    if rangeSize >= cgsState.subdivisionThresholds.minimumRangeSize {
-                        // Synthesize a pick over subranges, matching GeneratorTuning.tuneChooseBits
-                        let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
-                        let subranges = (min ... max).split(into: subrangeCount)
+                if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth,
+                   max >= min,
+                   (min ... max).saturatingCount >= cgsState.subdivisionThresholds.minimumRangeSize,
+                   let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+                       lower: min, upper: max, tag: tag,
+                       isRangeExplicit: isRangeExplicit, scaling: scaling,
+                       makeFingerprint: { 0 }
+                   )
+                {
+                    let synthesisedPick: ReflectiveGenerator<Output> = .impure(
+                        operation: .pick(choices: choices, branchCount: branchCount),
+                        continuation: continuation
+                    )
 
-                        let branchCount = UInt64(subranges.count)
-
-                        var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-                        subrangeChoices.reserveCapacity(subranges.count)
-
-                        for (i, subrange) in subranges.enumerated() {
-                            let subGen: ReflectiveGenerator<Any> = .impure(
-                                operation: .chooseBits(
-                                    min: subrange.lowerBound,
-                                    max: subrange.upperBound,
-                                    tag: tag,
-                                    isRangeExplicit: isRangeExplicit,
-                                    scaling: scaling
-                                ),
-                                continuation: { .pure($0) }
-                            )
-                            subrangeChoices.append(ReflectiveOperation.PickTuple(
-                                fingerprint: 0,
-                                id: UInt64(i),
-                                weight: 1,
-                                generator: subGen
-                            ))
-                        }
-
-                        let synthesisedPick: ReflectiveGenerator<Output> = .impure(
-                            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
-                            continuation: continuation
-                        )
-
-                        return try generateRecursive(
-                            synthesisedPick,
-                            with: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
-                        )
-                    }
+                    return try generateRecursive(
+                        synthesisedPick,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        derivativeContext: derivativeContext
+                    )
                 }
                 let effectiveRange: ClosedRange<UInt64>
                 if let scaling {
-                    let size: UInt64 = switch context.sizeOverride {
-                    case let override?: override
-                    case nil where context.size > 0: context.size
-                    case nil: GenerationContext.scaledSize(forRun: context.runs)
-                    }
-                    context.sizeOverride = nil
+                    let size = SharedInterpreterHelpers.consumeSize(&context)
                     effectiveRange = Gen.applyScaling(
                         min: min, max: max, tag: tag, scaling: scaling, size: size
                     )
@@ -469,12 +441,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - GetSize
 
             case .getSize:
-                let size: UInt64 = switch context.sizeOverride {
-                case let override?: override
-                case nil where context.size > 0: context.size
-                case nil: GenerationContext.scaledSize(forRun: context.runs)
-                }
-                context.sizeOverride = nil
+                let size = SharedInterpreterHelpers.consumeSize(&context)
                 return try runContinuation(
                     result: size,
                     continuation: continuation,

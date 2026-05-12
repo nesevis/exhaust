@@ -291,23 +291,7 @@ package enum SequenceCoveringArray {
     // MARK: - Private Helpers
 
     private static func isParameterFree(_ gen: ReflectiveGenerator<Any>) -> Bool {
-        switch gen {
-        case .pure:
-            true
-        case let .impure(op, _):
-            switch op {
-            case .just:
-                true
-            case let .contramap(_, inner):
-                isParameterFree(inner)
-            case let .prune(inner):
-                isParameterFree(inner)
-            case let .transform(_, inner):
-                isParameterFree(inner)
-            default:
-                false
-            }
-        }
+        SharedInterpreterHelpers.isParameterFree(gen)
     }
 
     /// Normalizes an analysis result to `[BoundaryParameter]` with a budget-derived threshold.

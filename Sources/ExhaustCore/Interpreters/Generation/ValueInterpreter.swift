@@ -367,13 +367,6 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
     @inline(__always)
     static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
-        if let override = context.sizeOverride {
-            context.sizeOverride = nil
-            return override
-        }
-        if context.size > 0 {
-            return context.size
-        }
-        return GenerationContext.scaledSize(forRun: context.runs)
+        SharedInterpreterHelpers.consumeSize(&context)
     }
 }

@@ -500,40 +500,21 @@ package enum ChoiceGradientTuner<FinalOutput> {
             return gen
         }
         let rangeSize = (lower ... upper).saturatingCount
-        guard rangeSize >= thresholds.minimumRangeSize, rangeSize > 4 else {
+        guard rangeSize >= thresholds.minimumRangeSize else {
+            return gen
+        }
+        guard let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+            lower: lower, upper: upper, tag: tag,
+            isRangeExplicit: isRangeExplicit, scaling: scaling,
+            makeFingerprint: { context.makeID() },
+            innerContinuation: { try chooseContinuation($0).erase() }
+        ) else {
             return gen
         }
 
-        let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
-        let subranges = (lower ... upper).split(into: subrangeCount)
-
-        let branchCount = UInt64(subranges.count)
-
-        var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-        subrangeChoices.reserveCapacity(subranges.count)
-
-        for (index, subrange) in subranges.enumerated() {
-            let subGen: ReflectiveGenerator<Any> = .impure(
-                operation: .chooseBits(
-                    min: subrange.lowerBound,
-                    max: subrange.upperBound,
-                    tag: tag,
-                    isRangeExplicit: isRangeExplicit,
-                    scaling: scaling
-                ),
-                continuation: { try chooseContinuation($0).erase() }
-            )
-            subrangeChoices.append(ReflectiveOperation.PickTuple(
-                fingerprint: context.makeID(),
-                id: UInt64(index),
-                weight: 1,
-                generator: subGen
-            ))
-        }
-
         return .impure(
-            operation: .pick(choices: subrangeChoices, branchCount: branchCount),
-            continuation: { .pure($0 as! Output) }
+            operation: .pick(choices: choices, branchCount: branchCount),
+            continuation: { .pure($0 as! Output) } // swiftlint:disable:this force_cast
         )
     }
 }

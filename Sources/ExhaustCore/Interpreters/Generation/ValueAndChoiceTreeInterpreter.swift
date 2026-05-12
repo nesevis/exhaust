@@ -667,17 +667,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         )
     }
 
-    /// Reads the active generation size in precedence order: a one-shot `.resize` override, then the persistent `context.size` baseline (set via the `sizeOverride` init arg — used by ``ChoiceTreeAnalysis`` to force size 100 so size-scaled sequences produce non-empty element subtrees during parameter extraction), then the per-run scaled size cycle.
     @inline(__always)
     static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
-        if let override = context.sizeOverride {
-            context.sizeOverride = nil
-            return override
-        }
-        if context.size > 0 {
-            return context.size
-        }
-        return GenerationContext.scaledSize(forRun: context.runs)
+        SharedInterpreterHelpers.consumeSize(&context)
     }
 
     @inline(__always)
