@@ -92,7 +92,7 @@ extension ChoiceGraphScheduler {
                     anyRequiresRebuild = true
                     mutatedStructurally = true
                 } else {
-                    let application = state.graph.apply(mutation, freshTree: state.tree)
+                    let application = state.graph.apply(mutation)
                     if application.requiresFullRebuild {
                         anyRequiresRebuild = true
                         break
@@ -142,35 +142,6 @@ extension ChoiceGraphScheduler {
             requiresRebuild: anyRequiresRebuild,
             treeIsStripped: latestAcceptedTreeIsStripped
         )
-    }
-
-    // MARK: - Structural Identity Check
-
-    /// Returns true when two sequences have identical structural markers (group, sequence, bind, branch, just) and differ only in value entries.
-    ///
-    /// Used to detect when a `mayReshape` leaf change did not actually reshape the bound subtree, allowing the probe loop to apply values in place and skip a full graph rebuild.
-    private static func structurallyIdentical(
-        _ oldSequence: ChoiceSequence,
-        _ newSequence: ChoiceSequence
-    ) -> Bool {
-        guard oldSequence.count == newSequence.count else { return false }
-        return oldSequence.withUnsafeBufferPointer { oldBuffer in
-            newSequence.withUnsafeBufferPointer { newBuffer in
-                var index = 0
-                while index < oldBuffer.count {
-                    let oldEntry = oldBuffer[index]
-                    let newEntry = newBuffer[index]
-                    switch (oldEntry, newEntry) {
-                    case (.value, .value):
-                        break
-                    default:
-                        if oldEntry != newEntry { return false }
-                    }
-                    index += 1
-                }
-                return true
-            }
-        }
     }
 
     // MARK: - Decoder Selection

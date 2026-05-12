@@ -149,26 +149,6 @@ extension Interpreters {
                         return nil
                     }
                     result = boundValue
-                } else if case let .group(innerChoices, _) = choices.first,
-                          innerChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
-                {
-                    // Legacy: support .group([innerTree, boundTree]) for backwards compatibility
-                    choices.removeFirst()
-                    var scopedChoices = innerChoices
-                    guard let innerValue = try replayWithChoicesHelper(
-                        inner,
-                        choices: &scopedChoices
-                    ) else {
-                        return nil
-                    }
-                    let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayWithChoicesHelper(
-                        boundGen,
-                        choices: &choices
-                    ) else {
-                        return nil
-                    }
-                    result = boundValue
                 } else {
                     guard let innerValue = try replayWithChoicesHelper(
                         inner,
@@ -520,24 +500,6 @@ extension Interpreters {
                     guard let boundValue = try replayRecursive(
                         boundGen,
                         with: boundTree
-                    ) else {
-                        return nil
-                    }
-                    result = boundValue
-                } else if case let .group(children, _) = script,
-                          children.count >= 2
-                {
-                    // Legacy: support .group([innerTree, boundTree]) for backwards compatibility
-                    guard let innerValue = try replayRecursive(
-                        inner,
-                        with: children[0]
-                    ) else {
-                        return nil
-                    }
-                    let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayRecursive(
-                        boundGen,
-                        with: children[1]
                     ) else {
                         return nil
                     }

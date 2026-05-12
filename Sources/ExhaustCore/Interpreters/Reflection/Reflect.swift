@@ -70,8 +70,7 @@ package enum Interpreters {
             // 1. Interpret the operation against the final output value.
             let intermediateResults = try interpretOperationBackward(
                 operation,
-                onFinalOutput: finalOutput,
-                outputType: Output.self
+                onFinalOutput: finalOutput
             )
 
             // 2. For each successful intermediate result...
@@ -93,8 +92,7 @@ package enum Interpreters {
     /// For chooseBits: inverts the bit-pattern encoding to recover the original value. For pick: tries each branch's sub-generator via ``reflectRecursive`` and returns the branch whose output matches `finalOutput`. For sequence: reflects each element independently. For contramap: applies the backward transform to extract the inner value from `finalOutput`.
     private static func interpretOperationBackward(
         _ op: ReflectiveOperation,
-        onFinalOutput finalOutput: Any,
-        outputType _: (some Any).Type
+        onFinalOutput finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
         // A nil onFinalOutput at this point means the generator produces an Optional type.

@@ -391,7 +391,7 @@ extension Materializer {
 
         var results: [Any] = []
         results.reserveCapacity(Int(length))
-        var elements: [ChoiceTree] = context.skipTree ? [] : []
+        var elements: [ChoiceTree] = []
         if context.skipTree == false {
             elements.reserveCapacity(Int(length))
         }
