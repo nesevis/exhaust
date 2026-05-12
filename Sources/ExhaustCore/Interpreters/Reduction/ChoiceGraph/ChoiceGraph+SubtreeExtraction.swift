@@ -81,13 +81,21 @@ extension ChoiceGraph {
                 // This is the target bind — return its bound child.
                 return bound
             }
-            guard let step = remainingPath.first,
-                  case .bindBound = step
-            else { return nil }
-            return walkForPathMatch(
-                tree: bound,
-                remainingPath: remainingPath.dropFirst()
-            )
+            guard let step = remainingPath.first else { return nil }
+            switch step {
+            case .bindBound:
+                return walkForPathMatch(
+                    tree: bound,
+                    remainingPath: remainingPath.dropFirst()
+                )
+            case .bindInner:
+                return walkForPathMatch(
+                    tree: inner,
+                    remainingPath: remainingPath.dropFirst()
+                )
+            default:
+                return nil
+            }
 
         case let .resize(_, choices):
             guard let step = remainingPath.first,
