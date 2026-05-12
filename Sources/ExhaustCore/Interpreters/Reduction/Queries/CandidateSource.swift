@@ -31,6 +31,12 @@ struct SortedCandidateSource: CandidateSource {
         return transformations[index].priority
     }
 
+    /// The first remaining transformation, for type inspection without consuming.
+    var peekTransformation: GraphTransformation? {
+        guard index < transformations.count else { return nil }
+        return transformations[index]
+    }
+
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < transformations.count else { return nil }
         let result = transformations[index]
@@ -44,11 +50,17 @@ struct SortedCandidateSource: CandidateSource {
 /// Builds the collection of candidate sources from a graph.
 enum CandidateSourceBuilder {
     static func buildSources(from graph: ChoiceGraph, deferBindInner: Bool = false, previousGraph: ChoiceGraph? = nil) -> [any CandidateSource] {
+        buildStructuralSources(from: graph, previousGraph: previousGraph)
+            + buildValueSources(from: graph, deferBindInner: deferBindInner)
+    }
+
+    /// Sources whose scopes depend on graph topology (node parent-child relationships, element counts, self-similarity edges) but not on leaf values. Stable across structurally-identical rebuilds.
+    static func buildStructuralSources(from graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil) -> [any CandidateSource] {
         var sources: [any CandidateSource] = []
 
         let elementScopes = RemovalQuery.elementRemovalScopes(graph: graph)
 
-        // Batched cross-sequence removal — most drastic structural reduction.
+        // Batched cross-sequence removal.
         let batchedSource = BatchedCrossSequenceRemovalSource(graph: graph)
         if batchedSource.peekPriority != nil {
             sources.append(batchedSource)
@@ -101,6 +113,13 @@ enum CandidateSourceBuilder {
         if permutationCandidates.isEmpty == false {
             sources.append(SortedCandidateSource(permutationCandidates))
         }
+
+        return sources
+    }
+
+    /// Sources whose scopes depend on leaf values (current ChoiceValue, valid ranges, distance-to-target). Must be rebuilt after any value change, even structurally-identical ones.
+    static func buildValueSources(from graph: ChoiceGraph, deferBindInner: Bool = false) -> [any CandidateSource] {
+        var sources: [any CandidateSource] = []
 
         // Minimization.
         let minimizationCandidates = buildMinimizationCandidates(graph: graph, deferBindInner: deferBindInner)
