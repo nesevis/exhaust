@@ -489,7 +489,8 @@ extension GraphValueEncoder {
             }
         }
 
-        if let nextBitPattern = state.stepper?.advance(lastAccepted: lastAccepted) {
+        var accepted = lastAccepted
+        while let nextBitPattern = state.stepper?.advance(lastAccepted: accepted) {
             let newEntry = currentEntry.withBitPattern(nextBitPattern)
             if newEntry.shortLexCompare(currentEntry) == .lt {
                 var candidate = state.sequence
@@ -497,11 +498,7 @@ extension GraphValueEncoder {
                 state.lastEmittedCandidate = candidate
                 return candidate
             }
-            // Probe not shortlex-smaller — re-enter to advance again.
-            return nextBitPatternSearchProbe(
-                state: &state,
-                lastAccepted: false
-            )
+            accepted = false
         }
 
         // Stepper converged — check for non-monotone gap.
