@@ -259,7 +259,7 @@ package extension Gen {
 
     /// Creates a generator that picks a random element from a collection.
     ///
-    /// Reflection uses hash-based O(1) lookup to find the element's index.
+    /// Reflection uses hash-based O(1) lookup to find the element's first index in the collection.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.

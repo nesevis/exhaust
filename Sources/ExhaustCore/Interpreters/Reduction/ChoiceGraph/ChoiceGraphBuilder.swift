@@ -196,7 +196,10 @@ struct ChoiceGraphBuilder {
                 lengthConstraint: metadata.validRange,
                 elementCount: elements.count,
                 childPositionRanges: childExtents,
-                childIndexByNodeID: Dictionary(uniqueKeysWithValues: childIDs.enumerated().map { ($0.element, $0.offset) }),
+                childIndexByNodeID: childIDs.enumerated().reduce(into: [:]) { dict, pair in
+                    precondition(dict[pair.element] == nil, "duplicate child node ID \(pair.element) at index \(pair.offset)")
+                    dict[pair.element] = pair.offset
+                },
                 elementTypeTag: deriveElementTypeTag(childIDs: childIDs)
             )),
             positionRange: offset ... (offset + consumed - 1),
