@@ -35,15 +35,15 @@ package enum Float16Emulation {
     private static let mantissaBits = 10
 
     /// The maximum integer that can be represented exactly in half-precision (2^11 = 2048).
-    public static let maxPreciseInteger: Double = 2048.0
+    package static let maxPreciseInteger: Double = 2048.0
 
     /// Greatest finite half-precision magnitude (65504).
-    public static let greatestFiniteMagnitude: Double = 65504.0
+    package static let greatestFiniteMagnitude: Double = 65504.0
 
     // MARK: - Encoded Bit Pattern → Double
 
     /// Converts an order-preserving encoded Float16 bit pattern to a `Double`.
-    public static func doubleValue(fromEncoded encoded: UInt64) -> Double {
+    package static func doubleValue(fromEncoded encoded: UInt64) -> Double {
         let encoded16 = UInt16(encoded & 0xFFFF)
         let raw = decodeOrderPreserving(encoded16)
         return doubleFromRawBits(raw)
@@ -54,7 +54,7 @@ package enum Float16Emulation {
     /// Converts a `Double` to an order-preserving encoded Float16 bit pattern.
     ///
     /// Values outside half-precision range saturate to infinity. NaN is preserved.
-    public static func encodedBitPattern(from value: Double) -> UInt64 {
+    package static func encodedBitPattern(from value: Double) -> UInt64 {
         let raw = rawBitsFromDouble(value)
         return UInt64(encodeOrderPreserving(raw))
     }
@@ -62,7 +62,7 @@ package enum Float16Emulation {
     // MARK: - Special Values
 
     /// Hypothesis-style special-value shortlist for half-precision, as `Double` values.
-    public static let specialValues: [Double] = [
+    package static let specialValues: [Double] = [
         greatestFiniteMagnitude,
         Double.infinity,
         Double.nan,

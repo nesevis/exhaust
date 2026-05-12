@@ -10,22 +10,22 @@
 /// Inactive (unselected) branches carry a nil ``positionRange`` and do not address live entries in the ``ChoiceSequence``. Encoders must skip these nodes. Only nodes with a non-nil position range correspond to mutable sequence positions.
 package struct ChoiceGraphNode {
     /// Assigned sequentially during graph construction. Unstable across rebuilds — the same logical node gets a different ID after any structural change.
-    public let id: Int
+    package let id: Int
 
     /// Determines which encoder passes may target this node. Value encoders target chooseBits leaves, structural encoders target pick, sequence, and bind nodes.
-    public let kind: ChoiceGraphNodeKind
+    package let kind: ChoiceGraphNodeKind
 
     /// Range of ``ChoiceSequence`` indices this node covers, or nil for inactive (unselected) branches. Encoders that modify the sequence can only target nodes with non-nil position ranges.
-    public let positionRange: ClosedRange<Int>?
+    package let positionRange: ClosedRange<Int>?
 
     /// Ordered by position in the ``ChoiceSequence``. For pick nodes, index corresponds to branch ID; for sequences, index corresponds to element ordinal.
-    public let children: [Int]
+    package let children: [Int]
 
     /// Nil only for the root. Used by scope queries to find enclosing bind and pick contexts for dependency analysis.
-    public let parent: Int?
+    package let parent: Int?
 
     /// Structural address from the tree root to this node. Stable across rebuilds as long as the tree shape above this node does not change. Two nodes in successive graphs with the same ``ChoicePath`` are the same logical node.
-    public let choicePath: ChoicePath
+    package let choicePath: ChoicePath
 
     /// Returns a copy with the specified fields replaced. Unspecified fields carry forward from `self`.
     ///
@@ -88,64 +88,64 @@ package enum ChoiceGraphNodeKind {
 /// Metadata for a ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf node.
 package struct ChooseBitsMetadata {
     /// Semantic type of the value.
-    public let typeTag: TypeTag
+    package let typeTag: TypeTag
 
     /// Valid bit-pattern range from the generator, or nil if unconstrained.
-    public let validRange: ClosedRange<UInt64>?
+    package let validRange: ClosedRange<UInt64>?
 
     /// Whether the range was user-specified or derived from size scaling.
-    public let isRangeExplicit: Bool
+    package let isRangeExplicit: Bool
 
     /// Current value from the ``ChoiceSequence``.
-    public let value: ChoiceValue
+    package let value: ChoiceValue
 
     /// Cached convergence floor from a prior value search pass, or nil if this leaf has not been searched. Invalidated on structural changes.
-    public var convergedOrigin: ConvergedOrigin?
+    package var convergedOrigin: ConvergedOrigin?
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.
 package struct PickMetadata {
     /// Pick site fingerprint. Two picks with matching values belong to the same recursive generator (possibly at different depths).
-    public let fingerprint: UInt64
+    package let fingerprint: UInt64
 
     /// The number of branches at this pick site. Branch identifiers are `0 ..< branchCount`.
-    public let branchCount: UInt64
+    package let branchCount: UInt64
 
     /// Currently selected branch identifier.
-    public let selectedID: UInt64
+    package let selectedID: UInt64
 
     /// Index into the parent node's ``ChoiceGraphNode/children`` identifying the active branch child.
-    public let selectedChildIndex: Int
+    package let selectedChildIndex: Int
 
     /// Per-branch tree elements at this pick site, in the same order as the parent ``ChoiceGraphNode/children``. Each entry is the original `.branch(...)` element (with `isSelected: true` for the active branch) as it existed in the tree at graph construction time. The graph stores these so that ``GraphReplacementEncoder`` can enumerate branch alternatives without reading from the live tree, which may have been stripped by ``Materializer`` calls with `materializePicks: false`.
-    public let branchElements: [ChoiceTree]
+    package let branchElements: [ChoiceTree]
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/bind(_:)`` dependency node.
 package struct BindMetadata {
     /// Stable hash of the originating `.bind` source location, carried through from ``ReflectiveOperation/transform(kind:inner:)`` (via ``ChoiceTree/bind(fingerprint:inner:bound:)``) to identify this bind site across graph rebuilds. Used by ``ChoiceGraph/bindClassifications`` to cache the classification verdict — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds.
-    public let fingerprint: UInt64
+    package let fingerprint: UInt64
 
     /// Whether the bound subtree contains no nested binds or picks, meaning the inner value controls ranges and counts but not tree shape.
-    public let isStructurallyConstant: Bool
+    package let isStructurallyConstant: Bool
 
     /// Nesting depth of enclosing bind regions.
-    public let bindDepth: Int
+    package let bindDepth: Int
 
     /// Index into the parent node's ``ChoiceGraphNode/children`` identifying the inner (controlling) child.
-    public let innerChildIndex: Int
+    package let innerChildIndex: Int
 
     /// Index into the parent node's ``ChoiceGraphNode/children`` identifying the bound (controlled) child.
-    public let boundChildIndex: Int
+    package let boundChildIndex: Int
 
     /// Structural path from the ``ChoiceTree`` root at graph-construction time to this bind. Used by ``ChoiceGraph/extractBoundSubtree(from:matchingPath:)`` to locate the matching bind in a post-mutation freshTree. The root bind has the empty path.
-    public let bindPath: BindPath
+    package let bindPath: BindPath
 
     /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``GraphComposedEncoder``) so unsuitable sites are skipped immediately.
-    public var classification: BindClassification?
+    package var classification: BindClassification?
 
     /// Creates bind metadata with the given structural properties and optional cached classification.
-    public init(
+    package init(
         fingerprint: UInt64,
         isStructurallyConstant: Bool,
         bindDepth: Int,
@@ -167,22 +167,22 @@ package struct BindMetadata {
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.
 package struct ZipMetadata {
     /// When true, coverage analysis skips this subtree.
-    public let isOpaque: Bool
+    package let isOpaque: Bool
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/sequence(_:)`` node.
 package struct SequenceMetadata {
     /// Explicit length range from ``ChoiceMetadata``, if any. Constrains deletion — the reducer cannot delete below the lower bound. This is metadata on the node, not a containment edge to a child.
-    public let lengthConstraint: ClosedRange<UInt64>?
+    package let lengthConstraint: ClosedRange<UInt64>?
 
     /// Current element count from the ``ChoiceSequence``.
-    public let elementCount: Int
+    package let elementCount: Int
 
     /// Full ``ChoiceSequence`` extent of each direct child element, including any transparent wrapper markers (group/bind from getSize-bind, transform-bind, and so on). Indexed parallel to ``ChoiceGraphNode/children``. Per-element removal must delete the full extent — removing only the inner chooseBits position leaves orphan markers that the materializer cannot decode.
-    public let childPositionRanges: [ClosedRange<Int>]
+    package let childPositionRanges: [ClosedRange<Int>]
 
     /// Maps child node ID to its index in ``childPositionRanges`` and ``ChoiceGraphNode/children``. O(1) lookup replacing linear `firstIndex(of:)` scans.
-    public let childIndexByNodeID: [Int: Int]
+    package let childIndexByNodeID: [Int: Int]
 
     /// Common ``TypeTag`` of all elements when the sequence is type-homogeneous, or nil for heterogeneous or empty sequences.
     ///
@@ -191,5 +191,5 @@ package struct SequenceMetadata {
     /// - Nested: all children are ``ChoiceGraphNodeKind/sequence(_:)`` with the same non-nil ``elementTypeTag``, implying subsequence homogeneity.
     ///
     /// When non-nil, any two leaves within the sequence are type-compatible for redistribution without materializing pairwise edges. The exchange scope builder uses this to construct ``RedistributionGroup`` descriptors in O(1) per sequence instead of O(C^2) per sequence.
-    public let elementTypeTag: TypeTag?
+    package let elementTypeTag: TypeTag?
 }

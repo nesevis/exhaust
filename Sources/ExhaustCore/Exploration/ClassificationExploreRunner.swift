@@ -349,29 +349,29 @@ private struct ReducedFailure<Output> {
 
 /// Result of a classification-aware exploration run.
 package struct ClassificationExploreResult<Output> {
-    package var counterexample: Output?
-    package var original: Output?
-    package var reducedSequence: ChoiceSequence?
-    package var counterexampleDirections: [Int]
-    package var directionCoverage: [DirectionCoverageEntry]
-    package var coOccurrence: CoOccurrenceMatrix
-    package var propertyInvocations: Int
-    package var warmupSamples: Int
-    package var totalMilliseconds: Double
-    package var termination: ClassificationExploreTermination
-    package var seed: UInt64
+    package let counterexample: Output?
+    package let original: Output?
+    package let reducedSequence: ChoiceSequence?
+    package let counterexampleDirections: [Int]
+    package let directionCoverage: [DirectionCoverageEntry]
+    package let coOccurrence: CoOccurrenceMatrix
+    package let propertyInvocations: Int
+    package let warmupSamples: Int
+    package let totalMilliseconds: Double
+    package let termination: ClassificationExploreTermination
+    package let seed: UInt64
 
     /// Records the coverage outcome for a single direction: hit count, sample count, and rule-of-three upper bounds for both the warm-up and tuning phases.
     package struct DirectionCoverageEntry {
-        package var name: String
-        package var hits: Int
-        package var tuningPassSamples: Int
-        package var tuningPassPasses: Int
-        package var tuningPassFailures: Int
-        package var warmupHits: Int
-        package var isCovered: Bool
-        package var warmupRuleOfThreeBound: Double?
-        package var tuningPassRuleOfThreeBound: Double?
+        package let name: String
+        package let hits: Int
+        package let tuningPassSamples: Int
+        package let tuningPassPasses: Int
+        package let tuningPassFailures: Int
+        package let warmupHits: Int
+        package let isCovered: Bool
+        package let warmupRuleOfThreeBound: Double?
+        package let tuningPassRuleOfThreeBound: Double?
     }
 }
 

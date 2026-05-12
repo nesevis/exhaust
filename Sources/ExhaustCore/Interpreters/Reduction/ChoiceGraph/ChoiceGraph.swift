@@ -29,25 +29,25 @@
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``SelfSimilarityEdge``, ``TypeCompatibilityEdge``
 package struct ChoiceGraph {
     /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``.
-    public var nodes: [ChoiceGraphNode]
+    package var nodes: [ChoiceGraphNode]
 
     /// Containment edges forming the tree structure (parent → child).
-    public let containmentEdges: [ContainmentEdge]
+    package let containmentEdges: [ContainmentEdge]
 
     /// Dependency edges from bind-inner nodes to structural nodes in their bound subtrees.
-    public let dependencyEdges: [DependencyEdge]
+    package let dependencyEdges: [DependencyEdge]
 
     /// Active pick nodes grouped by fingerprint. Picks in the same group are structurally exchangeable — any pair is a candidate for self-similar replacement. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
-    public let selfSimilarityGroups: [UInt64: [Int]]
+    package let selfSimilarityGroups: [UInt64: [Int]]
 
     /// IDs of active nodes (those with non-nil position ranges). Computed eagerly during graph assembly.
-    public let liveNodeIDs: [Int]
+    package let liveNodeIDs: [Int]
 
     /// All leaf node IDs (chooseBits nodes with non-nil position range). Computed eagerly during graph assembly.
-    public let leafNodes: [Int]
+    package let leafNodes: [Int]
 
     /// Node IDs in dependency order (roots first). Computed eagerly via Kahn's algorithm during graph assembly.
-    public let topologicalOrder: [Int]
+    package let topologicalOrder: [Int]
 
     /// Dependency adjacency list for on-demand reachability queries. Computed eagerly during graph assembly.
     let dependencyAdjacency: [[Int]]
@@ -63,17 +63,17 @@ package struct ChoiceGraph {
     // MARK: - Non-Caching Computed Properties
 
     /// Type-compatibility edges between antichain members with matching types. Recomputed on each access.
-    public var typeCompatibilityEdges: [TypeCompatibilityEdge] {
+    package var typeCompatibilityEdges: [TypeCompatibilityEdge] {
         computeTypeCompatibilityEdges()
     }
 
     /// Bind-inner descendant index. Maps each chooseBits leaf inside a bind's inner subtree to the outermost enclosing bind's node ID. Recomputed on each access.
-    public var innerDescendantToBind: [Int: Int] {
+    package var innerDescendantToBind: [Int: Int] {
         QueryHelpers.buildInnerDescendantToBind(graph: self)
     }
 
     /// Per-node source/sink status for redistribution. Recomputed on each access.
-    public var sourceSinkStatus: [Int: SourceSinkStatus] {
+    package var sourceSinkStatus: [Int: SourceSinkStatus] {
         computeSourceSinkAnnotations()
     }
 

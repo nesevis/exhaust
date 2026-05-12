@@ -10,13 +10,13 @@
 /// Produced by ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)``. Stored on ``BindMetadata/classification``. Read by expensive dependent-node encoders before dispatch.
 package struct BindClassification: Equatable, Hashable, Sendable {
     /// Structural relationship between the bound subtrees lifted at the upstream range's low and high endpoints.
-    public let topology: BindTopology
+    package let topology: BindTopology
 
     /// Which of the two endpoint lifts succeeded.
-    public let liftability: BindLiftability
+    package let liftability: BindLiftability
 
     /// Creates a classification with the given topology and liftability verdicts.
-    public init(topology: BindTopology, liftability: BindLiftability) {
+    package init(topology: BindTopology, liftability: BindLiftability) {
         self.topology = topology
         self.liftability = liftability
     }
@@ -47,8 +47,8 @@ package enum BindLiftability: Equatable, Hashable, Sendable {
 /// Snapshot of a bind site's upstream value and downstream topology at a given graph state. Compared across graph rebuilds to passively classify binds without materialisation probes.
 package struct BindTopologyObservation: Equatable, Hashable, Sendable {
     /// Bit pattern of the upstream (inner) leaf at observation time.
-    public let upstreamBitPattern: UInt64
+    package let upstreamBitPattern: UInt64
 
     /// Topology fingerprint of the bound subtree at observation time.
-    public let downstreamFingerprint: UInt64
+    package let downstreamFingerprint: UInt64
 }
