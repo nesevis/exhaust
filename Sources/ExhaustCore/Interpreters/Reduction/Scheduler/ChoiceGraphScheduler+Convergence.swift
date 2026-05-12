@@ -37,37 +37,48 @@ extension ChoiceGraphScheduler {
     }
 
     /// Extracts all convergence records with leaf metadata for transfer matching.
-    static func extractAllConvergence(from graph: ChoiceGraph) -> [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)] {
-        var records: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)] = [:]
+    ///
+    /// Keyed by ``ChoicePath`` for stable identity across rebuilds. Falls back to position-based keying for leaves with empty paths (inactive branches).
+    static func extractAllConvergence(from graph: ChoiceGraph) -> (byPath: [ChoicePath: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)], byPosition: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)]) {
+        var byPath: [ChoicePath: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)] = [:]
+        var byPosition: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)] = [:]
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let origin = metadata.convergedOrigin else { continue }
-            guard let range = graph.nodes[nodeID].positionRange else { continue }
             let isConstant = isInStructurallyConstantContext(nodeID: nodeID, graph: graph)
-            records[range.lowerBound] = (origin: origin, typeTag: metadata.typeTag, validRange: metadata.validRange, isStructurallyConstant: isConstant)
+            let record = (origin: origin, typeTag: metadata.typeTag, validRange: metadata.validRange, isStructurallyConstant: isConstant)
+            let path = graph.nodes[nodeID].choicePath
+            if path.isEmpty == false {
+                byPath[path] = record
+            }
+            if let range = graph.nodes[nodeID].positionRange {
+                byPosition[range.lowerBound] = record
+            }
         }
-        return records
+        return (byPath: byPath, byPosition: byPosition)
     }
 
-    /// Transfers convergence records from old graph positions to matching leaves in the new graph.
+    /// Transfers convergence records from an old graph to matching leaves in the new graph.
     ///
-    /// Two-tier policy:
-    /// - Leaves in structurally-constant bind subtrees (or outside any bind): match on position + typeTag only. The validRange may have changed but the materializer handles clamping.
-    /// - Leaves in non-constant bind subtrees: match on position + typeTag + validRange. The subtree was rebuilt — ranges may be different.
+    /// Primary matching by ``ChoicePath`` — structural address is stable across rebuilds even when positions shift due to deletions or insertions. Falls back to position-based matching for leaves whose path didn't match (structural change above the leaf).
+    ///
+    /// Two-tier validation policy:
+    /// - Leaves in structurally-constant bind subtrees (or outside any bind): match on path/position + typeTag only.
+    /// - Leaves in non-constant bind subtrees: also require validRange match.
     static func transferConvergence(
-        _ records: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)],
+        _ records: (byPath: [ChoicePath: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)], byPosition: [Int: (origin: ConvergedOrigin, typeTag: TypeTag, validRange: ClosedRange<UInt64>?, isStructurallyConstant: Bool)]),
         to graph: inout ChoiceGraph
     ) {
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
-            guard let oldRecord = records[range.lowerBound] else { continue }
 
-            // Type tag must always match.
+            let path = graph.nodes[nodeID].choicePath
+            let oldRecord = (path.isEmpty == false ? records.byPath[path] : nil) ?? records.byPosition[range.lowerBound]
+            guard let oldRecord else { continue }
+
             guard oldRecord.typeTag == metadata.typeTag else { continue }
 
-            // Two-tier: constant context requires only position + typeTag.
-            // Non-constant requires validRange match too.
             if oldRecord.isStructurallyConstant == false {
                 guard oldRecord.validRange == metadata.validRange else { continue }
             }
