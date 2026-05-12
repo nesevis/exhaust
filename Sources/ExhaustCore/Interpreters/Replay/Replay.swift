@@ -12,10 +12,21 @@ import Foundation
 //
 // Implements the `parse` interpretation P⟦·⟧ (Goldstein §3.3.3) from a hierarchical ChoiceTree. The dissertation parses from flat choice sequences; Exhaust adds tree-structured replay for precise structural matching.
 
+// MARK: - Why This Exists
+//
+// Replay handles both VACTI-produced and Reflect-produced ChoiceTrees. The two formats differ at pick sites: VACTI wraps
+// callee and continuation in a two-element group (children[0] = callee, children[1] = continuation), while Reflect produces
+// a flat group of branch nodes with no separate continuation. Materializer's guided-mode fallback expects the VACTI layout
+// (decomposeNonGroupFallback splits on children.count == 2), so reflected trees lose their continuation fallback and fall
+// through to PRNG, producing wrong values. Replay's tree-walking approach handles both layouts because it consumes the tree
+// structurally rather than through a cursor-based callee/continuation decomposition.
+
 extension Interpreters {
     // MARK: - Public-Facing Replay Function
 
     /// Deterministically reproduces a value by executing a generator with a structured ``ChoiceTree``.
+    ///
+    /// Handles both VACTI-produced trees (from generation) and Reflect-produced trees (from backward-pass decomposition). The two formats differ at pick sites, which prevents consolidation with ``Materializer``'s guided-mode fallback path.
     ///
     /// - Parameters:
     ///   - gen: The generator to execute.
@@ -25,10 +36,7 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Output>,
         using choiceTree: ChoiceTree
     ) throws -> Output? {
-        // Start the recursive process. The helper returns the value and any *unconsumed* parts of the tree. A successful top-level replay should consume the entire tree.
         try replayRecursive(gen, with: choiceTree)
-
-        // We can add a check here to ensure no parts of the tree were left over, but the recursive logic should handle this correctly.
     }
 
     // MARK: - Private Recursive Replay Engine
