@@ -49,6 +49,11 @@ enum ReorderingQuery {
 
             var byCategory: [SiblingGroupKey: [ClosedRange<Int>]] = [:]
             for (range, kind) in zip(childRanges, childKinds) {
+                if case let .chooseBits(metadata) = kind,
+                   case .depthControl = metadata.typeTag
+                {
+                    continue
+                }
                 byCategory[siblingGroupKey(kind), default: []].append(range)
             }
 

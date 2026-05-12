@@ -69,7 +69,7 @@ enum MinimizationQuery {
 
         // Partition integer leaves into bind-inner and independent scopes. Bind-inner leaves require guided materialization (their value changes reshape bound subtrees); independent leaves use exact materialization. Mixing them in one scope forces guided mode for all leaves in batch phases.
         //
-        // Depth-control leaves (TypeTag.depthControl) are excluded entirely. Reducing them collapses recursive layers, destroying structural context (branch pivots) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
+        // Depth-control leaves (TypeTag.depthControl) are excluded entirely. Reducing them through value search collapses recursive layers, destroying structural context (branch pivots) that substitution needs to converge to the optimal counterexample. Structural operations handle depth reduction while preserving structural integrity.
         if integerLeafNodeIDs.isEmpty == false {
             var bindInnerEntries: [LeafEntry] = []
             var independentEntries: [LeafEntry] = []
