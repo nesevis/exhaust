@@ -211,7 +211,7 @@ extension ChoiceGraphScheduler {
             }
         }) else { return nil }
 
-        let minimizedTarget = GraphStructuralEncoder.minimizingLeaves(in: elements[targetElementIndex])
+        let minimizedTarget = elements[targetElementIndex].minimizingLeaves
         let targetContent = ChoiceSequence.flatten(minimizedTarget.selecting())
 
         var replacement: [ChoiceSequenceValue] = []

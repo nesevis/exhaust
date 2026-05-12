@@ -92,7 +92,7 @@ extension GraphStructuralEncoder {
             }
         }) else { return nil }
 
-        let minimizedTarget = Self.minimizingLeaves(in: elements[targetElementIndex])
+        let minimizedTarget = elements[targetElementIndex].minimizingLeaves
         let targetContent = ChoiceSequence.flatten(minimizedTarget.selecting())
 
         var replacement: [ChoiceSequenceValue] = []
@@ -144,53 +144,6 @@ extension GraphStructuralEncoder {
         return candidate
     }
 
-    /// Returns a copy of the subtree with every `.choice` node's value replaced by its reduction target. Strips PRNG-like noise so the shortlex comparison reflects only structural difference.
-    static func minimizingLeaves(in tree: ChoiceTree) -> ChoiceTree {
-        switch tree {
-        case let .choice(value, metadata):
-            let targetBitPattern = value.reductionTarget(in: metadata.validRange)
-            let targetValue = ChoiceValue(
-                value.tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: value.tag
-            )
-            return .choice(targetValue, metadata)
-        case .just:
-            return tree
-        case .getSize:
-            return tree
-        case let .sequence(length, elements, metadata):
-            return .sequence(
-                length: length,
-                elements: elements.map { minimizingLeaves(in: $0) },
-                metadata
-            )
-        case let .branch(fingerprint, weight, id, branchCount, choice, isSelected):
-            return .branch(
-                fingerprint: fingerprint,
-                weight: weight,
-                id: id,
-                branchCount: branchCount,
-                choice: minimizingLeaves(in: choice),
-                isSelected: isSelected
-            )
-        case let .group(children, isOpaque):
-            return .group(
-                children.map { minimizingLeaves(in: $0) },
-                isOpaque: isOpaque
-            )
-        case let .resize(newSize, choices):
-            return .resize(
-                newSize: newSize,
-                choices: choices.map { minimizingLeaves(in: $0) }
-            )
-        case let .bind(fingerprint, inner, bound):
-            return .bind(
-                fingerprint: fingerprint,
-                inner: minimizingLeaves(in: inner),
-                bound: minimizingLeaves(in: bound)
-            )
-        }
-    }
 
     // MARK: - Depth-Crossing Expansion
 

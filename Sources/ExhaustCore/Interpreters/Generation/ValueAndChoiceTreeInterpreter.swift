@@ -411,15 +411,16 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                         return nil
                     }
 
-                    let isDuplicate = ChoiceTreeHandlers.checkDuplicate(
-                        result: result,
-                        tree: tree,
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor,
-                        context: &context
-                    )
+                    let isDuplicate: Bool
+                    if let keyExtractor {
+                        let key = keyExtractor(result)
+                        isDuplicate = context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted == false
+                    } else {
+                        let sequence = ChoiceSequence.flatten(tree)
+                        isDuplicate = context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted == false
+                    }
 
-                    if !isDuplicate {
+                    if isDuplicate == false {
                         return try runContinuation(
                             result: result,
                             calleeChoiceTree: tree,
