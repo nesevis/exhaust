@@ -848,7 +848,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             completedRounds = round + 1
             for (derivIdx, choiceIdx) in liveChoiceIndices.enumerated() {
                 do {
-                    let result = try LightweightSampler.sample(
+                    let result = try CGSDerivativeInterpreter.sample(
                         derivatives[derivIdx],
                         using: &cgsState.samplingPRNG,
                         size: currentSize
