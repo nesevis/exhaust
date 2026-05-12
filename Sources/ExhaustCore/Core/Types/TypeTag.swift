@@ -243,7 +243,8 @@ extension TypeTag: Equatable {
              (.int, .int), (.int64, .int64), (.int32, .int32),
              (.int16, .int16), (.int8, .int8),
              (.double, .double), (.float, .float), (.float16, .float16),
-             (.bits, .bits):
+             (.bits, .bits),
+             (.depthControl, .depthControl):
             true
         case let (.character(lhsIndices), .character(rhsIndices)):
             lhsIndices == rhsIndices
