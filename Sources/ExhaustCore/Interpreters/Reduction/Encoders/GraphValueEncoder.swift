@@ -34,10 +34,19 @@ struct GraphValueEncoder: GraphEncoder {
         convergenceStore
     }
 
+    // MARK: - Leaf Mutation Source
+
+    /// Common fields needed by ``buildLeafValuesMutation`` to diff a candidate against a baseline.
+    protocol LeafMutationSource {
+        var nodeID: Int { get }
+        var sequenceIndex: Int { get }
+        var mayReshape: Bool { get }
+    }
+
     // MARK: - Integer Leaf Position
 
     /// Metadata for a single integer leaf under value search.
-    struct IntegerLeafPosition {
+    struct IntegerLeafPosition: LeafMutationSource {
         let nodeID: Int
         let sequenceIndex: Int
         let validRange: ClosedRange<UInt64>?
@@ -174,7 +183,7 @@ struct GraphValueEncoder: GraphEncoder {
     // MARK: - Float State
 
     /// Tracks the reduction state for a single float leaf node, including its current value, bit pattern, type tag, and valid range constraints. Mutable fields update as probes are accepted so subsequent stages operate on the reduced value.
-    struct FloatTarget {
+    struct FloatTarget: LeafMutationSource {
         let nodeID: Int
         let sequenceIndex: Int
         let typeTag: TypeTag
@@ -359,27 +368,12 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - Mutation Builders
 
-    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline. Each leaf in ``IntegerState/leafPositions`` is checked at its sequence index; differing values become ``LeafChange`` entries that carry the leaf's bind-inner reshape marker through to ``ChoiceGraph/apply(_:)``.
+    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline.
     func buildIntegerLeafValuesMutation(
         candidate: ChoiceSequence,
         state: IntegerState
     ) -> ProjectedMutation {
-        var changes: [LeafChange] = []
-        for leaf in state.leafPositions {
-            guard leaf.sequenceIndex < candidate.count,
-                  leaf.sequenceIndex < state.sequence.count
-            else { continue }
-            guard let candidateChoice = candidate[leaf.sequenceIndex].value?.choice,
-                  let baselineChoice = state.sequence[leaf.sequenceIndex].value?.choice
-            else { continue }
-            guard candidateChoice != baselineChoice else { continue }
-            changes.append(LeafChange(
-                leafNodeID: leaf.nodeID,
-                newValue: candidateChoice,
-                mayReshape: leaf.mayReshape
-            ))
-        }
-        return .leafValues(changes)
+        buildLeafValuesMutation(candidate: candidate, baseline: state.sequence, leaves: state.leafPositions)
     }
 
     /// Builds a `.leafValues` mutation report by comparing the candidate against the float state's current baseline.
@@ -387,19 +381,28 @@ struct GraphValueEncoder: GraphEncoder {
         candidate: ChoiceSequence,
         state: FloatState
     ) -> ProjectedMutation {
+        buildLeafValuesMutation(candidate: candidate, baseline: state.sequence, leaves: state.targets)
+    }
+
+    /// Builds a `.leafValues` mutation by diffing candidate against baseline at each leaf's sequence index.
+    private func buildLeafValuesMutation(
+        candidate: ChoiceSequence,
+        baseline: ChoiceSequence,
+        leaves: some Sequence<LeafMutationSource>
+    ) -> ProjectedMutation {
         var changes: [LeafChange] = []
-        for target in state.targets {
-            guard target.sequenceIndex < candidate.count,
-                  target.sequenceIndex < state.sequence.count
+        for leaf in leaves {
+            guard leaf.sequenceIndex < candidate.count,
+                  leaf.sequenceIndex < baseline.count
             else { continue }
-            guard let candidateChoice = candidate[target.sequenceIndex].value?.choice,
-                  let baselineChoice = state.sequence[target.sequenceIndex].value?.choice
+            guard let candidateChoice = candidate[leaf.sequenceIndex].value?.choice,
+                  let baselineChoice = baseline[leaf.sequenceIndex].value?.choice
             else { continue }
             guard candidateChoice != baselineChoice else { continue }
             changes.append(LeafChange(
-                leafNodeID: target.nodeID,
+                leafNodeID: leaf.nodeID,
                 newValue: candidateChoice,
-                mayReshape: target.mayReshape
+                mayReshape: leaf.mayReshape
             ))
         }
         return .leafValues(changes)
