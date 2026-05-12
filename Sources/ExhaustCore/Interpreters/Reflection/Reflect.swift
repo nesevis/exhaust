@@ -128,8 +128,8 @@ package enum Interpreters {
             if let sequence = finalOutput as? any Sequence {
                 derivedSize = UInt64(sequence.underestimatedCount)
             }
-            // For replay
-            return [(value: derivedSize, path: [.getSize(0)])]
+            // Store max size (100) so that replay and materialization see the full range for size-scaled generators.
+            return [(value: derivedSize, path: [.getSize(100)])]
 
         case let .resize(newSize, nextGen):
             return try reflectResizeOperation(

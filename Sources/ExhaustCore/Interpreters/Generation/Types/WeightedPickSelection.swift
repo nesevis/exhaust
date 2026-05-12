@@ -29,8 +29,12 @@ package enum WeightedPickSelection {
             if roll <= choice.weight {
                 return choice
             }
-            roll -= choice.weight
+            let (remaining, underflow) = roll.subtractingReportingOverflow(choice.weight)
+            if underflow {
+                return choice
+            }
+            roll = remaining
         }
-        return nil
+        return choices.last
     }
 }

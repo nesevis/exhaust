@@ -27,19 +27,13 @@ package struct ChoiceGraphNode {
     /// Structural address from the tree root to this node. Stable across rebuilds as long as the tree shape above this node does not change. Two nodes in successive graphs with the same ``ChoicePath`` are the same logical node.
     package let choicePath: ChoicePath
 
-    /// Returns a copy with the specified fields replaced. Unspecified fields carry forward from `self`.
-    ///
-    /// `positionRange` uses a double-optional: `.none` keeps the current value, `.some(nil)` sets it to nil, `.some(.some(range))` sets it to `range`.
-    func with(
-        kind: ChoiceGraphNodeKind? = nil,
-        positionRange: ClosedRange<Int>?? = .none,
-        children: [Int]? = nil
-    ) -> ChoiceGraphNode {
+    /// Returns a copy with the node kind replaced. All other fields carry forward from `self`.
+    func with(kind: ChoiceGraphNodeKind) -> ChoiceGraphNode {
         ChoiceGraphNode(
             id: id,
-            kind: kind ?? self.kind,
-            positionRange: positionRange ?? self.positionRange,
-            children: children ?? self.children,
+            kind: kind,
+            positionRange: positionRange,
+            children: children,
             parent: parent,
             choicePath: choicePath
         )
