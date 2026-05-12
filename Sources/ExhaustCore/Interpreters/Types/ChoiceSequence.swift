@@ -61,8 +61,8 @@ package extension ChoiceSequence {
                 eIdx += 1
             }
             output.append(.sequence(false))
-        case let .branch(_, _, _, _, gen, _):
-            flatten(gen, includingAllBranches: includingAllBranches, into: &output)
+        case let .branch(b):
+            flatten(b.choice, includingAllBranches: includingAllBranches, into: &output)
         case let .group(array, _):
             var i = 0
             var selectedBranchTree: ChoiceTree?
@@ -74,10 +74,10 @@ package extension ChoiceSequence {
                 }
                 i += 1
             }
-            if case let .branch(_, _, id, branchCount, choice, true) = selectedBranchTree {
+            if case let .branch(b) = selectedBranchTree, b.isSelected {
                 output.append(.group(true))
-                output.append(.branch(.init(id: id, branchCount: branchCount)))
-                let children = includingAllBranches ? array : [choice]
+                output.append(.branch(.init(id: b.id, branchCount: b.branchCount)))
+                let children = includingAllBranches ? array : [b.choice]
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var cIdx = 0
                 while cIdx < children.count {

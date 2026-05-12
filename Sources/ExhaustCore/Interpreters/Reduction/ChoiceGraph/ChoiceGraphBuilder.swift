@@ -88,8 +88,8 @@ struct ChoiceGraphBuilder {
                 parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
             )
 
-        case let .branch(_, _, _, _, choice, _):
-            return walk(choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
+        case let .branch(b):
+            return walk(b.choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
 
         case let .group(array, isOpaque):
             return walkGroup(
@@ -526,10 +526,10 @@ struct ChoiceGraphBuilder {
         guard array.allSatisfy({ $0.isBranch }) else {
             return nil
         }
-        guard case let .branch(fingerprint, _, id, branchCount, _, true) = array.first(where: \.isSelected) else {
+        guard case let .branch(b) = array.first(where: \.isSelected), b.isSelected else {
             return nil
         }
-        return PickSiteInfo(fingerprint: fingerprint, selectedID: id, branchCount: branchCount)
+        return PickSiteInfo(fingerprint: b.fingerprint, selectedID: b.id, branchCount: b.branchCount)
     }
 
     // MARK: - Assembly

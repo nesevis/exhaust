@@ -43,8 +43,8 @@ package extension ChoiceTree {
             [inner, bound]
         case let .sequence(_, elements, _):
             elements
-        case let .branch(_, _, _, _, choice, _):
-            [choice]
+        case let .branch(b):
+            [b.choice]
         case let .resize(_, choices):
             choices
         }
@@ -68,9 +68,9 @@ package extension ChoiceTree {
             var copy = elements
             copy[index] = newChild
             return .sequence(length: length, elements: copy, metadata)
-        case let .branch(fingerprint, weight, id, branchCount, _, isSelected):
+        case let .branch(b):
             precondition(index == 0, "branch has exactly one child")
-            return .branch(fingerprint: fingerprint, weight: weight, id: id, branchCount: branchCount, choice: newChild, isSelected: isSelected)
+            return .branch(fingerprint: b.fingerprint, weight: b.weight, id: b.id, branchCount: b.branchCount, choice: newChild, isSelected: b.isSelected)
         case let .resize(newSize, choices):
             var copy = choices
             copy[index] = newChild

@@ -41,14 +41,14 @@ package extension ChoiceTree {
                 elements: elements.map(\.minimizingLeaves),
                 metadata
             )
-        case let .branch(fingerprint, weight, id, branchCount, choice, isSelected):
+        case let .branch(b):
             return .branch(
-                fingerprint: fingerprint,
-                weight: weight,
-                id: id,
-                branchCount: branchCount,
-                choice: choice.minimizingLeaves,
-                isSelected: isSelected
+                fingerprint: b.fingerprint,
+                weight: b.weight,
+                id: b.id,
+                branchCount: b.branchCount,
+                choice: b.choice.minimizingLeaves,
+                isSelected: b.isSelected
             )
         case let .group(children, isOpaque):
             return .group(

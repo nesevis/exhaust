@@ -204,8 +204,8 @@ extension ChoiceGraphScheduler {
 
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
-            case let .branch(_, _, candidateID, _, _, _):
-                candidateID == targetBranchID
+            case let .branch(b):
+                b.id == targetBranchID
             default:
                 false
             }

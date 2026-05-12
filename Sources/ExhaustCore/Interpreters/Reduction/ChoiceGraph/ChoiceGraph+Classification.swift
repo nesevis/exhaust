@@ -297,8 +297,8 @@ extension ChoiceGraph {
     /// Strips through transparent tree wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:isSelected:)``) so the caller can compare the underlying structure without tripping on wrapper asymmetry.
     private static func unwrapTransparent(_ tree: ChoiceTree) -> ChoiceTree {
         switch tree {
-        case let .branch(_, _, _, _, choice, _):
-            unwrapTransparent(choice)
+        case let .branch(b):
+            unwrapTransparent(b.choice)
         default:
             tree
         }
@@ -333,8 +333,8 @@ extension ChoiceGraph {
             for element in elements {
                 fold(element, into: &hash)
             }
-        case let .branch(_, _, _, _, choice, _):
-            fold(choice, into: &hash)
+        case let .branch(b):
+            fold(b.choice, into: &hash)
         case let .group(array, _):
             hash = (hash ^ UInt64(array.count)) &* 1_099_511_628_211
             for child in array {

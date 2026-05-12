@@ -225,8 +225,8 @@ package enum ChoiceTreeAnalysis {
             walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
         case let .sequence(_, elements, _):
             elements.allSatisfy { walkTreeValidateOnly($0) }
-        case let .branch(_, _, _, _, choice, _):
-            walkTreeValidateOnly(choice)
+        case let .branch(b):
+            walkTreeValidateOnly(b.choice)
         }
     }
 
@@ -314,18 +314,18 @@ package enum ChoiceTreeAnalysis {
         guard domainSize <= finiteDomainThreshold else { return false }
 
         for child in children {
-            guard case let .branch(_, _, _, _, choice, _) = child else { return false }
-            guard walkTreeValidateOnly(choice) else { return false }
+            guard case let .branch(b) = child else { return false }
+            guard walkTreeValidateOnly(b.choice) else { return false }
         }
 
         // Create synthetic PickTuples from branch metadata for replay compatibility
         var pickTuples = ContiguousArray<ReflectiveOperation.PickTuple>()
         for child in children {
-            guard case let .branch(fingerprint, weight, id, _, _, _) = child else { return false }
+            guard case let .branch(b) = child else { return false }
             pickTuples.append(ReflectiveOperation.PickTuple(
-                fingerprint: fingerprint,
-                id: id,
-                weight: weight,
+                fingerprint: b.fingerprint,
+                id: b.id,
+                weight: b.weight,
                 generator: .pure(())
             ))
         }

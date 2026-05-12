@@ -40,9 +40,9 @@ extension ChoiceGraph {
                 remainingPath: remainingPath.dropFirst()
             )
 
-        case let .branch(_, _, _, _, choice, _):
+        case let .branch(b):
             // Transparent wrapper — pass through without consuming a step.
-            return walkForPathMatch(tree: choice, remainingPath: remainingPath)
+            return walkForPathMatch(tree: b.choice, remainingPath: remainingPath)
 
         case let .group(array, _):
             if isPickSite(array) {
@@ -51,8 +51,8 @@ extension ChoiceGraph {
                 else { return nil }
                 for element in array {
                     // The selected element carries the originally-picked branch.
-                    if case let .branch(_, _, id, _, _, true) = element,
-                       id == targetID
+                    if case let .branch(b) = element, b.isSelected,
+                       b.id == targetID
                     {
                         return walkForPathMatch(
                             tree: element,

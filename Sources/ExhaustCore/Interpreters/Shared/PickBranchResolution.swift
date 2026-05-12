@@ -20,10 +20,10 @@ package enum PickBranchResolution {
     /// Extracts a ``Branch`` from a ``ChoiceTree/branch`` node, returning `nil` for other node kinds.
     @inline(__always)
     package static func unpack(_ branch: ChoiceTree) -> Branch? {
-        guard case let .branch(_, _, id, _, choice, isSelected) = branch else {
+        guard case let .branch(b) = branch else {
             return nil
         }
-        return Branch(id: id, choice: choice, isSelected: isSelected)
+        return Branch(id: b.id, choice: b.choice, isSelected: b.isSelected)
     }
 
     /// Returns the generator for the branch with the given identifier, or `nil` if the identifier is out of range.

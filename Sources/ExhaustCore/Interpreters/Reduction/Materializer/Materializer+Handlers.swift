@@ -175,10 +175,10 @@ extension Materializer {
         }
         if let effectiveFallback,
            case let .group(children, _) = effectiveFallback,
-           case let .branch(_, _, id, _, choice, true) = children.first(where: \.isSelected)
+           case let .branch(b) = children.first(where: \.isSelected), b.isSelected
         {
-            fbBranchId = id
-            branchChoiceTree = choice
+            fbBranchId = b.id
+            branchChoiceTree = b.choice
         } else {
             fbBranchId = nil
             branchChoiceTree = nil
