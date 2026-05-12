@@ -27,7 +27,7 @@ package enum SequenceCoveringArray {
     /// At strength t=2, the covering array produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to boundary-value representatives.
     ///
     /// The floor of 2 ensures every parameter retains at least its extremes. Param-free and unanalyzable branches use only 1 slot each, so analyzed branches effectively inherit leftover capacity.
-    public static func computeThreshold(
+    package static func computeThreshold(
         budget: UInt64,
         sequenceLength: Int,
         branchCount: Int
@@ -46,7 +46,7 @@ package enum SequenceCoveringArray {
     ///   - sequenceLength: Number of positions in each test sequence.
     ///   - pickChoices: The command types available at each position (from `Gen.pick`).
     /// - Returns: A profile suitable for ``PullBasedCoveringArrayGenerator``.
-    public static func buildProfile(
+    package static func buildProfile(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> FiniteDomainProfile {
@@ -81,7 +81,7 @@ package enum SequenceCoveringArray {
     ///   - profile: The SCA profile (one pick parameter per position).
     ///   - sequenceLengthRange: The valid length range for the sequence metadata.
     /// - Returns: A ``ChoiceTree`` suitable for ``Interpreters/replay``, or `nil` on failure.
-    public static func buildTree(
+    package static func buildTree(
         row: CoveringArrayRow,
         profile: FiniteDomainProfile,
         sequenceLengthRange: ClosedRange<UInt64>
@@ -128,7 +128,7 @@ package enum SequenceCoveringArray {
     /// - Unanalyzable branches (uses `getSize`, and so on) → `.unanalyzable` (1 domain value, random at replay)
     ///
     /// Parameters with domain size above `threshold` are converted to boundary-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
-    public static func analyzeBranches(
+    package static func analyzeBranches(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         threshold: UInt64
     ) -> [BranchArgProfile] {
@@ -157,7 +157,7 @@ package enum SequenceCoveringArray {
     /// - `.unanalyzable` → 1
     ///
     /// The mapping records the cumulative offsets so ``buildTree(row:profile:mapping:sequenceLengthRange:)`` can decompose flat domain indices back into branch + argument values.
-    public static func buildProfile(
+    package static func buildProfile(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         branchProfiles: [BranchArgProfile]
@@ -227,7 +227,7 @@ package enum SequenceCoveringArray {
     ///   - mapping: The domain mapping from ``buildProfile(sequenceLength:pickChoices:branchProfiles:)``.
     ///   - sequenceLengthRange: The valid length range for the sequence metadata.
     /// - Returns: A ``ChoiceTree`` suitable for ``Interpreters/replay``, or `nil` on failure.
-    public static func buildTree(
+    package static func buildTree(
         row: CoveringArrayRow,
         profile: FiniteDomainProfile,
         mapping: SCADomainMapping,
@@ -282,7 +282,7 @@ package enum SequenceCoveringArray {
     /// Returns true if every branch in the pick has no parameters (no choices in sub-generators).
     ///
     /// Command-type-only SCA produces `.just` sub-trees that can't satisfy parameterized branches during replay. Use this to gate command-type-only SCA on parameter-free branches.
-    public static func allBranchesParameterFree(
+    package static func allBranchesParameterFree(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> Bool {
         pickChoices.allSatisfy { isParameterFree($0.generator) }
@@ -433,13 +433,13 @@ package enum BranchArgProfile {
 /// Each slot covers `[flatOffset, flatOffset + contribution)` in the flat domain. Used by ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)`` to decompose a flat index into branch selection + argument values.
 package struct SCADomainSlot {
     /// Zero-based index of the branch this slot covers.
-    public let branchIndex: Int
+    package let branchIndex: Int
     /// Starting offset of this slot in the flat domain.
-    public let flatOffset: UInt64
+    package let flatOffset: UInt64
     /// Number of flat domain indices this slot covers.
-    public let contribution: UInt64
+    package let contribution: UInt64
     /// Argument decomposition profile for the branch.
-    public let argProfile: BranchArgProfile
+    package let argProfile: BranchArgProfile
 }
 
 /// Lookup structure for converting flat domain indices to branch + argument values.
@@ -447,9 +447,9 @@ package struct SCADomainSlot {
 /// Shared between ``SequenceCoveringArray/buildProfile(sequenceLength:pickChoices:branchProfiles:)`` and ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)``.
 package struct SCADomainMapping {
     /// Ordered slots mapping flat domain ranges to branches.
-    public let slots: [SCADomainSlot]
+    package let slots: [SCADomainSlot]
     /// Total number of flat domain indices across all slots.
-    public let totalDomainSize: UInt64
+    package let totalDomainSize: UInt64
     /// The pick choices this mapping was built from.
-    public let pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
+    package let pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
 }

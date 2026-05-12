@@ -6,7 +6,7 @@
 import Foundation
 
 /// Generation phase that produced an example.
-public enum OpenPBTStatsPhase: String, Codable, Sendable {
+package enum OpenPBTStatsPhase: String, Codable, Sendable {
     /// Indicates the example was produced during structured covering-array enumeration, which runs first to achieve combinatorial coverage of the generator's parameter space.
     case coverage
     /// Indicates the example was produced during standard PRNG-based sampling, which runs after the coverage phase completes.
@@ -14,22 +14,22 @@ public enum OpenPBTStatsPhase: String, Codable, Sendable {
 }
 
 /// Per-example features attached to each OpenPBTStats line.
-public struct OpenPBTStatsFeatures: Codable, Sendable {
+package struct OpenPBTStatsFeatures: Codable, Sendable {
     /// Generation phase that produced this example.
-    public let phase: OpenPBTStatsPhase
+    package let phase: OpenPBTStatsPhase
     /// Number of choice points in the generated value's choice tree.
-    public let choiceCount: Int
+    package let choiceCount: Int
     /// Arithmetic mean of all normalized complexity scores.
-    public let complexityMean: Double?
+    package let complexityMean: Double?
     /// Median of all normalized complexity scores.
-    public let complexityMedian: Double?
+    package let complexityMedian: Double?
     /// Total filter predicate evaluations during this example's generation.
-    public let filterAttempts: Int?
+    package let filterAttempts: Int?
     /// Filter predicate evaluations that returned false.
-    public let filterRejections: Int?
+    package let filterRejections: Int?
 
     /// Creates a features record with the given generation phase and complexity metrics.
-    public init(
+    package init(
         phase: OpenPBTStatsPhase,
         choiceCount: Int,
         complexityMean: Double?,
@@ -54,28 +54,28 @@ public struct OpenPBTStatsFeatures: Codable, Sendable {
 /// - `status_reason`: required string (empty when no specific reason).
 /// - `coverage`: `null` (Exhaust does not provide per-example line coverage).
 /// - `metadata`: `null` (reserved for future use).
-public struct OpenPBTStatsLine: Sendable {
+package struct OpenPBTStatsLine: Sendable {
     /// Record type, always `"test_case"`.
-    public let type: String
+    package let type: String
     /// Epoch timestamp when the test run started.
-    public let runStart: Double
+    package let runStart: Double
     /// Name of the property under test.
-    public let property: String
+    package let property: String
     /// Outcome status: `"passed"`, `"failed"`, or `"gave_up"`.
-    public let status: String
+    package let status: String
     /// Human-readable reason for the status, empty when not applicable.
-    public let statusReason: String
+    package let statusReason: String
     /// String representation of the generated test example.
-    public let representation: String
+    package let representation: String
     /// Complexity and phase features for this example.
-    public let features: OpenPBTStatsFeatures
+    package let features: OpenPBTStatsFeatures
     /// How this example was produced, for example `"reduced"`.
-    public let howGenerated: String?
+    package let howGenerated: String?
     /// Per-phase timing in seconds, keyed by phase name.
-    public let timing: [String: Double]?
+    package let timing: [String: Double]?
 
     /// Creates a stats line with all required and optional fields.
-    public init(
+    package init(
         type: String,
         runStart: Double,
         property: String,
@@ -134,7 +134,7 @@ extension OpenPBTStatsLine: Codable {
     }
 }
 
-public extension Sequence<OpenPBTStatsLine> {
+package extension Sequence<OpenPBTStatsLine> {
     /// Encodes each record as a JSON object and joins them with newlines to form a JSONL document.
     ///
     /// Records that fail to encode are skipped. Intended for attaching to test outputs consumed by the Tyche visualization extension.

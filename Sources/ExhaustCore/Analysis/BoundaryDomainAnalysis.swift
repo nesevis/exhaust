@@ -10,13 +10,13 @@ package struct BoundaryParameter: @unchecked Sendable {
     // @unchecked Sendable: stores `BoundaryParameterKind`, which in its `.pick` case holds generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     /// Zero-based parameter index in the covering array model.
-    public let index: Int
+    package let index: Int
     /// Synthetic boundary values as raw bit patterns.
-    public let values: [UInt64]
+    package let values: [UInt64]
     /// Number of distinct values in this parameter's synthetic domain.
-    public let domainSize: UInt64
+    package let domainSize: UInt64
     /// The generator operation this parameter was derived from.
-    public let kind: BoundaryParameterKind
+    package let kind: BoundaryParameterKind
 }
 
 /// Classifies the generator operation that produced a boundary parameter, determining which boundary-value strategy (range endpoints, sequence lengths, pick branches, or composite encoding) applies.
@@ -51,13 +51,13 @@ package enum BoundaryParameterKind: @unchecked Sendable {
 /// Maps a range of flat composite indices to a specific sequence length and its element parameters.
 package struct SequenceLengthSlot: Sendable {
     /// The sequence length this slot represents.
-    public let length: UInt64
+    package let length: UInt64
     /// Starting offset of this slot in the composite domain.
-    public let flatOffset: UInt64
+    package let flatOffset: UInt64
     /// Number of composite indices this slot covers. Equals the product of element domain sizes for this length, or one for length zero.
-    public let contribution: UInt64
+    package let contribution: UInt64
     /// Number of analyzed element slots active at this length.
-    public let activeElementCount: Int
+    package let activeElementCount: Int
 }
 
 /// Result of boundary analysis — a synthetic finite domain suitable for covering array generation.
@@ -65,34 +65,34 @@ package struct BoundaryDomainProfile: @unchecked Sendable {
     // @unchecked Sendable: stores `[BoundaryParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     /// The boundary parameters extracted from the generator's choice tree.
-    public let parameters: [BoundaryParameter]
+    package let parameters: [BoundaryParameter]
     /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, ``BoundaryCoveringArrayReplay`` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
-    public let originalTree: ChoiceTree?
+    package let originalTree: ChoiceTree?
 
     /// Creates a profile with the given parameters and optional original tree template.
-    public init(parameters: [BoundaryParameter], originalTree: ChoiceTree? = nil) {
+    package init(parameters: [BoundaryParameter], originalTree: ChoiceTree? = nil) {
         self.parameters = parameters
         self.originalTree = originalTree
     }
 }
 
 extension BoundaryDomainProfile: CoverageProfile {
-    public var domainSizes: [UInt64] {
+    package var domainSizes: [UInt64] {
         parameters.map(\.domainSize)
     }
 
-    public var parameterCount: Int {
+    package var parameterCount: Int {
         parameters.count
     }
 
-    public var totalSpace: UInt64 {
+    package var totalSpace: UInt64 {
         domainSizes.reduce(UInt64(1)) { result, domain in
             let (product, overflow) = result.multipliedReportingOverflow(by: domain)
             return overflow ? .max : product
         }
     }
 
-    public func buildTree(from row: CoveringArrayRow) -> ChoiceTree? {
+    package func buildTree(from row: CoveringArrayRow) -> ChoiceTree? {
         BoundaryCoveringArrayReplay.buildTree(row: row, profile: self)
     }
 }
@@ -104,7 +104,7 @@ package enum BoundaryDomainAnalysis {
     /// Unicode scalar values that are prone to causing problems in string-processing code.
     ///
     /// ``ScalarRangeSet`` converts these to flat indices during construction so that ``computeBoundaryValues(min:max:tag:)`` receives pre-computed, index-space boundary values via the ``TypeTag/character(boundaryIndices:)`` tag.
-    public static let interestingCharacterScalars: [UInt32] = [
+    package static let interestingCharacterScalars: [UInt32] = [
         0, // Null: truncates C-interop strings, invisible in output
         34, // Double quote: delimiter in JSON, SQL, HTML attributes, CSV, and shell commands
         92, // Backslash: escape character in JSON, regex, file paths, shell commands, and string literals
@@ -121,7 +121,7 @@ package enum BoundaryDomainAnalysis {
     ]
 
     /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
-    public static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
+    package static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
         case _ where tag.isFloatingPoint:
             computeFloatBoundaryValues(min: min, max: max, tag: tag)
@@ -401,7 +401,7 @@ package enum DSTTransitions {
     /// Returns DST transition times (seconds since reference date) that fall within [lower, upper] for the given timezone.
     ///
     /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself plus the start and end of its calendar day.
-    public static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
+    package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         guard let zone = TimeZone(identifier: timeZoneID) else { return [] }
 
         let startDate = Date(timeIntervalSinceReferenceDate: TimeInterval(lower))
@@ -447,7 +447,7 @@ package enum DSTTransitions {
 /// Computes real month starts, year starts, and leap day boundaries within a date range.
 package enum CalendarBoundaries {
     /// Returns seconds-since-reference-date for the first and last month start, year start, and any Feb 29 within [lower, upper].
-    public static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
+    package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         let zone = TimeZone(identifier: timeZoneID) ?? .gmt
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone

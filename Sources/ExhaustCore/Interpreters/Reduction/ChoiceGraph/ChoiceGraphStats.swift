@@ -6,39 +6,39 @@
 /// Statistics collected during ``ChoiceGraph`` construction and lifecycle operations.
 ///
 /// Accumulated by the builder during construction and updated by lifecycle methods. Gate logging on `isInstrumented` using the existing ``ExhaustLog`` pattern.
-public struct ChoiceGraphStats: Sendable {
+package struct ChoiceGraphStats: Sendable {
     /// Total node count in the graph (all kinds, active and inactive).
-    public var nodeCount: Int
+    package var nodeCount: Int
 
     /// Number of dependency edges connecting nodes that share a data-flow relationship.
-    public var dependencyEdgeCount: Int
+    package var dependencyEdgeCount: Int
     /// Number of containment edges reflecting parent-child nesting in the choice tree.
-    public var containmentEdgeCount: Int
+    package var containmentEdgeCount: Int
     /// Number of self-similarity edges linking structurally equivalent subtrees.
-    public var selfSimilarityEdgeCount: Int
+    package var selfSimilarityEdgeCount: Int
     /// Number of type-compatibility edges between nodes sharing the same type tag.
-    public var typeCompatibilityEdgeCount: Int
+    package var typeCompatibilityEdgeCount: Int
 
     /// Number of active (non-nil position range) nodes.
-    public var activeNodeCount: Int
+    package var activeNodeCount: Int
 
     /// Number of inactive (nil position range) nodes.
-    public var inactiveNodeCount: Int
+    package var inactiveNodeCount: Int
 
     /// Number of dynamic region rebuilds since graph construction.
-    public var dynamicRegionRebuilds: Int
+    package var dynamicRegionRebuilds: Int
 
     /// Total nodes rebuilt across all dynamic region rebuilds.
-    public var dynamicRegionNodesRebuilt: Int
+    package var dynamicRegionNodesRebuilt: Int
 
     /// Number of sequence-element nodes in the deletion antichain at initial graph construction.
-    public var deletionAntichainSize: Int
+    package var deletionAntichainSize: Int
 
     /// Number of full ``ChoiceGraph/build(from:)`` rebuilds triggered by structural acceptances during reduction.
-    public var fullGraphRebuilds: Int
+    package var fullGraphRebuilds: Int
 
     /// Creates empty stats.
-    public init() {
+    package init() {
         nodeCount = 0
         dependencyEdgeCount = 0
         containmentEdgeCount = 0
