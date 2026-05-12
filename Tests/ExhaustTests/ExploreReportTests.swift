@@ -91,7 +91,7 @@ struct CoOccurrenceMatrixTests {
         #expect(matrix.count(direction: 1, direction: 1) == 0)
     }
 
-    @Test("Total sample count is diagonal sum plus unmatched")
+    @Test("Total sample count tracks actual samples, not direction hits")
     func totalSampleCount() {
         var matrix = CoOccurrenceMatrix(directionCount: 2)
         matrix.recordSample(matchingDirections: [0])
@@ -100,14 +100,17 @@ struct CoOccurrenceMatrixTests {
         #expect(matrix.count(direction: 0, direction: 0) == 2)
         #expect(matrix.count(direction: 1, direction: 1) == 1)
         #expect(matrix.unmatchedCount == 1)
-        #expect(matrix.totalSampleCount == 4)
+        #expect(matrix.totalSampleCount == 3)
     }
 
     @Test("Entangled pairs detects redundant directions")
     func entangledPairsDetectsRedundancy() {
         var matrix = CoOccurrenceMatrix(directionCount: 2)
-        for _ in 0 ..< 100 {
+        for _ in 0 ..< 90 {
             matrix.recordSample(matchingDirections: [0, 1])
+        }
+        for _ in 0 ..< 10 {
+            matrix.recordSample(matchingDirections: [])
         }
         let pairs = matrix.entangledPairs(threshold: 0.5)
         #expect(pairs.count == 1)

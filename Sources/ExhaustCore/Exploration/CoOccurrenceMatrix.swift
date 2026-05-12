@@ -19,11 +19,15 @@ public struct CoOccurrenceMatrix: Sendable {
     /// Samples that satisfied no declared direction.
     public var unmatchedCount: Int
 
+    /// Total samples recorded via ``recordSample(matchingDirections:)``.
+    public private(set) var sampleCount: Int
+
     /// Creates a zero-filled matrix for the given number of directions.
     public init(directionCount: Int) {
         self.directionCount = directionCount
         cells = Array(repeating: 0, count: directionCount * directionCount)
         unmatchedCount = 0
+        sampleCount = 0
     }
 
     /// Returns the count for the pair (i, j).
@@ -41,6 +45,7 @@ public struct CoOccurrenceMatrix: Sendable {
 
     /// Records a sample's full direction membership set. Updates diagonal entries and all pairwise off-diagonal cells.
     public mutating func recordSample(matchingDirections: [Int]) {
+        sampleCount += 1
         if matchingDirections.isEmpty {
             unmatchedCount += 1
             return
@@ -55,13 +60,9 @@ public struct CoOccurrenceMatrix: Sendable {
         }
     }
 
-    /// Total samples recorded in the matrix (sum of diagonal entries plus unmatched).
+    /// Total samples recorded in the matrix.
     public var totalSampleCount: Int {
-        var diagonalSum = 0
-        for index in 0 ..< directionCount {
-            diagonalSum += cells[index * directionCount + index]
-        }
-        return diagonalSum + unmatchedCount
+        sampleCount
     }
 
     // MARK: - Diagnostics
