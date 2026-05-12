@@ -44,6 +44,16 @@ enum GraphOperation {
         return false
     }
 
+    /// Whether this operation's scope data depends on leaf values (ChoiceValue, validRange, distance-to-target) rather than just graph topology. Value-dependent sources must be rebuilt after any value change, even structurally-identical ones.
+    var isValueDependent: Bool {
+        switch self {
+        case .minimize, .exchange:
+            return true
+        case .remove, .replace, .permute, .migrate, .reorder:
+            return false
+        }
+    }
+
     /// Per-scope discriminator for the rejection cache. Branch pivot uses the target branch ID so that rejecting branch A at a pick site does not block branch B at the same site. All other operations return 0.
     var scopeSubDiscriminator: UInt64 {
         if case let .replace(.branchPivot(_, targetBranchID)) = self {
