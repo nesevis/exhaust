@@ -47,7 +47,7 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> FreerMonad<Operation, NewValue> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
         return Gen.liftF(.transform(
             kind: .bind(
                 fingerprint: fingerprint,
@@ -85,7 +85,7 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
         return Gen.liftF(.transform(
             kind: .bind(
                 fingerprint: fingerprint,

@@ -32,7 +32,7 @@ package extension Gen {
         fileID: String = #fileID,
         line: UInt = #line
     ) -> ReflectiveGenerator<Output> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line)
         return .impure(operation:
             .classify(
                 gen: generator.erase(),

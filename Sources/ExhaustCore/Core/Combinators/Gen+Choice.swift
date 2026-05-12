@@ -28,7 +28,7 @@ package extension Gen {
         precondition(choices.allSatisfy { $0.weight > 0 }, "Weights must be greater than zero")
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call ensures the final monad has the correct `Output` type.
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
 
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)

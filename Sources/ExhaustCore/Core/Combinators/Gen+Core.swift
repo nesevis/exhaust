@@ -7,6 +7,16 @@
 package enum Gen {
     /// Set by the generation pipeline to signal that ``.filter`` is being constructed during interpretation (inside a bind continuation) rather than at top level. When true, ``.filter`` defers CGS tuning to the interpreter's fingerprint-keyed cache instead of tuning eagerly.
     @TaskLocal package static var isInterpreting: Bool = false
+
+    /// Computes a per-site fingerprint from source location components.
+    @inline(__always)
+    static func sourceFingerprint(
+        fileID: String,
+        line: UInt,
+        column: UInt = 0
+    ) -> UInt64 {
+        fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+    }
 }
 
 package extension Gen {
