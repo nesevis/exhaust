@@ -76,6 +76,11 @@ protocol GraphEncoder {
     /// The default returns true, which is correct for encoders that do not cache per-leaf sequence indices (structural, swap, reorder, and similar single-shot encoders).
     func hasValidPositions(in sequence: ChoiceSequence) -> Bool
 
+    /// Whether any replacement probe was rejected because the candidate was not shortlex-smaller than the original.
+    ///
+    /// The scheduler uses this to decide whether a relax round is worth attempting after structural reduction completes. Default `false` for non-structural encoders.
+    var hadReplacementShortlexRejection: Bool { get }
+
     /// Convergence records accumulated during the probe loop.
     ///
     /// Each entry maps a graph **nodeID** to the ``ConvergedOrigin`` at which the search converged for that leaf. The scheduler harvests these after the probe loop and writes them to the graph via ``ChoiceGraph/recordConvergence(byNodeID:)``. NodeID keying (rather than sequence index) is required so the records survive in-pass position shifts triggered by ``refreshState(graph:sequence:)``.
@@ -92,6 +97,9 @@ extension GraphEncoder {
     var requiresExactDecoder: Bool {
         false
     }
+
+    /// Default: no replacement shortlex rejections.
+    var hadReplacementShortlexRejection: Bool { false }
 
     /// Default: no partial convergence to flush.
     mutating func flushPartialConvergence() {}

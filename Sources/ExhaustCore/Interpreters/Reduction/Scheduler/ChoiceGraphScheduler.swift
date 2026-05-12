@@ -264,8 +264,7 @@ enum ChoiceGraphScheduler {
                     }
 
                     if hadReplacementShortlexRejection == false,
-                       let structuralEncoder = encoder as? GraphStructuralEncoder,
-                       structuralEncoder.hadReplacementShortlexRejection
+                       encoder.hadReplacementShortlexRejection
                     {
                         hadReplacementShortlexRejection = true
                     }
