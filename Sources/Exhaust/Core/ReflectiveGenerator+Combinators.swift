@@ -44,37 +44,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         return Gen.contramap(erasedBackward, erasedGen)
     }
 
-    /// Lifts this generator's output from `T` to `T?` so reflection can distinguish the `.some` branch from `.none`.
-    ///
-    /// Without this, reflecting on a `nil` target has no way to prune the non-optional path: the reflector would attempt to decompose `nil` as if it were a valid `T`, and fail. With it, `nil` throws `ReflectionError.reflectedNil`, which the enclosing `pick` catches to eliminate that branch.
-    ///
-    /// If you want a generator that *chooses* between `nil` and a value, use ``optional()``: it wraps `.asOptional()` inside a weighted pick (1:5 nil-to-some).
-    ///
-    /// ```swift
-    /// let gen = #gen(.int(in: 0...10)).asOptional()
-    /// ```
-    ///
-    /// - Returns: A generator that produces optional versions of the original values.
-    func asOptional() -> ReflectiveGenerator<Value?> {
-        let description = String(describing: Value.self)
-        return .impure(operation: .contramap(
-            transform: { result in
-                // Backward pass. The calling function is expecting a non-optional, so we throw the `reflectedNil` error to indicate to the consumer — which should only be a `pick` exploring the nil and non-nil options — that they are trying to parse the `.some` branch using the `.none` value during reflection
-                // TODO: Can we verify that this closure is executed from a `pick`?
-                if let optional = result as? Value?, optional == nil {
-                    throw Interpreters.ReflectionError.reflectedNil(
-                        type: description,
-                        resultType: String(describing: type(of: result))
-                    )
-                }
-                return result as! Value
-            },
-            next: erase()
-        )) { result in
-            .pure(result as? Value)
-        }
-    }
-
     /// Categorizes generated values for statistical analysis.
     ///
     /// Wraps this generator with classification predicates that track how frequently different types of test data are generated.

@@ -98,7 +98,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func optional() -> ReflectiveGenerator<Value?> {
         Gen.pick(choices: [
             (1, Gen.just(.none)),
-            (5, asOptional()),
+            (5, liftToOptional()),
         ])
     }
 }
