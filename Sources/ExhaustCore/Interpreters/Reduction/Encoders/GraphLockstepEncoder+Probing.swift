@@ -38,7 +38,7 @@ extension GraphLockstepEncoder {
             plans: plans,
             planIndex: 0,
             probePhase: .directShot,
-            stepper: MaxBinarySearchStepper(lo: 0, hi: 0),
+            stepper: BinarySearchStepper(lo: 0, hi: 0, direction: .findLargest),
             lastEmittedCandidate: nil,
             lastWasDirectShot: false
         ))
@@ -133,7 +133,7 @@ extension GraphLockstepEncoder {
                 state.lastWasDirectShot = false
 
                 let plan = state.plans[state.planIndex]
-                state.stepper = MaxBinarySearchStepper(lo: 0, hi: plan.distance)
+                state.stepper = BinarySearchStepper(lo: 0, hi: plan.distance, direction: .findLargest)
                 guard let firstDelta = state.stepper.start() else {
                     state.planIndex += 1
                     state.probePhase = .directShot

@@ -132,60 +132,40 @@ struct GraphValueEncoder: GraphEncoder {
 
     /// Directional search stepper for bit-pattern-space search.
     ///
-    /// Uses interpolation search for large ranges (`downward` / `upward`) and plain binary search for small ranges (`downwardBinary` / `upwardBinary`). The threshold is ``InterpolationSearchStepper/binaryThreshold``.
+    /// Uses interpolation search for large ranges and plain binary search for small ranges. The threshold is ``InterpolationSearchStepper/binaryThreshold``.
     enum DirectionalStepper {
-        case downward(InterpolationSearchStepper)
-        case downwardBinary(BinarySearchStepper)
-        case upward(MaxInterpolationSearchStepper)
-        case upwardBinary(MaxBinarySearchStepper)
+        case binary(BinarySearchStepper)
+        case interpolation(InterpolationSearchStepper)
 
         var bestAccepted: UInt64 {
             switch self {
-            case let .downward(stepper): stepper.bestAccepted
-            case let .downwardBinary(stepper): stepper.bestAccepted
-            case let .upward(stepper): stepper.bestAccepted
-            case let .upwardBinary(stepper): stepper.bestAccepted
+            case let .binary(stepper): stepper.bestAccepted
+            case let .interpolation(stepper): stepper.bestAccepted
             }
         }
 
         mutating func start() -> UInt64? {
             switch self {
-            case var .downward(stepper):
+            case var .binary(stepper):
                 let value = stepper.start()
-                self = .downward(stepper)
+                self = .binary(stepper)
                 return value
-            case var .downwardBinary(stepper):
+            case var .interpolation(stepper):
                 let value = stepper.start()
-                self = .downwardBinary(stepper)
-                return value
-            case var .upward(stepper):
-                let value = stepper.start()
-                self = .upward(stepper)
-                return value
-            case var .upwardBinary(stepper):
-                let value = stepper.start()
-                self = .upwardBinary(stepper)
+                self = .interpolation(stepper)
                 return value
             }
         }
 
         mutating func advance(lastAccepted: Bool) -> UInt64? {
             switch self {
-            case var .downward(stepper):
+            case var .binary(stepper):
                 let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .downward(stepper)
+                self = .binary(stepper)
                 return value
-            case var .downwardBinary(stepper):
+            case var .interpolation(stepper):
                 let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .downwardBinary(stepper)
-                return value
-            case var .upward(stepper):
-                let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .upward(stepper)
-                return value
-            case var .upwardBinary(stepper):
-                let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .upwardBinary(stepper)
+                self = .interpolation(stepper)
                 return value
             }
         }

@@ -453,24 +453,24 @@ extension GraphValueEncoder {
                 let effectiveLo = validWarmStart?.bound ?? targetBitPattern
                 let range = currentBitPattern - effectiveLo
                 if range < InterpolationSearchStepper.binaryThreshold {
-                    state.stepper = .downwardBinary(
+                    state.stepper = .binary(
                         BinarySearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 } else {
-                    state.stepper = .downward(
+                    state.stepper = .interpolation(
                         InterpolationSearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 }
             } else {
                 let effectiveHi = validWarmStart?.bound ?? targetBitPattern
                 let range = effectiveHi - currentBitPattern
-                if range < MaxInterpolationSearchStepper.binaryThreshold {
-                    state.stepper = .upwardBinary(
-                        MaxBinarySearchStepper(lo: currentBitPattern, hi: effectiveHi)
+                if range < InterpolationSearchStepper.binaryThreshold {
+                    state.stepper = .binary(
+                        BinarySearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
                     )
                 } else {
-                    state.stepper = .upward(
-                        MaxInterpolationSearchStepper(lo: currentBitPattern, hi: effectiveHi)
+                    state.stepper = .interpolation(
+                        InterpolationSearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
                     )
                 }
             }

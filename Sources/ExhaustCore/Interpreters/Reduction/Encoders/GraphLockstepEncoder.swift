@@ -47,7 +47,7 @@ struct GraphLockstepEncoder: GraphEncoder {
         var plans: [LockstepWindowPlan]
         var planIndex: Int
         var probePhase: LockstepProbePhase
-        var stepper: MaxBinarySearchStepper
+        var stepper: BinarySearchStepper
         var lastEmittedCandidate: ChoiceSequence?
         var lastWasDirectShot: Bool
     }

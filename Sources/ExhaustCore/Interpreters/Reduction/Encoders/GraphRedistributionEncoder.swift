@@ -39,7 +39,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
     struct RedistributionState {
         let pairs: [(sourceIndex: Int, sinkIndex: Int, sourceTag: TypeTag, sinkTag: TypeTag, maxDelta: UInt64, mixedContext: MixedRedistributionContext?)]
         var pairIndex: Int
-        var stepper: MaxBinarySearchStepper?
+        var stepper: BinarySearchStepper?
         var didEmitCandidate: Bool
         var lastEmittedCandidate: ChoiceSequence?
         var triedFullDelta: Bool

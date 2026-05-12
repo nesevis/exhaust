@@ -5,21 +5,20 @@
 //  Created by Chris Kolbu on 12/4/2026.
 //
 
-/// Searches for the **smallest** accepted value using interpolation search with binary search fallback.
+/// Step-by-step driver for interpolation search with binary search fallback over a `UInt64` range.
 ///
-/// Probes near `lo` (the reduction target) during the interpolation phase, under the prior that most values can be reduced to or near the target. The divisor `K` starts at 4 (probing at 25% of the range from `lo`) and halves on rejection to K=2 (binary search). On acceptance, `K` resets to 4 for the narrowed interval.
+/// In `.findSmallest` mode, probes bias toward `lo` under the prior that the boundary is near the reduction target. In `.findLargest` mode, probes bias toward `hi`. The divisor `K` starts at 16 and halves on rejection (flooring at 2, which is pure binary search). On acceptance, `K` resets to 16 for the narrowed interval.
 ///
-/// Transitions to pure binary search when the interval shrinks below 1024 values, where the interpolation estimate provides negligible advantage over midpoint bisection.
-///
-/// Probe-point calculation uses `range / divisor`, which is safe from overflow because `range` fits in `UInt64` by construction.
+/// Transitions to pure binary search when the interval shrinks below ``binaryThreshold`` values.
 struct InterpolationSearchStepper {
     // MARK: - State
 
+    private let direction: SearchDirection
     private var lo: UInt64
     private var hi: UInt64
     private var lastProbe: UInt64 = 0
     private var converged = false
-    private var divisor: UInt64 = 16
+    private var divisor: UInt64 = Self.initialDivisor
 
     /// The threshold below which the stepper switches from interpolation to binary search.
     static let binaryThreshold: UInt64 = 1024
@@ -27,18 +26,23 @@ struct InterpolationSearchStepper {
     /// The initial divisor for the interpolation phase.
     private static let initialDivisor: UInt64 = 16
 
-    /// The best accepted value (smallest for a toward-target search).
+    /// The best accepted value found so far.
     private(set) var bestAccepted: UInt64
 
     // MARK: - Init
 
     /// - Parameters:
-    ///   - lo: The target value (semantic simplest / reduction target).
-    ///   - hi: The current value.
-    init(lo: UInt64, hi: UInt64) {
+    ///   - lo: The lower bound of the search range.
+    ///   - hi: The upper bound of the search range.
+    ///   - direction: Whether to find the smallest or largest accepted value.
+    init(lo: UInt64, hi: UInt64, direction: SearchDirection = .findSmallest) {
+        self.direction = direction
         self.lo = lo
         self.hi = hi
-        bestAccepted = hi
+        switch direction {
+        case .findSmallest: bestAccepted = hi
+        case .findLargest: bestAccepted = lo
+        }
     }
 
     /// Returns the first probe value, or `nil` if already converged.
@@ -55,22 +59,43 @@ struct InterpolationSearchStepper {
     mutating func advance(lastAccepted: Bool) -> UInt64? {
         guard converged == false else { return nil }
 
-        if lastAccepted {
-            bestAccepted = lastProbe
-            hi = lastProbe
-            // Reset divisor on acceptance — the "boundary near lo" prior is confirmed by the acceptance.
-            divisor = Self.initialDivisor
-        } else {
-            lo = lastProbe + 1
-            // Halve divisor on rejection, flooring at 2 (binary search).
-            if divisor > 2 {
-                divisor /= 2
+        switch direction {
+        case .findSmallest:
+            if lastAccepted {
+                bestAccepted = lastProbe
+                hi = lastProbe
+                divisor = Self.initialDivisor
+            } else {
+                lo = lastProbe + 1
+                if divisor > 2 { divisor /= 2 }
             }
-        }
+            guard lo < hi else {
+                converged = true
+                return nil
+            }
 
-        guard lo < hi else {
-            converged = true
-            return nil
+        case .findLargest:
+            if lastAccepted {
+                bestAccepted = lastProbe
+                let (next, overflow) = lastProbe.addingReportingOverflow(1)
+                if overflow {
+                    converged = true
+                    return nil
+                }
+                lo = next
+                divisor = Self.initialDivisor
+            } else {
+                guard lastProbe > lo else {
+                    converged = true
+                    return nil
+                }
+                hi = lastProbe - 1
+                if divisor > 2 { divisor /= 2 }
+            }
+            guard lo <= hi else {
+                converged = true
+                return nil
+            }
         }
 
         lastProbe = probePoint()
@@ -79,23 +104,30 @@ struct InterpolationSearchStepper {
 
     // MARK: - Probe Point
 
-    /// Computes the next probe point based on the current phase.
-    ///
-    /// In interpolation phase (`hi - lo >= binaryThreshold`), probes at `lo + range / divisor`. In binary phase, probes at the midpoint.
     private func probePoint() -> UInt64 {
         let range = hi - lo
         if range < Self.binaryThreshold {
-            // Binary phase: midpoint.
-            return lo + range / 2
+            switch direction {
+            case .findSmallest:
+                return lo + range / 2
+            case .findLargest:
+                return lo + (range + 1) / 2
+            }
         }
-        // Interpolation phase: biased toward lo.
-        //   probe = lo + range / divisor
-        // For power-of-two divisors this is just a shift.
         let step = range / divisor
-        // Guard against step == 0 (divisor > range, shouldn't happen given the binaryThreshold gate, but be safe).
         if step == 0 {
-            return lo + range / 2
+            switch direction {
+            case .findSmallest:
+                return lo + range / 2
+            case .findLargest:
+                return lo + (range + 1) / 2
+            }
         }
-        return lo + step
+        switch direction {
+        case .findSmallest:
+            return lo + step
+        case .findLargest:
+            return hi - step
+        }
     }
 }
