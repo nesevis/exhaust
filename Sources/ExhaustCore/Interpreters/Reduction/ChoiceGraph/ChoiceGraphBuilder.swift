@@ -58,7 +58,8 @@ struct ChoiceGraphBuilder {
                 )),
                 positionRange: isActive ? (offset ... offset) : nil,
                 children: [],
-                parent: parent
+                parent: parent,
+                choicePath: path
             )
             if let parent {
                 containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -70,7 +71,8 @@ struct ChoiceGraphBuilder {
                 kind: .just,
                 positionRange: isActive ? (offset ... offset) : nil,
                 children: [],
-                parent: parent
+                parent: parent,
+                choicePath: path
             )
             if let parent {
                 containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -134,7 +136,8 @@ struct ChoiceGraphBuilder {
             )),
             positionRange: nil,
             children: [],
-            parent: parent
+            parent: parent,
+            choicePath: path
         )
         if let parent {
             containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -154,7 +157,8 @@ struct ChoiceGraphBuilder {
                 kind: nodes[nodeID].kind,
                 positionRange: nil,
                 children: childIDs,
-                parent: parent
+                parent: parent,
+                choicePath: path
             )
             return 0
         }
@@ -197,7 +201,8 @@ struct ChoiceGraphBuilder {
             )),
             positionRange: offset ... (offset + consumed - 1),
             children: childIDs,
-            parent: parent
+            parent: parent,
+            choicePath: path
         )
         return consumed
     }
@@ -227,7 +232,8 @@ struct ChoiceGraphBuilder {
             kind: .zip(ZipMetadata(isOpaque: isOpaque)),
             positionRange: nil,
             children: [],
-            parent: parent
+            parent: parent,
+            choicePath: path
         )
         if let parent {
             containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -265,7 +271,8 @@ struct ChoiceGraphBuilder {
             kind: nodes[nodeID].kind,
             positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
             children: childIDs,
-            parent: parent
+            parent: parent,
+            choicePath: path
         )
         return consumed
     }
@@ -289,7 +296,8 @@ struct ChoiceGraphBuilder {
             )),
             positionRange: nil,
             children: [],
-            parent: parent
+            parent: parent,
+            choicePath: path
         )
         if let parent {
             containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -340,7 +348,8 @@ struct ChoiceGraphBuilder {
                 )),
                 positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
                 children: childIDs,
-                parent: parent
+                parent: parent,
+                choicePath: path
             )
         }
         return consumed
@@ -379,7 +388,8 @@ struct ChoiceGraphBuilder {
             )),
             positionRange: nil,
             children: [],
-            parent: parent
+            parent: parent,
+            choicePath: path
         )
         if let parent {
             containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -389,7 +399,7 @@ struct ChoiceGraphBuilder {
 
         let innerStartID = nextNodeID
         if isActive {
-            let innerConsumed = walk(inner, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth, path: path)
+            let innerConsumed = walk(inner, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth, path: path + [.bindInner])
             consumed += innerConsumed
         } else {
             walk(inner, offset: 0, parent: nodeID, bindDepth: bindDepth, path: [], isActive: false)
@@ -417,7 +427,8 @@ struct ChoiceGraphBuilder {
             kind: nodes[nodeID].kind,
             positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
             children: childIDs,
-            parent: parent
+            parent: parent,
+            choicePath: path
         )
         return consumed
     }
@@ -444,7 +455,8 @@ struct ChoiceGraphBuilder {
         kind: ChoiceGraphNodeKind,
         positionRange: ClosedRange<Int>?,
         children: [Int],
-        parent: Int?
+        parent: Int?,
+        choicePath: ChoicePath
     ) -> Int {
         let nodeID = nextNodeID
         nextNodeID += 1
@@ -453,7 +465,8 @@ struct ChoiceGraphBuilder {
             kind: kind,
             positionRange: positionRange,
             children: children,
-            parent: parent
+            parent: parent,
+            choicePath: choicePath
         ))
         return nodeID
     }

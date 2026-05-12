@@ -71,7 +71,7 @@ extension ChoiceGraphScheduler {
             return false
         }
 
-        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats).graph
         var exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
 
         Self.logReducer("relax_round_exploitation_start", isInstrumented: state.isInstrumented, metadata: [
@@ -118,7 +118,7 @@ extension ChoiceGraphScheduler {
             }
 
             if outcome.accepted, outcome.requiresRebuild {
-                state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats).graph
                 exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
             }
         }
@@ -134,7 +134,7 @@ extension ChoiceGraphScheduler {
         state.sequence = checkpointSequence
         state.tree = checkpointTree
         state.output = checkpointOutput
-        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats).graph
         transferConvergence(checkpointConvergence, to: &state.graph)
 
         Self.logReducer("relax_round_rolled_back", isInstrumented: state.isInstrumented, metadata: [

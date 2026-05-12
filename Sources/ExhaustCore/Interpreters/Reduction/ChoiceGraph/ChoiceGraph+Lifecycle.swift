@@ -32,11 +32,17 @@ extension ChoiceGraph {
         return application
     }
 
-    /// Rewrites a single leaf's ``ChooseBitsMetadata/value`` in place.
+    /// Rewrites a single leaf's ``ChooseBitsMetadata/value`` in place, tracking the touched node.
     private mutating func applyLeafValueWrite(
         _ change: LeafChange,
         into application: inout ChangeApplication
     ) {
+        applyLeafValueWrite(change)
+        application.touchedNodeIDs.insert(change.leafNodeID)
+    }
+
+    /// Rewrites a single leaf's ``ChooseBitsMetadata/value`` in place.
+    package mutating func applyLeafValueWrite(_ change: LeafChange) {
         guard change.leafNodeID < nodes.count else { return }
         guard case let .chooseBits(metadata) = nodes[change.leafNodeID].kind else { return }
         let updatedMetadata = ChooseBitsMetadata(
@@ -47,6 +53,5 @@ extension ChoiceGraph {
             convergedOrigin: metadata.convergedOrigin
         )
         nodes[change.leafNodeID] = nodes[change.leafNodeID].with(kind: .chooseBits(updatedMetadata))
-        application.touchedNodeIDs.insert(change.leafNodeID)
     }
 }

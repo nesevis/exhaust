@@ -38,6 +38,18 @@ struct GraphStructuralEncoder: GraphEncoder {
         let graph: ChoiceGraph
     }
 
+    mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
+        probe = nil
+        probeCandidate = nil
+        if let aligned = coveringAlignedState {
+            coveringAlignedState = CoveringAlignedState(
+                scope: aligned.scope,
+                baseSequence: sequence,
+                graph: graph
+            )
+        }
+    }
+
     mutating func start(scope: EncoderInput) {
         probe = nil
         probeCandidate = nil

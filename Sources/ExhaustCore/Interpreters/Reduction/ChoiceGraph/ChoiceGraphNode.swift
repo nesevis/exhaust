@@ -24,6 +24,9 @@ package struct ChoiceGraphNode {
     /// Nil only for the root. Used by scope queries to find enclosing bind and pick contexts for dependency analysis.
     public let parent: Int?
 
+    /// Structural address from the tree root to this node. Stable across rebuilds as long as the tree shape above this node does not change. Two nodes in successive graphs with the same ``ChoicePath`` are the same logical node.
+    public let choicePath: ChoicePath
+
     /// Returns a copy with the specified fields replaced. Unspecified fields carry forward from `self`.
     ///
     /// `positionRange` uses a double-optional: `.none` keeps the current value, `.some(nil)` sets it to nil, `.some(.some(range))` sets it to `range`.
@@ -37,7 +40,8 @@ package struct ChoiceGraphNode {
             kind: kind ?? self.kind,
             positionRange: positionRange ?? self.positionRange,
             children: children ?? self.children,
-            parent: parent
+            parent: parent,
+            choicePath: choicePath
         )
     }
 }

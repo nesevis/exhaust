@@ -204,6 +204,7 @@ enum ChoiceGraphScheduler {
                     continue
 
                 case .rematerialize:
+                    // Re-materialization with `materializePicks` generates fresh inactive branch content via PRNG fallback, invalidating self-similarity edges and replacement candidates from the old graph. The structural source split cannot be used here.
                     if case let .success(_, fullTree, _) = Materializer.materializeAny(
                         state.gen,
                         prefix: state.sequence,
@@ -214,7 +215,8 @@ enum ChoiceGraphScheduler {
                         state.tree = fullTree
                     }
                     let graphBeforeRebuild = state.graph
-                    state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                    let rebuild = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                    state.graph = rebuild.graph
                     sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
                     graphIsStripped = false
                     continue
@@ -299,7 +301,8 @@ enum ChoiceGraphScheduler {
                         }
 
                         let graphBeforeRebuild = state.graph
-                        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                        let rebuild = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                        state.graph = rebuild.graph
                         graphIsStripped = treeIsStripped
 
                         if let boundRange = boundPositionRange {
@@ -312,12 +315,33 @@ enum ChoiceGraphScheduler {
                                 state.graph.nodes[nodeID] = state.graph.nodes[nodeID].with(kind: .chooseBits(metadata))
                             }
                         }
-                        scopeRejectionCache.clear()
-                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
+                        if rebuild.diff.isStructurallyIdentical {
+                            // Topology unchanged — keep structural sources (removal, replacement,
+                            // migration, permutation) and only rebuild value-dependent sources
+                            // (minimization, exchange).
+                            let structuralSources = sources.filter { source in
+                                guard let sorted = source as? SortedCandidateSource,
+                                      let first = sorted.peekTransformation
+                                else {
+                                    // Non-SortedCandidateSource (BatchRemovalSource, etc.) are structural.
+                                    return true
+                                }
+                                return first.operation.isValueDependent == false
+                            }
+                            sources = structuralSources
+                                + CandidateSourceBuilder.buildValueSources(from: state.graph, deferBindInner: deferBindInner)
 
-                        Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
-                            "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
-                        ])
+                            Self.logReducer("graph_value_only_rebuild", isInstrumented: state.isInstrumented, metadata: [
+                                "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
+                            ])
+                        } else {
+                            scopeRejectionCache.clear()
+                            sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
+
+                            Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
+                                "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
+                            ])
+                        }
                     }
                 }
             }
@@ -399,7 +423,7 @@ enum ChoiceGraphScheduler {
         from tree: ChoiceTree,
         replacing oldGraph: ChoiceGraph,
         stats: inout ReductionStats
-    ) -> ChoiceGraph {
+    ) -> (graph: ChoiceGraph, diff: ChoiceGraphDiff) {
         stats.graphStats.dynamicRegionRebuilds += oldGraph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += oldGraph.graphStats.dynamicRegionNodesRebuilt
         let oldConvergence = extractAllConvergence(from: oldGraph)
@@ -412,8 +436,9 @@ enum ChoiceGraphScheduler {
         )
         newGraph.observeBindTopologies(tree: tree)
         transferConvergence(oldConvergence, to: &newGraph)
+        let diff = ChoiceGraphDiff.diff(old: oldGraph, new: newGraph)
         stats.graphStats.fullGraphRebuilds += 1
-        return newGraph
+        return (graph: newGraph, diff: diff)
     }
 
     // MARK: - Reorder Pass
