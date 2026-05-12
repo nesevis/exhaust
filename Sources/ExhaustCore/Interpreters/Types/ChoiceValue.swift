@@ -67,21 +67,6 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
         ChoiceValue(tag.simplestBitPattern, tag: tag)
     }
 
-    /// Returns a shortlex complexity score: the absolute magnitude of this value as a `UInt64`.
-    public var complexity: UInt64 {
-        if tag.isFloatingPoint {
-            let absValue = abs(decodedDoubleValue)
-            if absValue >= Double(UInt64.max) || absValue.isNaN || absValue.isInfinite {
-                return UInt64.max
-            }
-            return UInt64(absValue)
-        } else if tag.isSigned {
-            return UInt64(abs(decodedSignedValue))
-        } else {
-            return bitPattern64
-        }
-    }
-
     /// Returns whether this value's bit pattern falls within the given range.
     @inline(__always)
     func fits(in range: ClosedRange<UInt64>?) -> Bool {

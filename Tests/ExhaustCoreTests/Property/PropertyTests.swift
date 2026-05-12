@@ -247,45 +247,6 @@ struct ReplayIdempotencePropertyTests {
     }
 }
 
-// MARK: - ChoiceValue Properties
-
-@Suite("ChoiceValue Complexity")
-struct ChoiceValuePropertyTests {
-    @Test("semanticSimplest always has complexity <= the original value")
-    func semanticSimplestMinimalComplexity() throws {
-        // Unsigned
-        try exhaustCheck(Gen.choose(in: UInt64(0) ... 100_000)) { rawValue in
-            let value = ChoiceValue(rawValue, tag: .uint64)
-            return value.semanticSimplest.complexity <= value.complexity
-        }
-
-        // Signed
-        try exhaustCheck(Gen.choose(in: Int64(-50000) ... 50000)) { rawValue in
-            let value = ChoiceValue(rawValue, tag: .int64)
-            return value.semanticSimplest.complexity <= value.complexity
-        }
-
-        // Floating
-        try exhaustCheck(Gen.choose(in: -1000.0 ... 1000.0) as ReflectiveGenerator<Double>) { rawValue in
-            let value = ChoiceValue(rawValue, tag: .double)
-            return value.semanticSimplest.complexity <= value.complexity
-        }
-    }
-
-    @Test("Unsigned ChoiceValue complexity strictly increases with value")
-    func unsignedComplexityMonotonicity() throws {
-        try exhaustCheck(Gen.zip(
-            Gen.choose(in: UInt64(0) ... 100_000),
-            Gen.choose(in: UInt64(0) ... 100_000)
-        )) { a, b in
-            guard a < b else { return true }
-            let va = ChoiceValue(a, tag: .uint64)
-            let vb = ChoiceValue(b, tag: .uint64)
-            return va.complexity < vb.complexity
-        }
-    }
-}
-
 // MARK: - shortlexKey / fromShortlexKey Properties
 
 @Suite("ShortlexKey Roundtrip")
