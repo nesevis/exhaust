@@ -315,11 +315,32 @@ enum ChoiceGraphScheduler {
                             }
                         }
                         scopeRejectionCache.clear()
-                        sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
+                        if rebuild.diff.isStructurallyIdentical {
+                            // Topology unchanged — keep structural sources (removal, replacement,
+                            // migration, permutation) and only rebuild value-dependent sources
+                            // (minimization, exchange).
+                            let structuralSources = sources.filter { source in
+                                guard let sorted = source as? SortedCandidateSource,
+                                      let first = sorted.peekTransformation
+                                else {
+                                    // Non-SortedCandidateSource (BatchRemovalSource, etc.) are structural.
+                                    return true
+                                }
+                                return first.operation.isValueDependent == false
+                            }
+                            sources = structuralSources
+                                + CandidateSourceBuilder.buildValueSources(from: state.graph, deferBindInner: deferBindInner)
 
-                        Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
-                            "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
-                        ])
+                            Self.logReducer("graph_value_only_rebuild", isInstrumented: state.isInstrumented, metadata: [
+                                "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
+                            ])
+                        } else {
+                            sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
+
+                            Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
+                                "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
+                            ])
+                        }
                     }
                 }
             }
