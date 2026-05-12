@@ -7,19 +7,14 @@ import ExhaustCore
 
 // MARK: - Int128 / UInt128 generators
 
-//
-// These are composite generators built from two UInt64 halves using `Gen.chooseBits`.
-// Limitations:
-// - Test case reduction operates on each half independently (high half first, then low)
-// - Range-constrained generation is not supported
-// - Size scaling is not supported
-
 public extension ReflectiveGenerator {
-    /// Generates arbitrary `UInt128` values from two `UInt64` halves.
+    /// Generates arbitrary ``UInt128`` values across the full range.
     ///
     /// ```swift
     /// let gen = #gen(.uint128())
     /// ```
+    ///
+    /// - Note: Test case reduction operates on each half of the value independently. Range-constrained generation and size-scaled generation are not supported.
     static func uint128() -> ReflectiveGenerator<UInt128> {
         Gen.zip(
             Gen.chooseBits(),
@@ -35,13 +30,15 @@ public extension ReflectiveGenerator {
         )
     }
 
-    /// Generates arbitrary `Int128` values from two `UInt64` halves.
+    /// Generates arbitrary ``Int128`` values across the full range.
     ///
-    /// The high half uses sign-bit XOR so that test case reduction naturally drives toward zero: the mapped bit pattern orders negative → zero → positive.
+    /// Test case reduction drives values toward zero.
     ///
     /// ```swift
     /// let gen = #gen(.int128())
     /// ```
+    ///
+    /// - Note: Test case reduction operates on each half of the value independently. Range-constrained generation and size-scaled generation are not supported.
     static func int128() -> ReflectiveGenerator<Int128> {
         Gen.zip(
             Gen.chooseBits(),

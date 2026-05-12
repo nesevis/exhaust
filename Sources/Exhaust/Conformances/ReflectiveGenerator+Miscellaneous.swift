@@ -106,7 +106,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 public extension ReflectiveGenerator {
     /// Generates arbitrary `Result` values by choosing between a success and a failure generator with equal weight.
     ///
-    /// Both branches are fully reflective — the backward pass extracts the inner value from the matching `Result` case and signals a mismatch for the other case, allowing ``Gen/pick(choices:)`` to select the correct branch during reflection.
+    /// Reflection decomposes a `Result` value by matching the `.success` or `.failure` case and reflecting the inner value through the corresponding generator.
     ///
     /// ```swift
     /// let gen = #gen(.result(

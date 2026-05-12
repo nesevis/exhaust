@@ -2,6 +2,7 @@ import CustomDump
 import ExhaustCore
 import Foundation
 
+/// Formats a property test failure for reporting in key-value or JSONL format.
 struct PropertyTestFailure<Output> {
     let counterexample: Output
     let original: Output?
@@ -17,6 +18,7 @@ struct PropertyTestFailure<Output> {
     /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
     var transparent: Bool = false
 
+    /// Dispatches to the appropriate renderer based on the configured log format.
     func render(format: LogFormat) -> String {
         switch format {
         case .keyValue:

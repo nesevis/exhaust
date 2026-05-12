@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// Run statistics from a single `#exhaust` invocation.
+/// Captures run statistics from a single `#exhaust` invocation.
 ///
 /// Delivered via the ``ExhaustSettings/onReport(_:)`` setting. Contains phase timing, invocation counts, per-encoder probe breakdown, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree.
 public struct ExhaustReport: Sendable {
@@ -82,12 +82,12 @@ public struct ExhaustReport: Sendable {
     /// Empty when ``ExhaustSettings/collectOpenPBTStats`` is disabled or the run produced no records. Populated whenever stats collection is enabled, independent of whether the host exposes Swift Testing or XCTest. When a test framework is available, the same records — encoded as JSONL via ``Swift/Sequence/jsonlString()`` — are also attached to the running test. For failing runs, the second-to-last element is the failing example and the last element is the reduced counterexample.
     public var openPBTStatsLines: [OpenPBTStatsLine] = []
 
-    /// One-line summary of per-phase invocations and acceptances aggregated across all cycles.
+    /// Summarizes per-phase invocation counts as a single line.
     public var phaseSummary: String {
         ""
     }
 
-    /// One-line summary of profiling data for the reduction planning decision tree.
+    /// Summarizes profiling data as a single line.
     public var profilingSummary: String {
         let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
         let graphLabel = graphStats.map {

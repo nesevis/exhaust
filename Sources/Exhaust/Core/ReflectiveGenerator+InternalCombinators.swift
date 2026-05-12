@@ -11,7 +11,7 @@ extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a bidirectional transformation of this generator using forward and backward functions.
     /// Note that ``#gen`` with a closure will attempt to synthesize the backward mapping during macro expansion.
     ///
-    /// This is the fundamental operation for adapting generators to work with different types while preserving the bidirectional capability. Both directions must be provided:
+    /// Preserves bidirectional support across type changes, unlike the forward-only ``map`` which loses reflection. Both directions must be provided:
     ///
     /// - **Forward**: Transforms generated values to the new output type
     /// - **Backward**: During reflection, transforms target values back to the original type
@@ -20,7 +20,7 @@ extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - forward: Function to transform generated values.
     ///   - backward: Function to transform reflection targets back to original type.
     /// - Returns: A generator producing values of the new output type.
-    /// - Throws: Rethrows errors from the transformation functions
+    /// - Throws: Rethrows errors from the transformation functions.
     func _mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
         backward: @escaping (NewOutput) throws -> Value

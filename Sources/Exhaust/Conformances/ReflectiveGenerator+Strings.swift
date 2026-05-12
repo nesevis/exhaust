@@ -78,7 +78,7 @@ public extension ReflectiveGenerator {
 
     /// Generates a random character from the given ``CharacterSet``.
     ///
-    /// Uses ``ScalarRangeSet`` to flatten the character set into a single contiguous index space, then picks via ``Gen/choose(in:)`` with O(log n) lookup.
+    /// Characters are drawn uniformly from the provided set.
     ///
     /// ```swift
     /// let gen = #gen(.character(from: .letters))

@@ -1,6 +1,7 @@
 import CustomDump
 import ExhaustCore
 
+/// Formats a classification-aware test failure for reporting.
 struct ExploreFailure<Output> {
     let counterexample: Output
     let original: Output?
@@ -10,6 +11,7 @@ struct ExploreFailure<Output> {
     let matchedDirections: [(index: Int, name: String)]
     var reducedSequence: ChoiceSequence?
 
+    /// Renders the failure as a human-readable string with direction attribution.
     func render() -> String {
         var lines: [String] = []
 

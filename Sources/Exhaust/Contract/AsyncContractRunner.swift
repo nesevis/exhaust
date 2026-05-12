@@ -7,7 +7,7 @@ import IssueReporting
 
 /// Runs an async contract property test for the given specification type.
 ///
-/// Generates command sequences using the spec's synthesized `commandGenerator`, executes each sequence against a fresh instance using async `run`/`checkInvariants`, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
+/// Generates command sequences using the spec's synthesized ``commandGenerator``, executes each sequence against a fresh instance using async `run`/`checkInvariants`, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
 ///
 /// The synchronous core runs on a GCD thread. Async spec methods are invoked via `Task` + semaphore from that thread, avoiding cooperative thread pool deadlocks.
 @discardableResult

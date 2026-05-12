@@ -18,7 +18,7 @@ public protocol ContractSpecBase {
 
     /// Builds a generator for a single command step, weighted by `@Command` annotations.
     ///
-    /// The macro synthesizes this as a `Gen.pick` over the command cases, each carrying its argument generators.
+    /// The macro synthesizes this as a ``Gen.pick`` over the command cases, each carrying its argument generators.
     static var commandGenerator: ReflectiveGenerator<Command> { get }
 
     /// The system under test instance, for typed access in results and failure reports.
@@ -33,11 +33,11 @@ public protocol ContractSpecBase {
 
 /// A contract specification that drives sequential, stateful property tests.
 ///
-/// Users annotate a struct with `@Contract` rather than conforming manually. The macro synthesizes the `Command` enum, the `commandGenerator` property, and the `run(_:)` method from the `@Command`-annotated methods on the struct.
+/// Users annotate a struct with `@Contract` rather than conforming manually. The macro synthesizes the `Command` enum, the ``commandGenerator`` property, and the `run(_:)` method from the `@Command`-annotated methods on the struct.
 ///
 /// ## How It Works
 ///
-/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SUT`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and `check()` postconditions.
+/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SUT`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and ``check(_:_:)`` postconditions.
 ///
 /// ## Example
 ///

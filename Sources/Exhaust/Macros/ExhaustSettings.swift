@@ -98,7 +98,7 @@ public enum ExhaustBudget: Sendable {
     }
 }
 
-/// Configuration options for `#exhaust` property tests, passed as variadic arguments to control test behavior.
+/// Controls test behavior for `#exhaust` property tests, passed as variadic arguments.
 public enum ExhaustSettings<Output> {
     /// Controls iteration budgets for coverage, random sampling, and reduction. Defaults to `.expedient` (200 coverage rows, 200 random samplings, fast reduction).
     case budget(ExhaustBudget)

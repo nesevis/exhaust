@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// Results from a single `#explore` invocation.
+/// Captures results from a single `#explore` invocation.
 ///
 /// Contains the counterexample (if any), per-direction coverage statistics, and the co-occurrence matrix for cross-direction analysis.
 public struct ExploreReport<Output> {
@@ -32,7 +32,7 @@ public struct ExploreReport<Output> {
     public var termination: ExploreTermination
 }
 
-/// How an `#explore` run terminated.
+/// Describes how an `#explore` run terminated.
 public enum ExploreTermination: Sendable {
     /// The property failed on a sample. The counterexample is available in ``ExploreReport/result``.
     case propertyFailed
@@ -42,7 +42,7 @@ public enum ExploreTermination: Sendable {
     case budgetExhausted
 }
 
-/// Coverage statistics for a single declared direction.
+/// Records coverage statistics for a single declared direction.
 public struct DirectionCoverage: Sendable {
     /// The user-provided name for this direction.
     public var name: String

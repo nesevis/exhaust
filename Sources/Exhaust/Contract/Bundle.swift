@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Holds values produced by earlier commands so that later commands can reference them.
 ///
-/// Use `Bundle` when a command needs to operate on an entity created by a prior command (for example, deleting a user that was previously created). The drawing mechanism records a `chooseBits` effect in the Freer Monad, making bundle indices reducable by the Reducer.
+/// Use ``Bundle`` when a command needs to operate on an entity created by a prior command (for example, deleting a user that was previously created). The drawing mechanism records a ``chooseBits`` effect in the Freer Monad, making bundle indices reducable by the Reducer.
 ///
 /// ## Example
 ///
@@ -43,7 +43,7 @@ public final class Bundle<Element>: @unchecked Sendable {
         elements.isEmpty
     }
 
-    /// Stores a value in the bundle for later retrieval by `draw()` or `consume()`.
+    /// Stores a value in the bundle for later retrieval by ``draw(at:)`` or ``consume(at:)``.
     ///
     /// - Parameter element: The value to store.
     public func add(_ element: Element) {
@@ -52,9 +52,9 @@ public final class Bundle<Element>: @unchecked Sendable {
 
     /// Selects a value from the bundle without removing it, or returns `nil` if the bundle is empty.
     ///
-    /// The caller should call `skip()` when this returns `nil` to indicate that the command's precondition is not met.
+    /// The caller should call ``skip()`` when this returns `nil` to indicate that the command's precondition is not met.
     ///
-    /// - Parameter index: The index to draw from, typically provided by a `chooseBits` effect in the generated command runner.
+    /// - Parameter index: The index to draw from, typically provided by a ``chooseBits`` effect in the generated command runner.
     /// - Returns: The element at the given index (wrapped around), or `nil` if the bundle is empty.
     public func draw(at index: Int) -> Element? {
         guard !elements.isEmpty else { return nil }
@@ -65,7 +65,7 @@ public final class Bundle<Element>: @unchecked Sendable {
     ///
     /// Use this for exclusive ownership patterns where an entity should only be used once (for example, consuming a one-time token).
     ///
-    /// - Parameter index: The index to consume from, typically provided by a `chooseBits` effect in the generated command runner.
+    /// - Parameter index: The index to consume from, typically provided by a ``chooseBits`` effect in the generated command runner.
     /// - Returns: The removed element, or `nil` if the bundle is empty.
     public func consume(at index: Int) -> Element? {
         guard !elements.isEmpty else { return nil }

@@ -2,7 +2,7 @@
     import ExhaustCore
     @_weakLinked import Testing
 
-    /// Configuration carried by the `.exhaust(...)` trait, accessible to `#exhaust` at runtime via `@TaskLocal`.
+    /// Carries configuration for the `.exhaust(...)` trait attached to a test function.
     public struct ExhaustTraitConfiguration: Sendable {
         /// The iteration budget, or `nil` to use the inline setting or default.
         public var budget: ExhaustBudget?
@@ -95,7 +95,7 @@
     // MARK: - Tags
 
     public extension Tag {
-        /// Tag for property-based tests driven by `#exhaust`.
+        /// Identifies property-based tests driven by `#exhaust`.
         @Tag static var propertyTest: Self
     }
 #endif

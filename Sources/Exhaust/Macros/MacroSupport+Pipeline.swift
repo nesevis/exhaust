@@ -25,12 +25,14 @@ package extension __ExhaustRuntime {
         let statsAccumulator: OpenPBTStatsAccumulator?
     }
 
+    /// Represents the outcome of the coverage phase: failure found, exhaustive pass, or proceed to sampling.
     enum CoverageOutcome<Output> {
         case counterexample(Output)
         case exhaustivePass(iterations: Int)
         case proceed(coverageIterations: Int)
     }
 
+    /// Represents the outcome of the reduction phase: reduced counterexample, unreduced original, or error.
     enum ReduceOutcome<Output> {
         case reduced(Output)
         case unreduced(Output)
@@ -39,6 +41,7 @@ package extension __ExhaustRuntime {
 
     // MARK: - Coverage Phase
 
+    /// Runs the structured covering-array phase, returning early on first failure.
     static func runCoveragePhase<Output>(
         context: PipelineContext<Output>,
         coverageBudget: UInt64,
@@ -148,6 +151,7 @@ package extension __ExhaustRuntime {
 
     // MARK: - Sampling Phase
 
+    /// Runs the random sampling phase after coverage completes.
     static func runSamplingPhase<Output>( // swiftlint:disable:this function_body_length
         context: PipelineContext<Output>,
         seed: UInt64?,
@@ -306,6 +310,7 @@ package extension __ExhaustRuntime {
 
     // MARK: - Shared Reduction
 
+    /// Reduces a failing counterexample and reports the result.
     static func reduceAndReport<Output>( // swiftlint:disable:this function_parameter_count
         context: PipelineContext<Output>,
         value: Output,
@@ -454,6 +459,7 @@ package extension __ExhaustRuntime {
 
     // MARK: - Reflecting
 
+    /// Reduces a counterexample using reflection to seed the reducer.
     // swiftlint:disable:next function_parameter_count
     static func __reduceReflected<Output>(
         _ gen: ReflectiveGenerator<Output>,
