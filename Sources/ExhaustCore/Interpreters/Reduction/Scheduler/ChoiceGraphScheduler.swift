@@ -214,7 +214,8 @@ enum ChoiceGraphScheduler {
                         state.tree = fullTree
                     }
                     let graphBeforeRebuild = state.graph
-                    state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                    let rebuild = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                    state.graph = rebuild.graph
                     sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
                     graphIsStripped = false
                     continue
@@ -299,7 +300,8 @@ enum ChoiceGraphScheduler {
                         }
 
                         let graphBeforeRebuild = state.graph
-                        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                        let rebuild = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats)
+                        state.graph = rebuild.graph
                         graphIsStripped = treeIsStripped
 
                         if let boundRange = boundPositionRange {
@@ -399,7 +401,7 @@ enum ChoiceGraphScheduler {
         from tree: ChoiceTree,
         replacing oldGraph: ChoiceGraph,
         stats: inout ReductionStats
-    ) -> ChoiceGraph {
+    ) -> (graph: ChoiceGraph, diff: ChoiceGraphDiff) {
         stats.graphStats.dynamicRegionRebuilds += oldGraph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += oldGraph.graphStats.dynamicRegionNodesRebuilt
         let oldConvergence = extractAllConvergence(from: oldGraph)
@@ -412,8 +414,9 @@ enum ChoiceGraphScheduler {
         )
         newGraph.observeBindTopologies(tree: tree)
         transferConvergence(oldConvergence, to: &newGraph)
+        let diff = ChoiceGraphDiff.diff(old: oldGraph, new: newGraph)
         stats.graphStats.fullGraphRebuilds += 1
-        return newGraph
+        return (graph: newGraph, diff: diff)
     }
 
     // MARK: - Reorder Pass
