@@ -17,6 +17,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
     // MARK: - Derivative Context
 
+    /// Maximum derivative depth before handlePick skips derivative evaluation and falls back to weighted selection. Derivative composition through sequence boundaries is not supported, so deep picks cannot produce meaningful fitness signal.
+    private static var maxDerivativeDepth: Int { 4 }
+
     /// An inspectable data structure representing the composition of all outer continuations needed to produce a `FinalOutput` from a local sub-generator. Each ``handlePick`` or ``handleZip`` call pushes a frame; `apply` composes them to build a full derivative.
     ///
     /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized representation, matching the paper's treatment of CGS derivatives as syntactic transformations on the generator data structure (Goldstein, Ch. 3).
@@ -358,7 +361,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             case let .sequence(lengthGen, elementGen):
                 // Length generator: skip derivative evaluation — the length produces UInt64, not FinalOutput, so derivatives can't compose through. Depth >= 4 triggers handlePick's fast path.
                 var lengthDerivativeContext = DerivativeContext()
-                for _ in 0 ..< 4 {
+                for _ in 0 ..< Self.maxDerivativeDepth {
                     lengthDerivativeContext.push(.bind(continuation: { .pure($0) }))
                 }
                 guard let length = try generateRecursive(
@@ -711,7 +714,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // Fast path: single choice or deep pick — skip derivative evaluation.
         // Without .sequenceElement frames, derivative context cannot compose through sequence boundaries, so deep picks must fall back to weighted selection.
         let effectiveSampleCount = Swift.max(2, sampleCount >> derivativeContext.depth)
-        if choices.count == 1 || derivativeContext.depth >= 4 {
+        if choices.count == 1 || derivativeContext.depth >= Self.maxDerivativeDepth {
             guard let selectedChoice = WeightedPickSelection.draw(
                 from: choices, using: &context.prng
             ) else {
