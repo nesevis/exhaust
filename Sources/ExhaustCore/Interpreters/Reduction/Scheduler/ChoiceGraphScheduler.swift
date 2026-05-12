@@ -204,6 +204,7 @@ enum ChoiceGraphScheduler {
                     continue
 
                 case .rematerialize:
+                    // Re-materialization with `materializePicks` generates fresh inactive branch content via PRNG fallback, invalidating self-similarity edges and replacement candidates from the old graph. The structural source split cannot be used here.
                     if case let .success(_, fullTree, _) = Materializer.materializeAny(
                         state.gen,
                         prefix: state.sequence,
@@ -314,7 +315,6 @@ enum ChoiceGraphScheduler {
                                 state.graph.nodes[nodeID] = state.graph.nodes[nodeID].with(kind: .chooseBits(metadata))
                             }
                         }
-                        scopeRejectionCache.clear()
                         if rebuild.diff.isStructurallyIdentical {
                             // Topology unchanged — keep structural sources (removal, replacement,
                             // migration, permutation) and only rebuild value-dependent sources
@@ -335,6 +335,7 @@ enum ChoiceGraphScheduler {
                                 "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
                             ])
                         } else {
+                            scopeRejectionCache.clear()
                             sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: deferBindInner, previousGraph: graphBeforeRebuild)
 
                             Self.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
