@@ -33,9 +33,9 @@ package extension Gen {
             if let typedResult = result as? Output {
                 return .pure(typedResult)
             }
-            throw Interpreters.ReflectionError.reflectedNil(
-                type: String(describing: Output.self),
-                resultType: String(describing: result.self)
+            throw GeneratorError.typeMismatch(
+                expected: String(describing: Output.self),
+                actual: String(describing: type(of: result))
             )
         }
     }
@@ -78,12 +78,6 @@ package extension Gen {
             if let typed = result as? Output {
                 // Backward pass - direct value
                 return .pure(typed)
-            }
-            if let optional = result as? Output?, optional == nil {
-                throw Interpreters.ReflectionError.reflectedNil(
-                    type: String(describing: Output.self),
-                    resultType: String(describing: type(of: result))
-                )
             }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),
