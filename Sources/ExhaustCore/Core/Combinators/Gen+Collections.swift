@@ -278,7 +278,14 @@ package extension Gen {
         }
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in indexMap[element] ?? 0 },
+            { (element: C.Element) throws -> Int in
+                guard let index = indexMap[element] else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element not found in collection during reflection"
+                    )
+                }
+                return index
+            },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
@@ -299,7 +306,14 @@ package extension Gen {
         let elements = ContiguousArray(collection)
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in elements.firstIndex(of: element) ?? 0 },
+            { (element: C.Element) throws -> Int in
+                guard let index = elements.firstIndex(of: element) else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element not found in collection during reflection"
+                    )
+                }
+                return index
+            },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
     }
@@ -331,8 +345,13 @@ package extension Gen {
         }
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in
-                indexMap[element[keyPath: path]] ?? 0
+            { (element: C.Element) throws -> Int in
+                guard let index = indexMap[element[keyPath: path]] else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element key not found in collection during reflection"
+                    )
+                }
+                return index
             },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
@@ -357,9 +376,14 @@ package extension Gen {
         let elements = ContiguousArray(collection)
 
         return Gen.contramap(
-            { (element: C.Element) -> Int in
+            { (element: C.Element) throws -> Int in
                 let key = element[keyPath: path]
-                return elements.firstIndex { $0[keyPath: path] == key } ?? 0
+                guard let index = elements.firstIndex(where: { $0[keyPath: path] == key }) else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                        "element key not found in collection during reflection"
+                    )
+                }
+                return index
             },
             Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
         )
