@@ -28,12 +28,15 @@ package extension Gen {
     /// - Returns: A generator that produces the same values while collecting statistics.
     static func classify<Output>(
         _ generator: ReflectiveGenerator<Output>,
-        _ classifiers: (String, (Output) -> Bool)...
+        _ classifiers: (String, (Output) -> Bool)...,
+        fileID: String = #fileID,
+        line: UInt = #line
     ) -> ReflectiveGenerator<Output> {
-        .impure(operation:
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+        return .impure(operation:
             .classify(
                 gen: generator.erase(),
-                fingerprint: 0,
+                fingerprint: fingerprint,
                 classifiers: classifiers.map { pair in (pair.0, { pair.1($0 as! Output) }) }
             )) { .pure($0 as! Output) }
     }

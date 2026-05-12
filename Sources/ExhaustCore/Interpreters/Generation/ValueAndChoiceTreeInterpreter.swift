@@ -866,9 +866,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         ) else {
             return nil
         }
+        var bucket = context.classifications[fingerprint, default: [:]]
         for (label, classifier) in classifiers where classifier(result) {
-            context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+            bucket[label, default: []].insert(context.runs)
         }
+        context.classifications[fingerprint] = bucket
         return try runContinuation(
             result: result,
             calleeChoiceTree: tree,

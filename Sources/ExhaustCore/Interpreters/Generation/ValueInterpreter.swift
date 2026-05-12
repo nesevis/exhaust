@@ -262,15 +262,11 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 ) else {
                     return nil
                 }
+                var bucket = context.classifications[fingerprint, default: [:]]
                 for (label, classifier) in classifiers where classifier(inner) {
-                    if context.classifications[fingerprint] == nil {
-                        context.classifications[fingerprint] = [:]
-                    }
-                    if context.classifications[fingerprint]![label] == nil {
-                        context.classifications[fingerprint]![label] = []
-                    }
-                    context.classifications[fingerprint]![label]!.insert(context.runs)
+                    bucket[label, default: []].insert(context.runs)
                 }
+                context.classifications[fingerprint] = bucket
                 result = inner
 
             case let .transform(kind, inner):
