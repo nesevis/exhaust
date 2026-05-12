@@ -34,12 +34,25 @@ struct GraphValueEncoder: GraphEncoder {
         convergenceStore
     }
 
+    // MARK: - Integer Leaf Position
+
+    /// Metadata for a single integer leaf under value search.
+    struct IntegerLeafPosition {
+        let nodeID: Int
+        let sequenceIndex: Int
+        let validRange: ClosedRange<UInt64>?
+        var currentBitPattern: UInt64
+        let targetBitPattern: UInt64
+        let typeTag: TypeTag
+        let mayReshape: Bool
+    }
+
     // MARK: - Integer State
 
     /// Tracks the state of integer leaf reduction across its sub-phases, from batch zeroing through per-leaf interpolation search. Holds the working sequence, leaf metadata, the active stepper, and auxiliary state for cross-zero and linear scan recovery.
     struct IntegerState {
         var sequence: ChoiceSequence
-        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)]
+        var leafPositions: [IntegerLeafPosition]
         var phase: IntegerPhase
         var leafIndex: Int
         var stepper: DirectionalStepper?
@@ -366,7 +379,7 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - Mutation Builders
 
-    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline. Each leaf in ``IntegerState/leafPositions`` is checked at its sequence index; differing values become ``LeafChange`` entries that carry the leaf's bind-inner reshape marker through to ``ChoiceGraph/apply(_:freshTree:)``.
+    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline. Each leaf in ``IntegerState/leafPositions`` is checked at its sequence index; differing values become ``LeafChange`` entries that carry the leaf's bind-inner reshape marker through to ``ChoiceGraph/apply(_:)``.
     func buildIntegerLeafValuesMutation(
         candidate: ChoiceSequence,
         state: IntegerState

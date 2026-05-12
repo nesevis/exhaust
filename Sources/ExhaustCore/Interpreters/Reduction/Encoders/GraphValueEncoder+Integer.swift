@@ -15,7 +15,7 @@ extension GraphValueEncoder {
         preservingConvergence: [Int: ConvergedOrigin] = [:],
         armBatchZero: Bool = true
     ) {
-        var leafPositions: [(nodeID: Int, sequenceIndex: Int, validRange: ClosedRange<UInt64>?, currentBitPattern: UInt64, targetBitPattern: UInt64, typeTag: TypeTag, mayReshape: Bool)] = []
+        var leafPositions: [IntegerLeafPosition] = []
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
@@ -26,7 +26,7 @@ extension GraphValueEncoder {
             let current = metadata.value.bitPattern64
             let target = metadata.value.reductionTarget(in: metadata.validRange)
             if current != target {
-                leafPositions.append((
+                leafPositions.append(IntegerLeafPosition(
                     nodeID: nodeID,
                     sequenceIndex: range.lowerBound,
                     validRange: metadata.validRange,

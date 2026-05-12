@@ -147,7 +147,7 @@ struct ChoiceGraphClassificationTests {
             newValue: shiftedChoice,
             mayReshape: true
         )
-        let application = graph.apply(.leafValues([reshapeChange]), freshTree: tree)
+        let application = graph.apply(.leafValues([reshapeChange]))
 
         #expect(application.requiresFullRebuild)
     }
