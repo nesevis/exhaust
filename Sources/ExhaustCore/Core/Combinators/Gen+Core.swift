@@ -10,7 +10,7 @@ package enum Gen {
 
     /// Computes a per-site fingerprint from source location components.
     @inline(__always)
-    static func sourceFingerprint(
+    package static func sourceFingerprint(
         fileID: String,
         line: UInt,
         column: UInt = 0
