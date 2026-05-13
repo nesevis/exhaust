@@ -36,7 +36,7 @@ import ExhaustCore
 @freestanding(expression)
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
-    _ gen: RefGen<GeneratedValue>,
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
     directions: [(String, (GeneratedValue) -> Bool)],
     property: (GeneratedValue) throws -> PropertyResult
@@ -70,7 +70,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 @freestanding(expression)
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
-    _ gen: RefGen<GeneratedValue>,
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
     directions: [(String, (GeneratedValue) -> Bool)],
     property: (GeneratedValue) async throws -> PropertyResult

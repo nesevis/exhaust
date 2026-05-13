@@ -157,7 +157,7 @@ struct ResultGeneratorTests {
 
     @Test("Generates both success and failure cases")
     func generatesBothCases() {
-        let gen: RefGen<Result<Int, TestError>> = .result(
+        let gen: ReflectiveGenerator<Result<Int, TestError>> = .result(
             success: .int(in: 0 ... 100),
             failure: .element(from: [TestError.notFound, TestError.timeout, TestError.forbidden])
         )
@@ -178,7 +178,7 @@ struct ResultGeneratorTests {
 
     @Test("Success values are within range")
     func successValuesInRange() {
-        let gen: RefGen<Result<Int, TestError>> = .result(
+        let gen: ReflectiveGenerator<Result<Int, TestError>> = .result(
             success: .int(in: 10 ... 20),
             failure: .element(from: [TestError.notFound])
         )
@@ -194,7 +194,7 @@ struct ResultGeneratorTests {
 
     @Test("Deterministic: same seed produces same results")
     func deterministic() {
-        let gen: RefGen<Result<Int, TestError>> = .result(
+        let gen: ReflectiveGenerator<Result<Int, TestError>> = .result(
             success: .int(in: 0 ... 100),
             failure: .element(from: [TestError.notFound, TestError.timeout])
         )

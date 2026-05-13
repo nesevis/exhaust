@@ -59,7 +59,7 @@ import ExhaustCore
 @freestanding(expression)
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
-    _ gen: RefGen<GeneratedValue>,
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExhaustSettings<GeneratedValue>...,
     property: (GeneratedValue) throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
@@ -72,7 +72,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 @freestanding(expression)
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
-    _ gen: RefGen<GeneratedValue>,
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExhaustSettings<GeneratedValue>...,
     property: (GeneratedValue) async throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")

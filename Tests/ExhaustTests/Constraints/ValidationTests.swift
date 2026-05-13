@@ -33,7 +33,7 @@ struct ValidationTests {
 
     @Test("Constant generator passes validation")
     func constantGeneratorPasses() {
-        let gen = RefGen<Int>.just(42)
+        let gen = ReflectiveGenerator<Int>.just(42)
         let report = gen.gen.validate(samples: 50, seed: 42)
 
         #expect(report.passed)
@@ -46,7 +46,7 @@ struct ValidationTests {
             let value: Int
         }
 
-        let gen: RefGen<Wrapper> = #gen(.int(in: 0 ... 50)).mapped(
+        let gen: ReflectiveGenerator<Wrapper> = #gen(.int(in: 0 ... 50)).mapped(
             forward: { Wrapper(value: $0) },
             backward: { $0.value }
         )

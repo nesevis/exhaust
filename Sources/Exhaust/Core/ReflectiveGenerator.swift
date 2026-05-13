@@ -1,5 +1,5 @@
 //
-//  RefGen.swift
+//  ReflectiveGenerator.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
@@ -9,7 +9,7 @@ import ExhaustCore
 
 /// TODO: Update docstring
 /// Wraps the underlying monadic representation of the generator
-public struct RefGen<Output>: @unchecked Sendable {
+public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     package let gen: Generator<Output>
     
     package init(_ gen: () throws -> Generator<Output>) rethrows {
@@ -23,12 +23,12 @@ public struct RefGen<Output>: @unchecked Sendable {
     /// - Parameter transform: A function that takes the generated value and returns a new generator.
     /// - Returns: A generator that sequences the two computations.
     public func bind<NewOutput>(
-        _ transform: @escaping (Output) throws -> RefGen<NewOutput>,
+        _ transform: @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) rethrows -> RefGen<NewOutput> {
-        RefGen<NewOutput> {
+    ) rethrows -> ReflectiveGenerator<NewOutput> {
+        ReflectiveGenerator<NewOutput> {
             let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
             return Gen.liftF(.transform(
                 kind: .bind(
@@ -51,8 +51,8 @@ public struct RefGen<Output>: @unchecked Sendable {
     /// - Returns: A generator producing the transformed values.
     public func map<NewOutput>(
         _ transform: @escaping (Output) throws -> NewOutput
-    ) rethrows -> RefGen<NewOutput> {
-        RefGen<NewOutput> {
+    ) rethrows -> ReflectiveGenerator<NewOutput> {
+        ReflectiveGenerator<NewOutput> {
             Gen.liftF(.transform(
                 kind: .map(
                     forward: { try transform($0 as! Output) },
@@ -67,7 +67,7 @@ public struct RefGen<Output>: @unchecked Sendable {
 
 // MARK: - CustomDebugStringConvertible
 
-extension RefGen: CustomDebugStringConvertible {
+extension ReflectiveGenerator: CustomDebugStringConvertible {
     public var debugDescription: String {
         gen.debugDescription
     }

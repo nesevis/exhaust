@@ -79,9 +79,9 @@ enum BinaryHeapFixture {
     }
 
     /// Generates valid min-heaps by threading a minimum value through `bind`. Uses `bind` to constrain child values >= parent, so all generated heaps satisfy the invariant by construction.
-    static func heapGen(min: Int = 0, depth: UInt64) -> RefGen<Heap<Int>> {
+    static func heapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
         let maxValue = Int.max
-        let emptyGen: RefGen<Heap<Int>> = #gen(.just(.empty))
+        let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
 
         guard depth > 0, min <= maxValue else {
             return emptyGen
@@ -111,7 +111,7 @@ enum BinaryHeapFixture {
     static let gen = heapGen(depth: 20)
 
     /// Recursive combinator variant. Depth is controlled by `.recursive` instead of an outer `bind`. The min-value constraint is dropped — invalid heaps are filtered by ``invariant(_:)`` in the property.
-    static func heapGenRecursive(maxValue: Int = .max) -> RefGen<Heap<Int>> {
+    static func heapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<Int>> {
         .recursive(
             base: Heap<Int>.empty,
             depthRange: 0 ... 10

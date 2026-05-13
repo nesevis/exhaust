@@ -1,11 +1,11 @@
 //
-//  RefGen+Classify.swift
+//  ReflectiveGenerator+Classify.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Categorizes generated values for statistical analysis.
     ///
     /// Wraps this generator with classification predicates that track how frequently different types of test data are generated.
@@ -21,9 +21,9 @@ public extension RefGen {
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-        return RefGen {
+        return ReflectiveGenerator {
             .impure(operation:
                 .classify(
                     gen: gen.erase(),

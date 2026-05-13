@@ -1,11 +1,11 @@
 //
-//  RefGen+Combinators.swift
+//  ReflectiveGenerator+Combinators.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Transforms the output type with a provided inverse for reflection.
     ///
     /// Use this when the transform involves computation that ``#gen`` cannot invert: arithmetic, conditional logic, lossy conversions. For struct or class initializers with labeled arguments, prefer ``#gen`` with a trailing closure; the macro synthesizes the inverse via `Mirror`.
@@ -18,8 +18,8 @@ public extension RefGen {
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Output) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Output
-    ) rethrows -> RefGen<NewOutput> {
-        try RefGen<NewOutput> {
+    ) rethrows -> ReflectiveGenerator<NewOutput> {
+        try ReflectiveGenerator<NewOutput> {
             try Gen.contramap(backward, gen.map(forward))
         }
     }
@@ -38,7 +38,7 @@ public extension RefGen {
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Output) throws -> NewOutput,
         backward: KeyPath<NewOutput, Output>
-    ) rethrows -> RefGen<NewOutput> {
+    ) rethrows -> ReflectiveGenerator<NewOutput> {
         nonisolated(unsafe) let backward = backward
         return try mapped(forward: forward, backward: { $0[keyPath: backward] })
     }
@@ -62,13 +62,13 @@ public extension RefGen {
     ///   - backward: Function that extracts the inner value from the final output.
     /// - Returns: A generator that sequences the two computations with bidirectional support.
     func bound<NewValue>(
-        forward: @Sendable @escaping (Output) throws -> RefGen<NewValue>,
+        forward: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewValue>,
         backward: @Sendable @escaping (NewValue) throws -> Output,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) rethrows -> RefGen<NewValue> {
-        RefGen<NewValue> {
+    ) rethrows -> ReflectiveGenerator<NewValue> {
+        ReflectiveGenerator<NewValue> {
             let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
             return Gen.liftF(.transform(
                 kind: .bind(
@@ -99,13 +99,13 @@ public extension RefGen {
     ///   - backward: Key path to extract the inner value from the final output.
     /// - Returns: A generator that sequences the two computations with bidirectional support.
     func bound<NewValue>(
-        forward: @Sendable @escaping (Output) throws -> RefGen<NewValue>,
+        forward: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewValue>,
         backward: KeyPath<NewValue, Output>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) rethrows -> RefGen<NewValue> {
-        RefGen<NewValue> {
+    ) rethrows -> ReflectiveGenerator<NewValue> {
+        ReflectiveGenerator<NewValue> {
             let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
             return Gen.liftF(.transform(
                 kind: .bind(

@@ -9,11 +9,11 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
     case leaf
     indirect case node(left: BST, value: UInt, right: BST)
 
-    static func arbitrary(maxDepth: Int = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> RefGen<BST> {
+    static func arbitrary(maxDepth: Int = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> ReflectiveGenerator<BST> {
         bstGenerator(maxDepth: maxDepth, valueRange: valueRange)
     }
 
-    private static func bstGenerator(maxDepth: Int, valueRange: ClosedRange<UInt>) -> RefGen<BST> {
+    private static func bstGenerator(maxDepth: Int, valueRange: ClosedRange<UInt>) -> ReflectiveGenerator<BST> {
         if maxDepth <= 0 {
             return .just(.leaf)
         }
@@ -23,7 +23,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         return .oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch))
     }
 
-    static func arbitraryRecursive(valueRange: ClosedRange<UInt> = 0 ... 9) -> RefGen<BST> {
+    static func arbitraryRecursive(valueRange: ClosedRange<UInt> = 0 ... 9) -> ReflectiveGenerator<BST> {
         .recursive(base: .leaf, depthRange: 5 ... 5) { recurse, remaining in
             let nodeBranch = #gen(recurse(), .uint(in: valueRange), recurse()).map { left, value, right in
                 BST.node(left: left, value: value, right: right)

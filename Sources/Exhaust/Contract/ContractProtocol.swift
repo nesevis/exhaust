@@ -19,7 +19,7 @@ public protocol ContractSpecBase {
     /// Builds a generator for a single command step, weighted by `@Command` annotations.
     ///
     /// The macro synthesizes this as a ``Gen.pick`` over the command cases, each carrying its argument generators.
-    static var commandGenerator: RefGen<Command> { get }
+    static var commandGenerator: ReflectiveGenerator<Command> { get }
 
     /// The system under test instance, for typed access in results and failure reports.
     var systemUnderTest: SystemUnderTest { get }

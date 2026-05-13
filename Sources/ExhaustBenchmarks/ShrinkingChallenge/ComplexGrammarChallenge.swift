@@ -52,7 +52,7 @@ let complexGrammarProperty: @Sendable (ComplexExpr) -> Bool = { expr in
 
 // MARK: - Generator
 
-func complexGrammarGen(depth: UInt64) -> RefGen<ComplexExpr> {
+func complexGrammarGen(depth: UInt64) -> ReflectiveGenerator<ComplexExpr> {
     let leaf = #gen(.int(in: -10 ... 10, scaling: .constant))
         .mapped(
             forward: { value in ComplexExpr.lit(value) },

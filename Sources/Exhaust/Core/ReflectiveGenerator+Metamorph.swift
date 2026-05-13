@@ -1,11 +1,11 @@
 //
-//  RefGen+Metamorph.swift
+//  ReflectiveGenerator+Metamorph.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates independent copies of this generator's value and applies a different transform to each.
     ///
     /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value — all transformed copies follow deterministically.
@@ -20,7 +20,7 @@ public extension RefGen {
     /// - Returns: A generator producing `(original, transformed...)` tuples.
     func metamorph<each Transformed>(
         _ transform: repeat @escaping (Output) -> each Transformed
-    ) -> RefGen<(Output, repeat each Transformed)> {
+    ) -> ReflectiveGenerator<(Output, repeat each Transformed)> {
         var erasedTransforms: [(Any) throws -> Any] = []
         func add(_ function: @escaping (Output) -> some Any) {
             erasedTransforms.append { function($0 as! Output) as Any }
@@ -43,7 +43,7 @@ public extension RefGen {
             }
         )
 
-        return RefGen<(Output, repeat each Transformed)> {
+        return ReflectiveGenerator<(Output, repeat each Transformed)> {
             // `tuple.0` crashes the Swift 6.2 compiler (signal 5) on tuples with parameter packs.
             Gen.contramap(
                 { (tuple: (Output, repeat each Transformed)) -> Output in

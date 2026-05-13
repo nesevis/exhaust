@@ -1,11 +1,11 @@
 //
-//  RefGen+Recursive.swift
+//  ReflectiveGenerator+Recursive.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Creates a recursive generator with a constant base case value.
     ///
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
@@ -30,11 +30,11 @@ public extension RefGen {
     static func recursive(
         base: Output,
         depthRange: ClosedRange<Int>,
-        extend: @Sendable @escaping (@Sendable @escaping () -> RefGen<Output>, UInt64) -> RefGen<Output>
-    ) -> RefGen<Output> {
+        extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         return recursive(
-            base: RefGen { Gen.just(base) },
+            base: ReflectiveGenerator { Gen.just(base) },
             depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound),
             extend: extend
         )
@@ -64,9 +64,9 @@ public extension RefGen {
     static func recursive(
         base: Output,
         depthRange: ClosedRange<UInt64>,
-        extend: @Sendable @escaping (@Sendable @escaping () -> RefGen<Output>, UInt64) -> RefGen<Output>
-    ) -> RefGen<Output> {
-        recursive(base: RefGen { Gen.just(base) }, depthRange: depthRange, extend: extend)
+        extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
+        recursive(base: ReflectiveGenerator { Gen.just(base) }, depthRange: depthRange, extend: extend)
     }
 
     /// Creates a recursive generator with a generator base case and a reducible depth range.
@@ -88,10 +88,10 @@ public extension RefGen {
     ///   - extend: Closure that builds one recursive layer from the previous layer.
     /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
-        base: RefGen<Output>,
+        base: ReflectiveGenerator<Output>,
         depthRange: ClosedRange<Int>,
-        extend: @Sendable @escaping (@Sendable @escaping () -> RefGen<Output>, UInt64) -> RefGen<Output>
-    ) -> RefGen<Output> {
+        extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         return recursive(
             base: base,
@@ -110,17 +110,17 @@ public extension RefGen {
     ///   - extend: Closure that builds one recursive layer from the previous layer.
     /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
-        base: RefGen<Output>,
+        base: ReflectiveGenerator<Output>,
         depthRange: ClosedRange<UInt64>,
-        extend: @Sendable @escaping (@Sendable @escaping () -> RefGen<Output>, UInt64) -> RefGen<Output>
-    ) -> RefGen<Output> {
-        RefGen {
+        extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
             // Bridge the Sendable boundary: Gen.recursive is internal and provides a non-Sendable
             // recurse thunk. The public API requires @Sendable on the thunk so users can capture it
             // in #gen(...) closures. The wrap is safe because Generator is @unchecked Sendable.
             Gen.recursive(base: base.gen, depthRange: depthRange) { recurse, remaining in
                 nonisolated(unsafe) let capturedRecurse = recurse
-                let sendableRecurse: @Sendable () -> RefGen<Output> = { RefGen { capturedRecurse() } }
+                let sendableRecurse: @Sendable () -> ReflectiveGenerator<Output> = { ReflectiveGenerator { capturedRecurse() } }
                 return extend(sendableRecurse, remaining).gen
             }
         }

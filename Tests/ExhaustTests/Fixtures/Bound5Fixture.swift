@@ -29,7 +29,7 @@ enum Bound5Fixture {
     }
 
     /// Generator: each component is a length 0–10 array of `Int16` filtered so each list sums to less than 256.
-    static let gen: RefGen<Tuple> = {
+    static let gen: ReflectiveGenerator<Tuple> = {
         let arr = #gen(.int16(scaling: .constant).array(length: 0 ... 10, scaling: .constant))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
         return #gen(arr, arr, arr, arr, arr) { a, b, c, d, e in

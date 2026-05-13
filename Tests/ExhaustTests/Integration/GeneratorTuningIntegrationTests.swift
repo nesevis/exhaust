@@ -63,7 +63,7 @@ struct GeneratorTuningIntegrationTests {
     @Test("Deeply nested generators do not explode in sample count")
     func depthBudget() {
         // Create a deeply nested pick structure
-        var gen: RefGen<Int> = #gen(.int(in: 1 ... 10))
+        var gen: ReflectiveGenerator<Int> = #gen(.int(in: 1 ... 10))
         for _ in 0 ..< 10 {
             gen = #gen(.oneOf(weighted:
                 (1, gen),

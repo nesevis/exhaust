@@ -310,7 +310,7 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
     let choicesBlock = choices.joined(separator: ",\n")
 
     return """
-    static var commandGenerator: RefGen<Command> {
+    static var commandGenerator: ReflectiveGenerator<Command> {
         .oneOf(weighted:
     \(raw: choicesBlock)
         )
@@ -409,10 +409,10 @@ private func synthesizeSUTDescription(sutProps: [SUTProperty]) -> DeclSyntax {
 
 /// Wraps a generator expression with a type cast to provide type context for implicit member syntax.
 ///
-/// User writes `@Command(weight: 3, .int(in: 0...9))` — the expression `.int(in: 0...9)` has no base type in the synthesized context. Casting to `RefGen<ParamType>` resolves the member lookup.
+/// User writes `@Command(weight: 3, .int(in: 0...9))` — the expression `.int(in: 0...9)` has no base type in the synthesized context. Casting to `ReflectiveGenerator<ParamType>` resolves the member lookup.
 private func qualifyGenExpression(_ expr: String, paramType: String) -> String {
     if expr.hasPrefix(".") {
-        return "(\(expr) as RefGen<\(paramType)>)"
+        return "(\(expr) as ReflectiveGenerator<\(paramType)>)"
     }
     return expr
 }

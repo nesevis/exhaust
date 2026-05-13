@@ -1,11 +1,11 @@
 //
-//  RefGen+Unfold.swift
+//  ReflectiveGenerator+Unfold.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates values by iteratively transforming state from a seed.
     ///
     /// Starting from an initial state produced by `seed`, the generator repeatedly calls `step` to either produce the final value (`.done`) or continue with new state (`.recurse`). The `remaining` parameter counts down from the chosen depth to zero; `step` must return `.done` when `remaining` is zero.
@@ -34,14 +34,14 @@ public extension RefGen {
     ///   - step: Closure that receives the current state and remaining depth, returning a generator of ``UnfoldStep``.
     /// - Returns: A generator producing values built by iterative state transformation.
     static func unfold<State>(
-        seed: RefGen<State>,
+        seed: ReflectiveGenerator<State>,
         depthRange: ClosedRange<Int>,
-        step: @Sendable @escaping (State, UInt64) -> RefGen<UnfoldStep<State, Output>>,
+        step: @Sendable @escaping (State, UInt64) -> ReflectiveGenerator<UnfoldStep<State, Output>>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> RefGen<Output> {
-        RefGen {
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
             Gen.unfold(
                 seed: seed.gen,
                 depthRange: depthRange,

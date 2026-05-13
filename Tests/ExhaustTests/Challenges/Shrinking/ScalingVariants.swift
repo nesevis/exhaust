@@ -87,9 +87,9 @@ struct BinaryHeapScalingVariant {
 
     // MARK: - Recursive generator
 
-    static func heapGen(min: Int = 0, depth: UInt64, scaling: SizeScaling<Int>) -> RefGen<Heap> {
+    static func heapGen(min: Int = 0, depth: UInt64, scaling: SizeScaling<Int>) -> ReflectiveGenerator<Heap> {
         let maxVal = 100
-        let emptyGen: RefGen<Heap> = #gen(.just(.empty))
+        let emptyGen: ReflectiveGenerator<Heap> = #gen(.just(.empty))
 
         guard depth > 0, min <= maxVal else {
             return emptyGen
@@ -149,7 +149,7 @@ struct CalculatorScalingVariant {
 
     // MARK: - Recursive generator
 
-    static func expression(depth: UInt64, scaling: SizeScaling<Int>) -> RefGen<Expr> {
+    static func expression(depth: UInt64, scaling: SizeScaling<Int>) -> ReflectiveGenerator<Expr> {
         let leaf = #gen(.int(in: -10 ... 10, scaling: scaling))
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
 
@@ -413,7 +413,7 @@ struct LengthListScalingVariant {
         let uintScaling: SizeScaling<UInt> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
 
-        let gen: RefGen<[UInt]> = #gen(.uint(in: 0 ... 1000, scaling: uintScaling)).array(length: 1 ... 100, scaling: arrayScaling)
+        let gen: ReflectiveGenerator<[UInt]> = #gen(.uint(in: 0 ... 1000, scaling: uintScaling)).array(length: 1 ... 100, scaling: arrayScaling)
 
         let value: [UInt] = [100, 200, 900, 50, 300]
 

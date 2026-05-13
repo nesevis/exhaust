@@ -1,12 +1,12 @@
 //
-//  RefGen+Decimal.swift
+//  ReflectiveGenerator+Decimal.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates `Decimal` values within the given range, quantized to the specified number of decimal places.
     ///
     /// Values are represented internally as `Int64` steps, so total precision is limited to approximately 18 significant digits shared between the integer and fractional parts. The effective integer range depends on `precision`:
@@ -31,7 +31,7 @@ public extension RefGen {
     static func decimal(
         in range: ClosedRange<Decimal>,
         precision: UInt8
-    ) -> RefGen<Decimal> {
+    ) -> ReflectiveGenerator<Decimal> {
         let multiplier = pow(10, Int(precision)) as Decimal
         let lowerStep = Int64(truncating: (range.lowerBound * multiplier) as NSDecimalNumber)
         let upperStep = Int64(truncating: (range.upperBound * multiplier) as NSDecimalNumber)
@@ -41,7 +41,7 @@ public extension RefGen {
             "Lower bound must not exceed upper bound after scaling"
         )
 
-        return RefGen<Int64> { Gen.choose(in: lowerStep ... upperStep) }
+        return ReflectiveGenerator<Int64> { Gen.choose(in: lowerStep ... upperStep) }
             .mapped(
                 forward: { step in
                     Decimal(step) / multiplier

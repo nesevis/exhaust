@@ -36,12 +36,12 @@ struct GraphColoringGraph: CustomStringConvertible {
 // MARK: - Generator
 
 /// Multi-leaf bind-inner generator. The inner is a list of vertex labels (5 to 20 distinct integers in `0...50`). The bound subtree generates edges as index-pairs into that list — the edges' domain depends on the vertex count, so the upstream and downstream are structurally coupled. A non-bind rewrite using `.filter` would collapse to near-zero yield because random `Int` pairs almost never reference vertices in the chosen vertex list.
-let graphColoringGen: RefGen<GraphColoringGraph> = {
+let graphColoringGen: ReflectiveGenerator<GraphColoringGraph> = {
     let verticesGen = #gen(.int(in: 0 ... 50, scaling: .constant).array(length: 5 ... 20, scaling: .constant))
-    return verticesGen.bind { (vertices: [Int]) -> RefGen<GraphColoringGraph> in
+    return verticesGen.bind { (vertices: [Int]) -> ReflectiveGenerator<GraphColoringGraph> in
         let n = vertices.count
         guard n >= 2 else {
-            return RefGen.just(GraphColoringGraph(vertices: vertices, edges: []))
+            return ReflectiveGenerator.just(GraphColoringGraph(vertices: vertices, edges: []))
         }
         let edgePairGen = #gen(
             .int(in: 0 ... n - 1, scaling: .constant),

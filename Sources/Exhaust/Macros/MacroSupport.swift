@@ -60,7 +60,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// - Returns: The reduced counterexample if the property failed, or `nil` if all iterations passed.
     @discardableResult
     public static func __exhaust<Output>(
-        _ refGen: RefGen<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings<Output>],
         sourceCode: String?,
         fileID: StaticString = #fileID,
@@ -336,7 +336,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     continue
                 }
                 let replayResult = __exhaust(
-                    RefGen { gen },
+                    ReflectiveGenerator { gen },
                     settings: [
                         .replay(.numeric(seed)),
                         .suppress(.issueReporting),
@@ -375,7 +375,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Wraps the property into a `Bool`-returning form via `withExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
     @discardableResult
     public static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
-        _ refGen: RefGen<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings<Output>],
         sourceCode: String?,
         fileID: StaticString = #fileID,
@@ -488,7 +488,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Bridges the async property to sync, then dispatches the synchronous core onto a GCD thread where semaphore-blocking is safe.
     @discardableResult
     public static func __exhaustAsync<Output>( // swiftlint:disable:this function_parameter_count
-        _ refGen: RefGen<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings<Output>],
         sourceCode: String?,
         fileID: StaticString = #fileID,
@@ -519,7 +519,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Bridges the async detection to sync, dispatches the pipeline onto a GCD thread, then re-runs the async property in the original context so `#expect` failures record with reduced values.
     @discardableResult
     public static func __exhaustExpectAsync<Output>( // swiftlint:disable:this function_parameter_count
-        _ refGen: RefGen<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings<Output>],
         sourceCode: String?,
         fileID: StaticString = #fileID,
@@ -631,7 +631,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Generates a single value from a generator. Runtime target of `#example` expansion.
     public static func __example<Output>(
-        _ refGen: RefGen<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         seed: UInt64?
     ) -> Output {
         let gen = refGen.gen
@@ -646,7 +646,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Generates an array of values from a generator. Runtime target of `#example` expansion.
     public static func __exampleArray<Output>(
-        _ refGen: RefGen<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         count: UInt64,
         seed: UInt64?
     ) -> [Output] {
@@ -668,7 +668,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
     @discardableResult
     public static func __examine(
-        _ refGen: RefGen<some Equatable>,
+        _ refGen: ReflectiveGenerator<some Equatable>,
         samples: Int,
         seed: UInt64?,
         fileID: StaticString,
@@ -694,7 +694,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Falls back to choice-sequence comparison for non-`Equatable` types.
     @discardableResult
     public static func __examine(
-        _ refGen: RefGen<some Any>,
+        _ refGen: ReflectiveGenerator<some Any>,
         samples: Int,
         seed: UInt64?,
         fileID: StaticString,

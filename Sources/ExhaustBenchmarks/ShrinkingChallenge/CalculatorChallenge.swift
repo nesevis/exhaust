@@ -62,7 +62,7 @@ func containsLiteralDivisionByZero(_ expr: Expr) -> Bool {
 
 // MARK: - Generator
 
-func calculatorExpressionGen(depth: UInt64) -> RefGen<Expr> {
+func calculatorExpressionGen(depth: UInt64) -> ReflectiveGenerator<Expr> {
     let leaf = #gen(.int())
         .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
 

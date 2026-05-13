@@ -5,11 +5,11 @@ public extension __ExhaustRuntime {
     ///
     /// This is **macro infrastructure** — it exists solely as an expansion target for the `#gen` macro when a single generator is combined with an initializer/enum-case call.
     static func _macroMap<Input, Output>(
-        _ generator: RefGen<Input>,
+        _ generator: ReflectiveGenerator<Input>,
         label: String,
         forward: @Sendable @escaping (Input) -> Output
-    ) -> RefGen<Output> {
-        RefGen {
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
             Gen.contramap(
                 { (output: Output) throws -> Any in
                     guard let value = _mirrorExtract(output, label: label) else {
@@ -26,11 +26,11 @@ public extension __ExhaustRuntime {
     ///
     /// This is **macro infrastructure** for enum case generators. The backward closure uses pattern matching to extract associated values, returning `nil` when the enum value doesn't match the expected case.
     static func _macroMap<Input, Output>(
-        _ generator: RefGen<Input>,
+        _ generator: ReflectiveGenerator<Input>,
         backward: @Sendable @escaping (Output) -> Input?,
         forward: @Sendable @escaping (Input) -> Output
-    ) -> RefGen<Output> {
-        RefGen {
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
             Gen.contramap(
                 { (output: Output) throws -> Input in
                     guard let input = backward(output) else {
@@ -47,11 +47,11 @@ public extension __ExhaustRuntime {
     ///
     /// This is **macro infrastructure** — it exists solely as an expansion target for the `#gen` macro when multiple generators are combined with a labeled initializer call.
     static func _macroZip<each T, NewOutput>(
-        _ generators: repeat RefGen<each T>,
+        _ generators: repeat ReflectiveGenerator<each T>,
         labels: [String],
         forward: @Sendable @escaping ((repeat each T)) -> NewOutput
-    ) -> RefGen<NewOutput> {
-        RefGen {
+    ) -> ReflectiveGenerator<NewOutput> {
+        ReflectiveGenerator {
             var erased: ContiguousArray<AnyGenerator> = []
             erased.reserveCapacity(5)
             for generator in repeat each generators {
@@ -87,11 +87,11 @@ public extension __ExhaustRuntime {
     ///
     /// This is **macro infrastructure** for enum case generators with multiple associated values.
     static func _macroZip<each T, NewOutput>(
-        _ generators: repeat RefGen<each T>,
+        _ generators: repeat ReflectiveGenerator<each T>,
         backward: @Sendable @escaping (NewOutput) -> [Any]?,
         forward: @Sendable @escaping ((repeat each T)) -> NewOutput
-    ) -> RefGen<NewOutput> {
-        RefGen {
+    ) -> ReflectiveGenerator<NewOutput> {
+        ReflectiveGenerator {
             var erased: ContiguousArray<AnyGenerator> = []
             erased.reserveCapacity(5)
             for generator in repeat each generators {
@@ -127,25 +127,25 @@ public extension __ExhaustRuntime {
 
     /// Scalar conversion for `BinaryInteger` → `BinaryInteger` (for example `UInt64` → `Int`).
     static func _macroMapScalar<Input: BinaryInteger, Output: BinaryInteger>(
-        _ generator: RefGen<Input>,
+        _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         generator.mapped(forward: forward, backward: { Input($0) })
     }
 
     /// Scalar conversion for `BinaryFloatingPoint` → `BinaryFloatingPoint` (for example `Double` → `Float`).
     static func _macroMapScalar<Input: BinaryFloatingPoint, Output: BinaryFloatingPoint>(
-        _ generator: RefGen<Input>,
+        _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         generator.mapped(forward: forward, backward: { Input($0) })
     }
 
     /// Unconstrained fallback — forward-only when no numeric protocol matches.
     static func _macroMapScalar<Input, Output>(
-        _ generator: RefGen<Input>,
+        _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         generator.map(forward)
     }
 
@@ -153,8 +153,8 @@ public extension __ExhaustRuntime {
 
     /// Forwarding wrapper for `Gen.zip`, used by macro expansion for the no-closure multi-generator overload.
     static func __zip<each T>(
-        _ generators: repeat RefGen<each T>
-    ) -> RefGen<(repeat each T)> {
-        RefGen { Gen.zip(repeat (each generators).gen) }
+        _ generators: repeat ReflectiveGenerator<each T>
+    ) -> ReflectiveGenerator<(repeat each T)> {
+        ReflectiveGenerator { Gen.zip(repeat (each generators).gen) }
     }
 }

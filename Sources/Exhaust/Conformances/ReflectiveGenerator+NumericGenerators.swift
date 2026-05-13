@@ -1,5 +1,5 @@
 //
-//  RefGen+NumericGenerators.swift
+//  ReflectiveGenerator+NumericGenerators.swift
 //  Exhaust
 //
 
@@ -11,7 +11,7 @@ import ExhaustCore
 // MARK: - Floating-point generators
 
 #if arch(arm64) || arch(arm64_32)
-    public extension RefGen {
+    public extension ReflectiveGenerator {
         /// Generates arbitrary `Float16` values within the given range.
         ///
         /// When no range is specified, generates across the full finite half-precision range with size scaling.
@@ -22,8 +22,8 @@ import ExhaustCore
         static func float16(
             in range: ClosedRange<Float16>? = nil,
             scaling: SizeScaling<Float16>? = nil
-        ) -> RefGen<Float16> {
-            RefGen<Float16> {
+        ) -> ReflectiveGenerator<Float16> {
+            ReflectiveGenerator<Float16> {
                 if let range {
                     return if let scaling {
                         Gen.choose(in: range, scaling: scaling)
@@ -46,13 +46,13 @@ import ExhaustCore
         static func float16(
             in range: ClosedRange<Double>,
             scaling: SizeScaling<Float16>? = nil
-        ) -> RefGen<Float16> {
+        ) -> ReflectiveGenerator<Float16> {
             float16(in: Float16(range.lowerBound) ... Float16(range.upperBound), scaling: scaling)
         }
     }
 #endif
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates arbitrary `Double` values within the given range.
     ///
     /// When no range is specified, generates across the full finite double range with size scaling.
@@ -63,8 +63,8 @@ public extension RefGen {
     static func double(
         in range: ClosedRange<Double>? = nil,
         scaling: SizeScaling<Double>? = nil
-    ) -> RefGen<Double> {
-        RefGen<Double> {
+    ) -> ReflectiveGenerator<Double> {
+        ReflectiveGenerator<Double> {
             if let range {
                 return if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -93,8 +93,8 @@ public extension RefGen {
     static func float(
         in range: ClosedRange<Float>? = nil,
         scaling: SizeScaling<Float>? = nil
-    ) -> RefGen<Float> {
-        RefGen<Float> {
+    ) -> ReflectiveGenerator<Float> {
+        ReflectiveGenerator<Float> {
             if let range {
                 return if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -117,7 +117,7 @@ public extension RefGen {
     static func float(
         in range: ClosedRange<Double>,
         scaling: SizeScaling<Float>? = nil
-    ) -> RefGen<Float> {
+    ) -> ReflectiveGenerator<Float> {
         float(in: Float(range.lowerBound) ... Float(range.upperBound), scaling: scaling)
     }
 
@@ -132,9 +132,9 @@ public extension RefGen {
         static func cgfloat(
             in range: ClosedRange<CGFloat>? = nil,
             scaling: SizeScaling<Double>? = nil
-        ) -> RefGen<CGFloat> {
+        ) -> ReflectiveGenerator<CGFloat> {
             let doubleRange = range.map { Double($0.lowerBound) ... Double($0.upperBound) }
-            return RefGen<Double>.double(in: doubleRange, scaling: scaling)
+            return ReflectiveGenerator<Double>.double(in: doubleRange, scaling: scaling)
                 .mapped(
                     forward: { CGFloat($0) },
                     backward: { Double($0) }
@@ -145,7 +145,7 @@ public extension RefGen {
         static func cgfloat(
             in range: ClosedRange<Double>,
             scaling: SizeScaling<Double>? = nil
-        ) -> RefGen<CGFloat> {
+        ) -> ReflectiveGenerator<CGFloat> {
             cgfloat(in: CGFloat(range.lowerBound) ... CGFloat(range.upperBound), scaling: scaling)
         }
     #endif
@@ -153,7 +153,7 @@ public extension RefGen {
 
 // MARK: - Unsigned integer generators
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt8` values within the given range.
     ///
     /// ```swift
@@ -162,8 +162,8 @@ public extension RefGen {
     static func uint8(
         in range: ClosedRange<UInt8>? = nil,
         scaling: SizeScaling<UInt8>? = nil
-    ) -> RefGen<UInt8> {
-        RefGen<UInt8> {
+    ) -> ReflectiveGenerator<UInt8> {
+        ReflectiveGenerator<UInt8> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -182,7 +182,7 @@ public extension RefGen {
     static func uint8(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt8>? = nil
-    ) -> RefGen<UInt8> {
+    ) -> ReflectiveGenerator<UInt8> {
         guard let lower = UInt8(exactly: range.lowerBound),
               let upper = UInt8(exactly: range.upperBound)
         else {
@@ -201,8 +201,8 @@ public extension RefGen {
     static func uint16(
         in range: ClosedRange<UInt16>? = nil,
         scaling: SizeScaling<UInt16>? = nil
-    ) -> RefGen<UInt16> {
-        RefGen<UInt16> {
+    ) -> ReflectiveGenerator<UInt16> {
+        ReflectiveGenerator<UInt16> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -221,7 +221,7 @@ public extension RefGen {
     static func uint16(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt16>? = nil
-    ) -> RefGen<UInt16> {
+    ) -> ReflectiveGenerator<UInt16> {
         guard let lower = UInt16(exactly: range.lowerBound),
               let upper = UInt16(exactly: range.upperBound)
         else {
@@ -240,8 +240,8 @@ public extension RefGen {
     static func uint32(
         in range: ClosedRange<UInt32>? = nil,
         scaling: SizeScaling<UInt32>? = nil
-    ) -> RefGen<UInt32> {
-        RefGen<UInt32> {
+    ) -> ReflectiveGenerator<UInt32> {
+        ReflectiveGenerator<UInt32> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -260,7 +260,7 @@ public extension RefGen {
     static func uint32(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt32>? = nil
-    ) -> RefGen<UInt32> {
+    ) -> ReflectiveGenerator<UInt32> {
         guard let lower = UInt32(exactly: range.lowerBound),
               let upper = UInt32(exactly: range.upperBound)
         else {
@@ -279,8 +279,8 @@ public extension RefGen {
     static func uint64(
         in range: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64>? = nil
-    ) -> RefGen<UInt64> {
-        RefGen<UInt64> {
+    ) -> ReflectiveGenerator<UInt64> {
+        ReflectiveGenerator<UInt64> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -299,7 +299,7 @@ public extension RefGen {
     static func uint64(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt64>? = nil
-    ) -> RefGen<UInt64> {
+    ) -> ReflectiveGenerator<UInt64> {
         guard let lower = UInt64(exactly: range.lowerBound),
               let upper = UInt64(exactly: range.upperBound)
         else {
@@ -318,8 +318,8 @@ public extension RefGen {
     static func uint(
         in range: ClosedRange<UInt>? = nil,
         scaling: SizeScaling<UInt>? = nil
-    ) -> RefGen<UInt> {
-        RefGen<UInt> {
+    ) -> ReflectiveGenerator<UInt> {
+        ReflectiveGenerator<UInt> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -338,7 +338,7 @@ public extension RefGen {
     static func uint(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt>? = nil
-    ) -> RefGen<UInt> {
+    ) -> ReflectiveGenerator<UInt> {
         guard let lower = UInt(exactly: range.lowerBound),
               let upper = UInt(exactly: range.upperBound)
         else {
@@ -352,7 +352,7 @@ public extension RefGen {
 
 // MARK: - Signed integer generators
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates arbitrary `Int8` values within the given range.
     ///
     /// ```swift
@@ -361,8 +361,8 @@ public extension RefGen {
     static func int8(
         in range: ClosedRange<Int8>? = nil,
         scaling: SizeScaling<Int8>? = nil
-    ) -> RefGen<Int8> {
-        RefGen<Int8> {
+    ) -> ReflectiveGenerator<Int8> {
+        ReflectiveGenerator<Int8> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -381,7 +381,7 @@ public extension RefGen {
     static func int8(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int8>? = nil
-    ) -> RefGen<Int8> {
+    ) -> ReflectiveGenerator<Int8> {
         guard let lower = Int8(exactly: range.lowerBound),
               let upper = Int8(exactly: range.upperBound)
         else { preconditionFailure("Range bounds must fit inside \(Int8.self)") }
@@ -396,8 +396,8 @@ public extension RefGen {
     static func int16(
         in range: ClosedRange<Int16>? = nil,
         scaling: SizeScaling<Int16>? = nil
-    ) -> RefGen<Int16> {
-        RefGen<Int16> {
+    ) -> ReflectiveGenerator<Int16> {
+        ReflectiveGenerator<Int16> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -416,7 +416,7 @@ public extension RefGen {
     static func int16(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int16>? = nil
-    ) -> RefGen<Int16> {
+    ) -> ReflectiveGenerator<Int16> {
         guard let lower = Int16(exactly: range.lowerBound),
               let upper = Int16(exactly: range.upperBound)
         else { preconditionFailure("Range bounds must fit inside \(Int16.self)") }
@@ -431,8 +431,8 @@ public extension RefGen {
     static func int32(
         in range: ClosedRange<Int32>? = nil,
         scaling: SizeScaling<Int32>? = nil
-    ) -> RefGen<Int32> {
-        RefGen<Int32> {
+    ) -> ReflectiveGenerator<Int32> {
+        ReflectiveGenerator<Int32> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -451,7 +451,7 @@ public extension RefGen {
     static func int32(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int32>? = nil
-    ) -> RefGen<Int32> {
+    ) -> ReflectiveGenerator<Int32> {
         guard let lower = Int32(exactly: range.lowerBound),
               let upper = Int32(exactly: range.upperBound)
         else { preconditionFailure("Range bounds must fit inside \(Int32.self)") }
@@ -466,8 +466,8 @@ public extension RefGen {
     static func int64(
         in range: ClosedRange<Int64>? = nil,
         scaling: SizeScaling<Int64>? = nil
-    ) -> RefGen<Int64> {
-        RefGen<Int64> {
+    ) -> ReflectiveGenerator<Int64> {
+        ReflectiveGenerator<Int64> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -486,7 +486,7 @@ public extension RefGen {
     static func int64(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int64>? = nil
-    ) -> RefGen<Int64> {
+    ) -> ReflectiveGenerator<Int64> {
         int64(in: Int64(range.lowerBound) ... Int64(range.upperBound), scaling: scaling)
     }
 
@@ -498,8 +498,8 @@ public extension RefGen {
     static func int(
         in range: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int>? = nil
-    ) -> RefGen<Int> {
-        RefGen<Int> {
+    ) -> ReflectiveGenerator<Int> {
+        ReflectiveGenerator<Int> {
             if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)

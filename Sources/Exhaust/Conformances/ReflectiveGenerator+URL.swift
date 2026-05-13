@@ -1,12 +1,12 @@
 //
-//  RefGen+URL.swift
+//  ReflectiveGenerator+URL.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates arbitrary URL values with randomized structure.
     ///
     /// Produces URLs with a random scheme (`http` or `https`), host (two to three labels of three to ten lowercase alphanumeric characters), zero to three path segments, and zero to two query parameters. All generated strings are valid URL components, so the resulting URL always parses successfully.
@@ -18,8 +18,8 @@ public extension RefGen {
     /// ```
     ///
     /// - Returns: A generator producing valid `URL` values.
-    static func url() -> RefGen<URL> {
-        RefGen<URL> {
+    static func url() -> ReflectiveGenerator<URL> {
+        ReflectiveGenerator<URL> {
             let scheme: Generator<String> = Gen.pick(choices: [
                 (1, Gen.just("http")),
                 (1, Gen.just("https")),

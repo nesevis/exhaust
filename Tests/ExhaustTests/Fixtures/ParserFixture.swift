@@ -207,7 +207,7 @@ enum ParserFixture {
 
     // MARK: - Generators
 
-    static var varGen: RefGen<Var> {
+    static var varGen: ReflectiveGenerator<Var> {
         // Single lowercase ASCII letter — avoids Unicode/empty-name edge cases that would break the serializer/parser roundtrip for non-bug reasons.
         #gen(.int(in: 0 ... 25, scaling: .constant))
             .mapped(
@@ -216,7 +216,7 @@ enum ParserFixture {
             )
     }
 
-    static func expGen(depth: UInt64) -> RefGen<Exp> {
+    static func expGen(depth: UInt64) -> ReflectiveGenerator<Exp> {
         let intLeaf = #gen(.int(in: -10 ... 10, scaling: .constant))
             .mapped(
                 forward: { Exp.int($0) },
@@ -252,7 +252,7 @@ enum ParserFixture {
         func binaryExp(
             _ constructor: @Sendable @escaping (Exp, Exp) -> Exp,
             _ destructor: @Sendable @escaping (Exp) -> (Exp, Exp)?
-        ) -> RefGen<Exp> {
+        ) -> ReflectiveGenerator<Exp> {
             #gen(child, child)
                 .mapped(
                     forward: { lhs, rhs in constructor(lhs, rhs) },
@@ -300,7 +300,7 @@ enum ParserFixture {
             (10, orExp)))
     }
 
-    static var stmtGen: RefGen<Stmt> {
+    static var stmtGen: ReflectiveGenerator<Stmt> {
         let assignGen = #gen(varGen, expGen(depth: 3))
             .mapped(
                 forward: { variable, expression in Stmt.assign(variable, expression) },
@@ -328,7 +328,7 @@ enum ParserFixture {
         return #gen(.oneOf(weighted: (1, assignGen), (1, allocGen), (1, retGen)))
     }
 
-    static var funcGen: RefGen<Func> {
+    static var funcGen: ReflectiveGenerator<Func> {
         #gen(varGen, expGen(depth: 3).array(length: 1 ... 3, scaling: .constant), stmtGen.array(length: 0 ... 3, scaling: .constant))
             .mapped(
                 forward: { name, args, body in Func(name: name, args: args, body: body) },
@@ -336,7 +336,7 @@ enum ParserFixture {
             )
     }
 
-    static var modGen: RefGen<Mod> {
+    static var modGen: ReflectiveGenerator<Mod> {
         #gen(varGen.array(length: 0 ... 3, scaling: .constant), varGen.array(length: 0 ... 3, scaling: .constant))
             .mapped(
                 forward: { imports, exports in Mod(imports: imports, exports: exports) },
@@ -344,7 +344,7 @@ enum ParserFixture {
             )
     }
 
-    static var langGen: RefGen<Lang> {
+    static var langGen: ReflectiveGenerator<Lang> {
         #gen(modGen.array(length: 1 ... 2, scaling: .constant), funcGen.array(length: 1 ... 2, scaling: .constant))
             .mapped(
                 forward: { modules, funcs in Lang(modules: modules, funcs: funcs) },

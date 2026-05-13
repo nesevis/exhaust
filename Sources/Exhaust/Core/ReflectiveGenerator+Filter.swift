@@ -1,11 +1,11 @@
 //
-//  RefGen+Filter.swift
+//  ReflectiveGenerator+Filter.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Creates a filtered generator that only produces values satisfying a predicate.
     ///
     /// The filter combinator supports several strategies for satisfying the predicate, selectable via the `type` parameter:
@@ -38,8 +38,8 @@ public extension RefGen {
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> RefGen<Output> {
-        RefGen {
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
             Gen.filter(
                 gen,
                 type: type,

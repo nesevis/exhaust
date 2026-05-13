@@ -1,5 +1,5 @@
 //
-//  RefGen+Collections.swift
+//  ReflectiveGenerator+Collections.swift
 //  Exhaust
 //
 
@@ -7,7 +7,7 @@ import ExhaustCore
 
 // MARK: - Static collection generators
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Creates a generator that produces arrays of random elements with size-scaled length.
     ///
     /// The array length scales with the interpreter's size parameter (1–100), producing shorter arrays early in a test run and longer ones later.
@@ -19,9 +19,9 @@ public extension RefGen {
     /// - Parameter gen: Generator for each array element.
     /// - Returns: A generator producing arrays of random length.
     static func array<Element>(
-        _ gen: RefGen<Element>
-    ) -> RefGen<[Element]> where Output == [Element] {
-        RefGen<[Element]> { Gen.arrayOf(gen.gen) }
+        _ gen: ReflectiveGenerator<Element>
+    ) -> ReflectiveGenerator<[Element]> where Output == [Element] {
+        ReflectiveGenerator<[Element]> { Gen.arrayOf(gen.gen) }
     }
 
     /// Creates a generator that produces arrays with length within a specified range.
@@ -36,12 +36,12 @@ public extension RefGen {
     ///   - scaling: How array length scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing arrays with length in the given range.
     static func array<Element>(
-        _ gen: RefGen<Element>,
+        _ gen: ReflectiveGenerator<Element>,
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<[Element]> where Output == [Element] {
+    ) -> ReflectiveGenerator<[Element]> where Output == [Element] {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
-        return RefGen<[Element]> {
+        return ReflectiveGenerator<[Element]> {
             Gen.arrayOf(
                 gen.gen,
                 within: UInt64(length.lowerBound) ... UInt64(length.upperBound),
@@ -61,10 +61,10 @@ public extension RefGen {
     ///   - length: The exact number of elements in each generated array.
     /// - Returns: A generator producing arrays of the specified length.
     static func array<Element>(
-        _ gen: RefGen<Element>,
+        _ gen: ReflectiveGenerator<Element>,
         length: UInt64
-    ) -> RefGen<[Element]> where Output == [Element] {
-        RefGen<[Element]> { Gen.arrayOf(gen.gen, exactly: length) }
+    ) -> ReflectiveGenerator<[Element]> where Output == [Element] {
+        ReflectiveGenerator<[Element]> { Gen.arrayOf(gen.gen, exactly: length) }
     }
 
     /// Creates a generator that produces arrays of an exact fixed length.
@@ -78,9 +78,9 @@ public extension RefGen {
     ///   - length: The exact number of elements in each generated array.
     /// - Returns: A generator producing arrays of the specified length.
     static func array<Element>(
-        _ gen: RefGen<Element>,
+        _ gen: ReflectiveGenerator<Element>,
         length: Int
-    ) -> RefGen<[Element]> where Output == [Element] {
+    ) -> ReflectiveGenerator<[Element]> where Output == [Element] {
         precondition(length >= 0, "Length must be non-negative")
         return array(gen, length: UInt64(length))
     }
@@ -96,9 +96,9 @@ public extension RefGen {
     /// - Parameter gen: Generator for each set element.
     /// - Returns: A generator producing sets of random size.
     static func set<Element: Hashable>(
-        _ gen: RefGen<Element>
-    ) -> RefGen<Set<Element>> where Output == Set<Element> {
-        RefGen<Set<Element>> { Gen.setOf(gen.gen) }
+        _ gen: ReflectiveGenerator<Element>
+    ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
+        ReflectiveGenerator<Set<Element>> { Gen.setOf(gen.gen) }
     }
 
     /// Creates a generator that produces sets with count within a specified range.
@@ -113,13 +113,13 @@ public extension RefGen {
     ///   - scaling: How set size scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing sets with count in the given range.
     static func set<Element: Hashable>(
-        _ gen: RefGen<Element>,
+        _ gen: ReflectiveGenerator<Element>,
         count: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<Set<Element>> where Output == Set<Element> {
+    ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
-        return RefGen<Set<Element>> { Gen.setOf(gen.gen, within: range, scaling: scaling) }
+        return ReflectiveGenerator<Set<Element>> { Gen.setOf(gen.gen, within: range, scaling: scaling) }
     }
 
     /// Creates a generator that produces sets of an exact fixed count.
@@ -133,10 +133,10 @@ public extension RefGen {
     ///   - count: The exact number of elements in each generated set.
     /// - Returns: A generator producing sets of the specified size.
     static func set<Element: Hashable>(
-        _ gen: RefGen<Element>,
+        _ gen: ReflectiveGenerator<Element>,
         count: UInt64
-    ) -> RefGen<Set<Element>> where Output == Set<Element> {
-        RefGen<Set<Element>> { Gen.setOf(gen.gen, exactly: count) }
+    ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
+        ReflectiveGenerator<Set<Element>> { Gen.setOf(gen.gen, exactly: count) }
     }
 
     /// Creates a generator that produces sets of an exact fixed count.
@@ -150,9 +150,9 @@ public extension RefGen {
     ///   - count: The exact number of elements in each generated set.
     /// - Returns: A generator producing sets of the specified size.
     static func set<Element: Hashable>(
-        _ gen: RefGen<Element>,
+        _ gen: ReflectiveGenerator<Element>,
         count: Int
-    ) -> RefGen<Set<Element>> where Output == Set<Element> {
+    ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
         precondition(count >= 0, "Count must be non-negative")
         return set(gen, count: UInt64(count))
     }
@@ -170,10 +170,10 @@ public extension RefGen {
     ///   - valueGen: Generator for dictionary values.
     /// - Returns: A generator producing dictionaries of random size.
     static func dictionary<Key: Hashable, DictValue>(
-        _ keyGen: RefGen<Key>,
-        _ valueGen: RefGen<DictValue>
-    ) -> RefGen<[Key: DictValue]> where Output == [Key: DictValue] {
-        RefGen<[Key: DictValue]> { Gen.dictionaryOf(keyGen.gen, valueGen.gen) }
+        _ keyGen: ReflectiveGenerator<Key>,
+        _ valueGen: ReflectiveGenerator<DictValue>
+    ) -> ReflectiveGenerator<[Key: DictValue]> where Output == [Key: DictValue] {
+        ReflectiveGenerator<[Key: DictValue]> { Gen.dictionaryOf(keyGen.gen, valueGen.gen) }
     }
 
     /// Creates a generator that produces random contiguous slices of a generated collection.
@@ -187,9 +187,9 @@ public extension RefGen {
     /// - Parameter gen: Generator for the source collection to slice.
     /// - Returns: A generator producing random sub-sequences.
     static func slice<C: Collection>(
-        of gen: RefGen<C>
-    ) -> RefGen<C.SubSequence> where Output == C.SubSequence {
-        RefGen<C.SubSequence> { Gen.slice(of: gen.gen) }
+        of gen: ReflectiveGenerator<C>
+    ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {
+        ReflectiveGenerator<C.SubSequence> { Gen.slice(of: gen.gen) }
     }
 
     /// Creates a generator that produces random contiguous slices of a fixed collection.
@@ -204,8 +204,8 @@ public extension RefGen {
     /// - Returns: A generator producing random sub-sequences of the collection.
     static func slice<C: Collection>(
         of collection: C
-    ) -> RefGen<C.SubSequence> where Output == C.SubSequence {
-        RefGen<C.SubSequence> { Gen.slice(of: collection) }
+    ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {
+        ReflectiveGenerator<C.SubSequence> { Gen.slice(of: collection) }
     }
 
     /// Creates a generator that produces randomly shuffled versions of a generated collection.
@@ -219,15 +219,15 @@ public extension RefGen {
     /// - Parameter gen: Generator for the source collection to shuffle.
     /// - Returns: A generator producing shuffled arrays.
     static func shuffled(
-        _ gen: RefGen<Output>
-    ) -> RefGen<[Output.Element]> where Output: Collection {
-        RefGen<[Output.Element]> { Gen.shuffled(gen.gen) }
+        _ gen: ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<[Output.Element]> where Output: Collection {
+        ReflectiveGenerator<[Output.Element]> { Gen.shuffled(gen.gen) }
     }
 }
 
 // MARK: - Instance methods for chaining
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Wraps this element generator to produce arrays with size-scaled length.
     ///
     /// ```swift
@@ -235,8 +235,8 @@ public extension RefGen {
     /// ```
     ///
     /// - Returns: A generator producing arrays of this generator's values.
-    func array() -> RefGen<[Output]> {
-        RefGen<[Output]> { Gen.arrayOf(gen) }
+    func array() -> ReflectiveGenerator<[Output]> {
+        ReflectiveGenerator<[Output]> { Gen.arrayOf(gen) }
     }
 
     /// Wraps this element generator to produce arrays with length in a specified range.
@@ -252,10 +252,10 @@ public extension RefGen {
     func array(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<[Output]> {
+    ) -> ReflectiveGenerator<[Output]> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return RefGen<[Output]> { Gen.arrayOf(gen, within: range, scaling: scaling) }
+        return ReflectiveGenerator<[Output]> { Gen.arrayOf(gen, within: range, scaling: scaling) }
     }
 
     /// Wraps this element generator to produce arrays of an exact fixed length.
@@ -266,8 +266,8 @@ public extension RefGen {
     ///
     /// - Parameter length: The exact number of elements in each generated array.
     /// - Returns: A generator producing arrays of the specified length.
-    func array(length: UInt64) -> RefGen<[Output]> {
-        RefGen<[Output]> { Gen.arrayOf(gen, exactly: length) }
+    func array(length: UInt64) -> ReflectiveGenerator<[Output]> {
+        ReflectiveGenerator<[Output]> { Gen.arrayOf(gen, exactly: length) }
     }
 
     /// Wraps this element generator to produce arrays of an exact fixed length.
@@ -278,7 +278,7 @@ public extension RefGen {
     ///
     /// - Parameter length: The exact number of elements in each generated array.
     /// - Returns: A generator producing arrays of the specified length.
-    func array(length: Int) -> RefGen<[Output]> {
+    func array(length: Int) -> ReflectiveGenerator<[Output]> {
         precondition(length >= 0, "Length must be non-negative")
         return array(length: UInt64(length))
     }
@@ -290,8 +290,8 @@ public extension RefGen {
     /// ```
     ///
     /// - Returns: A generator producing sets of this generator's values.
-    func set() -> RefGen<Set<Output>> where Output: Hashable {
-        RefGen<Set<Output>> { Gen.setOf(gen) }
+    func set() -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
+        ReflectiveGenerator<Set<Output>> { Gen.setOf(gen) }
     }
 
     /// Wraps this element generator to produce sets with count in a specified range.
@@ -307,10 +307,10 @@ public extension RefGen {
     func set(
         count: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<Set<Output>> where Output: Hashable {
+    ) -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
-        return RefGen<Set<Output>> { Gen.setOf(gen, within: range, scaling: scaling) }
+        return ReflectiveGenerator<Set<Output>> { Gen.setOf(gen, within: range, scaling: scaling) }
     }
 
     /// Wraps this element generator to produce sets of an exact fixed count.
@@ -321,8 +321,8 @@ public extension RefGen {
     ///
     /// - Parameter count: The exact number of elements in each generated set.
     /// - Returns: A generator producing sets of the specified size.
-    func set(count: UInt64) -> RefGen<Set<Output>> where Output: Hashable {
-        RefGen<Set<Output>> { Gen.setOf(gen, exactly: count) }
+    func set(count: UInt64) -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
+        ReflectiveGenerator<Set<Output>> { Gen.setOf(gen, exactly: count) }
     }
 
     /// Wraps this element generator to produce sets of an exact fixed count.
@@ -333,7 +333,7 @@ public extension RefGen {
     ///
     /// - Parameter count: The exact number of elements in each generated set.
     /// - Returns: A generator producing sets of the specified size.
-    func set(count: Int) -> RefGen<Set<Output>> where Output: Hashable {
+    func set(count: Int) -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
         precondition(count >= 0, "Count must be non-negative")
         return set(count: UInt64(count))
     }
@@ -345,8 +345,8 @@ public extension RefGen {
     /// ```
     ///
     /// - Returns: A generator producing non-empty sub-sequences of the generated collection.
-    func slice() -> RefGen<Output.SubSequence> where Output: Collection {
-        RefGen<Output.SubSequence> { Gen.slice(of: gen) }
+    func slice() -> ReflectiveGenerator<Output.SubSequence> where Output: Collection {
+        ReflectiveGenerator<Output.SubSequence> { Gen.slice(of: gen) }
     }
 
     /// Wraps this collection generator to produce randomly shuffled arrays.
@@ -356,8 +356,8 @@ public extension RefGen {
     /// ```
     ///
     /// - Returns: A generator producing shuffled arrays of this collection's elements.
-    func shuffled() -> RefGen<[Output.Element]> where Output: Collection {
-        RefGen<[Output.Element]> { Gen.shuffled(gen) }
+    func shuffled() -> ReflectiveGenerator<[Output.Element]> where Output: Collection {
+        ReflectiveGenerator<[Output.Element]> { Gen.shuffled(gen) }
     }
 
     /// Picks a random element from a fixed collection.
@@ -372,8 +372,8 @@ public extension RefGen {
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C
-    ) -> RefGen<C.Element> where Output == C.Element, C.Element: Hashable {
-        RefGen { Gen.element(from: collection) }
+    ) -> ReflectiveGenerator<C.Element> where Output == C.Element, C.Element: Hashable {
+        ReflectiveGenerator { Gen.element(from: collection) }
     }
 
     /// Picks a random element from a fixed collection.
@@ -388,8 +388,8 @@ public extension RefGen {
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C
-    ) -> RefGen<C.Element> where Output == C.Element, C.Element: Equatable {
-        RefGen { Gen.element(from: collection) }
+    ) -> ReflectiveGenerator<C.Element> where Output == C.Element, C.Element: Equatable {
+        ReflectiveGenerator { Gen.element(from: collection) }
     }
 
     /// Picks a random element from a fixed collection, identified by a hashable key path for O(1) reflection.
@@ -407,8 +407,8 @@ public extension RefGen {
     static func element<C: Collection>(
         from collection: C,
         id path: KeyPath<C.Element, some Hashable>
-    ) -> RefGen<C.Element> where Output == C.Element {
-        RefGen { Gen.element(from: collection, id: path) }
+    ) -> ReflectiveGenerator<C.Element> where Output == C.Element {
+        ReflectiveGenerator { Gen.element(from: collection, id: path) }
     }
 
     /// Picks a random element from a fixed collection, identified by an equatable key path for reflection.
@@ -426,7 +426,7 @@ public extension RefGen {
     static func element<C: Collection>(
         from collection: C,
         id path: KeyPath<C.Element, some Equatable>
-    ) -> RefGen<C.Element> where Output == C.Element {
-        RefGen { Gen.element(from: collection, id: path) }
+    ) -> ReflectiveGenerator<C.Element> where Output == C.Element {
+        ReflectiveGenerator { Gen.element(from: collection, id: path) }
     }
 }

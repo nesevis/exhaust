@@ -1,12 +1,12 @@
 //
-//  RefGen+Strings.swift
+//  ReflectiveGenerator+Strings.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates a random Unicode character, optionally within the given range.
     ///
     /// ```swift
@@ -17,15 +17,15 @@ public extension RefGen {
     static func character(
         in range: ClosedRange<Character>? = nil,
         simplest: Unicode.Scalar? = nil
-    ) -> RefGen<Character> {
+    ) -> ReflectiveGenerator<Character> {
         guard let range else {
-            return RefGen<Character> { refGenCharacterGenerator(from: refGenDefaultScalarRangeSet) }
+            return ReflectiveGenerator<Character> { refGenCharacterGenerator(from: refGenDefaultScalarRangeSet) }
         }
         let lower = range.lowerBound.unicodeScalars.min()!
         let upper = range.upperBound.unicodeScalars.max()!
         let characterSet = CharacterSet(charactersIn: lower ... upper)
         let bottom = refGenResolveSimplest(simplest, in: characterSet)
-        return RefGen<Character> { refGenCharacterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
+        return ReflectiveGenerator<Character> { refGenCharacterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
     }
 
     /// Generates a random Unicode string with size-scaled or fixed length.
@@ -36,7 +36,7 @@ public extension RefGen {
     static func string(
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<String> {
+    ) -> ReflectiveGenerator<String> {
         refGenStringGenerator(from: refGenDefaultScalarRangeSet, length: length, scaling: scaling)
     }
 
@@ -48,7 +48,7 @@ public extension RefGen {
     static func asciiString(
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<String> {
+    ) -> ReflectiveGenerator<String> {
         refGenStringGenerator(from: refGenAsciiScalarRangeSet, length: length, scaling: scaling)
     }
 
@@ -56,7 +56,7 @@ public extension RefGen {
     static func string(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<String> {
+    ) -> ReflectiveGenerator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
         return string(length: uint64Range, scaling: scaling)
@@ -66,7 +66,7 @@ public extension RefGen {
     static func asciiString(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<String> {
+    ) -> ReflectiveGenerator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
         return asciiString(length: uint64Range, scaling: scaling)
@@ -86,9 +86,9 @@ public extension RefGen {
     static func character(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil
-    ) -> RefGen<Character> {
+    ) -> ReflectiveGenerator<Character> {
         let bottom = refGenResolveSimplest(simplest, in: characterSet)
-        return RefGen<Character> { refGenCharacterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
+        return ReflectiveGenerator<Character> { refGenCharacterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
     }
 
     /// Generates a random character from the union of two or more ``CharacterSet``s.
@@ -96,7 +96,7 @@ public extension RefGen {
     /// ```swift
     /// let gen = #gen(.character(from: .letters, .decimalDigits))
     /// ```
-    static func character(from first: CharacterSet, _ rest: CharacterSet...) -> RefGen<Character> {
+    static func character(from first: CharacterSet, _ rest: CharacterSet...) -> ReflectiveGenerator<Character> {
         let combined = rest.reduce(first) { $0.union($1) }
         return character(from: combined)
     }
@@ -113,7 +113,7 @@ public extension RefGen {
         simplest: Unicode.Scalar? = nil,
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<String> {
+    ) -> ReflectiveGenerator<String> {
         let bottom = refGenResolveSimplest(simplest, in: characterSet)
         return refGenStringGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom), length: length, scaling: scaling)
     }
@@ -130,7 +130,7 @@ public extension RefGen {
         simplest: Unicode.Scalar? = nil,
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<String> {
+    ) -> ReflectiveGenerator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
         return string(from: characterSet, simplest: simplest, length: uint64Range, scaling: scaling)
@@ -200,16 +200,16 @@ private func refGenStringGenerator(
     from srs: ScalarRangeSet,
     length: ClosedRange<UInt64>? = nil,
     scaling: SizeScaling<UInt64> = .linear
-) -> RefGen<String> {
+) -> ReflectiveGenerator<String> {
     let charGen = refGenCharacterGenerator(from: srs)
     if let length {
-        return RefGen<[Character]> { Gen.arrayOf(charGen, within: length, scaling: scaling) }
+        return ReflectiveGenerator<[Character]> { Gen.arrayOf(charGen, within: length, scaling: scaling) }
             .mapped(
                 forward: { String($0) },
                 backward: { $0.unicodeScalars.map { Character($0) } }
             )
     }
-    return RefGen<[Character]> { Gen.arrayOf(charGen) }
+    return ReflectiveGenerator<[Character]> { Gen.arrayOf(charGen) }
         .mapped(
             forward: { String($0) },
             backward: { $0.unicodeScalars.map { Character($0) } }

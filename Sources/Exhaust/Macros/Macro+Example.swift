@@ -15,7 +15,7 @@ import ExhaustCore
 /// - Returns: A single generated value.
 @freestanding(expression)
 public macro example<GeneratedValue>(
-    _ gen: RefGen<GeneratedValue>,
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     seed: UInt64? = nil
 ) -> GeneratedValue = #externalMacro(module: "ExhaustMacros", type: "ExampleMacro")
 
@@ -35,7 +35,7 @@ public macro example<GeneratedValue>(
 /// - Returns: An array of generated values.
 @freestanding(expression)
 public macro example<GeneratedValue>(
-    _ gen: RefGen<GeneratedValue>,
+    _ gen: ReflectiveGenerator<GeneratedValue>,
     count: UInt64,
     seed: UInt64? = nil
 ) -> [GeneratedValue] = #externalMacro(module: "ExhaustMacros", type: "ExampleMacro")

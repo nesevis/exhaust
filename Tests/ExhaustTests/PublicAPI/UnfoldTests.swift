@@ -6,7 +6,7 @@ import Testing
 struct UnfoldTests {
     @Test("Immediate done produces the seed-derived value")
     func immediateDone() {
-        let gen = RefGen<Int>.unfold(
+        let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 1 ... 10),
             depthRange: 1 ... 5
         ) { state, _ in
@@ -20,7 +20,7 @@ struct UnfoldTests {
 
     @Test("Countdown accumulates state across iterations")
     func countdownAccumulation() {
-        let gen = RefGen<[Int]>.unfold(
+        let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just((list: [Int](), counter: 0)),
             depthRange: 1 ... 3
         ) { state, remaining in
@@ -39,7 +39,7 @@ struct UnfoldTests {
 
     @Test("Step can terminate early")
     func earlyTermination() {
-        let gen = RefGen<Int>.unfold(
+        let gen = ReflectiveGenerator<Int>.unfold(
             seed: .just(0),
             depthRange: 1 ... 100
         ) { state, remaining in
@@ -55,7 +55,7 @@ struct UnfoldTests {
 
     @Test("Random decisions within step produce varied output")
     func randomStepDecisions() {
-        let gen = RefGen<[Int]>.unfold(
+        let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 5
         ) { list, remaining in
@@ -74,7 +74,7 @@ struct UnfoldTests {
 
     @Test("Unfold works with #exhaust for property testing")
     func propertyTestIntegration() {
-        let gen = RefGen<[Int]>.unfold(
+        let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 5
         ) { list, remaining in
@@ -99,7 +99,7 @@ struct UnfoldTests {
 
     @Test("Failing property finds and reduces counterexample")
     func reductionThroughUnfold() {
-        let gen = RefGen<[Int]>.unfold(
+        let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 10
         ) { list, remaining in
@@ -127,7 +127,7 @@ struct UnfoldTests {
 
     @Test("Deterministic replay with seed")
     func deterministicReplay() {
-        let gen = RefGen<Int>.unfold(
+        let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 0 ... 100),
             depthRange: 1 ... 3
         ) { state, remaining in

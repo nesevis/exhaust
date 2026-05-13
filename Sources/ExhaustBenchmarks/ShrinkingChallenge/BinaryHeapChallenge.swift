@@ -20,9 +20,9 @@ extension Heap: CustomDebugStringConvertible {
 
 // MARK: - Generator
 
-func binaryHeapGen(min: Int = 0, depth: UInt64) -> RefGen<Heap<Int>> {
+func binaryHeapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
     let maxVal = Int.max
-    let emptyGen: RefGen<Heap<Int>> = #gen(.just(.empty))
+    let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
 
     guard depth > 0, min <= maxVal else {
         return emptyGen
@@ -49,8 +49,8 @@ func binaryHeapGen(min: Int = 0, depth: UInt64) -> RefGen<Heap<Int>> {
 }
 
 /// Recursive combinator variant — flat choice tree, no nested binds. Validity enforced by filter instead of by construction.
-func binaryHeapGenRecursive(maxValue: Int = .max) -> RefGen<Heap<Int>> {
-    RefGen<Heap<Int>>.recursive(
+func binaryHeapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<Int>> {
+    ReflectiveGenerator<Heap<Int>>.recursive(
         base: Heap<Int>.empty,
         depthRange: 0 ... 20
     ) { recurse, _ in

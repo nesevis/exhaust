@@ -1,11 +1,11 @@
 //
-//  RefGen+Unique.swift
+//  ReflectiveGenerator+Unique.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Creates a generator that only produces unique values, deduplicated by choice sequence.
     ///
     /// Each generated value's underlying choice sequence is tracked. If a duplicate choice sequence is encountered, the generator retries (up to `maxFilterRuns` from the interpreter context). This is useful when the generator's domain is large but you want to avoid repeating the same random path.
@@ -30,9 +30,9 @@ public extension RefGen {
     func unique(
         fileID: String = #fileID,
         line: UInt = #line
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
-        return RefGen {
+        return ReflectiveGenerator {
             .impure(
                 operation: .unique(
                     gen: gen.erase(),
@@ -60,7 +60,7 @@ public extension RefGen {
         by path: KeyPath<Output, some Hashable> & Sendable,
         fileID: String = #fileID,
         line: UInt = #line
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         unique(
             by: { value in
                 AnyHashable(value[keyPath: path])
@@ -88,9 +88,9 @@ public extension RefGen {
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-        return RefGen {
+        return ReflectiveGenerator {
             var seen: [Key] = []
             return .impure(
                 operation: .unique(
@@ -124,9 +124,9 @@ public extension RefGen {
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> RefGen<Output> {
+    ) -> ReflectiveGenerator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-        return RefGen {
+        return ReflectiveGenerator {
             .impure(
                 operation: .unique(
                     gen: gen.erase(),

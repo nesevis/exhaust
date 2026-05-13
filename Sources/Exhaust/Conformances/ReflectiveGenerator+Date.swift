@@ -1,12 +1,12 @@
 //
-//  RefGen+Date.swift
+//  ReflectiveGenerator+Date.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates dates within the given range, spaced by `interval`.
     ///
     /// Dates are quantized to integral multiples of the interval relative to the range's lower bound.
@@ -24,7 +24,7 @@ public extension RefGen {
         between range: ClosedRange<Date>,
         interval: DateSpan,
         timeZone: TimeZone = .current
-    ) -> RefGen<Date> {
+    ) -> ReflectiveGenerator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
         let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
         let intervalSeconds = Int64(abs(interval.fixedSeconds))
@@ -37,7 +37,7 @@ public extension RefGen {
 
         let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
 
-        return RefGen<Int64> {
+        return ReflectiveGenerator<Int64> {
             .impure(
                 operation: .chooseBits(
                     min: Int64(0).bitPattern64,
@@ -71,7 +71,7 @@ public extension RefGen {
         of anchor: Date,
         interval: DateSpan,
         timeZone: TimeZone = .current
-    ) -> RefGen<Date> {
+    ) -> ReflectiveGenerator<Date> {
         let offsetSeconds = TimeInterval(span.fixedSeconds)
         let lower = anchor.addingTimeInterval(-offsetSeconds)
         let upper = anchor.addingTimeInterval(offsetSeconds)
@@ -91,7 +91,7 @@ public extension RefGen {
         of anchor: Date,
         interval: DateSpan,
         timeZone: TimeZone = .current
-    ) -> RefGen<Date> {
+    ) -> ReflectiveGenerator<Date> {
         let lower = anchor.addingTimeInterval(TimeInterval(span.lowerBound.fixedSeconds))
         let upper = anchor.addingTimeInterval(TimeInterval(span.upperBound.fixedSeconds))
         return date(between: lower ... upper, interval: interval, timeZone: timeZone)

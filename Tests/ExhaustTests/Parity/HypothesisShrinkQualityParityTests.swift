@@ -12,7 +12,7 @@ import Testing
 @Suite("Hypothesis Shrink Quality Parity")
 struct HypothesisShrinkQualityParityTests {
     private func reduce<Output>(
-        _ gen: RefGen<Output>,
+        _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
         config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool
@@ -263,7 +263,7 @@ struct HypothesisShrinkQualityParityTests {
     @Suite("Hypothesis Shrink Quality Parity — Float16")
     struct ShrinkQualityFloat16ParityTests {
         private func reduce<Output>(
-            _ gen: RefGen<Output>,
+            _ gen: ReflectiveGenerator<Output>,
             startingAt value: Output,
             config: Interpreters.ReducerConfiguration = .fast,
             property: (Output) -> Bool

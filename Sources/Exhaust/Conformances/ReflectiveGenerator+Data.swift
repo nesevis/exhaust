@@ -1,12 +1,12 @@
 //
-//  RefGen+Data.swift
+//  ReflectiveGenerator+Data.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension RefGen {
+public extension ReflectiveGenerator {
     /// Generates arbitrary `Data` values with size-scaled length.
     ///
     /// Each byte is drawn uniformly from 0 through 255. The data length scales with the interpreter's size parameter, producing shorter sequences early in a test run and longer ones later.
@@ -16,8 +16,8 @@ public extension RefGen {
     /// ```
     ///
     /// - Returns: A generator producing random `Data` of size-scaled length.
-    static func data() -> RefGen<Data> {
-        RefGen<[UInt8]> { Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)) }
+    static func data() -> ReflectiveGenerator<Data> {
+        ReflectiveGenerator<[UInt8]> { Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)) }
             .mapped(
                 forward: { Data($0) },
                 backward: { Array($0) }
@@ -37,10 +37,10 @@ public extension RefGen {
     static func data(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> RefGen<Data> {
+    ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return RefGen<[UInt8]> {
+        return ReflectiveGenerator<[UInt8]> {
             Gen.arrayOf(
                 Gen.choose(in: UInt8.min ... UInt8.max),
                 within: range,
@@ -62,8 +62,8 @@ public extension RefGen {
     /// - Returns: A generator producing `Data` of the specified length.
     static func data(
         length: UInt64
-    ) -> RefGen<Data> {
-        RefGen<[UInt8]> {
+    ) -> ReflectiveGenerator<Data> {
+        ReflectiveGenerator<[UInt8]> {
             Gen.arrayOf(
                 Gen.choose(in: UInt8.min ... UInt8.max),
                 exactly: length
@@ -84,7 +84,7 @@ public extension RefGen {
     /// - Returns: A generator producing `Data` of the specified length.
     static func data(
         length: Int
-    ) -> RefGen<Data> {
+    ) -> ReflectiveGenerator<Data> {
         precondition(length >= 0, "Length must be non-negative")
         return data(length: UInt64(length))
     }
