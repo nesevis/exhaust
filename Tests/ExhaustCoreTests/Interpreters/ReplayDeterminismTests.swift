@@ -72,7 +72,7 @@ struct ReplayDeterminismTests {
             { (person: Person) -> (String, UInt, [Int]) in
                 (person.name, person.age, person.scores)
             },
-            innerGen._map { (tuple: (String, UInt, [Int])) -> Person in
+            innerGen.map { (tuple: (String, UInt, [Int])) -> Person in
                 Person(name: tuple.0, age: tuple.1, scores: tuple.2)
             }
         )

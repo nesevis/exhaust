@@ -139,7 +139,7 @@ public extension RefGen {
                         }
                         return value
                     },
-                    success.gen._map { Result<Success, Failure>.success($0) }
+                    success.gen.map { Result<Success, Failure>.success($0) }
                 )),
                 (1, Gen.contramap(
                     { (result: Result<Success, Failure>) throws -> Failure in
@@ -148,7 +148,7 @@ public extension RefGen {
                         }
                         return error
                     },
-                    failure.gen._map { Result<Success, Failure>.failure($0) }
+                    failure.gen.map { Result<Success, Failure>.failure($0) }
                 )),
             ])
         }

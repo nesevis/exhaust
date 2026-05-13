@@ -76,7 +76,7 @@ struct RoundtripPropertyTests {
         let innerIntGen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
         let optionalGen: ReflectiveGenerator<Int?> = Gen.pick(choices: [
             (1, Gen.just(Int?.none)),
-            (5, innerIntGen._map { Optional($0) }),
+            (5, innerIntGen.map { Optional($0) }),
         ])
         try exhaustCheck(optionalGen) { value in
             guard let tree = try? Interpreters.reflect(optionalGen, with: value),
@@ -501,7 +501,7 @@ private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerato
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) }
+            .map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -520,16 +520,16 @@ private func asciiStringGen(
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) }
+            .map { Character(srs.scalar(at: $0)) }
     )
     if let length {
         return Gen.contramap(
             { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-            Gen.arrayOf(charGen, within: length)._map { String($0) }
+            Gen.arrayOf(charGen, within: length).map { String($0) }
         )
     }
     return Gen.contramap(
         { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen)._map { String($0) }
+        Gen.arrayOf(charGen).map { String($0) }
     )
 }

@@ -80,7 +80,7 @@ struct GenerationExamplesTests {
 
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
         func vACTGdoesntswallomaps() throws {
-            let gen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling)._map { $0 }._map { second in
+            let gen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling).map { $0 }.map { second in
                 second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })

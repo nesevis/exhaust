@@ -113,7 +113,7 @@ struct CoreGeneratorTests {
                 Gen.contramap(
                     { (s: String) -> UInt64 in UInt64(s)! },
                     Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)
-                        ._map { $0.description }
+                        .map { $0.description }
                 ),
                 Gen.just("constant"),
             ]

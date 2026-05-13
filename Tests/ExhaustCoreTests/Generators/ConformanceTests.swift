@@ -196,8 +196,8 @@ struct ConformanceTests {
         @Test("Instance .element() on Hashable collection")
         func instanceElementHashable() throws {
             let gen = Gen.arrayOf(Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>, exactly: 5)
-                ._bind { array in
-                    Gen.element(from: array)._map { element in
+                .bind { array in
+                    Gen.element(from: array).map { element in
                         (array, element)
                     }
                 }

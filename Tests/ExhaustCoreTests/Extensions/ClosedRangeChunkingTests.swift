@@ -110,7 +110,7 @@ private var rangeAndChunksGen: ReflectiveGenerator<(ClosedRange<UInt64>, Int)> {
     let rangeGen = Gen.zip(
         Gen.choose(in: UInt64.min ... UInt64.max),
         Gen.choose(in: UInt64.min ... UInt64.max)
-    )._map { Swift.min($0.0, $0.1) ... Swift.max($0.0, $0.1) }
+    ).map { Swift.min($0.0, $0.1) ... Swift.max($0.0, $0.1) }
     let chunksGen: ReflectiveGenerator<Int> = Gen.choose(in: 1 ... 50)
     return Gen.zip(rangeGen, chunksGen)
 }

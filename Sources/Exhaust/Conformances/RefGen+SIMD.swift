@@ -31,7 +31,7 @@ public extension RefGen {
         RefGen {
             Gen.contramap(
                 { (v: SIMD2<Scalar>) in (v[0], v[1]) },
-                Gen.zip(x.gen, y.gen, isOpaque: true)._map { a, b in SIMD2(a, b) }
+                Gen.zip(x.gen, y.gen, isOpaque: true).map { a, b in SIMD2(a, b) }
             )
         }
     }
@@ -66,7 +66,7 @@ public extension RefGen {
         RefGen {
             Gen.contramap(
                 { (v: SIMD3<Scalar>) in (v[0], v[1], v[2]) },
-                Gen.zip(x.gen, y.gen, z.gen, isOpaque: true)._map { a, b, c in SIMD3(a, b, c) }
+                Gen.zip(x.gen, y.gen, z.gen, isOpaque: true).map { a, b, c in SIMD3(a, b, c) }
             )
         }
     }
@@ -103,7 +103,7 @@ public extension RefGen {
         RefGen {
             Gen.contramap(
                 { (v: SIMD4<Scalar>) in (v[0], v[1], v[2], v[3]) },
-                Gen.zip(x.gen, y.gen, z.gen, w.gen, isOpaque: true)._map { a, b, c, d in SIMD4(a, b, c, d) }
+                Gen.zip(x.gen, y.gen, z.gen, w.gen, isOpaque: true).map { a, b, c, d in SIMD4(a, b, c, d) }
             )
         }
     }
@@ -205,7 +205,7 @@ private func refGenFlatSIMD<Scalar: SIMDScalar, Vector: SIMD>(
                 }
                 return values
             },
-            impure._map { (values: [Any]) -> Vector in
+            impure.map { (values: [Any]) -> Vector in
                 var v = Vector()
                 for i in 0 ..< lanes {
                     v[i] = values[i] as! Scalar

@@ -101,7 +101,7 @@ package extension Gen {
                 Gen.contramap(
                     { (pair: ([KeyOutput], [ValueOutput])) in pair.1 },
                     Gen.arrayOf(valueGenerator, exactly: UInt64(keys.count))
-                        ._map { values in (keys, values) }
+                        .map { values in (keys, values) }
                 )
             },
             backward: { (pair: ([KeyOutput], [ValueOutput])) in pair.0 }
@@ -109,7 +109,7 @@ package extension Gen {
 
         return Gen.contramap(
             { (dict: [KeyOutput: ValueOutput]) in (Array(dict.keys), Array(dict.values)) },
-            pairGen._map { keys, values in
+            pairGen.map { keys, values in
                 Dictionary(
                     Swift.zip(keys, values).map { ($0, $1) },
                     uniquingKeysWith: { first, _ in first }
@@ -130,7 +130,7 @@ package extension Gen {
         _ elementGenerator: ReflectiveGenerator<Element>,
         _ length: ReflectiveGenerator<UInt64>? = nil
     ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, length)._map { Set($0) }
+        arrayOf(elementGenerator, length).map { Set($0) }
     }
 
     /// Creates a generator for a set with size constrained to a specific range.
@@ -145,7 +145,7 @@ package extension Gen {
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, within: range, scaling: scaling)._map { Set($0) }
+        arrayOf(elementGenerator, within: range, scaling: scaling).map { Set($0) }
     }
 
     /// Creates a generator for a set with exactly the specified number of elements.
@@ -158,7 +158,7 @@ package extension Gen {
         _ elementGenerator: ReflectiveGenerator<Element>,
         exactly: UInt64
     ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, exactly: exactly)._map { Set($0) }
+        arrayOf(elementGenerator, exactly: exactly).map { Set($0) }
     }
 
     /// Shuffles the output of an array generator into a random permutation.
@@ -170,13 +170,13 @@ package extension Gen {
     static func shuffled<Element>(
         _ gen: ReflectiveGenerator<some Collection<Element>>
     ) -> ReflectiveGenerator<[Element]> {
-        gen._bind { array in
+        gen.bind { array in
             guard array.count > 1 else { return .pure(Array(array)) }
             return Gen.arrayOf(
                 Gen.choose(in: UInt64.min ... UInt64.max),
                 exactly: UInt64(array.count)
             )
-            ._map { keys in
+            .map { keys in
                 Swift.zip(array, keys)
                     .sorted { $0.1 < $1.1 }
                     .map(\.0)
@@ -227,7 +227,7 @@ package extension Gen {
                     return Gen.contramap(
                         { (subset: AnyCollection.SubSequence) -> Int in subset.count },
                         Gen.chooseDerived(in: Int(1) ... maxLength)
-                            ._map { length -> AnyCollection.SubSequence in
+                            .map { length -> AnyCollection.SubSequence in
                                 let startIndex = indices[startPosition]
                                 let endIndexPos = min(startPosition + length, indices.count)
                                 let endIndex = endIndexPos < indices.count
@@ -252,7 +252,7 @@ package extension Gen {
     static func slice<C: Collection>(
         of gen: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<C.SubSequence> {
-        gen._bind { collection in
+        gen.bind { collection in
             slice(of: collection)
         }
     }
@@ -286,7 +286,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 
@@ -314,7 +314,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 
@@ -353,7 +353,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 
@@ -385,7 +385,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 }

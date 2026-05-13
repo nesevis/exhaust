@@ -151,7 +151,7 @@ struct AdvancedCoupledScenariosTests {
             Gen.zip(
                 Gen.choose(in: 0 ... 1) as ReflectiveGenerator<Int>,
                 Gen.element(from: ["a", "b", "c"])
-            )._map { tag, value in
+            ).map { tag, value in
                 tag == 0 ? .pop : .push(value)
             }
         )
@@ -176,7 +176,7 @@ struct AdvancedCoupledScenariosTests {
         let charArrayGen = Gen.arrayOf(Gen.element(from: Array("01")), within: UInt64(0) ... 40)
         let binaryStringGen = Gen.contramap(
             { (string: String) -> [Character] in Array(string) },
-            charArrayGen._map { chars in String(chars) }
+            charArrayGen.map { chars in String(chars) }
         )
 
         let property: (String) -> Bool = { s in
@@ -221,7 +221,7 @@ struct AdvancedCoupledScenariosTests {
         let unicodeCharArrayGen = Gen.arrayOf(Gen.element(from: Array("xy The𝕿𝖍𝖊")), within: UInt64(0) ... 40)
         let unicodeStringGen = Gen.contramap(
             { (string: String) -> [Character] in Array(string) },
-            unicodeCharArrayGen._map { chars in String(chars) }
+            unicodeCharArrayGen.map { chars in String(chars) }
         )
 
         let property: (String) -> Bool = { s in

@@ -35,14 +35,14 @@ package extension FreerMonad {
     /// - Parameter transform: A function that takes the current value and produces a new computation.
     /// - Returns: A new computation representing the sequenced effects.
     /// - Throws: Rethrows any errors from the transform function.
-    func _bind<NewValue>(
+    func bind<NewValue>(
         _ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>
     ) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value):
             try transform(value)
         case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0)._bind(transform) }
+            .impure(operation: operation) { try continuation($0).bind(transform) }
         }
     }
 
@@ -53,13 +53,13 @@ package extension FreerMonad {
     /// - Parameter transform: A pure function to apply to the final value.
     /// - Returns: A computation that produces the transformed value.
     /// - Throws: Rethrows any errors from the transform function.
-    func _map<NewValue>(
+    func map<NewValue>(
         _ transform: @escaping (Value) throws -> NewValue
     ) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value): try .pure(transform(value))
         case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0)._map(transform) }
+            .impure(operation: operation) { try continuation($0).map(transform) }
         }
     }
 

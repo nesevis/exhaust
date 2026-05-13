@@ -27,20 +27,20 @@ public extension RefGen {
 
             let label = refGenAlphanumericString(length: 3 ... 10)
             let host = Gen.arrayOf(label, within: 2 ... 3, scaling: .constant)
-                ._map { $0.joined(separator: ".") }
+                .map { $0.joined(separator: ".") }
 
             let pathSegment = refGenAlphanumericString(length: 1 ... 8)
             let path = Gen.arrayOf(pathSegment, within: 0 ... 3, scaling: .constant)
-                ._map { segments in
+                .map { segments in
                     segments.isEmpty ? "" : "/" + segments.joined(separator: "/")
                 }
 
             let queryKey = refGenAlphanumericString(length: 2 ... 6)
             let queryValue = refGenAlphanumericString(length: 1 ... 8)
             let queryPair = Gen.zip(queryKey, queryValue)
-                ._map { "\($0)=\($1)" }
+                .map { "\($0)=\($1)" }
             let query = Gen.arrayOf(queryPair, within: 0 ... 2, scaling: .constant)
-                ._map { pairs in
+                .map { pairs in
                     pairs.isEmpty ? "" : "?" + pairs.joined(separator: "&")
                 }
 
@@ -66,7 +66,7 @@ private func refGenAlphanumericString(
     length: ClosedRange<UInt64>
 ) -> Generator<String> {
     let chars = Gen.choose(in: UInt8(0) ... 35)
-        ._map { value -> Character in
+        .map { value -> Character in
             if value < 26 {
                 Character(UnicodeScalar(UInt8(ascii: "a") + value))
             } else {
@@ -74,5 +74,5 @@ private func refGenAlphanumericString(
             }
         }
     return Gen.arrayOf(chars, within: length, scaling: .constant)
-        ._map { String($0) }
+        .map { String($0) }
 }

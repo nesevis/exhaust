@@ -211,7 +211,7 @@ private func makeDivergentGen() -> ReflectiveGenerator<Int> {
             if n <= 1 {
                 return Gen.choose(in: 0 ... 3 as ClosedRange<Int>)
             }
-            return Gen.arrayOf(Gen.choose(in: 0 ... 3 as ClosedRange<Int>), exactly: UInt64(n))._map { $0.reduce(0, +) }
+            return Gen.arrayOf(Gen.choose(in: 0 ... 3 as ClosedRange<Int>), exactly: UInt64(n)).map { $0.reduce(0, +) }
         },
         backward: { _ in 3 }
     )

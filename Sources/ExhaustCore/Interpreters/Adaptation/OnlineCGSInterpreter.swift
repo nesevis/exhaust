@@ -51,13 +51,13 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             for frame in frames.reversed() {
                 switch frame {
                 case let .bind(continuation):
-                    current = try current._bind { try continuation($0) }
+                    current = try current.bind { try continuation($0) }
 
                 case let .zipComponent(index, completed, allGenerators, continuation):
                     let capturedIndex = index
                     let capturedCompleted = completed
                     let capturedGenerators = allGenerators
-                    current = try current._bind { componentResult -> ReflectiveGenerator<Any> in
+                    current = try current.bind { componentResult -> ReflectiveGenerator<Any> in
                         var gens = ContiguousArray<ReflectiveGenerator<Any>>()
                         gens.reserveCapacity(capturedGenerators.count)
                         for (j, g) in capturedGenerators.enumerated() {
@@ -73,7 +73,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                             operation: .zip(gens),
                             continuation: { .pure($0) }
                         )
-                    }._bind { zipResult in
+                    }.bind { zipResult in
                         try continuation(zipResult)
                     }
 
@@ -82,7 +82,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     let capturedCompleted = completed
                     let capturedElementGen = elementGen
                     let capturedTotalCount = totalCount
-                    current = try current._bind { elementResult -> ReflectiveGenerator<Any> in
+                    current = try current.bind { elementResult -> ReflectiveGenerator<Any> in
                         var gens = ContiguousArray<ReflectiveGenerator<Any>>()
                         gens.reserveCapacity(capturedTotalCount)
                         for j in 0 ..< capturedTotalCount {
@@ -98,12 +98,12 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                             operation: .zip(gens),
                             continuation: { .pure($0) }
                         )
-                    }._bind { arrayResult in
+                    }.bind { arrayResult in
                         try continuation(arrayResult)
                     }
                 }
             }
-            return current._map { $0 as! FinalOutput }
+            return current.map { $0 as! FinalOutput }
         }
     }
 
@@ -561,7 +561,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     var innerContext = derivativeContext
                     innerContext.push(.bind(continuation: { innerValue in
                         let boundGen = try forward(innerValue)
-                        return try boundGen._bind { boundValue in
+                        return try boundGen.bind { boundValue in
                             try continuation(boundValue).erase()
                         }
                     }))
@@ -804,7 +804,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         var derivatives = ContiguousArray<ReflectiveGenerator<FinalOutput>>()
         derivatives.reserveCapacity(liveChoiceIndices.count)
         for i in liveChoiceIndices {
-            let derivative = try choices[i].generator._bind { innerValue in
+            let derivative = try choices[i].generator.bind { innerValue in
                 try continuation(innerValue).erase()
             }
             try derivatives.append(derivativeContext.apply(derivative))

@@ -49,7 +49,7 @@ public extension RefGen {
                 { (tuple: (Output, repeat each Transformed)) -> Output in
                     Mirror(reflecting: tuple).children.first!.value as! Output
                 },
-                impure._map { (values: [Any]) -> (Output, repeat each Transformed) in
+                impure.map { (values: [Any]) -> (Output, repeat each Transformed) in
                     var index = 0
                     func next<Element>(_: Element.Type) -> Element {
                         defer { index += 1 }

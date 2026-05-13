@@ -114,7 +114,7 @@ package extension Gen {
             },
             Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
                 // We're using round-robin indexing here so that the lookup does not fail when reducing
-                ._map { collection[$0 % count] }
+                .map { collection[$0 % count] }
         )
     }
 
@@ -125,7 +125,7 @@ package extension Gen {
         let count = collection.count
         return Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
             // We're using round-robin indexing here so that the lookup does not fail when reducing
-            ._map { collection[$0 % count] }
+            .map { collection[$0 % count] }
     }
 
     /// Internal helper for choose ranges derived from runtime context (for example ``getSize``).

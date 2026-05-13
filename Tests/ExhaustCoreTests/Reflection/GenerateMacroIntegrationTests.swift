@@ -30,7 +30,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
+            Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
         )
 
         let target = Person(name: "Alice", age: 30)
@@ -53,7 +53,7 @@ struct GenerateMacroIntegrationTests {
         let zGen = Gen.choose(in: -100 ... 100) as ReflectiveGenerator<Int>
         let coordGen = Gen.contramap(
             { (c: Coordinate) -> (Int, Int, Int) in (c.x, c.y, c.z) },
-            Gen.zip(xGen, yGen, zGen)._map { Coordinate(x: $0, y: $1, z: $2) }
+            Gen.zip(xGen, yGen, zGen).map { Coordinate(x: $0, y: $1, z: $2) }
         )
 
         let target = Coordinate(x: 42, y: -7, z: 99)
@@ -75,7 +75,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
+            Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
         )
 
         var iterator = ValueAndChoiceTreeInterpreter(personGen, seed: 7, maxRuns: 10)
@@ -98,7 +98,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
+            Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
         )
 
         let target = Person(name: "Bob", age: 25)
@@ -120,7 +120,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
+            Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
         )
 
         let failing = Person(name: "zqmfkwvxl", age: 500)

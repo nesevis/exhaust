@@ -20,7 +20,7 @@ public extension RefGen {
         backward: @Sendable @escaping (NewOutput) throws -> Output
     ) rethrows -> RefGen<NewOutput> {
         try RefGen<NewOutput> {
-            try Gen.contramap(backward, gen._map(forward))
+            try Gen.contramap(backward, gen.map(forward))
         }
     }
 

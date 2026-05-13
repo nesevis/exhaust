@@ -17,7 +17,7 @@ public extension __ExhaustRuntime {
                     }
                     return value
                 },
-                generator.gen._map(forward)
+                generator.gen.map(forward)
             )
         }
     }
@@ -38,7 +38,7 @@ public extension __ExhaustRuntime {
                     }
                     return input
                 },
-                generator.gen._map(forward)
+                generator.gen.map(forward)
             )
         }
     }
@@ -79,7 +79,7 @@ public extension __ExhaustRuntime {
                 return values
             }
 
-            return Gen.contramap(backwardToArray, impure._map(forwardFromArray))
+            return Gen.contramap(backwardToArray, impure.map(forwardFromArray))
         }
     }
 
@@ -119,7 +119,7 @@ public extension __ExhaustRuntime {
                 return values
             }
 
-            return Gen.contramap(backwardToArray, impure._map(forwardFromArray))
+            return Gen.contramap(backwardToArray, impure.map(forwardFromArray))
         }
     }
 
