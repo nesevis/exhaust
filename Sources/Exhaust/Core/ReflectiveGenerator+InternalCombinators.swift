@@ -1,5 +1,5 @@
 //
-//  ReflectiveGenerator+InternalCombinators.swift
+//  Generator+InternalCombinators.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 8/3/2026.
@@ -7,7 +7,7 @@
 
 import ExhaustCore
 
-extension ReflectiveGenerator where Operation == ReflectiveOperation {
+extension Generator where Operation == ReflectiveOperation {
     /// Creates a bidirectional transformation of this generator using forward and backward functions.
     /// Note that ``#gen`` with a closure will attempt to synthesize the backward mapping during macro expansion.
     ///
@@ -24,7 +24,7 @@ extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func _mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
         backward: @escaping (NewOutput) throws -> Value
-    ) rethrows -> ReflectiveGenerator<NewOutput> {
+    ) rethrows -> Generator<NewOutput> {
         try Gen.contramap(backward, _map(forward))
     }
 }

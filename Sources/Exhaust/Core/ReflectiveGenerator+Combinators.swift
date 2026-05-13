@@ -4,7 +4,7 @@ import ExhaustCore
 
 // The bidirectional combinators `mapped(forward:backward:)` and `bound(forward:backward:)` implement the `comap` annotation pattern from partial monadic profunctors (Xia et al., "Composing Bidirectional Programs Monadically", ESOP 2019). At each monadic bind site, the backward function `(B) -> A` provides the contravariant annotation that aligns the forward and backward interpretations — Goldstein §4.3.1 calls this "focusing on a part of the b that contains an a". `mapped` pairs `contramap(backward)` with an invisible `_map(forward)`; `bound` reifies the pair as a `.transform(.bind)` so interpreters can see through it.
 
-public extension ReflectiveGenerator where Operation == ReflectiveOperation {
+package extension Generator where Operation == ReflectiveOperation {
     /// Transforms the output type with a provided inverse for reflection.
     ///
     /// Use this when the transform involves computation that ``#gen`` cannot invert: arithmetic, conditional logic, lossy conversions. For struct or class initializers with labeled arguments, prefer ``#gen`` with a trailing closure; the macro synthesizes the inverse via `Mirror`.
@@ -17,7 +17,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Value
-    ) rethrows -> ReflectiveGenerator<NewOutput> {
+    ) rethrows -> Generator<NewOutput> {
         try Gen.contramap(backward, _map(forward))
     }
 
@@ -35,7 +35,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
         backward: KeyPath<NewOutput, Value>
-    ) rethrows -> ReflectiveGenerator<NewOutput> {
+    ) rethrows -> Generator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             (newOutput as! NewOutput)[keyPath: backward]
         }
@@ -56,7 +56,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     func classify(
         _ classifiers: (String, @Sendable (Value) -> Bool)...
-    ) -> ReflectiveGenerator<Value> {
+    ) -> Generator<Value> {
         .impure(operation:
             .classify(
                 gen: erase(),
@@ -70,7 +70,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```swift
     /// let small = #gen(.int().array()).resize(10)
     /// ```
-    func resize(_ newSize: UInt64) -> ReflectiveGenerator<Value> {
+    func resize(_ newSize: UInt64) -> Generator<Value> {
         Gen.liftF(.resize(newSize: newSize, next: erase()))
     }
 
@@ -79,7 +79,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```swift
     /// let small = #gen(.int().array()).resize(10)
     /// ```
-    func resize(_ newSize: Int) -> ReflectiveGenerator<Value> {
+    func resize(_ newSize: Int) -> Generator<Value> {
         precondition(newSize >= 0, "Size must be non-negative")
         return resize(UInt64(newSize))
     }
@@ -116,7 +116,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Value> {
+    ) -> Generator<Value> {
         Gen.filter(
             self,
             type: type,
@@ -154,7 +154,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func unique(
         fileID: String = #fileID,
         line: UInt = #line
-    ) -> ReflectiveGenerator<Value> {
+    ) -> Generator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
@@ -180,7 +180,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         by path: KeyPath<Value, some Hashable> & Sendable,
         fileID: String = #fileID,
         line: UInt = #line
-    ) -> ReflectiveGenerator<Value> {
+    ) -> Generator<Value> {
         unique(by: { value in
             AnyHashable(value[keyPath: path])
         }, fileID: fileID, line: line)
@@ -203,7 +203,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         by path: KeyPath<Value, Key> & Sendable,
         fileID: String = #fileID,
         line: UInt = #line
-    ) -> ReflectiveGenerator<Value> {
+    ) -> Generator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
         var seen: [Key] = []
 
@@ -238,7 +238,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         by transform: @Sendable @escaping (Value) -> some Hashable,
         fileID: String = #fileID,
         line: UInt = #line
-    ) -> ReflectiveGenerator<Value> {
+    ) -> Generator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
@@ -258,7 +258,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
     ///
     /// ```swift
-    /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
+    /// let treeGen: Generator<Tree> = #gen(.recursive(
     ///     base: .leaf,
     ///     depthRange: 0...5
     /// ) { recurse, remaining in
@@ -278,10 +278,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         base: Value,
         depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (
-            @Sendable @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> Generator<Value>,
             UInt64
-        ) -> ReflectiveGenerator<Value>
-    ) -> ReflectiveGenerator<Value> {
+        ) -> Generator<Value>
+    ) -> Generator<Value> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         return recursive(
             base: Gen.just(base),
@@ -295,7 +295,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
     ///
     /// ```swift
-    /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
+    /// let treeGen: Generator<Tree> = #gen(.recursive(
     ///     base: .leaf,
     ///     depthRange: UInt64(0)...UInt64(5)
     /// ) { recurse, remaining in
@@ -315,10 +315,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         base: Value,
         depthRange: ClosedRange<UInt64>,
         extend: @Sendable @escaping (
-            @Sendable @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> Generator<Value>,
             UInt64
-        ) -> ReflectiveGenerator<Value>
-    ) -> ReflectiveGenerator<Value> {
+        ) -> Generator<Value>
+    ) -> Generator<Value> {
         recursive(base: Gen.just(base), depthRange: depthRange, extend: extend)
     }
 
@@ -327,7 +327,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
     /// ```swift
-    /// let exprGen: ReflectiveGenerator<Expr> = .recursive(
+    /// let exprGen: Generator<Expr> = .recursive(
     ///     base: #gen(.int(in: 0...99)).map { .literal($0) },
     ///     depthRange: 0...4
     /// ) { recurse, remaining in
@@ -341,13 +341,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - extend: Closure that builds one recursive layer from the previous layer.
     /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
-        base: ReflectiveGenerator<Value>,
+        base: Generator<Value>,
         depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (
-            @Sendable @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> Generator<Value>,
             UInt64
-        ) -> ReflectiveGenerator<Value>
-    ) -> ReflectiveGenerator<Value> {
+        ) -> Generator<Value>
+    ) -> Generator<Value> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         return recursive(
             base: base,
@@ -366,19 +366,19 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - extend: Closure that builds one recursive layer from the previous layer.
     /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
-        base: ReflectiveGenerator<Value>,
+        base: Generator<Value>,
         depthRange: ClosedRange<UInt64>,
         extend: @Sendable @escaping (
-            @Sendable @escaping () -> ReflectiveGenerator<Value>,
+            @Sendable @escaping () -> Generator<Value>,
             UInt64
-        ) -> ReflectiveGenerator<Value>
-    ) -> ReflectiveGenerator<Value> {
+        ) -> Generator<Value>
+    ) -> Generator<Value> {
         // Bridge the Sendable boundary: Gen.recursive is internal and provides a non-Sendable
         // recurse thunk. The public API requires @Sendable on the thunk so users can capture it
-        // in #gen(...) closures. The wrap is safe because ReflectiveGenerator is @unchecked Sendable.
+        // in #gen(...) closures. The wrap is safe because Generator is @unchecked Sendable.
         Gen.recursive(base: base, depthRange: depthRange) { recurse, remaining in
             nonisolated(unsafe) let capturedRecurse = recurse
-            let sendableRecurse: @Sendable () -> ReflectiveGenerator<Value> = { capturedRecurse() }
+            let sendableRecurse: @Sendable () -> Generator<Value> = { capturedRecurse() }
             return extend(sendableRecurse, remaining)
         }
     }
@@ -388,7 +388,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The size parameter ranges from 1-100 and controls how complex generated values should be. Use this to build generators that adapt to the testing phase.
     ///
     /// ```swift
-    /// let adaptiveArray = ReflectiveGenerator.getSize { size in
+    /// let adaptiveArray = Generator.getSize { size in
     ///     .int(in: 0...Int(size)).array(length: 0...Int(size))
     /// }
     /// ```
@@ -396,8 +396,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter forward: A closure that receives the current size and returns a generator.
     /// - Returns: A generator that produces the result of the size-dependent inner generator.
     static func getSize<Output>(
-        _ forward: @escaping (UInt64) -> ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        _ forward: @escaping (UInt64) -> Generator<Output>
+    ) -> Generator<Output> {
         Gen.getSize(forward)
     }
 
@@ -415,7 +415,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator producing the transformed values.
     func map<NewValue>(
         _ transform: @Sendable @escaping (Value) throws -> NewValue
-    ) rethrows -> ReflectiveGenerator<NewValue> {
+    ) rethrows -> Generator<NewValue> {
         Gen.liftF(.transform(
             kind: .map(
                 forward: { try transform($0 as! Value) },
@@ -440,14 +440,14 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator producing `(original, transformed...)` tuples.
     func metamorph<each Transformed>(
         _ transform: repeat @escaping (Value) -> each Transformed
-    ) -> ReflectiveGenerator<(Value, repeat each Transformed)> {
+    ) -> Generator<(Value, repeat each Transformed)> {
         var erasedTransforms: [(Any) throws -> Any] = []
         func add(_ function: @escaping (Value) -> some Any) {
             erasedTransforms.append { function($0 as! Value) as Any }
         }
         repeat add(each transform)
 
-        let impure: ReflectiveGenerator<[Any]> = .impure(
+        let impure: Generator<[Any]> = .impure(
             operation: .transform(
                 kind: .metamorphic(
                     transforms: erasedTransforms,
@@ -494,11 +494,11 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter transform: A function that takes the generated value and returns a new generator.
     /// - Returns: A generator that sequences the two computations.
     func bind<NewValue>(
-        _ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
+        _ transform: @Sendable @escaping (Value) throws -> Generator<NewValue>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) rethrows -> ReflectiveGenerator<NewValue> {
+    ) rethrows -> Generator<NewValue> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
         return Gen.liftF(.transform(
             kind: .bind(
@@ -531,12 +531,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Function that extracts the inner value from the final output.
     /// - Returns: A generator that sequences the two computations with bidirectional support.
     func bound<NewValue>(
-        forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
+        forward: @Sendable @escaping (Value) throws -> Generator<NewValue>,
         backward: @Sendable @escaping (NewValue) throws -> Value,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) rethrows -> ReflectiveGenerator<NewValue> {
+    ) rethrows -> Generator<NewValue> {
         try _bound(forward: forward, backward: backward, fileID: fileID, line: line, column: column)
     }
 
@@ -556,12 +556,12 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Key path to extract the inner value from the final output.
     /// - Returns: A generator that sequences the two computations with bidirectional support.
     func bound<NewValue>(
-        forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
+        forward: @Sendable @escaping (Value) throws -> Generator<NewValue>,
         backward: KeyPath<NewValue, Value>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) rethrows -> ReflectiveGenerator<NewValue> {
+    ) rethrows -> Generator<NewValue> {
         try _bound(
             forward: forward,
             backward: { $0[keyPath: backward] },

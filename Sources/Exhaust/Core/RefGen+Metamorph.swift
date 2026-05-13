@@ -27,7 +27,7 @@ public extension RefGen {
         }
         repeat add(each transform)
 
-        let impure: ReflectiveGenerator<[Any]> = .impure(
+        let impure: Generator<[Any]> = .impure(
             operation: .transform(
                 kind: .metamorphic(
                     transforms: erasedTransforms,

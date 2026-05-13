@@ -118,7 +118,7 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
 
 // MARK: - Non-Equatable overload
 
-public extension ReflectiveGenerator where Operation == ReflectiveOperation {
+package extension Generator where Operation == ReflectiveOperation {
     /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses choice-sequence comparison for round-trip checks.
     ///
     /// Failures are recorded as test issues via ``reportIssue``, so calling this inside a test is sufficient — no assertions needed.
@@ -150,7 +150,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
 // MARK: - Equatable overload
 
-public extension ReflectiveGenerator where Operation == ReflectiveOperation, Value: Equatable {
+package extension Generator where Operation == ReflectiveOperation, Value: Equatable {
     /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses `Equatable` conformance and `CustomDump.diff` for rich failure output.
     ///
     /// Failures are recorded as test issues via ``reportIssue``, so calling this inside a test is sufficient — no assertions needed.
@@ -193,7 +193,7 @@ private enum DiffResult {
     case notEqual(detail: String)
 }
 
-private extension ReflectiveGenerator where Operation == ReflectiveOperation {
+private extension Generator where Operation == ReflectiveOperation {
     /// Core validation loop shared by both overloads.
     ///
     /// - Parameters:

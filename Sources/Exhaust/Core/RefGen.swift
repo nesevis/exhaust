@@ -10,9 +10,9 @@ import ExhaustCore
 /// TODO: Update docstring
 /// Wraps the underlying monadic representation of the generator
 public struct RefGen<Output>: @unchecked Sendable {
-    package let gen: ReflectiveGenerator<Output>
+    package let gen: Generator<Output>
     
-    package init(_ gen: () throws -> ReflectiveGenerator<Output>) rethrows {
+    package init(_ gen: () throws -> Generator<Output>) rethrows {
         self.gen = try gen()
     }
     

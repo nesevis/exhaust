@@ -11,7 +11,7 @@ public extension RefGen {
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
     ///
     /// ```swift
-    /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
+    /// let treeGen: Generator<Tree> = #gen(.recursive(
     ///     base: .leaf,
     ///     depthRange: 0...5
     /// ) { recurse, remaining in
@@ -45,7 +45,7 @@ public extension RefGen {
     /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
     ///
     /// ```swift
-    /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
+    /// let treeGen: Generator<Tree> = #gen(.recursive(
     ///     base: .leaf,
     ///     depthRange: UInt64(0)...UInt64(5)
     /// ) { recurse, remaining in
@@ -74,7 +74,7 @@ public extension RefGen {
     /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
     ///
     /// ```swift
-    /// let exprGen: ReflectiveGenerator<Expr> = .recursive(
+    /// let exprGen: Generator<Expr> = .recursive(
     ///     base: #gen(.int(in: 0...99)).map { .literal($0) },
     ///     depthRange: 0...4
     /// ) { recurse, remaining in
@@ -117,7 +117,7 @@ public extension RefGen {
         RefGen {
             // Bridge the Sendable boundary: Gen.recursive is internal and provides a non-Sendable
             // recurse thunk. The public API requires @Sendable on the thunk so users can capture it
-            // in #gen(...) closures. The wrap is safe because ReflectiveGenerator is @unchecked Sendable.
+            // in #gen(...) closures. The wrap is safe because Generator is @unchecked Sendable.
             Gen.recursive(base: base.gen, depthRange: depthRange) { recurse, remaining in
                 nonisolated(unsafe) let capturedRecurse = recurse
                 let sendableRecurse: @Sendable () -> RefGen<Output> = { RefGen { capturedRecurse() } }

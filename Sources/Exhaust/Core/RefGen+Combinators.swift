@@ -19,18 +19,8 @@ public extension RefGen {
         forward: @Sendable @escaping (Output) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Output
     ) rethrows -> RefGen<NewOutput> {
-        RefGen<NewOutput> {
-            Gen.contramap(
-                backward,
-                Gen.liftF(.transform(
-                    kind: .map(
-                        forward: { try forward($0 as! Output) },
-                        inputType: Output.self,
-                        outputType: NewOutput.self
-                    ),
-                    inner: gen.erase()
-                ))
-            )
+        try RefGen<NewOutput> {
+            try Gen.contramap(backward, gen._map(forward))
         }
     }
 
