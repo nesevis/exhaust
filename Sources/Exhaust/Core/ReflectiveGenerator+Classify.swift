@@ -8,7 +8,7 @@
 public extension ReflectiveGenerator {
     /// Categorizes generated values for statistical analysis.
     ///
-    /// Wraps this generator with classification predicates that track how frequently different types of test data are generated.
+    /// Wraps this generator with classification predicates that track how frequently each category is hit during generation. After the test run, classification counts and percentages are printed to standard output as part of the test summary. Values can satisfy multiple classifiers simultaneously.
     ///
     /// ```swift
     /// let classified = #gen(.int(in: 0...100)).classify(
