@@ -9,9 +9,9 @@
 @usableFromInline
 package struct ChoiceMetadata: Hashable, Equatable, Sendable {
     /// The valid bit-pattern range for this choice, or `nil` if unconstrained.
-    public let validRange: ClosedRange<UInt64>?
+    package let validRange: ClosedRange<UInt64>?
     /// Whether the range was explicitly specified by the user (for example `.array(length: 1...5)`) rather than derived from size scaling.
-    public let isRangeExplicit: Bool
+    package let isRangeExplicit: Bool
 
     /// Creates metadata with the given valid range and explicitness flag.
     package init(validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool = false) {

@@ -65,7 +65,7 @@ package enum ReflectiveOperation {
         /// Relative (unnormalized) probability. During generation, the PRNG draw is partitioned proportionally across branches. During CGS tuning, weights are overridden by learned biases. Zero weight makes the branch unreachable during generation but still reachable during reflection.
         public let weight: UInt64
         /// Type-erased because Swift enums cannot vary generic parameters across cases. The pick interpreter casts the continuation result back to the expected type at each branch boundary.
-        public let generator: AnyGenerator
+        package let generator: AnyGenerator
 
         /// Creates a pick tuple with the given fingerprint, identifier, weight, and generator.
         public init(

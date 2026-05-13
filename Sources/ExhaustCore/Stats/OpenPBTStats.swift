@@ -54,7 +54,7 @@ package struct OpenPBTStatsFeatures: Codable, Sendable {
 /// - `status_reason`: required string (empty when no specific reason).
 /// - `coverage`: `null` (Exhaust does not provide per-example line coverage).
 /// - `metadata`: `null` (reserved for future use).
-package struct OpenPBTStatsLine: Sendable {
+public struct OpenPBTStatsLine: Sendable {
     /// Record type, always `"test_case"`.
     package let type: String
     /// Epoch timestamp when the test run started.

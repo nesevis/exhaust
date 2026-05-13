@@ -8,12 +8,12 @@
 /// Metadata for a single branch in a ChoiceTree branch site.
 @usableFromInline
 package struct BranchData: Hashable, Sendable {
-    public var fingerprint: UInt64
-    public var weight: UInt64
-    public var id: UInt64
-    public var branchCount: UInt64
-    public var choice: ChoiceTree
-    public var isSelected: Bool
+    var fingerprint: UInt64
+    var weight: UInt64
+    var id: UInt64
+    var branchCount: UInt64
+    var choice: ChoiceTree
+    var isSelected: Bool
 
     package init(
         fingerprint: UInt64,
