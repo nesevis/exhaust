@@ -66,7 +66,7 @@ public extension ReflectiveGenerator {
     func bound<NewValue>(
         forward: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewValue>,
         backward: @Sendable @escaping (NewValue) throws -> Output,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
@@ -103,7 +103,7 @@ public extension ReflectiveGenerator {
     func bound<NewValue>(
         forward: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewValue>,
         backward: KeyPath<NewValue, Output>,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {

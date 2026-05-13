@@ -26,12 +26,14 @@ public extension ReflectiveGenerator {
     /// - Parameters:
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
+    ///   - column: Source column for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique choice sequences.
     func unique(
-        fileID: String = #fileID,
-        line: UInt = #line
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
         return ReflectiveGenerator {
             .impure(
                 operation: .unique(
@@ -55,18 +57,21 @@ public extension ReflectiveGenerator {
     ///   - by: A key path to the hashable property used for deduplication.
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
+    ///   - column: Source column for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
     func unique(
         by path: KeyPath<Output, some Hashable> & Sendable,
-        fileID: String = #fileID,
-        line: UInt = #line
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         unique(
             by: { value in
                 AnyHashable(value[keyPath: path])
             },
             fileID: fileID,
-            line: line
+            line: line,
+            column: column
         )
     }
 
@@ -85,7 +90,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that only yields values with unique keys.
     func unique<Key: Equatable>(
         by path: KeyPath<Output, Key> & Sendable,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
@@ -121,7 +126,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that only yields values with unique keys.
     func unique(
         by transform: @Sendable @escaping (Output) -> some Hashable,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {

@@ -17,8 +17,11 @@ package extension Gen {
     ) -> Generator<Output> {
         let erased = generator.erase()
         let erasedPredicate: (Any) -> Bool = { predicate($0 as! Output) }
-        let fingerprint = sourceLocation.fileID.description.hashValue.bitPattern64
-            &+ sourceLocation.line.bitPattern64
+        let fingerprint = Gen.sourceFingerprint(
+            fileID: sourceLocation.fileID,
+            line: sourceLocation.line,
+            column: sourceLocation.column
+        )
 
         let isInterpreting = Gen.isInterpreting
         let tuned: AnyGenerator?

@@ -37,7 +37,7 @@ public extension ReflectiveGenerator {
         seed: ReflectiveGenerator<State>,
         depthRange: ClosedRange<Int>,
         step: @Sendable @escaping (State, UInt64) -> ReflectiveGenerator<UnfoldStep<State, Output>>,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {

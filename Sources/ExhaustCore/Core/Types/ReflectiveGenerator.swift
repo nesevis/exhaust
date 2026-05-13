@@ -46,7 +46,7 @@ package extension Generator where Operation == ReflectiveOperation {
     /// - Returns: A new computation representing the sequenced effects.
     func _bindReified<NewValue>(
         _ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> FreerMonad<Operation, NewValue> {
@@ -84,7 +84,7 @@ package extension Generator where Operation == ReflectiveOperation {
     func _bound<NewValue>(
         forward: @escaping (Value) throws -> Generator<NewValue>,
         backward: @escaping (NewValue) throws -> Value,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> Generator<NewValue> {

@@ -29,7 +29,7 @@ package extension Gen {
     static func classify<Output>(
         _ generator: Generator<Output>,
         _ classifiers: (String, (Output) -> Bool)...,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line
     ) -> Generator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line)

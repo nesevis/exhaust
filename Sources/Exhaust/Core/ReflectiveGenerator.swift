@@ -40,7 +40,7 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     /// - Returns: A generator that sequences the two computations.
     public func bind<NewOutput>(
         _ transform: @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewOutput> {

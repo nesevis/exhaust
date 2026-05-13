@@ -36,7 +36,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func oneOf(
         _ generators: ReflectiveGenerator<Output>...,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
@@ -52,7 +52,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func oneOf(
         weighted choices: (Int, ReflectiveGenerator<Output>)...,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
@@ -69,7 +69,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func oneOf(
         _ generators: [ReflectiveGenerator<Output>],
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
@@ -86,7 +86,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func oneOf(
         weighted choices: [(Int, ReflectiveGenerator<Output>)],
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {

@@ -18,7 +18,7 @@ public extension ReflectiveGenerator {
     /// ```
     func classify(
         _ classifiers: (String, @Sendable (Output) -> Bool)...,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
