@@ -15,12 +15,10 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.uuid())
     /// ```
     static func uuid() -> ReflectiveGenerator<UUID> {
-        ReflectiveGenerator<(UInt64, UInt64)> {
-            Gen.zip(
-                Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF),
-                Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF)
-            )
-        }.mapped(
+        Gen.zip(
+            Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF),
+            Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF)
+        ).wrapped.mapped(
             forward: { uuidFromHalves($0, $1) },
             backward: { uuidToHalves($0) }
         )

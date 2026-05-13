@@ -334,7 +334,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     continue
                 }
                 let replayResult = __exhaust(
-                    ReflectiveGenerator { gen },
+                    gen.wrapped,
                     settings: [
                         .replay(.numeric(seed)),
                         .suppress(.issueReporting),

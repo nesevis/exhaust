@@ -9,17 +9,15 @@ public extension __ExhaustRuntime {
         label: String,
         forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
-        ReflectiveGenerator {
-            Gen.contramap(
-                { (output: Output) throws -> Any in
-                    guard let value = _mirrorExtract(output, label: label) else {
-                        throw Interpreters.ReflectionError.contramapWasWrongType
-                    }
-                    return value
-                },
-                generator.gen.map(forward)
-            )
-        }
+        Gen.contramap(
+            { (output: Output) throws -> Any in
+                guard let value = _mirrorExtract(output, label: label) else {
+                    throw Interpreters.ReflectionError.contramapWasWrongType
+                }
+                return value
+            },
+            generator.gen.map(forward)
+        ).wrapped
     }
 
     /// Maps a single generator with a failable backward closure for extraction.
@@ -30,17 +28,15 @@ public extension __ExhaustRuntime {
         backward: @Sendable @escaping (Output) -> Input?,
         forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
-        ReflectiveGenerator {
-            Gen.contramap(
-                { (output: Output) throws -> Input in
-                    guard let input = backward(output) else {
-                        throw Interpreters.ReflectionError.contramapWasWrongType
-                    }
-                    return input
-                },
-                generator.gen.map(forward)
-            )
-        }
+        Gen.contramap(
+            { (output: Output) throws -> Input in
+                guard let input = backward(output) else {
+                    throw Interpreters.ReflectionError.contramapWasWrongType
+                }
+                return input
+            },
+            generator.gen.map(forward)
+        ).wrapped
     }
 
     /// Zips multiple generators with a forward transform and Mirror-based backward extraction.
@@ -51,36 +47,34 @@ public extension __ExhaustRuntime {
         labels: [String],
         forward: @Sendable @escaping ((repeat each T)) -> NewOutput
     ) -> ReflectiveGenerator<NewOutput> {
-        ReflectiveGenerator {
-            var erased: ContiguousArray<AnyGenerator> = []
-            erased.reserveCapacity(5)
-            for generator in repeat each generators {
-                erased.append(generator.gen.erase())
-            }
-
-            let impure: Generator<[Any]> = .impure(
-                operation: .zip(erased),
-                continuation: { .pure($0 as! [Any]) }
-            )
-
-            let forwardFromArray: ([Any]) -> NewOutput = { values in
-                var index = 0
-                func next<U>(_: U.Type) -> U {
-                    defer { index += 1 }
-                    return values[index] as! U
-                }
-                return forward((repeat next((each T).self)))
-            }
-
-            let backwardToArray: (NewOutput) throws -> [Any] = { output in
-                guard let values = _mirrorExtractAll(output, labels: labels) else {
-                    throw Interpreters.ReflectionError.contramapWasWrongType
-                }
-                return values
-            }
-
-            return Gen.contramap(backwardToArray, impure.map(forwardFromArray))
+        var erased: ContiguousArray<AnyGenerator> = []
+        erased.reserveCapacity(5)
+        for generator in repeat each generators {
+            erased.append(generator.gen.erase())
         }
+
+        let impure: Generator<[Any]> = .impure(
+            operation: .zip(erased),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        let forwardFromArray: ([Any]) -> NewOutput = { values in
+            var index = 0
+            func next<U>(_: U.Type) -> U {
+                defer { index += 1 }
+                return values[index] as! U
+            }
+            return forward((repeat next((each T).self)))
+        }
+
+        let backwardToArray: (NewOutput) throws -> [Any] = { output in
+            guard let values = _mirrorExtractAll(output, labels: labels) else {
+                throw Interpreters.ReflectionError.contramapWasWrongType
+            }
+            return values
+        }
+
+        return Gen.contramap(backwardToArray, impure.map(forwardFromArray)).wrapped
     }
 
     /// Zips multiple generators with a failable backward closure for extraction.
@@ -91,36 +85,34 @@ public extension __ExhaustRuntime {
         backward: @Sendable @escaping (NewOutput) -> [Any]?,
         forward: @Sendable @escaping ((repeat each T)) -> NewOutput
     ) -> ReflectiveGenerator<NewOutput> {
-        ReflectiveGenerator {
-            var erased: ContiguousArray<AnyGenerator> = []
-            erased.reserveCapacity(5)
-            for generator in repeat each generators {
-                erased.append(generator.gen.erase())
-            }
-
-            let impure: Generator<[Any]> = .impure(
-                operation: .zip(erased),
-                continuation: { .pure($0 as! [Any]) }
-            )
-
-            let forwardFromArray: ([Any]) -> NewOutput = { values in
-                var index = 0
-                func next<U>(_: U.Type) -> U {
-                    defer { index += 1 }
-                    return values[index] as! U
-                }
-                return forward((repeat next((each T).self)))
-            }
-
-            let backwardToArray: (NewOutput) throws -> [Any] = { output in
-                guard let values = backward(output) else {
-                    throw Interpreters.ReflectionError.contramapWasWrongType
-                }
-                return values
-            }
-
-            return Gen.contramap(backwardToArray, impure.map(forwardFromArray))
+        var erased: ContiguousArray<AnyGenerator> = []
+        erased.reserveCapacity(5)
+        for generator in repeat each generators {
+            erased.append(generator.gen.erase())
         }
+
+        let impure: Generator<[Any]> = .impure(
+            operation: .zip(erased),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        let forwardFromArray: ([Any]) -> NewOutput = { values in
+            var index = 0
+            func next<U>(_: U.Type) -> U {
+                defer { index += 1 }
+                return values[index] as! U
+            }
+            return forward((repeat next((each T).self)))
+        }
+
+        let backwardToArray: (NewOutput) throws -> [Any] = { output in
+            guard let values = backward(output) else {
+                throw Interpreters.ReflectionError.contramapWasWrongType
+            }
+            return values
+        }
+
+        return Gen.contramap(backwardToArray, impure.map(forwardFromArray)).wrapped
     }
 
     // MARK: - Scalar conversion overloads
@@ -155,6 +147,6 @@ public extension __ExhaustRuntime {
     static func __zip<each T>(
         _ generators: repeat ReflectiveGenerator<each T>
     ) -> ReflectiveGenerator<(repeat each T)> {
-        ReflectiveGenerator { Gen.zip(repeat (each generators).gen) }
+        Gen.zip(repeat (each generators).gen).wrapped
     }
 }

@@ -39,18 +39,16 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        ReflectiveGenerator {
-            Gen.filter(
-                gen,
-                type: type,
-                predicate: predicate,
-                sourceLocation: FilterSourceLocation(
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
+        Gen.filter(
+            gen,
+            type: type,
+            predicate: predicate,
+            sourceLocation: FilterSourceLocation(
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
             )
-        }
+        ).wrapped
     }
 }

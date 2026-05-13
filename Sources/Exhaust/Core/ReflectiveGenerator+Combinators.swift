@@ -26,9 +26,7 @@ public extension ReflectiveGenerator {
         forward: @Sendable @escaping (Output) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Output
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        try ReflectiveGenerator<NewOutput> {
-            try Gen.contramap(backward, gen.map(forward))
-        }
+        try Gen.contramap(backward, gen.map(forward)).wrapped
     }
 
     /// Adapts a generator to a new output type, using a key path as the inverse for reflection.
@@ -70,19 +68,17 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        ReflectiveGenerator<NewValue> {
-            let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-            return Gen.liftF(.transform(
-                kind: .bind(
-                    fingerprint: fingerprint,
-                    forward: { try forward($0 as! Output).gen.erase() },
-                    backward: { try backward($0 as! NewValue) as Any },
-                    inputType: Output.self,
-                    outputType: NewValue.self
-                ),
-                inner: gen.erase()
-            ))
-        }
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                forward: { try forward($0 as! Output).gen.erase() },
+                backward: { try backward($0 as! NewValue) as Any },
+                inputType: Output.self,
+                outputType: NewValue.self
+            ),
+            inner: gen.erase()
+        )).wrapped
     }
 
     /// Chains this generator with a dependent generator, using a key path for backward extraction.
@@ -107,18 +103,16 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewValue> {
-        ReflectiveGenerator<NewValue> {
-            let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-            return Gen.liftF(.transform(
-                kind: .bind(
-                    fingerprint: fingerprint,
-                    forward: { try forward($0 as! Output).gen.erase() },
-                    backward: { ($0 as! NewValue)[keyPath: backward] },
-                    inputType: Output.self,
-                    outputType: NewValue.self
-                ),
-                inner: gen.erase()
-            ))
-        }
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                forward: { try forward($0 as! Output).gen.erase() },
+                backward: { ($0 as! NewValue)[keyPath: backward] },
+                inputType: Output.self,
+                outputType: NewValue.self
+            ),
+            inner: gen.erase()
+        )).wrapped
     }
 }

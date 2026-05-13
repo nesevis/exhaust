@@ -41,15 +41,13 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        ReflectiveGenerator {
-            Gen.unfold(
-                seed: seed.gen,
-                depthRange: depthRange,
-                step: { step($0, $1).gen },
-                fileID: fileID,
-                line: line,
-                column: column
-            )
-        }
+        Gen.unfold(
+            seed: seed.gen,
+            depthRange: depthRange,
+            step: { step($0, $1).gen },
+            fileID: fileID,
+            line: line,
+            column: column
+        ).wrapped
     }
 }

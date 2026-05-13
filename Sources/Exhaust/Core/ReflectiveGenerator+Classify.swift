@@ -23,16 +23,14 @@ public extension ReflectiveGenerator {
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-        return ReflectiveGenerator {
-            .impure(operation:
-                .classify(
-                    gen: gen.erase(),
-                    fingerprint: fingerprint,
-                    classifiers: classifiers.map { pair in
-                        (pair.0, { pair.1($0 as! Output) })
-                    }
-                )
-            ) { .pure($0 as! Output) }
-        }
+        return FreerMonad.impure(operation:
+            .classify(
+                gen: gen.erase(),
+                fingerprint: fingerprint,
+                classifiers: classifiers.map { pair in
+                    (pair.0, { pair.1($0 as! Output) })
+                }
+            )
+        ) { .pure($0 as! Output) }.wrapped
     }
 }

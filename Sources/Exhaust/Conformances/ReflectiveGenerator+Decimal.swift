@@ -41,7 +41,7 @@ public extension ReflectiveGenerator {
             "Lower bound must not exceed upper bound after scaling"
         )
 
-        return ReflectiveGenerator<Int64> { Gen.choose(in: lowerStep ... upperStep) }
+        return Gen.choose(in: lowerStep ... upperStep).wrapped
             .mapped(
                 forward: { step in
                     Decimal(step) / multiplier

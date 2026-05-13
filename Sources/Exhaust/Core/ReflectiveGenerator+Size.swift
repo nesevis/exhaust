@@ -12,9 +12,7 @@ public extension ReflectiveGenerator {
     /// let small = #gen(.int().array()).resize(10)
     /// ```
     func resize(_ newSize: UInt64) -> ReflectiveGenerator<Output> {
-        ReflectiveGenerator {
-            Gen.liftF(.resize(newSize: newSize, next: gen.erase()))
-        }
+        Gen.liftF(.resize(newSize: newSize, next: gen.erase())).wrapped
     }
 
     /// Runs this generator with a temporarily modified size parameter.
