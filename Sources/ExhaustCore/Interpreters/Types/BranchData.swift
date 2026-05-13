@@ -6,6 +6,7 @@
 //
 
 /// Metadata for a single branch in a ChoiceTree branch site.
+@usableFromInline
 package struct BranchData: Hashable, Sendable {
     var fingerprint: UInt64
     var weight: UInt64

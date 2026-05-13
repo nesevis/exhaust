@@ -38,7 +38,7 @@ build_triple() {
         --configuration release \
         "${EVOLUTION_FLAGS[@]}" \
         "$@" \
-        --target ExhaustCore 2>&1 | tail -1
+        --target ExhaustCore 2>&1 | tail -20
 }
 
 build_triple arm64-apple-macosx &

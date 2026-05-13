@@ -30,7 +30,9 @@
 /// **Construction**: Use ``Gen`` combinators, never construct directly.
 ///
 /// - SeeAlso: ``Gen`` for generator construction, ``Interpreters`` for execution
+@usableFromInline
 package typealias Generator<Output> = FreerMonad<ReflectiveOperation, Output>
+@usableFromInline
 package typealias AnyGenerator = FreerMonad<ReflectiveOperation, Any>
 
 package extension Generator where Operation == ReflectiveOperation {
