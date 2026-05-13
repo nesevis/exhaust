@@ -54,9 +54,8 @@ struct LargeUnionListShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
-
             .onReport { report = $0 },
             property: Self.property
         )
@@ -74,8 +73,8 @@ struct LargeUnionListShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
             .onReport { report = $0 },
             .logging(.debug),
             property: Self.property
@@ -94,9 +93,8 @@ struct LargeUnionListShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
-
             .onReport { report = $0 },
             property: Self.property
         )
@@ -117,9 +115,8 @@ struct LargeUnionListShrinkingChallenge {
         for list in lists {
             let output = #exhaust(
                 Self.gen,
+                reflecting: list,
                 .suppress(.issueReporting),
-                .reflecting(list),
-
                 property: Self.property
             )
 

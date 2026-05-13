@@ -99,7 +99,7 @@ public enum ExhaustBudget: Sendable {
 }
 
 /// Controls test behavior for `#exhaust` property tests, passed as variadic arguments.
-public enum ExhaustSettings<Output> {
+public enum ExhaustSettings {
     /// Controls iteration budgets for coverage, random sampling, and reduction. Defaults to `.expedient` (200 coverage rows, 200 random samplings, fast reduction).
     case budget(ExhaustBudget)
 
@@ -116,13 +116,6 @@ public enum ExhaustSettings<Output> {
     ///
     /// Use `.suppress(.issueReporting)` when the property test is expected to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     case suppress(SuppressOption)
-
-    /// Reflects an existing value through the generator and attempts to reduce it.
-    ///
-    /// Skips random generation entirely. The value is reflected into a choice tree and then reduced using the property as the test case reduction oracle.
-    ///
-    /// The value must fail the property — if it passes, an issue is reported.
-    case reflecting(Output)
 
     /// Disables automatic structured coverage analysis.
     ///

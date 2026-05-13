@@ -332,7 +332,16 @@ private func expandExhaust(
     }
 
     let generatorExpr = args[0].expression.trimmedDescription
-    let settingsExprs = args.dropFirst().map(\.expression.trimmedDescription)
+
+    var reflectingExpr: String?
+    var settingsExprs: [String] = []
+    for arg in args.dropFirst() {
+        if arg.label?.text == "reflecting" {
+            reflectingExpr = arg.expression.trimmedDescription
+        } else {
+            settingsExprs.append(arg.expression.trimmedDescription)
+        }
+    }
 
     let sourceCode = trailingClosure.statements.trimmedDescription
         .replacing("\\", with: "\\\\")
@@ -340,6 +349,7 @@ private func expandExhaust(
         .replacing("\n", with: "\\n")
 
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
+    let reflectingLine = reflectingExpr.map { "reflecting: \($0)," } ?? ""
 
     if runtimeFunction == "__exhaustExpect" || runtimeFunction == "__exhaustExpectAsync" {
         // Void path: pass both the original closure (for final re-run with #expect)
@@ -366,6 +376,7 @@ private func expandExhaust(
         __ExhaustRuntime.\(raw: runtimeFunction)(
             \(raw: generatorExpr),
             settings: \(raw: settingsArray),
+            \(raw: reflectingLine)
             sourceCode: "\(raw: sourceCode)",
             fileID: #fileID,
             filePath: #filePath,
@@ -382,6 +393,7 @@ private func expandExhaust(
     __ExhaustRuntime.\(raw: runtimeFunction)(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
+        \(raw: reflectingLine)
         sourceCode: "\(raw: sourceCode)",
         fileID: #fileID,
         filePath: #filePath,
@@ -419,13 +431,24 @@ private func expandExhaustFunctionReference(
     }
 
     let propertyExpr = propertyArg.expression.trimmedDescription
-    let settingsExprs = args.dropFirst().dropLast().map(\.expression.trimmedDescription)
+
+    var reflectingExpr: String?
+    var settingsExprs: [String] = []
+    for arg in args.dropFirst().dropLast() {
+        if arg.label?.text == "reflecting" {
+            reflectingExpr = arg.expression.trimmedDescription
+        } else {
+            settingsExprs.append(arg.expression.trimmedDescription)
+        }
+    }
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
+    let reflectingLine = reflectingExpr.map { "reflecting: \($0)," } ?? ""
 
     return """
     __ExhaustRuntime.\(raw: runtimeFunction)(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
+        \(raw: reflectingLine)
         sourceCode: nil,
         fileID: #fileID,
         filePath: #filePath,

@@ -51,8 +51,8 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Bound5Fixture.gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
             .onReport { report = $0 },
             property: Bound5Fixture.property
         )
@@ -75,8 +75,8 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Bound5Fixture.gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
             .onReport { report = $0 },
             property: Bound5Fixture.property
         )
@@ -98,8 +98,8 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Bound5Fixture.gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
             .onReport { report = $0 },
             .logging(.debug, .keyValue),
             property: Bound5Fixture.property
@@ -125,8 +125,8 @@ struct Bound5ShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             Bound5Fixture.gen,
+            reflecting: value,
             .suppress(.all),
-            .reflecting(value),
             .onReport { report = $0 },
             property: Bound5Fixture.property
         )
@@ -169,8 +169,8 @@ struct Bound5ShrinkingChallenge {
         for bound5 in bound5s {
             let output = #exhaust(
                 Bound5Fixture.gen,
+                reflecting: bound5,
                 .suppress(.issueReporting),
-                .reflecting(bound5),
                 .randomOnly,
                 property: Bound5Fixture.property
             )

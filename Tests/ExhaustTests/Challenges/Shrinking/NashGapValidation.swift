@@ -40,8 +40,8 @@ struct NashGapValidation {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
             .onReport { report = $0 },
             .logging(.debug)
         ) { a, b, c, d, e, f, g, h in
@@ -85,8 +85,8 @@ struct NashGapValidation {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
+            reflecting: value,
             .suppress(.issueReporting),
-            .reflecting(value),
             .onReport { report = $0 },
             .logging(.debug)
         ) { a, b, c, d, e, f, g, h, i, j in

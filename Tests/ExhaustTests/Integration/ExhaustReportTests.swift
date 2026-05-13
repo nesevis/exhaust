@@ -45,7 +45,7 @@ struct ExhaustReportTests {
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .reflecting(75),
+            reflecting: 75,
             .onReport { capturedReport = $0 },
             .suppress(.issueReporting)
         ) { value in

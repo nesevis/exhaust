@@ -9,11 +9,11 @@ struct DedupePropertyTests {
 
         #exhaust(
             generator,
+            reflecting: [3, 7, 7, 0, 7, 1, 1, 4],
             .logging(.debug),
             .suppress(.issueReporting),
 //            .randomOnly,
-            .budget(.exorbitant),
-            .reflecting([3, 7, 7, 0, 7, 1, 1, 4])
+            .budget(.exorbitant)
         ) { xs in
             #expect(Set(dedupe(xs)) == Set(xs))
         }

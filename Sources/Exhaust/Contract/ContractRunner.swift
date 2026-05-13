@@ -545,8 +545,8 @@ func runSCACoverage<Command>(
     return .completed
 }
 
-/// Builds a ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
-func buildExhaustSettings<Output>(
+/// Builds an ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
+func buildExhaustSettings(
     samplingBudget: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
@@ -555,8 +555,8 @@ func buildExhaustSettings<Output>(
     collectOpenPBTStats: Bool = false,
     logLevel: LogLevel = .error,
     logFormat: LogFormat = .keyValue
-) -> [ExhaustSettings<Output>] {
-    var settings: [ExhaustSettings<Output>] = [
+) -> [ExhaustSettings] {
+    var settings: [ExhaustSettings] = [
         .budget(.custom(
             coverage: coverageBudget,
             sampling: samplingBudget

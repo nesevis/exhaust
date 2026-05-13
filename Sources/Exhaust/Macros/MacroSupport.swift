@@ -61,7 +61,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     @discardableResult
     public static func __exhaust<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -81,7 +82,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 var seed: UInt64?
                 var suppressIssueReporting = false
                 var suppressLogs = false
-                var reflectingValue: Output?
                 var useRandomOnly = false
                 var visualize = false
                 var onReportClosure: ((ExhaustReport) -> Void)?
@@ -115,8 +115,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             suppressIssueReporting = true
                             suppressLogs = true
                         }
-                    case let .reflecting(value):
-                        reflectingValue = value
                     case .randomOnly:
                         useRandomOnly = true
                     case .visualize:
@@ -203,11 +201,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         statsAccumulator: statsAccumulator
                     )
 
-                    if let reflectingValue {
+                    if let reflecting {
                         do {
                             return try __reduceReflected(
                                 gen,
-                                value: reflectingValue,
+                                value: reflecting,
                                 reductionConfig: reductionConfig,
                                 visualize: visualize,
                                 suppressIssueReporting: suppressIssueReporting,
@@ -221,7 +219,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             )
                         } catch {
                             reportIssue("\(error)", fileID: fileID, filePath: filePath, line: line, column: column)
-                            return reflectingValue
+                            return reflecting
                         }
                     }
 
@@ -310,7 +308,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     #if canImport(Testing)
         private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
             gen: Generator<Output>,
-            settings: [ExhaustSettings<Output>],
+            settings: [ExhaustSettings],
             sourceCode: String?,
             fileID: StaticString,
             filePath: StaticString,
@@ -376,7 +374,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     @discardableResult
     public static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -440,6 +439,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     pipelineResult = __exhaust(
                         refGen,
                         settings: augmentedSettings,
+                        reflecting: reflecting,
                         sourceCode: sourceCode,
                         fileID: fileID,
                         filePath: filePath,
@@ -489,7 +489,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     @discardableResult
     public static func __exhaustAsync<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -503,6 +504,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             __exhaust(
                 refGen,
                 settings: settings,
+                reflecting: reflecting,
                 sourceCode: sourceCode,
                 fileID: fileID,
                 filePath: filePath,
@@ -520,7 +522,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     @discardableResult
     public static func __exhaustExpectAsync<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -570,6 +573,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         pipelineResult = __exhaust(
                             refGen,
                             settings: augmentedSettings,
+                            reflecting: reflecting,
                             sourceCode: sourceCode,
                             fileID: fileID,
                             filePath: filePath,
@@ -589,6 +593,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     pipelineResult = __exhaust(
                         refGen,
                         settings: augmentedSettings,
+                        reflecting: reflecting,
                         sourceCode: sourceCode,
                         fileID: fileID,
                         filePath: filePath,

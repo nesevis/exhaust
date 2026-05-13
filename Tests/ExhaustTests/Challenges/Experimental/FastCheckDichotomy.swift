@@ -48,10 +48,10 @@ struct FastCheckDichotomyChallenge {
 
         let output = #exhaust(
             gen,
+            reflecting: [500_000, 500_500],
             .suppress(.issueReporting),
             .budget(.exorbitant),
             .collectOpenPBTStats,
-            .reflecting([500_000, 500_500]),
             property: property
         )
 
