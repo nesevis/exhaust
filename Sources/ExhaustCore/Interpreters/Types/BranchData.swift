@@ -6,8 +6,7 @@
 //
 
 /// Metadata for a single branch in a ChoiceTree branch site.
-@usableFromInline
-package struct BranchData: Hashable, Sendable {
+public struct BranchData: Hashable, Sendable {
     public var fingerprint: UInt64
     public var weight: UInt64
     public var id: UInt64

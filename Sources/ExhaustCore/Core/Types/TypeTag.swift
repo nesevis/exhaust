@@ -6,8 +6,7 @@
 //
 
 /// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
-@usableFromInline
-package enum TypeTag: Sendable {
+public enum TypeTag: Sendable {
     /// Platform-width unsigned integer (``UInt``).
     case uint
     /// 64-bit unsigned integer.

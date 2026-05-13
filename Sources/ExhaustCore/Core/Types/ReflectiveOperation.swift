@@ -49,8 +49,7 @@
 // unique            InterpreterWrapperHandlers    (pass-through)    (pass-through)    (pass-through)
 // transform         VACTI / VI                    Reflect.swift     Replay.swift      ChoiceGraphBuilder
 
-@usableFromInline
-package enum ReflectiveOperation {
+public enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
     ///
     /// Each choice combines the elements needed for bidirectional generation:
@@ -240,8 +239,7 @@ package enum ReflectiveOperation {
 }
 
 /// Describes the kind of forward-only transformation applied by a `.transform` operation.
-@usableFromInline
-package enum TransformKind {
+public enum TransformKind {
     /// A pure function applied to the inner generator's output.
     ///
     /// - Parameters:

@@ -8,8 +8,7 @@
 /// An element in a flattened ``ChoiceSequence``, representing one entry from a ``ChoiceTree``.
 ///
 /// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` carries the actual numeric choices.
-@usableFromInline
-package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
+public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`--`false` range are logically grouped.
     case group(Bool)
     /// The elements within the `true`--`false` range are elements of a sequence.

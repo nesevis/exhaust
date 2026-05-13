@@ -30,10 +30,8 @@
 /// **Construction**: Use ``Gen`` combinators, never construct directly.
 ///
 /// - SeeAlso: ``Gen`` for generator construction, ``Interpreters`` for execution
-@usableFromInline
-package typealias Generator<Output> = FreerMonad<ReflectiveOperation, Output>
-@usableFromInline
-package typealias AnyGenerator = FreerMonad<ReflectiveOperation, Any>
+public typealias Generator<Output> = FreerMonad<ReflectiveOperation, Output>
+public typealias AnyGenerator = FreerMonad<ReflectiveOperation, Any>
 
 package extension Generator where Operation == ReflectiveOperation {
     /// Reifies a monadic bind as a visible `.transform(.bind(...))` operation in the generator tree.
