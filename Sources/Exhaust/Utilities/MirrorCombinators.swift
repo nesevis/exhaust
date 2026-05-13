@@ -11,7 +11,7 @@ public extension __ExhaustRuntime {
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { (output: Output) throws -> Any in
-                guard let value = _mirrorExtract(output, label: label) else {
+                guard let value = Self._mirrorExtract(output, label: label) else {
                     throw Interpreters.ReflectionError.contramapWasWrongType
                 }
                 return value
@@ -68,7 +68,7 @@ public extension __ExhaustRuntime {
         }
 
         let backwardToArray: (NewOutput) throws -> [Any] = { output in
-            guard let values = _mirrorExtractAll(output, labels: labels) else {
+            guard let values = Self._mirrorExtractAll(output, labels: labels) else {
                 throw Interpreters.ReflectionError.contramapWasWrongType
             }
             return values
