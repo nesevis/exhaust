@@ -53,34 +53,34 @@ let complexGrammarProperty: @Sendable (ComplexExpr) -> Bool = { expr in
 // MARK: - Generator
 
 func complexGrammarGen(depth: UInt64) -> RefGen<ComplexExpr> {
-    let leaf = #refGen(.int(in: -10 ... 10, scaling: .constant))
+    let leaf = #gen(.int(in: -10 ... 10, scaling: .constant))
         .mapped(
             forward: { value in ComplexExpr.lit(value) },
             backward: complexBackwardLit
         )
 
-    return #refGen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
-        let add = #refGen(recurse(), recurse())
+    return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+        let add = #gen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.add(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let sub = #refGen(recurse(), recurse())
+        let sub = #gen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.sub(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let mul = #refGen(recurse(), recurse())
+        let mul = #gen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.mul(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let div = #refGen(recurse(), recurse())
+        let div = #gen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.div(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let ifThen = #refGen(recurse(), recurse(), recurse())
+        let ifThen = #gen(recurse(), recurse(), recurse())
             .mapped(
                 forward: { condition, thenBranch, elseBranch in
                     ComplexExpr.ifThen(condition, thenBranch, elseBranch)

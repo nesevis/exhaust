@@ -22,7 +22,7 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "BinaryHeap", gen: #refGen(.uint64(in: 0 ... 20)).bind { binaryHeapGen(depth: $0) }.unique().gen, property: binaryHeapProperty,
+        name: "BinaryHeap", gen: #gen(.uint64(in: 0 ... 20)).bind { binaryHeapGen(depth: $0) }.unique().gen, property: binaryHeapProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(

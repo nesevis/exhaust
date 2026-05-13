@@ -22,15 +22,15 @@ extension Heap: CustomDebugStringConvertible {
 
 func binaryHeapGen(min: Int = 0, depth: UInt64) -> RefGen<Heap<Int>> {
     let maxVal = Int.max
-    let emptyGen: RefGen<Heap<Int>> = #refGen(.just(.empty))
+    let emptyGen: RefGen<Heap<Int>> = #gen(.just(.empty))
 
     guard depth > 0, min <= maxVal else {
         return emptyGen
     }
 
-    let nodeGen = #refGen(.int(in: min ... maxVal))
+    let nodeGen = #gen(.int(in: min ... maxVal))
         .bind { value in
-            #refGen(
+            #gen(
                 binaryHeapGen(min: value, depth: depth / 2),
                 binaryHeapGen(min: value, depth: depth / 2)
             )
@@ -45,7 +45,7 @@ func binaryHeapGen(min: Int = 0, depth: UInt64) -> RefGen<Heap<Int>> {
             )
         }
 
-    return #refGen(.oneOf(weighted: (1, emptyGen), (5, nodeGen)))
+    return #gen(.oneOf(weighted: (1, emptyGen), (5, nodeGen)))
 }
 
 /// Recursive combinator variant — flat choice tree, no nested binds. Validity enforced by filter instead of by construction.
@@ -54,7 +54,7 @@ func binaryHeapGenRecursive(maxValue: Int = .max) -> RefGen<Heap<Int>> {
         base: Heap<Int>.empty,
         depthRange: 0 ... 20
     ) { recurse, _ in
-        let nodeGen = #refGen(.int(in: 0 ... maxValue), recurse(), recurse())
+        let nodeGen = #gen(.int(in: 0 ... maxValue), recurse(), recurse())
             .mapped(
                 forward: { value, left, right in Heap.node(value, left, right) },
                 backward: { heap in
@@ -64,7 +64,7 @@ func binaryHeapGenRecursive(maxValue: Int = .max) -> RefGen<Heap<Int>> {
                     }
                 }
             )
-        return #refGen(.oneOf(weighted: (1, .just(.empty)), (5, nodeGen)))
+        return #gen(.oneOf(weighted: (1, .just(.empty)), (5, nodeGen)))
     }
     .filter { heapInvariant($0) }
 }

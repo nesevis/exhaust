@@ -40,7 +40,7 @@ func registerCGSBenchmarks() {
 // MARK: - Generator
 
 private func cgsBenchmarkGen() -> RefGen<[Int]> {
-    #refGen(
+    #gen(
         .int(in: 1 ... 200).bind { bound in
             .int(in: 0 ... 1000)
                 .filter { $0 % bound == 0 }
