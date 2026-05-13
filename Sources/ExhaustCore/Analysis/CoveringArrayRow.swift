@@ -4,6 +4,7 @@
 //
 
 /// A single row in a covering array, mapping parameter indices to value indices.
+@usableFromInline
 package struct CoveringArrayRow: @unchecked Sendable {
     // @unchecked Sendable: explicit annotation for consistency with related analysis types (`FiniteDomainProfile`, `BoundaryDomainProfile`). All stored properties are `Sendable`.
 

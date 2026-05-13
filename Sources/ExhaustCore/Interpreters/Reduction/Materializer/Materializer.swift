@@ -10,6 +10,7 @@
 /// - **Guided**: three-tier resolution — prefix first, then fallback tree, then PRNG. Values that fit the new domain are carried forward unchanged; values that don't fall back to the next tier.
 ///
 /// Always materializes all branch alternatives at pick sites so structural encoders can see inactive candidates. The result omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata.
+@usableFromInline
 package enum Materializer {
     /// Reads the active generation size for a materialization call. Reads the one-shot `.resize` override first, then falls back to `context.size` (the Materializer's persistent baseline, defaulting to 100).
     @inline(__always)

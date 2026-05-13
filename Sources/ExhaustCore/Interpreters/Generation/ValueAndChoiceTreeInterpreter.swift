@@ -13,6 +13,7 @@
 /// Produces both a value and a ``ChoiceTree`` by walking the ``FreerMonad`` spine and recording each choice.
 ///
 /// This is the primary generation interpreter. The ``ChoiceTree`` it builds is consumed downstream by coverage analysis, reduction, and replay. When only the value is needed, ``nextValueOnly()`` delegates to ``ValueInterpreter`` to avoid tree construction overhead.
+@usableFromInline
 package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 

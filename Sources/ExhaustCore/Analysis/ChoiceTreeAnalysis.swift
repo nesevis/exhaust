@@ -31,6 +31,7 @@
 /// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted — that is, the generator is purely deterministic (for example `Gen.just(value)`).
 ///
 /// - SeeAlso: ``PullBasedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
+@usableFromInline
 package enum ChoiceTreeAnalysis {
     /// The outcome of analyzing a generator's choice tree structure.
     public enum AnalysisResult {

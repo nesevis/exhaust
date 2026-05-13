@@ -5,6 +5,7 @@
 /// Result of SCA domain construction — carries everything needed for covering array generation and tree replay.
 ///
 /// Bundles the finite domain profile, optional argument mapping, and strength cap so the caller does not need to thread these values separately.
+@usableFromInline
 package struct SCADomain {
     /// The finite domain profile for covering array generation.
     public let profile: FiniteDomainProfile

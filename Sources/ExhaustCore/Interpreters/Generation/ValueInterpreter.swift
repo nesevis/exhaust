@@ -13,6 +13,7 @@
 /// Produces only a value (no ``ChoiceTree``), used by ``ValueAndChoiceTreeInterpreter/nextValueOnly()`` for tree-free sampling when only the output is needed.
 ///
 /// PRNG consumption is identical to ``ValueAndChoiceTreeInterpreter`` so a failing run can be reproduced with full tree construction.
+@usableFromInline
 package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     let generator: Generator<Element>
     private var erasedGenerator: AnyGenerator?

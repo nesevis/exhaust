@@ -21,6 +21,7 @@
 /// For `c` command types, sequence length `L`, strength `t`, the covering array produces roughly `c^t × log(L)` rows.
 /// - 5 commands, length 10, t=2: ~40–50 rows
 /// - 10 commands, length 15, t=2: ~150–200 rows
+@usableFromInline
 package enum SequenceCoveringArray {
     /// Computes the per-parameter finite threshold for SCA domain construction, derived from the covering array budget.
     ///

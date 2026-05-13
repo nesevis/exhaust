@@ -12,6 +12,7 @@ import Foundation
 /// Classification-aware exploration runner that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
 /// Implements the three-stage orchestration: warm-up (untuned sampling for ordering signal), per-direction tuning passes (most-hit-first, with cross-direction classification and budget pooling), and direction-preserving reduction on failure.
+@usableFromInline
 package struct ClassificationExploreRunner<Output>: ~Copyable {
     private let gen: Generator<Output>
     private let property: (Output) -> Bool

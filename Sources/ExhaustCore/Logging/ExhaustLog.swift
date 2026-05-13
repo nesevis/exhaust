@@ -60,6 +60,7 @@ public enum LogFormat: String, Sendable {
 }
 
 /// Provides structured logging for Exhaust's internal subsystems.
+@usableFromInline
 package enum ExhaustLog {
     /// Identifies the subsystem that originated a log message.
     package enum Category: String, CaseIterable, Hashable, Sendable {
