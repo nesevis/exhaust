@@ -25,18 +25,18 @@ public extension ReflectiveGenerator {
                 (1, Gen.just("https")),
             ])
 
-            let label = refGenAlphanumericString(length: 3 ... 10)
+            let label = alphanumericString(length: 3 ... 10)
             let host = Gen.arrayOf(label, within: 2 ... 3, scaling: .constant)
                 .map { $0.joined(separator: ".") }
 
-            let pathSegment = refGenAlphanumericString(length: 1 ... 8)
+            let pathSegment = alphanumericString(length: 1 ... 8)
             let path = Gen.arrayOf(pathSegment, within: 0 ... 3, scaling: .constant)
                 .map { segments in
                     segments.isEmpty ? "" : "/" + segments.joined(separator: "/")
                 }
 
-            let queryKey = refGenAlphanumericString(length: 2 ... 6)
-            let queryValue = refGenAlphanumericString(length: 1 ... 8)
+            let queryKey = alphanumericString(length: 2 ... 6)
+            let queryValue = alphanumericString(length: 1 ... 8)
             let queryPair = Gen.zip(queryKey, queryValue)
                 .map { "\($0)=\($1)" }
             let query = Gen.arrayOf(queryPair, within: 0 ... 2, scaling: .constant)
@@ -62,7 +62,7 @@ public extension ReflectiveGenerator {
 // MARK: - Helpers
 
 /// Generates a lowercase alphanumeric string with length in the given range.
-private func refGenAlphanumericString(
+private func alphanumericString(
     length: ClosedRange<UInt64>
 ) -> Generator<String> {
     let chars = Gen.choose(in: UInt8(0) ... 35)

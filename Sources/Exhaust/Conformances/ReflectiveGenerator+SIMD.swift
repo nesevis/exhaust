@@ -122,7 +122,7 @@ public extension ReflectiveGenerator {
     static func simd8<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
     ) -> ReflectiveGenerator<SIMD8<Scalar>> where Output == SIMD8<Scalar> {
-        refGenFlatSIMD(scalar, lanes: 8)
+        flatSIMD(scalar, lanes: 8)
     }
 }
 
@@ -139,7 +139,7 @@ public extension ReflectiveGenerator {
     static func simd16<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
     ) -> ReflectiveGenerator<SIMD16<Scalar>> where Output == SIMD16<Scalar> {
-        refGenFlatSIMD(scalar, lanes: 16)
+        flatSIMD(scalar, lanes: 16)
     }
 }
 
@@ -156,7 +156,7 @@ public extension ReflectiveGenerator {
     static func simd32<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
     ) -> ReflectiveGenerator<SIMD32<Scalar>> where Output == SIMD32<Scalar> {
-        refGenFlatSIMD(scalar, lanes: 32)
+        flatSIMD(scalar, lanes: 32)
     }
 }
 
@@ -173,14 +173,14 @@ public extension ReflectiveGenerator {
     static func simd64<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
     ) -> ReflectiveGenerator<SIMD64<Scalar>> where Output == SIMD64<Scalar> {
-        refGenFlatSIMD(scalar, lanes: 64)
+        flatSIMD(scalar, lanes: 64)
     }
 }
 
 // MARK: - Private helpers
 
 /// Builds a flat opaque zip of `lanes` copies of a scalar generator, then maps the result into a SIMD vector. A single flat group avoids the nested-group reflection issues that half-based recursive composition would cause.
-private func refGenFlatSIMD<Scalar: SIMDScalar, Vector: SIMD>(
+private func flatSIMD<Scalar: SIMDScalar, Vector: SIMD>(
     _ s: ReflectiveGenerator<Scalar>,
     lanes: Int
 ) -> ReflectiveGenerator<Vector> where Vector.Scalar == Scalar {
