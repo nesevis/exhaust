@@ -270,65 +270,6 @@ struct ChoiceGraphTests {
 
     // MARK: - Query Tests
 
-    @Test("Bind depth counts enclosing bind regions")
-    func bindDepthQuery() {
-        // Sequence: .bind(true), A, .bind(true), B, C, .bind(false), .bind(false)
-        // A is the outer inner (depth 0), B is the inner inner (depth 1), C is the inner bound (depth 2).
-        let valA = ChoiceTree.choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valB = ChoiceTree.choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valC = ChoiceTree.choice(ChoiceValue(30 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let innerBind = ChoiceTree.bind(fingerprint: 0, inner: valB, bound: valC)
-        let outerBind = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: innerBind)
-
-        let graph = ChoiceGraph.build(from: outerBind)
-        let sequence = ChoiceSequence(outerBind)
-
-        for position in 0 ..< sequence.count {
-            switch sequence[position] {
-            case .value:
-                let depth = graph.bindDepth(at: position)
-                // A is outer-inner: depth 0. B is inner-inner inside outer-bound: depth 1.
-                // C is inner-bound inside outer-bound: depth 2.
-                let value = sequence[position].value!.choice
-                switch value.bitPattern64 {
-                case 10: #expect(depth == 0)
-                case 20: #expect(depth == 1)
-                case 30: #expect(depth == 2)
-                default: break
-                }
-            default:
-                break
-            }
-        }
-    }
-
-    @Test("isInBoundSubtree identifies bound positions")
-    func isInBoundSubtreeQuery() {
-        // Sequence: .bind(true), A, B, .bind(false)
-        // A is inner (not in bound subtree), B is bound (in bound subtree).
-        let valA = ChoiceTree.choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let valB = ChoiceTree.choice(ChoiceValue(20 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
-        let tree = ChoiceTree.bind(fingerprint: 0, inner: valA, bound: valB)
-
-        let graph = ChoiceGraph.build(from: tree)
-        let sequence = ChoiceSequence(tree)
-
-        for position in 0 ..< sequence.count {
-            switch sequence[position] {
-            case .value:
-                let inBound = graph.isInBoundSubtree(position)
-                let value = sequence[position].value!.choice
-                switch value.bitPattern64 {
-                case 10: #expect(inBound == false) // inner
-                case 20: #expect(inBound == true) // bound
-                default: break
-                }
-            default:
-                break
-            }
-        }
-    }
-
     @Test("Deletion antichain excludes individual leaf nodes")
     func deletionAntichainExcludesLeaves() {
         // A zip of three leaves — the zip is in the antichain, not the individual leaves.

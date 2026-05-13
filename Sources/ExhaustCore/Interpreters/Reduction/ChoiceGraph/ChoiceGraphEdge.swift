@@ -29,22 +29,6 @@ package struct ContainmentEdge: Equatable {
     package let target: Int
 }
 
-// MARK: - Self-Similarity Edge
-
-/// Undirected edge between two active pick nodes with matching `fingerprint`.
-///
-/// These picks belong to the same recursive generator at different depths and are structurally exchangeable. The size delta determines substitution direction: a positive delta means the neighbour is smaller (the source is the substitution target, the neighbour is the donor).
-package struct SelfSimilarityEdge: Equatable {
-    /// Node ID of one pick node.
-    package let nodeA: Int
-
-    /// Node ID of the other pick node.
-    package let nodeB: Int
-
-    /// Subtree size of nodeA minus subtree size of nodeB. Positive means nodeB is smaller (nodeA is the substitution target).
-    package let sizeDelta: Int
-}
-
 // MARK: - Type-Compatibility Edge
 
 /// Undirected edge between two nodes in the same antichain with compatible types.
@@ -61,15 +45,3 @@ package struct TypeCompatibilityEdge: Equatable {
     package let typeTag: TypeTag?
 }
 
-// MARK: - Source/Sink Status
-
-/// Redistribution role of a leaf node based on its current value.
-///
-/// Updated on any acceptance (structural or value). A non-zero leaf is a source (can donate magnitude); a zero-valued leaf is a sink (can absorb).
-package enum SourceSinkStatus {
-    /// Non-zero value — can donate magnitude to a type-compatible sink.
-    case source
-
-    /// Zero or semantic-simplest value — can absorb magnitude from a type-compatible source.
-    case sink
-}

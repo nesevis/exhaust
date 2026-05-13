@@ -184,19 +184,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         return (value as! FinalOutput, tree)
     }
 
-    /// Used to generate results around a similar level of complexity. Intended to be used to increase pool of results to compare against.
-    func fixedAtSize() -> ValueAndChoiceTreeInterpreter<FinalOutput> {
-        var fixed = ValueAndChoiceTreeInterpreter(
-            generator,
-            materializePicks: context.materializePicks,
-            seed: context.baseSeed,
-            maxRuns: context.maxRuns
-        )
-        fixed.context.isFixed = true
-        fixed.context.runs = context.runs
-        return fixed
-    }
-
     // MARK: - Generic Wrapper
 
     /// Typed entry point that erases to ``generateRecursiveAny`` and casts the result back.

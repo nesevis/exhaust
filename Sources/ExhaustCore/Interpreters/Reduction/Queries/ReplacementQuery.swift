@@ -6,8 +6,6 @@
 // MARK: - Replacement Scope Query
 
 /// Static scope builder for replacement operations (self-similar substitution, branch pivots, and descendant promotion).
-///
-/// Replaces the former `ChoiceGraph.replacementScopes()` instance method.
 enum ReplacementQuery {
     /// Computes replacement scopes from self-similarity groups, pick nodes, and descendant promotion candidates.
     ///

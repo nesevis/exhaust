@@ -28,42 +28,6 @@ package extension ChoiceGraph {
         return edges
     }
 
-    /// Bind-inner nodes in topological order with their dependency edges restricted to other bind-inner nodes.
-    ///
-    /// - Complexity: O(D + B) where D is the dependency edge count and B is the bind-inner node count.
-    /// - SeeAlso: ``ChoiceDependencyGraph/bindInnerTopology()``
-    var bindInnerTopology: [(nodeID: Int, bindDepth: Int, dependsOn: [Int])] {
-        var bindInnerNodeIDs = Set<Int>()
-        var bindInnerInfo: [Int: Int] = [:]
-
-        for node in nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            bindInnerNodeIDs.insert(innerChildID)
-            bindInnerInfo[innerChildID] = metadata.bindDepth
-        }
-
-        // Build adjacency list once in O(D) instead of filtering all edges per node in O(topo × D).
-        var adjacency: [Int: [Int]] = [:]
-        for edge in dependencyEdges {
-            guard bindInnerNodeIDs.contains(edge.source) else { continue }
-            guard bindInnerNodeIDs.contains(edge.target) else { continue }
-            adjacency[edge.source, default: []].append(edge.target)
-        }
-
-        var result: [(nodeID: Int, bindDepth: Int, dependsOn: [Int])] = []
-        for nodeID in topologicalOrder {
-            guard bindInnerNodeIDs.contains(nodeID) else { continue }
-            result.append((
-                nodeID: nodeID,
-                bindDepth: bindInnerInfo[nodeID] ?? 0,
-                dependsOn: adjacency[nodeID, default: []]
-            ))
-        }
-        return result
-    }
-
     /// Whether two nodes are independent (no dependency path between them in either direction).
     func areIndependent(_ nodeA: Int, _ nodeB: Int) -> Bool {
         isReachable(from: nodeA, to: nodeB) == false
@@ -124,91 +88,6 @@ package extension ChoiceGraph {
         return antichainIndices.map { candidateIDs[$0] }
     }
 
-    /// Returns the sequence positions of all active `chooseBits` leaf nodes.
-    ///
-    /// This is the graph's natural definition of leaf positions — every value-producing node with a non-nil position range. This differs from the CDG's `leafPositions`, which partitions the flat sequence around structural node ranges. The graph's model is richer: every leaf has an explicit node with type metadata.
-    var leafPositions: [ClosedRange<Int>] {
-        liveNodeIDs.compactMap { nodeID in
-            let node = nodes[nodeID]
-            guard case .chooseBits = node.kind else { return nil }
-            return node.positionRange
-        }
-    }
-}
-
-// MARK: - Bind Queries
-
-package extension ChoiceGraph {
-    /// Returns the bind nesting depth at a given sequence position.
-    ///
-    /// Counts the number of bind nodes whose bound child's position range contains the given position.
-    func bindDepth(at position: Int) -> Int {
-        var depth = 0
-        for nodeID in liveNodeIDs {
-            let node = nodes[nodeID]
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let boundChildID = node.children[metadata.boundChildIndex]
-            if let boundRange = nodes[boundChildID].positionRange,
-               boundRange.contains(position)
-            {
-                depth += 1
-            }
-        }
-        return depth
-    }
-
-    /// Whether a sequence position falls inside any bind node's bound child range.
-    func isInBoundSubtree(_ position: Int) -> Bool {
-        for nodeID in liveNodeIDs {
-            let node = nodes[nodeID]
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let boundChildID = node.children[metadata.boundChildIndex]
-            if let boundRange = nodes[boundChildID].positionRange,
-               boundRange.contains(position)
-            {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Returns the bind node whose inner child's position range contains the given position, or nil.
-    func bindNodeForInnerPosition(_ position: Int) -> ChoiceGraphNode? {
-        for nodeID in liveNodeIDs {
-            let node = nodes[nodeID]
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            if let innerRange = nodes[innerChildID].positionRange,
-               innerRange.contains(position)
-            {
-                return node
-            }
-        }
-        return nil
-    }
-}
-
-// MARK: - Self-Similarity Queries
-
-package extension ChoiceGraph {
-    /// Returns self-similarity edges incident to a pick node, derived on demand from the group index.
-    ///
-    /// A positive delta means the neighbour is smaller (the queried node is the substitution target). Sorted by size delta descending (largest reduction first).
-    ///
-    /// - Complexity: O(G log G) where G is the group size. Replaces the previous O(E) filter over all edges.
-    func selfSimilarityEdges(from nodeID: Int) -> [SelfSimilarityEdge] {
-        guard case let .pick(metadata) = nodes[nodeID].kind else { return [] }
-        guard let group = selfSimilarityGroups[metadata.fingerprint] else { return [] }
-        let sizeA = nodes[nodeID].positionRange?.count ?? 0
-        return group.compactMap { otherID -> SelfSimilarityEdge? in
-            guard otherID != nodeID else { return nil }
-            let sizeB = nodes[otherID].positionRange?.count ?? 0
-            return SelfSimilarityEdge(nodeA: nodeID, nodeB: otherID, sizeDelta: sizeA - sizeB)
-        }.sorted { $0.sizeDelta > $1.sizeDelta }
-    }
 }
 
 // MARK: - Structural Fingerprint

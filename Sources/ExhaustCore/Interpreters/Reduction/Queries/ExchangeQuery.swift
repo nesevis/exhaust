@@ -7,7 +7,7 @@
 
 /// Static scope builder for exchange operations (redistribution and tandem lockstep reduction).
 ///
-/// Replaces the former `ChoiceGraph.exchangeScopes()` instance method. Callers that also need minimization scopes should build ``QueryHelpers/buildInnerDescendantToBind(graph:)`` once and pass it to both ``build(graph:innerDescendantToBind:)`` and ``MinimizationQuery/build(graph:innerDescendantToBind:)``.
+/// Callers that also need minimization scopes should build ``QueryHelpers/buildInnerDescendantToBind(graph:)`` once and pass it to both ``build(graph:innerDescendantToBind:)`` and ``MinimizationQuery/build(graph:innerDescendantToBind:)``.
 enum ExchangeQuery {
     /// Computes exchange scopes from type-compatibility edges, homogeneous group descriptors, and leaf groupings.
     ///

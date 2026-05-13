@@ -1,4 +1,3 @@
-import ExhaustCore
 
 /// Combines generators through a transform closure, synthesizing a bidirectional backward mapping when possible.
 ///

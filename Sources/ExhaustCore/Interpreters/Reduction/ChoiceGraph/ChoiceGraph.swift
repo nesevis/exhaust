@@ -18,7 +18,7 @@
 ///
 /// ## Lifecycle
 ///
-/// Rebuilt from the tree on every structural acceptance. All derived data (live node IDs, leaf nodes, topological order, dependency adjacency) is computed eagerly during ``ChoiceGraphBuilder/assembleGraph()`` and stored as immutable fields. Infrequently-accessed derived data (type-compatibility edges, source/sink status, bind-inner descendant index) is recomputed on each access without caching.
+/// Rebuilt from the tree on every structural acceptance. All derived data (live node IDs, leaf nodes, topological order, dependency adjacency) is computed eagerly during ``ChoiceGraphBuilder/assembleGraph()`` and stored as immutable fields. Infrequently-accessed derived data (type-compatibility edges) is recomputed on each access without caching.
 ///
 /// Value-only leaf changes (no reshape) are applied in place via ``apply(_:freshTree:)`` without rebuilding. Structural mutations return ``ChangeApplication/requiresFullRebuild`` true, delegating the rebuild to the scheduler.
 ///
@@ -26,7 +26,7 @@
 ///
 /// This file holds the struct definition, eagerly-computed fields, the convergence-record helpers, and the init/build plumbing. Read-only graph queries live in `ChoiceGraph+Queries.swift`. Computation functions for non-eagerly-derived data live in `ChoiceGraph+LazyComputation.swift`. The mutation entry point (`apply`) lives in `ChoiceGraph+Lifecycle.swift`. Per-scope query families each have their own `ChoiceGraph+*Scopes.swift`.
 ///
-/// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``SelfSimilarityEdge``, ``TypeCompatibilityEdge``
+/// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``TypeCompatibilityEdge``
 package struct ChoiceGraph {
     /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``.
     package var nodes: [ChoiceGraphNode]
@@ -65,16 +65,6 @@ package struct ChoiceGraph {
     /// Type-compatibility edges between antichain members with matching types. Recomputed on each access.
     package var typeCompatibilityEdges: [TypeCompatibilityEdge] {
         computeTypeCompatibilityEdges()
-    }
-
-    /// Bind-inner descendant index. Maps each chooseBits leaf inside a bind's inner subtree to the outermost enclosing bind's node ID. Recomputed on each access.
-    package var innerDescendantToBind: [Int: Int] {
-        QueryHelpers.buildInnerDescendantToBind(graph: self)
-    }
-
-    /// Per-node source/sink status for redistribution. Recomputed on each access.
-    package var sourceSinkStatus: [Int: SourceSinkStatus] {
-        computeSourceSinkAnnotations()
     }
 
     /// Writes convergence records from an encoder pass onto the corresponding leaf nodes by sequence position.
@@ -122,7 +112,7 @@ package struct ChoiceGraph {
 package extension ChoiceGraph {
     /// Builds a ``ChoiceGraph`` from a choice tree.
     ///
-    /// The tree contains all structural and value information needed for graph construction. Type-compatibility edges and source/sink annotations are deferred until first access.
+    /// The tree contains all structural and value information needed for graph construction. Type-compatibility edges are deferred until first access.
     ///
     /// - Parameter tree: The generator's compositional structure.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {

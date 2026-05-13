@@ -111,41 +111,9 @@ package struct ChoiceTreeWalker: IteratorProtocol, Sequence {
     }
 }
 
-// MARK: - Subscript
+// MARK: - Walk
 
 package extension ChoiceTree {
-    /// Access a node at the given fingerprint for reading or writing.
-    ///
-    /// The getter walks down the tree following the fingerprint's steps.
-    /// The setter rebuilds the spine from root to target via ``replacingChild(at:with:)``.
-    subscript(fingerprint: Fingerprint) -> ChoiceTree {
-        get {
-            var current = self
-            for step in fingerprint.steps {
-                current = current.children[step]
-            }
-            return current
-        }
-        set {
-            if fingerprint.steps.isEmpty {
-                self = newValue
-                return
-            }
-            // Rebuild the spine from the deepest ancestor back up to root
-            var current = newValue
-            var ancestors: [(node: ChoiceTree, childIndex: Int)] = []
-            var node = self
-            for step in fingerprint.steps {
-                ancestors.append((node: node, childIndex: step))
-                node = node.children[step]
-            }
-            for ancestor in ancestors.reversed() {
-                current = ancestor.node.replacingChild(at: ancestor.childIndex, with: current)
-            }
-            self = current
-        }
-    }
-
     /// Creates a ``ChoiceTreeWalker`` for depth-first traversal.
     func walk() -> ChoiceTreeWalker {
         ChoiceTreeWalker(self)

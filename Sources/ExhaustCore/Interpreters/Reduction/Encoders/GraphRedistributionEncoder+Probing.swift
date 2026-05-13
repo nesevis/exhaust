@@ -373,14 +373,14 @@ extension GraphRedistributionEncoder {
             newSinkBitPattern = sinkBitPattern - delta
         }
 
-        // Enforce natural type bounds. Replaces the per-tag range checks that the deleted `bitPattern(fromSemantic:tag:)` helper used to do — `tag.bitPatternRange` is the same set, so this is a structural simplification, not a behavior change.
+        // Enforce natural type bounds via `tag.bitPatternRange`.
         guard sourceTag.bitPatternRange.contains(newSourceBitPattern),
               sinkValue.choice.tag.bitPatternRange.contains(newSinkBitPattern)
         else {
             return nil
         }
 
-        // Enforce explicit `validRange`. The mixed/rational path already does this for cross-type and float pairs; the previous semantic-Int64 narrow-sink path was missing this check, which let candidates escape the user's declared domain.
+        // Enforce explicit `validRange` so candidates stay within the user's declared domain.
         if sourceValue.isRangeExplicit,
            let range = sourceValue.validRange,
            range.contains(newSourceBitPattern) == false

@@ -236,10 +236,8 @@ struct BoundaryCoveringArrayReplayUnitTests {
             let tree = try #require(BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile))
 
             // Should contain a sequence with length 0
-            #expect(tree.contains { node in
-                if case let .sequence(length, _, _) = node { return length == 0 }
-                return false
-            })
+            let sequence = ChoiceSequence(tree)
+            #expect(sequence.contains(where: { $0.value != nil }) == false)
         }
     }
 

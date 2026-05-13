@@ -238,7 +238,7 @@ extension GeneratorTuning {
                 predicate: composedPredicate
             )
 
-            // Specification entropy weighting: reward branches that produce diverse valid outputs, not just frequent ones.  We estimate Shannon entropy from the empirical frequency distribution of valid outputs.  This is strictly more informative than the previous distinct-count heuristic: two branches may each produce 10 distinct outputs, but if one concentrates 90% of mass on a single value the entropy will be low, correctly down-weighting it.
+            // Specification entropy weighting: reward branches that produce diverse valid outputs, not just frequent ones. Shannon entropy from the empirical frequency distribution captures both frequency and diversity: two branches may each produce 10 distinct outputs, but if one concentrates 90% of mass on a single value the entropy will be low, correctly down-weighting it.
             // The +1 offset ensures branches with a single valid output still receive weight proportional to their success count.
             let frequencies = outputFrequencies[choiceIdx]
             let totalObservations = frequencies.values.reduce(UInt64(0), +)

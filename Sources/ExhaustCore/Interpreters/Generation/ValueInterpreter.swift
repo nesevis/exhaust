@@ -83,18 +83,6 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         }
     }
 
-    /// Used to generate results around a similar level of complexity. Intended to be used to increase pool of results to compare against.
-    func fixedAtSize() -> ValueInterpreter<Element> {
-        var fixed = ValueInterpreter(
-            generator,
-            seed: context.baseSeed,
-            maxRuns: context.maxRuns
-        )
-        fixed.context.isFixed = true
-        fixed.context.runs = context.runs
-        return fixed
-    }
-
     // MARK: - Generator implementation
 
     static func generate<Output>(

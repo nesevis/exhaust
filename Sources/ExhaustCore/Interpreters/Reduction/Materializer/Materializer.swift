@@ -173,12 +173,6 @@ extension Materializer.Mode {
         }
     }
 
-    var isGuided: Bool {
-        switch self {
-        case .exact: false
-        case .guided: true
-        }
-    }
 }
 
 // MARK: - Recursive Engine

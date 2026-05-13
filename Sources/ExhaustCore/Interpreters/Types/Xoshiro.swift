@@ -25,12 +25,6 @@ package struct Xoshiro256: ~Copyable {
         0xA958_2618_E03F_C9AA, 0x39AB_DC45_29B1_661C,
     ]
 
-    /// Long jump polynomial for 2^192 steps.
-    private static let longJumpPoly: [UInt64] = [
-        0x76E1_5D3E_FEFD_CBBF, 0xC500_4E44_1C52_2FB3,
-        0x7771_0069_854E_E241, 0x3910_9BB0_2ACB_E635,
-    ]
-
     /// Creates a generator seeded from the system random number generator.
     public init() {
         var rng = SystemRandomNumberGenerator()

@@ -38,40 +38,6 @@ package enum SequenceCoveringArray {
         return max(2, UInt64(perBranch))
     }
 
-    // MARK: - Legacy API (parameter-free branches only)
-
-    /// Builds a ``FiniteDomainProfile`` where each parameter represents one position in the command sequence, with domain values being command type indices.
-    ///
-    /// - Parameters:
-    ///   - sequenceLength: Number of positions in each test sequence.
-    ///   - pickChoices: The command types available at each position (from `Gen.pick`).
-    /// - Returns: A profile suitable for ``PullBasedCoveringArrayGenerator``.
-    package static func buildProfile(
-        sequenceLength: Int,
-        pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
-    ) -> FiniteDomainProfile {
-        let domainSize = UInt64(pickChoices.count)
-        let parameters = (0 ..< sequenceLength).map { i in
-            FiniteParameter(
-                index: i,
-                domainSize: domainSize,
-                kind: .pick(choices: pickChoices)
-            )
-        }
-
-        var totalSpace: UInt64 = 1
-        for _ in 0 ..< sequenceLength {
-            let (product, overflow) = totalSpace.multipliedReportingOverflow(by: domainSize)
-            if overflow {
-                totalSpace = .max
-                break
-            }
-            totalSpace = product
-        }
-
-        return FiniteDomainProfile(parameters: parameters, totalSpace: totalSpace)
-    }
-
     /// Converts a covering array row into a ``ChoiceTree`` representing a command sequence that can be replayed through the array generator.
     ///
     /// Each row value selects a command type (pick branch) at the corresponding sequence position. The result is a `.sequence` node wrapping pick-site groups.
@@ -277,15 +243,6 @@ package enum SequenceCoveringArray {
                 isRangeExplicit: true
             )
         )
-    }
-
-    /// Returns true if every branch in the pick has no parameters (no choices in sub-generators).
-    ///
-    /// Command-type-only SCA produces `.just` sub-trees that can't satisfy parameterized branches during replay. Use this to gate command-type-only SCA on parameter-free branches.
-    package static func allBranchesParameterFree(
-        _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>
-    ) -> Bool {
-        pickChoices.allSatisfy { isParameterFree($0.generator) }
     }
 
     // MARK: - Private Helpers

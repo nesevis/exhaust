@@ -10,16 +10,6 @@ package enum SequenceDecoder {
                 materializePicks: Bool = false, usePRNGFallback: Bool = false,
                 skipShortlexCheck: Bool = false, prngSalt: UInt64 = 0)
 
-    /// Salt mixed into the reject cache key so the same candidate with a different PRNG salt gets an independent cache entry.
-    var rejectCacheSalt: UInt64 {
-        switch self {
-        case .exact:
-            0
-        case let .guided(_, _, _, _, _, prngSalt):
-            prngSalt
-        }
-    }
-
     // MARK: - Decode
 
     /// Materializes a candidate and checks feasibility against the property.

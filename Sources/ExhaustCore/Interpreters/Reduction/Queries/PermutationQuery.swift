@@ -6,8 +6,6 @@
 // MARK: - Permutation Scope Query
 
 /// Static scope builder for permutation operations.
-///
-/// Replaces the former `ChoiceGraph.permutationScopes()` instance method.
 enum PermutationQuery {
     /// Computes permutation scopes for zip nodes with same-shaped siblings.
     ///

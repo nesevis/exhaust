@@ -5,9 +5,7 @@
 
 // MARK: - Removal Scope Query
 
-/// Static scope builder for removal operations (element removal, covering-array-backed aligned removal, and structural subtree removal).
-///
-/// Replaces the former `ChoiceGraph.elementRemovalScopes()`, `coveringAlignedRemovalScopes()`, and `subtreeRemovalScopes()` instance methods.
+/// Static scope builder for removal operations (element removal and covering-array-backed aligned removal).
 enum RemovalQuery {
     /// Computes element removal scopes for all sequence nodes with deletable elements.
     ///
@@ -118,16 +116,4 @@ enum RemovalQuery {
 
     // MARK: - Subtree Removal Scopes
 
-    /// Computes subtree removal scopes for compound structural nodes in the deletion antichain.
-    ///
-    /// Targets nodes with ``ChoiceGraphNode/positionRange`` count greater than one — bind subtrees, zip children, and other compound elements worth removing as a unit.
-    ///
-    /// - Returns: One scope per compound node in the deletion antichain.
-    static func subtreeRemovalScopes(graph: ChoiceGraph) -> [RemovalScope] {
-        graph.deletionAntichain.compactMap { nodeID in
-            guard let range = graph.nodes[nodeID].positionRange else { return nil }
-            guard range.count > 1 else { return nil }
-            return .subtree(nodeID: nodeID, yield: range.count)
-        }
-    }
 }

@@ -1,7 +1,6 @@
 // Defines the protocol that `@Contract`-annotated types conform to.
 //
 // The macro synthesizes conformance — users never implement this directly.
-import ExhaustCore
 
 /// Shared requirements for both synchronous and asynchronous contract specifications.
 ///

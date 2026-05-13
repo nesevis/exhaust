@@ -433,30 +433,6 @@ package extension __ExhaustRuntime {
         return .unreduced(value)
     }
 
-    // MARK: - Phase Timing
-
-    static func logPhaseTimings(
-        start: UInt64,
-        coverageEnd: UInt64,
-        generationEnd: UInt64,
-        reductionEnd: UInt64
-    ) {
-        let coverageMs = Double(coverageEnd - start) / 1_000_000
-        let generationMs = Double(generationEnd - coverageEnd) / 1_000_000
-        let reductionMs = Double(reductionEnd - generationEnd) / 1_000_000
-        let totalMs = Double(reductionEnd - start) / 1_000_000
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "phase_timing",
-            metadata: [
-                "coverage_ms": String(format: "%.1f", coverageMs),
-                "generation_ms": String(format: "%.1f", generationMs),
-                "reduction_ms": String(format: "%.1f", reductionMs),
-                "total_ms": String(format: "%.1f", totalMs),
-            ]
-        )
-    }
-
     // MARK: - Reflecting
 
     /// Reduces a counterexample using reflection to seed the reducer.

@@ -149,48 +149,6 @@ struct ChoiceTreeTests {
         }
     }
 
-    // MARK: - contains(where:)
-
-    @Suite("contains(where:)")
-    struct ContainsWhere {
-        @Test("Matching predicate on self returns true")
-        func matchingSelf() {
-            let tree = ChoiceTree.just
-            #expect(tree.contains { $0 == .just })
-        }
-
-        @Test("Non-matching predicate returns false")
-        func nonMatching() {
-            let tree = ChoiceTree.just
-            #expect(tree.contains { $0 == .getSize(99) } == false)
-        }
-
-        @Test("Finds nested node in group")
-        func findsNested() {
-            let target = ChoiceTree.getSize(42)
-            let tree = ChoiceTree.group([.just, target])
-            #expect(tree.contains { $0 == target })
-        }
-
-        @Test("Searches through sequence elements")
-        func searchesSequence() {
-            let target = ChoiceTree.just
-            let seq = ChoiceTree.sequence(
-                length: 1,
-                elements: [target],
-                ChoiceMetadata(validRange: 0 ... 5)
-            )
-            #expect(seq.contains { $0 == target })
-        }
-
-        @Test("Searches through resize children")
-        func searchesResize() {
-            let target = ChoiceTree.just
-            let resize = ChoiceTree.resize(newSize: 10, choices: [target])
-            #expect(resize.contains { $0 == target })
-        }
-    }
-
     // MARK: - map
 
     @Suite("map")

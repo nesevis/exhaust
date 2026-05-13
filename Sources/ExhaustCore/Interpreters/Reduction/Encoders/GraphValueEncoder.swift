@@ -231,23 +231,6 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - GraphEncoder
 
-    func hasValidPositions(in sequence: ChoiceSequence) -> Bool {
-        switch mode {
-        case .idle:
-            true
-        case let .valueLeaves(state):
-            state.leafPositions.allSatisfy { leaf in
-                leaf.sequenceIndex < sequence.count
-                    && sequence[leaf.sequenceIndex].value != nil
-            }
-        case let .floatLeaves(state):
-            state.targets.allSatisfy { target in
-                target.sequenceIndex < sequence.count
-                    && sequence[target.sequenceIndex].value != nil
-            }
-        }
-    }
-
     mutating func start(scope: EncoderInput) {
         convergenceStore = [:]
 
