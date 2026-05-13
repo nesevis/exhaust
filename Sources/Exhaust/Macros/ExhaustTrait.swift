@@ -17,10 +17,10 @@
     /// A Swift Testing trait that configures `#exhaust` property tests.
     ///
     /// ```swift
-    /// @Test(.exhaust(.budget(.expensive)))
+    /// @Test(.exhaust(.budget(.thorough)))
     /// func ageIsNonNegative() { ... }
     ///
-    /// @Test(.exhaust(.budget(.expensive), .regressions("3RT5GH8KM2", "9WXY1CV7")))
+    /// @Test(.exhaust(.budget(.thorough), .regressions("3RT5GH8KM2", "9WXY1CV7")))
     /// func ageIsNonNegative() { ... }
     /// ```
     ///
@@ -63,9 +63,9 @@
     /// Pass one or more options to `.exhaust(...)` to configure property test behavior at the test or suite level:
     ///
     /// ```swift
-    /// @Test(.exhaust(.budget(.expensive)))
-    /// @Test(.exhaust(.budget(.expensive), .regressions("3RT5GH8KM2", "9WXY1CV7")))
-    /// @Suite(.exhaust(.budget(.exorbitant)))
+    /// @Test(.exhaust(.budget(.thorough)))
+    /// @Test(.exhaust(.budget(.thorough), .regressions("3RT5GH8KM2", "9WXY1CV7")))
+    /// @Suite(.exhaust(.budget(.extensive)))
     /// ```
     public struct ExhaustTraitOption: Sendable {
         enum Kind: Sendable {
@@ -96,9 +96,9 @@
         /// Configures `#exhaust` property tests with the given options.
         ///
         /// ```swift
-        /// @Test(.exhaust(.budget(.expensive)))
-        /// @Test(.exhaust(.budget(.expensive), .regressions("3RT5GH8KM2", "9WXY1CV7")))
-        /// @Suite(.exhaust(.budget(.exorbitant)))
+        /// @Test(.exhaust(.budget(.thorough)))
+        /// @Test(.exhaust(.budget(.thorough), .regressions("3RT5GH8KM2", "9WXY1CV7")))
+        /// @Suite(.exhaust(.budget(.extensive)))
         /// ```
         ///
         /// - Parameter options: Configuration options for the property test.

@@ -33,7 +33,7 @@ struct LargeUnionListShrinkingChallenge {
             .suppress(.issueReporting),
             .replay(2079),
             .onReport { report = $0 },
-            .budget(.exorbitant),
+            .budget(.extensive),
             .logging(.debug, .keyValue),
             property: Self.property
         )

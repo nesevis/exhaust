@@ -83,7 +83,7 @@ struct DifferenceShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
-            .budget(.exorbitant),
+            .budget(.extensive),
             .suppress(.issueReporting),
             .onReport { report = $0 }
         ) { arr in

@@ -1,37 +1,6 @@
 import Testing
 @testable import Exhaust
 
-@Suite("ExploreBudget")
-struct ExploreBudgetTests {
-    @Test("Expedient preset values")
-    func expedientPreset() {
-        let budget = ExploreBudget.expedient
-        #expect(budget.hitsPerDirection == 30)
-        #expect(budget.maxAttemptsPerDirection == 300)
-    }
-
-    @Test("Expensive preset values")
-    func expensivePreset() {
-        let budget = ExploreBudget.expensive
-        #expect(budget.hitsPerDirection == 100)
-        #expect(budget.maxAttemptsPerDirection == 1000)
-    }
-
-    @Test("Exorbitant preset values")
-    func exorbitantPreset() {
-        let budget = ExploreBudget.exorbitant
-        #expect(budget.hitsPerDirection == 300)
-        #expect(budget.maxAttemptsPerDirection == 3000)
-    }
-
-    @Test("Custom budget values")
-    func customBudget() {
-        let budget = ExploreBudget.custom(hitsPerDirection: 50, maxAttemptsPerDirection: 750)
-        #expect(budget.hitsPerDirection == 50)
-        #expect(budget.maxAttemptsPerDirection == 750)
-    }
-}
-
 @Suite("CoOccurrenceMatrix")
 struct CoOccurrenceMatrixTests {
     @Test("Empty matrix has zero counts")

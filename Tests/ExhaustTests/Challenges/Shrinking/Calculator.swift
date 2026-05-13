@@ -30,7 +30,7 @@ struct CalculatorShrinkingChallenge {
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .budget(.exorbitant)
+            .budget(.extensive)
         ) { expr in
             CalculatorFixture.property(expr)
         }
@@ -48,7 +48,7 @@ struct CalculatorShrinkingChallenge {
             .suppress(.issueReporting),
             .replay(.numeric(1509)),
             .logging(.debug),
-            .budget(.exorbitant)
+            .budget(.extensive)
         ) { expr in
             CalculatorFixture.property(expr)
         }

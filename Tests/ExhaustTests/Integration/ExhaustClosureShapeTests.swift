@@ -9,7 +9,7 @@ struct ExhaustClosureShapeTests {
     func syncPredicatePassing() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value in
             value >= 0
@@ -21,7 +21,7 @@ struct ExhaustClosureShapeTests {
     func syncPredicateFailing() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value in
             value < 50
@@ -38,7 +38,7 @@ struct ExhaustClosureShapeTests {
     func syncExpectPassing() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value in
             #expect(value >= 0)
@@ -50,7 +50,7 @@ struct ExhaustClosureShapeTests {
     func syncExpectFailing() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value in
             #expect(value < 50)
@@ -62,7 +62,7 @@ struct ExhaustClosureShapeTests {
     func syncMultiStatementPassing() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value in
             let doubled = value * 2
@@ -77,7 +77,7 @@ struct ExhaustClosureShapeTests {
     func asyncPredicatePassing() async {
         let result = await #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value async in
             value >= 0
@@ -89,7 +89,7 @@ struct ExhaustClosureShapeTests {
     func asyncPredicateFailing() async {
         let result = await #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value async in
             value < 50
@@ -103,7 +103,7 @@ struct ExhaustClosureShapeTests {
     func asyncExpectPassing() async {
         let result = await #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value async in
             #expect(value >= 0)
@@ -115,7 +115,7 @@ struct ExhaustClosureShapeTests {
     func asyncExpectFailing() async {
         let result = await #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.expedient),
+            .budget(.standard),
             .suppress(.all)
         ) { value async in
             #expect(value < 50)

@@ -6,7 +6,7 @@
 /// Pass the property as a trailing closure to capture source location for better failure messages:
 ///
 /// ```swift
-/// let report = #explore(crossingGen, .budget(.expensive),
+/// let report = #explore(crossingGen, .budget(.thorough),
 ///     directions: [
 ///         ("northward", { $0.from > 0 && $0.to < 0 }),
 ///         ("southward", { $0.from < 0 && $0.to > 0 }),
@@ -25,7 +25,7 @@
 ///
 /// ## Settings
 ///
-/// - `.budget(_)`: per-direction hit target and attempt budget. Presets: `.expedient` (30 hits, default), `.expensive` (100 hits), `.exorbitant` (300 hits).
+/// - `.budget(_)`: per-direction hit target and attempt budget. Presets: `.quick` (10 hits), `.standard` (30 hits, default), `.thorough` (100 hits), `.extensive` (300 hits).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned report.
 /// - `.suppress(.logs)`: silences all console output.
@@ -46,7 +46,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// Given a list of named directions (predicate-labeled regions of the output space), `#explore` tunes the generator per direction, draws K samples per direction, and reports per-direction coverage alongside cross-direction overlap and diagnostic findings. Must be called with `await` since the expanded function is `async`.
 ///
 /// ```swift
-/// let report = try await #explore(crossingGen, .budget(.expensive),
+/// let report = try await #explore(crossingGen, .budget(.thorough),
 ///     directions: [
 ///         ("northward", { $0.from > 0 && $0.to < 0 }),
 ///         ("southward", { $0.from < 0 && $0.to > 0 }),
@@ -59,7 +59,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 ///
 /// ## Settings
 ///
-/// - `.budget(_)`: per-direction hit target and attempt budget. Presets: `.expedient` (30 hits, default), `.expensive` (100 hits), `.exorbitant` (300 hits).
+/// - `.budget(_)`: per-direction hit target and attempt budget. Presets: `.quick` (10 hits), `.standard` (30 hits, default), `.thorough` (100 hits), `.extensive` (300 hits).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned report.
 /// - `.suppress(.logs)`: silences all console output.

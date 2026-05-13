@@ -38,7 +38,7 @@ struct CircularQueueTests {
             #exhaust(
                 CircularQueueContract.self,
                 commandLimit: 10,
-                .budget(.expensive),
+                .budget(.thorough),
                 .suppress(.issueReporting),
                 .replay(12_892_450_489_757_532_783)
             )

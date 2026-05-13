@@ -33,7 +33,7 @@ struct ParserShrinkingChallenge {
             #exhaust(
                 ParserFixture.langGen,
                 .randomOnly, // coverage takes a long time
-                .budget(.exorbitant),
+                .budget(.extensive),
                 .logging(.debug, .keyValue),
                 .suppress(.issueReporting),
                 .onReport { report = $0 },

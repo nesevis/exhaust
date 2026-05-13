@@ -31,7 +31,7 @@ struct HeapMergeTests {
             #exhaust(
                 HeapMergeContract.self,
                 commandLimit: 12,
-                .budget(.exorbitant),
+                .budget(.extensive),
                 .suppress(.issueReporting),
                 .replay(2_244_429_497_963_284_422)
             )

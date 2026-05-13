@@ -20,7 +20,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     line: UInt = #line,
     column: UInt = #column
 ) async -> ContractResult<Spec>? {
-    var budget = ExhaustBudget.expensive
+    var budget = ExhaustBudget.thorough
     var seed: UInt64?
     var suppressIssueReporting = false
     var suppressLogs = false

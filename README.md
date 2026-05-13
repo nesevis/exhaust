@@ -214,10 +214,12 @@ Configure behaviour with settings:
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.budget(.expedient)` | default | 200 coverage rows, 200 random samples. |
-| `.budget(.expensive)` | — | 500 coverage rows, 500 random samples. |
-| `.budget(.exorbitant)` | — | 2000 coverage rows, 2000 random samples. |
+| `.budget(.quick)` | — | 100 coverage rows, 100 random samples. |
+| `.budget(.standard)` | default | 200 coverage rows, 200 random samples. |
+| `.budget(.thorough)` | — | 500 coverage rows, 500 random samples. |
+| `.budget(.extensive)` | — | 2000 coverage rows, 2000 random samples. |
 | `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
+| `.budget(.thorough * 3)` | — | Scale any preset with `*` or `/`. |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
 | `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). Passed as a named parameter, not a setting. |
@@ -600,14 +602,15 @@ For each direction, Exhaust tunes the generator via Choice Gradient Sampling to 
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.budget(.expedient)` | default | 30 hits per direction, 300 max attempts per direction. |
-| `.budget(.expensive)` | — | 100 hits per direction, 1000 max attempts per direction. |
-| `.budget(.exorbitant)` | — | 300 hits per direction, 3000 max attempts per direction. |
+| `.budget(.quick)` | — | 10 hits per direction, 100 max attempts per direction. |
+| `.budget(.standard)` | default | 30 hits per direction, 300 max attempts per direction. |
+| `.budget(.thorough)` | — | 100 hits per direction, 1000 max attempts per direction. |
+| `.budget(.extensive)` | — | 300 hits per direction, 3000 max attempts per direction. |
 | `.budget(.custom(...))` | — | Explicit values for hit target and attempt budget. |
 | `.replay(seed)` | — | Deterministic reproduction. |
 
 > [!Note]
-> `#explore` is more expensive than `#exhaust`. The total attempt budget is the per-direction budget multiplied by the number of declared directions — five directions at `.expedient` means 1,500 total attempts, plus CGS tuning overhead per direction. Start with `.expedient` and increase the budget only for directions that need stronger bounds.
+> `#explore` is more expensive than `#exhaust`. The total attempt budget is the per-direction budget multiplied by the number of declared directions — five directions at `.standard` means 1,500 total attempts, plus CGS tuning overhead per direction. Start with `.standard` and increase the budget only for directions that need stronger bounds.
 
 ## How It Works
 

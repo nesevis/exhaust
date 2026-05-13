@@ -25,7 +25,7 @@ public extension __ExhaustRuntime {
         property: @Sendable @escaping (Output) -> Bool
     ) -> ExploreReport<Output> {
         let gen = refGen.gen
-        var budget: ExploreBudget = .expedient
+        var budget: ExploreBudget = .standard
         var seed: UInt64?
         var suppressIssueReporting = false
         var suppressLogs = false

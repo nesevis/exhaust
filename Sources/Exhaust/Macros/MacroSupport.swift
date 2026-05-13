@@ -78,7 +78,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     (try? property(value)) ?? false
                 }
 
-                var budget = ExhaustBudget.expedient
+                var budget = ExhaustBudget.standard
                 var seed: UInt64?
                 var suppressIssueReporting = false
                 var suppressLogs = false

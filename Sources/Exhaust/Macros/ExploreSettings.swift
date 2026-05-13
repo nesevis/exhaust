@@ -2,7 +2,7 @@
 //
 // Pass these as variadic arguments to `#explore` to control test behavior:
 // ```swift
-// let report = #explore(crossingGen, .budget(.expensive),
+// let report = #explore(crossingGen, .budget(.thorough),
 //     directions: [
 //         ("northward", { $0.from > 0 && $0.to < 0 }),
 //         ("southward", { $0.from < 0 && $0.to > 0 }),
@@ -18,27 +18,31 @@ import ExhaustCore
 ///
 /// | Preset | K (hits per direction) | Max attempts per direction |
 /// |---|---|---|
-/// | `.expedient` | 30 | 300 |
-/// | `.expensive` | 100 | 1000 |
-/// | `.exorbitant` | 300 | 3000 |
+/// | `.quick` | 10 | 100 |
+/// | `.standard` | 30 | 300 |
+/// | `.thorough` | 100 | 1000 |
+/// | `.extensive` | 300 | 3000 |
 ///
-/// Use `.expedient` (the default) when 30 hits per direction is enough to confirm reachability. Use `.expensive` when direction predicates are sparse (less than 10 percent acceptance rate) and need more attempts to accumulate hits. Use `.exorbitant` for statistical coverage reporting where confidence intervals matter.
+/// Use `.standard` (the default) when 30 hits per direction is enough to confirm reachability. Use `.quick` for a fast smoke test. Use `.thorough` when direction predicates are sparse (less than 10 percent acceptance rate) and need more attempts to accumulate hits. Use `.extensive` for statistical coverage reporting where confidence intervals matter.
 public enum ExploreBudget: Sendable {
-    /// Default. Confirms direction reachability with 30 hits per direction.
-    case expedient
-    /// For sparse direction predicates. Draws up to 1000 attempts per direction.
-    case expensive
-    /// For statistical confidence. Accumulates 300 hits per direction.
-    case exorbitant
+    /// 10 hits, 100 max attempts per direction.
+    case quick
+    /// 30 hits, 300 max attempts per direction.
+    case standard
+    /// 100 hits, 1000 max attempts per direction.
+    case thorough
+    /// 300 hits, 3000 max attempts per direction.
+    case extensive
     /// Explicit values for both budget aspects.
     case custom(hitsPerDirection: Int, maxAttemptsPerDirection: Int)
 
     /// The number of matching samples each direction must accumulate before it is considered covered.
     public var hitsPerDirection: Int {
         switch self {
-        case .expedient: 30
-        case .expensive: 100
-        case .exorbitant: 300
+        case .quick: 10
+        case .standard: 30
+        case .thorough: 100
+        case .extensive: 300
         case let .custom(hitsPerDirection, _): hitsPerDirection
         }
     }
@@ -46,9 +50,10 @@ public enum ExploreBudget: Sendable {
     /// The per-direction contribution to the shared attempt pool.
     public var maxAttemptsPerDirection: Int {
         switch self {
-        case .expedient: 300
-        case .expensive: 1000
-        case .exorbitant: 3000
+        case .quick: 100
+        case .standard: 300
+        case .thorough: 1000
+        case .extensive: 3000
         case let .custom(_, maxAttemptsPerDirection): maxAttemptsPerDirection
         }
     }
@@ -56,7 +61,7 @@ public enum ExploreBudget: Sendable {
 
 /// Controls test behavior for `#explore` classification tests, passed as variadic arguments.
 public enum ExploreSettings: Sendable {
-    /// Controls per-direction hit targets and attempt budgets. Defaults to `.expedient` (30 hits per direction, 300 max attempts per direction).
+    /// Controls per-direction hit targets and attempt budgets. Defaults to `.standard` (30 hits per direction, 300 max attempts per direction).
     case budget(ExploreBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).

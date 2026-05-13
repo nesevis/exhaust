@@ -53,7 +53,7 @@ struct ExploreTransactionTests {
 
         let report = #explore(
             gen,
-            .budget(.expensive),
+            .budget(.thorough),
             .suppress(.all),
             directions: [
                 ("dips and recovers", { t in dipsAndRecovers(asArray(t)) }),
@@ -83,7 +83,7 @@ struct ExploreTransactionTests {
 
         let report = #explore(
             gen,
-            .budget(.expensive),
+            .budget(.thorough),
             .suppress(.all),
             directions: makeTransactionDirections()
         ) { _ in
@@ -109,7 +109,7 @@ struct ExploreTransactionTests {
 
         let report = #explore(
             gen,
-            .budget(.exorbitant),
+            .budget(.extensive),
             .suppress(.all),
             directions: makeTransactionDirections()
         ) { _ in

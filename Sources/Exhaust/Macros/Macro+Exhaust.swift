@@ -3,7 +3,7 @@ import ExhaustCore
 /// Runs a property test that systematically explores the generator's output space, then reports a reduced counterexample on failure.
 ///
 /// ```swift
-/// let counterexample = #exhaust(personGen, .budget(.expensive)) { person in
+/// let counterexample = #exhaust(personGen, .budget(.thorough)) { person in
 ///     person.age >= 0
 /// }
 /// ```
@@ -36,7 +36,7 @@ import ExhaustCore
 ///
 /// ## Settings
 ///
-/// - `.budget(_)`: controls iteration budgets for coverage, sampling, and reduction. Presets: `.expedient` (200/200, default), `.expensive` (500/500), `.exorbitant` (2000/2000), or `.custom(coverage:sampling:)`.
+/// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (500/500), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
 /// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
@@ -94,7 +94,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 ///
 /// ## Settings
 ///
-/// - `.budget(_)`: controls iteration budgets. Defaults to `.expensive` (500/500).
+/// - `.budget(_)`: controls iteration budgets. Defaults to `.thorough` (500/500).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.

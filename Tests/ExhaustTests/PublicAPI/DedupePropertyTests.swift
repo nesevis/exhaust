@@ -13,7 +13,7 @@ struct DedupePropertyTests {
             .logging(.debug),
             .suppress(.issueReporting),
 //            .randomOnly,
-            .budget(.exorbitant)
+            .budget(.extensive)
         ) { xs in
             #expect(Set(dedupe(xs)) == Set(xs))
         }

@@ -2,7 +2,7 @@
 //
 // Pass these as variadic arguments to `#exhaust` to control test behavior:
 // ```swift
-// #exhaust(personGen, .budget(.expensive)) { person in
+// #exhaust(personGen, .budget(.thorough)) { person in
 //     person.age >= 0
 // }
 // ```
@@ -57,31 +57,37 @@ public enum SuppressOption: Sendable, Equatable {
     case all
 }
 
-/// Controls the iteration budgets for coverage, random sampling, and reduction.
+/// Controls the iteration budgets for coverage and random sampling.
 ///
-/// | Preset | Coverage | Sampling | Reduction |
-/// |---|---|---|---|
-/// | `.expedient` | 200 | 200 | `.fast` |
-/// | `.expensive` | 500 | 500 | `.fast` |
-/// | `.exorbitant` | 2000 | 2000 | `.slow` |
+/// | Preset | Coverage | Sampling |
+/// |---|---|---|
+/// | `.quick` | 100 | 100 |
+/// | `.standard` | 200 | 200 |
+/// | `.thorough` | 500 | 500 |
+/// | `.extensive` | 2000 | 2000 |
 ///
-/// Use `.expedient` (the default) for fast iteration during development — sufficient for generators with fewer than 50 independent parameters. Use `.expensive` when the generator has high combinatorial complexity (many picks, nested sequences) and you want stronger coverage guarantees. Use `.exorbitant` for pre-release validation or when counterexamples are rare; expect roughly 10x the runtime of `.expedient`.
+/// Use `.standard` (the default) for development — sufficient for generators with fewer than 50 independent parameters. Use `.quick` when iteration speed matters more than coverage depth. Use `.thorough` when the generator has high combinatorial complexity (many picks, nested sequences) and you want stronger coverage guarantees. Use `.extensive` when counterexamples are rare or you want broad coverage; expect roughly 10x the runtime of `.standard`.
+///
+/// Scale any preset with arithmetic: `.thorough * 3` produces a custom budget of 1500/1500, and `.standard / 2` produces 100/100.
 public enum ExhaustBudget: Sendable {
+    /// Faster than default. Use when iteration speed matters more than coverage depth.
+    case quick
     /// Default for property tests. Sufficient for most generators during development.
-    case expedient
+    case standard
     /// Stronger coverage for complex generators. Default for contract tests.
-    case expensive
-    /// Pre-release validation. Thorough coverage and aggressive reduction at 10x the cost of `.expedient`.
-    case exorbitant
+    case thorough
+    /// Broad coverage at 10x the cost of `.standard`.
+    case extensive
     /// Explicit values for all budget aspects.
     case custom(coverage: UInt64, sampling: UInt64)
 
     /// The iteration budget for structured coverage analysis.
     public var coverageBudget: UInt64 {
         switch self {
-        case .expedient: 200
-        case .expensive: 500
-        case .exorbitant: 2000
+        case .quick: 100
+        case .standard: 200
+        case .thorough: 500
+        case .extensive: 2000
         case let .custom(coverage, _): coverage
         }
     }
@@ -89,18 +95,42 @@ public enum ExhaustBudget: Sendable {
     /// The iteration budget for random sampling.
     public var samplingBudget: UInt64 {
         switch self {
-        case .expedient: 200
-        case .expensive: 500
-        case .exorbitant: 2000
+        case .quick: 100
+        case .standard: 200
+        case .thorough: 500
+        case .extensive: 2000
         case let .custom(_, sampling):
             sampling
         }
+    }
+
+    /// Scales both coverage and sampling budgets by a multiplier.
+    public static func * (lhs: ExhaustBudget, rhs: UInt64) -> ExhaustBudget {
+        precondition(rhs > 0, "Multiplier must be positive")
+        return .custom(
+            coverage: lhs.coverageBudget * rhs,
+            sampling: lhs.samplingBudget * rhs
+        )
+    }
+
+    /// Scales both coverage and sampling budgets by a multiplier.
+    public static func * (lhs: UInt64, rhs: ExhaustBudget) -> ExhaustBudget {
+        rhs * lhs
+    }
+
+    /// Divides both coverage and sampling budgets by a divisor, flooring at 1.
+    public static func / (lhs: ExhaustBudget, rhs: UInt64) -> ExhaustBudget {
+        precondition(rhs > 0, "Divisor must be positive")
+        return .custom(
+            coverage: max(1, lhs.coverageBudget / rhs),
+            sampling: max(1, lhs.samplingBudget / rhs)
+        )
     }
 }
 
 /// Controls test behavior for `#exhaust` property tests, passed as variadic arguments.
 public enum ExhaustSettings {
-    /// Controls iteration budgets for coverage, random sampling, and reduction. Defaults to `.expedient` (200 coverage rows, 200 random samplings, fast reduction).
+    /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard` (200 coverage rows, 200 random samplings).
     case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).

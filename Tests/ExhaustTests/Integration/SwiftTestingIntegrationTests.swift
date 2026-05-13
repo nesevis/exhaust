@@ -148,10 +148,10 @@ import Testing
 
     // MARK: - Configuration Trait
 
-    @Test(.exhaust(.budget(.expensive)))
+    @Test(.exhaust(.budget(.thorough)))
     func traitSetsBudget() {
-        // The trait sets .expensive (sampling: 500). Verify the trait budget is applied
-        // instead of the default .expedient (200) by checking the iteration count.
+        // The trait sets .thorough (sampling: 500). Verify the trait budget is applied
+        // instead of the default .standard (200) by checking the iteration count.
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: Int.min ... Int.max)),
@@ -164,13 +164,13 @@ import Testing
             true // always passes — runs the full sampling budget
         }
         #expect(result == nil)
-        // .expensive sampling budget is 500; .expedient would be 200.
-        #expect(capturedReport?.randomSamplingInvocations == 500, "Trait should set .expensive budget (500), not default .expedient (200)")
+        // .thorough sampling budget is 500; .standard would be 200.
+        #expect(capturedReport?.randomSamplingInvocations == 500, "Trait should set .thorough budget (500), not default .standard (200)")
     }
 
-    @Test(.exhaust(.budget(.expedient)))
+    @Test(.exhaust(.budget(.standard)))
     func traitBudgetOverriddenByInline() {
-        // Trait sets .expedient, inline sets a custom budget. Inline should win.
+        // Trait sets .standard, inline sets a custom budget. Inline should win.
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 10)),
@@ -184,7 +184,7 @@ import Testing
             value >= 0
         }
         #expect(result == nil)
-        // The inline budget of 5 sampling iterations should be used, not the trait's .expedient (200).
+        // The inline budget of 5 sampling iterations should be used, not the trait's .standard (200).
         #expect(capturedReport?.randomSamplingInvocations ?? 0 <= 5)
     }
 
@@ -200,7 +200,7 @@ import Testing
         #expect(result != nil, "Regression seed should find a counterexample")
     }
 
-    @Test(.exhaust(.budget(.expedient), .regressions("0")))
+    @Test(.exhaust(.budget(.standard), .regressions("0")))
     func traitWithPassingRegressionSeed() {
         // Seed "0" should produce a value that passes value >= 0 on 0...100.
         // The regression "now passes" warning should be emitted as an issue.

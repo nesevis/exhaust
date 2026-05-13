@@ -336,7 +336,7 @@ struct StructuralPathologicalChallenge {
             .suppress(.issueReporting),
 //            .randomOnly,
             .replay(12_791_394_592_254_154_946),
-            .budget(.expedient),
+            .budget(.standard),
             .onReport { report = $0 }
         ) { arr in
             arr.reduce(0, +) < 50

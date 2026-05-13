@@ -50,7 +50,7 @@ struct FastCheckDichotomyChallenge {
             gen,
             reflecting: [500_000, 500_500],
             .suppress(.issueReporting),
-            .budget(.exorbitant),
+            .budget(.extensive),
             .collectOpenPBTStats,
             property: property
         )

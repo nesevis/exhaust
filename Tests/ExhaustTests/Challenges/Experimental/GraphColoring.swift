@@ -254,7 +254,7 @@ struct GraphColoringChallenge {
             let reduced = #exhaust(
                 Self.gen,
                 .suppress(.issueReporting),
-                .budget(.exorbitant),
+                .budget(.extensive),
                 .replay(.numeric(seed)),
                 .onReport { reportBox.record($0) },
                 property: wrappedProperty
@@ -350,7 +350,7 @@ struct GraphColoringChallenge {
         let result = #exhaust(
             Self.gen,
             .suppress(.issueReporting),
-            .budget(.exorbitant),
+            .budget(.extensive),
 //            .onReport { report = $0 },
 //            .logging(.debug),
             property: Self.property

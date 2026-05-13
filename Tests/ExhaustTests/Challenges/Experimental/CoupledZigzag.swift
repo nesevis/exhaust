@@ -99,7 +99,7 @@ struct CoupledZigzagChallenge {
             #exhaust(
                 gen,
                 .suppress(.issueReporting),
-                .budget(.exorbitant),
+                .budget(.extensive),
                 .replay(15_376_868_453_505_688_755),
                 .onReport { report = $0 },
                 property: property

@@ -112,7 +112,7 @@ struct DateDSTPropertyTests {
 
         // The specific Closure Library bug: two dates on the SAME calendar day
         // where the buggy formula says "tomorrow" instead of "today".
-        let counterExample = #exhaust(gen, .suppress(.issueReporting), .budget(.exorbitant)) { now, target in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting), .budget(.extensive)) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 

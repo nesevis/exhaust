@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Configuration options for `#exhaust` contract property tests, passed as variadic arguments to control test behavior.
 public enum ContractSettings {
-    /// Controls iteration budgets for coverage, random sampling, and reduction. Defaults to `.expensive` (500 coverage rows, 500 random samplings, fast reduction).
+    /// Controls iteration budgets for coverage and random sampling. Defaults to `.thorough` (500 coverage rows, 500 random samplings).
     case budget(ExhaustBudget)
 
     /// Replays a specific test run using a fixed seed.

@@ -74,7 +74,7 @@ struct SparseModularZigzagChallenge {
             #exhaust(
                 Self.gen,
                 .suppress(.issueReporting),
-                .budget(.exorbitant),
+                .budget(.extensive),
                 .replay(11_933_936_430_368_835_868),
                 .onReport { report = $0 },
                 .logging(.debug),
