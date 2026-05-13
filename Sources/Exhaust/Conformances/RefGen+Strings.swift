@@ -163,14 +163,14 @@ private func refGenResolveSimplest(
 // MARK: - ScalarRangeSet-based generators (no CharacterSet reconstruction)
 
 /// Builds a character generator directly from a pre-computed ``ScalarRangeSet``.
-private func refGenCharacterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator<Character> {
+private func refGenCharacterGenerator(from srs: ScalarRangeSet) -> Generator<Character> {
     let operation = ReflectiveOperation.chooseBits(
         min: 0,
         max: UInt64(srs.scalarCount - 1),
         tag: .character(boundaryIndices: srs.boundaryIndices),
         isRangeExplicit: true
     )
-    let innerGen = ReflectiveGenerator<Character>.impure(operation: operation) { result in
+    let innerGen = Generator<Character>.impure(operation: operation) { result in
         guard let convertible = result as? any BitPatternConvertible else {
             throw GeneratorError.typeMismatch(
                 expected: "any BitPatternConvertible",

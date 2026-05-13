@@ -38,7 +38,7 @@ struct AdvancedFeatureTests {
     struct RecursiveTests {
         @Test("Recursive tree generation with depth control")
         func recursiveTreeGeneration() {
-            func treeGen(depth: Int) -> ReflectiveGenerator<TestTree<Int>> {
+            func treeGen(depth: Int) -> RefGen<TestTree<Int>> {
                 if depth <= 0 {
                     // Leaf node
                     return #gen(.int(in: 1 ... 100)) { value in
@@ -106,7 +106,7 @@ struct AdvancedFeatureTests {
     struct ExtremeValueTests {
         @Test("Generator robustness with extreme values")
         func extremeValueHandling() {
-            let extremeGenerators: [ReflectiveGenerator<Int>] = [
+            let extremeGenerators: [RefGen<Int>] = [
                 #gen(.int(in: Int.min ... Int.min)), // Minimum value
                 #gen(.int(in: Int.max ... Int.max)), // Maximum value
                 #gen(.int(in: -1 ... 1)), // Small range around zero

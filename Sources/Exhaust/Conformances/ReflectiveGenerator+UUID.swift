@@ -1,12 +1,12 @@
 //
-//  ReflectiveGenerator+UUID.swift
+//  Generator+UUID.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension ReflectiveGenerator {
+package extension Generator {
     /// Generates valid UUID v4 values.
     ///
     /// UUID v4 has 122 random bits with a fixed version nibble (`4`) and variant bits (`10`). Two `UInt64` generators produce exactly 122 random bits (60 + 62) — the mapping is bijective.
@@ -14,7 +14,7 @@ public extension ReflectiveGenerator {
     /// ```swift
     /// let gen = #gen(.uuid())
     /// ```
-    static func uuid() -> ReflectiveGenerator<UUID> {
+    static func uuid() -> Generator<UUID> {
         Gen.zip(
             Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF), // 60 bits → bytes 0–7
             Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF) // 62 bits → bytes 8–15
@@ -41,7 +41,7 @@ public extension ReflectiveGenerator {
 //
 // Generators produce only the random bits; fixed bits are inserted/stripped in the forward/backward functions below.
 
-private extension ReflectiveGenerator {
+private extension Generator {
     static func uuidFromHalves(_ high60: UInt64, _ low62: UInt64) -> UUID {
         let highU64 = ((high60 >> 12) << 16) | (0x4 << 12) | (high60 & 0xFFF)
         let lowU64 = 0x8000_0000_0000_0000 | low62

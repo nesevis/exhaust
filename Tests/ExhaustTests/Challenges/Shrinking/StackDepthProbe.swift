@@ -16,7 +16,7 @@ struct BindBoundMaterializationProbe {
         case add(SimpleExp, SimpleExp)
     }
 
-    static func fullExpAtDepth(_ depth: Int) -> ReflectiveGenerator<SimpleExp> {
+    static func fullExpAtDepth(_ depth: Int) -> RefGen<SimpleExp> {
         let leafGen = #gen(.int(in: 0 ... 10))
             .mapped(
                 forward: { SimpleExp.leaf($0) },
@@ -35,7 +35,7 @@ struct BindBoundMaterializationProbe {
                 Self.fullExpAtDepth(childDepth)
             }
 
-        func binOp() -> ReflectiveGenerator<SimpleExp> {
+        func binOp() -> RefGen<SimpleExp> {
             #gen(child, child)
                 .mapped(
                     forward: { lhs, rhs in SimpleExp.add(lhs, rhs) },

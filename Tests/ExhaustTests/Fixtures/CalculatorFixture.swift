@@ -82,7 +82,7 @@ enum CalculatorFixture {
     }
 
     /// Recursive expression generator with weighted leaf/add/div branches.
-    static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
+    static func expression(depth: UInt64) -> RefGen<Expr> {
         let leaf = #gen(.int())
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
 

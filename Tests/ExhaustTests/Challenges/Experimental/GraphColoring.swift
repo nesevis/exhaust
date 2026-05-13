@@ -85,9 +85,9 @@ struct GraphColoringChallenge {
         }
     }
 
-    static let gen: ReflectiveGenerator<Graph> = {
+    static let gen: RefGen<Graph> = {
         let verticesGen = #gen(.int(in: 0 ... 50, scaling: .constant).array(length: 5 ... 20, scaling: .constant))
-        return verticesGen.bind { (vertices: [Int]) -> ReflectiveGenerator<Graph> in
+        return verticesGen.bind { vertices in
             let n = vertices.count
             guard n >= 2 else {
                 return .just(Graph(vertices: vertices, edges: []))

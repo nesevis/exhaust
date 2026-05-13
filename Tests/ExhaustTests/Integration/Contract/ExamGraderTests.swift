@@ -136,11 +136,11 @@ struct ExamGraderContract {
 // `bind` breaks reflection (the backward pass for decomposing a value back into generator choices), but `#exhaust` uses the forward VACTI interpreter, which records the choice tree alongside generation. Shrinking operates on the choice sequence directly and is completely unaffected by normally opaque `bind` boundaries.
 
 /// Generates an ``Exam`` and matching `[Int?]` answers array where the answers length always matches the answer key length, and each answer is either correct, wrong, or blank (nil).
-private func examWithMatchingAnswers() -> ReflectiveGenerator<(Exam, [Int?])> {
+private func examWithMatchingAnswers() -> RefGen<(Exam, [Int?])> {
     #gen(.int(in: 1 ... 5))
         .bind { keyLength in
             let keyGen = #gen(.int(in: 1 ... 5)).array(length: UInt64(keyLength))
-            let answersGen: ReflectiveGenerator<[Int?]> = ReflectiveGenerator.oneOf(
+            let answersGen: RefGen<[Int?]> = RefGen.oneOf(
                 weighted: (1, .just(nil)),
                 (2, #gen(.int(in: 1 ... 5)).map { Optional($0) })
             ).array(length: UInt64(keyLength))

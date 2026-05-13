@@ -1,12 +1,12 @@
 //
-//  ReflectiveGenerator+Data.swift
+//  Generator+Data.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension ReflectiveGenerator {
+package extension Generator {
     /// Generates arbitrary `Data` values with size-scaled length.
     ///
     /// Each byte is drawn uniformly from 0 through 255. The data length scales with the interpreter's size parameter, producing shorter sequences early in a test run and longer ones later.
@@ -16,7 +16,7 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Returns: A generator producing random `Data` of size-scaled length.
-    static func data() -> ReflectiveGenerator<Data> {
+    static func data() -> Generator<Data> {
         Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max))
             .mapped(
                 forward: { Data($0) },
@@ -37,7 +37,7 @@ public extension ReflectiveGenerator {
     static func data(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<Data> {
+    ) -> Generator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
         return Gen.arrayOf(
@@ -60,7 +60,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing `Data` of the specified length.
     static func data(
         length: UInt64
-    ) -> ReflectiveGenerator<Data> {
+    ) -> Generator<Data> {
         Gen.arrayOf(
             Gen.choose(in: UInt8.min ... UInt8.max),
             exactly: length
@@ -80,7 +80,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing `Data` of the specified length.
     static func data(
         length: Int
-    ) -> ReflectiveGenerator<Data> {
+    ) -> Generator<Data> {
         precondition(length >= 0, "Length must be non-negative")
         return data(length: UInt64(length))
     }

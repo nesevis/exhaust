@@ -1,5 +1,5 @@
 //
-//  ReflectiveGenerator+LargeNumericGenerators.swift
+//  Generator+LargeNumericGenerators.swift
 //  Exhaust
 //
 
@@ -7,7 +7,7 @@ import ExhaustCore
 
 // MARK: - Int128 / UInt128 generators
 
-public extension ReflectiveGenerator {
+package extension Generator {
     /// Generates arbitrary ``UInt128`` values across the full range.
     ///
     /// ```swift
@@ -15,7 +15,7 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Note: Test case reduction operates on each half of the value independently. Range-constrained generation and size-scaled generation are not supported.
-    static func uint128() -> ReflectiveGenerator<UInt128> {
+    static func uint128() -> Generator<UInt128> {
         Gen.zip(
             Gen.chooseBits(),
             Gen.chooseBits()
@@ -39,7 +39,7 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Note: Test case reduction operates on each half of the value independently. Range-constrained generation and size-scaled generation are not supported.
-    static func int128() -> ReflectiveGenerator<Int128> {
+    static func int128() -> Generator<Int128> {
         Gen.zip(
             Gen.chooseBits(),
             Gen.chooseBits()

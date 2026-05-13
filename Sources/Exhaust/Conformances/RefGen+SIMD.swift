@@ -185,13 +185,13 @@ private func refGenFlatSIMD<Scalar: SIMDScalar, Vector: SIMD>(
     lanes: Int
 ) -> RefGen<Vector> where Vector.Scalar == Scalar {
     RefGen<Vector> {
-        var erased = ContiguousArray<ReflectiveGenerator<Any>>()
+        var erased = ContiguousArray<AnyGenerator>()
         erased.reserveCapacity(lanes)
         for _ in 0 ..< lanes {
             erased.append(s.gen.erase())
         }
 
-        let impure: ReflectiveGenerator<[Any]> = .impure(
+        let impure: Generator<[Any]> = .impure(
             operation: .zip(erased, isOpaque: true),
             continuation: { .pure($0 as! [Any]) }
         )

@@ -12,7 +12,8 @@ struct BindInnerFilterTests {
                 .filter { $0 % n == 0 }
         }
 
-        let values = #example(gen, count: 50, seed: 42)
+        // TODO: Replace generator declaration with #gen
+        let values = #example(RefGen { gen }, count: 50, seed: 42)
         for value in values {
             #expect(value >= 0)
             #expect(value <= 100)

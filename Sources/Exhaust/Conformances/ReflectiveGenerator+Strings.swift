@@ -1,5 +1,5 @@
 //
-//  ReflectiveGenerator+Strings.swift
+//  Generator+Strings.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 22/2/2026.
@@ -8,7 +8,7 @@
 import ExhaustCore
 import Foundation
 
-public extension ReflectiveGenerator {
+package extension Generator {
     /// Generates a random Unicode character, optionally within the given range.
     ///
     /// ```swift
@@ -19,7 +19,7 @@ public extension ReflectiveGenerator {
     static func character(
         in range: ClosedRange<Character>? = nil,
         simplest: Unicode.Scalar? = nil
-    ) -> ReflectiveGenerator<Character> {
+    ) -> Generator<Character> {
         guard let range else {
             return characterGenerator(from: defaultScalarRangeSet)
         }
@@ -38,7 +38,7 @@ public extension ReflectiveGenerator {
     static func string(
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
+    ) -> Generator<String> {
         stringGenerator(from: defaultScalarRangeSet, length: length, scaling: scaling)
     }
 
@@ -50,7 +50,7 @@ public extension ReflectiveGenerator {
     static func asciiString(
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
+    ) -> Generator<String> {
         stringGenerator(from: asciiScalarRangeSet, length: length, scaling: scaling)
     }
 
@@ -58,7 +58,7 @@ public extension ReflectiveGenerator {
     static func string(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
+    ) -> Generator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
         return string(length: uint64Range, scaling: scaling)
@@ -68,7 +68,7 @@ public extension ReflectiveGenerator {
     static func asciiString(
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
+    ) -> Generator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
         return asciiString(length: uint64Range, scaling: scaling)
@@ -88,7 +88,7 @@ public extension ReflectiveGenerator {
     static func character(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil
-    ) -> ReflectiveGenerator<Character> {
+    ) -> Generator<Character> {
         let bottom = resolveSimplest(simplest, in: characterSet)
         return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom))
     }
@@ -98,7 +98,7 @@ public extension ReflectiveGenerator {
     /// ```swift
     /// let gen = #gen(.character(from: .letters, .decimalDigits))
     /// ```
-    static func character(from first: CharacterSet, _ rest: CharacterSet...) -> ReflectiveGenerator<Character> {
+    static func character(from first: CharacterSet, _ rest: CharacterSet...) -> Generator<Character> {
         let combined = rest.reduce(first) { $0.union($1) }
         return character(from: combined)
     }
@@ -115,7 +115,7 @@ public extension ReflectiveGenerator {
         simplest: Unicode.Scalar? = nil,
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
+    ) -> Generator<String> {
         let bottom = resolveSimplest(simplest, in: characterSet)
         return stringGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom), length: length, scaling: scaling)
     }
@@ -132,7 +132,7 @@ public extension ReflectiveGenerator {
         simplest: Unicode.Scalar? = nil,
         length: ClosedRange<Int>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
+    ) -> Generator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
         return string(from: characterSet, simplest: simplest, length: uint64Range, scaling: scaling)
@@ -165,14 +165,14 @@ private func resolveSimplest(
 // MARK: - ScalarRangeSet-based generators (no CharacterSet reconstruction)
 
 /// Builds a character generator directly from a pre-computed ``ScalarRangeSet``.
-private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator<Character> {
+private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character> {
     let operation = ReflectiveOperation.chooseBits(
         min: 0,
         max: UInt64(srs.scalarCount - 1),
         tag: .character(boundaryIndices: srs.boundaryIndices),
         isRangeExplicit: true
     )
-    let innerGen = ReflectiveGenerator<Character>.impure(operation: operation) { result in
+    let innerGen = Generator<Character>.impure(operation: operation) { result in
         guard let convertible = result as? any BitPatternConvertible else {
             throw GeneratorError.typeMismatch(
                 expected: "any BitPatternConvertible",
@@ -202,7 +202,7 @@ private func stringGenerator(
     from srs: ScalarRangeSet,
     length: ClosedRange<UInt64>? = nil,
     scaling: SizeScaling<UInt64> = .linear
-) -> ReflectiveGenerator<String> {
+) -> Generator<String> {
     let charGen = characterGenerator(from: srs)
     if let length {
         return Gen.arrayOf(charGen, within: length, scaling: scaling)

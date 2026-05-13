@@ -1,12 +1,12 @@
 //
-//  ReflectiveGenerator+URL.swift
+//  Generator+URL.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Foundation
 
-public extension ReflectiveGenerator {
+package extension Generator {
     /// Generates arbitrary URL values with randomized structure.
     ///
     /// Produces URLs with a random scheme (`http` or `https`), host (two to three labels of three to ten lowercase alphanumeric characters), zero to three path segments, and zero to two query parameters. All generated strings are valid URL components, so the resulting URL always parses successfully.
@@ -18,8 +18,8 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Returns: A generator producing valid `URL` values.
-    static func url() -> ReflectiveGenerator<URL> {
-        let scheme: ReflectiveGenerator<String> = Gen.pick(choices: [
+    static func url() -> Generator<URL> {
+        let scheme: Generator<String> = Gen.pick(choices: [
             (1, Gen.just("http")),
             (1, Gen.just("https")),
         ])
@@ -55,7 +55,7 @@ public extension ReflectiveGenerator {
 /// Generates a lowercase alphanumeric string with length in the given range.
 private func alphanumericString(
     length: ClosedRange<UInt64>
-) -> ReflectiveGenerator<String> {
+) -> Generator<String> {
     let chars = Gen.choose(in: UInt8(0) ... 35)
         ._map { value -> Character in
             if value < 26 {

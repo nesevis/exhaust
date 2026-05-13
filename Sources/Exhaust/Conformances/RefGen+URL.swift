@@ -20,7 +20,7 @@ public extension RefGen {
     /// - Returns: A generator producing valid `URL` values.
     static func url() -> RefGen<URL> {
         RefGen<URL> {
-            let scheme: ReflectiveGenerator<String> = Gen.pick(choices: [
+            let scheme: Generator<String> = Gen.pick(choices: [
                 (1, Gen.just("http")),
                 (1, Gen.just("https")),
             ])
@@ -64,7 +64,7 @@ public extension RefGen {
 /// Generates a lowercase alphanumeric string with length in the given range.
 private func refGenAlphanumericString(
     length: ClosedRange<UInt64>
-) -> ReflectiveGenerator<String> {
+) -> Generator<String> {
     let chars = Gen.choose(in: UInt8(0) ... 35)
         ._map { value -> Character in
             if value < 26 {

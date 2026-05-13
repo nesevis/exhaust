@@ -6,25 +6,21 @@ import Testing
 struct UnfoldTests {
     @Test("Immediate done produces the seed-derived value")
     func immediateDone() {
-        let gen = ReflectiveGenerator<Int>.unfold(
+        let gen = RefGen<Int>.unfold(
             seed: .int(in: 1 ... 10),
             depthRange: 1 ... 5
         ) { state, _ in
             .just(.done(state * 2))
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 20)
-        var values: [Int] = []
-        while let value = try? interpreter.next() {
-            values.append(value)
-        }
+        let values = #example(gen, count: 20, seed: 42)
         #expect(values.isEmpty == false)
         #expect(values.allSatisfy { $0 >= 2 && $0 <= 20 })
     }
 
     @Test("Countdown accumulates state across iterations")
     func countdownAccumulation() {
-        let gen = ReflectiveGenerator<[Int]>.unfold(
+        let gen = RefGen<[Int]>.unfold(
             seed: .just((list: [Int](), counter: 0)),
             depthRange: 1 ... 3
         ) { state, remaining in
@@ -37,14 +33,13 @@ struct UnfoldTests {
             )))
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 1)
-        let value = try? interpreter.next()
+        let value = #example(gen, seed: 42)
         #expect(value == [0, 1, 2])
     }
 
     @Test("Step can terminate early")
     func earlyTermination() {
-        let gen = ReflectiveGenerator<Int>.unfold(
+        let gen = RefGen<Int>.unfold(
             seed: .just(0),
             depthRange: 1 ... 100
         ) { state, remaining in
@@ -54,14 +49,13 @@ struct UnfoldTests {
             return .just(.recurse(state + 1))
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 1)
-        let value = try? interpreter.next()
+        let value = #example(gen, seed: 42)
         #expect(value == 3)
     }
 
     @Test("Random decisions within step produce varied output")
     func randomStepDecisions() {
-        let gen = ReflectiveGenerator<[Int]>.unfold(
+        let gen = RefGen<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 5
         ) { list, remaining in
@@ -73,17 +67,14 @@ struct UnfoldTests {
             }
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 50)
-        var lengths = Set<Int>()
-        while let value = try? interpreter.next() {
-            lengths.insert(value.count)
-        }
+        let values = #example(gen, count: 50, seed: 42)
+        let lengths = Set(values.map(\.count))
         #expect(lengths.count > 1, "Expected varied list lengths, got \(lengths)")
     }
 
     @Test("Unfold works with #exhaust for property testing")
     func propertyTestIntegration() {
-        let gen = ReflectiveGenerator<[Int]>.unfold(
+        let gen = RefGen<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 5
         ) { list, remaining in
@@ -108,7 +99,7 @@ struct UnfoldTests {
 
     @Test("Failing property finds and reduces counterexample")
     func reductionThroughUnfold() {
-        let gen = ReflectiveGenerator<[Int]>.unfold(
+        let gen = RefGen<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 10
         ) { list, remaining in
@@ -136,7 +127,7 @@ struct UnfoldTests {
 
     @Test("Deterministic replay with seed")
     func deterministicReplay() {
-        let gen = ReflectiveGenerator<Int>.unfold(
+        let gen = RefGen<Int>.unfold(
             seed: .int(in: 0 ... 100),
             depthRange: 1 ... 3
         ) { state, remaining in
@@ -148,18 +139,8 @@ struct UnfoldTests {
             }
         }
 
-        var firstRun = ValueInterpreter(gen, seed: 99, maxRuns: 10)
-        var firstValues: [Int] = []
-        while let value = try? firstRun.next() {
-            firstValues.append(value)
-        }
-
-        var secondRun = ValueInterpreter(gen, seed: 99, maxRuns: 10)
-        var secondValues: [Int] = []
-        while let value = try? secondRun.next() {
-            secondValues.append(value)
-        }
-
+        let firstValues = #example(gen, count: 10, seed: 99)
+        let secondValues = #example(gen, count: 10, seed: 99)
         #expect(firstValues == secondValues)
     }
 }

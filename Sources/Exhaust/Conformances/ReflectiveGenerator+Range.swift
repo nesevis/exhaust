@@ -1,11 +1,11 @@
 //
-//  ReflectiveGenerator+Range.swift
+//  Generator+Range.swift
 //  Exhaust
 //
 
 import ExhaustCore
 
-public extension ReflectiveGenerator {
+package extension Generator {
     /// Generates arbitrary `ClosedRange` values from two independently generated bounds.
     ///
     /// The two generated values are sorted so the smaller becomes the lower bound and the larger becomes the upper bound. This is fully bidirectional — the backward pass extracts the bounds directly.
@@ -17,8 +17,8 @@ public extension ReflectiveGenerator {
     /// - Parameter bounds: Generator for the range bound values.
     /// - Returns: A generator producing closed ranges where lower bound is at most the upper bound.
     static func closedRange<Bound: Comparable & Sendable>(
-        _ bounds: ReflectiveGenerator<Bound>
-    ) -> ReflectiveGenerator<ClosedRange<Bound>> where Value == ClosedRange<Bound> {
+        _ bounds: Generator<Bound>
+    ) -> Generator<ClosedRange<Bound>> where Value == ClosedRange<Bound> {
         Gen.zip(bounds, bounds).mapped(
             forward: { first, second in
                 min(first, second) ... max(first, second)
@@ -40,8 +40,8 @@ public extension ReflectiveGenerator {
     /// - Parameter bounds: Generator for the range bound values.
     /// - Returns: A generator producing ranges where lower bound is at most the upper bound.
     static func range<Bound: Comparable & Sendable>(
-        _ bounds: ReflectiveGenerator<Bound>
-    ) -> ReflectiveGenerator<Range<Bound>> where Value == Range<Bound> {
+        _ bounds: Generator<Bound>
+    ) -> Generator<Range<Bound>> where Value == Range<Bound> {
         Gen.zip(bounds, bounds).mapped(
             forward: { first, second in
                 min(first, second) ..< max(first, second)

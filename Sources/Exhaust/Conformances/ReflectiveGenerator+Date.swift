@@ -1,5 +1,5 @@
 //
-//  ReflectiveGenerator+Date.swift
+//  Generator+Date.swift
 //  Exhaust
 //
 
@@ -47,7 +47,7 @@ public enum DateSpan: Sendable, Comparable, Equatable {
     }
 }
 
-public extension ReflectiveGenerator {
+package extension Generator {
     /// Generates dates within the given range, spaced by `interval`.
     ///
     /// Dates are quantized to integral multiples of the interval relative to the range's lower bound.
@@ -65,7 +65,7 @@ public extension ReflectiveGenerator {
         between range: ClosedRange<Date>,
         interval: DateSpan,
         timeZone: TimeZone = .current
-    ) -> ReflectiveGenerator<Date> {
+    ) -> Generator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
         let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
         // Uses the absolute value of the interval, so .hours(-1) is treated as .hours(1)
@@ -79,7 +79,7 @@ public extension ReflectiveGenerator {
 
         let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
 
-        let inner: ReflectiveGenerator<Int64> = .impure(
+        let inner: Generator<Int64> = .impure(
             operation: .chooseBits(
                 min: Int64(0).bitPattern64,
                 max: numSteps.bitPattern64,
@@ -113,7 +113,7 @@ public extension ReflectiveGenerator {
         of anchor: Date,
         interval: DateSpan,
         timeZone: TimeZone = .current
-    ) -> ReflectiveGenerator<Date> {
+    ) -> Generator<Date> {
         let offsetSeconds = TimeInterval(span.fixedSeconds)
         let lower = anchor.addingTimeInterval(-offsetSeconds)
         let upper = anchor.addingTimeInterval(offsetSeconds)
@@ -133,7 +133,7 @@ public extension ReflectiveGenerator {
         of anchor: Date,
         interval: DateSpan,
         timeZone: TimeZone = .current
-    ) -> ReflectiveGenerator<Date> {
+    ) -> Generator<Date> {
         let lower = anchor.addingTimeInterval(TimeInterval(span.lowerBound.fixedSeconds))
         let upper = anchor.addingTimeInterval(TimeInterval(span.upperBound.fixedSeconds))
         return date(between: lower ... upper, interval: interval, timeZone: timeZone)

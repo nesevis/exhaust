@@ -12,11 +12,12 @@ import Testing
 @Suite("Hypothesis Shrink Quality Parity")
 struct HypothesisShrinkQualityParityTests {
     private func reduce<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: RefGen<Output>,
         startingAt value: Output,
         config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool
     ) throws -> Output {
+        let gen = gen.gen
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
             try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
@@ -262,11 +263,12 @@ struct HypothesisShrinkQualityParityTests {
     @Suite("Hypothesis Shrink Quality Parity — Float16")
     struct ShrinkQualityFloat16ParityTests {
         private func reduce<Output>(
-            _ gen: ReflectiveGenerator<Output>,
+            _ gen: RefGen<Output>,
             startingAt value: Output,
             config: Interpreters.ReducerConfiguration = .fast,
             property: (Output) -> Bool
         ) throws -> Output {
+            let gen = gen.gen
             let tree = try #require(try Interpreters.reflect(gen, with: value))
             let (_, output) = try #require(
                 try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)

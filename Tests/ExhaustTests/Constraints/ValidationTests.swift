@@ -6,7 +6,7 @@ struct ValidationTests {
     @Test("Correct generator passes validation")
     func correctGeneratorPasses() {
         let gen = #gen(.int(in: 1 ... 100))
-        let report = gen.validate(samples: 50, seed: 42)
+        let report = gen.gen.validate(samples: 50, seed: 42)
 
         #expect(report.passed)
         #expect(report.valuesGenerated == 50)
@@ -22,7 +22,7 @@ struct ValidationTests {
         )
 
         withKnownIssue {
-            let report = gen.validate(samples: 50, seed: 42)
+            let report = gen.gen.validate(samples: 50, seed: 42)
             #expect(!report.passed)
             #expect(report.failures.contains { failure in
                 if case .reflectionRoundTripMismatch = failure { return true }
@@ -33,8 +33,8 @@ struct ValidationTests {
 
     @Test("Constant generator passes validation")
     func constantGeneratorPasses() {
-        let gen = ReflectiveGenerator<Int>.just(42)
-        let report = gen.validate(samples: 50, seed: 42)
+        let gen = RefGen<Int>.just(42)
+        let report = gen.gen.validate(samples: 50, seed: 42)
 
         #expect(report.passed)
         #expect(report.uniquenessRate <= 1.0 / Double(report.valuesGenerated) + 0.01)
@@ -46,12 +46,12 @@ struct ValidationTests {
             let value: Int
         }
 
-        let gen: ReflectiveGenerator<Wrapper> = #gen(.int(in: 0 ... 50)).mapped(
+        let gen: RefGen<Wrapper> = #gen(.int(in: 0 ... 50)).mapped(
             forward: { Wrapper(value: $0) },
             backward: { $0.value }
         )
 
-        let report = gen.validate(samples: 50, seed: 42)
+        let report = gen.gen.validate(samples: 50, seed: 42)
         #expect(report.passed)
         #expect(report.valuesGenerated == 50)
     }
@@ -59,7 +59,7 @@ struct ValidationTests {
     @Test("Report stats are populated correctly")
     func reportStatsPopulated() {
         let gen = #gen(.int(in: 0 ... 1000))
-        let report = gen.validate(samples: 100, seed: 7)
+        let report = gen.gen.validate(samples: 100, seed: 7)
 
         #expect(report.sampleCount == 100)
         #expect(report.valuesGenerated > 0)

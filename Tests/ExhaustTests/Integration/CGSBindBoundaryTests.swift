@@ -6,7 +6,7 @@ import Testing
 struct CGSBindBoundaryTests {
     @Test("Pick inside bind with different inner/outer types does not crash CGS")
     func pickInsideTypeMismatchedBind() {
-        let gen = ReflectiveGenerator<String>.oneOf(
+        let gen = RefGen<String>.oneOf(
             .just("hello"),
             .just("world"),
             .just("test")
@@ -20,13 +20,13 @@ struct CGSBindBoundaryTests {
 
     @Test("Pick inside nested binds with type changes does not crash CGS")
     func pickInsideNestedBinds() {
-        let gen = ReflectiveGenerator<Bool>.oneOf(
+        let gen = RefGen<Bool>.oneOf(
             .just(true),
             .just(false)
         ).bind { flag in
-            ReflectiveGenerator<Int>.just(flag ? 10 : 1)
+            RefGen<Int>.just(flag ? 10 : 1)
         }.bind { count in
-            ReflectiveGenerator<String>.just(String(repeating: "x", count: count))
+            RefGen<String>.just(String(repeating: "x", count: count))
         }.filter(.choiceGradientSampling) { $0.isEmpty == false }
 
         let values = #example(gen, count: 50, seed: 42)
@@ -35,7 +35,7 @@ struct CGSBindBoundaryTests {
 
     @Test("Unfold with filter does not crash CGS")
     func unfoldWithFilter() {
-        let gen = ReflectiveGenerator<Int>.unfold(
+        let gen = RefGen<Int>.unfold(
             seed: .just(0),
             depthRange: 1 ... 3
         ) { state, remaining in
@@ -54,11 +54,11 @@ struct CGSBindBoundaryTests {
 
     @Test("CGS tunes picks inside bind toward filter predicate")
     func cgsTunesPicksThroughBind() {
-        let gen = ReflectiveGenerator<Int>.oneOf(
+        let gen = RefGen<Int>.oneOf(
             weighted: (1, .int(in: 1 ... 100)),
             (1, .int(in: 901 ... 1000))
         ).bind { inner in
-            ReflectiveGenerator<[Int]>.just([inner, inner * 2])
+            RefGen<[Int]>.just([inner, inner * 2])
         }.filter(.choiceGradientSampling) { array in
             array.allSatisfy { $0 <= 200 }
         }
