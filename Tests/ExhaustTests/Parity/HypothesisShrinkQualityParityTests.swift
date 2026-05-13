@@ -14,7 +14,7 @@ struct HypothesisShrinkQualityParityTests {
     private func reduce<Output>(
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
-        config: Interpreters.ReducerConfiguration = .fast,
+        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
         property: (Output) -> Bool
     ) throws -> Output {
         let gen = gen.gen
@@ -265,7 +265,7 @@ struct HypothesisShrinkQualityParityTests {
         private func reduce<Output>(
             _ gen: ReflectiveGenerator<Output>,
             startingAt value: Output,
-            config: Interpreters.ReducerConfiguration = .fast,
+            config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
             property: (Output) -> Bool
         ) throws -> Output {
             let gen = gen.gen

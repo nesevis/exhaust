@@ -14,7 +14,7 @@ private enum Helpers {
     static func reduce<Output>(
         _ gen: Generator<Output>,
         startingAt value: Output,
-        config: Interpreters.ReducerConfiguration = .fast,
+        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
         property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))

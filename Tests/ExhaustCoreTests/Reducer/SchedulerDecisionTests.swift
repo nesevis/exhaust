@@ -5,6 +5,8 @@ import Testing
 struct SchedulerDecisionTests {
 
     // MARK: - Convergence Detection
+    
+    let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
 
     @Test("Scheduler detects convergence when property always passes")
     func convergenceWhenPropertyAlwaysPasses() throws {
@@ -15,7 +17,7 @@ struct SchedulerDecisionTests {
             gen: gen,
             tree: tree,
             output: value,
-            config: .fast
+            config: reducerConfig
         ) { _ in true }
 
         let original = ChoiceSequence.flatten(tree)
@@ -35,7 +37,7 @@ struct SchedulerDecisionTests {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: .fast
+                config: reducerConfig
             ) { $0 == 0 }
         )
 
@@ -55,7 +57,7 @@ struct SchedulerDecisionTests {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: .fast
+                config: reducerConfig
             ) { $0.isEmpty || $0[0] < 5 }.reduced
         )
 
@@ -76,7 +78,7 @@ struct SchedulerDecisionTests {
             gen: gen,
             tree: tree,
             output: value,
-            config: .fast
+            config: reducerConfig
         ) { $0.reduce(0, +) < 10 }
 
         #expect(result.stats.cycles > 0)
@@ -100,7 +102,7 @@ struct SchedulerDecisionTests {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: .fast
+                config: reducerConfig
             ) { pair in pair.0 < 10 || pair.1 < 10 }
         )
 

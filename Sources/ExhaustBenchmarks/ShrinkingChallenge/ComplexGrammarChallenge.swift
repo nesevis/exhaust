@@ -109,7 +109,7 @@ func complexGrammarGen(depth: UInt64) -> ReflectiveGenerator<ComplexExpr> {
 func registerComplexGrammarBenchmarks() {
     let seedCount = 1
     let baseSeed: UInt64 = 1337
-    let config = Interpreters.ReducerConfiguration.slow
+    let config = Interpreters.ReducerConfiguration(maxStalls: 2)
 
     registerECOOPPair(
         name: "ComplexGrammar",

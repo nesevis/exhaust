@@ -86,7 +86,7 @@ private func registerCalculator() {
     let coverageFinds = coverageFindsFailure(gen: gen, property: property)
     let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
-    for strategy in withStrategies(.slow) {
+    for strategy in withStrategies(reducerConfig) {
         benchmark("Calculator (\(strategy.name))") {
             let results = runReflectableBenchmark(
                 gen: gen,
@@ -332,8 +332,7 @@ private func registerParser() {
 //    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed, matching the methodology from MacIver & Donaldson Figure 13.
-    benchmark("Parser ECOOP (adaptive)") {
-        let adaptive = Interpreters.ReducerConfiguration.slow
+    benchmark("Parser ECOOP") {
 
         let seedCount = 1000
         let baseSeed: UInt64 = 1337
@@ -369,7 +368,7 @@ private func registerParser() {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: adaptive,
+                config: reducerConfig,
                 property: countingProperty
             )
 //            print("\(seed), \(invocationCount)")
@@ -459,7 +458,7 @@ private func runReflectableBenchmark<Output>(
     gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingValues: [Output],
-    config: Interpreters.ReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = .init(maxStalls: 2)
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     for (index, value) in failingValues.enumerated() {
@@ -498,7 +497,7 @@ private func runNonReflectableBenchmark<Output>(
     gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingPairs: [(value: Output, tree: ChoiceTree)],
-    config: Interpreters.ReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = reducerConfig
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     for (index, (value, tree)) in failingPairs.enumerated() {

@@ -216,7 +216,7 @@ struct CharacterSetRangeExtractionTests {
         while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.choiceGraphReduce(
-                gen: gen, tree: tree, config: .fast, property: property
+                gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
             // Shrunk value should be '5' (the smallest digit failing the property)
             #expect(shrunk == "5", "Expected shrunk digit to be '5', got '\(shrunk)'")

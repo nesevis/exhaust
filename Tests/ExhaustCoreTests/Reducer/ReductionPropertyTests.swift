@@ -3,6 +3,7 @@ import Testing
 
 @Suite("Reduction Properties")
 struct ReductionPropertyTests {
+    let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
 
     // MARK: - Monotonicity
 
@@ -19,7 +20,7 @@ struct ReductionPropertyTests {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: .fast,
+                config: reducerConfig,
                 property: property
             )
         )
@@ -45,7 +46,7 @@ struct ReductionPropertyTests {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: .fast,
+                config: reducerConfig,
                 property: property
             )
         )
@@ -72,7 +73,7 @@ struct ReductionPropertyTests {
                     gen: gen,
                     tree: tree,
                     output: value,
-                    config: .fast,
+                    config: reducerConfig,
                     property: property
                 )
             )
@@ -100,7 +101,7 @@ struct ReductionPropertyTests {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: .fast,
+                config: reducerConfig,
                 property: property
             )
         )
@@ -119,7 +120,7 @@ struct ReductionPropertyTests {
             gen: gen,
             tree: secondTree,
             output: firstOutput,
-            config: .fast,
+            config: reducerConfig,
             property: property
         )
 
@@ -139,7 +140,7 @@ struct ReductionPropertyTests {
             gen: gen,
             tree: tree,
             output: UInt64(0),
-            config: .fast,
+            config: reducerConfig,
             property: property
         )
 
