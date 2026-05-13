@@ -6,13 +6,20 @@
 //
 
 public extension ReflectiveGenerator {
-    /// Transforms the output type with a provided inverse for reflection.
+    /// Adapts a generator to a new output type while preserving reflection support.
     ///
-    /// Use this when the transform involves computation that ``#gen`` cannot invert: arithmetic, conditional logic, lossy conversions. For struct or class initializers with labeled arguments, prefer ``#gen`` with a trailing closure; the macro synthesizes the inverse via `Mirror`.
+    /// Use this when the transform involves computation that ``#gen`` cannot invert automatically: arithmetic, conditional logic, lossy conversions. For struct or class initializers with labeled arguments, prefer ``#gen`` with a trailing closure — the macro synthesizes the inverse via `Mirror`.
+    ///
+    /// ```swift
+    /// let celsiusGen = #gen(.double(in: -40...100)).mapped(
+    ///     forward: { $0 * 9 / 5 + 32 },
+    ///     backward: { ($0 - 32) * 5 / 9 }
+    /// )
+    /// ```
     ///
     /// - Parameters:
     ///   - forward: Function to transform generated values.
-    ///   - backward: Function to transform reflection targets back to original type.
+    ///   - backward: Function to transform reflection targets back to the original type.
     /// - Returns: A generator producing values of the new output type.
     /// - Throws: Rethrows errors from the transformation functions.
     func mapped<NewOutput>(
@@ -24,11 +31,9 @@ public extension ReflectiveGenerator {
         }
     }
 
-    /// Creates a bidirectional transformation using a forward function and a key path for backward.
+    /// Adapts a generator to a new output type, using a key path as the inverse for reflection.
     ///
-    /// Transforms the output type while providing a key path as the inverse for reflection.
-    ///
-    /// Use this when the backward direction can be expressed as a property extraction rather than an arbitrary closure.
+    /// Use this when the backward direction is a simple property extraction rather than an arbitrary closure.
     ///
     /// - Parameters:
     ///   - forward: Function to transform generated values.
@@ -45,10 +50,7 @@ public extension ReflectiveGenerator {
     
     /// Chains this generator with a dependent generator, with a backward extraction function for reflection.
     ///
-    /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function extracts the inner generator's input from the final output, enabling reflection (and therefore reduction) through the bind.
-    ///
-    /// - Forward: Takes the inner value and returns a dependent generator.
-    /// - Backward: Extracts the inner value from the final output, enabling reflection to decompose through the bind.
+    /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `forward` function takes the inner value and returns a dependent generator. The `backward` function extracts the inner value from the final output, enabling reflection to decompose through the bind.
     ///
     /// ```swift
     /// let sized = #gen(.int(in: 1...10)).bound(

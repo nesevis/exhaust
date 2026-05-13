@@ -13,7 +13,7 @@ public extension ReflectiveGenerator {
     /// The iteration count is drawn from `depthRange` as a reducible depth-control choice. The reducer can collapse iterations through structural operations to find the minimum number of steps needed to trigger a property failure. Because the chosen depth may be less than the upper bound, `step` should not assume that `remaining` starts at any particular value — use it only for relative decisions (for example, "generate a leaf when `remaining` is zero") rather than absolute thresholds.
     ///
     /// ```swift
-    /// let listGen = Generator<[Int]>.unfold(
+    /// let listGen = ReflectiveGenerator<[Int]>.unfold(
     ///     seed: .just([]),
     ///     depthRange: 1 ... 5
     /// ) { list, remaining in
