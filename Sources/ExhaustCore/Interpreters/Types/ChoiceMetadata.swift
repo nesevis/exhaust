@@ -6,6 +6,7 @@
 //
 
 /// Metadata attached to ``ChoiceTree/choice`` and ``ChoiceTree/sequence`` nodes, capturing the valid range and whether it was explicitly specified.
+@usableFromInline
 package struct ChoiceMetadata: Hashable, Equatable, Sendable {
     /// The valid bit-pattern range for this choice, or `nil` if unconstrained.
     package let validRange: ClosedRange<UInt64>?
