@@ -11,9 +11,9 @@
 @usableFromInline
 package struct ChoiceValue: Comparable, Hashable, Sendable {
     /// All numeric types are stored in this single `UInt64` regardless of original width. Signed integers use sign-bit XOR for order-preserving shortlex reduction; floats use a Hedgehog-style sign-preserving transform. Decoding is controlled by ``tag``.
-    package let bitPattern64: UInt64
+    public let bitPattern64: UInt64
     /// Controls how ``bitPattern64`` is decoded (signed vs unsigned vs float), which reduction strategies apply (shortlex for integers, mantissa-first for floats), and what the semantically simplest value is (zero for all types, but at different bit patterns).
-    package let tag: TypeTag
+    public let tag: TypeTag
 
     /// Creates a choice value from a raw bit pattern and type tag.
     package init(_ bitPattern: UInt64, tag: TypeTag) {
