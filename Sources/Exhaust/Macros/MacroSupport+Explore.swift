@@ -14,7 +14,7 @@ public extension __ExhaustRuntime {
     /// Runs a classification-aware property test with per-direction CGS tuning. Runtime target of `#explore`.
     @discardableResult
     static func __explore<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ refGen: RefGen<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
         sourceCode: String?,
@@ -24,6 +24,7 @@ public extension __ExhaustRuntime {
         column: UInt = #column,
         property: @Sendable @escaping (Output) -> Bool
     ) -> ExploreReport<Output> {
+        let gen = refGen.gen
         var budget: ExploreBudget = .expedient
         var seed: UInt64?
         var suppressIssueReporting = false
@@ -165,7 +166,7 @@ public extension __ExhaustRuntime {
     /// Runs a classification-aware property test with a Void/#expect/#require closure.
     @discardableResult
     static func __exploreExpect<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ refGen: RefGen<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
         sourceCode: String?,
@@ -176,13 +177,14 @@ public extension __ExhaustRuntime {
         property: @Sendable (Output) throws -> Void,
         detection: @Sendable (Output) throws -> Void
     ) -> ExploreReport<Output> {
-        withoutActuallyEscaping(detection) { detection in
+        let gen = refGen.gen
+        return withoutActuallyEscaping(detection) { detection in
             let boolProperty = wrapDetectionProperty(detection)
 
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
             withExpectedIssue(isIntermittent: true) {
                 pipelineResult = __explore(
-                    gen,
+                    refGen,
                     settings: settings + [.suppress(.issueReporting)],
                     directions: directions,
                     sourceCode: sourceCode,
@@ -196,7 +198,7 @@ public extension __ExhaustRuntime {
 
             guard let report = pipelineResult else {
                 return __explore(
-                    gen,
+                    refGen,
                     settings: settings,
                     directions: directions,
                     sourceCode: sourceCode,
@@ -238,7 +240,7 @@ public extension __ExhaustRuntime {
     /// Runs a classification-aware property test with an async Bool-returning closure.
     @discardableResult
     static func __exploreAsync<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ refGen: RefGen<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
         sourceCode: String?,
@@ -251,7 +253,7 @@ public extension __ExhaustRuntime {
         let syncProperty = bridgeAsyncProperty(property)
         return await dispatchToGCD {
             __explore(
-                gen,
+                refGen,
                 settings: settings,
                 directions: directions,
                 sourceCode: sourceCode,
@@ -269,7 +271,7 @@ public extension __ExhaustRuntime {
     /// Runs a classification-aware property test with an async Void/#expect/#require closure.
     @discardableResult
     static func __exploreExpectAsync<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ refGen: RefGen<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
         sourceCode: String?,
@@ -280,6 +282,7 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Void,
         detection: @escaping @Sendable (Output) throws -> Void
     ) async -> ExploreReport<Output> {
+        let gen = refGen.gen
         let boolProperty = wrapDetectionProperty(detection)
 
         return await withCheckedContinuation { continuation in
@@ -289,7 +292,7 @@ public extension __ExhaustRuntime {
                 #if canImport(Testing)
                     withKnownIssue(isIntermittent: true) {
                         pipelineResult = __explore(
-                            gen,
+                            refGen,
                             settings: settings + [.suppress(.issueReporting)],
                             directions: directions,
                             sourceCode: sourceCode,
@@ -302,7 +305,7 @@ public extension __ExhaustRuntime {
                     }
                 #else
                     pipelineResult = __explore(
-                        gen,
+                        refGen,
                         settings: settings + [.suppress(.issueReporting)],
                         directions: directions,
                         sourceCode: sourceCode,
@@ -316,7 +319,7 @@ public extension __ExhaustRuntime {
 
                 guard let report = pipelineResult else {
                     let emptyReport = __explore(
-                        gen,
+                        refGen,
                         settings: settings,
                         directions: directions,
                         sourceCode: sourceCode,

@@ -26,7 +26,7 @@ package enum CoverageRunner {
 
     /// Runs coverage analysis and iterates through the covering array, calling `property` for each row.
     package static func run<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         coverageBudget: UInt64,
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
@@ -152,7 +152,7 @@ package enum CoverageRunner {
     ///
     /// Returns `nil` when materialization fails (row is skipped). Otherwise returns the value, its choice tree, and whether the property passed.
     private static func testRow<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         row: CoveringArrayRow,
         rowIndex: Int,
         profile: any CoverageProfile,

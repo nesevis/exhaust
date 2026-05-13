@@ -15,9 +15,9 @@ import ExhaustCore
 /// ```
 @freestanding(expression)
 public macro gen<each GeneratedValue, TransformedValue>(
-    _ generators: repeat ReflectiveGenerator<each GeneratedValue>,
+    _ generators: repeat RefGen<each GeneratedValue>,
     transform: (repeat each GeneratedValue) -> TransformedValue
-) -> ReflectiveGenerator<TransformedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
+) -> RefGen<TransformedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
 /// Wraps a single generator expression, enabling dot-syntax (for example `.int(in: 0...100)`).
 ///
@@ -28,8 +28,8 @@ public macro gen<each GeneratedValue, TransformedValue>(
 /// ```
 @freestanding(expression)
 public macro gen<GeneratedValue>(
-    _ generator: ReflectiveGenerator<GeneratedValue>
-) -> ReflectiveGenerator<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
+    _ generator: RefGen<GeneratedValue>
+) -> RefGen<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
 /// Combines multiple generators into a tuple without transformation.
 ///
@@ -40,6 +40,6 @@ public macro gen<GeneratedValue>(
 /// ```
 @freestanding(expression)
 public macro gen<each GeneratedValue>(
-    _ generators: repeat ReflectiveGenerator<each GeneratedValue>
-) -> ReflectiveGenerator<(repeat each GeneratedValue)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
+    _ generators: repeat RefGen<each GeneratedValue>
+) -> RefGen<(repeat each GeneratedValue)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 

@@ -109,7 +109,7 @@ public macro SUT() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
 /// }
 /// ```
 @attached(peer)
-public macro Command<each Generator>(weight: Int = 1, _ generators: repeat ReflectiveGenerator<each Generator>) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
+public macro Command<each Generator>(weight: Int = 1, _ generators: repeat RefGen<each Generator>) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
 
 /// Marks a method as a global postcondition in a `@Contract` struct.
 ///

@@ -10,7 +10,7 @@ package extension __ExhaustRuntime {
 
     /// Bundles parameters shared across coverage, sampling, and reduction phases.
     struct PipelineContext<Output> {
-        let gen: ReflectiveGenerator<Output>
+        let gen: Generator<Output>
         let property: @Sendable (Output) -> Bool
         let samplingBudget: UInt64
         let reductionConfig: Interpreters.ReducerConfiguration
@@ -462,7 +462,7 @@ package extension __ExhaustRuntime {
     /// Reduces a counterexample using reflection to seed the reducer.
     // swiftlint:disable:next function_parameter_count
     static func __reduceReflected<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         value: Output,
         reductionConfig: Interpreters.ReducerConfiguration,
         visualize: Bool,
