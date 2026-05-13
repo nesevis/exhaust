@@ -26,7 +26,7 @@ extension Interpreters {
     /// - Returns: A ``ChoiceTree`` encoding the choices that produce `outputValue`, or `nil` if no valid decomposition exists.
     /// - Throws: ``ReflectionError`` when the value is structurally incompatible with the generator.
     public static func reflect<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         with outputValue: Output,
         // Optional validation check
         where check: (Output) -> Bool = { _ in true }
@@ -57,7 +57,7 @@ extension Interpreters {
     ///
     /// - Returns: All (value, path) pairs where the generator can produce `finalOutput`. Multiple results arise from non-injective pick operations.
     private static func reflectRecursive<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         onFinalOutput finalOutput: Any
     ) throws -> [(value: Output, path: [ChoiceTree])] {
         switch gen {
@@ -219,7 +219,7 @@ extension Interpreters {
 
     private static func reflectContramapOperation(
         transform: (Any) throws -> Any?,
-        nextGen: ReflectiveGenerator<Any>,
+        nextGen: AnyGenerator,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let subValue = try transform(finalOutput) else {
@@ -229,7 +229,7 @@ extension Interpreters {
     }
 
     private static func reflectPruneOperation(
-        nextGen: ReflectiveGenerator<Any>,
+        nextGen: AnyGenerator,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         do {
@@ -354,7 +354,7 @@ extension Interpreters {
 
     private static func reflectResizeOperation(
         newSize: UInt64,
-        nextGen: ReflectiveGenerator<Any>,
+        nextGen: AnyGenerator,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let nestedResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -364,8 +364,8 @@ extension Interpreters {
     }
 
     private static func reflectSequenceOperation(
-        lengthGen: ReflectiveGenerator<UInt64>,
-        elementGen: ReflectiveGenerator<Any>,
+        lengthGen: Generator<UInt64>,
+        elementGen: AnyGenerator,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let targetArray = finalOutput as? any Sequence else {
@@ -411,7 +411,7 @@ extension Interpreters {
     }
 
     private static func reflectZipOperation(
-        generators: ContiguousArray<ReflectiveGenerator<Any>>,
+        generators: ContiguousArray<AnyGenerator>,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let outputs = finalOutput as? [Any], outputs.count == generators.count else {
@@ -435,7 +435,7 @@ extension Interpreters {
     }
 
     private static func reflectPassthroughOperation(
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }

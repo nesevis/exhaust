@@ -197,8 +197,8 @@ struct PartialMonadicProfunctorLawTests {
         let transform: (String) -> Int? = { $0.isEmpty == false ? $0.count : nil }
 
         // Act
-        let lhs = Gen.contramap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))
-        let rhs = ReflectiveGenerator<String>.pure(pureValue)
+        let lhs = Gen.contramap(transform, Gen.prune(Generator.pure(pureValue)))
+        let rhs = Generator<String>.pure(pureValue)
 
         var lhsIterator = ValueInterpreter(lhs)
         var rhsIterator = ValueInterpreter(rhs)
@@ -217,10 +217,10 @@ struct PartialMonadicProfunctorLawTests {
     @Test("PMP Law 4: contramap . prune distributes over bind")
     func pmpLaw4_contramapPruneDistributesOverBind() throws {
         // Arrange - carefully chosen types for the law to work
-        let baseGenerator = ReflectiveGenerator<Int>.pure(5)
+        let baseGenerator = Generator<Int>.pure(5)
         // Crucial: bindFunction must return a generator with the SAME input type as base
-        let bindFunction: (Int) -> ReflectiveGenerator<String> = { val in
-            ReflectiveGenerator<String>.pure("Value: \(val)")
+        let bindFunction: (Int) -> Generator<String> = { val in
+            Generator<String>.pure("Value: \(val)")
         }
         // transform maps from NewInput to original input type (Optional)
         let transform: (String) -> Int? = { str in
@@ -229,18 +229,18 @@ struct PartialMonadicProfunctorLawTests {
 
         // Act
         // LHS: (contramap f . prune)(x >>= g)
-        let boundGenerator = baseGenerator.bind(bindFunction) // ReflectiveGenerator<Int, String>
-        let lhs = Gen.contramap(transform, Gen.prune(boundGenerator)) // ReflectiveGenerator<String, String>
+        let boundGenerator = baseGenerator.bind(bindFunction) // Generator<Int, String>
+        let lhs = Gen.contramap(transform, Gen.prune(boundGenerator)) // Generator<String, String>
 
         // RHS: (contramap f . prune) x >>= (contramap f . prune) . g
-        let transformedBase = Gen.contramap(transform, Gen.prune(baseGenerator)) // ReflectiveGenerator<String, Int>
+        let transformedBase = Gen.contramap(transform, Gen.prune(baseGenerator)) // Generator<String, Int>
 
         // The bind function applies (contramap f . prune) to the result of g
-        let transformedFunction: (Int) -> ReflectiveGenerator<String> = { val in
-            let resultGenerator = bindFunction(val) // ReflectiveGenerator<Int, String>
-            return Gen.contramap(transform, Gen.prune(resultGenerator)) // ReflectiveGenerator<String, String>
+        let transformedFunction: (Int) -> Generator<String> = { val in
+            let resultGenerator = bindFunction(val) // Generator<Int, String>
+            return Gen.contramap(transform, Gen.prune(resultGenerator)) // Generator<String, String>
         }
-        let rhs = transformedBase.bind(transformedFunction) // ReflectiveGenerator<String, String>
+        let rhs = transformedBase.bind(transformedFunction) // Generator<String, String>
 
         var lhsIterator = ValueInterpreter(lhs)
         var rhsIterator = ValueInterpreter(rhs)

@@ -1,5 +1,5 @@
 //
-//  ReflectiveGenerator.swift
+//  Generator.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 25/7/2025.
@@ -9,7 +9,7 @@ import ExhaustCore
 import Testing
 
 @discardableResult
-func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {
+func validateGenerator<Output: Equatable>(_ gen: Generator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {
     var iterator = ValueInterpreter(gen)
     if let instance = try iterator.next() {
         let recipe = try #require(try Interpreters.reflect(gen, with: instance))
@@ -26,7 +26,7 @@ func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Output>) th
 import Foundation
 
 /// ASCII character generator (U+0020–U+007E) with reflection support.
-func asciiCharGen() -> ReflectiveGenerator<Character> {
+func asciiCharGen() -> Generator<Character> {
     let srs = CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -43,7 +43,7 @@ func asciiCharGen() -> ReflectiveGenerator<Character> {
 }
 
 /// Default (non-control, non-illegal Unicode) character generator with reflection support.
-func defaultCharGen() -> ReflectiveGenerator<Character> {
+func defaultCharGen() -> Generator<Character> {
     let srs = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters).scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -60,7 +60,7 @@ func defaultCharGen() -> ReflectiveGenerator<Character> {
 }
 
 /// ASCII string generator with size-scaled length.
-func asciiStringGen() -> ReflectiveGenerator<String> {
+func asciiStringGen() -> Generator<String> {
     let charGen = asciiCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
@@ -69,7 +69,7 @@ func asciiStringGen() -> ReflectiveGenerator<String> {
 }
 
 /// Default Unicode string generator with size-scaled length.
-func stringGen() -> ReflectiveGenerator<String> {
+func stringGen() -> Generator<String> {
     let charGen = defaultCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
@@ -78,12 +78,12 @@ func stringGen() -> ReflectiveGenerator<String> {
 }
 
 /// Bool generator equivalent to .bool() — picks from [true, false].
-func boolGen() -> ReflectiveGenerator<Bool> {
+func boolGen() -> Generator<Bool> {
     Gen.choose(from: [true, false])
 }
 
 /// Character generator from a CharacterSet.
-func charGen(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> {
+func charGen(from characterSet: CharacterSet) -> Generator<Character> {
     let srs = characterSet.scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -100,7 +100,7 @@ func charGen(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> 
 }
 
 /// Makes a generator optional: picks between .none (weight 1) and .some (weight 5).
-func optionalGen<Value>(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<Value?> {
+func optionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
     Gen.pick(choices: [
         (1, Gen.just(Value?.none)),
         (5, asOptionalGen(gen)),
@@ -108,7 +108,7 @@ func optionalGen<Value>(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerato
 }
 
 /// Wraps a non-optional generator into an optional one (the .some branch).
-func asOptionalGen<Value>(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<Value?> {
+func asOptionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
     let description = String(describing: Value.self)
     return .impure(operation: .contramap(
         transform: { result in

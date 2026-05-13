@@ -456,7 +456,7 @@ private func registerReverse() {
 // MARK: - Benchmark Runners
 
 private func runReflectableBenchmark<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingValues: [Output],
     config: Interpreters.ReducerConfiguration = .fast
@@ -495,7 +495,7 @@ private func runReflectableBenchmark<Output>(
 }
 
 private func runNonReflectableBenchmark<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingPairs: [(value: Output, tree: ChoiceTree)],
     config: Interpreters.ReducerConfiguration = .fast
@@ -533,7 +533,7 @@ private func runNonReflectableBenchmark<Output>(
 // MARK: - Pre-Generation Helpers
 
 private func generateFailingValues<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     name: String,
     maxRuns: UInt64 = 1_000_000
@@ -556,7 +556,7 @@ private func generateFailingValues<Output>(
 }
 
 private func generateFailingPairs<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     name: String,
     maxRuns: UInt64 = 1_000_000
@@ -581,7 +581,7 @@ private func generateFailingPairs<Output>(
 // MARK: - Generation Metrics
 
 private func coverageFindsFailure<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @escaping (Output) -> Bool
 ) -> Bool {
     let result = CoverageRunner.run(gen, coverageBudget: 200, property: property)
@@ -590,7 +590,7 @@ private func coverageFindsFailure<Output>(
 }
 
 private func measureIterationsToFirstFailure<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @escaping (Output) -> Bool,
     seeds: Int = 100,
     maxIterations: UInt64 = 500

@@ -94,7 +94,7 @@ func registerECOOPBenchmarks() {
 /// Registers a benchmark for a single challenge using the graph-based reducer.
 func registerECOOPPair<Output>(
     name: String,
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     config: Interpreters.ReducerConfiguration,
     seedCount: Int,
@@ -135,7 +135,7 @@ private struct SeedResult {
 
 private func registerECOOPChallenge<Output>(
     name: String,
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     config: Interpreters.ReducerConfiguration,
     seedCount: Int,

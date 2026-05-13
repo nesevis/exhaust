@@ -45,8 +45,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         ///
         /// Frames are stored in push order (oldest first). `apply` iterates in reverse (newest/innermost first) to match the closure chain's nesting: `gen.bind(innerCont).bind(outerCont).map(cast)`.
         public func apply(
-            _ gen: ReflectiveGenerator<Any>
-        ) throws -> ReflectiveGenerator<FinalOutput> {
+            _ gen: AnyGenerator
+        ) throws -> Generator<FinalOutput> {
             var current = gen
             for frame in frames.reversed() {
                 switch frame {
@@ -57,8 +57,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     let capturedIndex = index
                     let capturedCompleted = completed
                     let capturedGenerators = allGenerators
-                    current = try current.bind { componentResult -> ReflectiveGenerator<Any> in
-                        var gens = ContiguousArray<ReflectiveGenerator<Any>>()
+                    current = try current.bind { componentResult -> AnyGenerator in
+                        var gens = ContiguousArray<AnyGenerator>()
                         gens.reserveCapacity(capturedGenerators.count)
                         for (j, g) in capturedGenerators.enumerated() {
                             if j < capturedIndex {
@@ -69,7 +69,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                 gens.append(g)
                             }
                         }
-                        return ReflectiveGenerator<Any>.impure(
+                        return AnyGenerator.impure(
                             operation: .zip(gens),
                             continuation: { .pure($0) }
                         )
@@ -82,8 +82,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     let capturedCompleted = completed
                     let capturedElementGen = elementGen
                     let capturedTotalCount = totalCount
-                    current = try current.bind { elementResult -> ReflectiveGenerator<Any> in
-                        var gens = ContiguousArray<ReflectiveGenerator<Any>>()
+                    current = try current.bind { elementResult -> AnyGenerator in
+                        var gens = ContiguousArray<AnyGenerator>()
                         gens.reserveCapacity(capturedTotalCount)
                         for j in 0 ..< capturedTotalCount {
                             if j < capturedIndex {
@@ -94,7 +94,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                 gens.append(capturedElementGen)
                             }
                         }
-                        return ReflectiveGenerator<Any>.impure(
+                        return AnyGenerator.impure(
                             operation: .zip(gens),
                             continuation: { .pure($0) }
                         )
@@ -112,14 +112,14 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     /// During CGS derivative evaluation, the interpreter descends into a specific choice site. Each level of descent pushes a frame that captures the surrounding context (bind continuation or zip siblings) so that ``DerivativeContext/apply(_:)`` can reassemble the complete generator by replaying the frames in reverse.
     public enum DerivativeFrame {
         /// A bind continuation encountered on the path to the target choice site.
-        case bind(continuation: (Any) throws -> ReflectiveGenerator<Any>)
+        case bind(continuation: (Any) throws -> AnyGenerator)
 
         /// A zip component: the target site is inside the `index`-th child of a zip. `completed` holds already-generated values for earlier children, `allGenerators` holds all children's generators, and `continuation` is the downstream bind.
         case zipComponent(
             index: Int,
             completed: [Any],
-            allGenerators: ContiguousArray<ReflectiveGenerator<Any>>,
-            continuation: (Any) throws -> ReflectiveGenerator<Any>
+            allGenerators: ContiguousArray<AnyGenerator>,
+            continuation: (Any) throws -> AnyGenerator
         )
 
         /// A sequence element: the target site is inside element `index` of a sequence of `totalCount` elements. `completed` holds already-generated values for earlier elements, `elementGen` is the generator for remaining elements, and `continuation` is the downstream bind that receives the assembled array.
@@ -127,12 +127,12 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             index: Int,
             completed: [Any],
             totalCount: Int,
-            elementGen: ReflectiveGenerator<Any>,
-            continuation: (Any) throws -> ReflectiveGenerator<Any>
+            elementGen: AnyGenerator,
+            continuation: (Any) throws -> AnyGenerator
         )
     }
 
-    let generator: ReflectiveGenerator<FinalOutput>
+    let generator: Generator<FinalOutput>
     private var context: GenerationContext
 
     // CGS-specific fields
@@ -148,7 +148,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
     /// Creates an online CGS interpreter for the given generator and predicate, with optional derivative sampling count, seed, run cap, fitness accumulator, and subdivision thresholds.
     public init(
-        _ generator: ReflectiveGenerator<FinalOutput>,
+        _ generator: Generator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64 = 50,
         seed: UInt64? = nil,
@@ -229,7 +229,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     // MARK: - Recursive Engine
 
     private static func generateRecursive<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         with inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
@@ -320,7 +320,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                        makeFingerprint: { 0 }
                    )
                 {
-                    let synthesisedPick: ReflectiveGenerator<Output> = .impure(
+                    let synthesisedPick: Generator<Output> = .impure(
                         operation: .pick(choices: choices, branchCount: branchCount),
                         continuation: continuation
                     )
@@ -678,7 +678,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     @inline(__always)
     private static func runContinuation<Output>(
         result: Any,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: (Any) throws -> Generator<Output>,
         inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
@@ -703,7 +703,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     @inline(__always)
     private static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: @escaping (Any) throws -> Generator<Output>,
         inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
@@ -801,7 +801,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         //
         // Build derivatives only for live choices, then sample in rounds.
         // This allows adaptive stopping when the relative ranking is decided, rather than exhausting the full budget per choice independently.
-        var derivatives = ContiguousArray<ReflectiveGenerator<FinalOutput>>()
+        var derivatives = ContiguousArray<Generator<FinalOutput>>()
         derivatives.reserveCapacity(liveChoiceIndices.count)
         for i in liveChoiceIndices {
             let derivative = try choices[i].generator.bind { innerValue in
@@ -962,8 +962,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
     @inline(__always)
     private static func handleZip<Output>(
-        _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        _ generators: ContiguousArray<AnyGenerator>,
+        continuation: @escaping (Any) throws -> Generator<Output>,
         inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,

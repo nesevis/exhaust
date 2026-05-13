@@ -24,7 +24,7 @@ package enum SequenceDecoder {
 
     /// Materializes a candidate and checks feasibility against the property.
     ///
-    /// All callers in the reduction pipeline hold an already-erased ``ReflectiveGenerator<Any>`` and a property closure that takes ``Any``, so the entire decoding chain runs without generic specialization and the runtime metadata cache does not thrash per call.
+    /// All callers in the reduction pipeline hold an already-erased ``AnyGenerator`` and a property closure that takes ``Any``, so the entire decoding chain runs without generic specialization and the runtime metadata cache does not thrash per call.
     ///
     /// Uses a two-phase optimization: Phase 1 materializes value-only (no tree construction) and checks the property. Phase 2 re-materializes with full tree construction only on acceptance, avoiding the tree allocation cost for rejected probes.
     ///
@@ -32,7 +32,7 @@ package enum SequenceDecoder {
     /// - Returns: A ``ReductionResult`` if the candidate produces a failing output that is shortlex-smaller than the original, or `nil` if the candidate is rejected.
     public func decodeAny(
         candidate: consuming ChoiceSequence,
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         tree: ChoiceTree,
         originalSequence: ChoiceSequence,
         property: (Any) -> Bool,
@@ -71,7 +71,7 @@ package enum SequenceDecoder {
 
     private func decodeExactAny(
         candidate: consuming ChoiceSequence,
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         fallbackTree: ChoiceTree,
         originalSequence _: ChoiceSequence,
         property: (Any) -> Bool,
@@ -121,7 +121,7 @@ package enum SequenceDecoder {
 
     private func decodeGuidedAny(
         candidate: consuming ChoiceSequence,
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         fallbackTree: ChoiceTree?,
         maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,

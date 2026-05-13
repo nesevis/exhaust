@@ -290,7 +290,7 @@ package enum SequenceCoveringArray {
 
     // MARK: - Private Helpers
 
-    private static func isParameterFree(_ gen: ReflectiveGenerator<Any>) -> Bool {
+    private static func isParameterFree(_ gen: AnyGenerator) -> Bool {
         SharedInterpreterHelpers.isParameterFree(gen)
     }
 

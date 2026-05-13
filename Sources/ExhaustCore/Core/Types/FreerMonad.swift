@@ -95,7 +95,7 @@ package extension FreerMonad {
 /// 2. **User-injected closures are `@Sendable` at the API boundary.**
 ///    Every public API that accepts a user-provided closure — `property` in `#exhaust` and `#explore`, direction predicates in `#explore`, `predicate` in `.filter()`, `forward`/`backward` in `.mapped()`, and so on — marks that parameter as `@Sendable`. This means the Swift compiler verifies at each call site that the user's closure captures only `Sendable` values, preventing shared mutable state from entering the system.
 ///
-/// Together, these guarantees mean that a `FreerMonad<ReflectiveOperation, Value>` (that is, `ReflectiveGenerator<Value>`) can be safely shared across concurrency domains — for example, reusing the same generator across parallel test methods in Swift Testing.
+/// Together, these guarantees mean that a `FreerMonad<ReflectiveOperation, Value>` (that is, `Generator<Value>`) can be safely shared across concurrency domains — for example, reusing the same generator across parallel test methods in Swift Testing.
 extension FreerMonad: @unchecked Sendable {}
 
 package extension FreerMonad where Value == Any {

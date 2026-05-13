@@ -12,7 +12,7 @@ import Testing
 
 private enum Helpers {
     static func reduce<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         startingAt value: Output,
         config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool
@@ -29,7 +29,7 @@ private enum Helpers {
         in range: ClosedRange<Double>? = nil,
         where condition: (Double) -> Bool
     ) throws -> Double {
-        let gen: ReflectiveGenerator<Double> = if let range {
+        let gen: Generator<Double> = if let range {
             Gen.choose(in: range)
         } else {
             Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
@@ -99,7 +99,7 @@ struct HypothesisFloatShrinkingParityTests {
         for b in [1, 2, 3, 8, 10] {
             let lower = Double(b)
             let innerGen = Gen.choose(in: lower ... upper as ClosedRange<Double>)
-            let gen: ReflectiveGenerator<Double> = .impure(
+            let gen: Generator<Double> = .impure(
                 operation: .filter(
                     gen: innerGen.erase(),
                     fingerprint: 0,

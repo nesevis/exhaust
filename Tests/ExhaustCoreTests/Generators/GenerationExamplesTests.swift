@@ -27,7 +27,7 @@ struct GenerationExamplesTests {
         @Test("Test Gen filtering")
         func genFiltering() throws {
             let innerGen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling)
-            let filteredGen: ReflectiveGenerator<UInt> = .impure(
+            let filteredGen: Generator<UInt> = .impure(
                 operation: .filter(
                     gen: innerGen.erase(),
                     fingerprint: 0,
@@ -93,7 +93,7 @@ struct GenerationExamplesTests {
 
         @Test
         func example2() throws {
-            let gen = Gen.choose(in: 1 ... 5) as ReflectiveGenerator<Int>
+            let gen = Gen.choose(in: 1 ... 5) as Generator<Int>
             var iterator = ValueInterpreter(gen)
             let results = try iterator.next()
             let nonNilResults = try #require(results)

@@ -161,18 +161,18 @@ struct GenerateMacroTests {
         )
     }
 
-    @Test("Implicit member chain gets ReflectiveGenerator prefix in expansion")
+    @Test("Implicit member chain gets Generator prefix in expansion")
     func implicitMemberChainResolution() {
-        // The macro correctly prepends ReflectiveGenerator to resolve implicit member chains.
+        // The macro correctly prepends Generator to resolve implicit member chains.
         // However, the compiler type-checks macro arguments BEFORE expansion, so
         // #gen(.int16().array(length: 0...10)) still fails at the call site.
-        // Use ReflectiveGenerator.int16().array(length: 0...10) directly instead.
+        // Use Generator.int16().array(length: 0...10) directly instead.
         assertMacroExpansion(
             """
             #gen(.int16().array(length: 0...10))
             """,
             expandedSource: """
-            ReflectiveGenerator.int16().array(length: 0...10)
+            Generator.int16().array(length: 0...10)
             """,
             macros: testMacros
         )

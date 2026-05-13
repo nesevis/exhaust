@@ -16,13 +16,13 @@
 package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 
-    let generator: ReflectiveGenerator<FinalOutput>
-    private var erasedGenerator: ReflectiveGenerator<Any>?
+    let generator: Generator<FinalOutput>
+    private var erasedGenerator: AnyGenerator?
     private(set) var context: GenerationContext
 
     /// Creates an interpreter for the given generator with optional pick materialization, seed, run cap, and size override.
     public init(
-        _ generator: ReflectiveGenerator<FinalOutput>,
+        _ generator: Generator<FinalOutput>,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
@@ -201,7 +201,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     /// Typed entry point that erases to ``generateRecursiveAny`` and casts the result back.
     static func generateRecursive<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         with inputValue: some Any,
         context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
@@ -222,7 +222,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ///
     /// - Returns: The generated value paired with its choice tree, or `nil` if generation fails (for example, filter exhaustion or PRNG budget exceeded).
     static func generateRecursiveAny(
-        _ gen: ReflectiveGenerator<Any>,
+        _ gen: AnyGenerator,
         with inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -336,7 +336,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             // MARK: - Filter
 
             case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
-                let filteredGen: ReflectiveGenerator<Any>
+                let filteredGen: AnyGenerator
                 if let tuned {
                     filteredGen = tuned
                 } else if filterType == .rejectionSampling {
@@ -442,7 +442,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     private static func runContinuation(
         result: Any,
         calleeChoiceTree: ChoiceTree,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -468,8 +468,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     @inline(__always)
     private static func handleContramap(
-        _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        _ nextGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -491,8 +491,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     @inline(__always)
     private static func handlePrune(
-        _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        _ nextGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -519,7 +519,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     private static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         branchCount: UInt64,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -638,7 +638,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         tag: TypeTag,
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling?,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -675,9 +675,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     @inline(__always)
     private static func handleSequence(
-        lengthGen: ReflectiveGenerator<UInt64>,
-        elementGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        lengthGen: Generator<UInt64>,
+        elementGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -724,9 +724,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     @inline(__always)
     private static func handleZip(
-        _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
+        _ generators: ContiguousArray<AnyGenerator>,
         isOpaque: Bool,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -758,8 +758,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     private static func handleResize(
         newSize: UInt64,
-        gen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -780,8 +780,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     private static func handleTransform(
         kind: TransformKind,
-        inner: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inner: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
@@ -845,10 +845,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     @inline(__always)
     private static func handleClassify(
-        _ gen: ReflectiveGenerator<Any>,
+        _ gen: AnyGenerator,
         fingerprint: UInt64,
         classifiers: [(label: String, predicate: (Any) -> Bool)],
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {

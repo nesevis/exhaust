@@ -36,7 +36,7 @@ public enum FilterType: Equatable, Hashable {
 
 // MARK: - Filter Source Location
 
-/// Source location captured at a ``ReflectiveGenerator/filter(_:_:fileID:filePath:line:column:)`` call site.
+/// Source location captured at a ``Generator/filter(_:_:fileID:filePath:line:column:)`` call site.
 ///
 /// Stored alongside filter observations so that runtime warnings can point to the `.filter(...)` line rather than the `#exhaust` macro site.
 public struct FilterSourceLocation: Sendable {

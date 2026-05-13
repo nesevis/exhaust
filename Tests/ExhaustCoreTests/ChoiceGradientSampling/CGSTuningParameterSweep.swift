@@ -6,11 +6,11 @@ private enum SweepBST: Equatable, Hashable {
     case leaf
     indirect case node(left: SweepBST, value: UInt, right: SweepBST)
 
-    static var arbitrary: ReflectiveGenerator<SweepBST> {
+    static var arbitrary: Generator<SweepBST> {
         bstGenerator(maxDepth: 5)
     }
 
-    private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<SweepBST> {
+    private static func bstGenerator(maxDepth: Int) -> Generator<SweepBST> {
         if maxDepth <= 0 {
             return Gen.just(.leaf)
         }
@@ -219,7 +219,7 @@ struct CGSTuningParameterSweep {
     }
 
     private func measureBSTGeneration(
-        generator: ReflectiveGenerator<SweepBST>,
+        generator: Generator<SweepBST>,
         predicate: (SweepBST) -> Bool
     ) -> GenerationResult {
         var iterator = ValueInterpreter(generator, seed: 42, maxRuns: .max)

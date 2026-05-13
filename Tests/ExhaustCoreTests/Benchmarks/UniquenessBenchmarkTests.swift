@@ -16,7 +16,7 @@ import Testing
 
 private struct BenchmarkProblem<Value: Hashable> {
     let name: String
-    let generator: ReflectiveGenerator<Value>
+    let generator: Generator<Value>
     let predicate: (Value) -> Bool
     /// Maps a valid value to its quality bucket (e.g. height for trees, distinct count for lists).
     let qualityBucket: (Value) -> Int
@@ -95,7 +95,7 @@ struct UniquenessBenchmarkTests {
     }
 
     private static var boundedSumProblem: BenchmarkProblem<[Int16]> {
-        let gen: ReflectiveGenerator<[Int16]> = Gen.arrayOf(Gen.choose(in: Int16.min ... Int16.max), within: 0 ... 10)
+        let gen: Generator<[Int16]> = Gen.arrayOf(Gen.choose(in: Int16.min ... Int16.max), within: 0 ... 10)
         return BenchmarkProblem(
             name: "BOUND-SUM",
             generator: gen,
@@ -115,7 +115,7 @@ struct UniquenessBenchmarkTests {
     }
 
     /// Runs the generator a handful of times and returns true as soon as any tree contains a pick site.
-    private func probeContainsPicks(_ generator: ReflectiveGenerator<some Any>) throws -> Bool {
+    private func probeContainsPicks(_ generator: Generator<some Any>) throws -> Bool {
         var iterator = ValueAndChoiceTreeInterpreter(generator, seed: Self.seed, maxRuns: 10)
         while let (_, tree) = try iterator.next() {
             if tree.containsPicks { return true }
@@ -374,7 +374,7 @@ struct UniquenessBenchmarkTests {
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
-        let tuned: ReflectiveGenerator<Value> = try ChoiceGradientTuner<Value>.tune(
+        let tuned: Generator<Value> = try ChoiceGradientTuner<Value>.tune(
             problem.generator,
             predicate: problem.predicate,
             warmupRuns: 400,

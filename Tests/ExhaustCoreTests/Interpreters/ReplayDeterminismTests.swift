@@ -15,8 +15,8 @@ struct ReplayDeterminismTests {
     func replayDeterminism() throws {
         let gen = Gen.zip(
             stringGen(),
-            Gen.choose() as ReflectiveGenerator<UInt>,
-            Gen.choose() as ReflectiveGenerator<Int>
+            Gen.choose() as Generator<UInt>,
+            Gen.choose() as Generator<Int>
         )
 
         // Generate initial value
@@ -38,7 +38,7 @@ struct ReplayDeterminismTests {
 
     @Test("Recipe serialization preserves determinism")
     func recipeSerializationDeterminism() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 1 ... 1000)
+        let gen: Generator<Int> = Gen.choose(in: 1 ... 1000)
 
         let value = 742
         let recipe = try #require(try Interpreters.reflect(gen, with: value))
@@ -64,8 +64,8 @@ struct ReplayDeterminismTests {
 
         let innerGen = Gen.zip(
             stringGen(),
-            Gen.choose() as ReflectiveGenerator<UInt>,
-            Gen.arrayOf(Gen.choose() as ReflectiveGenerator<Int>, within: 1 ... 5)
+            Gen.choose() as Generator<UInt>,
+            Gen.arrayOf(Gen.choose() as Generator<Int>, within: 1 ... 5)
         )
 
         let personGen = Gen.contramap(

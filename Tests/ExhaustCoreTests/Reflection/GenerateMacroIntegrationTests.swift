@@ -27,7 +27,7 @@ struct GenerateMacroIntegrationTests {
     @Test("Two-generator zip can be reflected")
     func twoGeneratorReflection() throws {
         let nameGen = stringGen()
-        let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
+        let ageGen = Gen.choose(in: 0 ... 120) as Generator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
             Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
@@ -48,9 +48,9 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Three-generator zip can be reflected")
     func threeGeneratorReflection() throws {
-        let xGen = Gen.choose(in: -100 ... 100) as ReflectiveGenerator<Int>
-        let yGen = Gen.choose(in: -100 ... 100) as ReflectiveGenerator<Int>
-        let zGen = Gen.choose(in: -100 ... 100) as ReflectiveGenerator<Int>
+        let xGen = Gen.choose(in: -100 ... 100) as Generator<Int>
+        let yGen = Gen.choose(in: -100 ... 100) as Generator<Int>
+        let zGen = Gen.choose(in: -100 ... 100) as Generator<Int>
         let coordGen = Gen.contramap(
             { (c: Coordinate) -> (Int, Int, Int) in (c.x, c.y, c.z) },
             Gen.zip(xGen, yGen, zGen).map { Coordinate(x: $0, y: $1, z: $2) }
@@ -72,7 +72,7 @@ struct GenerateMacroIntegrationTests {
     @Test("Generated values round-trip through reflection")
     func generationReflectionRoundTrip() throws {
         let nameGen = stringGen()
-        let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
+        let ageGen = Gen.choose(in: 0 ... 120) as Generator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
             Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
@@ -95,7 +95,7 @@ struct GenerateMacroIntegrationTests {
     @Test("Shorthand parameters round-trip through reflection")
     func shorthandParametersRoundTrip() throws {
         let nameGen = stringGen()
-        let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
+        let ageGen = Gen.choose(in: 0 ... 120) as Generator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
             Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
@@ -117,7 +117,7 @@ struct GenerateMacroIntegrationTests {
     @Test("Generator supports reflect then shrink")
     func reflectThenShrink() throws {
         let nameGen = stringGen()
-        let ageGen = Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>
+        let ageGen = Gen.choose(in: 0 ... 1000) as Generator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
             Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }

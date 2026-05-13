@@ -6,11 +6,11 @@
 // MARK: - Length Interpreter
 
 extension ValueInterpreter {
-    /// Interprets a `ReflectiveGenerator<UInt64>` directly without type-erasing to `<Any>`.
+    /// Interprets a `Generator<UInt64>` directly without type-erasing to `<Any>`.
     ///
     /// Value-only variant of ``ValueAndChoiceTreeInterpreter/interpretLength(_:context:)`` — returns the `UInt64` length without constructing a ``ChoiceTree``.
     static func interpretLength(
-        _ gen: ReflectiveGenerator<UInt64>,
+        _ gen: Generator<UInt64>,
         context: inout GenerationContext
     ) throws -> UInt64? {
         switch gen {
@@ -120,7 +120,7 @@ extension ValueInterpreter {
     @inline(__always)
     static func interpretLengthContinuation(
         result: Any,
-        continuation: (Any) throws -> ReflectiveGenerator<UInt64>,
+        continuation: (Any) throws -> Generator<UInt64>,
         context: inout GenerationContext
     ) throws -> UInt64? {
         let nextGen = try continuation(result)

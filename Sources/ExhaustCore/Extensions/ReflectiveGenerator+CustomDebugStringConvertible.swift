@@ -1,5 +1,5 @@
 //
-//  ReflectiveGenerator+CustomDebugStringConvertible.swift
+//  Generator+CustomDebugStringConvertible.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 12/12/2025.
@@ -12,7 +12,7 @@ extension Generator where Operation == ReflectiveOperation {
     ///
     /// Example output:
     /// ```
-    /// ReflectiveGenerator<BinarySearchTree<Int>>
+    /// Generator<BinarySearchTree<Int>>
     /// └── pick(choices: 2)
     ///     ├── just(leaf)
     ///     └── zip(generators: 3)
@@ -22,7 +22,7 @@ extension Generator where Operation == ReflectiveOperation {
     /// ```
     package var debugDescription: String {
         let typeName = "\(Value.self)"
-        return "ReflectiveGenerator<\(typeName)>\n" + treeDescription(prefix: "", isLast: true)
+        return "Generator<\(typeName)>\n" + treeDescription(prefix: "", isLast: true)
     }
 
     private func treeDescription(prefix: String, isLast: Bool, depth: Int = 0) -> String {

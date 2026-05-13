@@ -34,7 +34,7 @@ struct GeneratorCompositionEdgeCaseTests {
             stringGen(),
             Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling),
             Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling),
-            Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>
+            Gen.choose(in: 1 ... 100) as Generator<Int>
         )
 
         // Verify all components are generated correctly
@@ -81,7 +81,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Composition with bound generators")
     func boundGeneratorComposition() throws {
-        let dependentGen = (Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>).bind { first in
+        let dependentGen = (Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as Generator<Int>).bind { first in
             Gen.choose(in: first ... (first + 10)).map { second in
                 (first, second)
             }
@@ -101,7 +101,7 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Composition preserves replay behavior")
     func compositionReplayBehavior() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 1 ... 100) as Generator<Int>,
             stringGen(),
             boolGen()
         )

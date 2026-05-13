@@ -14,13 +14,13 @@
 ///
 /// PRNG consumption is identical to ``ValueAndChoiceTreeInterpreter`` so a failing run can be reproduced with full tree construction.
 package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
-    let generator: ReflectiveGenerator<Element>
-    private var erasedGenerator: ReflectiveGenerator<Any>?
+    let generator: Generator<Element>
+    private var erasedGenerator: AnyGenerator?
     private var context: GenerationContext
 
     /// Creates a value-only interpreter for the given generator with optional seed, run cap, and size override.
     public init(
-        _ generator: ReflectiveGenerator<Element>,
+        _ generator: Generator<Element>,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
         sizeOverride: UInt64? = nil
@@ -98,7 +98,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     // MARK: - Generator implementation
 
     static func generate<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         initialSize: UInt64 = 0,
         maxRuns: UInt64,
         using rng: inout Xoshiro256
@@ -122,7 +122,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
     /// Typed entry point that erases the generator once at the boundary and casts the result.
     static func generateRecursive<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         with inputValue: Any,
         context: inout GenerationContext
     ) throws -> Output? {
@@ -132,7 +132,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
     /// Non-generic recursive engine. One specialization in the binary regardless of Output type.
     static func generateRecursiveAny(
-        _ gen: ReflectiveGenerator<Any>,
+        _ gen: AnyGenerator,
         with inputValue: Any,
         context: inout GenerationContext
     ) throws -> Any? {
@@ -220,7 +220,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 result = try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
             case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
-                let tunedGen: ReflectiveGenerator<Any>
+                let tunedGen: AnyGenerator
                 if let tuned {
                     tunedGen = tuned
                 } else if filterType == .rejectionSampling {

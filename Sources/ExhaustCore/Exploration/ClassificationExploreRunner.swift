@@ -13,7 +13,7 @@ import Foundation
 ///
 /// Implements the three-stage orchestration: warm-up (untuned sampling for ordering signal), per-direction tuning passes (most-hit-first, with cross-direction classification and budget pooling), and direction-preserving reduction on failure.
 package struct ClassificationExploreRunner<Output>: ~Copyable {
-    private let gen: ReflectiveGenerator<Output>
+    private let gen: Generator<Output>
     private let property: (Output) -> Bool
     private let directions: [(name: String, predicate: (Output) -> Bool)]
     private let hitsPerDirection: Int
@@ -22,7 +22,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
     /// Creates a runner with the given generator, property, directions, budget parameters, and optional fixed seed.
     package init(
-        gen: ReflectiveGenerator<Output>,
+        gen: Generator<Output>,
         property: @escaping (Output) -> Bool,
         directions: [(name: String, predicate: (Output) -> Bool)],
         hitsPerDirection: Int,
@@ -169,7 +169,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         state: inout RunState,
         startTime: DispatchTime
     ) -> ClassificationExploreResult<Output>? {
-        let tunedGen: ReflectiveGenerator<Output>
+        let tunedGen: Generator<Output>
         do {
             tunedGen = try ChoiceGradientTuner.tune(
                 gen,

@@ -111,7 +111,7 @@ struct ComplexityScalingTests {
 // MARK: - Helpers
 
 private func generateSigned(
-    _ gen: ReflectiveGenerator<some SignedInteger & BitPatternConvertible>,
+    _ gen: Generator<some SignedInteger & BitPatternConvertible>,
     count: Int,
     seed: UInt64 = 0
 ) throws -> [Double] {
@@ -125,7 +125,7 @@ private func generateSigned(
 }
 
 private func generateUnsigned(
-    _ gen: ReflectiveGenerator<some UnsignedInteger & BitPatternConvertible>,
+    _ gen: Generator<some UnsignedInteger & BitPatternConvertible>,
     count: Int,
     seed: UInt64 = 0
 ) throws -> [Double] {

@@ -52,14 +52,14 @@ package enum Materializer {
     ///   - mode: How to resolve values at each choice point.
     /// - Returns: A ``Result`` containing the output value and fresh tree on success.
     public static func materialize<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         prefix: consuming ChoiceSequence,
         mode: Mode,
         fallbackTree: ChoiceTree? = nil,
         materializePicks: Bool = false,
         precomputedSeed: UInt64? = nil
     ) -> Result<Output> {
-        // Generic public entry point — erases the input generator and casts the result back to ``Output`` at the boundary, delegating to the non-generic ``materializeAny``. Hot-path callers (schedulers, decoders) should hold an already-erased ``ReflectiveGenerator<Any>`` and call ``materializeAny`` directly to avoid the per-call erasure cost.
+        // Generic public entry point — erases the input generator and casts the result back to ``Output`` at the boundary, delegating to the non-generic ``materializeAny``. Hot-path callers (schedulers, decoders) should hold an already-erased ``AnyGenerator`` and call ``materializeAny`` directly to avoid the per-call erasure cost.
         let anyResult = materializeAny(
             gen.erase(),
             prefix: consume prefix,
@@ -81,9 +81,9 @@ package enum Materializer {
 
     /// Non-generic materialization entry point that takes an already-erased generator.
     ///
-    /// This is the hot-path API used by the reduction pipeline. By eliminating the `<Output>` generic parameter on the recursive descent, the runtime no longer pays per-Output-type metadata cache lookups inside ``generateRecursive``. Callers that hold a typed ``ReflectiveGenerator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
+    /// This is the hot-path API used by the reduction pipeline. By eliminating the `<Output>` generic parameter on the recursive descent, the runtime no longer pays per-Output-type metadata cache lookups inside ``generateRecursive``. Callers that hold a typed ``Generator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
     public static func materializeAny(
-        _ gen: ReflectiveGenerator<Any>,
+        _ gen: AnyGenerator,
         prefix: consuming ChoiceSequence,
         mode: Mode,
         fallbackTree: ChoiceTree? = nil,
@@ -197,7 +197,7 @@ extension Materializer {
     }
 
     static func generateRecursive(
-        _ gen: ReflectiveGenerator<Any>,
+        _ gen: AnyGenerator,
         with inputValue: Any,
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
@@ -379,7 +379,7 @@ extension Materializer {
     static func runContinuation(
         result: Any,
         calleeChoiceTree: ChoiceTree,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         continuationFallback: ChoiceTree? = nil

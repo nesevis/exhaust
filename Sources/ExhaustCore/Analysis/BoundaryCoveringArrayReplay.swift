@@ -361,7 +361,7 @@ package enum BoundaryCoveringArrayReplay {
         return indices
     }
 
-    private static func buildSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
+    private static func buildSubTree(for gen: AnyGenerator) -> ChoiceTree? {
         SharedInterpreterHelpers.buildParameterFreeSubTree(for: gen)
     }
 }

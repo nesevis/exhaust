@@ -11,7 +11,7 @@ import Testing
 @Suite("Reducer Float Shrinking")
 struct ReducerFloatShrinkingTests {
     private func reduce<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         startingAt value: Output,
         config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool

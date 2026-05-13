@@ -7,7 +7,7 @@
 
 /// Offline, one-shot tuning that transforms a generator's pick structure using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
 ///
-/// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal ``ReflectiveGenerator`` with synthesised pick structure whose weights reflect predicate satisfaction rates. Reduction is unaffected because the reducer operates on ``ChoiceTree``/``ChoiceSequence`` and is weight-agnostic.
+/// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal ``Generator`` with synthesised pick structure whose weights reflect predicate satisfaction rates. Reduction is unaffected because the reducer operates on ``ChoiceTree``/``ChoiceSequence`` and is weight-agnostic.
 ///
 /// ## Algorithm
 ///
@@ -72,7 +72,7 @@ package enum GeneratorTuning {
     ///   - predicate: The property that generated values should satisfy.
     /// - Returns: A tuned generator if picks were found, or the original generator unchanged.
     public static func probeAndTune<Output>(
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: Generator<Output>,
         probeSeed: UInt64 = 0,
         probeRuns: UInt64 = 10,
         minPerChoice: UInt64 = 30,
@@ -81,7 +81,7 @@ package enum GeneratorTuning {
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool
-    ) throws -> ReflectiveGenerator<Output> {
+    ) throws -> Generator<Output> {
         var probe = ValueAndChoiceTreeInterpreter(generator, seed: probeSeed, maxRuns: probeRuns)
         var maxComplexity: UInt64 = 0
 
@@ -122,12 +122,12 @@ package enum GeneratorTuning {
     ///   - predicate: The property that generated values should satisfy.
     /// - Returns: A tuned generator with weights biased toward predicate satisfaction.
     public static func tune<Output>(
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: Generator<Output>,
         samples: UInt64 = 100,
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool
-    ) throws -> ReflectiveGenerator<Output> {
+    ) throws -> Generator<Output> {
         let rng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         let context = TuningContext(
             baseSampleCount: samples,
@@ -145,11 +145,11 @@ package enum GeneratorTuning {
     // MARK: - Recursive Engine
 
     static func tuneRecursive<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
-    ) throws -> ReflectiveGenerator<Output> {
+    ) throws -> Generator<Output> {
         switch gen {
         case .pure:
             return gen
@@ -301,11 +301,11 @@ package enum GeneratorTuning {
     ///
     /// Forwards to ``AdaptiveSmoothing/smooth(_:epsilon:baseTemperature:maxTemperature:)``.
     public static func smoothAdaptively<Output>(
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: Generator<Output>,
         epsilon: Double = 1.0,
         baseTemperature: Double = 1.0,
         maxTemperature: Double = 4.0
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         AdaptiveSmoothing.smooth(
             generator,
             epsilon: epsilon,

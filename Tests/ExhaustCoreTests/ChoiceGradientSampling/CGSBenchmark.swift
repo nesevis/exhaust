@@ -14,11 +14,11 @@ private enum BenchBST: Equatable, Hashable {
     case leaf
     indirect case node(left: BenchBST, value: UInt, right: BenchBST)
 
-    static var arbitrary: ReflectiveGenerator<BenchBST> {
+    static var arbitrary: Generator<BenchBST> {
         bstGenerator(maxDepth: 5)
     }
 
-    private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BenchBST> {
+    private static func bstGenerator(maxDepth: Int) -> Generator<BenchBST> {
         if maxDepth <= 0 {
             return Gen.just(.leaf)
         }

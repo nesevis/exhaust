@@ -28,7 +28,7 @@ package extension Gen {
     /// - Returns: A generator that executes the operation and validates the result type.
     static func liftF<Output>(
         _ operation: ReflectiveOperation
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         .impure(operation: operation) { result in
             if let typedResult = result as? Output {
                 return .pure(typedResult)
@@ -47,8 +47,8 @@ package extension Gen {
     /// - Parameter generator: The generator to apply pruning to.
     /// - Returns: A generator with pruning applied.
     static func prune<Output>(
-        _ generator: ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        _ generator: Generator<Output>
+    ) -> Generator<Output> {
         liftF(.prune(next: generator.erase()))
     }
 
@@ -62,8 +62,8 @@ package extension Gen {
     /// - Returns: A generator that accepts the new input type.
     static func contramap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> some Any,
-        _ generator: ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        _ generator: Generator<Output>
+    ) -> Generator<Output> {
         .impure(operation: ReflectiveOperation.contramap(
             // This is where the backwards pass happens
             transform: {
@@ -98,8 +98,8 @@ package extension Gen {
     /// - Returns: A generator that prunes on transformation failure.
     static func comap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> (some Any)?,
-        _ generator: ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        _ generator: Generator<Output>
+    ) -> Generator<Output> {
         contramap(transform, prune(generator))
     }
 }

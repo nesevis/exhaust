@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable type_body_length
 
-/// Validates every first-party generator exposed on `ReflectiveGenerator` via `#examine`.
+/// Validates every first-party generator exposed on `Generator` via `#examine`.
 ///
 /// Each test exercises generation, reflection round-trip, and replay determinism
 /// for a single generator (or small family of overloads). The `samples` count is

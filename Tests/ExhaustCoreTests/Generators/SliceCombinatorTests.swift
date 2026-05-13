@@ -23,7 +23,7 @@ struct SliceCombinatorTests {
     @Test("Gen.slice result is a proper subsequence of the source")
     func sliceIsProperSubsequence() throws {
         // Generate a fixed-length array, then take a slice of it
-        let arrayGen = Gen.arrayOf(Gen.choose(in: 0 ... 50) as ReflectiveGenerator<Int>, within: 10 ... 10)
+        let arrayGen = Gen.arrayOf(Gen.choose(in: 0 ... 50) as Generator<Int>, within: 10 ... 10)
         let gen = arrayGen.bind { array in
             Gen.slice(of: array).map { sub in
                 (array, Array(sub))

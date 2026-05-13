@@ -16,7 +16,7 @@ struct GeneratorTuningTests {
     @Test("Filter adaptation uses the filter's own predicate to adapt inner generator")
     func filterAdaptation() throws {
         let innerGen = Gen.choose(in: 1 ... 1000)
-        let gen: ReflectiveGenerator<Int> = .impure(
+        let gen: Generator<Int> = .impure(
             operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { ($0 as! Int) < 200 }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
             continuation: { .pure($0 as! Int) }
         )

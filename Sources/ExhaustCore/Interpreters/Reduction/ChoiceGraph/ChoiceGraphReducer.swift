@@ -18,7 +18,7 @@ package extension Interpreters {
     ///   - property: The property that fails on the counterexample.
     /// - Returns: The reduced (sequence, output) pair, or `nil` if reduction could not improve the result.
     static func choiceGraphReduce<Output>(
-        gen: ReflectiveGenerator<Output>,
+        gen: Generator<Output>,
         tree: ChoiceTree,
         output: Output,
         config: ReducerConfiguration,
@@ -59,7 +59,7 @@ package extension Interpreters {
     ///
     /// - Returns: The reduced result and a ``ReductionStats`` value summarizing encoder probe counts, materialization attempts, and cycle count.
     static func choiceGraphReduceCollectingStats<Output>(
-        gen: ReflectiveGenerator<Output>,
+        gen: Generator<Output>,
         tree: ChoiceTree,
         output: Output,
         config: ReducerConfiguration,
@@ -98,7 +98,7 @@ package extension Interpreters {
 
     /// Convenience overload that materializes the output from the tree before reducing.
     static func choiceGraphReduce<Output>(
-        gen: ReflectiveGenerator<Output>,
+        gen: Generator<Output>,
         tree: ChoiceTree,
         config: ReducerConfiguration,
         property: (Output) -> Bool

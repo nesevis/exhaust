@@ -17,7 +17,7 @@ package enum CGSDerivativeInterpreter {
     /// Produces a single value from the generator using the provided PRNG, or returns `nil` if generation fails.
     @inline(__always)
     public static func sample<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         using rng: inout Xoshiro256,
         size: UInt64 = 50
     ) throws -> Output? {
@@ -27,7 +27,7 @@ package enum CGSDerivativeInterpreter {
     // MARK: - Recursive Engine
 
     private static func generateRecursive<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         with inputValue: some Any,
         rng: inout Xoshiro256,
         size: UInt64
@@ -247,7 +247,7 @@ package enum CGSDerivativeInterpreter {
     @inline(__always)
     private static func runContinuation<Output>(
         _ result: Any,
-        _ continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        _ continuation: (Any) throws -> Generator<Output>,
         inputValue: some Any,
         rng: inout Xoshiro256,
         size: UInt64

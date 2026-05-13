@@ -11,7 +11,7 @@ import Testing
 
 private enum HypothesisFloatParityHelpers {
     static func reduce<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         startingAt value: Output,
         config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool
@@ -79,11 +79,11 @@ struct HypothesisFloatEncodingFilterTests {
 
 /// Constructs a filtered generator at the ExhaustCore level (the `.filter` instance method lives in the Exhaust module).
 private func filtered<Output>(
-    _ gen: ReflectiveGenerator<Output>,
+    _ gen: Generator<Output>,
     _ predicate: @Sendable @escaping (Output) -> Bool,
     fileID: String = #fileID,
     line: UInt = #line
-) -> ReflectiveGenerator<Output> {
+) -> Generator<Output> {
     let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
     return .impure(
         operation: .filter(

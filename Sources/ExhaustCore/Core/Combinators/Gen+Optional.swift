@@ -1,10 +1,10 @@
-package extension ReflectiveGenerator where Operation == ReflectiveOperation {
+package extension Generator where Operation == ReflectiveOperation {
     /// Lifts this generator's output from `T` to `T?` so reflection can distinguish the `.some` branch from `.none`.
     ///
     /// Without this, reflecting on a `nil` target has no way to prune the non-optional path: the reflector would attempt to decompose `nil` as if it were a valid `T`, and fail. With it, `nil` throws `ReflectionError.reflectedNil`, which the enclosing `pick` catches to eliminate that branch.
     ///
     /// - Returns: A generator that produces optional versions of the original values.
-    func liftToOptional() -> ReflectiveGenerator<Value?> {
+    func liftToOptional() -> Generator<Value?> {
         let description = String(describing: Value.self)
         return .impure(operation: .contramap(
             transform: { result in

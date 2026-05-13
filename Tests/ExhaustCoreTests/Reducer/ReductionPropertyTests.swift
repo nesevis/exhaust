@@ -153,7 +153,7 @@ struct ReductionPropertyTests {
 // MARK: - Helpers
 
 private func generate<Output>(
-    _ gen: ReflectiveGenerator<Output>,
+    _ gen: Generator<Output>,
     seed: UInt64
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)

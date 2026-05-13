@@ -17,7 +17,7 @@ struct BindAwareReductionTests {
     @Test("Bind-dependent array length shrinks correctly")
     func bindDependentShrink() throws {
         // Property: array.count <= 2 (fails when n >= 3). Minimal: n = 3.
-        let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bound(
+        let gen: Generator<[Int]> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bound(
             forward: { n in
                 Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(n))
             },
@@ -48,7 +48,7 @@ struct BindAwareReductionTests {
     func bindDependentRangeShrink() throws {
         // .int(in: 0...100).bound { n in .int(in: 0...max(1, n)) }
         // Property: m < 5 (fails when m >= 5).
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._bound(
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._bound(
             forward: { n in
                 Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>)
             },

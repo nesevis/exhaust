@@ -10,7 +10,7 @@ package extension Gen {
     ///
     /// - Parameter value: The constant value to always generate.
     /// - Returns: A generator that produces the constant value.
-    static func just<Output>(_ value: Output) -> ReflectiveGenerator<Output> {
+    static func just<Output>(_ value: Output) -> Generator<Output> {
         liftF(.just(value))
     }
 
@@ -26,7 +26,7 @@ package extension Gen {
     ///
     /// - Parameter value: The constant value to generate and validate against.
     /// - Returns: A generator that produces the constant and validates during reflection.
-    static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value> {
+    static func exact<Value: Equatable>(_ value: Value) -> Generator<Value> {
         // Use contramap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.
         let baseGenerator = just(value as Any)

@@ -14,7 +14,7 @@ struct ReproducibilityTests {
 
     @Test("Same seed produces identical value sequences")
     func seedDeterminism() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose()
+        let gen: Generator<Int> = Gen.choose()
         var iter1 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
         let values1 = try Array(collecting: &iter1).map(\.value)
         var iter2 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
@@ -24,7 +24,7 @@ struct ReproducibilityTests {
 
     @Test("Different maxRuns with same seed share a common prefix")
     func maxRunsIndependence() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose()
+        let gen: Generator<Int> = Gen.choose()
         var shortIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 50)
         let short = try shortIter.prefix(30).map(\.value)
         var longIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 200)
@@ -36,7 +36,7 @@ struct ReproducibilityTests {
 
     @Test("ValueInterpreter: same seed produces identical value sequences")
     func valueInterpreterSeedDeterminism() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose()
+        let gen: Generator<Int> = Gen.choose()
         var valIter1 = ValueInterpreter(gen, seed: 42, maxRuns: 20)
         let values1 = try Array(collecting: &valIter1)
         var valIter2 = ValueInterpreter(gen, seed: 42, maxRuns: 20)
@@ -71,7 +71,7 @@ struct ReproducibilityTests {
 
 /// Replacement for `#exhaust` macro.
 private func exhaustCheck<T>(
-    _ gen: ReflectiveGenerator<T>,
+    _ gen: Generator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool

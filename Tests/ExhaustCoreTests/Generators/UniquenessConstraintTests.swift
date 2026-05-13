@@ -220,7 +220,7 @@ struct UniquenessConstraintTests {
 // MARK: - Helpers
 
 /// Wraps a generator with the `.unique` operation (no key extractor).
-private func uniqueGen<Value>(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<Value> {
+private func uniqueGen<Value>(_ gen: Generator<Value>) -> Generator<Value> {
     .impure(
         operation: .unique(gen: gen.erase(), fingerprint: 0, keyExtractor: nil),
         continuation: { .pure($0 as! Value) }
@@ -228,7 +228,7 @@ private func uniqueGen<Value>(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGe
 }
 
 /// Wraps a generator with the `.unique` operation using a key extractor.
-private func uniqueGen<Value>(_ gen: ReflectiveGenerator<Value>, by keyExtractor: @escaping (Value) -> AnyHashable) -> ReflectiveGenerator<Value> {
+private func uniqueGen<Value>(_ gen: Generator<Value>, by keyExtractor: @escaping (Value) -> AnyHashable) -> Generator<Value> {
     .impure(
         operation: .unique(gen: gen.erase(), fingerprint: 0, keyExtractor: { value in keyExtractor(value as! Value) }),
         continuation: { .pure($0 as! Value) }

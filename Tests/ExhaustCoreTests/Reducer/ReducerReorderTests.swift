@@ -14,7 +14,7 @@ import Testing
 
 /// Generate a value and its choice tree from a generator with a given seed.
 private func generate<Output>(
-    _ gen: ReflectiveGenerator<Output>,
+    _ gen: Generator<Output>,
     seed: UInt64 = 42,
     iteration: Int = 0
 ) throws -> (value: Output, tree: ChoiceTree) {

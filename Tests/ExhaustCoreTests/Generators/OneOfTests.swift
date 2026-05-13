@@ -13,7 +13,7 @@ struct OneOfTests {
     // MARK: - Helpers
 
     private func roundTrip<Output: Equatable>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         seed: UInt64 = 42
     ) throws -> (original: Output, materialized: Output) {
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
@@ -30,7 +30,7 @@ struct OneOfTests {
 
     @Test("Equal-weight oneOf produces values from all branches")
     func equalWeightProducesVariety() throws {
-        let gen: ReflectiveGenerator<String> = Gen.pick(choices: [
+        let gen: Generator<String> = Gen.pick(choices: [
             (1, Gen.just("alpha")),
             (1, Gen.just("beta")),
             (1, Gen.just("gamma")),
@@ -48,7 +48,7 @@ struct OneOfTests {
 
     @Test("Weighted oneOf produces values from all branches")
     func weightedProducesVariety() throws {
-        let gen: ReflectiveGenerator<String> = Gen.pick(choices: [
+        let gen: Generator<String> = Gen.pick(choices: [
             (1, Gen.just("rare")),
             (5, Gen.just("common")),
         ])
@@ -65,7 +65,7 @@ struct OneOfTests {
 
     @Test("oneOf round-trips through choice tree and materialize", arguments: [UInt64(1), 7, 42, 100, 999, 12345])
     func roundTripAcrossSeeds(seed: UInt64) throws {
-        let gen: ReflectiveGenerator<String> = Gen.pick(choices: [
+        let gen: Generator<String> = Gen.pick(choices: [
             (1, Gen.just("alpha")),
             (1, Gen.just("beta")),
             (1, Gen.just("gamma")),
@@ -76,7 +76,7 @@ struct OneOfTests {
 
     @Test("Weighted oneOf round-trips through choice tree and materialize")
     func weightedRoundTrip() throws {
-        let gen: ReflectiveGenerator<String> = Gen.pick(choices: [
+        let gen: Generator<String> = Gen.pick(choices: [
             (1, Gen.just("rare")),
             (3, Gen.just("medium")),
             (5, Gen.just("common")),

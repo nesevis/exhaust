@@ -98,7 +98,7 @@ private enum AdvancedCoupledFixtures {
 @Suite("Advanced & Coupled Scenarios")
 struct AdvancedCoupledScenariosTests {
     private func reduce<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         startingAt value: Output,
         config: Interpreters.ReducerConfiguration = .fast,
         property: (Output) -> Bool
@@ -113,8 +113,8 @@ struct AdvancedCoupledScenariosTests {
     @Test("2.1 Coupled Integers (fast-check)")
     func coupledIntegersFastCheckStyle() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>,
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>,
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -139,7 +139,7 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.2 Stateful Stack Bug (jqwik)")
     func statefulStackBugJqwikStyle() throws {
-        let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = Gen.contramap(
+        let actionGen: Generator<AdvancedCoupledFixtures.StackAction> = Gen.contramap(
             { (action: AdvancedCoupledFixtures.StackAction) -> (Int, String) in
                 switch action {
                 case .pop:
@@ -149,7 +149,7 @@ struct AdvancedCoupledScenariosTests {
                 }
             },
             Gen.zip(
-                Gen.choose(in: 0 ... 1) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 1) as Generator<Int>,
                 Gen.element(from: ["a", "b", "c"])
             ).map { tag, value in
                 tag == 0 ? .pop : .push(value)
@@ -241,8 +241,8 @@ struct AdvancedCoupledScenariosTests {
     @Test("2.6 Difference with Gap (CsCheck)")
     func differenceWithGapCsCheckStyle() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>,
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>,
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>
         )
 
         let property: ((Int, Int)) -> Bool = { pair in

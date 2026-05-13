@@ -23,7 +23,7 @@ package enum SharedInterpreterHelpers {
     // MARK: - Parameter-Free Generator Walk
 
     /// Returns whether a generator produces values without any choices (no chooseBits, pick, sequence, zip, or getSize operations). Walks through transparent wrappers (pure, just, contramap, prune, transform).
-    static func isParameterFree(_ gen: ReflectiveGenerator<Any>) -> Bool {
+    static func isParameterFree(_ gen: AnyGenerator) -> Bool {
         switch gen {
         case .pure:
             true
@@ -42,7 +42,7 @@ package enum SharedInterpreterHelpers {
     }
 
     /// Builds a minimal subtree for a parameter-free generator, or `nil` if the generator contains choices. Walks through transparent wrappers, returning `.just` for terminals.
-    static func buildParameterFreeSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
+    static func buildParameterFreeSubTree(for gen: AnyGenerator) -> ChoiceTree? {
         switch gen {
         case .pure:
             .just
@@ -66,7 +66,7 @@ package enum SharedInterpreterHelpers {
     ///
     /// Used by the tuning handlers (contramap, resize, prune, classify) to compose a fitness predicate that evaluates inner values in the context of the full downstream pipeline.
     static func composedPredicate<Output>(
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: @escaping (Any) throws -> Generator<Output>,
         context: GeneratorTuning.TuningContext,
         predicate: @escaping (Output) -> Bool
     ) -> (Any) -> Bool {
@@ -99,7 +99,7 @@ package enum SharedInterpreterHelpers {
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling? = nil,
         makeFingerprint: () -> UInt64,
-        innerContinuation: @escaping (Any) throws -> ReflectiveGenerator<Any> = { .pure($0) }
+        innerContinuation: @escaping (Any) throws -> AnyGenerator = { .pure($0) }
     ) -> (choices: ContiguousArray<ReflectiveOperation.PickTuple>, branchCount: UInt64)? {
         let rangeSize = (lower ... upper).saturatingCount
         guard rangeSize > 4 else { return nil }
@@ -113,7 +113,7 @@ package enum SharedInterpreterHelpers {
         choices.reserveCapacity(subranges.count)
 
         for (index, subrange) in subranges.enumerated() {
-            let subGen: ReflectiveGenerator<Any> = .impure(
+            let subGen: AnyGenerator = .impure(
                 operation: .chooseBits(
                     min: subrange.lowerBound,
                     max: subrange.upperBound,

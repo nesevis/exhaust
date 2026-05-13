@@ -166,7 +166,7 @@ struct ContractDeclarationMacroTests {
                     queue
                 }
 
-                static var commandGenerator: ReflectiveGenerator<Command> {
+                static var commandGenerator: Generator<Command> {
                     .oneOf(weighted:
                         (3, .just(Command.enqueue)),
                         (2, .just(Command.dequeue))
@@ -267,7 +267,7 @@ struct ContractDeclarationMacroTests {
                     counter
                 }
 
-                static var commandGenerator: ReflectiveGenerator<Command> {
+                static var commandGenerator: Generator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment)),
                         (1, .just(Command.decrement))
@@ -346,7 +346,7 @@ struct ContractDeclarationMacroTests {
                     counter
                 }
 
-                static var commandGenerator: ReflectiveGenerator<Command> {
+                static var commandGenerator: Generator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment))
                     )
@@ -415,7 +415,7 @@ struct ContractDeclarationMacroTests {
                     counter
                 }
 
-                static var commandGenerator: ReflectiveGenerator<Command> {
+                static var commandGenerator: Generator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment))
                     )

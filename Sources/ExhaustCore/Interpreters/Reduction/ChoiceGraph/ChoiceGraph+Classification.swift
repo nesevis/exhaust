@@ -20,7 +20,7 @@ extension ChoiceGraph {
     ///   - upstreamLeafNodeID: The ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf whose valid range defines the probe endpoints. Typically the bind's inner child.
     mutating func classifyBind(
         at bindNodeID: Int,
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree,
         upstreamLeafNodeID: Int
@@ -44,7 +44,7 @@ extension ChoiceGraph {
         bindNodeID _: Int,
         bindMetadata: BindMetadata,
         upstreamLeafNodeID: Int,
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree
     ) -> (classification: BindClassification, fingerprint: UInt64?) {
@@ -106,7 +106,7 @@ extension ChoiceGraph {
         bitPattern: UInt64,
         upstreamIndex: Int,
         leafMetadata: ChooseBitsMetadata,
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree,
         bindPath: BindPath

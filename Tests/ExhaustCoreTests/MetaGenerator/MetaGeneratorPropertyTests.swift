@@ -87,7 +87,7 @@ struct MetaGeneratorPropertyTests {
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             // contramap(id, gen.map(id)) adds no PRNG-consuming operations
-            let mappedGen: ReflectiveGenerator<Any> = Gen.contramap(
+            let mappedGen: AnyGenerator = Gen.contramap(
                 { (newOutput: Any) throws -> Any in newOutput },
                 gen.map { $0 }
             )
@@ -139,12 +139,12 @@ struct MetaGeneratorPropertyTests {
     func monadLeftIdentity() throws {
         var valueIter = ValueInterpreter(Gen.choose(in: -100 ... 100 as ClosedRange<Int>), seed: 7, maxRuns: 30)
         while let x = try valueIter.next() {
-            let f: (Int) -> ReflectiveGenerator<Int> = { val in
+            let f: (Int) -> Generator<Int> = { val in
                 Gen.choose(in: val ... (val + 10))
             }
 
-            let lhs: ReflectiveGenerator<Int> = Gen.just(x).bind { f($0) }
-            let rhs: ReflectiveGenerator<Int> = f(x)
+            let lhs: Generator<Int> = Gen.just(x).bind { f($0) }
+            let rhs: Generator<Int> = f(x)
 
             var lhsIter = ValueInterpreter(lhs, seed: 99, maxRuns: 5)
             var rhsIter = ValueInterpreter(rhs, seed: 99, maxRuns: 5)
@@ -217,7 +217,7 @@ struct MetaGeneratorPropertyTests {
             // Only use predicates applicable to the recipe's output type
             for predicate in KnownPredicate.applicable(to: recipe.outputType) {
                 // For .isPositive, constrain the inner recipe to include positive values
-                let innerGen: ReflectiveGenerator<Any>
+                let innerGen: AnyGenerator
                 if predicate == .isPositive {
                     innerGen = Gen.choose(in: -10 ... 100 as ClosedRange<Int>).erase()
                 } else if predicate == .isNonEmpty {
@@ -226,7 +226,7 @@ struct MetaGeneratorPropertyTests {
                     innerGen = buildGenerator(from: recipe)
                 }
 
-                let filteredGen: ReflectiveGenerator<Any> = .impure(
+                let filteredGen: AnyGenerator = .impure(
                     operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
                     continuation: { .pure($0) }
                 )

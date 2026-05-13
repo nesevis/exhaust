@@ -213,7 +213,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
 ///
 /// Type-directed: only produces recipes whose output matches `type`.
 /// Depth-bounded: at depth 0, only leaf generators are produced.
-func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     if maxDepth <= 0 {
         return leafGenerator(producing: type)
     }
@@ -229,7 +229,7 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGen
     ])
 }
 
-private func leafGenerator(producing type: RecipeType) -> ReflectiveGenerator<GenRecipe> {
+private func leafGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
     switch type {
     case .int:
         Gen.pick(choices: [
@@ -252,7 +252,7 @@ private func leafGenerator(producing type: RecipeType) -> ReflectiveGenerator<Ge
     }
 }
 
-private func intRangeLeaf() -> ReflectiveGenerator<GenRecipe> {
+private func intRangeLeaf() -> Generator<GenRecipe> {
     // Generate two bounds and sort them to form a valid range
     Gen.choose(in: -100 ... 100 as ClosedRange<Int>).bind { a in
         Gen.choose(in: -100 ... 100 as ClosedRange<Int>).map { b in
@@ -263,17 +263,17 @@ private func intRangeLeaf() -> ReflectiveGenerator<GenRecipe> {
     }
 }
 
-private func justIntLeaf() -> ReflectiveGenerator<GenRecipe> {
+private func justIntLeaf() -> Generator<GenRecipe> {
     Gen.choose(in: -50 ... 50 as ClosedRange<Int>).map { .leaf(.justInt($0)) }
 }
 
-private func justIntArrayLeaf() -> ReflectiveGenerator<GenRecipe> {
+private func justIntArrayLeaf() -> Generator<GenRecipe> {
     Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>).bind { length in
         Gen.arrayOf(Gen.choose(in: -50 ... 50 as ClosedRange<Int>), exactly: length).map { .leaf(.justIntArray($0)) }
     }
 }
 
-private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     let transforms = InvertibleTransform.applicable(to: type)
     guard transforms.isEmpty == false else {
         return leafGenerator(producing: type)
@@ -287,7 +287,7 @@ private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Refle
     }
 }
 
-private func arrayGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+private func arrayGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     guard case let .arrayOf(elementType) = type else {
         return leafGenerator(producing: type)
     }
@@ -300,7 +300,7 @@ private func arrayGenerator(producing type: RecipeType, maxDepth: Int) -> Reflec
     }
 }
 
-private func oneOfGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+private func oneOfGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     // Generate 2–3 sub-recipes all producing the same type
     Gen.choose(in: 2 ... 3 as ClosedRange<Int>).bind { count in
         let subGen = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
@@ -310,7 +310,7 @@ private func oneOfGenerator(producing type: RecipeType, maxDepth: Int) -> Reflec
     }
 }
 
-private func filteredGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+private func filteredGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     let predicates = KnownPredicate.applicable(to: type)
     guard predicates.isEmpty == false else {
         return leafGenerator(producing: type)
@@ -327,7 +327,7 @@ private func filteredGenerator(producing type: RecipeType, maxDepth: Int) -> Ref
     }
 }
 
-private func constrainedIntLeafForPositive() -> ReflectiveGenerator<GenRecipe> {
+private func constrainedIntLeafForPositive() -> Generator<GenRecipe> {
     // Ensure the range includes at least one positive value
     Gen.choose(in: 1 ... 100 as ClosedRange<Int>).bind { hi in
         Gen.choose(in: -50 ... hi).map { lo in
@@ -336,7 +336,7 @@ private func constrainedIntLeafForPositive() -> ReflectiveGenerator<GenRecipe> {
     }
 }
 
-private func resizedGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+private func resizedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     Gen.choose(in: 1 ... 50 as ClosedRange<UInt64>).bind { size in
         recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { inner in
             .combinator(.resized(inner, size: size))
@@ -344,7 +344,7 @@ private func resizedGenerator(producing type: RecipeType, maxDepth: Int) -> Refl
     }
 }
 
-private func zippedGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+private func zippedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     let subA = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
     let subB = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
     return Gen.zip(subA, subB).map { a, b in
@@ -354,8 +354,8 @@ private func zippedGenerator(producing type: RecipeType, maxDepth: Int) -> Refle
 
 // MARK: - Recipe Interpreter
 
-/// Builds a real `ReflectiveGenerator<Any>` from a `GenRecipe`.
-func buildGenerator(from recipe: GenRecipe) -> ReflectiveGenerator<Any> {
+/// Builds a real `AnyGenerator` from a `GenRecipe`.
+func buildGenerator(from recipe: GenRecipe) -> AnyGenerator {
     switch recipe {
     case let .leaf(kind):
         buildLeaf(kind)
@@ -364,7 +364,7 @@ func buildGenerator(from recipe: GenRecipe) -> ReflectiveGenerator<Any> {
     }
 }
 
-private func buildLeaf(_ kind: GenRecipe.LeafKind) -> ReflectiveGenerator<Any> {
+private func buildLeaf(_ kind: GenRecipe.LeafKind) -> AnyGenerator {
     switch kind {
     case let .int(range):
         Gen.choose(in: range).erase()
@@ -379,7 +379,7 @@ private func buildLeaf(_ kind: GenRecipe.LeafKind) -> ReflectiveGenerator<Any> {
     }
 }
 
-private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> ReflectiveGenerator<Any> {
+private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
     switch kind {
     case let .mapped(inner, transform):
         return Gen.contramap(
@@ -395,7 +395,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> ReflectiveGene
 
     case let .filtered(inner, predicate):
         let innerGen = buildGenerator(from: inner)
-        return ReflectiveGenerator<Any>.impure(
+        return AnyGenerator.impure(
             operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
             continuation: { .pure($0) }
         )

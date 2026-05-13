@@ -27,11 +27,11 @@ package enum AdaptiveSmoothing {
     ///   - maxTemperature: Temperature for bottleneck sites. Default: 4.0.
     /// - Returns: A generator with adaptively smoothed pick weights.
     public static func smooth<Output>(
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: Generator<Output>,
         epsilon: Double = 1.0,
         baseTemperature: Double = 1.0,
         maxTemperature: Double = 4.0
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         smoothGenerator(
             generator,
             epsilon: epsilon,
@@ -41,11 +41,11 @@ package enum AdaptiveSmoothing {
     }
 
     private static func smoothGenerator<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         epsilon: Double,
         baseTemperature: Double,
         maxTemperature: Double
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         switch gen {
         case .pure:
             return gen
