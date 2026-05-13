@@ -9,7 +9,7 @@ import ExhaustCore
 
 /// TODO: Update docstring
 /// Wraps the underlying monadic representation of the generator
-public struct RefGen<Output> {
+public struct RefGen<Output>: @unchecked Sendable {
     package let gen: ReflectiveGenerator<Output>
     
     package init(_ gen: () throws -> ReflectiveGenerator<Output>) rethrows {
@@ -23,7 +23,7 @@ public struct RefGen<Output> {
     /// - Parameter transform: A function that takes the current value and produces a new computation.
     /// - Returns: A new computation representing the sequenced effects.
     /// - Throws: Rethrows any errors from the transform function.
-    func bind<NewOutput>(
+    public func bind<NewOutput>(
         _ transform: @escaping (Output) throws -> RefGen<NewOutput>
     ) rethrows -> RefGen<NewOutput> {
         switch gen {
@@ -45,7 +45,7 @@ public struct RefGen<Output> {
     /// - Parameter transform: A pure function to apply to the final value.
     /// - Returns: A computation that produces the transformed value.
     /// - Throws: Rethrows any errors from the transform function.
-    func map<NewOutput>(
+    public func map<NewOutput>(
         _ transform: @escaping (Output) throws -> NewOutput
     ) rethrows -> RefGen<NewOutput> {
         try RefGen<NewOutput> {
