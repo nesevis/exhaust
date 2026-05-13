@@ -6,23 +6,23 @@
 //
 
 extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         Wrapped.tag
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .constant
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         Wrapped.bitPatternRange
     }
 
-    public init(bitPattern64: UInt64) {
+    package init(bitPattern64: UInt64) {
         self = .some(Wrapped(bitPattern64: bitPattern64))
     }
 
-    public var bitPattern64: UInt64 {
+    package var bitPattern64: UInt64 {
         switch self {
         case .none:
             0
@@ -33,11 +33,11 @@ extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
 }
 
 extension UInt8: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .uint8
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -45,7 +45,7 @@ extension UInt8: BitPatternConvertible {
         self = UInt8(truncatingIfNeeded: bitPattern64)
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64(UInt8.min) ... UInt64(UInt8.max)
     }
 
@@ -55,11 +55,11 @@ extension UInt8: BitPatternConvertible {
 }
 
 extension UInt16: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .uint16
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -67,7 +67,7 @@ extension UInt16: BitPatternConvertible {
         self = UInt16(bitPattern64)
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64(UInt16.min) ... UInt64(UInt16.max)
     }
 
@@ -77,11 +77,11 @@ extension UInt16: BitPatternConvertible {
 }
 
 extension UInt32: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .uint32
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -89,7 +89,7 @@ extension UInt32: BitPatternConvertible {
         self = UInt32(bitPattern64)
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64(UInt32.min) ... UInt64(UInt32.max)
     }
 
@@ -100,15 +100,15 @@ extension UInt32: BitPatternConvertible {
 
 /// Implemented for bidirectionality.
 extension UInt64: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .uint64
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64.min ... UInt64.max
     }
 
@@ -122,15 +122,15 @@ extension UInt64: BitPatternConvertible {
 }
 
 extension UInt: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .uint
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64.min ... UInt64.max
     }
 
@@ -144,11 +144,11 @@ extension UInt: BitPatternConvertible {
 }
 
 extension Int8: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .int8
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -158,7 +158,7 @@ extension Int8: BitPatternConvertible {
         self = Int8(Int8(bitPattern: UInt8(truncatingIfNeeded: bitPattern64) ^ Self.signBitMask))
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64(UInt8.min) ... UInt64(UInt8.max)
     }
 
@@ -168,11 +168,11 @@ extension Int8: BitPatternConvertible {
 }
 
 extension Int16: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .int16
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -182,7 +182,7 @@ extension Int16: BitPatternConvertible {
         self = Int16(Int16(bitPattern: UInt16(truncatingIfNeeded: bitPattern64) ^ Self.signBitMask))
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64(UInt16.min) ... UInt64(UInt16.max)
     }
 
@@ -192,11 +192,11 @@ extension Int16: BitPatternConvertible {
 }
 
 extension Int32: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .int32
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -206,7 +206,7 @@ extension Int32: BitPatternConvertible {
         self = Int32(Int32(bitPattern: UInt32(truncatingIfNeeded: bitPattern64) ^ Self.signBitMask))
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64(UInt32.min) ... UInt64(UInt32.max)
     }
 
@@ -216,11 +216,11 @@ extension Int32: BitPatternConvertible {
 }
 
 extension Int64: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .int64
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -230,7 +230,7 @@ extension Int64: BitPatternConvertible {
         self = Int64(bitPattern: bitPattern64 ^ Self.signBitMask)
     }
 
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64.min ... UInt64.max
     }
 
@@ -240,11 +240,11 @@ extension Int64: BitPatternConvertible {
 }
 
 extension Int: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .int
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
@@ -255,7 +255,7 @@ extension Int: BitPatternConvertible {
     }
 
     /// Maps the full Int range to the full UInt64 range.
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64.min ... UInt64.max
     }
 

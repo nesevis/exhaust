@@ -49,7 +49,7 @@
 // unique            InterpreterWrapperHandlers    (pass-through)    (pass-through)    (pass-through)
 // transform         VACTI / VI                    Reflect.swift     Replay.swift      ChoiceGraphBuilder
 
-public enum ReflectiveOperation {
+package enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
     ///
     /// Each choice combines the elements needed for bidirectional generation:
@@ -64,7 +64,7 @@ public enum ReflectiveOperation {
         /// Relative (unnormalized) probability. During generation, the PRNG draw is partitioned proportionally across branches. During CGS tuning, weights are overridden by learned biases. Zero weight makes the branch unreachable during generation but still reachable during reflection.
         public let weight: UInt64
         /// Type-erased because Swift enums cannot vary generic parameters across cases. The pick interpreter casts the continuation result back to the expected type at each branch boundary.
-        public let generator: ReflectiveGenerator<Any>
+        package let generator: ReflectiveGenerator<Any>
 
         /// Creates a pick tuple with the given fingerprint, identifier, weight, and generator.
         public init(
@@ -239,7 +239,7 @@ public enum ReflectiveOperation {
 }
 
 /// Describes the kind of forward-only transformation applied by a `.transform` operation.
-public enum TransformKind {
+package enum TransformKind {
     /// A pure function applied to the inner generator's output.
     ///
     /// - Parameters:

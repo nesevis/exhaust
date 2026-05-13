@@ -1,7 +1,7 @@
 /// Describes a type that can be losslessly represented by a ``UInt64`` bit pattern.
 ///
 /// Without this protocol, each numeric type would need its own generator and reduction logic instead of sharing the unified ``Gen/choose(in:)`` path. Any type that conforms (for example, ``Int`` and ``Float``) gets ``Gen/choose(in:)`` support automatically.
-public protocol BitPatternConvertible: Equatable, Sendable {
+package protocol BitPatternConvertible: Equatable, Sendable {
     /// The valid range of this type, expressed as an inclusive ``ClosedRange`` of ``UInt64`` bit patterns. This is used by ``Gen/choose(in:)`` as the default range if a more specific one is not provided.
     static var bitPatternRange: ClosedRange<UInt64> { get }
 

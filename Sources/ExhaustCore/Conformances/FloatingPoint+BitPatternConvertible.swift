@@ -7,23 +7,23 @@
 
 #if arch(arm64) || arch(arm64_32)
     extension Float16: BitPatternConvertible {
-        public static var tag: TypeTag {
+        package static var tag: TypeTag {
             .float16
         }
 
-        public static var defaultScaling: SizeScaling<Self> {
+        package static var defaultScaling: SizeScaling<Self> {
             .exponentialFrom(origin: 0)
         }
 
         private static let signBitMask: UInt16 = 0x8000
 
         /// A `Float16` can use the entire `UInt16` space for its bit pattern.
-        public static var bitPatternRange: ClosedRange<UInt64> {
+        package static var bitPatternRange: ClosedRange<UInt64> {
             UInt64(UInt16.min) ... UInt64(UInt16.max)
         }
 
         /// Creates a `Float16` from a `UInt64` with ordering-preserving encoding.
-        public init(bitPattern64: UInt64) {
+        package init(bitPattern64: UInt64) {
             let bitPattern16 = UInt16(clamping: bitPattern64)
             // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear.
             // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set.
@@ -50,7 +50,7 @@
 #endif
 
 extension Float: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .float
     }
 
@@ -58,15 +58,15 @@ extension Float: BitPatternConvertible {
         .exponential
     }
 
-    private static let signBitMask: UInt32 = 0x8000_0000
+    package static let signBitMask: UInt32 = 0x8000_0000
 
     /// A `Float` can use the entire `UInt32` space for its bit pattern.
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64(UInt32.min) ... UInt64(UInt32.max)
     }
 
     /// Creates a `Float` from a `UInt64` with ordering-preserving encoding.
-    public init(bitPattern64: UInt64) {
+    package init(bitPattern64: UInt64) {
         let bitPattern32 = UInt32(bitPattern64)
         // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear.
         // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set.
@@ -79,7 +79,7 @@ extension Float: BitPatternConvertible {
     /// The underlying IEEE 754 bits with ordering-preserving encoding, promoted to a `UInt64`.
     /// Positive numbers have sign bit flipped, negative numbers have all bits flipped.
     /// This ensures that the natural UInt64 ordering matches the Float ordering.
-    public var bitPattern64: UInt64 {
+    package var bitPattern64: UInt64 {
         let rawBitPattern = bitPattern
         if rawBitPattern & Self.signBitMask == 0 {
             // Positive numbers: flip sign bit
@@ -92,23 +92,23 @@ extension Float: BitPatternConvertible {
 }
 
 extension Double: BitPatternConvertible {
-    public static var tag: TypeTag {
+    package static var tag: TypeTag {
         .double
     }
 
-    public static var defaultScaling: SizeScaling<Self> {
+    package static var defaultScaling: SizeScaling<Self> {
         .exponential
     }
 
     private static let signBitMask: UInt64 = 0x8000_0000_0000_0000
 
     /// A `Double` uses the full `UInt64` space for its bit pattern.
-    public static var bitPatternRange: ClosedRange<UInt64> {
+    package static var bitPatternRange: ClosedRange<UInt64> {
         UInt64.min ... UInt64.max
     }
 
     /// Creates a `Double` from a `UInt64` with ordering-preserving encoding.
-    public init(bitPattern64: UInt64) {
+    package init(bitPattern64: UInt64) {
         // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear.
         // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set.
         let rawBitPattern: UInt64 = bitPattern64 & Self.signBitMask == 0
@@ -120,7 +120,7 @@ extension Double: BitPatternConvertible {
     /// The underlying IEEE 754 bits with ordering-preserving encoding.
     /// Positive numbers have sign bit flipped, negative numbers have all bits flipped.
     /// This ensures that the natural UInt64 ordering matches the Double ordering.
-    public var bitPattern64: UInt64 {
+    package var bitPattern64: UInt64 {
         let rawBitPattern = bitPattern
         if rawBitPattern & Self.signBitMask == 0 {
             // Positive numbers: flip sign bit
