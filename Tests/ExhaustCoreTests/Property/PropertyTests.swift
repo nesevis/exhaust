@@ -20,7 +20,7 @@ import Testing
 struct RoundtripPropertyTests {
     @Test("Primitive generators round-trip through reflect and replay")
     func primitiveRoundtrip() throws {
-        let intGen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
+        let intGen: Generator<Int> = Gen.choose(in: -1000 ... 1000)
         try exhaustCheck(intGen) { value in
             guard let tree = try? Interpreters.reflect(intGen, with: value),
                   let replayed = try? Interpreters.replay(intGen, using: tree)
@@ -28,7 +28,7 @@ struct RoundtripPropertyTests {
             return replayed == value
         }
 
-        let doubleGen: ReflectiveGenerator<Double> = Gen.choose(in: -1000.0 ... 1000.0)
+        let doubleGen: Generator<Double> = Gen.choose(in: -1000.0 ... 1000.0)
         try exhaustCheck(doubleGen) { value in
             guard let tree = try? Interpreters.reflect(doubleGen, with: value),
                   let replayed = try? Interpreters.replay(doubleGen, using: tree)
@@ -64,7 +64,7 @@ struct RoundtripPropertyTests {
     @Test("Composed generators round-trip through reflect and replay")
     func composedRoundtrip() throws {
         // Array
-        let arrayGen = Gen.arrayOf(Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>, within: 1 ... 5)
+        let arrayGen = Gen.arrayOf(Gen.choose(in: 0 ... 100) as Generator<Int>, within: 1 ... 5)
         try exhaustCheck(arrayGen) { value in
             guard let tree = try? Interpreters.reflect(arrayGen, with: value),
                   let replayed = try? Interpreters.replay(arrayGen, using: tree)
@@ -73,10 +73,10 @@ struct RoundtripPropertyTests {
         }
 
         // Optional — .optional() is Exhaust-only, using Gen.pick equivalent
-        let innerIntGen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
-        let optionalGen: ReflectiveGenerator<Int?> = Gen.pick(choices: [
+        let innerIntGen: Generator<Int> = Gen.choose(in: 0 ... 100)
+        let optionalGen: Generator<Int?> = Gen.pick(choices: [
             (1, Gen.just(Int?.none)),
-            (5, innerIntGen._map { Optional($0) }),
+            (5, innerIntGen.map { Optional($0) }),
         ])
         try exhaustCheck(optionalGen) { value in
             guard let tree = try? Interpreters.reflect(optionalGen, with: value),
@@ -87,8 +87,8 @@ struct RoundtripPropertyTests {
 
         // Zip (tuple)
         let zipGen = Gen.zip(
-            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
-            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>
+            Gen.choose(in: 0 ... 100) as Generator<Int>,
+            Gen.choose(in: 0 ... 100) as Generator<Int>
         )
         try exhaustCheck(zipGen) { value in
             guard let tree = try? Interpreters.reflect(zipGen, with: value),
@@ -98,7 +98,7 @@ struct RoundtripPropertyTests {
         }
 
         // oneOf → Gen.pick
-        let oneOfGen: ReflectiveGenerator<Int> = Gen.pick(choices: [
+        let oneOfGen: Generator<Int> = Gen.pick(choices: [
             (1, Gen.choose(in: 0 ... 50)),
             (1, Gen.choose(in: 100 ... 200)),
         ])
@@ -235,7 +235,7 @@ struct FloatShortlexPropertyTests {
 struct ReplayIdempotencePropertyTests {
     @Test("Replaying the same tree always produces the same value")
     func replayIdempotence() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: -10000 ... 10000)
+        let gen: Generator<Int> = Gen.choose(in: -10000 ... 10000)
         try exhaustCheck(gen) { value in
             guard let tree = try? Interpreters.reflect(gen, with: value),
                   let replay1 = try? Interpreters.replay(gen, using: tree),
@@ -253,14 +253,14 @@ struct ReplayIdempotencePropertyTests {
 struct ReplayMaterializerEquivalenceTests {
     @Test("Replay and Materializer produce identical values for integer generators")
     func integerEquivalence() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
+        let gen: Generator<Int> = Gen.choose(in: -1000 ... 1000)
         try assertReplayMaterializerEquivalence(gen)
     }
 
     @Test("Replay and Materializer produce identical values for array generators")
     func arrayEquivalence() throws {
         let gen = Gen.arrayOf(
-            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 0 ... 100) as Generator<Int>,
             within: 1 ... 5
         )
         try assertReplayMaterializerEquivalence(gen)
@@ -268,7 +268,7 @@ struct ReplayMaterializerEquivalenceTests {
 
     @Test("Replay and Materializer produce identical values for pick generators")
     func pickEquivalence() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.pick(choices: [
+        let gen: Generator<Int> = Gen.pick(choices: [
             (1, Gen.choose(in: 0 ... 50)),
             (1, Gen.choose(in: 100 ... 200)),
         ])
@@ -278,8 +278,8 @@ struct ReplayMaterializerEquivalenceTests {
     @Test("Replay and Materializer produce identical values for zip generators")
     func zipEquivalence() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
-            Gen.choose(in: -50 ... 50) as ReflectiveGenerator<Int>
+            Gen.choose(in: 0 ... 100) as Generator<Int>,
+            Gen.choose(in: -50 ... 50) as Generator<Int>
         )
         try assertReplayMaterializerEquivalence(gen, isEqual: { $0.0 == $1.0 && $0.1 == $1.1 })
     }
@@ -288,7 +288,7 @@ struct ReplayMaterializerEquivalenceTests {
     func nestedEquivalence() throws {
         let gen = Gen.arrayOf(
             Gen.pick(choices: [
-                (1, Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>),
+                (1, Gen.choose(in: 0 ... 10) as Generator<Int>),
                 (1, Gen.choose(in: 100 ... 110)),
             ]),
             within: 1 ... 3
@@ -298,14 +298,14 @@ struct ReplayMaterializerEquivalenceTests {
 }
 
 private func assertReplayMaterializerEquivalence<Output: Equatable>(
-    _ gen: ReflectiveGenerator<Output>,
+    _ gen: Generator<Output>,
     maxIterations: Int = 200
 ) throws {
     try assertReplayMaterializerEquivalence(gen, maxIterations: maxIterations, isEqual: ==)
 }
 
 private func assertReplayMaterializerEquivalence<Output>(
-    _ gen: ReflectiveGenerator<Output>,
+    _ gen: Generator<Output>,
     maxIterations: Int = 200,
     isEqual: @escaping (Output, Output) -> Bool
 ) throws {
@@ -358,7 +358,7 @@ struct ShortlexKeyPropertyTests {
 struct InterpreterAgreementPropertyTests {
     @Test("Materialize with flattened tree agrees with replay")
     func materializeAgreesWithReplay() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
+        let gen: Generator<Int> = Gen.choose(in: -1000 ... 1000)
         try exhaustCheck(gen) { value in
             guard let tree = try? Interpreters.reflect(gen, with: value),
                   let replayed = try? Interpreters.replay(gen, using: tree)
@@ -372,7 +372,7 @@ struct InterpreterAgreementPropertyTests {
 
     @Test("Reflect stabilizes after one round")
     func reflectIdempotence() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
+        let gen: Generator<Int> = Gen.choose(in: -1000 ... 1000)
         try exhaustCheck(gen) { value in
             guard let tree1 = try? Interpreters.reflect(gen, with: value),
                   let replayed = try? Interpreters.replay(gen, using: tree1),
@@ -392,7 +392,7 @@ struct InterpreterAgreementPropertyTests {
 struct GeneratorContractPropertyTests {
     @Test("Gen.choose always produces values within the specified range")
     func chooseRangeContainment() throws {
-        try exhaustCheck(Gen.choose(in: -500 ... 500) as ReflectiveGenerator<Int>) { value in
+        try exhaustCheck(Gen.choose(in: -500 ... 500) as Generator<Int>) { value in
             value >= -500 && value <= 500
         }
 
@@ -400,7 +400,7 @@ struct GeneratorContractPropertyTests {
             value >= 10 && value <= 10000
         }
 
-        let doubleGen: ReflectiveGenerator<Double> = Gen.choose(in: -1.0 ... 1.0)
+        let doubleGen: Generator<Double> = Gen.choose(in: -1.0 ... 1.0)
         try exhaustCheck(doubleGen) { value in
             value >= -1.0 && value <= 1.0
         }
@@ -421,14 +421,14 @@ struct GeneratorContractPropertyTests {
 struct ShrinkingPropertyTests {
     @Test("Shrinking preserves counterexample status")
     func shrinkingPreservesFailure() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 10000)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 10000)
         let property: (Int) -> Bool = { $0 < 50 }
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
         while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.choiceGraphReduce(
-                gen: gen, tree: tree, config: .fast, property: property
+                gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
             #expect(!property(shrunk), "Shrunk value \(shrunk) no longer fails the property")
         }
@@ -436,7 +436,7 @@ struct ShrinkingPropertyTests {
 
     @Test("Shrinking produces simpler choice sequences")
     func shrinkingReducesComplexity() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 10000)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 10000)
         let property: (Int) -> Bool = { $0 < 50 }
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
@@ -444,7 +444,7 @@ struct ShrinkingPropertyTests {
             guard !property(value) else { continue }
             let originalSequence = ChoiceSequence.flatten(tree)
             guard let (shrunkSequence, _) = try Interpreters.choiceGraphReduce(
-                gen: gen, tree: tree, config: .fast, property: property
+                gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
             #expect(
                 shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
@@ -477,7 +477,7 @@ struct ChoiceValueComparablePropertyTests {
 
 /// Replacement for `#exhaust` macro.
 private func exhaustCheck<T>(
-    _ gen: ReflectiveGenerator<T>,
+    _ gen: Generator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool
@@ -489,7 +489,7 @@ private func exhaustCheck<T>(
 }
 
 /// Character generator from CharacterSet using ExhaustCore primitives.
-private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> {
+private func characterGen(from characterSet: CharacterSet) -> Generator<Character> {
     let srs = characterSet.scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -501,14 +501,14 @@ private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerato
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) }
+            .map { Character(srs.scalar(at: $0)) }
     )
 }
 
 /// ASCII string generator using ExhaustCore primitives.
 private func asciiStringGen(
     length: ClosedRange<UInt64>? = nil
-) -> ReflectiveGenerator<String> {
+) -> Generator<String> {
     let srs = CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()
     let charGen = Gen.contramap(
         { (char: Character) throws -> Int in
@@ -520,16 +520,16 @@ private func asciiStringGen(
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) }
+            .map { Character(srs.scalar(at: $0)) }
     )
     if let length {
         return Gen.contramap(
             { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-            Gen.arrayOf(charGen, within: length)._map { String($0) }
+            Gen.arrayOf(charGen, within: length).map { String($0) }
         )
     }
     return Gen.contramap(
         { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen)._map { String($0) }
+        Gen.arrayOf(charGen).map { String($0) }
     )
 }

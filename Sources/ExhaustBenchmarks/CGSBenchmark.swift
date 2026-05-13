@@ -22,7 +22,7 @@ func registerCGSBenchmarks() {
         for i in 0 ..< seedCount {
             let seed = baseSeed &+ UInt64(i)
             var iterator = ValueAndChoiceTreeInterpreter(
-                gen,
+                gen.gen,
                 materializePicks: false,
                 seed: seed,
                 maxRuns: 10000

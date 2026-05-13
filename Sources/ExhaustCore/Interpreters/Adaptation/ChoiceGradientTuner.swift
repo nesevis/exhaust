@@ -65,14 +65,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
     ///   - weightingStrategy: How accumulated fitness data is converted to static pick weights.
     ///   - subdivisionThresholds: Controls when `chooseBits` sites are subdivided into picks for CGS to guide.
     public static func tune(
-        _ generator: ReflectiveGenerator<FinalOutput>,
+        _ generator: Generator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
         warmupRuns: UInt64 = 100,
         sampleCount: UInt64 = 10,
         seed: UInt64? = nil,
         weightingStrategy: WeightingStrategy = .fitnessSharing,
         subdivisionThresholds: CGSSubdivisionThresholds = .default
-    ) throws -> ReflectiveGenerator<FinalOutput> {
+    ) throws -> Generator<FinalOutput> {
         // Stage 0: Preprocess — subdivide chooseBits into picks over subranges so CGS can guide decisions (chooseBits sites are opaque to CGS). With default thresholds, only sequence lengths are subdivided. With relaxed thresholds, element generators inside sequences are also subdivided.
         let subdivisionContext = SubdivisionContext()
         let subdivided = try subdivideForCGS(generator, context: subdivisionContext, thresholds: subdivisionThresholds)
@@ -131,11 +131,11 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
     /// Recursively walks the generator tree, replacing pick weights with accumulated fitness data from the online CGS tuning pass.
     private static func bakeWeights<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         from accumulator: FitnessAccumulator,
         strategy: WeightingStrategy,
         depth: Int = 0
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         switch gen {
         case .pure:
             return gen
@@ -246,10 +246,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
     /// Preprocessing pass that rewrites sequence operations by converting their length generators into picks over subranges. This makes the length decision CGS-guidable at O(S × 4 × N_avg) cost instead of the O(N² × S) cost of per-element derivative composition.
     private static func subdivideForCGS<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         context: SubdivisionContext,
         thresholds: CGSSubdivisionThresholds
-    ) throws -> ReflectiveGenerator<Output> {
+    ) throws -> Generator<Output> {
         switch gen {
         case .pure:
             return gen
@@ -277,7 +277,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         subrangeChoices.reserveCapacity(subranges.count)
 
                         for (index, subrange) in subranges.enumerated() {
-                            let subLengthGen: ReflectiveGenerator<UInt64> = .impure(
+                            let subLengthGen: Generator<UInt64> = .impure(
                                 operation: .chooseBits(
                                     min: subrange.lowerBound,
                                     max: subrange.upperBound,
@@ -288,7 +288,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                                 continuation: lengthContinuation
                             )
 
-                            let subSeqGen: ReflectiveGenerator<Any> = .impure(
+                            let subSeqGen: AnyGenerator = .impure(
                                 operation: .sequence(length: subLengthGen, gen: subdividedElement),
                                 continuation: { .pure($0) }
                             )
@@ -321,7 +321,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     subrangeChoices.reserveCapacity(subranges.count)
 
                     for (index, subrange) in subranges.enumerated() {
-                        let subSizeGen: ReflectiveGenerator<UInt64> = .impure(
+                        let subSizeGen: Generator<UInt64> = .impure(
                             operation: .chooseBits(
                                 min: subrange.lowerBound,
                                 max: subrange.upperBound,
@@ -331,7 +331,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                             continuation: { .pure($0 as! UInt64) }
                         )
 
-                        let subSeqGen: ReflectiveGenerator<Any> = try .impure(
+                        let subSeqGen: AnyGenerator = try .impure(
                             operation: .sequence(
                                 length: subSizeGen._bindReified(getSizeContinuation),
                                 gen: subdividedElement
@@ -390,8 +390,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
     /// Collapses subdivision picks where CGS found no signal (all subrange weights are near-equal) back to a single `chooseBits`.
     private static func collapseUniformSubdivisions<Output>(
-        _ gen: ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        _ gen: Generator<Output>
+    ) -> Generator<Output> {
         switch gen {
         case .pure:
             return gen
@@ -399,7 +399,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         case let .impure(operation, continuation):
             switch operation {
             case let .pick(choices, branchCount) where choices.count >= 2:
-                if let collapsed: ReflectiveGenerator<Output> = collapseIfUniform(choices, continuation: continuation) {
+                if let collapsed: Generator<Output> = collapseIfUniform(choices, continuation: continuation) {
                     return collapsed
                 }
                 let recursed = ContiguousArray(choices.map { choice in
@@ -437,8 +437,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
     /// Returns a collapsed `chooseBits` if all choices in the pick are `chooseBits` subranges with near-equal weights. Returns `nil` if the pick has signal and should be kept.
     private static func collapseIfUniform<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output>? {
+        continuation: @escaping (Any) throws -> Generator<Output>
+    ) -> Generator<Output>? {
         let maxWeight = choices.max(by: { $0.weight < $1.weight })!.weight
         let minWeight = choices.min(by: { $0.weight < $1.weight })!.weight
         guard minWeight > 0 else { return nil }
@@ -450,7 +450,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         var tag: TypeTag?
         var isRangeExplicit: Bool?
         var scaling: ChooseBitsScaling?
-        var innerContinuation: ((Any) throws -> ReflectiveGenerator<Any>)?
+        var innerContinuation: ((Any) throws -> AnyGenerator)?
 
         for choice in choices {
             guard case let .impure(.chooseBits(lower, upper, choiceTag, choiceExplicit, choiceScaling), choiceContinuation) = choice.generator else {
@@ -492,10 +492,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
     /// Subdivides a top-level `chooseBits` into a pick over subranges if the range meets the threshold. Leaves non-chooseBits generators unchanged.
     private static func subdivideChooseBits<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         context: SubdivisionContext,
         thresholds: CGSSubdivisionThresholds
-    ) throws -> ReflectiveGenerator<Output> {
+    ) throws -> Generator<Output> {
         guard case let .impure(.chooseBits(lower, upper, tag, isRangeExplicit, scaling), chooseContinuation) = gen else {
             return gen
         }

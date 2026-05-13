@@ -70,13 +70,13 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         let coverageBudget = budget.coverageBudget
 
         let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
-            commandGen: commandGen,
+            commandGen: commandGen.gen,
             coverageBudget: coverageBudget
         )
 
         let commandSequenceGenerator = commandGen.array(
             length: 0 ... resolvedCommandLimit
-        )
+        ).gen
 
         // The sync property closure runs async spec methods via Task + semaphore.
         // This closure is called from a GCD thread where semaphore.wait() is safe.
@@ -128,7 +128,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                 } else {
                     scaOutcome = runSCACoverage(
                         seqGen: commandSequenceGenerator,
-                        commandGen: commandGen,
+                        commandGen: commandGen.gen,
                         commandLimit: resolvedCommandLimit,
                         coverageBudget: covBudget,
                         property: property
@@ -146,7 +146,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                     // Only suppress generic coverage when SCA ran its covering array to completion.
                     // When SCA was skipped, generic coverage is still needed.
                     let exhaustResult = __ExhaustRuntime.__exhaust(
-                        commandSequenceGenerator,
+                        ReflectiveGenerator { commandSequenceGenerator },
                         settings: buildExhaustSettings(
                             samplingBudget: maxIter,
                             coverageBudget: covBudget,

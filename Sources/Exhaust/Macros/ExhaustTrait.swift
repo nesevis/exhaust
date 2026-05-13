@@ -16,13 +16,11 @@
 
     /// A Swift Testing trait that configures `#exhaust` property tests.
     ///
-    /// Budget is a positional parameter (most commonly varied). Regressions are variadic:
-    ///
     /// ```swift
-    /// @Test(.exhaust(.expensive))
+    /// @Test(.exhaust(.budget(.expensive)))
     /// func ageIsNonNegative() { ... }
     ///
-    /// @Test(.exhaust(.expensive, regressions: "3RT5GH8KM2", "9WXY1CV7"))
+    /// @Test(.exhaust(.budget(.expensive), .regressions("3RT5GH8KM2", "9WXY1CV7")))
     /// func ageIsNonNegative() { ... }
     /// ```
     ///
@@ -58,37 +56,64 @@
         }
     }
 
+    // MARK: - Trait Options
+
+    /// A configuration option for the `.exhaust(...)` test trait.
+    ///
+    /// Pass one or more options to `.exhaust(...)` to configure property test behavior at the test or suite level:
+    ///
+    /// ```swift
+    /// @Test(.exhaust(.budget(.expensive)))
+    /// @Test(.exhaust(.budget(.expensive), .regressions("3RT5GH8KM2", "9WXY1CV7")))
+    /// @Suite(.exhaust(.budget(.exorbitant)))
+    /// ```
+    public struct ExhaustTraitOption: Sendable {
+        enum Kind: Sendable {
+            case budget(ExhaustBudget)
+            case regressions([String])
+        }
+
+        let kind: Kind
+
+        /// Sets the iteration budget for coverage, sampling, and reduction.
+        ///
+        /// Applies to all `#exhaust` calls in the test (or suite) that do not specify an inline `.budget(...)` setting. Inline settings take precedence.
+        public static func budget(_ budget: ExhaustBudget) -> ExhaustTraitOption {
+            ExhaustTraitOption(kind: .budget(budget))
+        }
+
+        /// Registers Crockford Base32 encoded seeds to replay before the normal pipeline.
+        ///
+        /// Each seed is replayed in order. If a regression now passes, a warning is reported suggesting removal.
+        public static func regressions(_ seeds: String...) -> ExhaustTraitOption {
+            ExhaustTraitOption(kind: .regressions(seeds))
+        }
+    }
+
     // MARK: - Builder API
 
     public extension Trait where Self == ExhaustTrait {
-        /// Configures an `#exhaust` property test with the given budget and regression seeds.
+        /// Configures `#exhaust` property tests with the given options.
         ///
         /// ```swift
-        /// @Test(.exhaust(.expensive))
-        /// @Test(.exhaust(.expensive, regressions: "3RT5GH8KM2", "9WXY1CV7"))
+        /// @Test(.exhaust(.budget(.expensive)))
+        /// @Test(.exhaust(.budget(.expensive), .regressions("3RT5GH8KM2", "9WXY1CV7")))
+        /// @Suite(.exhaust(.budget(.exorbitant)))
         /// ```
         ///
-        /// - Parameters:
-        ///   - budget: The iteration budget for coverage, sampling, and reduction.
-        ///   - regressions: Crockford Base32 encoded seeds to replay before the normal pipeline.
-        static func exhaust(
-            _ budget: ExhaustBudget,
-            regressions: String...
-        ) -> ExhaustTrait {
-            ExhaustTrait(budget: budget, regressions: regressions)
-        }
-
-        /// Configures an `#exhaust` property test with default budget and regression seeds.
-        ///
-        /// ```swift
-        /// @Test(.exhaust(regressions: "3RT5GH8KM2", "9WXY1CV7"))
-        /// ```
-        ///
-        /// - Parameter regressions: Crockford Base32 encoded seeds to replay before the normal pipeline.
-        static func exhaust(
-            regressions: String...
-        ) -> ExhaustTrait {
-            ExhaustTrait(budget: nil, regressions: regressions)
+        /// - Parameter options: Configuration options for the property test.
+        static func exhaust(_ options: ExhaustTraitOption...) -> ExhaustTrait {
+            var budget: ExhaustBudget?
+            var regressions: [String] = []
+            for option in options {
+                switch option.kind {
+                case let .budget(value):
+                    budget = value
+                case let .regressions(seeds):
+                    regressions.append(contentsOf: seeds)
+                }
+            }
+            return ExhaustTrait(budget: budget, regressions: regressions)
         }
     }
 

@@ -70,7 +70,7 @@ struct ChoiceGraphClassificationTests {
     @Test("Singleton upstream classifies as unclassifiable + both")
     func singletonUpstreamIsUnclassifiable() throws {
         // int(in: 7...7) — lowerBound == upperBound after clamping, no comparison possible.
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 7 ... 7 as ClosedRange<Int>)._bound(
+        let gen: Generator<Int> = Gen.choose(in: 7 ... 7 as ClosedRange<Int>)._bound(
             forward: { _ in Gen.choose(in: 0 ... 3 as ClosedRange<Int>) },
             backward: { m in max(7, min(7, m)) }
         )
@@ -188,7 +188,7 @@ struct ChoiceGraphClassificationTests {
 
 // MARK: - Fixtures
 
-private func makeCouplingLikeGen() -> ReflectiveGenerator<[Int]> {
+private func makeCouplingLikeGen() -> Generator<[Int]> {
     Gen.choose(in: 0 ... 5 as ClosedRange<Int>)._bound(
         forward: { n in
             Gen.arrayOf(
@@ -202,23 +202,23 @@ private func makeCouplingLikeGen() -> ReflectiveGenerator<[Int]> {
     )
 }
 
-private func makeDivergentGen() -> ReflectiveGenerator<Int> {
+private func makeDivergentGen() -> Generator<Int> {
     // Low endpoint → int(in: 0...3) (a single chooseBits leaf).
     // High endpoint → an array(int) summed back to an Int (a sequence under a
     // transform-bind). Different kinds at the root of the bound subtree.
     Gen.choose(in: 0 ... 5 as ClosedRange<Int>)._bound(
-        forward: { n -> ReflectiveGenerator<Int> in
+        forward: { n -> Generator<Int> in
             if n <= 1 {
                 return Gen.choose(in: 0 ... 3 as ClosedRange<Int>)
             }
-            return Gen.arrayOf(Gen.choose(in: 0 ... 3 as ClosedRange<Int>), exactly: UInt64(n))._map { $0.reduce(0, +) }
+            return Gen.arrayOf(Gen.choose(in: 0 ... 3 as ClosedRange<Int>), exactly: UInt64(n)).map { $0.reduce(0, +) }
         },
         backward: { _ in 3 }
     )
 }
 
 private func generateTree(
-    from gen: ReflectiveGenerator<some Any>,
+    from gen: Generator<some Any>,
     seed: UInt64
 ) throws -> ChoiceTree {
     var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)

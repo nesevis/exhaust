@@ -45,7 +45,7 @@ struct BitPatternConvertibleTests {
     @Test("Int BitPatternConvertible round-trip for various values")
     func intBitPatternRoundTrip() throws {
         // #exhaust was Exhaust-only; using exhaustCheck helper
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int>) { value in
+        try exhaustCheck(Gen.choose() as Generator<Int>) { value in
             Int(bitPattern64: value.bitPattern64) == value
         }
     }
@@ -57,14 +57,14 @@ struct BitPatternConvertibleTests {
 
     @Test("UInt64 to Int mapping round-trip consistency")
     func uInt64ToIntMappingRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { bitPattern in
+        try exhaustCheck(Gen.choose() as Generator<UInt64>) { bitPattern in
             Int(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
 
     @Test("Float BitPatternConvertible round-trip for special values")
     func floatSpecialValuesRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Float>) { val in
+        try exhaustCheck(Gen.choose() as Generator<Float>) { val in
             val.isNaN || Float(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -102,7 +102,7 @@ struct BitPatternConvertibleTests {
 
     @Test("Double BitPatternConvertible round-trip for special values")
     func doubleSpecialValuesRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Double>) { val in
+        try exhaustCheck(Gen.choose() as Generator<Double>) { val in
             val.isNaN || Double(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -147,7 +147,7 @@ struct BitPatternConvertibleTests {
 
     @Test("UInt64 to Double mapping round-trip consistency")
     func uInt64ToDoubleMappingRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { bitPattern in
+        try exhaustCheck(Gen.choose() as Generator<UInt64>) { bitPattern in
             Double(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
@@ -156,28 +156,28 @@ struct BitPatternConvertibleTests {
 
     @Test("Int8 BitPatternConvertible round-trip")
     func int8BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int8>) { val in
+        try exhaustCheck(Gen.choose() as Generator<Int8>) { val in
             Int8(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("Int16 BitPatternConvertible round-trip")
     func int16BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int16>) { val in
+        try exhaustCheck(Gen.choose() as Generator<Int16>) { val in
             Int16(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("Int32 BitPatternConvertible round-trip")
     func int32BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int32>) { val in
+        try exhaustCheck(Gen.choose() as Generator<Int32>) { val in
             Int32(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("Int64 BitPatternConvertible round-trip")
     func int64BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int64>) { val in
+        try exhaustCheck(Gen.choose() as Generator<Int64>) { val in
             Int64(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -197,35 +197,35 @@ struct BitPatternConvertibleTests {
 
     @Test("UInt8 BitPatternConvertible round-trip")
     func uInt8BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt8>) { val in
+        try exhaustCheck(Gen.choose() as Generator<UInt8>) { val in
             UInt8(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt16 BitPatternConvertible round-trip")
     func uInt16BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt16>) { val in
+        try exhaustCheck(Gen.choose() as Generator<UInt16>) { val in
             UInt16(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt32 BitPatternConvertible round-trip")
     func uInt32BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt32>) { val in
+        try exhaustCheck(Gen.choose() as Generator<UInt32>) { val in
             UInt32(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt64 BitPatternConvertible round-trip")
     func uInt64BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { val in
+        try exhaustCheck(Gen.choose() as Generator<UInt64>) { val in
             UInt64(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt BitPatternConvertible round-trip")
     func uIntBitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt>) { val in
+        try exhaustCheck(Gen.choose() as Generator<UInt>) { val in
             UInt(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -235,7 +235,7 @@ struct BitPatternConvertibleTests {
 
 /// Replacement for `#exhaust` macro: generates values and checks a property holds for all of them.
 private func exhaustCheck<T>(
-    _ gen: ReflectiveGenerator<T>,
+    _ gen: Generator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool

@@ -7,7 +7,7 @@
 
 /// Static scope builder for minimization operations.
 ///
-/// Replaces the former `ChoiceGraph.minimizationScopes()` instance method. The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeQuery`` can share a single ``QueryHelpers/buildInnerDescendantToBind(graph:)`` allocation.
+/// The builder is a free function over a ``ChoiceGraph`` so that callers that also need ``ExchangeQuery`` can share a single ``QueryHelpers/buildInnerDescendantToBind(graph:)`` allocation.
 enum MinimizationQuery {
     /// Computes minimization scopes: one integer scope, one float scope, and one bound value scope per non-constant reduction edge.
     ///

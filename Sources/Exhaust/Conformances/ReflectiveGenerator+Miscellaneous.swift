@@ -2,8 +2,6 @@
 //  ReflectiveGenerator+Miscellaneous.swift
 //  Exhaust
 //
-//  Created by Chris Kolbu on 24/2/2026.
-//
 
 import ExhaustCore
 
@@ -13,8 +11,8 @@ public extension ReflectiveGenerator {
     /// ```swift
     /// let gen = #gen(.just(42))
     /// ```
-    static func just(_ value: Value) -> ReflectiveGenerator<Value> {
-        Gen.just(value)
+    static func just(_ value: Output) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator { Gen.just(value) }
     }
 
     /// Generates arbitrary `Bool` values. Reduces toward `false`.
@@ -23,11 +21,12 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.bool())
     /// ```
     static func bool() -> ReflectiveGenerator<Bool> {
-        Gen.choose(in: UInt8(0) ... 1, scaling: .constant)
-            .mapped(
-                forward: { $0 == 1 },
-                backward: { $0 ? 1 : 0 }
-            )
+        ReflectiveGenerator<UInt8> {
+            Gen.choose(in: UInt8(0) ... 1, scaling: .constant)
+        }.mapped(
+            forward: { $0 == 1 },
+            backward: { $0 ? 1 : 0 }
+        )
     }
 
     /// Creates a generator that randomly selects from one of the provided generators with equal weight.
@@ -36,12 +35,14 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.oneOf(.int(in: 0...5), .int(in: 100...105)))
     /// ```
     static func oneOf(
-        _ generators: ReflectiveGenerator<Value>...,
+        _ generators: ReflectiveGenerator<Output>...,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Value> {
-        Gen.pick(choices: generators.map { (1, $0) }, fileID: fileID, line: line, column: column)
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
+            Gen.pick(choices: generators.map { (1, $0.gen) }, fileID: fileID, line: line, column: column)
+        }
     }
 
     /// Creates a generator that randomly selects from weighted generators.
@@ -50,12 +51,14 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.oneOf(weighted: (1, .just(0)), (5, .int(in: 1...100))))
     /// ```
     static func oneOf(
-        weighted choices: (Int, ReflectiveGenerator<Value>)...,
+        weighted choices: (Int, ReflectiveGenerator<Output>)...,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Value> {
-        Gen.pick(choices: choices.map { ($0.0, $0.1) }, fileID: fileID, line: line, column: column)
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
+            Gen.pick(choices: choices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column)
+        }
     }
 
     /// Selects from an array of generators with equal weight.
@@ -65,12 +68,14 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.oneOf(gens))
     /// ```
     static func oneOf(
-        _ generators: [ReflectiveGenerator<Value>],
+        _ generators: [ReflectiveGenerator<Output>],
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Value> {
-        Gen.pick(choices: generators.map { (1, $0) }, fileID: fileID, line: line, column: column)
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
+            Gen.pick(choices: generators.map { (1, $0.gen) }, fileID: fileID, line: line, column: column)
+        }
     }
 
     /// Selects from an array of weighted generators.
@@ -80,30 +85,30 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.oneOf(weighted: choices))
     /// ```
     static func oneOf(
-        weighted choices: [(Int, ReflectiveGenerator<Value>)],
+        weighted choices: [(Int, ReflectiveGenerator<Output>)],
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Value> {
-        Gen.pick(choices: choices, fileID: fileID, line: line, column: column)
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
+            Gen.pick(choices: choices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column)
+        }
     }
-}
 
-public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Wraps this generator to produce optional values, choosing between `nil` and a generated value.
     ///
     /// ```swift
     /// let gen = #gen(.int(in: 0...10)).optional()
     /// ```
-    func optional() -> ReflectiveGenerator<Value?> {
-        Gen.pick(choices: [
-            (1, Gen.just(.none)),
-            (5, asOptional()),
-        ])
+    func optional() -> ReflectiveGenerator<Output?> {
+        ReflectiveGenerator<Output?> {
+            Gen.pick(choices: [
+                (1, Gen.just(.none)),
+                (5, gen.liftToOptional()),
+            ])
+        }
     }
-}
 
-public extension ReflectiveGenerator {
     /// Generates arbitrary `Result` values by choosing between a success and a failure generator with equal weight.
     ///
     /// Reflection decomposes a `Result` value by matching the `.success` or `.failure` case and reflecting the inner value through the corresponding generator.
@@ -123,27 +128,29 @@ public extension ReflectiveGenerator {
         success: ReflectiveGenerator<Success>,
         failure: ReflectiveGenerator<Failure>
     ) -> ReflectiveGenerator<Result<Success, Failure>>
-        where Value == Result<Success, Failure>
+        where Output == Result<Success, Failure>
     {
-        Gen.pick(choices: [
-            (1, Gen.contramap(
-                { (result: Result<Success, Failure>) throws -> Success in
-                    guard case let .success(value) = result else {
-                        throw Interpreters.ReflectionError.contramapWasWrongType
-                    }
-                    return value
-                },
-                success._map { Result<Success, Failure>.success($0) }
-            )),
-            (1, Gen.contramap(
-                { (result: Result<Success, Failure>) throws -> Failure in
-                    guard case let .failure(error) = result else {
-                        throw Interpreters.ReflectionError.contramapWasWrongType
-                    }
-                    return error
-                },
-                failure._map { Result<Success, Failure>.failure($0) }
-            )),
-        ])
+        ReflectiveGenerator<Result<Success, Failure>> {
+            Gen.pick(choices: [
+                (1, Gen.contramap(
+                    { (result: Result<Success, Failure>) throws -> Success in
+                        guard case let .success(value) = result else {
+                            throw Interpreters.ReflectionError.contramapWasWrongType
+                        }
+                        return value
+                    },
+                    success.gen.map { Result<Success, Failure>.success($0) }
+                )),
+                (1, Gen.contramap(
+                    { (result: Result<Success, Failure>) throws -> Failure in
+                        guard case let .failure(error) = result else {
+                            throw Interpreters.ReflectionError.contramapWasWrongType
+                        }
+                        return error
+                    },
+                    failure.gen.map { Result<Success, Failure>.failure($0) }
+                )),
+            ])
+        }
     }
 }

@@ -10,7 +10,7 @@ import Testing
 struct OptionalTests {
     @Test("Produces both nil and non-nil values")
     func producesBothBranches() throws {
-        let gen = optionalGen(Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>)
+        let gen = optionalGen(Gen.choose(in: 1 ... 100) as Generator<Int>)
 
         var sawNil = false
         var sawSome = false
@@ -32,7 +32,7 @@ struct OptionalTests {
 
     @Test("Non-nil values satisfy the underlying generator's constraints")
     func nonNilValuesSatisfyConstraints() throws {
-        let gen = optionalGen(Gen.choose(in: 10 ... 20) as ReflectiveGenerator<Int>)
+        let gen = optionalGen(Gen.choose(in: 10 ... 20) as Generator<Int>)
 
         for _ in 0 ..< 100 {
             var iterator = ValueInterpreter(gen)
@@ -45,7 +45,7 @@ struct OptionalTests {
 
     @Test("Round-trips through reflect and replay", arguments: [UInt64(1), 7, 42, 100, 999, 12345])
     func roundTrip(seed: UInt64) throws {
-        let gen = optionalGen(Gen.choose(in: 0 ... 50) as ReflectiveGenerator<Int>)
+        let gen = optionalGen(Gen.choose(in: 0 ... 50) as Generator<Int>)
 
         var optIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
         let (value, tree) = try #require(try optIter.prefix(1).last)
@@ -59,14 +59,14 @@ struct OptionalTests {
 
     @Test("Round-trips with validateGenerator helper")
     func roundTripValidate() throws {
-        let gen = optionalGen(Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>)
+        let gen = optionalGen(Gen.choose(in: 0 ... 100) as Generator<Int>)
         _ = try validateGenerator(gen)
     }
 
     @Test("Composes with arrayOf")
     func composesWithArray() throws {
         let gen = Gen.arrayOf(
-            optionalGen(Gen.choose(in: 1 ... 10) as ReflectiveGenerator<Int>),
+            optionalGen(Gen.choose(in: 1 ... 10) as Generator<Int>),
             exactly: 5
         )
 
@@ -79,7 +79,7 @@ struct OptionalTests {
 
     @Test("Nested optional produces all three tiers")
     func nestedOptional() throws {
-        let gen = optionalGen(optionalGen(Gen.choose(in: 1 ... 10) as ReflectiveGenerator<Int>))
+        let gen = optionalGen(optionalGen(Gen.choose(in: 1 ... 10) as Generator<Int>))
 
         var sawNone = false // .none
         var sawSomeNone = false // .some(.none)

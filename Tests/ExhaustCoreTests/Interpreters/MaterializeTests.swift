@@ -15,7 +15,7 @@ struct MaterializeTests {
 
     /// Reflects a value into a choice tree, flattens it, and materializes back.
     private func materializeViaReflection<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         _ value: Output
     ) -> Output? {
         guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
@@ -36,7 +36,7 @@ struct MaterializeTests {
             #expect(materializeViaReflection(uint64Gen, value) == value)
         }
 
-        let intGen = Gen.choose(in: -10000 ... 10000) as ReflectiveGenerator<Int>
+        let intGen = Gen.choose(in: -10000 ... 10000) as Generator<Int>
         var intIter = ValueInterpreter(intGen, seed: 42, maxRuns: 200)
         while let value = try intIter.next() {
             #expect(materializeViaReflection(intGen, value) == value)
@@ -160,7 +160,7 @@ struct MaterializeTests {
         }
 
         let baseFilterGen = Gen.choose(in: UInt64(0) ... 100)
-        let filterGen: ReflectiveGenerator<UInt64> = .impure(
+        let filterGen: Generator<UInt64> = .impure(
             operation: .filter(gen: baseFilterGen.erase(), fingerprint: 0, filterType: .auto, predicate: { ($0 as! UInt64) % 2 == 0 }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
             continuation: { .pure($0 as! UInt64) }
         )
@@ -179,7 +179,7 @@ struct MaterializeTests {
             #expect(materializeViaReflection(classifyGen, value) == value)
         }
 
-        let resizeGen = Gen.resize(50, Gen.arrayOf(Gen.choose(in: 1000 ... 10000) as ReflectiveGenerator<Int>))
+        let resizeGen = Gen.resize(50, Gen.arrayOf(Gen.choose(in: 1000 ... 10000) as Generator<Int>))
         var resizeIter = ValueInterpreter(resizeGen, seed: 42, maxRuns: 200)
         while let value = try resizeIter.next() {
             #expect(materializeViaReflection(resizeGen, value) == value)
@@ -229,7 +229,7 @@ struct MaterializeTests {
     func mappedRoundtrip() throws {
         let mappedGen = Gen.contramap(
             { (v: Int) -> UInt64 in UInt64(v) },
-            Gen.choose(in: UInt64(0) ... 10000)._map { Int($0) }
+            Gen.choose(in: UInt64(0) ... 10000).map { Int($0) }
         )
         var mappedIter = ValueInterpreter(mappedGen, seed: 42, maxRuns: 200)
         while let value = try mappedIter.next() {
@@ -245,7 +245,7 @@ struct MaterializeTests {
             Gen.zip(
                 Gen.choose(in: UInt64(0) ... 100),
                 Gen.choose(in: UInt64(0) ... 100)
-            )._map { Point(x: $0.0, y: $0.1) }
+            ).map { Point(x: $0.0, y: $0.1) }
         )
         var pointIter = ValueInterpreter(pointGen, seed: 42, maxRuns: 200)
         while let value = try pointIter.next() {
@@ -262,7 +262,7 @@ struct MaterializeTests {
         ])
         let personGen = Gen.contramap(
             { (p: Person) -> (UInt64, String) in (p.age, p.name) },
-            Gen.zip(ageGen, stringGen())._map { Person(age: $0.0, name: $0.1) }
+            Gen.zip(ageGen, stringGen()).map { Person(age: $0.0, name: $0.1) }
         )
         var personIter = ValueInterpreter(personGen, seed: 42, maxRuns: 200)
         while let value = try personIter.next() {
@@ -274,7 +274,7 @@ struct MaterializeTests {
 
     @Test("Materializing the same sequence twice is idempotent")
     func materializeIdempotent() throws {
-        let gen = Gen.choose(in: -10000 ... 10000) as ReflectiveGenerator<Int>
+        let gen = Gen.choose(in: -10000 ... 10000) as Generator<Int>
         var iter = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         while let value = try iter.next() {
             guard let tree = try? Interpreters.reflect(gen, with: value) else {

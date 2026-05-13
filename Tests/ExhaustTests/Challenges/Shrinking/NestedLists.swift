@@ -23,10 +23,10 @@ struct NestedListsShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
+            reflecting: Self.counterExample,
             .suppress(.issueReporting),
 //            .onReport { report = $0 },
-            .logging(.debug, .keyValue),
-            .reflecting(Self.counterExample)
+            .logging(.debug, .keyValue)
 //                .replay(13580297670505979531)
         ) { arrs in
             var count = 0

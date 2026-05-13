@@ -4,7 +4,7 @@ import Testing
 
 // swiftlint:disable type_body_length
 
-/// Validates every first-party generator exposed on `ReflectiveGenerator` via `#examine`.
+/// Validates every first-party generator exposed on `Generator` via `#examine`.
 ///
 /// Each test exercises generation, reflection round-trip, and replay determinism
 /// for a single generator (or small family of overloads). The `samples` count is
@@ -249,7 +249,7 @@ struct ExamineFirstPartyGeneratorsTests {
     }
 
     @Test func arrayStaticFactory() {
-        let report = #examine(ReflectiveGenerator.array(.int(in: 0 ... 10), length: 2 ... 4), samples: 30)
+        let report = #examine(.array(.int(in: 0 ... 10), length: 2 ... 4), samples: 30)
         #expect(report.passed)
     }
 
@@ -275,7 +275,7 @@ struct ExamineFirstPartyGeneratorsTests {
 
     @Test func dictionary() {
         let report = #examine(
-            ReflectiveGenerator.dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100)),
+            .dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100)),
             samples: 5
         )
         #expect(report.passed)
@@ -303,7 +303,7 @@ struct ExamineFirstPartyGeneratorsTests {
             KeyPathFixture(id: 3, label: .init(value: "gamma")),
             KeyPathFixture(id: 4, label: .init(value: "delta")),
         ]
-        let report = #examine(Gen.element(from: items, id: \KeyPathFixture.id), samples: 50)
+        let report = #examine(.element(from: items, id: \KeyPathFixture.id), samples: 50)
         #expect(report.passed)
     }
 
@@ -314,7 +314,7 @@ struct ExamineFirstPartyGeneratorsTests {
             KeyPathFixture(id: 2, label: .init(value: "beta")),
             KeyPathFixture(id: 3, label: .init(value: "gamma")),
         ]
-        let report = #examine(Gen.element(from: items, id: \KeyPathFixture.label), samples: 50)
+        let report = #examine(.element(from: items, id: \KeyPathFixture.label), samples: 50)
         #expect(report.passed)
     }
 
@@ -332,7 +332,7 @@ struct ExamineFirstPartyGeneratorsTests {
 
     @Test func sliceOfFixedCollection() {
         let report = #examine(
-            ReflectiveGenerator.slice(of: [10, 20, 30, 40, 50]),
+            .slice(of: [10, 20, 30, 40, 50]),
             samples: 30
         )
         #expect(report.passed)
@@ -361,7 +361,7 @@ struct ExamineFirstPartyGeneratorsTests {
 
     @Test func oneOfGenerators() {
         let report = #examine(
-            ReflectiveGenerator.oneOf(.int(in: 0 ... 10), .int(in: 90 ... 100)),
+            .oneOf(.int(in: 0 ... 10), .int(in: 90 ... 100)),
             samples: 50
         )
         #expect(report.passed)
@@ -379,7 +379,7 @@ struct ExamineFirstPartyGeneratorsTests {
 
     @Test func oneOfWeighted() {
         let report = #examine(
-            ReflectiveGenerator.oneOf(weighted: (3, .int(in: 0 ... 10)), (1, .int(in: 90 ... 100))),
+            .oneOf(weighted: (3, .int(in: 0 ... 10)), (1, .int(in: 90 ... 100))),
             samples: 50
         )
         #expect(report.passed)
@@ -509,7 +509,7 @@ struct ExamineFirstPartyGeneratorsTests {
             KeyPathFixture(id: 4, label: .init(value: "delta")),
         ]
         let report = #examine(
-            Gen.element(from: items, id: \KeyPathFixture.id)
+            .element(from: items, id: \KeyPathFixture.id)
                 .unique(by: \KeyPathFixture.id),
             samples: 50
         )
@@ -524,7 +524,7 @@ struct ExamineFirstPartyGeneratorsTests {
             KeyPathFixture(id: 3, label: .init(value: "gamma")),
         ]
         let report = #examine(
-            Gen.element(from: items, id: \KeyPathFixture.id)
+            .element(from: items, id: \KeyPathFixture.id)
                 .unique(by: \KeyPathFixture.label),
             samples: 50
         )

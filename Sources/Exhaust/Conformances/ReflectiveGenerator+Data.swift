@@ -17,7 +17,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Returns: A generator producing random `Data` of size-scaled length.
     static func data() -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max))
+        ReflectiveGenerator<[UInt8]> { Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)) }
             .mapped(
                 forward: { Data($0) },
                 backward: { Array($0) }
@@ -40,11 +40,13 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.arrayOf(
-            Gen.choose(in: UInt8.min ... UInt8.max),
-            within: range,
-            scaling: scaling
-        ).mapped(
+        return ReflectiveGenerator<[UInt8]> {
+            Gen.arrayOf(
+                Gen.choose(in: UInt8.min ... UInt8.max),
+                within: range,
+                scaling: scaling
+            )
+        }.mapped(
             forward: { Data($0) },
             backward: { Array($0) }
         )
@@ -61,10 +63,12 @@ public extension ReflectiveGenerator {
     static func data(
         length: UInt64
     ) -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(
-            Gen.choose(in: UInt8.min ... UInt8.max),
-            exactly: length
-        ).mapped(
+        ReflectiveGenerator<[UInt8]> {
+            Gen.arrayOf(
+                Gen.choose(in: UInt8.min ... UInt8.max),
+                exactly: length
+            )
+        }.mapped(
             forward: { Data($0) },
             backward: { Array($0) }
         )

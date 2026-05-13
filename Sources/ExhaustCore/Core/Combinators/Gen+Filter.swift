@@ -10,18 +10,18 @@ package extension Gen {
     ///   - sourceLocation: Source location of the call site for diagnostic warnings.
     /// - Returns: A filtered generator that only produces valid values.
     static func filter<Output>(
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: Generator<Output>,
         type: FilterType = .auto,
         predicate: @escaping (Output) -> Bool,
         sourceLocation: FilterSourceLocation
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         let erased = generator.erase()
         let erasedPredicate: (Any) -> Bool = { predicate($0 as! Output) }
         let fingerprint = sourceLocation.fileID.description.hashValue.bitPattern64
             &+ sourceLocation.line.bitPattern64
 
         let isInterpreting = Gen.isInterpreting
-        let tuned: ReflectiveGenerator<Any>?
+        let tuned: AnyGenerator?
         switch (type, isInterpreting) {
         case (.rejectionSampling, _),
              (.choiceGradientSampling, true),

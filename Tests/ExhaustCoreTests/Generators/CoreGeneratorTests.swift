@@ -15,7 +15,7 @@ struct CoreGeneratorTests {
     struct GenFactoryTests {
         @Test("Gen.choose produces values within specified range")
         func genChooseRange() throws {
-            let gen = Gen.choose(in: 10 ... 20) as ReflectiveGenerator<Int>
+            let gen = Gen.choose(in: 10 ... 20) as Generator<Int>
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 50 {
@@ -109,17 +109,17 @@ struct CoreGeneratorTests {
     struct InterpreterTests {
         @Test("Generate-Reflect-Replay cycle consistency")
         func generateReflectReplayConsistency() throws {
-            let generators: [ReflectiveGenerator<String>] = [
+            let generators: [Generator<String>] = [
                 Gen.contramap(
                     { (s: String) -> UInt64 in UInt64(s)! },
                     Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)
-                        ._map { $0.description }
+                        .map { $0.description }
                 ),
                 Gen.just("constant"),
             ]
 
             var seedIter = ValueInterpreter(
-                Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling) as ReflectiveGenerator<UInt64>
+                Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling) as Generator<UInt64>
             )
             let seeds = try seedIter.prefix(10)
 
@@ -142,7 +142,7 @@ struct CoreGeneratorTests {
 
         @Test("Multiple generation consistency")
         func multipleGenerationConsistency() throws {
-            let gen = Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>
+            let gen = Gen.choose(in: 1 ... 100) as Generator<Int>
             guard let recipe = try Interpreters.reflect(gen, with: 42) else {
                 #expect(false, "Reflection failed for value 42")
                 return
@@ -163,7 +163,7 @@ struct CoreGeneratorTests {
     struct PerformanceTests {
         @Test("High-frequency generation performance")
         func highFrequencyGeneration() throws {
-            let gen = Gen.choose(in: 1 ... 1000) as ReflectiveGenerator<Int>
+            let gen = Gen.choose(in: 1 ... 1000) as Generator<Int>
             var iterator = ValueInterpreter(gen, maxRuns: 10000)
 
             // Should be able to generate many values quickly

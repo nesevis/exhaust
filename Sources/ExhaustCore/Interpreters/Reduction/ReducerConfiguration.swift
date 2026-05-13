@@ -4,13 +4,13 @@ package extension Interpreters {
     /// Controls the ChoiceGraph reducer's pass pipeline: stall budget, scope scheduling, and visualization.
     struct ReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
-        public var maxStalls: Int
+        public let maxStalls: Int
 
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
 
         /// Tuning constants for the scheduler's internal heuristics.
-        public var tuning: SchedulerTuning = .init()
+        public let tuning: SchedulerTuning = .init()
 
         /// Creates a configuration with the given stall budget.
         public init(
@@ -18,12 +18,6 @@ package extension Interpreters {
         ) {
             self.maxStalls = maxStalls
         }
-
-        /// Preset for fast reduction with low stall tolerance.
-        public static let fast = Self(maxStalls: 2)
-
-        /// Preset for thorough reduction with higher stall tolerance.
-        public static let slow = Self(maxStalls: 8)
     }
 }
 

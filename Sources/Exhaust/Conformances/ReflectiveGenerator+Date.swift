@@ -6,47 +6,6 @@
 import ExhaustCore
 import Foundation
 
-/// A calendar-meaningful duration for date generation.
-///
-/// All cases resolve to a fixed number of seconds. Months are treated as 30 days and years as 365 days.
-public enum DateSpan: Sendable, Comparable, Equatable {
-    /// Specifies an interval measured in seconds.
-    case seconds(Int)
-    /// Specifies an interval measured in minutes.
-    case minutes(Int)
-    /// Specifies an interval measured in hours.
-    case hours(Int)
-    /// Specifies an interval measured in days.
-    case days(Int)
-    /// Specifies an interval measured in weeks.
-    case weeks(Int)
-    /// Specifies an interval measured in calendar months.
-    case months(Int)
-    /// Specifies an interval measured in calendar years.
-    case years(Int)
-
-    /// The number of seconds represented by this span.
-    var fixedSeconds: Int {
-        switch self {
-        case let .seconds(n): n
-        case let .minutes(n): n * 60
-        case let .hours(n): n * 3600
-        case let .days(n): n * 86400
-        case let .weeks(n): n * 604_800
-        case let .months(n): n * 2_592_000 // 30 days
-        case let .years(n): n * 31_536_000 // 365 days
-        }
-    }
-
-    public static func == (lhs: DateSpan, rhs: DateSpan) -> Bool {
-        lhs.fixedSeconds == rhs.fixedSeconds
-    }
-
-    public static func < (lhs: DateSpan, rhs: DateSpan) -> Bool {
-        lhs.fixedSeconds < rhs.fixedSeconds
-    }
-}
-
 public extension ReflectiveGenerator {
     /// Generates dates within the given range, spaced by `interval`.
     ///
@@ -68,7 +27,6 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
         let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
-        // Uses the absolute value of the interval, so .hours(-1) is treated as .hours(1)
         let intervalSeconds = Int64(abs(interval.fixedSeconds))
 
         precondition(intervalSeconds > 0, "Interval must be non-zero")
@@ -79,20 +37,20 @@ public extension ReflectiveGenerator {
 
         let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
 
-        let inner: ReflectiveGenerator<Int64> = .impure(
-            operation: .chooseBits(
-                min: Int64(0).bitPattern64,
-                max: numSteps.bitPattern64,
-                tag: .date(
-                    lowerSeconds: lowerSeconds,
-                    intervalSeconds: intervalSeconds,
-                    timeZoneID: timeZone.identifier
-                ),
-                isRangeExplicit: true
-            )
-        ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
-
-        return inner.mapped(
+        return ReflectiveGenerator<Int64> {
+            .impure(
+                operation: .chooseBits(
+                    min: Int64(0).bitPattern64,
+                    max: numSteps.bitPattern64,
+                    tag: .date(
+                        lowerSeconds: lowerSeconds,
+                        intervalSeconds: intervalSeconds,
+                        timeZoneID: timeZone.identifier
+                    ),
+                    isRangeExplicit: true
+                )
+            ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
+        }.mapped(
             forward: { step in
                 Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
             },

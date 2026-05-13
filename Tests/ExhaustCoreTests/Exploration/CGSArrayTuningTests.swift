@@ -7,7 +7,7 @@ struct CGSArrayTuningTests {
     @Test("Tuning an array generator with a predicate does not crash")
     func tuneArrayGeneratorWithPredicate() throws {
         let gen = Gen.arrayOf(
-            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 0 ... 100) as Generator<Int>,
             within: 1 ... 10
         )
 
@@ -42,7 +42,7 @@ struct CGSArrayTuningTests {
     @Test("Tuning steers element values toward predicate-satisfying arrays")
     func tuneArrayElementValues() throws {
         let gen = Gen.arrayOf(
-            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 0 ... 100) as Generator<Int>,
             within: 3 ... 5
         )
 
@@ -79,7 +79,7 @@ struct CGSArrayTuningTests {
     @Test("Tuning an array generator with default thresholds does not crash")
     func tuneArrayGeneratorDefaultThresholds() throws {
         let gen = Gen.arrayOf(
-            Gen.choose(in: -50 ... 50) as ReflectiveGenerator<Int>,
+            Gen.choose(in: -50 ... 50) as Generator<Int>,
             within: 2 ... 8
         )
 

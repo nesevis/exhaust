@@ -216,7 +216,7 @@ struct CharacterSetRangeExtractionTests {
         while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.choiceGraphReduce(
-                gen: gen, tree: tree, config: .fast, property: property
+                gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
             // Shrunk value should be '5' (the smallest digit failing the property)
             #expect(shrunk == "5", "Expected shrunk digit to be '5', got '\(shrunk)'")
@@ -235,8 +235,8 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("Variadic character(from:) is equivalent to union")
     func variadicCharacterFromEquivalence() throws {
-        let variadicGen: ReflectiveGenerator<Character> = characterGen(from: .letters.union(.decimalDigits))
-        let unionGen: ReflectiveGenerator<Character> = characterGen(from: .letters.union(.decimalDigits))
+        let variadicGen: Generator<Character> = characterGen(from: .letters.union(.decimalDigits))
+        let unionGen: Generator<Character> = characterGen(from: .letters.union(.decimalDigits))
 
         // Both should produce the same set of valid characters
         var variadicIterator = ValueAndChoiceTreeInterpreter(variadicGen, seed: 42, maxRuns: 200)
@@ -253,7 +253,7 @@ struct CharacterSetRangeExtractionTests {
 // MARK: - Helpers
 
 /// Builds a character generator from a CharacterSet using ExhaustCore primitives.
-private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> {
+private func characterGen(from characterSet: CharacterSet) -> Generator<Character> {
     let srs = characterSet.scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -265,7 +265,7 @@ private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerato
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) }
+            .map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -273,17 +273,17 @@ private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerato
 private func stringGen(
     from characterSet: CharacterSet,
     length: ClosedRange<UInt64>
-) -> ReflectiveGenerator<String> {
+) -> Generator<String> {
     let charGen = characterGen(from: characterSet)
     return Gen.contramap(
         { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen, within: length)._map { String($0) }
+        Gen.arrayOf(charGen, within: length).map { String($0) }
     )
 }
 
 /// Replacement for `#exhaust` macro.
 private func exhaustCheck<T>(
-    _ gen: ReflectiveGenerator<T>,
+    _ gen: Generator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool

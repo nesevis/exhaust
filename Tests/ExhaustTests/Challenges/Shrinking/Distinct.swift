@@ -44,9 +44,8 @@ struct DistinctShrinkingChallenge {
         var report: ExhaustReport?
         let counterExample = #exhaust(
             gen,
+            reflecting: value,
             .suppress(.issueReporting),
-
-            .reflecting(value),
             .onReport { report = $0 }
         ) {
             Set($0).count < 3

@@ -31,7 +31,7 @@ enum ChoiceGraphScheduler {
         var graph: ChoiceGraph
         var stats: ReductionStats
         var rejectCache: Set<UInt64>
-        let gen: ReflectiveGenerator<Any>
+        let gen: AnyGenerator
         let property: (Any) -> Bool
         let tuning: SchedulerTuning
         let collectStats: Bool
@@ -42,7 +42,7 @@ enum ChoiceGraphScheduler {
 
     /// Orchestrates the full reduction loop: builds the initial choice graph, runs scope-based encoding passes until convergence or budget exhaustion, and returns the minimal counterexample.
     static func run<Output>(
-        gen: ReflectiveGenerator<Output>,
+        gen: Generator<Output>,
         initialTree: ChoiceTree,
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
@@ -60,7 +60,7 @@ enum ChoiceGraphScheduler {
 
     /// Wraps ``run(gen:initialTree:initialOutput:config:property:)`` with statistics collection, returning both the reduced result and accumulated ``ReductionStats``.
     static func runCollectingStats<Output>(
-        gen: ReflectiveGenerator<Output>,
+        gen: Generator<Output>,
         initialTree: ChoiceTree,
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
@@ -80,7 +80,7 @@ enum ChoiceGraphScheduler {
 
     // swiftlint:disable function_parameter_count
     private static func runCore<Output>(
-        gen: ReflectiveGenerator<Output>,
+        gen: Generator<Output>,
         initialTree: ChoiceTree,
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,

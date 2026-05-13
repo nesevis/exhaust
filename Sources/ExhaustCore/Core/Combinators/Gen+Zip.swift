@@ -10,7 +10,7 @@ package extension Gen {
     ///
     /// ```swift
     /// let pairGen = Gen.zip(Gen.int(in: 0...99), Gen.string())
-    /// // produces ReflectiveGenerator<(Int, String)>
+    /// // produces Generator<(Int, String)>
     /// ```
     ///
     /// - Parameters:
@@ -18,16 +18,16 @@ package extension Gen {
     ///   - isOpaque: When `true`, the resulting zip node is treated as a single unit during coverage analysis. Defaults to `false`.
     /// - Returns: A generator producing a tuple of values, one per input generator.
     static func zip<each T>(
-        _ generators: repeat ReflectiveGenerator<each T>,
+        _ generators: repeat Generator<each T>,
         isOpaque: Bool = false
-    ) -> ReflectiveGenerator<(repeat each T)> {
-        var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
+    ) -> Generator<(repeat each T)> {
+        var erased: ContiguousArray<AnyGenerator> = []
         erased.reserveCapacity(5) // It will rarely exceed this size
         for generator in repeat each generators {
             erased.append(generator.erase())
         }
 
-        let impure: ReflectiveGenerator<[Any]> = .impure(
+        let impure: Generator<[Any]> = .impure(
             operation: .zip(erased, isOpaque: isOpaque),
             continuation: { .pure($0 as! [Any]) }
         )
@@ -40,7 +40,7 @@ package extension Gen {
                 }
                 return values
             },
-            impure._map { (values: [Any]) -> (repeat each T) in
+            impure.map { (values: [Any]) -> (repeat each T) in
                 var index = 0
                 func next<U>(_: U.Type) -> U {
                     defer { index += 1 }

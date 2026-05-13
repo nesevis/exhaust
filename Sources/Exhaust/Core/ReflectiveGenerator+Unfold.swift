@@ -1,4 +1,9 @@
-import ExhaustCore
+//
+//  ReflectiveGenerator+Unfold.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 13/5/2026.
+//
 
 public extension ReflectiveGenerator {
     /// Generates values by iteratively transforming state from a seed.
@@ -31,18 +36,20 @@ public extension ReflectiveGenerator {
     static func unfold<State>(
         seed: ReflectiveGenerator<State>,
         depthRange: ClosedRange<Int>,
-        step: @Sendable @escaping (State, UInt64) -> ReflectiveGenerator<UnfoldStep<State, Value>>,
+        step: @Sendable @escaping (State, UInt64) -> ReflectiveGenerator<UnfoldStep<State, Output>>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Value> {
-        Gen.unfold(
-            seed: seed,
-            depthRange: depthRange,
-            step: step,
-            fileID: fileID,
-            line: line,
-            column: column
-        )
+    ) -> ReflectiveGenerator<Output> {
+        ReflectiveGenerator {
+            Gen.unfold(
+                seed: seed.gen,
+                depthRange: depthRange,
+                step: { step($0, $1).gen },
+                fileID: fileID,
+                line: line,
+                column: column
+            )
+        }
     }
 }

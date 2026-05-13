@@ -32,10 +32,10 @@ struct MonadLawTests {
     @Test("Functor Law: Identity (map(id) == id)")
     func functorIdentity() throws {
         // Arrange
-        let functor = log("Action")._map { 42 }
+        let functor = log("Action").map { 42 }
 
         // Act
-        let lhsResult = try interpret(functor._map(\.self))
+        let lhsResult = try interpret(functor.map(\.self))
         let rhsResult = try interpret(functor)
 
         // Assert
@@ -47,13 +47,13 @@ struct MonadLawTests {
     @Test("Functor Law: Composition (map(g • f) == map(f).map(g))")
     func functorComposition() throws {
         // Arrange
-        let functor = log("Start")._map { 10 } // Initial monad producing an Int
+        let functor = log("Start").map { 10 } // Initial monad producing an Int
         let function1: (Int) -> String = { "\($0 * 2)" }
         let function2: (String) -> String = { "Value is \($0)" }
 
         // Act
-        let lhsResult = try interpret(functor._map { function2(function1($0)) })
-        let rhsResult = try interpret(functor._map(function1)._map(function2))
+        let lhsResult = try interpret(functor.map { function2(function1($0)) })
+        let rhsResult = try interpret(functor.map(function1).map(function2))
 
         // Assert
         #expect(lhsResult.value == rhsResult.value)
@@ -69,11 +69,11 @@ struct MonadLawTests {
         // Arrange
         let output = "World"
         let function: (String) -> LoggingFreerMonad<String> = { name in
-            log("Hello, \(name)")._map { _ in "Done" }
+            log("Hello, \(name)").map { _ in "Done" }
         }
 
         // Act
-        let lhsResult = try interpret(LoggingFreerMonad.pure(output)._bind(function))
+        let lhsResult = try interpret(LoggingFreerMonad.pure(output).bind(function))
         let rhsResult = try interpret(function(output))
 
         // Assert
@@ -85,10 +85,10 @@ struct MonadLawTests {
     @Test("Monad Law: Right Identity (m >>= return == m)")
     func monadRightIdentity() throws {
         // Arrange
-        let monad = log("Step 1")._bind { log("Step 2") }._map { 123 }
+        let monad = log("Step 1").bind { log("Step 2") }.map { 123 }
 
         // Act
-        let lhsResult = try interpret(monad._bind { .pure($0) })
+        let lhsResult = try interpret(monad.bind { .pure($0) })
         let rhsResult = try interpret(monad)
 
         // Assert
@@ -100,19 +100,19 @@ struct MonadLawTests {
     @Test("Monad Law: Associativity ((m >>= f) >>= g == m >>= (x -> f(x) >>= g))")
     func monadAssociativity() throws {
         // Arrange: Use a chain that changes types to stress the generic interpreter.
-        let monad: LoggingFreerMonad<String> = log("Start")._map { "Value from m" }
+        let monad: LoggingFreerMonad<String> = log("Start").map { "Value from m" }
 
         let function1: (String) -> LoggingFreerMonad<Int> = { val in
-            log("function1 received '\(val)'")._map { 42 }
+            log("function1 received '\(val)'").map { 42 }
         }
 
         let function2: (Int) -> LoggingFreerMonad<Bool> = { val in
-            log("function2 received \(val)")._map { true }
+            log("function2 received \(val)").map { true }
         }
 
         // Act
-        let lhsResult = try interpret(monad._bind(function1)._bind(function2))
-        let rhsResult = try interpret(monad._bind { x in function1(x)._bind(function2) })
+        let lhsResult = try interpret(monad.bind(function1).bind(function2))
+        let rhsResult = try interpret(monad.bind { x in function1(x).bind(function2) })
 
         // Assert
         #expect(lhsResult.value == rhsResult.value)
@@ -197,8 +197,8 @@ struct PartialMonadicProfunctorLawTests {
         let transform: (String) -> Int? = { $0.isEmpty == false ? $0.count : nil }
 
         // Act
-        let lhs = Gen.contramap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))
-        let rhs = ReflectiveGenerator<String>.pure(pureValue)
+        let lhs = Gen.contramap(transform, Gen.prune(Generator.pure(pureValue)))
+        let rhs = Generator<String>.pure(pureValue)
 
         var lhsIterator = ValueInterpreter(lhs)
         var rhsIterator = ValueInterpreter(rhs)
@@ -217,10 +217,10 @@ struct PartialMonadicProfunctorLawTests {
     @Test("PMP Law 4: contramap . prune distributes over bind")
     func pmpLaw4_contramapPruneDistributesOverBind() throws {
         // Arrange - carefully chosen types for the law to work
-        let baseGenerator = ReflectiveGenerator<Int>.pure(5)
+        let baseGenerator = Generator<Int>.pure(5)
         // Crucial: bindFunction must return a generator with the SAME input type as base
-        let bindFunction: (Int) -> ReflectiveGenerator<String> = { val in
-            ReflectiveGenerator<String>.pure("Value: \(val)")
+        let bindFunction: (Int) -> Generator<String> = { val in
+            Generator<String>.pure("Value: \(val)")
         }
         // transform maps from NewInput to original input type (Optional)
         let transform: (String) -> Int? = { str in
@@ -229,18 +229,18 @@ struct PartialMonadicProfunctorLawTests {
 
         // Act
         // LHS: (contramap f . prune)(x >>= g)
-        let boundGenerator = baseGenerator._bind(bindFunction) // ReflectiveGenerator<Int, String>
-        let lhs = Gen.contramap(transform, Gen.prune(boundGenerator)) // ReflectiveGenerator<String, String>
+        let boundGenerator = baseGenerator.bind(bindFunction) // Generator<Int, String>
+        let lhs = Gen.contramap(transform, Gen.prune(boundGenerator)) // Generator<String, String>
 
         // RHS: (contramap f . prune) x >>= (contramap f . prune) . g
-        let transformedBase = Gen.contramap(transform, Gen.prune(baseGenerator)) // ReflectiveGenerator<String, Int>
+        let transformedBase = Gen.contramap(transform, Gen.prune(baseGenerator)) // Generator<String, Int>
 
         // The bind function applies (contramap f . prune) to the result of g
-        let transformedFunction: (Int) -> ReflectiveGenerator<String> = { val in
-            let resultGenerator = bindFunction(val) // ReflectiveGenerator<Int, String>
-            return Gen.contramap(transform, Gen.prune(resultGenerator)) // ReflectiveGenerator<String, String>
+        let transformedFunction: (Int) -> Generator<String> = { val in
+            let resultGenerator = bindFunction(val) // Generator<Int, String>
+            return Gen.contramap(transform, Gen.prune(resultGenerator)) // Generator<String, String>
         }
-        let rhs = transformedBase._bind(transformedFunction) // ReflectiveGenerator<String, String>
+        let rhs = transformedBase.bind(transformedFunction) // Generator<String, String>
 
         var lhsIterator = ValueInterpreter(lhs)
         var rhsIterator = ValueInterpreter(rhs)

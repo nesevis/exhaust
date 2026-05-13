@@ -166,8 +166,8 @@ struct CompositionTests {
 
         let target = Pet.dog(13, "Buddy")
 
-        let tree = try #require(try Interpreters.reflect(petGen, with: target))
-        let replay = try #require(try Interpreters.replay(petGen, using: tree))
+        let tree = try #require(try Interpreters.reflect(petGen.gen, with: target))
+        let replay = try #require(try Interpreters.replay(petGen.gen, using: tree))
         #expect(replay == target)
     }
 

@@ -107,7 +107,7 @@ struct DecoderSelectionTests {
 
     @Test("Sibling swap does not set materializePicks")
     func siblingSwapDoesNotMaterializePicks() {
-        let mutation = ProjectedMutation.siblingsSwapped(parentNodeID: 0, idA: 1, idB: 2)
+        let mutation = ProjectedMutation.siblingsSwapped(parentNodeID: 0, lhs: 1, rhs: 2)
         let selection = ChoiceGraphScheduler.selectDecoder(
             for: mutation,
             requiresExactDecoder: false,

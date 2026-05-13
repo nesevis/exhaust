@@ -13,11 +13,7 @@ struct UnfoldTests {
             .just(.done(state * 2))
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 20)
-        var values: [Int] = []
-        while let value = try? interpreter.next() {
-            values.append(value)
-        }
+        let values = #example(gen, count: 20, seed: 42)
         #expect(values.isEmpty == false)
         #expect(values.allSatisfy { $0 >= 2 && $0 <= 20 })
     }
@@ -37,8 +33,7 @@ struct UnfoldTests {
             )))
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 1)
-        let value = try? interpreter.next()
+        let value = #example(gen, seed: 42)
         #expect(value == [0, 1, 2])
     }
 
@@ -54,8 +49,7 @@ struct UnfoldTests {
             return .just(.recurse(state + 1))
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 1)
-        let value = try? interpreter.next()
+        let value = #example(gen, seed: 42)
         #expect(value == 3)
     }
 
@@ -73,11 +67,8 @@ struct UnfoldTests {
             }
         }
 
-        var interpreter = ValueInterpreter(gen, seed: 42, maxRuns: 50)
-        var lengths = Set<Int>()
-        while let value = try? interpreter.next() {
-            lengths.insert(value.count)
-        }
+        let values = #example(gen, count: 50, seed: 42)
+        let lengths = Set(values.map(\.count))
         #expect(lengths.count > 1, "Expected varied list lengths, got \(lengths)")
     }
 
@@ -148,18 +139,8 @@ struct UnfoldTests {
             }
         }
 
-        var firstRun = ValueInterpreter(gen, seed: 99, maxRuns: 10)
-        var firstValues: [Int] = []
-        while let value = try? firstRun.next() {
-            firstValues.append(value)
-        }
-
-        var secondRun = ValueInterpreter(gen, seed: 99, maxRuns: 10)
-        var secondValues: [Int] = []
-        while let value = try? secondRun.next() {
-            secondValues.append(value)
-        }
-
+        let firstValues = #example(gen, count: 10, seed: 99)
+        let secondValues = #example(gen, count: 10, seed: 99)
         #expect(firstValues == secondValues)
     }
 }

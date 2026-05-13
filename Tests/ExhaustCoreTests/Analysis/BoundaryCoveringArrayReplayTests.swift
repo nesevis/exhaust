@@ -95,7 +95,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
     struct BuildPickTreeTests {
         @Test("Pick parameter produces branch with selected wrapper")
         func pickProducesBranch() {
-            let gen: ReflectiveGenerator<Bool> = Gen.pick(choices: [
+            let gen: Generator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
             ])
@@ -117,7 +117,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
 
         @Test("Out-of-bounds pick value returns nil")
         func outOfBoundsPick() {
-            let gen: ReflectiveGenerator<Bool> = Gen.pick(choices: [
+            let gen: Generator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
             ])
@@ -236,10 +236,8 @@ struct BoundaryCoveringArrayReplayUnitTests {
             let tree = try #require(BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile))
 
             // Should contain a sequence with length 0
-            #expect(tree.contains { node in
-                if case let .sequence(length, _, _) = node { return length == 0 }
-                return false
-            })
+            let sequence = ChoiceSequence(tree)
+            #expect(sequence.contains(where: { $0.value != nil }) == false)
         }
     }
 
@@ -250,7 +248,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
         @Test("Pure generator produces .just")
         func pureProducesJust() {
             // Verified via pick which calls buildSubTree internally
-            let gen: ReflectiveGenerator<Bool> = Gen.pick(choices: [
+            let gen: Generator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
             ])
@@ -357,7 +355,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
 
 // MARK: - Helpers
 
-private func analyzeBoundary(_ gen: ReflectiveGenerator<some Any>) -> BoundaryDomainProfile? {
+private func analyzeBoundary(_ gen: Generator<some Any>) -> BoundaryDomainProfile? {
     guard case let .boundary(profile) = ChoiceTreeAnalysis.analyze(gen) else { return nil }
     return profile
 }

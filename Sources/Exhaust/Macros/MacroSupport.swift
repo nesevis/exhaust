@@ -60,8 +60,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// - Returns: The reduced counterexample if the property failed, or `nil` if all iterations passed.
     @discardableResult
     public static func __exhaust<Output>(
-        _ gen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        _ refGen: ReflectiveGenerator<Output>,
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -70,7 +71,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         function: StaticString = #function,
         property: @Sendable (Output) throws -> Bool
     ) -> Output? {
-        Gen.$isInterpreting.withValue(true) {
+        let gen = refGen.gen
+        return Gen.$isInterpreting.withValue(true) {
             withoutActuallyEscaping(property) { property in
                 let property: @Sendable (Output) -> Bool = { value in
                     (try? property(value)) ?? false
@@ -80,7 +82,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 var seed: UInt64?
                 var suppressIssueReporting = false
                 var suppressLogs = false
-                var reflectingValue: Output?
                 var useRandomOnly = false
                 var visualize = false
                 var onReportClosure: ((ExhaustReport) -> Void)?
@@ -102,7 +103,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 line: line,
                                 column: column
                             )
-                            return nil
+                            return nil as Output?
                         }
                     case let .suppress(option):
                         switch option {
@@ -114,8 +115,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             suppressIssueReporting = true
                             suppressLogs = true
                         }
-                    case let .reflecting(value):
-                        reflectingValue = value
                     case .randomOnly:
                         useRandomOnly = true
                     case .visualize:
@@ -202,11 +201,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         statsAccumulator: statsAccumulator
                     )
 
-                    if let reflectingValue {
+                    if let reflecting {
                         do {
                             return try __reduceReflected(
                                 gen,
-                                value: reflectingValue,
+                                value: reflecting,
                                 reductionConfig: reductionConfig,
                                 visualize: visualize,
                                 suppressIssueReporting: suppressIssueReporting,
@@ -220,7 +219,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             )
                         } catch {
                             reportIssue("\(error)", fileID: fileID, filePath: filePath, line: line, column: column)
-                            return reflectingValue
+                            return reflecting
                         }
                     }
 
@@ -308,8 +307,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     // Replays regression seeds from the test trait and returns the first failing counterexample, if any.
     #if canImport(Testing)
         private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
-            gen: ReflectiveGenerator<Output>,
-            settings: [ExhaustSettings<Output>],
+            gen: Generator<Output>,
+            settings: [ExhaustSettings],
             sourceCode: String?,
             fileID: StaticString,
             filePath: StaticString,
@@ -335,7 +334,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     continue
                 }
                 let replayResult = __exhaust(
-                    gen,
+                    ReflectiveGenerator { gen },
                     settings: [
                         .replay(.numeric(seed)),
                         .suppress(.issueReporting),
@@ -374,8 +373,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Wraps the property into a `Bool`-returning form via `withExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
     @discardableResult
     public static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
-        _ gen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        _ refGen: ReflectiveGenerator<Output>,
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -385,6 +385,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         property: @Sendable (Output) throws -> Void,
         detection: @Sendable (Output) throws -> Void
     ) -> Output? {
+        let gen = refGen.gen
         var logLevel: LogLevel = .error
         var logFormat: LogFormat = .keyValue
         var suppressLogs = false
@@ -436,8 +437,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
                     // Delegate to the Bool pipeline with suppressed issue reporting.
                     pipelineResult = __exhaust(
-                        gen,
+                        refGen,
                         settings: augmentedSettings,
+                        reflecting: reflecting,
                         sourceCode: sourceCode,
                         fileID: fileID,
                         filePath: filePath,
@@ -486,8 +488,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Bridges the async property to sync, then dispatches the synchronous core onto a GCD thread where semaphore-blocking is safe.
     @discardableResult
     public static func __exhaustAsync<Output>( // swiftlint:disable:this function_parameter_count
-        _ gen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        _ refGen: ReflectiveGenerator<Output>,
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -499,8 +502,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         let syncProperty = bridgeAsyncProperty(property)
         return await dispatchToGCD {
             __exhaust(
-                gen,
+                refGen,
                 settings: settings,
+                reflecting: reflecting,
                 sourceCode: sourceCode,
                 fileID: fileID,
                 filePath: filePath,
@@ -517,8 +521,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Bridges the async detection to sync, dispatches the pipeline onto a GCD thread, then re-runs the async property in the original context so `#expect` failures record with reduced values.
     @discardableResult
     public static func __exhaustExpectAsync<Output>( // swiftlint:disable:this function_parameter_count
-        _ gen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings<Output>],
+        _ refGen: ReflectiveGenerator<Output>,
+        settings: [ExhaustSettings],
+        reflecting: Output? = nil,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -528,6 +533,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         property: @escaping @Sendable (Output) async throws -> Void,
         detection: @escaping @Sendable (Output) async throws -> Void
     ) async -> Output? {
+        let gen = refGen.gen
         var logLevel: LogLevel = .error
         var logFormat: LogFormat = .keyValue
         for setting in settings {
@@ -565,8 +571,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         })
 
                         pipelineResult = __exhaust(
-                            gen,
+                            refGen,
                             settings: augmentedSettings,
+                            reflecting: reflecting,
                             sourceCode: sourceCode,
                             fileID: fileID,
                             filePath: filePath,
@@ -584,8 +591,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     })
 
                     pipelineResult = __exhaust(
-                        gen,
+                        refGen,
                         settings: augmentedSettings,
+                        reflecting: reflecting,
                         sourceCode: sourceCode,
                         fileID: fileID,
                         filePath: filePath,
@@ -628,10 +636,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Generates a single value from a generator. Runtime target of `#example` expansion.
     public static func __example<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         seed: UInt64?
     ) -> Output {
-        Gen.$isInterpreting.withValue(true) {
+        let gen = refGen.gen
+        return Gen.$isInterpreting.withValue(true) {
             var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
             guard let value = try? interpreter.next() else {
                 fatalError("#example: generator produced no values")
@@ -642,11 +651,12 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Generates an array of values from a generator. Runtime target of `#example` expansion.
     public static func __exampleArray<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ refGen: ReflectiveGenerator<Output>,
         count: UInt64,
         seed: UInt64?
     ) -> [Output] {
-        Gen.$isInterpreting.withValue(true) {
+        let gen = refGen.gen
+        return Gen.$isInterpreting.withValue(true) {
             var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
             var results: [Output] = []
             while let value = try? interpreter.next() {
@@ -663,7 +673,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
     @discardableResult
     public static func __examine(
-        _ gen: ReflectiveGenerator<some Equatable>,
+        _ refGen: ReflectiveGenerator<some Equatable>,
         samples: Int,
         seed: UInt64?,
         fileID: StaticString,
@@ -671,7 +681,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         line: UInt,
         column: UInt
     ) -> ValidationReport {
-        Gen.$isInterpreting.withValue(true) {
+        let gen = refGen.gen
+        return Gen.$isInterpreting.withValue(true) {
             gen.validate(
                 samples: samples,
                 seed: seed,
@@ -688,7 +699,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Falls back to choice-sequence comparison for non-`Equatable` types.
     @discardableResult
     public static func __examine(
-        _ gen: ReflectiveGenerator<some Any>,
+        _ refGen: ReflectiveGenerator<some Any>,
         samples: Int,
         seed: UInt64?,
         fileID: StaticString,
@@ -696,7 +707,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         line: UInt,
         column: UInt
     ) -> ValidationReport {
-        Gen.$isInterpreting.withValue(true) {
+        let gen = refGen.gen
+        return Gen.$isInterpreting.withValue(true) {
             gen.validate(
                 samples: samples,
                 seed: seed,

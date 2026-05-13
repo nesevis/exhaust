@@ -40,8 +40,8 @@ struct DifferenceShrinkingChallenge {
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
+            reflecting: [700, 700],
             .suppress(.issueReporting),
-            .reflecting([700, 700]),
             .onReport { report = $0 },
             property: property
         )

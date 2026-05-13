@@ -98,9 +98,9 @@ private enum AdvancedCoupledFixtures {
 @Suite("Advanced & Coupled Scenarios")
 struct AdvancedCoupledScenariosTests {
     private func reduce<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         startingAt value: Output,
-        config: Interpreters.ReducerConfiguration = .fast,
+        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
         property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
@@ -113,8 +113,8 @@ struct AdvancedCoupledScenariosTests {
     @Test("2.1 Coupled Integers (fast-check)")
     func coupledIntegersFastCheckStyle() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>,
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>,
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -139,7 +139,7 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.2 Stateful Stack Bug (jqwik)")
     func statefulStackBugJqwikStyle() throws {
-        let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = Gen.contramap(
+        let actionGen: Generator<AdvancedCoupledFixtures.StackAction> = Gen.contramap(
             { (action: AdvancedCoupledFixtures.StackAction) -> (Int, String) in
                 switch action {
                 case .pop:
@@ -149,9 +149,9 @@ struct AdvancedCoupledScenariosTests {
                 }
             },
             Gen.zip(
-                Gen.choose(in: 0 ... 1) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 1) as Generator<Int>,
                 Gen.element(from: ["a", "b", "c"])
-            )._map { tag, value in
+            ).map { tag, value in
                 tag == 0 ? .pop : .push(value)
             }
         )
@@ -176,7 +176,7 @@ struct AdvancedCoupledScenariosTests {
         let charArrayGen = Gen.arrayOf(Gen.element(from: Array("01")), within: UInt64(0) ... 40)
         let binaryStringGen = Gen.contramap(
             { (string: String) -> [Character] in Array(string) },
-            charArrayGen._map { chars in String(chars) }
+            charArrayGen.map { chars in String(chars) }
         )
 
         let property: (String) -> Bool = { s in
@@ -221,7 +221,7 @@ struct AdvancedCoupledScenariosTests {
         let unicodeCharArrayGen = Gen.arrayOf(Gen.element(from: Array("xy The𝕿𝖍𝖊")), within: UInt64(0) ... 40)
         let unicodeStringGen = Gen.contramap(
             { (string: String) -> [Character] in Array(string) },
-            unicodeCharArrayGen._map { chars in String(chars) }
+            unicodeCharArrayGen.map { chars in String(chars) }
         )
 
         let property: (String) -> Bool = { s in
@@ -241,8 +241,8 @@ struct AdvancedCoupledScenariosTests {
     @Test("2.6 Difference with Gap (CsCheck)")
     func differenceWithGapCsCheckStyle() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>,
-            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>,
+            Gen.choose(in: 0 ... 1_000_000) as Generator<Int>
         )
 
         let property: ((Int, Int)) -> Bool = { pair in

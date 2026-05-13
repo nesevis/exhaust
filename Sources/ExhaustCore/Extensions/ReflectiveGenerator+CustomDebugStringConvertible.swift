@@ -1,18 +1,18 @@
 //
-//  ReflectiveGenerator+CustomDebugStringConvertible.swift
+//  Generator+CustomDebugStringConvertible.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 12/12/2025.
 //
 
-extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == ReflectiveOperation {
+extension Generator where Operation == ReflectiveOperation {
     /// Provides a human-readable tree view of the generator composition.
     ///
     /// This implementation shows the hierarchical structure of generator operations, making it easier to understand complex generator compositions, debug generation issues, and visualize how Choice Gradient Sampling optimizations are applied.
     ///
     /// Example output:
     /// ```
-    /// ReflectiveGenerator<BinarySearchTree<Int>>
+    /// Generator<BinarySearchTree<Int>>
     /// └── pick(choices: 2)
     ///     ├── just(leaf)
     ///     └── zip(generators: 3)
@@ -20,9 +20,9 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
     ///         ├── chooseBits(Int: -2147483648...2147483647)
     ///         └── BinarySearchTree<Int>.arbitrary
     /// ```
-    public var debugDescription: String {
+    package var debugDescription: String {
         let typeName = "\(Value.self)"
-        return "ReflectiveGenerator<\(typeName)>\n" + treeDescription(prefix: "", isLast: true)
+        return "Generator<\(typeName)>\n" + treeDescription(prefix: "", isLast: true)
     }
 
     private func treeDescription(prefix: String, isLast: Bool, depth: Int = 0) -> String {

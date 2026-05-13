@@ -16,10 +16,12 @@ public extension ReflectiveGenerator {
     ///
     /// - Note: Test case reduction operates on each half of the value independently. Range-constrained generation and size-scaled generation are not supported.
     static func uint128() -> ReflectiveGenerator<UInt128> {
-        Gen.zip(
-            Gen.chooseBits(),
-            Gen.chooseBits()
-        ).mapped(
+        ReflectiveGenerator<(UInt64, UInt64)> {
+            Gen.zip(
+                Gen.chooseBits(),
+                Gen.chooseBits()
+            )
+        }.mapped(
             forward: { high, low in
                 UInt128(high) << 64 | UInt128(low)
             },
@@ -40,10 +42,12 @@ public extension ReflectiveGenerator {
     ///
     /// - Note: Test case reduction operates on each half of the value independently. Range-constrained generation and size-scaled generation are not supported.
     static func int128() -> ReflectiveGenerator<Int128> {
-        Gen.zip(
-            Gen.chooseBits(),
-            Gen.chooseBits()
-        ).mapped(
+        ReflectiveGenerator<(UInt64, UInt64)> {
+            Gen.zip(
+                Gen.chooseBits(),
+                Gen.chooseBits()
+            )
+        }.mapped(
             forward: { high, low in
                 let bits = UInt128(high) << 64 | UInt128(low)
                 return Int128(bitPattern: bits)

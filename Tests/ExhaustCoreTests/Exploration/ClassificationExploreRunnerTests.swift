@@ -5,7 +5,7 @@ import Testing
 struct ClassificationExploreRunnerTests {
     @Test("Covers all directions for a simple generator with common directions")
     func coversCommonDirections() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { _ in true },
@@ -28,7 +28,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Finds failure during warm-up and reduces")
     func findsFailureDuringWarmup() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { $0 < 50 },
@@ -49,7 +49,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Finds failure during tuning pass with direction-preserving reduction")
     func findsFailureDuringTuningPass() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 1000)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 1000)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { $0 < 950 },
@@ -69,7 +69,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Co-occurrence matrix records cross-direction overlap")
     func coOccurrenceTracksOverlap() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { _ in true },
@@ -88,7 +88,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Unmatched samples are tracked")
     func unmatchedSamplesTracked() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { _ in true },
@@ -105,7 +105,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Deterministic with same seed")
     func deterministicWithSameSeed() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
 
         var runner1 = ClassificationExploreRunner(
             gen: gen,
@@ -141,7 +141,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Budget exhaustion reported for unreachable direction")
     func budgetExhaustionForUnreachableDirection() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 10)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 10)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { _ in true },
@@ -161,7 +161,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Warm-up hits count toward direction coverage")
     func warmupHitsCountTowardCoverage() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 1)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 1)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { _ in true },
@@ -180,7 +180,7 @@ struct ClassificationExploreRunnerTests {
 
     @Test("Incidental coverage from other direction's tuning pass")
     func incidentalCoverage() {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
+        let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
             property: { _ in true },

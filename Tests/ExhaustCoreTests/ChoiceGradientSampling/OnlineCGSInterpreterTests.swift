@@ -209,7 +209,7 @@ struct DerivativeContextTests {
     typealias Context = Interpreter.DerivativeContext
     typealias Frame = Interpreter.DerivativeFrame
 
-    private func sampleApplied(_ context: Context, gen: ReflectiveGenerator<Any>) throws -> Int {
+    private func sampleApplied(_ context: Context, gen: AnyGenerator) throws -> Int {
         let result = try context.apply(gen)
         var iterator = ValueInterpreter(result, seed: 1, maxRuns: 1)
         let value = try iterator.next()
@@ -219,7 +219,7 @@ struct DerivativeContextTests {
     @Test("Empty context applies identity transform")
     func emptyContextIsIdentity() throws {
         let context = Context()
-        let gen: ReflectiveGenerator<Any> = .pure(42)
+        let gen: AnyGenerator = .pure(42)
         let value = try sampleApplied(context, gen: gen)
         #expect(value == 42)
     }
@@ -245,7 +245,7 @@ struct DerivativeContextTests {
         }))
 
         // gen produces 5, bind should transform to 50, map casts to Int
-        let gen: ReflectiveGenerator<Any> = .pure(5)
+        let gen: AnyGenerator = .pure(5)
         let value = try sampleApplied(context, gen: gen)
         #expect(value == 50)
     }
@@ -265,15 +265,15 @@ struct DerivativeContextTests {
         }))
 
         // gen produces 5 -> inner: 5+1=6 -> outer: 6*10=60
-        let gen: ReflectiveGenerator<Any> = .pure(5)
+        let gen: AnyGenerator = .pure(5)
         let value = try sampleApplied(context, gen: gen)
         #expect(value == 60)
     }
 
     @Test("zipComponent frame reconstructs zip correctly")
     func zipComponentFrame() throws {
-        let g0: ReflectiveGenerator<Any> = .pure(10)
-        let g1: ReflectiveGenerator<Any> = .pure(20)
+        let g0: AnyGenerator = .pure(10)
+        let g1: AnyGenerator = .pure(20)
         let generators = ContiguousArray([g0, g1])
 
         var context = Context()
@@ -290,7 +290,7 @@ struct DerivativeContextTests {
 
         // Component gen produces 100 (replacing g0 at index 0)
         // -> zip([.pure(100), .pure(20)]) -> [100, 20] -> continuation sums -> 120
-        let gen: ReflectiveGenerator<Any> = .pure(100)
+        let gen: AnyGenerator = .pure(100)
         let value = try sampleApplied(context, gen: gen)
         #expect(value == 120)
     }

@@ -44,13 +44,4 @@ package extension ComposableEncoder {
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
     }
-
-    /// Default cost estimate: nil (no work to do). Conformers should override.
-    func estimatedCost(
-        sequence _: ChoiceSequence,
-        tree _: ChoiceTree,
-        positionRange _: ClosedRange<Int>
-    ) -> Int? {
-        nil
-    }
 }

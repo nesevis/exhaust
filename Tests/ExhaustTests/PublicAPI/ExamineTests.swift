@@ -38,7 +38,7 @@ struct ExamineTests {
     func filterObservations() {
         // ~50% validity rate — should pass without warnings
         let gen = #gen(.int(in: 0 ... 100, scaling: .constant)).filter(.rejectionSampling) { $0 >= 50 }
-        let report = gen.validate(samples: 50, seed: 42)
+        let report = gen.gen.validate(samples: 50, seed: 42)
         #expect(report.passed)
         #expect(report.filterObservations.count == 1)
         let observation = report.filterObservations.values.first!
@@ -53,7 +53,7 @@ struct ExamineTests {
         let gen = #gen(.int(in: 0 ... 1000, scaling: .constant)).filter(.rejectionSampling) { $0 < 10 }
         var report: ValidationReport!
         withKnownIssue {
-            report = gen.validate(samples: 50, seed: 99)
+            report = gen.gen.validate(samples: 50, seed: 99)
         }
         let lowValidityFailures = report.failures.compactMap { failure -> Double? in
             if case let .lowFilterValidityRate(_, rate, _) = failure { return rate }

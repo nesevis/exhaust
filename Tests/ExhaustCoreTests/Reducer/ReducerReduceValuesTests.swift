@@ -13,9 +13,11 @@ import Testing
 
 // MARK: - Helpers
 
+private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
+
 /// Generate a value and its choice tree from a generator with a given seed.
 private func generate<Output>(
-    _ gen: ReflectiveGenerator<Output>,
+    _ gen: Generator<Output>,
     seed: UInt64 = 42
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
@@ -77,7 +79,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 5 }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         #expect(result.1 == 5)
@@ -94,7 +96,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 50 }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         #expect(result.1 == 50)
@@ -111,7 +113,7 @@ struct ReducerReduceValuesTests {
         let property: (Int64) -> Bool = { $0 > -5 }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         #expect(result.1 == -5)
@@ -128,7 +130,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { _ in true }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         #expect(result.0 == originalSequence)
@@ -145,7 +147,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 10 }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         #expect(property(result.1) == false)
@@ -171,7 +173,7 @@ struct ReducerReduceValuesTests {
         let property: (Character) -> Bool = { $0 <= "e" }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         #expect(result.1 == "f")
@@ -199,7 +201,7 @@ struct ReducerReduceValuesTests {
         let property: (Double) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         // Value should be reduced toward 0 (Pass 3 sets it to 0.0 directly since property always fails)
@@ -220,7 +222,7 @@ struct ReducerReduceValuesTests {
         }
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         #expect(result.1.count == 3)
@@ -235,7 +237,7 @@ struct ReducerReduceValuesTests {
     func dynamicRangesDoNotBlockValueShrinking() throws {
         // Child values are constrained by the chosen parent value.
         let gen = Gen.choose(in: UInt64(0) ... 100)
-            ._bind { parent in
+            .bind { parent in
                 Gen.zip(Gen.just(parent), Gen.choose(in: parent ... 100), Gen.choose(in: parent ... 100))
             }
 
@@ -257,7 +259,7 @@ struct ReducerReduceValuesTests {
         let (_, tree) = try #require(found)
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         )
 
         // Minimal failing tuple under constraints:

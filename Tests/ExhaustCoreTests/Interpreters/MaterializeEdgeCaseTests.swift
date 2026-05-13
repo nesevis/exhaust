@@ -11,7 +11,7 @@ struct MaterializeEdgeCaseTests {
     // MARK: - Helpers
 
     private func roundTrip<Output: Equatable>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         seed: UInt64 = 42,
         maxRuns: UInt64 = 20
     ) throws -> [(original: Output, materialized: Output)] {
@@ -60,7 +60,7 @@ struct MaterializeEdgeCaseTests {
 
     @Test("Pick between just values inside an array")
     func pickOfJustInArray() throws {
-        let pick: ReflectiveGenerator<String> = Gen.pick(choices: [
+        let pick: Generator<String> = Gen.pick(choices: [
             (weight: 1, generator: Gen.just("a")),
             (weight: 1, generator: Gen.just("b")),
             (weight: 1, generator: Gen.just("c")),

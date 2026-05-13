@@ -29,10 +29,10 @@ package extension Gen {
         base: Output,
         depthRange: ClosedRange<Int>,
         extend: @escaping (
-            @escaping () -> ReflectiveGenerator<Output>,
+            @escaping () -> Generator<Output>,
             UInt64
-        ) -> ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        ) -> Generator<Output>
+    ) -> Generator<Output> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         return recursive(base: Gen.just(base), depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound), extend: extend)
     }
@@ -49,12 +49,12 @@ package extension Gen {
     ///   - extend: Closure that builds one recursive layer from the previous layer.
     /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive<Output>(
-        base: ReflectiveGenerator<Output>,
+        base: Generator<Output>,
         depthRange: ClosedRange<UInt64>,
-        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        extend: @escaping (@escaping () -> Generator<Output>, UInt64) -> Generator<Output>
+    ) -> Generator<Output> {
         // Build all layers eagerly. Layer 0 = base, layer N = extend applied N times.
-        var layers: [ReflectiveGenerator<Output>] = [base]
+        var layers: [Generator<Output>] = [base]
         for layer in 0 ... depthRange.upperBound {
             let availableLayers = layers // capture current set
             // recurse() draws its OWN depth independently
@@ -88,18 +88,18 @@ package extension Gen {
     ///   - step: Closure that receives the current state and remaining depth, returning a generator of ``UnfoldStep``.
     /// - Returns: A generator producing values built by iterative state transformation.
     static func unfold<State, Output>(
-        seed: ReflectiveGenerator<State>,
+        seed: Generator<State>,
         depthRange: ClosedRange<Int>,
-        step: @escaping (State, UInt64) -> ReflectiveGenerator<UnfoldStep<State, Output>>,
+        step: @escaping (State, UInt64) -> Generator<UnfoldStep<State, Output>>,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         precondition(depthRange.lowerBound >= 1, "lower bound must be >= 1")
         func loop(
-            state: ReflectiveGenerator<State>,
+            state: Generator<State>,
             remaining: UInt64
-        ) -> ReflectiveGenerator<Output> {
+        ) -> Generator<Output> {
             state._bindReified(
                 { currentState in
                     step(currentState, remaining)._bindReified(
@@ -138,7 +138,7 @@ package extension Gen {
     // MARK: - Depth Control
 
     /// Generates a depth index tagged with ``TypeTag/depthControl``. Excluded from value search during reduction — structural operations handle depth reduction while preserving structural context.
-    static func chooseDepth(in range: ClosedRange<UInt64>) -> ReflectiveGenerator<UInt64> {
+    static func chooseDepth(in range: ClosedRange<UInt64>) -> Generator<UInt64> {
         let operation = ReflectiveOperation.chooseBits(
             min: range.lowerBound,
             max: range.upperBound,

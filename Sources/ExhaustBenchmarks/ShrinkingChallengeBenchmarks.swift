@@ -33,7 +33,7 @@ func registerShrinkingChallengeBenchmarks() {
 // MARK: - Bound5
 
 private func registerBound5() {
-    let gen = bound5Gen
+    let gen = bound5Gen.gen
     let property = bound5Property
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Bound5")
@@ -56,8 +56,7 @@ private func registerBound5() {
 // MARK: - Binary Heap
 
 private func registerBinaryHeap() {
-    let gen = binaryHeapGen(depth: 10).unique()
-        .unique()
+    let gen = binaryHeapGen(depth: 10).unique().gen
     let property = binaryHeapProperty
 
     let failingPairs = generateFailingPairs(gen: gen, property: property, name: "BinaryHeap")
@@ -80,14 +79,14 @@ private func registerBinaryHeap() {
 // MARK: - Calculator
 
 private func registerCalculator() {
-    let gen = #gen(calculatorExpressionGen(depth: 4))
+    let gen = calculatorExpressionGen(depth: 4).gen
     let property = calculatorProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Calculator")
     let coverageFinds = coverageFindsFailure(gen: gen, property: property)
     let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
-    for strategy in withStrategies(.slow) {
+    for strategy in withStrategies(reducerConfig) {
         benchmark("Calculator (\(strategy.name))") {
             let results = runReflectableBenchmark(
                 gen: gen,
@@ -103,7 +102,7 @@ private func registerCalculator() {
 // MARK: - Coupling
 
 private func registerCoupling() {
-    let gen = couplingGen
+    let gen = couplingGen.gen
     let property = couplingProperty
 
     let failingPairs = generateFailingPairs(gen: gen, property: property, name: "Coupling")
@@ -126,7 +125,7 @@ private func registerCoupling() {
 // MARK: - Deletion
 
 private func registerDeletion() {
-    let gen = deletionGen
+    let gen = deletionGen.gen
     let property = deletionProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Deletion")
@@ -149,7 +148,7 @@ private func registerDeletion() {
 // MARK: - Difference (Must Not Be Zero)
 
 private func registerDifferenceMustNotBeZero() {
-    let gen = differenceMustNotBeZeroGen
+    let gen = differenceMustNotBeZeroGen.gen
     let property = differenceMustNotBeZeroProperty
 
     let failingValues = generateFailingValues(
@@ -177,7 +176,7 @@ private func registerDifferenceMustNotBeZero() {
 // MARK: - Difference (Must Not Be Small)
 
 private func registerDifferenceMustNotBeSmall() {
-    let gen = differenceMustNotBeSmallGen
+    let gen = differenceMustNotBeSmallGen.gen
     let property = differenceMustNotBeSmallProperty
 
     let failingValues = generateFailingValues(
@@ -205,7 +204,7 @@ private func registerDifferenceMustNotBeSmall() {
 // MARK: - Difference (Must Not Be One)
 
 private func registerDifferenceMustNotBeOne() {
-    let gen = differenceMustNotBeOneGen
+    let gen = differenceMustNotBeOneGen.gen
     let property = differenceMustNotBeOneProperty
 
     let failingValues = generateFailingValues(
@@ -233,7 +232,7 @@ private func registerDifferenceMustNotBeOne() {
 // MARK: - Distinct
 
 private func registerDistinct() {
-    let gen = distinctGen
+    let gen = distinctGen.gen
     let property = distinctProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Distinct")
@@ -256,7 +255,7 @@ private func registerDistinct() {
 // MARK: - Large Union List
 
 private func registerLargeUnionList() {
-    let gen = largeUnionListGen
+    let gen = largeUnionListGen.gen
     let property = largeUnionListProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "LargeUnionList")
@@ -279,7 +278,7 @@ private func registerLargeUnionList() {
 // MARK: - Length List
 
 private func registerLengthList() {
-    let gen = lengthListGen
+    let gen = lengthListGen.gen
     let property = lengthListProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "LengthList")
@@ -302,7 +301,7 @@ private func registerLengthList() {
 // MARK: - Nested Lists
 
 private func registerNestedLists() {
-    let gen = nestedListsGen
+    let gen = nestedListsGen.gen
     let property = nestedListsProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "NestedLists")
@@ -325,7 +324,7 @@ private func registerNestedLists() {
 // MARK: - Parser
 
 private func registerParser() {
-    let gen = parserLangGen
+    let gen = parserLangGen.gen
     let property = parserProperty
 
 //    let failingValues = generateFailingValues(gen: gen, property: property, name: "Parser")
@@ -333,8 +332,7 @@ private func registerParser() {
 //    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
     // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed, matching the methodology from MacIver & Donaldson Figure 13.
-    benchmark("Parser ECOOP (adaptive)") {
-        let adaptive = Interpreters.ReducerConfiguration.slow
+    benchmark("Parser ECOOP") {
 
         let seedCount = 1000
         let baseSeed: UInt64 = 1337
@@ -370,7 +368,7 @@ private func registerParser() {
                 gen: gen,
                 tree: tree,
                 output: value,
-                config: adaptive,
+                config: reducerConfig,
                 property: countingProperty
             )
 //            print("\(seed), \(invocationCount)")
@@ -411,7 +409,7 @@ private func registerParser() {
 // MARK: - Replacement
 
 private func registerReplacement() {
-    let gen = replacementGen
+    let gen = replacementGen.gen
     let property = replacementProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Replacement")
@@ -434,7 +432,7 @@ private func registerReplacement() {
 // MARK: - Reverse
 
 private func registerReverse() {
-    let gen = reverseGen
+    let gen = reverseGen.gen
     let property = reverseProperty
 
     let failingValues = generateFailingValues(gen: gen, property: property, name: "Reverse")
@@ -457,10 +455,10 @@ private func registerReverse() {
 // MARK: - Benchmark Runners
 
 private func runReflectableBenchmark<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingValues: [Output],
-    config: Interpreters.ReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = .init(maxStalls: 2)
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     for (index, value) in failingValues.enumerated() {
@@ -496,10 +494,10 @@ private func runReflectableBenchmark<Output>(
 }
 
 private func runNonReflectableBenchmark<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     failingPairs: [(value: Output, tree: ChoiceTree)],
-    config: Interpreters.ReducerConfiguration = .fast
+    config: Interpreters.ReducerConfiguration = reducerConfig
 ) -> [ReductionResult] {
     var results: [ReductionResult] = []
     for (index, (value, tree)) in failingPairs.enumerated() {
@@ -534,7 +532,7 @@ private func runNonReflectableBenchmark<Output>(
 // MARK: - Pre-Generation Helpers
 
 private func generateFailingValues<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     name: String,
     maxRuns: UInt64 = 1_000_000
@@ -557,7 +555,7 @@ private func generateFailingValues<Output>(
 }
 
 private func generateFailingPairs<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @Sendable @escaping (Output) -> Bool,
     name: String,
     maxRuns: UInt64 = 1_000_000
@@ -582,7 +580,7 @@ private func generateFailingPairs<Output>(
 // MARK: - Generation Metrics
 
 private func coverageFindsFailure<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @escaping (Output) -> Bool
 ) -> Bool {
     let result = CoverageRunner.run(gen, coverageBudget: 200, property: property)
@@ -591,7 +589,7 @@ private func coverageFindsFailure<Output>(
 }
 
 private func measureIterationsToFirstFailure<Output>(
-    gen: ReflectiveGenerator<Output>,
+    gen: Generator<Output>,
     property: @escaping (Output) -> Bool,
     seeds: Int = 100,
     maxIterations: UInt64 = 500

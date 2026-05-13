@@ -210,7 +210,7 @@ struct SizeScalingDistributionTests {
 // MARK: - Helpers
 
 private func sample<Value>(
-    _ gen: ReflectiveGenerator<Value>,
+    _ gen: Generator<Value>,
     count: Int,
     seed: UInt64
 ) -> [Value] {

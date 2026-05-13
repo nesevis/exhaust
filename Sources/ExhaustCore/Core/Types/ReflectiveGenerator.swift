@@ -1,6 +1,6 @@
 /// A bidirectional generator that can both produce values and reflect on them.
 ///
-/// ReflectiveGenerator is the foundation of advanced property-based testing, enabling generators that work in **three distinct modes**:
+/// Generator is the foundation of advanced property-based testing, enabling generators that work in **three distinct modes**:
 ///
 /// ## 1. Generation (Forward Pass)
 /// Produces random values using entropy, just like traditional generators.
@@ -14,7 +14,7 @@
 /// ## Why This Matters
 ///
 /// Traditional generators lose the connection between values and the randomness that produced them.
-/// ReflectiveGenerator **reconstructs that connection**, enabling:
+/// Generator **reconstructs that connection**, enabling:
 ///
 /// - **Reduction without traces**: Reduce any value, even from crash reports or external sources
 /// - **Mutation testing**: Modify values while preserving validity constraints
@@ -23,16 +23,17 @@
 ///
 /// ## Implementation
 ///
-/// ReflectiveGenerator is a type alias for `FreerMonad<ReflectiveOperation, Output>`, separating the description of generation from its interpretation. This enables the same generator structure to be used for all three modes through different interpreters.
+/// Generator is a type alias for `FreerMonad<ReflectiveOperation, Output>`, separating the description of generation from its interpretation. This enables the same generator structure to be used for all three modes through different interpreters.
 ///
 /// The bidirectional generator design is based on Harrison Goldstein's dissertation, "Property-Based Testing for the People" (UPenn, 2024).
 ///
 /// **Construction**: Use ``Gen`` combinators, never construct directly.
 ///
 /// - SeeAlso: ``Gen`` for generator construction, ``Interpreters`` for execution
-public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
+package typealias Generator<Output> = FreerMonad<ReflectiveOperation, Output>
+package typealias AnyGenerator = FreerMonad<ReflectiveOperation, Any>
 
-package extension ReflectiveGenerator where Operation == ReflectiveOperation {
+package extension Generator where Operation == ReflectiveOperation {
     /// Reifies a monadic bind as a visible `.transform(.bind(...))` operation in the generator tree.
     ///
     /// Unlike the invisible ``FreerMonad/_bind(_:)`` used by internal framework code, this method creates an inspectable node that the reflection interpreter, reducer, and coverage analysis can see and traverse. The backward function (when provided via ``_bound(forward:backward:fileID:line:column:)``) enables reflection to decompose the bound value back into the inner generator's output.
@@ -79,12 +80,12 @@ package extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - backward: Function that extracts the inner value from the final output.
     /// - Returns: A generator that sequences the two computations with bidirectional support.
     func _bound<NewValue>(
-        forward: @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
+        forward: @escaping (Value) throws -> Generator<NewValue>,
         backward: @escaping (NewValue) throws -> Value,
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) rethrows -> ReflectiveGenerator<NewValue> {
+    ) rethrows -> Generator<NewValue> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
         return Gen.liftF(.transform(
             kind: .bind(

@@ -2,8 +2,6 @@
 //  ReflectiveGenerator+Strings.swift
 //  Exhaust
 //
-//  Created by Chris Kolbu on 22/2/2026.
-//
 
 import ExhaustCore
 import Foundation
@@ -21,13 +19,13 @@ public extension ReflectiveGenerator {
         simplest: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
         guard let range else {
-            return characterGenerator(from: defaultScalarRangeSet)
+            return ReflectiveGenerator<Character> { characterGenerator(from: defaultScalarRangeSet) }
         }
         let lower = range.lowerBound.unicodeScalars.min()!
         let upper = range.upperBound.unicodeScalars.max()!
         let characterSet = CharacterSet(charactersIn: lower ... upper)
         let bottom = resolveSimplest(simplest, in: characterSet)
-        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom))
+        return ReflectiveGenerator<Character> { characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
     }
 
     /// Generates a random Unicode string with size-scaled or fixed length.
@@ -90,7 +88,7 @@ public extension ReflectiveGenerator {
         simplest: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
         let bottom = resolveSimplest(simplest, in: characterSet)
-        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom))
+        return ReflectiveGenerator<Character> { characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
     }
 
     /// Generates a random character from the union of two or more ``CharacterSet``s.
@@ -165,14 +163,14 @@ private func resolveSimplest(
 // MARK: - ScalarRangeSet-based generators (no CharacterSet reconstruction)
 
 /// Builds a character generator directly from a pre-computed ``ScalarRangeSet``.
-private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator<Character> {
+private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character> {
     let operation = ReflectiveOperation.chooseBits(
         min: 0,
         max: UInt64(srs.scalarCount - 1),
         tag: .character(boundaryIndices: srs.boundaryIndices),
         isRangeExplicit: true
     )
-    let innerGen = ReflectiveGenerator<Character>.impure(operation: operation) { result in
+    let innerGen = Generator<Character>.impure(operation: operation) { result in
         guard let convertible = result as? any BitPatternConvertible else {
             throw GeneratorError.typeMismatch(
                 expected: "any BitPatternConvertible",
@@ -205,13 +203,13 @@ private func stringGenerator(
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
     if let length {
-        return Gen.arrayOf(charGen, within: length, scaling: scaling)
+        return ReflectiveGenerator<[Character]> { Gen.arrayOf(charGen, within: length, scaling: scaling) }
             .mapped(
                 forward: { String($0) },
                 backward: { $0.unicodeScalars.map { Character($0) } }
             )
     }
-    return Gen.arrayOf(charGen)
+    return ReflectiveGenerator<[Character]> { Gen.arrayOf(charGen) }
         .mapped(
             forward: { String($0) },
             backward: { $0.unicodeScalars.map { Character($0) } }

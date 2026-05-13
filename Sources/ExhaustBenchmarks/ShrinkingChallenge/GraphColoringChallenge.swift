@@ -41,7 +41,7 @@ let graphColoringGen: ReflectiveGenerator<GraphColoringGraph> = {
     return verticesGen.bind { (vertices: [Int]) -> ReflectiveGenerator<GraphColoringGraph> in
         let n = vertices.count
         guard n >= 2 else {
-            return .just(GraphColoringGraph(vertices: vertices, edges: []))
+            return ReflectiveGenerator.just(GraphColoringGraph(vertices: vertices, edges: []))
         }
         let edgePairGen = #gen(
             .int(in: 0 ... n - 1, scaling: .constant),

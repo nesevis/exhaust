@@ -5,7 +5,7 @@ package extension Gen {
     /// Retrieves the raw size parameter without a backward comap.
     ///
     /// All public-facing size access goes through ``getSize(_:)`` which wraps the result in a `._bound` with `backward: { _ in 100 }`, giving the reducer a usable default.
-    static func rawGetSize() -> ReflectiveGenerator<UInt64> {
+    static func rawGetSize() -> Generator<UInt64> {
         .impure(operation: .getSize) { result in
             if let typedResult = result as? UInt64 {
                 return .pure(typedResult)
@@ -26,8 +26,8 @@ package extension Gen {
     /// - Parameter forward: A closure that receives the current size and returns a generator.
     /// - Returns: A generator that produces the result of the size-dependent inner generator.
     static func getSize<Output>(
-        _ forward: @escaping (UInt64) -> ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        _ forward: @escaping (UInt64) -> Generator<Output>
+    ) -> Generator<Output> {
         rawGetSize()._bound(forward: forward, backward: { _ in 100 })
     }
 
@@ -48,8 +48,8 @@ package extension Gen {
     /// - Note: Size handling may need refinement in future versions
     static func resize<Output>(
         _ newSize: UInt64,
-        _ generator: ReflectiveGenerator<Output>
-    ) -> ReflectiveGenerator<Output> {
+        _ generator: Generator<Output>
+    ) -> Generator<Output> {
         liftF(.resize(newSize: newSize, next: generator.erase()))
     }
 }

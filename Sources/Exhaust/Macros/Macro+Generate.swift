@@ -1,4 +1,3 @@
-import ExhaustCore
 
 /// Combines generators through a transform closure, synthesizing a bidirectional backward mapping when possible.
 ///
@@ -42,3 +41,4 @@ public macro gen<GeneratedValue>(
 public macro gen<each GeneratedValue>(
     _ generators: repeat ReflectiveGenerator<each GeneratedValue>
 ) -> ReflectiveGenerator<(repeat each GeneratedValue)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
+

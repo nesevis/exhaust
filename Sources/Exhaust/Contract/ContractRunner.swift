@@ -77,7 +77,7 @@ public func __runContract<Spec: ContractSpec>(
 
         let commandGen = Spec.commandGenerator
         let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
-            commandGen: commandGen,
+            commandGen: commandGen.gen,
             coverageBudget: coverageBudget
         )
 
@@ -85,7 +85,7 @@ public func __runContract<Spec: ContractSpec>(
         let commandSequenceGenerator = commandGen.array(
             length: 0 ... resolvedCommandLimit,
             scaling: .constant
-        )
+        ).gen
 
         // The property: execute the command sequence against a fresh spec and check for failures.
         let property: @Sendable ([Spec.Command]) -> Bool = { commands in
@@ -124,7 +124,7 @@ public func __runContract<Spec: ContractSpec>(
         } else {
             scaOutcome = runSCACoverage(
                 seqGen: commandSequenceGenerator,
-                commandGen: commandGen,
+                commandGen: commandGen.gen,
                 commandLimit: resolvedCommandLimit,
                 coverageBudget: coverageBudget,
                 property: property
@@ -145,7 +145,7 @@ public func __runContract<Spec: ContractSpec>(
             // Only suppress generic coverage when SCA ran its covering array to completion.
             // When SCA was skipped, generic coverage is still needed.
             failingSequence = __ExhaustRuntime.__exhaust(
-                commandSequenceGenerator,
+                ReflectiveGenerator { commandSequenceGenerator },
                 settings: buildExhaustSettings(
                     samplingBudget: samplingBudget,
                     coverageBudget: coverageBudget,
@@ -335,7 +335,7 @@ struct ContractFailureInfo<Command> {
 
 /// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.
 func extractPickChoices(
-    from gen: ReflectiveGenerator<some Any>
+    from gen: Generator<some Any>
 ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
     guard case let .impure(operation, _) = gen,
           case let .pick(choices, _) = operation
@@ -347,7 +347,7 @@ func extractPickChoices(
 ///
 /// Pre-analyzes pick branches to determine the per-position domain size, then computes the sequence length at which SCA rows (at t=2) would exhaust the budget. The result is the larger of this budget ceiling and an exploration floor based on the number of command types, ensuring sequences are long enough for each command to appear several times.
 func estimateCommandLimit(
-    commandGen: ReflectiveGenerator<some Any>,
+    commandGen: Generator<some Any>,
     coverageBudget: UInt64
 ) -> Int {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -434,8 +434,8 @@ enum SCAOutcome<Command> {
 ///
 /// Returns ``SCAOutcome/skipped`` when domain construction fails or the domain is too small for pairwise coverage, so the caller can fall through to generic coverage and random sampling.
 func runSCACoverage<Command>(
-    seqGen: ReflectiveGenerator<[Command]>,
-    commandGen: ReflectiveGenerator<Command>,
+    seqGen: Generator<[Command]>,
+    commandGen: Generator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
     property: @escaping @Sendable ([Command]) -> Bool
@@ -545,8 +545,8 @@ func runSCACoverage<Command>(
     return .completed
 }
 
-/// Builds a ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
-func buildExhaustSettings<Output>(
+/// Builds an ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
+func buildExhaustSettings(
     samplingBudget: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
@@ -555,8 +555,8 @@ func buildExhaustSettings<Output>(
     collectOpenPBTStats: Bool = false,
     logLevel: LogLevel = .error,
     logFormat: LogFormat = .keyValue
-) -> [ExhaustSettings<Output>] {
-    var settings: [ExhaustSettings<Output>] = [
+) -> [ExhaustSettings] {
+    var settings: [ExhaustSettings] = [
         .budget(.custom(
             coverage: coverageBudget,
             sampling: samplingBudget

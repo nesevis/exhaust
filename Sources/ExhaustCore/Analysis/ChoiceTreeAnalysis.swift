@@ -56,7 +56,7 @@ package enum ChoiceTreeAnalysis {
     ///
     /// - Parameter expandSequencePairs: When `true`, sequence boundary models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``CoverageRunner`` uses this to retry with a smaller domain when the full model exceeds the coverage budget.
     public static func analyze(
-        _ gen: ReflectiveGenerator<some Any>,
+        _ gen: Generator<some Any>,
         expandSequencePairs: Bool = true
     ) -> AnalysisResult? {
         var bestParameters: [BoundaryParameter]?

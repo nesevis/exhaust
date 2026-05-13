@@ -15,7 +15,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func simd2<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD2<Scalar>> where Value == SIMD2<Scalar> {
+    ) -> ReflectiveGenerator<SIMD2<Scalar>> where Output == SIMD2<Scalar> {
         simd2(scalar, scalar)
     }
 
@@ -27,11 +27,13 @@ public extension ReflectiveGenerator {
     static func simd2<Scalar: SIMDScalar>(
         _ x: ReflectiveGenerator<Scalar>,
         _ y: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD2<Scalar>> where Value == SIMD2<Scalar> {
-        Gen.zip(x, y, isOpaque: true)._mapped(
-            forward: { a, b in SIMD2(a, b) },
-            backward: { v in (v[0], v[1]) }
-        )
+    ) -> ReflectiveGenerator<SIMD2<Scalar>> where Output == SIMD2<Scalar> {
+        ReflectiveGenerator {
+            Gen.contramap(
+                { (v: SIMD2<Scalar>) in (v[0], v[1]) },
+                Gen.zip(x.gen, y.gen, isOpaque: true).map { a, b in SIMD2(a, b) }
+            )
+        }
     }
 }
 
@@ -45,7 +47,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func simd3<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD3<Scalar>> where Value == SIMD3<Scalar> {
+    ) -> ReflectiveGenerator<SIMD3<Scalar>> where Output == SIMD3<Scalar> {
         simd3(scalar, scalar, scalar)
     }
 
@@ -60,11 +62,13 @@ public extension ReflectiveGenerator {
         _ x: ReflectiveGenerator<Scalar>,
         _ y: ReflectiveGenerator<Scalar>,
         _ z: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD3<Scalar>> where Value == SIMD3<Scalar> {
-        Gen.zip(x, y, z, isOpaque: true)._mapped(
-            forward: { a, b, c in SIMD3(a, b, c) },
-            backward: { v in (v[0], v[1], v[2]) }
-        )
+    ) -> ReflectiveGenerator<SIMD3<Scalar>> where Output == SIMD3<Scalar> {
+        ReflectiveGenerator {
+            Gen.contramap(
+                { (v: SIMD3<Scalar>) in (v[0], v[1], v[2]) },
+                Gen.zip(x.gen, y.gen, z.gen, isOpaque: true).map { a, b, c in SIMD3(a, b, c) }
+            )
+        }
     }
 }
 
@@ -78,7 +82,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func simd4<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD4<Scalar>> where Value == SIMD4<Scalar> {
+    ) -> ReflectiveGenerator<SIMD4<Scalar>> where Output == SIMD4<Scalar> {
         simd4(scalar, scalar, scalar, scalar)
     }
 
@@ -95,11 +99,13 @@ public extension ReflectiveGenerator {
         _ y: ReflectiveGenerator<Scalar>,
         _ z: ReflectiveGenerator<Scalar>,
         _ w: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD4<Scalar>> where Value == SIMD4<Scalar> {
-        Gen.zip(x, y, z, w, isOpaque: true)._mapped(
-            forward: { a, b, c, d in SIMD4(a, b, c, d) },
-            backward: { v in (v[0], v[1], v[2], v[3]) }
-        )
+    ) -> ReflectiveGenerator<SIMD4<Scalar>> where Output == SIMD4<Scalar> {
+        ReflectiveGenerator {
+            Gen.contramap(
+                { (v: SIMD4<Scalar>) in (v[0], v[1], v[2], v[3]) },
+                Gen.zip(x.gen, y.gen, z.gen, w.gen, isOpaque: true).map { a, b, c, d in SIMD4(a, b, c, d) }
+            )
+        }
     }
 }
 
@@ -115,7 +121,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func simd8<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD8<Scalar>> where Value == SIMD8<Scalar> {
+    ) -> ReflectiveGenerator<SIMD8<Scalar>> where Output == SIMD8<Scalar> {
         flatSIMD(scalar, lanes: 8)
     }
 }
@@ -132,7 +138,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func simd16<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD16<Scalar>> where Value == SIMD16<Scalar> {
+    ) -> ReflectiveGenerator<SIMD16<Scalar>> where Output == SIMD16<Scalar> {
         flatSIMD(scalar, lanes: 16)
     }
 }
@@ -149,7 +155,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func simd32<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD32<Scalar>> where Value == SIMD32<Scalar> {
+    ) -> ReflectiveGenerator<SIMD32<Scalar>> where Output == SIMD32<Scalar> {
         flatSIMD(scalar, lanes: 32)
     }
 }
@@ -166,7 +172,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func simd64<Scalar: SIMDScalar>(
         _ scalar: ReflectiveGenerator<Scalar>
-    ) -> ReflectiveGenerator<SIMD64<Scalar>> where Value == SIMD64<Scalar> {
+    ) -> ReflectiveGenerator<SIMD64<Scalar>> where Output == SIMD64<Scalar> {
         flatSIMD(scalar, lanes: 64)
     }
 }
@@ -178,32 +184,34 @@ private func flatSIMD<Scalar: SIMDScalar, Vector: SIMD>(
     _ s: ReflectiveGenerator<Scalar>,
     lanes: Int
 ) -> ReflectiveGenerator<Vector> where Vector.Scalar == Scalar {
-    var erased = ContiguousArray<ReflectiveGenerator<Any>>()
-    erased.reserveCapacity(lanes)
-    for _ in 0 ..< lanes {
-        erased.append(s.erase())
-    }
-
-    let impure: ReflectiveGenerator<[Any]> = .impure(
-        operation: .zip(erased, isOpaque: true),
-        continuation: { .pure($0 as! [Any]) }
-    )
-
-    return Gen.contramap(
-        { (vector: Vector) -> [Any] in
-            var values: [Any] = []
-            values.reserveCapacity(lanes)
-            for i in 0 ..< lanes {
-                values.append(vector[i])
-            }
-            return values
-        },
-        impure._map { (values: [Any]) -> Vector in
-            var v = Vector()
-            for i in 0 ..< lanes {
-                v[i] = values[i] as! Scalar
-            }
-            return v
+    ReflectiveGenerator<Vector> {
+        var erased = ContiguousArray<AnyGenerator>()
+        erased.reserveCapacity(lanes)
+        for _ in 0 ..< lanes {
+            erased.append(s.gen.erase())
         }
-    )
+
+        let impure: Generator<[Any]> = .impure(
+            operation: .zip(erased, isOpaque: true),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return Gen.contramap(
+            { (vector: Vector) -> [Any] in
+                var values: [Any] = []
+                values.reserveCapacity(lanes)
+                for i in 0 ..< lanes {
+                    values.append(vector[i])
+                }
+                return values
+            },
+            impure.map { (values: [Any]) -> Vector in
+                var v = Vector()
+                for i in 0 ..< lanes {
+                    v[i] = values[i] as! Scalar
+                }
+                return v
+            }
+        )
+    }
 }

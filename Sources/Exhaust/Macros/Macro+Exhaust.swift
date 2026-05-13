@@ -38,7 +38,6 @@ import ExhaustCore
 ///
 /// - `.budget(_)`: controls iteration budgets for coverage, sampling, and reduction. Presets: `.expedient` (200/200, default), `.expensive` (500/500), `.exorbitant` (2000/2000), or `.custom(coverage:sampling:)`.
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
-/// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
 /// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
 /// - `.suppress(.logs)`: silences all console output. Overrides `.logging(...)`.
@@ -60,7 +59,8 @@ import ExhaustCore
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    _ settings: ExhaustSettings<GeneratedValue>...,
+    reflecting: GeneratedValue? = nil,
+    _ settings: ExhaustSettings...,
     property: (GeneratedValue) throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
@@ -73,7 +73,8 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    _ settings: ExhaustSettings<GeneratedValue>...,
+    reflecting: GeneratedValue? = nil,
+    _ settings: ExhaustSettings...,
     property: (GeneratedValue) async throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
 

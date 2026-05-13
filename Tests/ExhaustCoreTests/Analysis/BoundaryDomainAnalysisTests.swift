@@ -228,12 +228,12 @@ struct ChoiceTreeAnalysisTests {
         // This bind chain is NOT analyzable by the recursive walker because
         // analyzeContinuation rejects .impure continuations. But the ChoiceTree
         // walker sees through it because VACTI evaluates the full chain.
-        let gen: ReflectiveGenerator<(UInt8, UInt8)> = Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>)
+        let gen: Generator<(UInt8, UInt8)> = Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>)
             ._bindReified { _ in
-                Gen.choose(in: 0 ... 20 as ClosedRange<UInt8>)._map { y in y }
+                Gen.choose(in: 0 ... 20 as ClosedRange<UInt8>).map { y in y }
             }
             ._bindReified { y in
-                Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>)._map { x in (x, y) }
+                Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>).map { x in (x, y) }
             }
 
         let newResult = ChoiceTreeAnalysis.analyze(gen)
@@ -562,7 +562,7 @@ struct OpaqueGroupTests {
             isOpaque: true
         )
         let gen = Gen.zip(
-            opaqueFloats._map { $0.0 },
+            opaqueFloats.map { $0.0 },
             Gen.choose(in: 0 ... 100)
         )
         guard let result = ChoiceTreeAnalysis.analyze(gen) else {
@@ -583,12 +583,12 @@ struct OpaqueGroupTests {
         // A size-scaled float (uses getSize internally) inside an opaque zip.
         // Without opaque, this would make the whole property unanalyzable.
         let opaqueScaled = Gen.zip(
-            Gen.choose() as ReflectiveGenerator<Float>,
-            Gen.choose() as ReflectiveGenerator<Float>,
+            Gen.choose() as Generator<Float>,
+            Gen.choose() as Generator<Float>,
             isOpaque: true
         )
         let gen = Gen.zip(
-            opaqueScaled._map { $0.0 },
+            opaqueScaled.map { $0.0 },
             Gen.choose(in: 0 ... 10)
         )
         guard let result = ChoiceTreeAnalysis.analyze(gen) else {
@@ -622,12 +622,12 @@ struct OpaqueGroupTests {
 
 // MARK: - Helpers
 
-private func analyzeBoundary(_ gen: ReflectiveGenerator<some Any>) -> BoundaryDomainProfile? {
+private func analyzeBoundary(_ gen: Generator<some Any>) -> BoundaryDomainProfile? {
     guard case let .boundary(profile) = ChoiceTreeAnalysis.analyze(gen) else { return nil }
     return profile
 }
 
-private func asciiStringGen(length: ClosedRange<Int>) -> ReflectiveGenerator<String> {
+private func asciiStringGen(length: ClosedRange<Int>) -> Generator<String> {
     var rangeSet = RangeSet<UInt32>()
     rangeSet.insert(contentsOf: 0x0020 ..< 0x007F)
     let asciiSRS = ScalarRangeSet(rangeSet)
@@ -641,8 +641,8 @@ private func asciiStringGen(length: ClosedRange<Int>) -> ReflectiveGenerator<Str
             return asciiSRS.index(of: scalar)
         },
         Gen.choose(in: 0 ... asciiSRS.scalarCount - 1)
-            ._map { Character(asciiSRS.scalar(at: $0)) }
+            .map { Character(asciiSRS.scalar(at: $0)) }
     )
     return Gen.arrayOf(charGen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound))
-        ._map { String($0) }
+        .map { String($0) }
 }

@@ -6,7 +6,7 @@
 //
 
 /// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
-public enum TypeTag: Sendable {
+package enum TypeTag: Sendable {
     /// Platform-width unsigned integer (``UInt``).
     case uint
     /// 64-bit unsigned integer.
@@ -41,39 +41,6 @@ public enum TypeTag: Sendable {
     case character(boundaryIndices: [UInt64])
     /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
     case depthControl
-
-    /// Creates a type tag by matching the metatype of the given value against known numeric types.
-    package init<T>(type: T) {
-        self = switch type {
-        case is Double.Type:
-            .double
-        case is Int.Type:
-            .int
-        case is UInt.Type:
-            .uint
-        // More specific, less likely to be used
-        case is Float.Type:
-            .float
-        case is Int64.Type:
-            .int64
-        case is Int32.Type:
-            .int32
-        case is Int16.Type:
-            .int16
-        case is Int8.Type:
-            .int8
-        case is UInt64.Type:
-            .uint64
-        case is UInt32.Type:
-            .uint32
-        case is UInt16.Type:
-            .uint16
-        case is UInt8.Type:
-            .uint8
-        default:
-            fatalError("Unexpected type passed to \(#function): \(T.self)")
-        }
-    }
 }
 
 package extension TypeTag {

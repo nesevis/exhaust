@@ -19,11 +19,11 @@ package extension Gen {
     /// - Returns: A generator that produces values from one of the provided generators.
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
-        choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)],
+        choices: [(weight: UInt64, generator: Generator<Output>)],
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         precondition(choices.isEmpty == false, "At least one choice must be provided")
         precondition(choices.allSatisfy { $0.weight > 0 }, "Weights must be greater than zero")
         // The nested generators must all have the same Output type.
@@ -56,11 +56,11 @@ package extension Gen {
     /// - Returns: A generator that produces values from one of the provided generators.
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
-        choices: [(weight: Int, generator: ReflectiveGenerator<Output>)],
+        choices: [(weight: Int, generator: Generator<Output>)],
         fileID: String = #fileID,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         precondition(
             choices.map(\.weight).allSatisfy { $0 > 0 },
             "Weights must be higher than zero"
@@ -87,7 +87,7 @@ package extension Gen {
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         let isRangeExplicit = range != nil
         return choose(
             in: range,
@@ -99,7 +99,7 @@ package extension Gen {
     /// Chooses a random element from a collection by generating a random index.
     static func choose<C: Collection>(
         from collection: C
-    ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable, C.Index == Int {
+    ) -> Generator<C.Element> where C.Element: Equatable, C.Index == Int {
         // Use Gen.contramap directly rather than .mapped because the backward closure throws and .mapped propagates that via rethrows (from FreerMonad.bind), which would force this function to be marked throws — even though the throw only happens at reflection time, never during construction.
         let count = collection.count
         return Gen.contramap(
@@ -114,18 +114,18 @@ package extension Gen {
             },
             Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
                 // We're using round-robin indexing here so that the lookup does not fail when reducing
-                ._map { collection[$0 % count] }
+                .map { collection[$0 % count] }
         )
     }
 
     /// Chooses a random element from a collection by generating a random index.
     static func choose<C: Collection>(
         from collection: C
-    ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
+    ) -> Generator<C.Element> where C.Index == Int {
         let count = collection.count
         return Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
             // We're using round-robin indexing here so that the lookup does not fail when reducing
-            ._map { collection[$0 % count] }
+            .map { collection[$0 % count] }
     }
 
     /// Internal helper for choose ranges derived from runtime context (for example ``getSize``).
@@ -134,7 +134,7 @@ package extension Gen {
     static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         type _: Output.Type = Output.self
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         choose(
             in: range,
             type: Output.self,
@@ -153,7 +153,7 @@ package extension Gen {
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         scaling: SizeScaling<Output>
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         choose(
             in: range,
             type: Output.self,
@@ -323,7 +323,7 @@ package extension Gen {
         type _: Output.Type = Output.self,
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling? = nil
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRange.lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRange.upperBound
 
@@ -351,7 +351,7 @@ package extension Gen {
     /// Boundary analysis will produce only all-low / all-high values.
     static func chooseBits(
         in range: ClosedRange<UInt64>? = nil
-    ) -> ReflectiveGenerator<UInt64> {
+    ) -> Generator<UInt64> {
         let resolvedRange = range ?? UInt64.min ... .max
         let operation = ReflectiveOperation.chooseBits(
             min: resolvedRange.lowerBound,

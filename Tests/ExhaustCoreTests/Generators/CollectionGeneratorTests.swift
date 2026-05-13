@@ -14,7 +14,7 @@ struct CollectionGeneratorTests {
     struct SetOfTests {
         @Test("Produces sets with unique elements")
         func uniqueElements() throws {
-            let gen = Gen.setOf(Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>)
+            let gen = Gen.setOf(Gen.choose(in: 0 ... 100) as Generator<Int>)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             var generated = 0
@@ -30,7 +30,7 @@ struct CollectionGeneratorTests {
         @Test("setOf with exact count")
         func exactCount() throws {
             let gen = Gen.setOf(
-                Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 1000) as Generator<Int>,
                 exactly: 5
             )
             var iterator = ValueInterpreter(gen, seed: 1)
@@ -43,7 +43,7 @@ struct CollectionGeneratorTests {
         @Test("setOf with range")
         func withinRange() throws {
             let gen = Gen.setOf(
-                Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 1000) as Generator<Int>,
                 within: 2 ... 5,
                 scaling: .constant
             )
@@ -65,8 +65,8 @@ struct CollectionGeneratorTests {
         @Test("Produces dictionaries")
         func producesDictionaries() throws {
             let gen = Gen.dictionaryOf(
-                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
-                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>
+                Gen.choose(in: 0 ... 100) as Generator<Int>,
+                Gen.choose(in: 0 ... 100) as Generator<Int>
             )
             var iterator = ValueInterpreter(gen, seed: 7)
 
@@ -85,8 +85,8 @@ struct CollectionGeneratorTests {
         func duplicateKeys() throws {
             // Use a very small key range to force collisions
             let gen = Gen.dictionaryOf(
-                Gen.choose(in: 0 ... 2) as ReflectiveGenerator<Int>,
-                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>
+                Gen.choose(in: 0 ... 2) as Generator<Int>,
+                Gen.choose(in: 0 ... 100) as Generator<Int>
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -104,7 +104,7 @@ struct CollectionGeneratorTests {
         @Test("Empty collection returns empty")
         func emptyCollection() throws {
             let gen = Gen.shuffled(Gen.arrayOf(
-                Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 10) as Generator<Int>,
                 exactly: 0
             ))
             var iterator = ValueInterpreter(gen, seed: 1)
@@ -117,7 +117,7 @@ struct CollectionGeneratorTests {
         @Test("Single element returns that element")
         func singleElement() throws {
             let gen = Gen.shuffled(Gen.arrayOf(
-                Gen.choose(in: 42 ... 42) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 42 ... 42) as Generator<Int>,
                 exactly: 1
             ))
             var iterator = ValueInterpreter(gen, seed: 1)
@@ -130,10 +130,10 @@ struct CollectionGeneratorTests {
         @Test("Shuffled array contains same elements")
         func preservesElements() throws {
             let gen = Gen.arrayOf(
-                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 100) as Generator<Int>,
                 exactly: 5
-            )._bind { array in
-                Gen.shuffled(ReflectiveGenerator<[Int]>.pure(array))._map { shuffled in
+            ).bind { array in
+                Gen.shuffled(Generator<[Int]>.pure(array)).map { shuffled in
                     (array.sorted(), shuffled.sorted())
                 }
             }
@@ -147,7 +147,7 @@ struct CollectionGeneratorTests {
         @Test("Produces different permutations across seeds")
         func differentPermutations() throws {
             let source = [1, 2, 3, 4, 5]
-            let gen = Gen.shuffled(ReflectiveGenerator<[Int]>.pure(source))
+            let gen = Gen.shuffled(Generator<[Int]>.pure(source))
 
             var permutations: Set<[Int]> = []
             for seed in UInt64(1) ... 20 {
@@ -166,7 +166,7 @@ struct CollectionGeneratorTests {
     struct SizedTests {
         @Test("Produces arrays respecting size")
         func respectsSize() throws {
-            let gen = Gen.sized(Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>)
+            let gen = Gen.sized(Gen.choose(in: 0 ... 100) as Generator<Int>)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             var generated = 0
@@ -182,7 +182,7 @@ struct CollectionGeneratorTests {
         @Test("With lengthRange clamps to size")
         func lengthRangeClamped() throws {
             let gen = Gen.sized(
-                Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 10) as Generator<Int>,
                 lengthRange: 0 ... 1000
             )
             var iterator = ValueInterpreter(gen, seed: 42)
@@ -201,7 +201,7 @@ struct CollectionGeneratorTests {
         @Test("Hashable element picks from collection")
         func hashableElement() throws {
             let collection = [10, 20, 30, 40, 50]
-            let gen: ReflectiveGenerator<Int> = Gen.element(from: collection)
+            let gen: Generator<Int> = Gen.element(from: collection)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 20 {
@@ -214,7 +214,7 @@ struct CollectionGeneratorTests {
         @Test("Non-Hashable element picks from collection")
         func nonHashableElement() throws {
             let collection = [NonHashableWrapper(value: 1), NonHashableWrapper(value: 2), NonHashableWrapper(value: 3)]
-            let gen: ReflectiveGenerator<NonHashableWrapper> = Gen.element(from: collection)
+            let gen: Generator<NonHashableWrapper> = Gen.element(from: collection)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 20 {
@@ -232,7 +232,7 @@ struct CollectionGeneratorTests {
         @Test("Constant scaling uses full range")
         func constantScaling() throws {
             let gen = Gen.arrayOf(
-                Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 10) as Generator<Int>,
                 within: 3 ... 7,
                 scaling: .constant
             )
@@ -249,7 +249,7 @@ struct CollectionGeneratorTests {
         @Test("Linear scaling produces arrays in range")
         func linearScaling() throws {
             let gen = Gen.arrayOf(
-                Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 10) as Generator<Int>,
                 within: 0 ... 10,
                 scaling: .linear
             )
@@ -266,7 +266,7 @@ struct CollectionGeneratorTests {
         @Test("Exponential scaling produces arrays in range")
         func exponentialScaling() throws {
             let gen = Gen.arrayOf(
-                Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 10) as Generator<Int>,
                 within: 0 ... 10,
                 scaling: .exponential
             )

@@ -27,11 +27,11 @@ package extension Gen {
     ///   - classifiers: Variadic (label, predicate) pairs for categorizing generated values.
     /// - Returns: A generator that produces the same values while collecting statistics.
     static func classify<Output>(
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: Generator<Output>,
         _ classifiers: (String, (Output) -> Bool)...,
         fileID: String = #fileID,
         line: UInt = #line
-    ) -> ReflectiveGenerator<Output> {
+    ) -> Generator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line)
         return .impure(operation:
             .classify(

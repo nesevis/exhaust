@@ -6,7 +6,7 @@ struct MetamorphTests {
     // MARK: - Helpers
 
     /// Builds a metamorphic generator that pairs an Int with its negation.
-    private func intNegateGen() -> ReflectiveGenerator<[Any]> {
+    private func intNegateGen() -> Generator<[Any]> {
         let inner = Gen.choose(in: 1 ... 100 as ClosedRange<Int>)
         return .impure(
             operation: .transform(
@@ -21,7 +21,7 @@ struct MetamorphTests {
     }
 
     /// Builds a metamorphic generator with two transforms on Int.
-    private func intDoubleAndNegateGen() -> ReflectiveGenerator<[Any]> {
+    private func intDoubleAndNegateGen() -> Generator<[Any]> {
         let inner = Gen.choose(in: 1 ... 100 as ClosedRange<Int>)
         return .impure(
             operation: .transform(
@@ -132,7 +132,7 @@ struct MetamorphTests {
         // validates that each transform's input was generated from the same
         // PRNG state, producing identical but independent values.
         let inner = Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: 3)
-        let gen: ReflectiveGenerator<[Any]> = .impure(
+        let gen: Generator<[Any]> = .impure(
             operation: .transform(
                 kind: .metamorphic(
                     transforms: [
@@ -193,7 +193,7 @@ struct MetamorphTests {
     @Test("Bonsai reduces the source value and transforms follow")
     func bonsaiReduction() throws {
         let inner = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-        let gen: ReflectiveGenerator<[Any]> = .impure(
+        let gen: Generator<[Any]> = .impure(
             operation: .transform(
                 kind: .metamorphic(
                     transforms: [{ value in (value as! Int) * 2 as Any }],
@@ -226,7 +226,7 @@ struct MetamorphTests {
 
         // Reduce: property is "original <= 100"
         let (_, shrunk) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .fast) { results in
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .init(maxStalls: 2)) { results in
                 (results[0] as! Int) <= 100
             }
         )

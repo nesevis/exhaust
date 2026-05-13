@@ -55,8 +55,8 @@ extension GraphSwapEncoder {
             candidate = built
             return .siblingsSwapped(
                 parentNodeID: parentNodeID,
-                idA: slots[slotIndex].nodeID,
-                idB: slots[slotIndex + 1].nodeID
+                lhs: slots[slotIndex].nodeID,
+                rhs: slots[slotIndex + 1].nodeID
             )
         }
         return nil
@@ -168,8 +168,8 @@ extension GraphSwapEncoder {
         candidate = built
         return .siblingsSwapped(
             parentNodeID: state.parentNodeID,
-            idA: state.slots[state.contentSlotIndex].nodeID,
-            idB: state.slots[nextTarget].nodeID
+            lhs: state.slots[state.contentSlotIndex].nodeID,
+            rhs: state.slots[nextTarget].nodeID
         )
     }
 
@@ -198,8 +198,8 @@ extension GraphSwapEncoder {
         candidate = built
         return .siblingsSwapped(
             parentNodeID: state.parentNodeID,
-            idA: state.slots[state.contentSlotIndex].nodeID,
-            idB: state.slots[mid].nodeID
+            lhs: state.slots[state.contentSlotIndex].nodeID,
+            rhs: state.slots[mid].nodeID
         )
     }
 }

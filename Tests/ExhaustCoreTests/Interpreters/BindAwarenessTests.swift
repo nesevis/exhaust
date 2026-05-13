@@ -144,7 +144,7 @@ struct BindAwarenessTests {
     @Test("VACTI produces bind tree for transform(.bind) operation")
     func vactiProducesBindTree() throws {
         // Construct a bind generator using Gen.liftF
-        let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: 0 ... 5 as ClosedRange<Int>)._bound(
+        let gen: Generator<[Int]> = Gen.choose(in: 0 ... 5 as ClosedRange<Int>)._bound(
             forward: { n in
                 Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(max(0, n)))
             },
@@ -172,7 +172,7 @@ struct BindAwarenessTests {
     @Test("ChoiceTreeAnalysis produces fewer parameters for bind-dependent generators")
     func coverageAnalysisTreatsBoundAsOpaque() {
         // Construct a bind generator: inner picks from 0...3, bound depends on inner
-        let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: 0 ... 3 as ClosedRange<Int>)._bound(
+        let gen: Generator<[Int]> = Gen.choose(in: 0 ... 3 as ClosedRange<Int>)._bound(
             forward: { n in
                 Gen.arrayOf(Gen.choose(in: 0 ... 10 as ClosedRange<Int>), exactly: UInt64(max(0, n)))
             },

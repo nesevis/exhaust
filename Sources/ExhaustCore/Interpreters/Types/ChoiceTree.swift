@@ -179,12 +179,6 @@ package extension ChoiceTree {
         return false
     }
 
-    /// The pick site fingerprint, or `nil` if this node is not a `.branch`.
-    var pickFingerprint: UInt64? {
-        guard case let .branch(b) = self else { return nil }
-        return b.fingerprint
-    }
-
     /// Whether this tree contains any pick sites (`.branch` nodes).
     /// Short-circuits on the first pick found.
     var containsPicks: Bool {
@@ -291,27 +285,6 @@ package extension ChoiceTree {
         }
     }
 
-    /// Returns whether any node in this tree satisfies the given predicate. Short-circuits on the first match.
-    func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
-        let selfResult = predicate(self)
-        guard selfResult == false else {
-            return true
-        }
-
-        switch self {
-        case .choice, .just, .getSize:
-            return selfResult
-        case let .branch(b):
-            return b.choice.contains(predicate)
-        case let .sequence(_, elements, _), let .group(elements, _):
-            // For a sequence, recursively map over its elements.
-            return elements.contains { $0.contains(predicate) }
-        case let .bind(_, inner, bound):
-            return inner.contains(predicate) || bound.contains(predicate)
-        case let .resize(_, choices):
-            return choices.contains { $0.contains(predicate) }
-        }
-    }
 }
 
 extension ChoiceTree: CustomDebugStringConvertible {

@@ -14,15 +14,15 @@ private enum BenchBST: Equatable, Hashable {
     case leaf
     indirect case node(left: BenchBST, value: UInt, right: BenchBST)
 
-    static var arbitrary: ReflectiveGenerator<BenchBST> {
+    static var arbitrary: Generator<BenchBST> {
         bstGenerator(maxDepth: 5)
     }
 
-    private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BenchBST> {
+    private static func bstGenerator(maxDepth: Int) -> Generator<BenchBST> {
         if maxDepth <= 0 {
             return Gen.just(.leaf)
         }
-        let nodeBranch = Gen.zip(bstGenerator(maxDepth: maxDepth - 1), Gen.choose(in: 0 ... 9 as ClosedRange<UInt>), bstGenerator(maxDepth: maxDepth - 1))._map { left, value, right in
+        let nodeBranch = Gen.zip(bstGenerator(maxDepth: maxDepth - 1), Gen.choose(in: 0 ... 9 as ClosedRange<UInt>), bstGenerator(maxDepth: maxDepth - 1)).map { left, value, right in
             BenchBST.node(left: left, value: value, right: right)
         }
         return Gen.pick(choices: [(1, Gen.just(.leaf)), (3, nodeBranch)])

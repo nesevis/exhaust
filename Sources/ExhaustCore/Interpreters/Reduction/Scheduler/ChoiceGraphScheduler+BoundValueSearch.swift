@@ -23,7 +23,7 @@ extension ChoiceGraphScheduler {
         bindScope: BoundValueScope,
         scope: EncoderInput,
         graph: ChoiceGraph,
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         upstreamBudget: Int = 15
     ) -> any GraphEncoder {
         // Synthesise the upstream scope: a one-leaf integer minimization on the bind-inner. ``mayReshapeOnAcceptance`` is false here because the composition synthesises the reshape change in ``GraphComposedEncoder/wrap``
@@ -87,7 +87,7 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         graph _: ChoiceGraph,
         bindScope: BoundValueScope,
-        gen: ReflectiveGenerator<Any>
+        gen: AnyGenerator
     ) -> EncoderInput? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
 

@@ -30,7 +30,7 @@ package struct GenerationContext: ~Copyable {
     // MARK: - Caches
 
     /// CGS-tuned filter generators for bind-inner filters, keyed by source-location fingerprint. Populated on first encounter when ``Gen/isInterpreting`` caused the filter to defer eager tuning.
-    package var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
+    package var tunedFilterCache: [UInt64: AnyGenerator] = [:]
     /// Seen keys for `unique(by:)` deduplication, keyed by site fingerprint.
     package var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
     /// Seen choice sequences for `unique()` deduplication, keyed by site fingerprint.

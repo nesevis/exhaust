@@ -11,8 +11,8 @@ extension Materializer {
     /// Materializes a ``ReflectiveOperation/contramap`` by recursing into the inner generator and threading the result through the continuation unchanged.
     @inline(__always)
     static func handleContramap(
-        _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        _ nextGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -33,8 +33,8 @@ extension Materializer {
     /// Returns nil if the prune predicate rejects the input, which propagates as a materialization failure to the caller.
     @inline(__always)
     static func handlePrune(
-        _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        _ nextGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -65,7 +65,7 @@ extension Materializer {
         tag: TypeTag,
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling?,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -157,7 +157,7 @@ extension Materializer {
     static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         branchCount: UInt64,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -324,9 +324,9 @@ extension Materializer {
     /// Length resolution is mode-dependent: exact mode trusts the cursor's element count, guided mode clamps cursor or fallback lengths to the generator's valid range, and generate mode runs the length generator fresh. After all elements are materialized the cursor's sequence-close marker is consumed so the caller's cursor position is consistent.
     @inline(__always)
     static func handleSequence(
-        lengthGen: ReflectiveGenerator<UInt64>,
-        elementGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        lengthGen: Generator<UInt64>,
+        elementGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -436,8 +436,8 @@ extension Materializer {
     /// When a fallback tree is available, each child is scoped to its flattened entry count so guided-mode cursor reads cannot bleed into sibling components. Scope limits are computed arithmetically from the cursor's position at the zip's group-open marker to avoid drift from transparent group markers consumed by ``Cursor/skipGroups()``.
     @inline(__always)
     static func handleZip(
-        _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        _ generators: ContiguousArray<AnyGenerator>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -505,8 +505,8 @@ extension Materializer {
     @inline(__always)
     static func handleResize(
         newSize: UInt64,
-        gen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -543,8 +543,8 @@ extension Materializer {
     @inline(__always)
     static func handleTransform(
         kind: TransformKind,
-        inner: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Any>,
+        inner: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
@@ -671,7 +671,7 @@ extension Materializer {
     ///
     /// Handles two common shapes: a bare ``ReflectiveOperation/chooseBits`` and a ``ReflectiveOperation/getSize``-wrapped chooseBits. Returns empty metadata when the generator has an unrecognized shape, which causes the caller to skip range clamping.
     private static func extractLengthMetadata(
-        _ lengthGen: ReflectiveGenerator<UInt64>
+        _ lengthGen: Generator<UInt64>
     ) throws -> ChoiceMetadata {
         if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = lengthGen {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)

@@ -220,7 +220,7 @@ Configure behaviour with settings:
 | `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
-| `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). |
+| `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). Passed as a named parameter, not a setting. |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and reduces your generator. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
 | `.collectOpenPBTStats` | off | Collects per-example statistics and attaches them to the test run in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. See [Test Observability](#test-observability). |
@@ -333,7 +333,7 @@ Tyche renders these signals as interactive charts — sample breakdowns, feature
 
 ## Reflecting and Reducing Known Values
 
-Sometimes you already have a failing value — from a bug report, a production log, or a test fixture — and want to find the simplest version that still fails. The `.reflecting` setting skips generation, reflects your value through the generator, and reduces it:
+Sometimes you already have a failing value — from a bug report, a production log, or a test fixture — and want to find the simplest version that still fails. The `reflecting:` parameter skips generation, reflects your value through the generator, and reduces it:
 
 ```swift
 @Test
@@ -341,7 +341,7 @@ func minimizeBugReport() {
     let gen = #gen(.int().array(length: 3...30))
     let fromBugReport = [1337, 80085, 69, 67]
 
-    #exhaust(gen, .reflecting(fromBugReport)) {
+    #exhaust(gen, reflecting: fromBugReport) {
         #expect(Set($0).count < 3)
     }
     // Reduces to [-1, 0, 1]
@@ -371,7 +371,7 @@ Exhaust uses `mapped` automatically when it can synthesise a backward mapping �
 | Capability | Reflectable (`mapped`/`bound`) | Forward-only (`.map`/`.bind`) |
 |---|---|---|
 | `#exhaust` (generation + reduction) | Yes | Yes |
-| `#exhaust(..., .reflecting(value))` | Yes | No |
+| `#exhaust(..., reflecting: value)` | Yes | No |
 | `#example` | Yes | Yes |
 | `#examine` (round-trip validation) | Yes | No |
 | Structured coverage | Yes | Yes |
@@ -616,7 +616,7 @@ Generators in Exhaust are inspectable data structures, not opaque closures. Stru
 Exhaust supports three execution modes:
 
 - **Generation (forward)** — the generator is interpreted to produce a value, recording every choice made along the way. This is the normal path during test execution.
-- **Reflection (backward)** — given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what powers `.reflecting` and automatic reduction without custom reduction functions.
+- **Reflection (backward)** — given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what powers `reflecting:` and automatic reduction without custom reduction functions.
 - **Replay** — a recorded sequence of choices is fed back to reproduce the exact same value, powering deterministic reproduction via `.replay(seed)`.
 
 Reduction operates on the recorded sequences and trees of choices rather than the output value, making it type-agnostic and preserving all generator invariants. A failing test case has two independent aspects: its *shape* (how many values exist and how they depend on each other) and its *values* (what those values are). The reducer treats these as separate problems. Each cycle first simplifies the shape — remove elements, flatten branches, shorten sequences — then simplifies the values within that fixed shape — drive numbers toward zero, simplify floats. This repeats until neither makes progress. When both stall, the reducer tries to escape: searching shape and values jointly along dependency edges, or temporarily worsening one value to unlock progress elsewhere.

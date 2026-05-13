@@ -41,16 +41,15 @@ public extension ReflectiveGenerator {
             "Lower bound must not exceed upper bound after scaling"
         )
 
-        let inner: ReflectiveGenerator<Int64> = Gen.choose(in: lowerStep ... upperStep)
-
-        return inner.mapped(
-            forward: { step in
-                Decimal(step) / multiplier
-            },
-            backward: { target in
-                let scaled = Int64(truncating: (target * multiplier) as NSDecimalNumber)
-                return min(max(scaled, lowerStep), upperStep)
-            }
-        )
+        return ReflectiveGenerator<Int64> { Gen.choose(in: lowerStep ... upperStep) }
+            .mapped(
+                forward: { step in
+                    Decimal(step) / multiplier
+                },
+                backward: { target in
+                    let scaled = Int64(truncating: (target * multiplier) as NSDecimalNumber)
+                    return min(max(scaled, lowerStep), upperStep)
+                }
+            )
     }
 }

@@ -30,7 +30,7 @@
 ///
 /// **Construction**: Operations are created by ``Gen`` combinators and interpreted by ``Interpreters``. Never construct directly.
 ///
-/// - SeeAlso: ``ReflectiveGenerator``, ``Gen``, ``Interpreters``
+/// - SeeAlso: ``Generator``, ``Gen``, ``Interpreters``
 // MARK: - Interpretation Sites
 
 //
@@ -49,7 +49,7 @@
 // unique            InterpreterWrapperHandlers    (pass-through)    (pass-through)    (pass-through)
 // transform         VACTI / VI                    Reflect.swift     Replay.swift      ChoiceGraphBuilder
 
-public enum ReflectiveOperation {
+package enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
     ///
     /// Each choice combines the elements needed for bidirectional generation:
@@ -64,14 +64,14 @@ public enum ReflectiveOperation {
         /// Relative (unnormalized) probability. During generation, the PRNG draw is partitioned proportionally across branches. During CGS tuning, weights are overridden by learned biases. Zero weight makes the branch unreachable during generation but still reachable during reflection.
         public let weight: UInt64
         /// Type-erased because Swift enums cannot vary generic parameters across cases. The pick interpreter casts the continuation result back to the expected type at each branch boundary.
-        public let generator: ReflectiveGenerator<Any>
+        package let generator: AnyGenerator
 
         /// Creates a pick tuple with the given fingerprint, identifier, weight, and generator.
         public init(
             fingerprint: UInt64,
             id: UInt64,
             weight: UInt64,
-            generator: ReflectiveGenerator<Any>
+            generator: AnyGenerator
         ) {
             self.fingerprint = fingerprint
             self.id = id
@@ -85,13 +85,13 @@ public enum ReflectiveOperation {
     /// - Parameters:
     ///   - transform: Function that extracts focus area, returning nil to prune branches.
     ///   - next: Generator to apply to the extracted input.
-    case contramap(transform: (Any) throws -> Any?, next: ReflectiveGenerator<Any>)
+    case contramap(transform: (Any) throws -> Any?, next: AnyGenerator)
 
     /// Selects one of several discrete generation strategies by weighted random draw.
     ///
     /// Pick is a primitive because weighted discrete choice cannot be composed from ``chooseBits``: branches carry distinct sub-generators with different recursive structures, not just different bit patterns in a contiguous range. The ChoiceGraph builds a separate subtree per branch, and the reducer can swap, reorder, or eliminate branches independently — none of which is possible when the choice is encoded as a numeric range.
     ///
-    /// **Invariants:** Every ``PickTuple/generator`` is type-erased to `ReflectiveGenerator<Any>` and must produce a value whose type matches the continuation attached to this operation. `branchCount` must equal `choices.count`; the two are stored separately because `branchCount` is needed at sites that do not inspect individual branches (for example, ChoiceTree construction).
+    /// **Invariants:** Every ``PickTuple/generator`` is type-erased to `AnyGenerator` and must produce a value whose type matches the continuation attached to this operation. `branchCount` must equal `choices.count`; the two are stored separately because `branchCount` is needed at sites that do not inspect individual branches (for example, ChoiceTree construction).
     ///
     /// - Parameters:
     ///   - choices: Array of weighted generator options with replay labels.
@@ -103,7 +103,7 @@ public enum ReflectiveOperation {
     /// **Why separate from contramap:** Contramap transforms the input; prune decides whether to continue. Merging them into a single operation would force every contramap to handle the nil case even when failure is impossible, and would hide the branch-elimination decision from interpreters that need to count or log pruned paths. The separation lets the reflection interpreter distinguish "transform succeeded but downstream failed" from "transform itself rejected this branch."
     ///
     /// - Parameter next: Generator to apply if the input is valid (non-nil).
-    case prune(next: ReflectiveGenerator<Any>)
+    case prune(next: AnyGenerator)
 
     /// Generates a random `UInt64` bit pattern within `min...max`, interpreted as a typed value via ``TypeTag``.
     ///
@@ -134,18 +134,18 @@ public enum ReflectiveOperation {
     /// - Parameters:
     ///   - length: Generator that determines the sequence length.
     ///   - gen: Generator applied to each element position.
-    case sequence(length: ReflectiveGenerator<UInt64>, gen: ReflectiveGenerator<Any>)
+    case sequence(length: Generator<UInt64>, gen: AnyGenerator)
 
     /// Composes a fixed number of independent generators into a single tuple result.
     ///
     /// Zip is a primitive because fixed-arity parallel composition is structurally distinct from ``sequence``'s variable-length output. The ChoiceTree knows the child count at construction time, so coverage analysis can enumerate parameter combinations without generating a length first. The reducer treats each child as an independent scope, which is not possible when variable-length output forces all elements through a shared element generator.
     ///
-    /// **Invariant:** All generators are type-erased to `ReflectiveGenerator<Any>`. The continuation attached to this operation receives an `[Any]` whose count and element types match the generators array. The interpreter does not validate element types — the combinator that constructed the zip guarantees the correspondence.
+    /// **Invariant:** All generators are type-erased to `AnyGenerator`. The continuation attached to this operation receives an `[Any]` whose count and element types match the generators array. The interpreter does not validate element types — the combinator that constructed the zip guarantees the correspondence.
     ///
     /// - Parameters:
     ///   - generators: Array of generators to compose in parallel.
     ///   - isOpaque: When `true`, the resulting ``ChoiceTree/group(_:isOpaque:)`` is marked opaque so coverage analysis skips its subtree.
-    case zip(ContiguousArray<ReflectiveGenerator<Any>>, isOpaque: Bool = false)
+    case zip(ContiguousArray<AnyGenerator>, isOpaque: Bool = false)
 
     /// Embeds a constant value into the generator tree without contributing any choices to the choice sequence.
     ///
@@ -168,7 +168,7 @@ public enum ReflectiveOperation {
     /// - Parameters:
     ///   - newSize: Temporary size parameter for the nested scope.
     ///   - next: Generator to run with the modified size.
-    case resize(newSize: UInt64, next: ReflectiveGenerator<Any>)
+    case resize(newSize: UInt64, next: AnyGenerator)
 
     /// Marks a generator with a validity predicate that the framework can optimize via Choice Gradient Sampling (CGS).
     ///
@@ -184,11 +184,11 @@ public enum ReflectiveOperation {
     ///   - tuned: Pre-tuned generator with baked CGS weights, used by generation interpreters. Reduction interpreters ignore this and use `gen` directly.
     ///   - sourceLocation: Source location of the `.filter(...)` call site, for diagnostic warnings.
     case filter(
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         fingerprint: UInt64,
         filterType: FilterType,
         predicate: (Any) -> Bool,
-        tuned: ReflectiveGenerator<Any>?,
+        tuned: AnyGenerator?,
         sourceLocation: FilterSourceLocation
     )
 
@@ -201,7 +201,7 @@ public enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this classification operation.
     ///   - classifiers: Array of (label, predicate) pairs for categorizing values.
     case classify(
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         fingerprint: UInt64,
         classifiers: [(label: String, predicate: (Any) -> Bool)]
     )
@@ -221,7 +221,7 @@ public enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this unique site (for per-site tracking).
     ///   - keyExtractor: Optional function to extract a hashable key from generated values. When `nil`, deduplication uses the choice sequence instead.
     case unique(
-        gen: ReflectiveGenerator<Any>,
+        gen: AnyGenerator,
         fingerprint: UInt64,
         keyExtractor: ((Any) -> AnyHashable)?
     )
@@ -235,11 +235,11 @@ public enum ReflectiveOperation {
     /// - Parameters:
     ///   - kind: Whether this is a `map` (pure function) or `bind` (dependent generator).
     ///   - inner: The generator whose output is being transformed.
-    case transform(kind: TransformKind, inner: ReflectiveGenerator<Any>)
+    case transform(kind: TransformKind, inner: AnyGenerator)
 }
 
 /// Describes the kind of forward-only transformation applied by a `.transform` operation.
-public enum TransformKind {
+package enum TransformKind {
     /// A pure function applied to the inner generator's output.
     ///
     /// - Parameters:
@@ -259,7 +259,7 @@ public enum TransformKind {
     ///   - outputType: The metatype of the output, captured at the call site.
     case bind(
         fingerprint: UInt64,
-        forward: (Any) throws -> ReflectiveGenerator<Any>,
+        forward: (Any) throws -> AnyGenerator,
         backward: ((Any) throws -> Any)?,
         inputType: Any.Type,
         outputType: Any.Type
@@ -286,7 +286,7 @@ package extension ReflectiveOperation {
     /// Returns the rebuilt operation for wrapper operations that contain exactly one sub-generator (`contramap`, `prune`, `resize`, `filter`, `classify`, `unique`, `transform`).
     /// Returns `nil` for operations with zero or multiple sub-generators (`chooseBits`, `just`, `getSize`, `pick`, `zip`, `sequence`, `metamorphic`).
     func mapInnerGenerator(
-        _ transform: (ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<Any>
+        _ transform: (AnyGenerator) throws -> AnyGenerator
     ) rethrows -> ReflectiveOperation? {
         switch self {
         case let .contramap(contramapTransform, next):

@@ -128,23 +128,11 @@ extension ChoiceGraph {
         }
     }
 
-    /// Classifies each live leaf as a source (nonzero value) or sink (zero value) for scope query filtering.
-    func computeSourceSinkAnnotations() -> [Int: SourceSinkStatus] {
-        var status: [Int: SourceSinkStatus] = [:]
-        for nodeID in liveNodeIDs {
-            let node = nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            let isZero = metadata.value.bitPattern64 == 0
-            status[nodeID] = isZero ? .sink : .source
-        }
-        return status
-    }
-
     // MARK: - On-Demand Reachability
 
     /// Returns true when `target` is reachable from `source` via one or more dependency edges.
     ///
-    /// Uses a DFS through the cached ``dependencyAdjacency`` list, stopping as soon as `target` is found. Replaces the previous O(V^2) eager transitive closure with an O(V + E) per-query walk.
+    /// Uses a DFS through the cached ``dependencyAdjacency`` list, stopping as soon as `target` is found.
     func isReachable(from source: Int, to target: Int) -> Bool {
         guard source < nodes.count, target < nodes.count else { return false }
         let adjacency = dependencyAdjacency

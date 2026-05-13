@@ -1,4 +1,3 @@
-import ExhaustCore
 
 /// Extracts a single child value from a Mirror by label.
 ///

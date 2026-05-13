@@ -9,23 +9,23 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
     case leaf
     indirect case node(left: BST, value: UInt, right: BST)
 
-    static func arbitrary(maxDepth: Int = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> ReflectiveGenerator<BST> {
+    static func arbitrary(maxDepth: Int = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> Generator<BST> {
         bstGenerator(maxDepth: maxDepth, valueRange: valueRange)
     }
 
-    private static func bstGenerator(maxDepth: Int, valueRange: ClosedRange<UInt>) -> ReflectiveGenerator<BST> {
+    private static func bstGenerator(maxDepth: Int, valueRange: ClosedRange<UInt>) -> Generator<BST> {
         if maxDepth <= 0 {
             return Gen.just(.leaf)
         }
-        let nodeBranch = Gen.zip(bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange), Gen.choose(in: valueRange), bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange))._map { left, value, right in
+        let nodeBranch = Gen.zip(bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange), Gen.choose(in: valueRange), bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange)).map { left, value, right in
             BST.node(left: left, value: value, right: right)
         }
         return Gen.pick(choices: [(1, Gen.just(.leaf)), (3, nodeBranch)])
     }
 
-    static func arbitraryRecursive(maxDepth: UInt64 = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> ReflectiveGenerator<BST> {
+    static func arbitraryRecursive(maxDepth: UInt64 = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> Generator<BST> {
         Gen.recursive(base: .leaf, depthRange: 0 ... Int(maxDepth)) { recurse, remaining in
-            let nodeBranch = Gen.zip(recurse(), Gen.choose(in: valueRange), recurse())._map { left, value, right in
+            let nodeBranch = Gen.zip(recurse(), Gen.choose(in: valueRange), recurse()).map { left, value, right in
                 BST.node(left: left, value: value, right: right)
             }
             return Gen.pick(choices: [(1, Gen.just(.leaf)), (Int(remaining), nodeBranch)])

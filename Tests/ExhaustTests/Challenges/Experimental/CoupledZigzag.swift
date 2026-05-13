@@ -78,8 +78,8 @@ struct CoupledZigzagChallenge {
         // the zigzag: it detects both values moving slowly toward zero and
         // proposes a joint binary search that converges in O(log n) probes.
         let gen = #gen(.int(in: 0 ... 10000))
-            .bind { (m: Int) -> ReflectiveGenerator<(Int, Int)> in
-                #gen(.int(in: 0 ... 10000)).bind { (n: Int) -> ReflectiveGenerator<(Int, Int)> in
+            .bind { m in
+                #gen(.int(in: 0 ... 10000)).bind { n in
                     .just((m, n))
                 }
             }

@@ -10,7 +10,7 @@ package extension __ExhaustRuntime {
 
     /// Bundles parameters shared across coverage, sampling, and reduction phases.
     struct PipelineContext<Output> {
-        let gen: ReflectiveGenerator<Output>
+        let gen: Generator<Output>
         let property: @Sendable (Output) -> Bool
         let samplingBudget: UInt64
         let reductionConfig: Interpreters.ReducerConfiguration
@@ -433,36 +433,12 @@ package extension __ExhaustRuntime {
         return .unreduced(value)
     }
 
-    // MARK: - Phase Timing
-
-    static func logPhaseTimings(
-        start: UInt64,
-        coverageEnd: UInt64,
-        generationEnd: UInt64,
-        reductionEnd: UInt64
-    ) {
-        let coverageMs = Double(coverageEnd - start) / 1_000_000
-        let generationMs = Double(generationEnd - coverageEnd) / 1_000_000
-        let reductionMs = Double(reductionEnd - generationEnd) / 1_000_000
-        let totalMs = Double(reductionEnd - start) / 1_000_000
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "phase_timing",
-            metadata: [
-                "coverage_ms": String(format: "%.1f", coverageMs),
-                "generation_ms": String(format: "%.1f", generationMs),
-                "reduction_ms": String(format: "%.1f", reductionMs),
-                "total_ms": String(format: "%.1f", totalMs),
-            ]
-        )
-    }
-
     // MARK: - Reflecting
 
     /// Reduces a counterexample using reflection to seed the reducer.
     // swiftlint:disable:next function_parameter_count
     static func __reduceReflected<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+        _ gen: Generator<Output>,
         value: Output,
         reductionConfig: Interpreters.ReducerConfiguration,
         visualize: Bool,

@@ -6,13 +6,13 @@
 // MARK: - Length Interpreter
 
 extension ValueAndChoiceTreeInterpreter {
-    /// Interprets a `ReflectiveGenerator<UInt64>` directly without type-erasing to `<Any>`.
+    /// Interprets a `Generator<UInt64>` directly without type-erasing to `<Any>`.
     ///
-    /// Length generators produce a `UInt64` that is consumed immediately by ``handleSequence``. Their continuations are typed `(Any) throws -> ReflectiveGenerator<UInt64>`, so this interpreter avoids the `FreerMonad.erase()` spine traversal and the generic metadata resolution in the erased continuation closures.
+    /// Length generators produce a `UInt64` that is consumed immediately by ``handleSequence``. Their continuations are typed `(Any) throws -> Generator<UInt64>`, so this interpreter avoids the `FreerMonad.erase()` spine traversal and the generic metadata resolution in the erased continuation closures.
     ///
     /// Handles `chooseBits` and `getSize` inline. Wrapper operations (`resize`, `contramap`, `prune`) delegate their inner `<Any>` sub-generator to ``generateRecursiveAny`` and thread the result through the typed continuation.
     static func interpretLength(
-        _ gen: ReflectiveGenerator<UInt64>,
+        _ gen: Generator<UInt64>,
         context: inout GenerationContext
     ) throws -> (UInt64, ChoiceTree)? {
         switch gen {
@@ -149,7 +149,7 @@ extension ValueAndChoiceTreeInterpreter {
     static func interpretLengthContinuation(
         result: Any,
         calleeTree: ChoiceTree,
-        continuation: (Any) throws -> ReflectiveGenerator<UInt64>,
+        continuation: (Any) throws -> Generator<UInt64>,
         context: inout GenerationContext
     ) throws -> (UInt64, ChoiceTree)? {
         let nextGen = try continuation(result)

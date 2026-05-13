@@ -69,13 +69,6 @@ protocol GraphEncoder {
     ///   - sequence: The live sequence after the structural mutation. Encoders that cache a baseline sequence in their state must replace it with this value, since their cached copy is from before the mutation.
     mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence)
 
-    /// Whether every cached sequence position still addresses a value entry in the given sequence.
-    ///
-    /// The probe loop calls this after an acceptance whose ``ChangeApplication`` indicates a partial graph modification (value writes landed but bind reshape did not complete). When true, the encoder's cached leaf positions are still usable against the post-acceptance sequence and the probe loop can continue without a cycle break. When false, at least one cached position now addresses a structural marker or is out of bounds, and the loop must break to trigger a full rebuild.
-    ///
-    /// The default returns true, which is correct for encoders that do not cache per-leaf sequence indices (structural, swap, reorder, and similar single-shot encoders).
-    func hasValidPositions(in sequence: ChoiceSequence) -> Bool
-
     /// Whether any replacement probe was rejected because the candidate was not shortlex-smaller than the original.
     ///
     /// The scheduler uses this to decide whether a relax round is worth attempting after structural reduction completes. Default `false` for non-structural encoders.
@@ -103,11 +96,6 @@ extension GraphEncoder {
 
     /// Default: no partial convergence to flush.
     mutating func flushPartialConvergence() {}
-
-    /// Default: all cached positions are valid.
-    func hasValidPositions(in _: ChoiceSequence) -> Bool {
-        true
-    }
 
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {

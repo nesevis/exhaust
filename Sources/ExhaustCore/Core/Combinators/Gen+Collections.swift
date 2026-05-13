@@ -14,9 +14,9 @@ package extension Gen {
     ///   - length: Optional generator for the array length. Defaults to size-based length.
     /// - Returns: A generator that produces an array of elements.
     static func arrayOf<Output>(
-        _ elementGenerator: ReflectiveGenerator<Output>,
-        _ length: ReflectiveGenerator<UInt64>? = nil
-    ) -> ReflectiveGenerator<[Output]> {
+        _ elementGenerator: Generator<Output>,
+        _ length: Generator<UInt64>? = nil
+    ) -> Generator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: length ?? Gen.getSize { Gen.chooseDerived(in: 0 ... $0) },
@@ -49,10 +49,10 @@ package extension Gen {
     ///   - scaling: The distribution strategy for the length. Defaults to `.linear`
     /// - Returns: A generator that produces arrays with length in the specified range.
     static func arrayOf<Output>(
-        _ elementGenerator: ReflectiveGenerator<Output>,
+        _ elementGenerator: Generator<Output>,
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<[Output]> {
+    ) -> Generator<[Output]> {
         let sequenceOperation = ReflectiveOperation.sequence(
             length: Gen.choose(in: range, scaling: scaling),
             gen: elementGenerator.erase()
@@ -77,9 +77,9 @@ package extension Gen {
     ///   - exactly: The exact length the array should have.
     /// - Returns: A generator that produces arrays of the specified length.
     static func arrayOf<Output>(
-        _ elementGenerator: ReflectiveGenerator<Output>,
+        _ elementGenerator: Generator<Output>,
         exactly: UInt64
-    ) -> ReflectiveGenerator<[Output]> {
+    ) -> Generator<[Output]> {
         arrayOf(elementGenerator, Gen.choose(in: exactly ... exactly))
     }
 
@@ -93,15 +93,15 @@ package extension Gen {
     /// - Returns: A generator that produces dictionaries with random key-value pairs.
     /// - Note: Reflection decomposes the dictionary into key/value arrays via ``Dictionary/keys`` and ``Dictionary/values``. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may reduce shrinking quality.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
-        _ keyGenerator: ReflectiveGenerator<KeyOutput>,
-        _ valueGenerator: ReflectiveGenerator<ValueOutput>
-    ) -> ReflectiveGenerator<[KeyOutput: ValueOutput]> {
+        _ keyGenerator: Generator<KeyOutput>,
+        _ valueGenerator: Generator<ValueOutput>
+    ) -> Generator<[KeyOutput: ValueOutput]> {
         let pairGen = Gen.arrayOf(keyGenerator)._bound(
             forward: { keys in
                 Gen.contramap(
                     { (pair: ([KeyOutput], [ValueOutput])) in pair.1 },
                     Gen.arrayOf(valueGenerator, exactly: UInt64(keys.count))
-                        ._map { values in (keys, values) }
+                        .map { values in (keys, values) }
                 )
             },
             backward: { (pair: ([KeyOutput], [ValueOutput])) in pair.0 }
@@ -109,7 +109,7 @@ package extension Gen {
 
         return Gen.contramap(
             { (dict: [KeyOutput: ValueOutput]) in (Array(dict.keys), Array(dict.values)) },
-            pairGen._map { keys, values in
+            pairGen.map { keys, values in
                 Dictionary(
                     Swift.zip(keys, values).map { ($0, $1) },
                     uniquingKeysWith: { first, _ in first }
@@ -127,10 +127,10 @@ package extension Gen {
     ///   - length: Optional generator for the set size. Defaults to size-based length.
     /// - Returns: A generator that produces a set of unique elements.
     static func setOf<Element: Hashable>(
-        _ elementGenerator: ReflectiveGenerator<Element>,
-        _ length: ReflectiveGenerator<UInt64>? = nil
-    ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, length)._map { Set($0) }
+        _ elementGenerator: Generator<Element>,
+        _ length: Generator<UInt64>? = nil
+    ) -> Generator<Set<Element>> {
+        arrayOf(elementGenerator, length).map { Set($0) }
     }
 
     /// Creates a generator for a set with size constrained to a specific range.
@@ -141,11 +141,11 @@ package extension Gen {
     ///   - scaling: The distribution strategy for the set size. Defaults to `.linear`
     /// - Returns: A generator that produces sets with size in the specified range.
     static func setOf<Element: Hashable>(
-        _ elementGenerator: ReflectiveGenerator<Element>,
+        _ elementGenerator: Generator<Element>,
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, within: range, scaling: scaling)._map { Set($0) }
+    ) -> Generator<Set<Element>> {
+        arrayOf(elementGenerator, within: range, scaling: scaling).map { Set($0) }
     }
 
     /// Creates a generator for a set with exactly the specified number of elements.
@@ -155,10 +155,10 @@ package extension Gen {
     ///   - exactly: The exact number of elements the set should have.
     /// - Returns: A generator that produces sets of the specified size.
     static func setOf<Element: Hashable>(
-        _ elementGenerator: ReflectiveGenerator<Element>,
+        _ elementGenerator: Generator<Element>,
         exactly: UInt64
-    ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, exactly: exactly)._map { Set($0) }
+    ) -> Generator<Set<Element>> {
+        arrayOf(elementGenerator, exactly: exactly).map { Set($0) }
     }
 
     /// Shuffles the output of an array generator into a random permutation.
@@ -168,15 +168,15 @@ package extension Gen {
     /// - Parameter gen: An array generator whose output should be shuffled.
     /// - Returns: A generator that produces a randomly permuted array.
     static func shuffled<Element>(
-        _ gen: ReflectiveGenerator<some Collection<Element>>
-    ) -> ReflectiveGenerator<[Element]> {
-        gen._bind { array in
+        _ gen: Generator<some Collection<Element>>
+    ) -> Generator<[Element]> {
+        gen.bind { array in
             guard array.count > 1 else { return .pure(Array(array)) }
             return Gen.arrayOf(
                 Gen.choose(in: UInt64.min ... UInt64.max),
                 exactly: UInt64(array.count)
             )
-            ._map { keys in
+            .map { keys in
                 Swift.zip(array, keys)
                     .sorted { $0.1 < $1.1 }
                     .map(\.0)
@@ -193,9 +193,9 @@ package extension Gen {
     ///   - lengthRange: Optional range to constrain the array length. If nil, uses 0...size.
     /// - Returns: A generator that produces arrays with size-controlled length.
     static func sized<Output>(
-        _ elementGenerator: ReflectiveGenerator<Output>,
+        _ elementGenerator: Generator<Output>,
         lengthRange: ClosedRange<UInt64>? = nil
-    ) -> ReflectiveGenerator<[Output]> {
+    ) -> Generator<[Output]> {
         getSize { size in
             let actualRange = lengthRange ?? (0 ... size)
             let clampedMin = max(actualRange.lowerBound, 0)
@@ -213,7 +213,7 @@ package extension Gen {
     /// Reduction drives the start position toward zero and the length toward one.
     static func slice<AnyCollection: Collection>(
         of collection: AnyCollection
-    ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
+    ) -> Generator<AnyCollection.SubSequence> {
         let count = collection.count
         guard count > 0 else {
             return .pure(collection[collection.startIndex ..< collection.startIndex])
@@ -227,7 +227,7 @@ package extension Gen {
                     return Gen.contramap(
                         { (subset: AnyCollection.SubSequence) -> Int in subset.count },
                         Gen.chooseDerived(in: Int(1) ... maxLength)
-                            ._map { length -> AnyCollection.SubSequence in
+                            .map { length -> AnyCollection.SubSequence in
                                 let startIndex = indices[startPosition]
                                 let endIndexPos = min(startPosition + length, indices.count)
                                 let endIndex = endIndexPos < indices.count
@@ -250,9 +250,9 @@ package extension Gen {
     /// - Parameter gen: A generator that produces a collection.
     /// - Returns: A generator that produces a contiguous subrange of the generated collection.
     static func slice<C: Collection>(
-        of gen: ReflectiveGenerator<C>
-    ) -> ReflectiveGenerator<C.SubSequence> {
-        gen._bind { collection in
+        of gen: Generator<C>
+    ) -> Generator<C.SubSequence> {
+        gen.bind { collection in
             slice(of: collection)
         }
     }
@@ -265,7 +265,7 @@ package extension Gen {
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C
-    ) -> ReflectiveGenerator<C.Element> where C.Element: Hashable {
+    ) -> Generator<C.Element> where C.Element: Hashable {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
@@ -286,7 +286,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 
@@ -298,7 +298,7 @@ package extension Gen {
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C
-    ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable {
+    ) -> Generator<C.Element> where C.Element: Equatable {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
@@ -314,7 +314,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 
@@ -329,7 +329,7 @@ package extension Gen {
     static func element<C: Collection, Key: Hashable>(
         from collection: C,
         id path: KeyPath<C.Element, Key>
-    ) -> ReflectiveGenerator<C.Element> {
+    ) -> Generator<C.Element> {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
@@ -353,7 +353,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 
@@ -368,7 +368,7 @@ package extension Gen {
     static func element<C: Collection>(
         from collection: C,
         id path: KeyPath<C.Element, some Equatable>
-    ) -> ReflectiveGenerator<C.Element> {
+    ) -> Generator<C.Element> {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
@@ -385,7 +385,7 @@ package extension Gen {
                 }
                 return index
             },
-            Gen.choose(in: 0 ... (elements.count - 1))._map { elements[$0] }
+            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
         )
     }
 }

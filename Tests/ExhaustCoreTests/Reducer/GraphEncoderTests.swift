@@ -274,7 +274,7 @@ struct ChoiceGraphReducerIntegrationTests {
         try #require(value > 5)
 
         let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, output: value, config: .fast) {
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, output: value, config: .init(maxStalls: 2)) {
                 $0 < 5
             }
         )
@@ -294,7 +294,7 @@ struct ChoiceGraphReducerIntegrationTests {
             gen: gen,
             tree: tree,
             output: value,
-            config: .fast
+            config: .init(maxStalls: 2)
         ) { $0 < 10 }
 
         #expect(result.reduced != nil)

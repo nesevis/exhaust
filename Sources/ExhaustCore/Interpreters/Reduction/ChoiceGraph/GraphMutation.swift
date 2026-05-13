@@ -35,7 +35,7 @@ package enum ProjectedMutation {
     )
 
     /// Two same-shaped siblings swapped within a parent (zip or sequence).
-    case siblingsSwapped(parentNodeID: Int, idA: Int, idB: Int)
+    case siblingsSwapped(parentNodeID: Int, lhs: Int, rhs: Int)
 
     /// Sequence elements permuted into natural numeric order by ``GraphReorderEncoder``.
     ///

@@ -87,9 +87,9 @@ struct MetaGeneratorPropertyTests {
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             // contramap(id, gen.map(id)) adds no PRNG-consuming operations
-            let mappedGen: ReflectiveGenerator<Any> = Gen.contramap(
+            let mappedGen: AnyGenerator = Gen.contramap(
                 { (newOutput: Any) throws -> Any in newOutput },
-                gen._map { $0 }
+                gen.map { $0 }
             )
 
             var iter1: ValueInterpreter<Any> = ValueInterpreter(gen, seed: 42, maxRuns: 10)
@@ -117,9 +117,9 @@ struct MetaGeneratorPropertyTests {
             let g: (Any) -> Any = { ($0 as! Int) + 1 }
 
             // gen.map(f).map(g)
-            let composed1 = gen._map(f)._map(g)
+            let composed1 = gen.map(f).map(g)
             // gen.map(g . f)
-            let composed2 = gen._map { g(f($0)) }
+            let composed2 = gen.map { g(f($0)) }
 
             var iter1 = ValueInterpreter(composed1, seed: 42, maxRuns: 10)
             var iter2 = ValueInterpreter(composed2, seed: 42, maxRuns: 10)
@@ -139,12 +139,12 @@ struct MetaGeneratorPropertyTests {
     func monadLeftIdentity() throws {
         var valueIter = ValueInterpreter(Gen.choose(in: -100 ... 100 as ClosedRange<Int>), seed: 7, maxRuns: 30)
         while let x = try valueIter.next() {
-            let f: (Int) -> ReflectiveGenerator<Int> = { val in
+            let f: (Int) -> Generator<Int> = { val in
                 Gen.choose(in: val ... (val + 10))
             }
 
-            let lhs: ReflectiveGenerator<Int> = Gen.just(x)._bind { f($0) }
-            let rhs: ReflectiveGenerator<Int> = f(x)
+            let lhs: Generator<Int> = Gen.just(x).bind { f($0) }
+            let rhs: Generator<Int> = f(x)
 
             var lhsIter = ValueInterpreter(lhs, seed: 99, maxRuns: 5)
             var rhsIter = ValueInterpreter(rhs, seed: 99, maxRuns: 5)
@@ -164,7 +164,7 @@ struct MetaGeneratorPropertyTests {
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             // bind { .pure($0) } adds no PRNG-consuming operations
-            let boundGen = gen._bind { .pure($0) }
+            let boundGen = gen.bind { .pure($0) }
 
             var iter1 = ValueInterpreter(gen, seed: 42, maxRuns: 10)
             var iter2 = ValueInterpreter(boundGen, seed: 42, maxRuns: 10)
@@ -196,7 +196,7 @@ struct MetaGeneratorPropertyTests {
             while let (value, tree) = try valueIter.next() {
                 guard !property(value) else { continue }
                 guard let (_, shrunk) = try? Interpreters.choiceGraphReduce(
-                    gen: gen, tree: tree, config: .fast, property: property
+                    gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else { continue }
                 #expect(
                     !property(shrunk),
@@ -217,7 +217,7 @@ struct MetaGeneratorPropertyTests {
             // Only use predicates applicable to the recipe's output type
             for predicate in KnownPredicate.applicable(to: recipe.outputType) {
                 // For .isPositive, constrain the inner recipe to include positive values
-                let innerGen: ReflectiveGenerator<Any>
+                let innerGen: AnyGenerator
                 if predicate == .isPositive {
                     innerGen = Gen.choose(in: -10 ... 100 as ClosedRange<Int>).erase()
                 } else if predicate == .isNonEmpty {
@@ -226,7 +226,7 @@ struct MetaGeneratorPropertyTests {
                     innerGen = buildGenerator(from: recipe)
                 }
 
-                let filteredGen: ReflectiveGenerator<Any> = .impure(
+                let filteredGen: AnyGenerator = .impure(
                     operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
                     continuation: { .pure($0) }
                 )

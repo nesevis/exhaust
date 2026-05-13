@@ -15,10 +15,12 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.uuid())
     /// ```
     static func uuid() -> ReflectiveGenerator<UUID> {
-        Gen.zip(
-            Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF), // 60 bits → bytes 0–7
-            Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF) // 62 bits → bytes 8–15
-        ).mapped(
+        ReflectiveGenerator<(UInt64, UInt64)> {
+            Gen.zip(
+                Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF),
+                Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF)
+            )
+        }.mapped(
             forward: { uuidFromHalves($0, $1) },
             backward: { uuidToHalves($0) }
         )
@@ -41,28 +43,26 @@ public extension ReflectiveGenerator {
 //
 // Generators produce only the random bits; fixed bits are inserted/stripped in the forward/backward functions below.
 
-private extension ReflectiveGenerator {
-    static func uuidFromHalves(_ high60: UInt64, _ low62: UInt64) -> UUID {
-        let highU64 = ((high60 >> 12) << 16) | (0x4 << 12) | (high60 & 0xFFF)
-        let lowU64 = 0x8000_0000_0000_0000 | low62
+private func uuidFromHalves(_ high60: UInt64, _ low62: UInt64) -> UUID {
+    let highU64 = ((high60 >> 12) << 16) | (0x4 << 12) | (high60 & 0xFFF)
+    let lowU64 = 0x8000_0000_0000_0000 | low62
 
-        var bytes: uuid_t = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-        withUnsafeMutableBytes(of: &bytes) { buf in
-            buf.storeBytes(of: highU64.bigEndian, as: UInt64.self)
-            buf.storeBytes(of: lowU64.bigEndian, toByteOffset: 8, as: UInt64.self)
-        }
-        return UUID(uuid: bytes)
+    var bytes: uuid_t = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    withUnsafeMutableBytes(of: &bytes) { buf in
+        buf.storeBytes(of: highU64.bigEndian, as: UInt64.self)
+        buf.storeBytes(of: lowU64.bigEndian, toByteOffset: 8, as: UInt64.self)
     }
+    return UUID(uuid: bytes)
+}
 
-    static func uuidToHalves(_ uuid: UUID) -> (UInt64, UInt64) {
-        withUnsafeBytes(of: uuid.uuid) { buf in
-            let rawHigh = UInt64(bigEndian: buf.loadUnaligned(as: UInt64.self))
-            let rawLow = UInt64(bigEndian: buf.loadUnaligned(fromByteOffset: 8, as: UInt64.self))
+private func uuidToHalves(_ uuid: UUID) -> (UInt64, UInt64) {
+    withUnsafeBytes(of: uuid.uuid) { buf in
+        let rawHigh = UInt64(bigEndian: buf.loadUnaligned(as: UInt64.self))
+        let rawLow = UInt64(bigEndian: buf.loadUnaligned(fromByteOffset: 8, as: UInt64.self))
 
-            let high60 = ((rawHigh >> 16) << 12) | (rawHigh & 0xFFF)
-            let low62 = rawLow & 0x3FFF_FFFF_FFFF_FFFF
+        let high60 = ((rawHigh >> 16) << 12) | (rawHigh & 0xFFF)
+        let low62 = rawLow & 0x3FFF_FFFF_FFFF_FFFF
 
-            return (high60, low62)
-        }
+        return (high60, low62)
     }
 }

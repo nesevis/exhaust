@@ -148,7 +148,7 @@ import Testing
 
     // MARK: - Configuration Trait
 
-    @Test(.exhaust(.expensive))
+    @Test(.exhaust(.budget(.expensive)))
     func traitSetsBudget() {
         // The trait sets .expensive (sampling: 500). Verify the trait budget is applied
         // instead of the default .expedient (200) by checking the iteration count.
@@ -168,7 +168,7 @@ import Testing
         #expect(capturedReport?.randomSamplingInvocations == 500, "Trait should set .expensive budget (500), not default .expedient (200)")
     }
 
-    @Test(.exhaust(.expedient))
+    @Test(.exhaust(.budget(.expedient)))
     func traitBudgetOverriddenByInline() {
         // Trait sets .expedient, inline sets a custom budget. Inline should win.
         var capturedReport: ExhaustReport?
@@ -188,7 +188,7 @@ import Testing
         #expect(capturedReport?.randomSamplingInvocations ?? 0 <= 5)
     }
 
-    @Test(.exhaust(regressions: "1A"))
+    @Test(.exhaust(.regressions("1A")))
     func traitWithRegressionSeedThatFails() {
         // Seed "1A" (= 42) should reproduce a counterexample for value < 50 on 0...100.
         let result = #exhaust(
@@ -200,7 +200,7 @@ import Testing
         #expect(result != nil, "Regression seed should find a counterexample")
     }
 
-    @Test(.exhaust(.expedient, regressions: "0"))
+    @Test(.exhaust(.budget(.expedient), .regressions("0")))
     func traitWithPassingRegressionSeed() {
         // Seed "0" should produce a value that passes value >= 0 on 0...100.
         // The regression "now passes" warning should be emitted as an issue.
