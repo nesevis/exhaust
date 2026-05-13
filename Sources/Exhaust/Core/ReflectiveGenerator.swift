@@ -7,9 +7,9 @@
 
 import ExhaustCore
 
-/// Produces arbitrary values and supports reflection, replay, and reduction.
+/// Produces arbitrary values for property-based testing.
 ///
-/// `ReflectiveGenerator` is the public face of the generator system. It wraps the internal monadic representation (a `FreerMonad<ReflectiveOperation, Output>`) in a struct that hides the enum cases from users. Construct generators with static factory methods (`.int()`, `.string()`, `.bool()`, and so on) or the `#gen` macro, then pass them to `#exhaust` for property testing.
+/// Construct generators with static factory methods (`.int()`, `.string()`, `.bool()`, and so on) or the `#gen` macro, then combine them with `.array()`, `.filter()`, `.map()`, and pass the result to `#exhaust`.
 ///
 /// ```swift
 /// let gen = ReflectiveGenerator.int(in: 0...100)
@@ -21,15 +21,9 @@ import ExhaustCore
 /// }
 /// ```
 ///
-/// ## Three Modes
+/// When a property fails, Exhaust automatically reduces (shrinks) the counterexample to a minimal failing case. Generators that support bidirectional transforms — ``mapped(forward:backward:)`` and ``bound(forward:backward:)`` — also enable ``#examine`` to decompose a concrete value back into its generator inputs.
 ///
-/// The same generator supports generation (forward pass with entropy), reflection (backward pass that decomposes a value into its choice sequence), and replay (deterministic forward from a recorded choice sequence). Interpreters select the mode; the generator itself is mode-agnostic.
-///
-/// ## Why a Struct
-///
-/// The underlying `FreerMonad` is an `indirect enum` whose `.pure` and `.impure` cases would otherwise be constructible by users, bypassing the combinator API. The struct hides those cases while adding zero overhead — WMO eliminates the single-field wrapper entirely.
-///
-/// - Note: `@unchecked Sendable` is safe because the wrapped `FreerMonad` stores only `@Sendable` closures and `Sendable` value types. The `indirect enum` representation prevents the compiler from verifying this automatically.
+/// - Note: `@unchecked Sendable` is safe because the underlying indirect enum stores only `@Sendable` closures and `Sendable` value types. The compiler cannot verify sendability through the indirection automatically.
 public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     package let gen: Generator<Output>
 
@@ -90,6 +84,18 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
         }
     }
 }
+
+// MARK: - Design Notes
+//
+// ReflectiveGenerator wraps a FreerMonad<ReflectiveOperation, Output> — an indirect enum with
+// .pure and .impure cases. The struct prevents users from constructing those cases directly,
+// ensuring all generators go through the combinator API. WMO eliminates the single-field
+// wrapper at runtime.
+//
+// The same generator representation supports three interpreter modes: generation (forward pass
+// with entropy), reflection (backward pass decomposing a value into its choice sequence), and
+// replay (deterministic forward from a recorded choice sequence). The generator itself is
+// mode-agnostic — interpreters select the mode.
 
 // MARK: - CustomDebugStringConvertible
 

@@ -10,10 +10,10 @@ public extension ReflectiveGenerator {
     ///
     /// The filter combinator supports several strategies for satisfying the predicate, selectable via the `type` parameter:
     ///
-    /// - ``FilterType/rejectionSampling``: Pure rejection sampling — generate values and discard those that fail the predicate. Simple and predictable, but inefficient when valid values are sparse.
-    /// - ``FilterType/probeSampling``: Probes each branching point's choices through the continuation pipeline to measure predicate satisfaction rates, then biases weights toward valid outputs before generation begins.
-    /// - ``FilterType/choiceGradientSampling``: Runs a CGS (Choice Gradient Sampling) warmup pass to learn pick weights conditioned on upstream choices, then bakes them with fitness sharing to prevent overcommitting to the dominant cluster. Produces the best balance of validity rate and output diversity for recursive generators like BST/AVL. Incurs a slight penalty for generators with few branching points.
-    /// - ``FilterType/auto`` (default): Uses ``FilterType/choiceGradientSampling``.
+    /// - ``FilterType/rejectionSampling``: Generates values and discards those that fail the predicate. Best when most values already satisfy the predicate (for example, filtering positive integers from a 0...100 range). Becomes slow or exhausts the retry budget when valid values are rare.
+    /// - ``FilterType/probeSampling``: Analyzes each branching point independently to bias toward valid outputs. Faster startup than ``FilterType/choiceGradientSampling`` and effective when validity depends on individual choices, but produces less diverse output for generators where validity is correlated across choices (for example, balanced tree generators).
+    /// - ``FilterType/choiceGradientSampling``: Runs a warmup pass to learn which combinations of choices lead to valid outputs, then biases generation accordingly. Produces the best balance of validity rate and output diversity for complex or recursive generators. The warmup adds a brief startup cost that is not worthwhile when the predicate already accepts most values.
+    /// - ``FilterType/auto`` (default): Uses ``FilterType/choiceGradientSampling``. Override with ``FilterType/rejectionSampling`` when the predicate already accepts most values and the warmup cost is not worthwhile.
     ///
     /// All strategies maintain deterministic behavior — given the same seed, the generator will produce the same sequence of values.
     ///
