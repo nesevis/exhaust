@@ -18,75 +18,75 @@ func registerECOOPBenchmarks() {
     let config = reducerConfig
 
     registerECOOPPair(
-        name: "Bound5", gen: bound5Gen, property: bound5Property,
+        name: "Bound5", gen: bound5Gen.gen, property: bound5Property,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "BinaryHeap", gen: #gen(.uint64(in: 0 ... 20)).bind { binaryHeapGen(depth: $0) }.unique(), property: binaryHeapProperty,
+        name: "BinaryHeap", gen: #refGen(.uint64(in: 0 ... 20)).bind { binaryHeapGen(depth: $0) }.unique().gen, property: binaryHeapProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "BinaryHeap (recursive)", gen: binaryHeapGenRecursive(), property: binaryHeapProperty,
+        name: "BinaryHeap (recursive)", gen: binaryHeapGenRecursive().gen, property: binaryHeapProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Calculator", gen: #gen(calculatorExpressionGen(depth: 5)), property: calculatorProperty,
+        name: "Calculator", gen: calculatorExpressionGen(depth: 5).gen, property: calculatorProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Coupling", gen: couplingGen, property: couplingProperty,
+        name: "Coupling", gen: couplingGen.gen, property: couplingProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Deletion", gen: deletionGen, property: deletionProperty,
+        name: "Deletion", gen: deletionGen.gen, property: deletionProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
         name: "Difference: Must Not Be Zero",
-        gen: differenceMustNotBeZeroGen, property: differenceMustNotBeZeroProperty,
+        gen: differenceMustNotBeZeroGen.gen, property: differenceMustNotBeZeroProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
     registerECOOPPair(
         name: "Difference: Must Not Be Small",
-        gen: differenceMustNotBeSmallGen, property: differenceMustNotBeSmallProperty,
+        gen: differenceMustNotBeSmallGen.gen, property: differenceMustNotBeSmallProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
     registerECOOPPair(
         name: "Difference: Must Not Be One",
-        gen: differenceMustNotBeOneGen, property: differenceMustNotBeOneProperty,
+        gen: differenceMustNotBeOneGen.gen, property: differenceMustNotBeOneProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
     registerECOOPPair(
-        name: "Distinct", gen: distinctGen, property: distinctProperty,
+        name: "Distinct", gen: distinctGen.gen, property: distinctProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "LargeUnionList", gen: largeUnionListGen, property: largeUnionListProperty,
+        name: "LargeUnionList", gen: largeUnionListGen.gen, property: largeUnionListProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "LengthList", gen: lengthListGen, property: lengthListProperty,
+        name: "LengthList", gen: lengthListGen.gen, property: lengthListProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "NestedLists", gen: nestedListsGen, property: nestedListsProperty,
+        name: "NestedLists", gen: nestedListsGen.gen, property: nestedListsProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Reverse", gen: reverseGen, property: reverseProperty,
+        name: "Reverse", gen: reverseGen.gen, property: reverseProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
-        name: "Replacement", gen: replacementGen, property: replacementProperty,
+        name: "Replacement", gen: replacementGen.gen, property: replacementProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
 
     registerECOOPPair(
-        name: "Parser", gen: parserLangGen, property: parserProperty,
+        name: "Parser", gen: parserLangGen.gen, property: parserProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, sizeMetric: parserSize
     )
     registerECOOPPair(
-        name: "GraphColoring", gen: graphColoringGen, property: graphColoringProperty,
+        name: "GraphColoring", gen: graphColoringGen.gen, property: graphColoringProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
 }

@@ -365,33 +365,33 @@ func parserSize(_ expression: ParserExp) -> Int {
 
 // MARK: - Generators
 
-var parserVarGen: ReflectiveGenerator<ParserVar> {
-    #gen(.int(in: 0 ... 25))
+var parserVarGen: RefGen<ParserVar> {
+    #refGen(.int(in: 0 ... 25))
         .mapped(
             forward: { ParserVar(name: String(Character(UnicodeScalar(UInt8(97 + $0))))) },
             backward: { Int($0.name.first?.asciiValue ?? 97) - 97 }
         )
 }
 
-func parserExpGen(depth: UInt64) -> ReflectiveGenerator<ParserExp> {
-    let intLeaf = #gen(.int(in: -10 ... 10))
+func parserExpGen(depth: UInt64) -> RefGen<ParserExp> {
+    let intLeaf = #refGen(.int(in: -10 ... 10))
         .mapped(
             forward: { ParserExp.int($0) },
             backward: { if case let .int(inner) = $0 { return inner }; return 0 }
         )
-    let boolLeaf = #gen(.bool())
+    let boolLeaf = #refGen(.bool())
         .mapped(
             forward: { ParserExp.bool($0) },
             backward: { if case let .bool(inner) = $0 { return inner }; return false }
         )
 
     guard depth > 0 else {
-        return #gen(.oneOf(weighted: (1, intLeaf), (1, boolLeaf)))
+        return #refGen(.oneOf(weighted: (1, intLeaf), (1, boolLeaf)))
     }
 
     let child = parserExpGen(depth: depth - 1)
 
-    let notExp = #gen(child)
+    let notExp = #refGen(child)
         .mapped(
             forward: { ParserExp.not($0) },
             backward: { if case let .not(inner) = $0 { return inner }; return .int(0) }
@@ -400,8 +400,8 @@ func parserExpGen(depth: UInt64) -> ReflectiveGenerator<ParserExp> {
     func binaryExp(
         _ constructor: @Sendable @escaping (ParserExp, ParserExp) -> ParserExp,
         _ destructor: @Sendable @escaping (ParserExp) -> (ParserExp, ParserExp)?
-    ) -> ReflectiveGenerator<ParserExp> {
-        #gen(child, child)
+    ) -> RefGen<ParserExp> {
+        #refGen(child, child)
             .mapped(
                 forward: { lhs, rhs in constructor(lhs, rhs) },
                 backward: { value in destructor(value) ?? (.int(0), .int(0)) }
@@ -433,7 +433,7 @@ func parserExpGen(depth: UInt64) -> ReflectiveGenerator<ParserExp> {
         return (lhs, rhs)
     }
 
-    return #gen(.oneOf(weighted:
+    return #refGen(.oneOf(weighted:
         (3, intLeaf),
         (3, boolLeaf),
         (1, notExp),
@@ -445,8 +445,8 @@ func parserExpGen(depth: UInt64) -> ReflectiveGenerator<ParserExp> {
         (10, orExp)))
 }
 
-var parserStmtGen: ReflectiveGenerator<ParserStmt> {
-    let assignGen = #gen(parserVarGen, parserExpGen(depth: 3))
+var parserStmtGen: RefGen<ParserStmt> {
+    let assignGen = #refGen(parserVarGen, parserExpGen(depth: 3))
         .mapped(
             forward: { variable, expression in ParserStmt.assign(variable, expression) },
             backward: { stmt in
@@ -454,7 +454,7 @@ var parserStmtGen: ReflectiveGenerator<ParserStmt> {
                 return (ParserVar(name: "a"), .int(0))
             }
         )
-    let allocGen = #gen(parserVarGen, parserExpGen(depth: 3))
+    let allocGen = #refGen(parserVarGen, parserExpGen(depth: 3))
         .mapped(
             forward: { variable, expression in ParserStmt.alloc(variable, expression) },
             backward: { stmt in
@@ -462,7 +462,7 @@ var parserStmtGen: ReflectiveGenerator<ParserStmt> {
                 return (ParserVar(name: "a"), .int(0))
             }
         )
-    let retGen = #gen(parserExpGen(depth: 3))
+    let retGen = #refGen(parserExpGen(depth: 3))
         .mapped(
             forward: { ParserStmt.ret($0) },
             backward: { stmt in
@@ -470,27 +470,27 @@ var parserStmtGen: ReflectiveGenerator<ParserStmt> {
                 return .int(0)
             }
         )
-    return #gen(.oneOf(weighted: (1, assignGen), (1, allocGen), (1, retGen)))
+    return #refGen(.oneOf(weighted: (1, assignGen), (1, allocGen), (1, retGen)))
 }
 
-var parserFuncGen: ReflectiveGenerator<ParserFunc> {
-    #gen(parserVarGen, parserExpGen(depth: 3).array(length: 0 ... 3), parserStmtGen.array(length: 0 ... 3))
+var parserFuncGen: RefGen<ParserFunc> {
+    #refGen(parserVarGen, parserExpGen(depth: 3).array(length: 0 ... 3), parserStmtGen.array(length: 0 ... 3))
         .mapped(
             forward: { name, args, body in ParserFunc(name: name, args: args, body: body) },
             backward: { function in (function.name, function.args, function.body) }
         )
 }
 
-var parserModGen: ReflectiveGenerator<ParserMod> {
-    #gen(parserVarGen.array(length: 0 ... 3), parserVarGen.array(length: 0 ... 3))
+var parserModGen: RefGen<ParserMod> {
+    #refGen(parserVarGen.array(length: 0 ... 3), parserVarGen.array(length: 0 ... 3))
         .mapped(
             forward: { imports, exports in ParserMod(imports: imports, exports: exports) },
             backward: { mod in (mod.imports, mod.exports) }
         )
 }
 
-var parserLangGen: ReflectiveGenerator<ParserLang> {
-    #gen(parserModGen.array(length: 0 ... 2), parserFuncGen.array(length: 0 ... 2))
+var parserLangGen: RefGen<ParserLang> {
+    #refGen(parserModGen.array(length: 0 ... 2), parserFuncGen.array(length: 0 ... 2))
         .mapped(
             forward: { modules, funcs in ParserLang(modules: modules, funcs: funcs) },
             backward: { lang in (lang.modules, lang.funcs) }

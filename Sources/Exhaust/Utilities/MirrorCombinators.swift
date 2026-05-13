@@ -154,6 +154,67 @@ public extension __ExhaustRuntime {
         return Gen.contramap(backwardToArray, impure._map(forwardFromArray))
     }
 
+    // MARK: - RefGen overloads
+
+    static func _macroMap<Input, Output>(
+        _ generator: RefGen<Input>,
+        label: String,
+        forward: @Sendable @escaping (Input) -> Output
+    ) -> RefGen<Output> {
+        RefGen { _macroMap(generator.gen, label: label, forward: forward) }
+    }
+
+    static func _macroMap<Input, Output>(
+        _ generator: RefGen<Input>,
+        backward: @Sendable @escaping (Output) -> Input?,
+        forward: @Sendable @escaping (Input) -> Output
+    ) -> RefGen<Output> {
+        RefGen { _macroMap(generator.gen, backward: backward, forward: forward) }
+    }
+
+    static func _macroZip<each T, NewOutput>(
+        _ generators: repeat RefGen<each T>,
+        labels: [String],
+        forward: @Sendable @escaping ((repeat each T)) -> NewOutput
+    ) -> RefGen<NewOutput> {
+        RefGen { _macroZip(repeat (each generators).gen, labels: labels, forward: forward) }
+    }
+
+    static func _macroZip<each T, NewOutput>(
+        _ generators: repeat RefGen<each T>,
+        backward: @Sendable @escaping (NewOutput) -> [Any]?,
+        forward: @Sendable @escaping ((repeat each T)) -> NewOutput
+    ) -> RefGen<NewOutput> {
+        RefGen { _macroZip(repeat (each generators).gen, backward: backward, forward: forward) }
+    }
+
+    static func _macroMapScalar<Input: BinaryInteger, Output: BinaryInteger>(
+        _ generator: RefGen<Input>,
+        forward: @Sendable @escaping (Input) -> Output
+    ) -> RefGen<Output> {
+        generator.mapped(forward: forward, backward: { Input($0) })
+    }
+
+    static func _macroMapScalar<Input: BinaryFloatingPoint, Output: BinaryFloatingPoint>(
+        _ generator: RefGen<Input>,
+        forward: @Sendable @escaping (Input) -> Output
+    ) -> RefGen<Output> {
+        generator.mapped(forward: forward, backward: { Input($0) })
+    }
+
+    static func _macroMapScalar<Input, Output>(
+        _ generator: RefGen<Input>,
+        forward: @Sendable @escaping (Input) -> Output
+    ) -> RefGen<Output> {
+        generator.map(forward)
+    }
+
+    static func __zip<each T>(
+        _ generators: repeat RefGen<each T>
+    ) -> RefGen<(repeat each T)> {
+        RefGen { Gen.zip(repeat (each generators).gen) }
+    }
+
     // MARK: - Scalar conversion overloads
 
     /// Scalar conversion for `BinaryInteger` → `BinaryInteger` (for example `UInt64` → `Int`).

@@ -52,35 +52,35 @@ let complexGrammarProperty: @Sendable (ComplexExpr) -> Bool = { expr in
 
 // MARK: - Generator
 
-func complexGrammarGen(depth: UInt64) -> ReflectiveGenerator<ComplexExpr> {
-    let leaf = #gen(.int(in: -10 ... 10, scaling: .constant))
+func complexGrammarGen(depth: UInt64) -> RefGen<ComplexExpr> {
+    let leaf = #refGen(.int(in: -10 ... 10, scaling: .constant))
         .mapped(
             forward: { value in ComplexExpr.lit(value) },
             backward: complexBackwardLit
         )
 
-    return #gen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
-        let add = #gen(recurse(), recurse())
+    return #refGen(.recursive(base: leaf, depthRange: 0 ... depth) { recurse, _ in
+        let add = #refGen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.add(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let sub = #gen(recurse(), recurse())
+        let sub = #refGen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.sub(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let mul = #gen(recurse(), recurse())
+        let mul = #refGen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.mul(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let div = #gen(recurse(), recurse())
+        let div = #refGen(recurse(), recurse())
             .mapped(
                 forward: { lhs, rhs in ComplexExpr.div(lhs, rhs) },
                 backward: complexBackwardBinary
             )
-        let ifThen = #gen(recurse(), recurse(), recurse())
+        let ifThen = #refGen(recurse(), recurse(), recurse())
             .mapped(
                 forward: { condition, thenBranch, elseBranch in
                     ComplexExpr.ifThen(condition, thenBranch, elseBranch)
@@ -113,7 +113,7 @@ func registerComplexGrammarBenchmarks() {
 
     registerECOOPPair(
         name: "ComplexGrammar",
-        gen: #gen(complexGrammarGen(depth: 10)),
+        gen: complexGrammarGen(depth: 10).gen,
         property: complexGrammarProperty,
         config: config,
         seedCount: seedCount,

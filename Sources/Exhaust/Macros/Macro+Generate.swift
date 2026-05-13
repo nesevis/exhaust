@@ -42,3 +42,4 @@ public macro gen<GeneratedValue>(
 public macro gen<each GeneratedValue>(
     _ generators: repeat ReflectiveGenerator<each GeneratedValue>
 ) -> ReflectiveGenerator<(repeat each GeneratedValue)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
+

@@ -2,9 +2,9 @@ import Exhaust
 
 // MARK: - Coupling
 
-let couplingGen = #gen(.int(in: 0 ... 10))
+let couplingGen = #refGen(.int(in: 0 ... 10))
     .bind { n in
-        #gen(.int(in: 0 ... n)).array(length: 2 ... max(2, n + 1))
+        #refGen(.int(in: 0 ... n)).array(length: 2 ... max(2, n + 1))
     }
     .filter { arr in arr.allSatisfy { arr.indices.contains($0) } }
 
@@ -21,8 +21,8 @@ let couplingProperty: @Sendable ([Int]) -> Bool = { arr in
 // MARK: - Deletion
 
 let deletionGen = {
-    let numberGen = #gen(.int(in: 0 ... 20))
-    return #gen(numberGen.array(length: 2 ... 20), numberGen)
+    let numberGen = #refGen(.int(in: 0 ... 20))
+    return #refGen(numberGen.array(length: 2 ... 20), numberGen)
         .filter { $0.contains($1) }
 }()
 
@@ -36,7 +36,7 @@ let deletionProperty: @Sendable (([Int], Int)) -> Bool = { pair in
 
 // MARK: - Difference (Must Not Be Zero)
 
-let differenceMustNotBeZeroGen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+let differenceMustNotBeZeroGen = #refGen(.int(in: 1 ... 1000)).array(length: 2)
 
 let differenceMustNotBeZeroProperty: @Sendable ([Int]) -> Bool = { arr in
     arr[0] < 10 || arr[0] != arr[1]
@@ -44,7 +44,7 @@ let differenceMustNotBeZeroProperty: @Sendable ([Int]) -> Bool = { arr in
 
 // MARK: - Difference (Must Not Be Small)
 
-let differenceMustNotBeSmallGen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+let differenceMustNotBeSmallGen = #refGen(.int(in: 1 ... 1000)).array(length: 2)
 
 let differenceMustNotBeSmallProperty: @Sendable ([Int]) -> Bool = { arr in
     let diff = abs(arr[0] - arr[1])
@@ -53,7 +53,7 @@ let differenceMustNotBeSmallProperty: @Sendable ([Int]) -> Bool = { arr in
 
 // MARK: - Difference (Must Not Be One)
 
-let differenceMustNotBeOneGen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+let differenceMustNotBeOneGen = #refGen(.int(in: 1 ... 1000)).array(length: 2)
 
 let differenceMustNotBeOneProperty: @Sendable ([Int]) -> Bool = { arr in
     let diff = abs(arr[0] - arr[1])
@@ -62,7 +62,7 @@ let differenceMustNotBeOneProperty: @Sendable ([Int]) -> Bool = { arr in
 
 // MARK: - Distinct
 
-let distinctGen = #gen(.int().array(length: 3 ... 30))
+let distinctGen = #refGen(.int().array(length: 3 ... 30))
 
 let distinctProperty: @Sendable ([Int]) -> Bool = { arr in
     Set(arr).count < 3
@@ -70,7 +70,7 @@ let distinctProperty: @Sendable ([Int]) -> Bool = { arr in
 
 // MARK: - Large Union List
 
-let largeUnionListGen = #gen(.int().array(length: 1 ... 10).array(length: 1 ... 10))
+let largeUnionListGen = #refGen(.int().array(length: 1 ... 10).array(length: 1 ... 10))
 
 let largeUnionListProperty: @Sendable ([[Int]]) -> Bool = { arr in
     Set(arr.flatMap(\.self)).count <= 4
@@ -78,7 +78,7 @@ let largeUnionListProperty: @Sendable ([[Int]]) -> Bool = { arr in
 
 // MARK: - Length List
 
-let lengthListGen = #gen(.uint(in: 0 ... 1000)).array(length: 1 ... 100)
+let lengthListGen = #refGen(.uint(in: 0 ... 1000)).array(length: 1 ... 100)
 
 let lengthListProperty: @Sendable ([UInt]) -> Bool = { arr in
     arr.max() ?? 0 < 900
@@ -86,7 +86,7 @@ let lengthListProperty: @Sendable ([UInt]) -> Bool = { arr in
 
 // MARK: - Nested Lists
 
-let nestedListsGen = #gen(.uint().array().array())
+let nestedListsGen = #refGen(.uint().array().array())
 
 let nestedListsProperty: @Sendable ([[UInt]]) -> Bool = { arrs in
     var count = 0
@@ -112,7 +112,7 @@ func replacementProds(_ initial: Int, _ multipliers: [Int]) -> [Int] {
     return result
 }
 
-let replacementGen = #gen(.int(in: 0 ... 1_000_000), .int(in: 2 ... 10).array())
+let replacementGen = #refGen(.int(in: 0 ... 1_000_000), .int(in: 2 ... 10).array())
 
 let replacementProperty: @Sendable ((Int, [Int])) -> Bool = { pair in
     let (initial, multipliers) = pair
@@ -121,7 +121,7 @@ let replacementProperty: @Sendable ((Int, [Int])) -> Bool = { pair in
 
 // MARK: - Reverse
 
-let reverseGen = #gen(.uint()).array(length: 1 ... 1000)
+let reverseGen = #refGen(.uint()).array(length: 1 ... 1000)
 
 let reverseProperty: @Sendable ([UInt]) -> Bool = { arr in
     arr.elementsEqual(arr.reversed())

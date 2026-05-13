@@ -20,17 +20,17 @@ extension Heap: CustomDebugStringConvertible {
 
 // MARK: - Generator
 
-func binaryHeapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
+func binaryHeapGen(min: Int = 0, depth: UInt64) -> RefGen<Heap<Int>> {
     let maxVal = Int.max
-    let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
+    let emptyGen: RefGen<Heap<Int>> = #refGen(.just(.empty))
 
     guard depth > 0, min <= maxVal else {
         return emptyGen
     }
 
-    let nodeGen = #gen(.int(in: min ... maxVal))
+    let nodeGen = #refGen(.int(in: min ... maxVal))
         .bind { value in
-            #gen(
+            #refGen(
                 binaryHeapGen(min: value, depth: depth / 2),
                 binaryHeapGen(min: value, depth: depth / 2)
             )
@@ -45,16 +45,16 @@ func binaryHeapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>
             )
         }
 
-    return #gen(.oneOf(weighted: (1, emptyGen), (5, nodeGen)))
+    return #refGen(.oneOf(weighted: (1, emptyGen), (5, nodeGen)))
 }
 
 /// Recursive combinator variant — flat choice tree, no nested binds. Validity enforced by filter instead of by construction.
-func binaryHeapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<Int>> {
-    ReflectiveGenerator<Heap<Int>>.recursive(
+func binaryHeapGenRecursive(maxValue: Int = .max) -> RefGen<Heap<Int>> {
+    RefGen<Heap<Int>>.recursive(
         base: Heap<Int>.empty,
         depthRange: 0 ... 20
     ) { recurse, _ in
-        let nodeGen = #gen(.int(in: 0 ... maxValue), recurse(), recurse())
+        let nodeGen = #refGen(.int(in: 0 ... maxValue), recurse(), recurse())
             .mapped(
                 forward: { value, left, right in Heap.node(value, left, right) },
                 backward: { heap in
@@ -64,7 +64,7 @@ func binaryHeapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<In
                     }
                 }
             )
-        return #gen(.oneOf(weighted: (1, .just(.empty)), (5, nodeGen)))
+        return #refGen(.oneOf(weighted: (1, .just(.empty)), (5, nodeGen)))
     }
     .filter { heapInvariant($0) }
 }

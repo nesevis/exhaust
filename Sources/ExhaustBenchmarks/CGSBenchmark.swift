@@ -22,7 +22,7 @@ func registerCGSBenchmarks() {
         for i in 0 ..< seedCount {
             let seed = baseSeed &+ UInt64(i)
             var iterator = ValueAndChoiceTreeInterpreter(
-                gen,
+                gen.gen,
                 materializePicks: false,
                 seed: seed,
                 maxRuns: 10000
@@ -39,8 +39,8 @@ func registerCGSBenchmarks() {
 
 // MARK: - Generator
 
-private func cgsBenchmarkGen() -> ReflectiveGenerator<[Int]> {
-    #gen(
+private func cgsBenchmarkGen() -> RefGen<[Int]> {
+    #refGen(
         .int(in: 1 ... 200).bind { bound in
             .int(in: 0 ... 1000)
                 .filter { $0 % bound == 0 }
