@@ -49,7 +49,12 @@ enum ChoiceGraphScheduler {
             collectStats: true,
             property: property
         )
-        while try machine.next() != nil {}
+        var lastStep = monotonicNanoseconds()
+        while let transition = try machine.next() {
+            let now = monotonicNanoseconds()
+            machine.stats.stepTimings.record(transition, elapsed: now - lastStep)
+            lastStep = now
+        }
         return machine.typedResult()
     }
 

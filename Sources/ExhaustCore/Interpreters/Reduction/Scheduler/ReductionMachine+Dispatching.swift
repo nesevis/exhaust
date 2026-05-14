@@ -8,8 +8,8 @@
 extension ReductionMachine {
     mutating func stepDispatching() throws -> Transition {
         switch dispatchPhase {
-        case .evaluate:
-            return try stepEvaluate()
+        case .dispatch:
+            return try stepDispatch()
         case .encode:
             return stepEncode()
         case .decode:
@@ -23,16 +23,16 @@ extension ReductionMachine {
 
     // MARK: - Evaluate
 
-    private mutating func stepEvaluate() throws -> Transition {
+    private mutating func stepDispatch() throws -> Transition {
         guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(sources) else {
             phase = .endCycle
-            return .evaluated(decision: .sourceExhausted)
+            return .dispatched(decision: .sourceExhausted)
         }
 
         guard let transformation = sources[sourceIndex].next(lastAccepted: false) else {
             sources.swapAt(sourceIndex, sources.count - 1)
             sources.removeLast()
-            return .evaluated(decision: .sourceExhausted)
+            return .dispatched(decision: .sourceExhausted)
         }
 
         var decision = ChoiceGraphScheduler.evaluateDispatch(
@@ -47,7 +47,7 @@ extension ReductionMachine {
 
         if case let .classifyBind(bindNodeID, fingerprint) = decision {
             guard case let .minimize(.boundValue(bindScope)) = transformation.operation else {
-                return .evaluated(decision: .skipped)
+                return .dispatched(decision: .skipped)
             }
             graph.classifyBind(
                 at: bindNodeID,
@@ -59,21 +59,21 @@ extension ReductionMachine {
             guard case let .bind(updatedMetadata) = graph.nodes[bindNodeID].kind,
                   let classification = updatedMetadata.classification
             else {
-                return .evaluated(decision: .skipped)
+                return .dispatched(decision: .skipped)
             }
             if classification.topology != .identical || classification.liftability != .both {
                 gate.markFruitless(fingerprint)
-                return .evaluated(decision: .skipped)
+                return .dispatched(decision: .skipped)
             }
             decision = .readyToDispatch(boundValueFingerprint: fingerprint)
         }
 
         switch decision {
         case .skip:
-            return .evaluated(decision: .skipped)
+            return .dispatched(decision: .skipped)
 
         case .classifyBind:
-            return .evaluated(decision: .skipped)
+            return .dispatched(decision: .skipped)
 
         case .rematerialize:
             if case let .success(_, fullTree, _) = Materializer.materializeAny(
@@ -89,7 +89,7 @@ extension ReductionMachine {
             _ = rebuildAndUpdateGraph()
             sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
             graphIsStripped = false
-            return .evaluated(decision: .rematerialized)
+            return .dispatched(decision: .rematerialized)
 
         case let .readyToDispatch(boundValueFingerprint):
             return beginEncoderPass(
@@ -152,15 +152,15 @@ extension ReductionMachine {
         encoderLatestTreeIsStripped = false
 
         dispatchPhase = .encode
-        return .evaluated(decision: .encoderStarted(encoder: encoder.name))
+        return .dispatched(decision: .encoderStarted(encoder: encoder.name))
     }
 
     // MARK: - Encode
 
     private mutating func stepEncode() -> Transition {
         guard var encoder = activeEncoder else {
-            dispatchPhase = .evaluate
-            return .evaluated(decision: .sourceExhausted)
+            dispatchPhase = .dispatch
+            return .dispatched(decision: .sourceExhausted)
         }
 
         guard let mutation = encoder.nextProbe(into: &candidateBuffer, lastAccepted: lastProbeAccepted) else {
@@ -204,7 +204,7 @@ extension ReductionMachine {
               let mutation = pendingMutation,
               let selection = pendingDecoderSelection
         else {
-            dispatchPhase = .evaluate
+            dispatchPhase = .dispatch
             return .decoded(encoder: .valueSearch, accepted: false)
         }
 
@@ -286,8 +286,8 @@ extension ReductionMachine {
 
     private mutating func stepFinishEncoder() -> Transition {
         guard var encoder = activeEncoder else {
-            dispatchPhase = .evaluate
-            return .evaluated(decision: .sourceExhausted)
+            dispatchPhase = .dispatch
+            return .dispatched(decision: .sourceExhausted)
         }
 
         let encoderName = encoder.name
@@ -351,12 +351,12 @@ extension ReductionMachine {
                 )
             }
             activeTransformation = nil
-            dispatchPhase = .evaluate
-            return .evaluated(decision: .sourceExhausted)
+            dispatchPhase = .dispatch
+            return .dispatched(decision: .sourceExhausted)
 
         case .rebuildAndResume:
             dispatchPhase = .rebuild
-            return .evaluated(decision: .sourceExhausted)
+            return .dispatched(decision: .sourceExhausted)
         }
     }
 
@@ -414,7 +414,7 @@ extension ReductionMachine {
         }
 
         activeTransformation = nil
-        dispatchPhase = .evaluate
+        dispatchPhase = .dispatch
         return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.isStructurallyIdentical == false)
     }
 }

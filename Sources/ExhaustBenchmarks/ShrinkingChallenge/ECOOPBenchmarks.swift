@@ -129,6 +129,7 @@ private struct SeedResult {
     let encoderProbesAccepted: [EncoderName: Int]
     let encoderProbesRejectedByCache: [EncoderName: Int]
     let encoderProbesRejectedByDecoder: [EncoderName: Int]
+    let stepTimings: ReductionStats.StepTimings?
 }
 
 // MARK: - Runner
@@ -200,7 +201,8 @@ private func registerECOOPChallenge<Output>(
                 encoderProbes: reduceResult?.stats.encoderProbes ?? [:],
                 encoderProbesAccepted: reduceResult?.stats.encoderProbesAccepted ?? [:],
                 encoderProbesRejectedByCache: reduceResult?.stats.encoderProbesRejectedByCache ?? [:],
-                encoderProbesRejectedByDecoder: reduceResult?.stats.encoderProbesRejectedByDecoder ?? [:]
+                encoderProbesRejectedByDecoder: reduceResult?.stats.encoderProbesRejectedByDecoder ?? [:],
+                stepTimings: reduceResult?.stats.stepTimings
             ))
         }
 
@@ -280,6 +282,30 @@ private func printECOOPReport(
             let decRej = totalDecRej[encoder] ?? 0
             print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej)")
         }
+    }
+
+    // Per-step timing breakdown (summed across all seeds).
+    let timingResults = results.compactMap(\.stepTimings)
+    if timingResults.isEmpty == false {
+        var totalDisp: UInt64 = 0
+        var totalEnc: UInt64 = 0
+        var totalDec: UInt64 = 0
+        var totalReb: UInt64 = 0
+        var totalCC: UInt64 = 0
+        var totalRlx: UInt64 = 0
+        var totalReord: UInt64 = 0
+        for timing in timingResults {
+            totalDisp += timing.dispatch
+            totalEnc += timing.encode
+            totalDec += timing.decode
+            totalReb += timing.rebuild
+            totalCC += timing.convergenceConfirmation
+            totalRlx += timing.relaxRound
+            totalReord += timing.reorder
+        }
+        let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
+        let totalNs = totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalReord
+        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb)) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) reord=\(toMs(totalReord))")
     }
 
     if enableCounterExamples {

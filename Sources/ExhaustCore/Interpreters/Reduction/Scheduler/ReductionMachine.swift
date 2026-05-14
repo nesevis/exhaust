@@ -41,7 +41,7 @@ package struct ReductionMachine {
     }
 
     enum DispatchPhase {
-        case evaluate
+        case dispatch
         case encode
         case decode
         case finishEncoder
@@ -50,7 +50,7 @@ package struct ReductionMachine {
 
     // MARK: - Transition
 
-    package enum EvaluateOutcome {
+    package enum DispatchOutcome {
         case sourceExhausted
         case skipped
         case rematerialized
@@ -61,7 +61,7 @@ package struct ReductionMachine {
         case cycleStarted(cycle: Int, sourceCount: Int, sequenceLength: Int)
         case cycleEnded(stallBudget: Int)
 
-        case evaluated(decision: EvaluateOutcome)
+        case dispatched(decision: DispatchOutcome)
         case encoded(encoder: EncoderName, cacheHit: Bool)
         case decoded(encoder: EncoderName, accepted: Bool)
         case rebuilt(sequenceLength: Int, structurallyChanged: Bool)
@@ -77,7 +77,7 @@ package struct ReductionMachine {
     // MARK: - State
 
     var phase: Phase = .beginCycle
-    var dispatchPhase: DispatchPhase = .evaluate
+    var dispatchPhase: DispatchPhase = .dispatch
 
     // Core
     var sequence: ChoiceSequence
@@ -231,7 +231,7 @@ package struct ReductionMachine {
         ])
 
         phase = .dispatching
-        dispatchPhase = .evaluate
+        dispatchPhase = .dispatch
         return .cycleStarted(cycle: cycles, sourceCount: sources.count, sequenceLength: sequence.count)
     }
 

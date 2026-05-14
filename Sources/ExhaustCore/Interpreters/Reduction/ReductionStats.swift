@@ -52,7 +52,7 @@ extension ReductionStats {
     ///
     /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
     package struct StepTimings: Sendable {
-        package var evaluate: UInt64 = 0
+        package var dispatch: UInt64 = 0
         package var encode: UInt64 = 0
         package var decode: UInt64 = 0
         package var rebuild: UInt64 = 0
@@ -60,7 +60,7 @@ extension ReductionStats {
         package var relaxRound: UInt64 = 0
         package var reorder: UInt64 = 0
 
-        package var evaluateCount: Int = 0
+        package var dispatchCount: Int = 0
         package var encodeCount: Int = 0
         package var decodeCount: Int = 0
         package var rebuildCount: Int = 0
@@ -70,9 +70,9 @@ extension ReductionStats {
         /// Records elapsed time for a step transition.
         package mutating func record(_ transition: ReductionMachine.Transition, elapsed: UInt64) {
             switch transition {
-            case .evaluated:
-                evaluate += elapsed
-                evaluateCount += 1
+            case .dispatched:
+                dispatch += elapsed
+                dispatchCount += 1
             case .encoded:
                 encode += elapsed
                 encodeCount += 1
