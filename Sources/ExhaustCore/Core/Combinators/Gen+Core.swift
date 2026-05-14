@@ -69,7 +69,7 @@ package extension Gen {
             transform: {
                 // Handle optional inputs
                 guard let input = $0 as? NewInput else {
-                    throw Interpreters.ReflectionError.contramapWasWrongType
+                    throw ReflectionError.contramapWasWrongType
                 }
                 return try transform(input) as Any
             },

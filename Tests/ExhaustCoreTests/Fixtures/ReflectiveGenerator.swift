@@ -31,7 +31,7 @@ func asciiCharGen() -> Generator<Character> {
     return Gen.contramap(
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
-                throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                throw ReflectionError.couldNotReflectOnSequenceElement(
                     "Character has no scalars"
                 )
             }
@@ -48,7 +48,7 @@ func defaultCharGen() -> Generator<Character> {
     return Gen.contramap(
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
-                throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                throw ReflectionError.couldNotReflectOnSequenceElement(
                     "Character has no scalars"
                 )
             }
@@ -88,7 +88,7 @@ func charGen(from characterSet: CharacterSet) -> Generator<Character> {
     return Gen.contramap(
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
-                throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                throw ReflectionError.couldNotReflectOnSequenceElement(
                     "Character has no scalars"
                 )
             }
@@ -113,7 +113,7 @@ func asOptionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
     return .impure(operation: .contramap(
         transform: { result in
             if let optional = result as? Value?, optional == nil {
-                throw Interpreters.ReflectionError.reflectedNil(
+                throw ReflectionError.reflectedNil(
                     type: description,
                     resultType: String(describing: type(of: result))
                 )

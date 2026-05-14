@@ -280,7 +280,7 @@ package extension Gen {
         return Gen.contramap(
             { (element: C.Element) throws -> Int in
                 guard let index = indexMap[element] else {
-                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                    throw ReflectionError.couldNotReflectOnSequenceElement(
                         "element not found in collection during reflection"
                     )
                 }
@@ -308,7 +308,7 @@ package extension Gen {
         return Gen.contramap(
             { (element: C.Element) throws -> Int in
                 guard let index = elements.firstIndex(of: element) else {
-                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                    throw ReflectionError.couldNotReflectOnSequenceElement(
                         "element not found in collection during reflection"
                     )
                 }
@@ -347,7 +347,7 @@ package extension Gen {
         return Gen.contramap(
             { (element: C.Element) throws -> Int in
                 guard let index = indexMap[element[keyPath: path]] else {
-                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                    throw ReflectionError.couldNotReflectOnSequenceElement(
                         "element key not found in collection during reflection"
                     )
                 }
@@ -379,7 +379,7 @@ package extension Gen {
             { (element: C.Element) throws -> Int in
                 let key = element[keyPath: path]
                 guard let index = elements.firstIndex(where: { $0[keyPath: path] == key }) else {
-                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                    throw ReflectionError.couldNotReflectOnSequenceElement(
                         "element key not found in collection during reflection"
                     )
                 }

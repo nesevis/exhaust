@@ -64,7 +64,6 @@ struct ReducerStressTests {
             arr.filter { $0 > 0 }.count < 3 || arr.reduce(0, +) == 0
         }
         if let report { print("[PROFILE] FixedLengthWideArray: \(report.profilingSummary)") }
-        print(output)
         #expect(output != nil)
     }
 
@@ -88,7 +87,6 @@ struct ReducerStressTests {
             return totalElements < 20 || totalSum < 200
         }
         if let report { print("[PROFILE] ManySmallSequences: \(report.profilingSummary)") }
-        print(output)
         #expect(output != nil)
     }
 

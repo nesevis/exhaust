@@ -222,7 +222,7 @@ extension __ExhaustRuntime {
                                 report: &report
                             )
                         } catch {
-                            reportIssue("\(error)", fileID: fileID, filePath: filePath, line: line, column: column)
+                            reportIssue(error.localizedDescription, fileID: fileID, filePath: filePath, line: line, column: column)
                             return reflecting
                         }
                     }

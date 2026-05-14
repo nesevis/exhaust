@@ -634,7 +634,7 @@ private func asciiStringGen(length: ClosedRange<Int>) -> Generator<String> {
     let charGen = Gen.contramap(
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
-                throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                throw ReflectionError.couldNotReflectOnSequenceElement(
                     "Character has no scalars"
                 )
             }

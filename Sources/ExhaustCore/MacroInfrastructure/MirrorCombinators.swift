@@ -10,7 +10,7 @@ public extension __ExhaustRuntime {
         Gen.contramap(
             { (output: Output) throws -> Any in
                 guard let value = Self._mirrorExtract(output, label: label) else {
-                    throw Interpreters.ReflectionError.contramapWasWrongType
+                    throw ReflectionError.contramapWasWrongType
                 }
                 return value
             },
@@ -29,7 +29,7 @@ public extension __ExhaustRuntime {
         Gen.contramap(
             { (output: Output) throws -> Input in
                 guard let input = backward(output) else {
-                    throw Interpreters.ReflectionError.contramapWasWrongType
+                    throw ReflectionError.contramapWasWrongType
                 }
                 return input
             },
@@ -67,7 +67,7 @@ public extension __ExhaustRuntime {
 
         let backwardToArray: (NewOutput) throws -> [Any] = { output in
             guard let values = Self._mirrorExtractAll(output, labels: labels) else {
-                throw Interpreters.ReflectionError.contramapWasWrongType
+                throw ReflectionError.contramapWasWrongType
             }
             return values
         }
@@ -105,7 +105,7 @@ public extension __ExhaustRuntime {
 
         let backwardToArray: (NewOutput) throws -> [Any] = { output in
             guard let values = backward(output) else {
-                throw Interpreters.ReflectionError.contramapWasWrongType
+                throw ReflectionError.contramapWasWrongType
             }
             return values
         }

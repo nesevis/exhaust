@@ -274,7 +274,7 @@ private extension Generator where Operation == ReflectiveOperation {
                             ))
                         }
                     }
-                } catch let error as Interpreters.ReflectionError {
+                } catch let error as ReflectionError {
                     switch error {
                     case let .forwardOnlyMap(inputType, outputType):
                         failures.append(.forwardOnlyTransform(
@@ -293,7 +293,7 @@ private extension Generator where Operation == ReflectiveOperation {
                     default:
                         failures.append(.reflectionFailed(
                             sampleIndex: sampleIndex,
-                            errorDescription: "\(error)"
+                            errorDescription: error.localizedDescription
                         ))
                     }
                 } catch {

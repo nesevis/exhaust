@@ -37,7 +37,7 @@ public extension ReflectiveGenerator {
             ),
             continuation: {
                 guard let array = $0 as? [Any] else {
-                    throw Interpreters.ReflectionError.forwardOnlyMetamorph
+                    throw ReflectionError.forwardOnlyMetamorph
                 }
                 return .pure(array)
             }

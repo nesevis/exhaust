@@ -182,7 +182,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
     return Gen.contramap(
         { (char: Character) throws -> UInt32 in
             guard let scalar = char.unicodeScalars.first else {
-                throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
+                throw ReflectionError.couldNotReflectOnSequenceElement(
                     "Character has no scalars"
                 )
             }
