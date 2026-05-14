@@ -321,18 +321,19 @@ extension Interpreters {
         let bitPattern = convertibleValue.bitPattern64
         if isRangeExplicit, (min ... max).contains(bitPattern) == false {
             // Float types: allow NaN/infinity through so boundary coverage counterexamples are reflectable, but enforce the range for finite values.
+            let range = ChoiceValue(bitPattern, tag: tag).displayRange(min ... max)
             if tag.isFloatingPoint {
                 let numericValue = tag.numericDoubleValue(forBitPattern: bitPattern)
                 if numericValue.isFinite {
                     throw ReflectionError.inputWasOutOfGeneratorRange(
                         String(describing: convertibleValue),
-                        min ... max
+                        range: range
                     )
                 }
             } else {
                 throw ReflectionError.inputWasOutOfGeneratorRange(
                     String(describing: convertibleValue),
-                    min ... max
+                    range: range
                 )
             }
         }

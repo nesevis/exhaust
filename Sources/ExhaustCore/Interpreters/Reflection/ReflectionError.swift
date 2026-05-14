@@ -26,7 +26,7 @@ public enum ReflectionError: LocalizedError, Equatable {
         /// Indicates that a pick branch value lacks the ``Equatable`` conformance needed to match against the target.
         case pickValueIsNotEquatable(String)
         /// Indicates that the reflected bit pattern falls outside the declared chooseBits range.
-        case inputWasOutOfGeneratorRange(String, ClosedRange<UInt64>)
+        case inputWasOutOfGeneratorRange(String, range: String)
         /// Reflection failed because a forward-only `map` was detected.
         /// Use `.mapped(forward:backward:)` instead to enable bidirectional operation.
         case forwardOnlyMap(inputType: String, outputType: String)
@@ -55,7 +55,7 @@ public enum ReflectionError: LocalizedError, Equatable {
             case let .pickValueIsNotEquatable(type):
                 "Pick branch value of type '\(type)' lacks Equatable conformance required for reflection matching."
             case let .inputWasOutOfGeneratorRange(value, range):
-                "Reflected bit pattern for '\(value)' falls outside the declared range \(range.lowerBound)...\(range.upperBound)."
+                "Reflected bit pattern for '\(value)' falls outside the declared range \(range)"
             case let .forwardOnlyMap(inputType, outputType):
                 "Reflection failed: forward-only map (\(inputType) -> \(outputType)) detected."
             case let .forwardOnlyBind(inputType, outputType):
