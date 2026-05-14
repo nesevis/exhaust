@@ -1,6 +1,6 @@
 /// Statistics collected from a single reduction run.
 ///
-/// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionState`` during reduction and extracted at the end of the pipeline.
+/// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionMachine`` during reduction and extracted at the end of the pipeline.
 package struct ReductionStats: Sendable {
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
     package var encoderProbes: [EncoderName: Int]
@@ -30,6 +30,9 @@ package struct ReductionStats: Sendable {
     /// Graph structure and lifecycle statistics accumulated during reduction.
     package var graphStats: ChoiceGraphStats
 
+    /// Aggregate wall-time spent in each ``ReductionMachine`` step category, in nanoseconds.
+    package var stepTimings: StepTimings = .init()
+
     /// Creates an empty stats value.
     package init() {
         encoderProbes = [:]
@@ -39,5 +42,55 @@ package struct ReductionStats: Sendable {
         totalMaterializations = 0
         cycles = 0
         graphStats = ChoiceGraphStats()
+    }
+}
+
+// MARK: - Step Timings
+
+extension ReductionStats {
+    /// Aggregate wall-time spent in each ``ReductionMachine`` step category.
+    ///
+    /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
+    package struct StepTimings: Sendable {
+        package var dispatch: UInt64 = 0
+        package var encode: UInt64 = 0
+        package var decode: UInt64 = 0
+        package var rebuild: UInt64 = 0
+        package var convergenceConfirmation: UInt64 = 0
+        package var relaxRound: UInt64 = 0
+        package var reorder: UInt64 = 0
+
+        package var dispatchCount: Int = 0
+        package var encodeCount: Int = 0
+        package var decodeCount: Int = 0
+        package var rebuildCount: Int = 0
+
+        package init() {}
+
+        /// Records elapsed time for a step transition.
+        package mutating func record(_ transition: ReductionMachine.Transition, elapsed: UInt64) {
+            switch transition {
+            case .dispatched:
+                dispatch += elapsed
+                dispatchCount += 1
+            case .encoded:
+                encode += elapsed
+                encodeCount += 1
+            case .decoded:
+                decode += elapsed
+                decodeCount += 1
+            case .rebuilt:
+                rebuild += elapsed
+                rebuildCount += 1
+            case .convergenceConfirmed:
+                convergenceConfirmation += elapsed
+            case .relaxRoundCompleted:
+                relaxRound += elapsed
+            case .reorderCompleted:
+                reorder += elapsed
+            case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
+                break
+            }
+        }
     }
 }

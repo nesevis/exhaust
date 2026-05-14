@@ -17,11 +17,11 @@ extension ChoiceGraphScheduler {
         let treeIsStripped: Bool
     }
 
-    /// Runs an encoder's probe loop, accepting improvements.
+    /// Runs an encoder's probe loop, accepting improvements. Used by the reorder pass and relax round.
     static func runProbeLoop(
         encoder: inout any GraphEncoder,
         scope: EncoderInput,
-        state: inout ReductionState
+        state: inout ReductionMachine
     ) throws -> ProbeLoopOutcome {
         encoder.start(scope: scope)
 
@@ -81,8 +81,6 @@ extension ChoiceGraphScheduler {
                 lastAccepted = true
                 anyAccepted = true
                 acceptCount += 1
-                // Accepted probes cost two materialisations: one for the property check (counted
-                // unconditionally below), one for tree reconstruction (counted here).
                 if state.collectStats {
                     state.stats.totalMaterializations += 1
                 }
@@ -113,8 +111,6 @@ extension ChoiceGraphScheduler {
                 }
             }
 
-            // One materialisation per non-cache-hit probe (the property check).
-            // Accepted probes add a second materialisation above for tree reconstruction.
             if state.collectStats {
                 state.stats.totalMaterializations += 1
             }
@@ -182,7 +178,7 @@ extension ChoiceGraphScheduler {
     }
 
     /// Logs a `graph_probe_rejected` debug event for replacement probes rejected by the decoder.
-    private static func logReplacementProbeRejection(
+    static func logReplacementProbeRejection(
         mutation: ProjectedMutation,
         encoder: EncoderName,
         graph: ChoiceGraph,
