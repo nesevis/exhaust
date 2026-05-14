@@ -5,35 +5,35 @@
 
 // MARK: - Structural Relax Round
 
-extension ChoiceGraphScheduler {
+extension ReductionMachine {
     /// Runs a structural relax-solve-round pass: checkpoint, apply a shortlex-worsening structural perturbation, reduce from the perturbed state, commit if the result beats the checkpoint.
     ///
     /// - Returns: True if the relax round produced a net improvement (committed).
-    static func runRelaxRound(state: inout ReductionState) throws -> Bool {
-        let checkpointSequence = state.sequence
-        let checkpointTree = state.tree
-        let checkpointOutput = state.output
-        let checkpointConvergence = extractAllConvergence(from: state.graph)
+    mutating func runRelaxRound() throws -> Bool {
+        let checkpointSequence = sequence
+        let checkpointTree = tree
+        let checkpointOutput = output
+        let checkpointConvergence = ChoiceGraphScheduler.extractAllConvergence(from: graph)
 
-        Self.logReducer("relax_round_start", isInstrumented: state.isInstrumented, metadata: [
-            "seq_len": "\(state.sequence.count)",
+        ChoiceGraphScheduler.logReducer("relax_round_start", isInstrumented: isInstrumented, metadata: [
+            "seq_len": "\(sequence.count)",
         ])
 
-        let candidates = buildRelaxCandidates(
-            sequence: state.sequence,
-            graph: state.graph
+        let candidates = Self.buildRelaxCandidates(
+            sequence: sequence,
+            graph: graph
         )
 
         guard candidates.isEmpty == false else {
-            Self.logReducer("relax_round_no_candidates", isInstrumented: state.isInstrumented, metadata: [:])
+            ChoiceGraphScheduler.logReducer("relax_round_no_candidates", isInstrumented: isInstrumented, metadata: [:])
             return false
         }
 
-        Self.logReducer("relax_round_candidates", isInstrumented: state.isInstrumented, metadata: [
+        ChoiceGraphScheduler.logReducer("relax_round_candidates", isInstrumented: isInstrumented, metadata: [
             "count": "\(candidates.count)",
         ])
 
-        let materializationBudget = state.tuning.relaxMaterializationBudget
+        let materializationBudget = tuning.relaxMaterializationBudget
         var perturbationAccepted = false
         var materializationsUsed = 0
         for candidate in candidates {
@@ -43,45 +43,45 @@ extension ChoiceGraphScheduler {
 
             if let result = try decoder.decodeAny(
                 candidate: candidate,
-                gen: state.gen,
-                tree: state.tree,
-                originalSequence: state.sequence,
-                property: state.property,
+                gen: gen,
+                tree: tree,
+                originalSequence: sequence,
+                property: property,
                 filterObservations: &filterObservations
             ) {
-                state.sequence = result.sequence
-                state.tree = result.tree
-                state.output = result.output
+                sequence = result.sequence
+                tree = result.tree
+                output = result.output
                 perturbationAccepted = true
 
-                Self.logReducer("relax_round_perturbation_accepted", isInstrumented: state.isInstrumented, metadata: [
-                    "seq_len": "\(state.sequence.count)",
+                ChoiceGraphScheduler.logReducer("relax_round_perturbation_accepted", isInstrumented: isInstrumented, metadata: [
+                    "seq_len": "\(sequence.count)",
                 ])
                 break
             }
 
             materializationsUsed += 1
-            if state.collectStats {
-                state.stats.totalMaterializations += 1
+            if collectStats {
+                stats.totalMaterializations += 1
             }
         }
 
         guard perturbationAccepted else {
-            Self.logReducer("relax_round_no_perturbation", isInstrumented: state.isInstrumented, metadata: [:])
+            ChoiceGraphScheduler.logReducer("relax_round_no_perturbation", isInstrumented: isInstrumented, metadata: [:])
             return false
         }
 
-        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats).graph
-        var exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
+        _ = rebuildAndUpdateGraph()
+        var exploitSources = CandidateSourceBuilder.buildSources(from: graph)
 
-        Self.logReducer("relax_round_exploitation_start", isInstrumented: state.isInstrumented, metadata: [
-            "seq_len": "\(state.sequence.count)", "sources": "\(exploitSources.count)",
+        ChoiceGraphScheduler.logReducer("relax_round_exploitation_start", isInstrumented: isInstrumented, metadata: [
+            "seq_len": "\(sequence.count)", "sources": "\(exploitSources.count)",
         ])
 
-        let savedRejectCache = state.rejectCache
-        state.rejectCache = []
+        let savedRejectCache = rejectCache
+        rejectCache = []
         while true {
-            guard let sourceIndex = highestPrioritySourceIndex(exploitSources) else {
+            guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(exploitSources) else {
                 break
             }
             guard let exploitTransformation = exploitSources[sourceIndex].next(lastAccepted: false) else {
@@ -89,56 +89,56 @@ extension ChoiceGraphScheduler {
                 exploitSources.removeLast()
                 continue
             }
-            guard exploitTransformation.operation.isValid(in: state.graph) else {
+            guard exploitTransformation.operation.isValid(in: graph) else {
                 continue
             }
             if case .minimize(.boundValue) = exploitTransformation.operation {
                 continue
             }
 
-            let warmStarts = extractWarmStarts(from: state.graph)
+            let warmStarts = ChoiceGraphScheduler.extractWarmStarts(from: graph)
             let exploitScope = EncoderInput(
                 transformation: exploitTransformation,
-                baseSequence: state.sequence,
-                tree: state.tree,
-                graph: state.graph,
+                baseSequence: sequence,
+                tree: tree,
+                graph: graph,
                 warmStartRecords: warmStarts
             )
 
-            var exploitEncoder = selectEncoder(for: exploitTransformation.operation)
-            let outcome = try runProbeLoop(
+            var exploitEncoder = ChoiceGraphScheduler.selectEncoder(for: exploitTransformation.operation)
+            let outcome = try ChoiceGraphScheduler.runProbeLoop(
                 encoder: &exploitEncoder,
                 scope: exploitScope,
-                state: &state
+                state: &self
             )
 
             let convergence = exploitEncoder.convergenceRecords
             if convergence.isEmpty == false {
-                state.graph.recordConvergence(byNodeID: convergence)
+                graph.recordConvergence(byNodeID: convergence)
             }
 
             if outcome.accepted, outcome.requiresRebuild {
-                state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats).graph
-                exploitSources = CandidateSourceBuilder.buildSources(from: state.graph)
+                _ = rebuildAndUpdateGraph()
+                exploitSources = CandidateSourceBuilder.buildSources(from: graph)
             }
         }
-        state.rejectCache = savedRejectCache
+        rejectCache = savedRejectCache
 
-        if state.sequence.shortLexPrecedes(checkpointSequence) {
-            Self.logReducer("relax_round_committed", isInstrumented: state.isInstrumented, metadata: [
-                "old_seq_len": "\(checkpointSequence.count)", "new_seq_len": "\(state.sequence.count)",
+        if sequence.shortLexPrecedes(checkpointSequence) {
+            ChoiceGraphScheduler.logReducer("relax_round_committed", isInstrumented: isInstrumented, metadata: [
+                "old_seq_len": "\(checkpointSequence.count)", "new_seq_len": "\(sequence.count)",
             ])
             return true
         }
 
-        state.sequence = checkpointSequence
-        state.tree = checkpointTree
-        state.output = checkpointOutput
-        state.graph = rebuildGraph(from: state.tree, replacing: state.graph, stats: &state.stats).graph
-        transferConvergence(checkpointConvergence, to: &state.graph)
+        sequence = checkpointSequence
+        tree = checkpointTree
+        output = checkpointOutput
+        _ = rebuildAndUpdateGraph()
+        ChoiceGraphScheduler.transferConvergence(checkpointConvergence, to: &graph)
 
-        Self.logReducer("relax_round_rolled_back", isInstrumented: state.isInstrumented, metadata: [
-            "seq_len": "\(state.sequence.count)",
+        ChoiceGraphScheduler.logReducer("relax_round_rolled_back", isInstrumented: isInstrumented, metadata: [
+            "seq_len": "\(sequence.count)",
         ])
         return false
     }
