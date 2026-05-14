@@ -433,7 +433,7 @@ private func isAtFloor(_ value: Any) -> Bool {
         return mirror.children.isEmpty
     }
 
-    return "\(value)" == "0" || "\(value)" == "0.0"
+    return isAtSemanticSimplest(value) ?? false
 }
 
 private let descriptionCap = 60
