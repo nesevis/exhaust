@@ -5,7 +5,7 @@ import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
-let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
+let usePrecompiled = true
 
 #if os(macOS)
     let swiftLintPlugins: [Target.PluginUsage] = [
@@ -20,7 +20,7 @@ let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != n
 #endif
 
 let coreTarget: Target = usePrecompiled
-    ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
+    ? .binaryTarget(name: "ExhaustCore", url: "https://github.com/nesevis/exhaust/releases/download/v0.8.0/ExhaustCore.xcframework.zip", checksum: "97da75efb397368b6ba8831b7e90e21a3e4461b14217ed42c2c8d0de06aef8ec")
     : .target(
         name: "ExhaustCore",
         dependencies: [],
