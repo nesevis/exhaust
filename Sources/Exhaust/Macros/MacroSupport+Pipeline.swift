@@ -354,6 +354,7 @@ package extension __ExhaustRuntime {
                     reducedSequence: reducedSequence
                 )
                 failure.replayHint = replayHint
+                failure.reductionWasCapped = report.reductionWasCapped
                 let rendered = failure.render(format: context.logFormat)
                 report.renderedFailure = rendered
                 ExhaustLog.debug(

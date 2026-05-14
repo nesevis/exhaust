@@ -148,7 +148,12 @@ extension __ExhaustRuntime {
 
                     let samplingBudget = budget.samplingBudget
                     let coverageBudget = budget.coverageBudget
-                    let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
+                    let totalBudget = coverageBudget + samplingBudget
+                    let reductionDeadlineNanoseconds = UInt64(totalBudget) * 5 * 1_000_000
+                    let reductionConfig = Interpreters.ReducerConfiguration(
+                        maxStalls: 2,
+                        wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
+                    )
 
                     var report = ExhaustReport()
                     defer { onReportClosure?(report) }

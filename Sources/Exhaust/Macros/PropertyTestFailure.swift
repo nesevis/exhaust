@@ -17,6 +17,8 @@ struct PropertyTestFailure<Output> {
     var replayHint: String?
     /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
     var transparent: Bool = false
+    /// When `true`, the reduction was cut short by the wall-clock deadline and the counterexample may not be fully reduced.
+    var reductionWasCapped: Bool = false
 
     /// Dispatches to the appropriate renderer based on the configured log format.
     func render(format: LogFormat) -> String {
@@ -75,6 +77,11 @@ struct PropertyTestFailure<Output> {
         if let propertyInvocations {
             lines.append("")
             lines.append("Property invoked: \(propertyInvocations) times")
+        }
+
+        if reductionWasCapped {
+            lines.append("")
+            lines.append("Note: Reduction halted by time limit. Increase .budget(...) to allow more reduction time.")
         }
 
         if let seed {

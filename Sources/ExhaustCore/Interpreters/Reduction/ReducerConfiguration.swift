@@ -6,17 +6,22 @@ package extension Interpreters {
         /// Maximum number of outer cycles with no improvement before terminating.
         public let maxStalls: Int
 
+        /// Wall-clock deadline for the reduction phase, in nanoseconds. The machine checks this after each decode step and terminates early when exceeded. Zero means no limit.
+        public let wallClockDeadlineNanoseconds: UInt64
+
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
 
         /// Tuning constants for the scheduler's internal heuristics.
         public let tuning: SchedulerTuning = .init()
 
-        /// Creates a configuration with the given stall budget.
+        /// Creates a configuration with the given stall budget and optional wall-clock deadline.
         public init(
-            maxStalls: Int
+            maxStalls: Int,
+            wallClockDeadlineNanoseconds: UInt64 = 0
         ) {
             self.maxStalls = maxStalls
+            self.wallClockDeadlineNanoseconds = wallClockDeadlineNanoseconds
         }
     }
 }

@@ -108,6 +108,8 @@ package struct ReductionMachine {
     let maxStalls: Int
     var deferBindInner: Bool
     var graphIsStripped: Bool = false
+    let deadlineNanoseconds: UInt64
+    let startNanoseconds: UInt64
 
     // MARK: - Per-Cycle State
 
@@ -183,6 +185,8 @@ package struct ReductionMachine {
         self.maxStalls = config.maxStalls
         self.deferBindInner = graph.reductionEdges.isEmpty == false
         self.gate = BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
+        self.deadlineNanoseconds = config.wallClockDeadlineNanoseconds
+        self.startNanoseconds = deadlineNanoseconds > 0 ? monotonicNanoseconds() : 0
 
         if collectStats {
             stats.graphStats = ChoiceGraphStats.from(graph)
@@ -356,6 +360,11 @@ package struct ReductionMachine {
     }
 
     // MARK: - Helpers
+
+    func isDeadlineExceeded() -> Bool {
+        guard deadlineNanoseconds > 0 else { return false }
+        return monotonicNanoseconds() - startNanoseconds >= deadlineNanoseconds
+    }
 
     mutating func countMaterialization() {
         if collectStats {

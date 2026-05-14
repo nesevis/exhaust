@@ -20,6 +20,9 @@ package struct ReductionStats: Sendable {
     /// Total reduction cycles completed.
     package var cycles: Int
 
+    /// True when the reduction phase was terminated early by the wall-clock deadline.
+    package var reductionWasCapped: Bool = false
+
     // MARK: - Filter Observations
 
     /// Per-fingerprint filter predicate observations accumulated across all materializations.
