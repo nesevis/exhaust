@@ -399,7 +399,8 @@ private struct ReductionChangeCollector {
     }
 
     private func backticked(_ path: String) -> String {
-        "`\(path)`"
+        if path.isEmpty { return path }
+        return "`\(path)`"
     }
 }
 
