@@ -144,7 +144,6 @@ extension GraphStructuralEncoder {
         return candidate
     }
 
-
     // MARK: - Depth-Crossing Expansion
 
     /// Wrapping kind for a depth-0 base case entry during cross-depth expansion.

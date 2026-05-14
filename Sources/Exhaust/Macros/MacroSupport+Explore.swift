@@ -177,7 +177,6 @@ public extension __ExhaustRuntime {
         property: @Sendable (Output) throws -> Void,
         detection: @Sendable (Output) throws -> Void
     ) -> ExploreReport<Output> {
-        let gen = refGen.gen
         return withoutActuallyEscaping(detection) { detection in
             let boolProperty = wrapDetectionProperty(detection)
 
@@ -282,7 +281,6 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Void,
         detection: @escaping @Sendable (Output) throws -> Void
     ) async -> ExploreReport<Output> {
-        let gen = refGen.gen
         let boolProperty = wrapDetectionProperty(detection)
 
         return await withCheckedContinuation { continuation in
