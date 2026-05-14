@@ -89,7 +89,8 @@ extension ReductionMachine {
             }
             let graphBefore = graph
             _ = rebuildAndUpdateGraph()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore, previousReplacementScopes: cachedReplacementScopes)
+            cachedReplacementScopes = extractReplacementScopes(from: sources)
             graphIsStripped = false
             return .dispatched(decision: .rematerialized)
 
@@ -381,6 +382,7 @@ extension ReductionMachine {
         }
 
         let graphBefore = graph
+        let graphStart = monotonicNanoseconds()
         let diff = rebuildAndUpdateGraph()
         graphIsStripped = encoderLatestTreeIsStripped
 
@@ -394,6 +396,7 @@ extension ReductionMachine {
                 graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(metadata))
             }
         }
+        let graphEnd = monotonicNanoseconds()
 
         if diff.isStructurallyIdentical {
             let structuralSources = sources.filter { source in
@@ -412,11 +415,18 @@ extension ReductionMachine {
             ])
         } else {
             scopeRejectionCache.clear()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore, previousReplacementScopes: cachedReplacementScopes)
+            cachedReplacementScopes = extractReplacementScopes(from: sources)
 
             ChoiceGraphScheduler.logReducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
+        }
+        let sourceEnd = monotonicNanoseconds()
+
+        if collectStats {
+            stats.stepTimings.rebuildGraphNanoseconds += graphEnd - graphStart
+            stats.stepTimings.rebuildSourceNanoseconds += sourceEnd - graphEnd
         }
 
         activeTransformation = nil

@@ -64,6 +64,8 @@ extension ReductionStats {
         package var encodeCount: Int = 0
         package var decodeCount: Int = 0
         package var rebuildCount: Int = 0
+        package var rebuildGraphNanoseconds: UInt64 = 0
+        package var rebuildSourceNanoseconds: UInt64 = 0
 
         package init() {}
 

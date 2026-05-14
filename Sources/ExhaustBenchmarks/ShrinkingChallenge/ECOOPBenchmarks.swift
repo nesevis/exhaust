@@ -303,9 +303,15 @@ private func printECOOPReport(
             totalRlx += timing.relaxRound
             totalReord += timing.reorder
         }
+        var totalRebGraph: UInt64 = 0
+        var totalRebSource: UInt64 = 0
+        for timing in timingResults {
+            totalRebGraph += timing.rebuildGraphNanoseconds
+            totalRebSource += timing.rebuildSourceNanoseconds
+        }
         let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
         let totalNs = totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalReord
-        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb)) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) reord=\(toMs(totalReord))")
+        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) reord=\(toMs(totalReord))")
     }
 
     if enableCounterExamples {
