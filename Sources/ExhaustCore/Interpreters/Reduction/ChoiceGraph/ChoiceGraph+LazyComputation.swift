@@ -41,8 +41,9 @@ extension ChoiceGraph {
 
             var indexA = 0
             while indexA < siblings.count {
+                let limit = min(siblings.count, indexA + 1 + SchedulerTuning.maxPairLookahead)
                 var indexB = indexA + 1
-                while indexB < siblings.count {
+                while indexB < limit {
                     let tagA = siblings[indexA].tag
                     let tagB = siblings[indexB].tag
                     let sharedTag: TypeTag? = (tagA == tagB) ? tagA : nil
@@ -93,8 +94,11 @@ extension ChoiceGraph {
                         groupB += 1
                         continue
                     }
-                    for leafA in perChildLeaves[groupA] {
-                        for leafB in perChildLeaves[groupB] {
+                    let leafLimit = SchedulerTuning.maxPairLookahead
+                    for (indexA, leafA) in perChildLeaves[groupA].enumerated() {
+                        let bLimit = min(perChildLeaves[groupB].count, leafLimit)
+                        for indexB in 0 ..< bLimit {
+                            let leafB = perChildLeaves[groupB][indexB]
                             let sharedTag: TypeTag? = (leafA.tag == leafB.tag) ? leafA.tag : nil
                             edges.append(TypeCompatibilityEdge(
                                 nodeA: leafA.nodeID,
@@ -102,10 +106,69 @@ extension ChoiceGraph {
                                 typeTag: sharedTag
                             ))
                         }
+                        if indexA >= leafLimit { break }
                     }
                     groupB += 1
                 }
                 groupA += 1
+            }
+        }
+
+        // Pass 3: chooseBits leaves across adjacent sibling elements of a sequence whose children are themselves homogeneous sequences (the `[[Int]]` pattern). Enables redistribution to consolidate values into fewer inner sequences, which deletion can then remove. Only fires when every child is a sequence with a non-nil elementTypeTag and all children share the same tag.
+        for parentNodeID in liveNodeIDs {
+            let parentNode = nodes[parentNodeID]
+            guard case .sequence = parentNode.kind else { continue }
+            guard parentNode.children.count >= 2 else { continue }
+
+            var childTag: TypeTag?
+            var allChildrenAreHomogeneousSequences = true
+            for childID in parentNode.children {
+                guard case let .sequence(childSeqMeta) = nodes[childID].kind,
+                      let tag = childSeqMeta.elementTypeTag
+                else {
+                    allChildrenAreHomogeneousSequences = false
+                    break
+                }
+                if let existing = childTag {
+                    guard existing == tag else {
+                        allChildrenAreHomogeneousSequences = false
+                        break
+                    }
+                } else {
+                    childTag = tag
+                }
+            }
+            guard allChildrenAreHomogeneousSequences else { continue }
+
+            var perChildLeaves: [[(nodeID: Int, tag: TypeTag)]] = []
+            perChildLeaves.reserveCapacity(parentNode.children.count)
+            for childID in parentNode.children {
+                var leaves: [(nodeID: Int, tag: TypeTag)] = []
+                collectChooseBitsDescendants(rootID: childID, into: &leaves)
+                perChildLeaves.append(leaves)
+            }
+
+            let lookahead = SchedulerTuning.maxPairLookahead
+            for indexA in 0 ..< perChildLeaves.count {
+                guard perChildLeaves[indexA].isEmpty == false else { continue }
+                let bEnd = min(perChildLeaves.count, indexA + 1 + lookahead)
+                for indexB in (indexA + 1) ..< bEnd {
+                    guard perChildLeaves[indexB].isEmpty == false else { continue }
+                    let aLimit = min(perChildLeaves[indexA].count, lookahead)
+                    let bLimit = min(perChildLeaves[indexB].count, lookahead)
+                    for leafIdxA in 0 ..< aLimit {
+                        let leafA = perChildLeaves[indexA][leafIdxA]
+                        for leafIdxB in 0 ..< bLimit {
+                            let leafB = perChildLeaves[indexB][leafIdxB]
+                            guard leafA.tag == leafB.tag else { continue }
+                            edges.append(TypeCompatibilityEdge(
+                                nodeA: leafA.nodeID,
+                                nodeB: leafB.nodeID,
+                                typeTag: leafA.tag
+                            ))
+                        }
+                    }
+                }
             }
         }
 

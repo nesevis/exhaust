@@ -197,14 +197,13 @@ enum ExchangeQuery {
 
     /// Generates source-sink pairs from leaves within a single homogeneous group.
     ///
-    /// Sorts leaves by position, then for each source (distance from target > 0) pairs it with the first later-position leaf. Produces at most C-1 pairs for C leaves.
+    /// Sorts leaves by position, then for each source (distance from target > 0) pairs it with later-position leaves up to ``SchedulerTuning/maxPairLookahead`` positions ahead.
     private static func pairsFromHomogeneousLeaves(
         childIDs: [Int],
         tag: TypeTag,
         graph: ChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
-        // Collect non-bind-inner leaves with position and distance.
         var leaves: [(nodeID: Int, position: Int, distance: UInt64)] = []
         for childID in childIDs {
             guard QueryHelpers.isBindInner(childID, innerDescendantToBind: innerDescendantToBind) == false else { continue }
@@ -218,17 +217,16 @@ enum ExchangeQuery {
         }
         guard leaves.count >= 2 else { return [] }
 
-        // Sort by position for the shortlex ordering constraint.
         leaves.sort { $0.position < $1.position }
 
         var pairs: [RedistributionPair] = []
         for index in 0 ..< leaves.count {
             guard leaves[index].distance > 0 else { continue }
-            // Pair with the first later-position leaf (bind-inner leaves were already filtered above).
-            if index + 1 < leaves.count {
+            let limit = min(leaves.count, index + 1 + SchedulerTuning.maxPairLookahead)
+            for sinkIndex in (index + 1) ..< limit {
                 pairs.append(RedistributionPair(
                     source: QueryHelpers.makeLeafEntry(leaves[index].nodeID, innerDescendantToBind: innerDescendantToBind),
-                    sink: QueryHelpers.makeLeafEntry(leaves[index + 1].nodeID, innerDescendantToBind: innerDescendantToBind),
+                    sink: QueryHelpers.makeLeafEntry(leaves[sinkIndex].nodeID, innerDescendantToBind: innerDescendantToBind),
                     sourceTag: tag,
                     sinkTag: tag
                 ))
