@@ -1,6 +1,6 @@
 # Reducer Pipeline
 
-*Last updated: 2026-05-11*
+*Last updated: 2026-05-14*
 
 When Exhaust finds a failing test case, the reducer shrinks it to a minimal counterexample. It builds a graph from the choice tree — a structural map of every decision the generator made — then tries operations that make the counterexample smaller or simpler while keeping the property failing. Structural operations (delete elements, collapse recursion levels, swap branches) compete with value operations (binary search toward zero, redistribute between coupled parameters) in a shared priority queue. The highest-priority operation wins at each step.
 
@@ -84,3 +84,4 @@ After the cycle loop exits, one final pass runs:
 - **Rejection caching.** Structural replacements (branch pivots, substitutions) are value-independent, so a rejection is cached by identity alone and persists across value changes. Deletions depend on values and use a finer-grained cache.
 - **Convergence tracking.** Once a value search converges, the floor is recorded and reused as a warm start if values shift later. Leaves at their floor are skipped.
 - **Stall-cycle gating for expensive operations.** Bound value search (joint search across dependent parameters) only fires when cheaper operations have stalled.
+- **Step-by-step execution.** The reducer is implemented as an explicit state machine (`ReductionMachine`) where each call to `next()` performs one unit of work — selecting a source, producing a candidate, checking the property, or rebuilding the graph — and returns a transition describing what happened. This makes the reducer's internal control flow inspectable and enables per-step wall-time measurement (dispatch, encode, decode, rebuild, convergence confirmation, relax, reorder).

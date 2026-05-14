@@ -15,6 +15,7 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Entry Points
 
+    /// Reduces a failing counterexample by constructing and driving a ``ReductionMachine`` to completion.
     static func run<Output>(
         gen: Generator<Output>,
         initialTree: ChoiceTree,
@@ -34,6 +35,7 @@ enum ChoiceGraphScheduler {
         return machine.typedResult().reduced
     }
 
+    /// Reduces a failing counterexample with per-step wall-time measurement, returning both the reduced result and accumulated ``ReductionStats`` including ``ReductionStats/StepTimings``.
     static func runCollectingStats<Output>(
         gen: Generator<Output>,
         initialTree: ChoiceTree,
@@ -101,6 +103,7 @@ enum ChoiceGraphScheduler {
         case rebuildAndResume(treeIsStripped: Bool)
     }
 
+    /// Determines whether the scheduler should rebuild the graph or continue dispatching after an encoder pass completes. Pure function of the probe outcome and operation type.
     static func evaluateAcceptance(
         outcome: ProbeLoopOutcome,
         operation: GraphOperation
@@ -122,6 +125,7 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Dispatch Evaluation
 
+    /// Decision returned by ``evaluateDispatch`` indicating what the dispatch step should do with a candidate transformation.
     enum DispatchDecision: Equatable {
         case skip
         case classifyBind(bindNodeID: Int, fingerprint: UInt64)
@@ -129,6 +133,7 @@ enum ChoiceGraphScheduler {
         case readyToDispatch(boundValueFingerprint: UInt64?)
     }
 
+    /// Determines whether a candidate transformation should be dispatched, skipped, or requires a classification effect before proceeding. Pure function of the transformation, graph state, caches, and flags.
     static func evaluateDispatch(
         transformation: GraphTransformation,
         graph: ChoiceGraph,
@@ -185,6 +190,7 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Encoder Selection
 
+    /// Selects the appropriate encoder for a graph operation type. Bound value minimization scopes are not handled here because they require the typed generator at construction time; the dispatch step builds them via ``makeBoundValueComposition(bindScope:scope:graph:gen:upstreamBudget:)`` instead.
     static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
         case .remove, .replace, .migrate:
@@ -204,6 +210,7 @@ enum ChoiceGraphScheduler {
 
     // MARK: - Post-Cycle Evaluation
 
+    /// Snapshot of what happened during a single reduction cycle, consumed by ``evaluatePostCycle`` to determine the next actions.
     struct CycleOutcome: Sendable {
         let anyAccepted: Bool
         let hadReplacementShortlexRejection: Bool
@@ -212,18 +219,21 @@ enum ChoiceGraphScheduler {
         let structurallyImproved: Bool
     }
 
+    /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful relax round prevents termination, and convergence confirmation can clear stale floors that change the ``allValuesConverged`` result).
     enum PostCycleAction: Equatable, Sendable {
         case confirmConvergence
         case relaxRound
         case releaseDeferral
     }
 
+    /// Result of evaluating a cycle's outcome, containing the ordered list of actions to attempt and updated loop control values.
     struct PostCycleEvaluation: Equatable, Sendable {
         let actions: [PostCycleAction]
         let newStallBudget: Int
         let newDeferBindInner: Bool
     }
 
+    /// Determines what should happen after a reduction cycle completes. Pure function of the cycle outcome, current stall budget, deferral state, and max stalls.
     static func evaluatePostCycle(
         outcome: CycleOutcome,
         stallBudget: Int,

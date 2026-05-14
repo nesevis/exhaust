@@ -30,6 +30,7 @@ package struct ReductionMachine {
 
     // MARK: - Phase
 
+    /// Tracks which stage of the reduction pipeline the machine is in. The outer loop cycles through ``beginCycle`` → ``dispatching`` → ``endCycle`` → ``postCycle`` → ``checkTermination``, exiting via ``reorderPass`` → ``done`` when the stall budget is exhausted or all values converge.
     enum Phase {
         case beginCycle
         case dispatching
@@ -40,6 +41,7 @@ package struct ReductionMachine {
         case done
     }
 
+    /// Tracks where the machine is within a single ``Phase/dispatching`` step. Each call to ``next()`` during dispatching advances through one sub-phase: selecting a source (``dispatch``), producing a candidate (``encode``), materializing and checking the property (``decode``), flushing encoder state (``finishEncoder``), or rebuilding the graph after a structural acceptance (``rebuild``).
     enum DispatchPhase {
         case dispatch
         case encode
@@ -50,13 +52,19 @@ package struct ReductionMachine {
 
     // MARK: - Transition
 
+    /// Reports what happened during the ``dispatch`` sub-phase of a single ``next()`` call.
     package enum DispatchOutcome {
+        /// No source had a remaining transformation, or the pulled source was exhausted.
         case sourceExhausted
+        /// The transformation was skipped by the dispatch decision (invalid scope, cached rejection, or gate skip).
         case skipped
+        /// The graph was stripped (picks not materialized) and needed rematerialization before a path-changing operation.
         case rematerialized
+        /// An encoder was selected, started, and is ready to produce probes.
         case encoderStarted(encoder: EncoderName)
     }
 
+    /// Describes the single unit of work performed by one call to ``next()``. Returned to the caller for logging and per-step timing aggregation via ``ReductionStats/StepTimings/record(_:elapsed:)``.
     package enum Transition {
         case cycleStarted(cycle: Int, sourceCount: Int, sequenceLength: Int)
         case cycleEnded(stallBudget: Int)
@@ -79,7 +87,8 @@ package struct ReductionMachine {
     var phase: Phase = .beginCycle
     var dispatchPhase: DispatchPhase = .dispatch
 
-    // Core
+    // MARK: - Core State
+
     var sequence: ChoiceSequence
     var tree: ChoiceTree
     var output: Any
@@ -92,14 +101,16 @@ package struct ReductionMachine {
     let collectStats: Bool
     let isInstrumented: Bool
 
-    // Loop control
+    // MARK: - Loop Control
+
     var cycles: Int = 0
     var stallBudget: Int
     let maxStalls: Int
     var deferBindInner: Bool
     var graphIsStripped: Bool = false
 
-    // Per-cycle
+    // MARK: - Per-Cycle State
+
     var sources: [any CandidateSource] = []
     var gate: BoundValueGate
     var scopeRejectionCache: CandidateRejectionCache = .init()
@@ -107,7 +118,8 @@ package struct ReductionMachine {
     var hadReplacementShortlexRejection: Bool = false
     var sequenceBeforeCycle: ChoiceSequence = []
 
-    // Per-encoder-pass
+    // MARK: - Per-Encoder-Pass State
+
     var activeEncoder: (any GraphEncoder)?
     var activeTransformation: GraphTransformation?
     var activeBoundValueFingerprint: UInt64?
@@ -119,7 +131,8 @@ package struct ReductionMachine {
     var pendingProbeHash: UInt64 = 0
     var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
 
-    // Per-encoder-pass accumulators
+    // MARK: - Per-Encoder-Pass Accumulators
+
     var encoderProbeCount: Int = 0
     var encoderAcceptCount: Int = 0
     var encoderCacheHitCount: Int = 0
@@ -182,6 +195,7 @@ package struct ReductionMachine {
 
     // MARK: - Result Extraction
 
+    /// Extracts the final reduced counterexample and accumulated statistics, folding in graph-level stats that were tracked separately during reduction. Call once after ``next()`` returns `nil`.
     mutating func typedResult<Output>() -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
@@ -194,6 +208,7 @@ package struct ReductionMachine {
 
     // MARK: - Step
 
+    /// Advances the machine by one step, returning a ``Transition`` that describes what happened, or `nil` when reduction is complete.
     mutating func next() throws -> Transition? {
         switch phase {
         case .beginCycle:
@@ -380,6 +395,7 @@ package struct ReductionMachine {
         return reorderOutcome.accepted
     }
 
+    /// Rebuilds the ``ChoiceGraph`` from the current tree, inheriting bind classifications and convergence records from the previous graph. Returns the diff so the caller can decide whether to rebuild structural or value-only sources.
     mutating func rebuildAndUpdateGraph() -> ChoiceGraphDiff {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt

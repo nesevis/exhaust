@@ -6,6 +6,7 @@
 // MARK: - Dispatching Sub-Phases
 
 extension ReductionMachine {
+    /// Routes to the active ``DispatchPhase`` sub-step. Each call performs one of: selecting and evaluating a source (``dispatch``), producing a candidate via ``GraphEncoder/nextProbe(into:lastAccepted:)`` (``encode``), materializing and property-checking the candidate (``decode``), flushing encoder state after a pass completes (``finishEncoder``), or rebuilding the graph after a structural acceptance (``rebuild``).
     mutating func stepDispatching() throws -> Transition {
         switch dispatchPhase {
         case .dispatch:
@@ -21,8 +22,9 @@ extension ReductionMachine {
         }
     }
 
-    // MARK: - Evaluate
+    // MARK: - Dispatch
 
+    /// Selects the highest-priority source, pulls the next transformation, and resolves the dispatch decision. On ``ChoiceGraphScheduler/DispatchDecision/readyToDispatch(boundValueFingerprint:)``, initializes the encoder and transitions to the ``DispatchPhase/encode`` sub-phase.
     private mutating func stepDispatch() throws -> Transition {
         guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(sources) else {
             phase = .endCycle
@@ -157,6 +159,7 @@ extension ReductionMachine {
 
     // MARK: - Encode
 
+    /// Asks the active encoder for its next candidate via ``GraphEncoder/nextProbe(into:lastAccepted:)``. Returns `nil` from the encoder as a transition to ``DispatchPhase/finishEncoder``. A reject-cache hit skips decoding and stays in the encode phase for the next probe.
     private mutating func stepEncode() -> Transition {
         guard var encoder = activeEncoder else {
             dispatchPhase = .dispatch
@@ -199,6 +202,7 @@ extension ReductionMachine {
 
     // MARK: - Decode
 
+    /// Materializes the pending candidate through ``SequenceDecoder/decodeAny`` and checks the property. On acceptance, updates core state and applies the mutation to the graph. On rejection, inserts the probe hash into the reject cache. Transitions to ``DispatchPhase/encode`` for the next probe, or ``DispatchPhase/finishEncoder`` when the graph requires a full rebuild.
     private mutating func stepDecode() throws -> Transition {
         guard var encoder = activeEncoder,
               let mutation = pendingMutation,
@@ -284,6 +288,7 @@ extension ReductionMachine {
 
     // MARK: - Finish Encoder
 
+    /// Flushes partial convergence, harvests convergence records, records gate outcomes for bound value scopes, accumulates per-encoder stats, and evaluates the post-acceptance action. Transitions to ``DispatchPhase/dispatch`` (continue dispatching) or ``DispatchPhase/rebuild`` (structural acceptance requires graph rebuild).
     private mutating func stepFinishEncoder() -> Transition {
         guard var encoder = activeEncoder else {
             dispatchPhase = .dispatch
@@ -362,6 +367,7 @@ extension ReductionMachine {
 
     // MARK: - Rebuild
 
+    /// Rebuilds the graph from the current tree after a structural acceptance, clears stale convergence in bound subtrees when a bound value scope triggered the rebuild, and reconstructs candidate sources. Uses ``ChoiceGraphDiff/isStructurallyIdentical`` to decide whether structural sources can be preserved or must also be rebuilt.
     private mutating func stepRebuild() -> Transition {
         var boundPositionRange: ClosedRange<Int>?
         if let transformation = activeTransformation,
