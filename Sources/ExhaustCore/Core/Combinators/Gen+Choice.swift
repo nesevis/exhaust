@@ -20,7 +20,7 @@ package extension Gen {
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
         choices: [(weight: UInt64, generator: Generator<Output>)],
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> Generator<Output> {
@@ -57,7 +57,7 @@ package extension Gen {
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
         choices: [(weight: Int, generator: Generator<Output>)],
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> Generator<Output> {

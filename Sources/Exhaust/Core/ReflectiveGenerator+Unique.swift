@@ -26,21 +26,21 @@ public extension ReflectiveGenerator {
     /// - Parameters:
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
+    ///   - column: Source column for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique choice sequences.
     func unique(
-        fileID: String = #fileID,
-        line: UInt = #line
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
-        return ReflectiveGenerator {
-            .impure(
-                operation: .unique(
-                    gen: gen.erase(),
-                    fingerprint: fingerprint,
-                    keyExtractor: nil
-                )
-            ) { .pure($0 as! Output) }
-        }
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return FreerMonad.impure(
+            operation: .unique(
+                gen: gen.erase(),
+                fingerprint: fingerprint,
+                keyExtractor: nil
+            )
+        ) { .pure($0 as! Output) }.wrapped
     }
 
     /// Creates a generator that only produces unique values, deduplicated by a hashable key path.
@@ -55,18 +55,21 @@ public extension ReflectiveGenerator {
     ///   - by: A key path to the hashable property used for deduplication.
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).
     ///   - line: Source line number for fingerprinting (auto-captured).
+    ///   - column: Source column for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
     func unique(
         by path: KeyPath<Output, some Hashable> & Sendable,
-        fileID: String = #fileID,
-        line: UInt = #line
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         unique(
             by: { value in
                 AnyHashable(value[keyPath: path])
             },
             fileID: fileID,
-            line: line
+            line: line,
+            column: column
         )
     }
 
@@ -85,28 +88,26 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that only yields values with unique keys.
     func unique<Key: Equatable>(
         by path: KeyPath<Output, Key> & Sendable,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-        return ReflectiveGenerator {
-            var seen: [Key] = []
-            return .impure(
-                operation: .unique(
-                    gen: gen.erase(),
-                    fingerprint: fingerprint,
-                    keyExtractor: { value in
-                        let key = (value as! Output)[keyPath: path]
-                        if seen.contains(where: { $0 == key }) {
-                            return AnyHashable(seen.count)
-                        }
-                        seen.append(key)
+        var seen: [Key] = []
+        return FreerMonad.impure(
+            operation: .unique(
+                gen: gen.erase(),
+                fingerprint: fingerprint,
+                keyExtractor: { value in
+                    let key = (value as! Output)[keyPath: path]
+                    if seen.contains(where: { $0 == key }) {
                         return AnyHashable(seen.count)
                     }
-                ),
-            ) { .pure($0 as! Output) }
-        }
+                    seen.append(key)
+                    return AnyHashable(seen.count)
+                }
+            ),
+        ) { .pure($0 as! Output) }.wrapped
     }
 
     /// Creates a generator that only produces unique values, deduplicated by a transform.
@@ -121,21 +122,19 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that only yields values with unique keys.
     func unique(
         by transform: @Sendable @escaping (Output) -> some Hashable,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-        return ReflectiveGenerator {
-            .impure(
-                operation: .unique(
-                    gen: gen.erase(),
-                    fingerprint: fingerprint,
-                    keyExtractor: { value in
-                        AnyHashable(transform(value as! Output))
-                    }
-                ),
-            ) { .pure($0 as! Output) }
-        }
+        return FreerMonad.impure(
+            operation: .unique(
+                gen: gen.erase(),
+                fingerprint: fingerprint,
+                keyExtractor: { value in
+                    AnyHashable(transform(value as! Output))
+                }
+            ),
+        ) { .pure($0 as! Output) }.wrapped
     }
 }

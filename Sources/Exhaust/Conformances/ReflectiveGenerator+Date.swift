@@ -37,20 +37,19 @@ public extension ReflectiveGenerator {
 
         let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
 
-        return ReflectiveGenerator<Int64> {
-            .impure(
-                operation: .chooseBits(
-                    min: Int64(0).bitPattern64,
-                    max: numSteps.bitPattern64,
-                    tag: .date(
-                        lowerSeconds: lowerSeconds,
-                        intervalSeconds: intervalSeconds,
-                        timeZoneID: timeZone.identifier
-                    ),
-                    isRangeExplicit: true
-                )
-            ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
-        }.mapped(
+        return Generator<Int64>.impure(
+            operation: .chooseBits(
+                min: Int64(0).bitPattern64,
+                max: numSteps.bitPattern64,
+                tag: .date(
+                    lowerSeconds: lowerSeconds,
+                    intervalSeconds: intervalSeconds,
+                    timeZoneID: timeZone.identifier
+                ),
+                isRangeExplicit: true
+            )
+        ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
+        .wrapped.mapped(
             forward: { step in
                 Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
             },

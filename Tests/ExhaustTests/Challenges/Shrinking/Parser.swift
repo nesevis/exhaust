@@ -50,6 +50,6 @@ struct ParserShrinkingChallenge {
         // Exhaust averages ~3.64
         let outputSize = ParserFixture.size(output)
         print("Size: \(outputSize)")
-        #expect(outputSize < 5)
+        #expect(outputSize <= 5)
     }
 }

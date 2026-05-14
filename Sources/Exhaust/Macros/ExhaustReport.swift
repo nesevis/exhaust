@@ -82,14 +82,8 @@ public struct ExhaustReport: Sendable {
     /// Empty when ``ExhaustSettings/collectOpenPBTStats`` is disabled or the run produced no records. Populated whenever stats collection is enabled, independent of whether the host exposes Swift Testing or XCTest. When a test framework is available, the same records — encoded as JSONL via ``Swift/Sequence/jsonlString()`` — are also attached to the running test. For failing runs, the second-to-last element is the failing example and the last element is the reduced counterexample.
     package var openPBTStatsLines: [OpenPBTStatsLine] = []
 
-    /// Summarizes per-phase invocation counts as a single line.
-    public var phaseSummary: String {
-        ""
-    }
-
     /// Summarizes profiling data as a single line.
     public var profilingSummary: String {
-        let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
         let graphLabel = graphStats.map {
             " graph=\($0.nodeCount)n/\($0.fullGraphRebuilds)r/\($0.dynamicRegionRebuilds)dr"
         } ?? ""
@@ -103,7 +97,7 @@ public struct ExhaustReport: Sendable {
             let pct = invocations > 0 ? accepted * 100 / invocations : 0
             return "\(name.rawValue)=i\(invocations)/a\(accepted)/c\(cacheRej)/d\(decRej)/\(pct)%"
         }.joined(separator: " ")
-        return "cycles=\(cycles) invocations=\(coverageInvocations)cov/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(phaseLabel)"
+        return "cycles=\(cycles) invocations=\(coverageInvocations)cov/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.

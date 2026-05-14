@@ -146,7 +146,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                     // Only suppress generic coverage when SCA ran its covering array to completion.
                     // When SCA was skipped, generic coverage is still needed.
                     let exhaustResult = __ExhaustRuntime.__exhaust(
-                        ReflectiveGenerator { commandSequenceGenerator },
+                        commandSequenceGenerator.wrapped,
                         settings: buildExhaustSettings(
                             samplingBudget: maxIter,
                             coverageBudget: covBudget,

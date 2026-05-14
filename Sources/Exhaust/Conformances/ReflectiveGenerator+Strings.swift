@@ -19,13 +19,13 @@ public extension ReflectiveGenerator {
         simplest: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
         guard let range else {
-            return ReflectiveGenerator<Character> { characterGenerator(from: defaultScalarRangeSet) }
+            return characterGenerator(from: defaultScalarRangeSet).wrapped
         }
         let lower = range.lowerBound.unicodeScalars.min()!
         let upper = range.upperBound.unicodeScalars.max()!
         let characterSet = CharacterSet(charactersIn: lower ... upper)
         let bottom = resolveSimplest(simplest, in: characterSet)
-        return ReflectiveGenerator<Character> { characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
+        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
     }
 
     /// Generates a random Unicode string with size-scaled or fixed length.
@@ -88,7 +88,7 @@ public extension ReflectiveGenerator {
         simplest: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
         let bottom = resolveSimplest(simplest, in: characterSet)
-        return ReflectiveGenerator<Character> { characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)) }
+        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
     }
 
     /// Generates a random character from the union of two or more ``CharacterSet``s.
@@ -203,13 +203,13 @@ private func stringGenerator(
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
     if let length {
-        return ReflectiveGenerator<[Character]> { Gen.arrayOf(charGen, within: length, scaling: scaling) }
+        return Gen.arrayOf(charGen, within: length, scaling: scaling).wrapped
             .mapped(
                 forward: { String($0) },
                 backward: { $0.unicodeScalars.map { Character($0) } }
             )
     }
-    return ReflectiveGenerator<[Character]> { Gen.arrayOf(charGen) }
+    return Gen.arrayOf(charGen).wrapped
         .mapped(
             forward: { String($0) },
             backward: { $0.unicodeScalars.map { Character($0) } }

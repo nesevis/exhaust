@@ -19,9 +19,7 @@ public extension ReflectiveGenerator {
     static func closedRange<Bound: Comparable & Sendable>(
         _ bounds: ReflectiveGenerator<Bound>
     ) -> ReflectiveGenerator<ClosedRange<Bound>> where Output == ClosedRange<Bound> {
-        ReflectiveGenerator<(Bound, Bound)> {
-            Gen.zip(bounds.gen, bounds.gen)
-        }.mapped(
+        Gen.zip(bounds.gen, bounds.gen).wrapped.mapped(
             forward: { first, second in
                 min(first, second) ... max(first, second)
             },
@@ -44,9 +42,7 @@ public extension ReflectiveGenerator {
     static func range<Bound: Comparable & Sendable>(
         _ bounds: ReflectiveGenerator<Bound>
     ) -> ReflectiveGenerator<Range<Bound>> where Output == Range<Bound> {
-        ReflectiveGenerator<(Bound, Bound)> {
-            Gen.zip(bounds.gen, bounds.gen)
-        }.mapped(
+        Gen.zip(bounds.gen, bounds.gen).wrapped.mapped(
             forward: { first, second in
                 min(first, second) ..< max(first, second)
             },

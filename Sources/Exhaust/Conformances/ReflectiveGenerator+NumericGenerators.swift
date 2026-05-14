@@ -23,23 +23,23 @@ import ExhaustCore
             in range: ClosedRange<Float16>? = nil,
             scaling: SizeScaling<Float16>? = nil
         ) -> ReflectiveGenerator<Float16> {
-            ReflectiveGenerator<Float16> {
-                if let range {
-                    return if let scaling {
-                        Gen.choose(in: range, scaling: scaling)
-                    } else if range == -Float16.greatestFiniteMagnitude ... Float16.greatestFiniteMagnitude {
-                        Gen.choose(in: range, scaling: Float16.defaultScaling)
-                    } else {
-                        Gen.choose(in: range)
-                    }
+            let generator: Generator<Float16> = if let range {
+                if let scaling {
+                    Gen.choose(in: range, scaling: scaling)
+                } else if range == -Float16.greatestFiniteMagnitude ... Float16.greatestFiniteMagnitude {
+                    Gen.choose(in: range, scaling: Float16.defaultScaling)
+                } else {
+                    Gen.choose(in: range)
                 }
-                return Gen.choose(
+            } else {
+                Gen.choose(
                     in: nil as ClosedRange<Float16>?,
                     type: Float16.self,
                     isRangeExplicit: false,
                     scaling: (scaling ?? Float16.defaultScaling).erased
                 )
             }
+            return generator.wrapped
         }
 
         /// Generates arbitrary `Float16` values within the given range.
@@ -64,23 +64,23 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Double>? = nil,
         scaling: SizeScaling<Double>? = nil
     ) -> ReflectiveGenerator<Double> {
-        ReflectiveGenerator<Double> {
-            if let range {
-                return if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude {
-                    Gen.choose(in: range, scaling: Double.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<Double> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude {
+                Gen.choose(in: range, scaling: Double.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
-            return Gen.choose(
+        } else {
+            Gen.choose(
                 in: nil as ClosedRange<Double>?,
                 type: Double.self,
                 isRangeExplicit: false,
                 scaling: (scaling ?? Double.defaultScaling).erased
             )
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary `Float` values within the given range.
@@ -94,23 +94,23 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Float>? = nil,
         scaling: SizeScaling<Float>? = nil
     ) -> ReflectiveGenerator<Float> {
-        ReflectiveGenerator<Float> {
-            if let range {
-                return if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude {
-                    Gen.choose(in: range, scaling: Float.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<Float> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude {
+                Gen.choose(in: range, scaling: Float.defaultScaling)
+            } else {
+                Gen.choose(in: range)
             }
-            return Gen.choose(
+        } else {
+            Gen.choose(
                 in: nil as ClosedRange<Float>?,
                 type: Float.self,
                 isRangeExplicit: false,
                 scaling: (scaling ?? Float.defaultScaling).erased
             )
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary `Float` values within the given range.
@@ -163,19 +163,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt8>? = nil,
         scaling: SizeScaling<UInt8>? = nil
     ) -> ReflectiveGenerator<UInt8> {
-        ReflectiveGenerator<UInt8> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == UInt8.min ... UInt8.max {
-                    Gen.choose(in: range, scaling: UInt8.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<UInt8> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == UInt8.min ... UInt8.max {
+                Gen.choose(in: range, scaling: UInt8.defaultScaling)
             } else {
-                Gen.choose(in: UInt8.min ... UInt8.max, scaling: scaling ?? UInt8.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: UInt8.min ... UInt8.max, scaling: scaling ?? UInt8.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -202,19 +201,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt16>? = nil,
         scaling: SizeScaling<UInt16>? = nil
     ) -> ReflectiveGenerator<UInt16> {
-        ReflectiveGenerator<UInt16> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == UInt16.min ... UInt16.max {
-                    Gen.choose(in: range, scaling: UInt16.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<UInt16> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == UInt16.min ... UInt16.max {
+                Gen.choose(in: range, scaling: UInt16.defaultScaling)
             } else {
-                Gen.choose(in: UInt16.min ... UInt16.max, scaling: scaling ?? UInt16.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: UInt16.min ... UInt16.max, scaling: scaling ?? UInt16.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -241,19 +239,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt32>? = nil,
         scaling: SizeScaling<UInt32>? = nil
     ) -> ReflectiveGenerator<UInt32> {
-        ReflectiveGenerator<UInt32> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == UInt32.min ... UInt32.max {
-                    Gen.choose(in: range, scaling: UInt32.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<UInt32> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == UInt32.min ... UInt32.max {
+                Gen.choose(in: range, scaling: UInt32.defaultScaling)
             } else {
-                Gen.choose(in: UInt32.min ... UInt32.max, scaling: scaling ?? UInt32.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: UInt32.min ... UInt32.max, scaling: scaling ?? UInt32.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -280,19 +277,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64>? = nil
     ) -> ReflectiveGenerator<UInt64> {
-        ReflectiveGenerator<UInt64> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == UInt64.min ... UInt64.max {
-                    Gen.choose(in: range, scaling: UInt64.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<UInt64> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == UInt64.min ... UInt64.max {
+                Gen.choose(in: range, scaling: UInt64.defaultScaling)
             } else {
-                Gen.choose(in: UInt64.min ... UInt64.max, scaling: scaling ?? UInt64.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: UInt64.min ... UInt64.max, scaling: scaling ?? UInt64.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -319,19 +315,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt>? = nil,
         scaling: SizeScaling<UInt>? = nil
     ) -> ReflectiveGenerator<UInt> {
-        ReflectiveGenerator<UInt> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == UInt.min ... UInt.max {
-                    Gen.choose(in: range, scaling: UInt.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<UInt> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == UInt.min ... UInt.max {
+                Gen.choose(in: range, scaling: UInt.defaultScaling)
             } else {
-                Gen.choose(in: UInt.min ... UInt.max, scaling: scaling ?? UInt.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: UInt.min ... UInt.max, scaling: scaling ?? UInt.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -362,19 +357,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int8>? = nil,
         scaling: SizeScaling<Int8>? = nil
     ) -> ReflectiveGenerator<Int8> {
-        ReflectiveGenerator<Int8> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == Int8.min ... Int8.max {
-                    Gen.choose(in: range, scaling: Int8.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<Int8> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == Int8.min ... Int8.max {
+                Gen.choose(in: range, scaling: Int8.defaultScaling)
             } else {
-                Gen.choose(in: Int8.min ... Int8.max, scaling: scaling ?? Int8.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: Int8.min ... Int8.max, scaling: scaling ?? Int8.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -397,19 +391,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int16>? = nil,
         scaling: SizeScaling<Int16>? = nil
     ) -> ReflectiveGenerator<Int16> {
-        ReflectiveGenerator<Int16> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == Int16.min ... Int16.max {
-                    Gen.choose(in: range, scaling: Int16.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<Int16> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == Int16.min ... Int16.max {
+                Gen.choose(in: range, scaling: Int16.defaultScaling)
             } else {
-                Gen.choose(in: Int16.min ... Int16.max, scaling: scaling ?? Int16.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: Int16.min ... Int16.max, scaling: scaling ?? Int16.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -432,19 +425,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int32>? = nil,
         scaling: SizeScaling<Int32>? = nil
     ) -> ReflectiveGenerator<Int32> {
-        ReflectiveGenerator<Int32> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == Int32.min ... Int32.max {
-                    Gen.choose(in: range, scaling: Int32.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<Int32> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == Int32.min ... Int32.max {
+                Gen.choose(in: range, scaling: Int32.defaultScaling)
             } else {
-                Gen.choose(in: Int32.min ... Int32.max, scaling: scaling ?? Int32.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: Int32.min ... Int32.max, scaling: scaling ?? Int32.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -467,19 +459,18 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int64>? = nil,
         scaling: SizeScaling<Int64>? = nil
     ) -> ReflectiveGenerator<Int64> {
-        ReflectiveGenerator<Int64> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == Int64.min ... Int64.max {
-                    Gen.choose(in: range, scaling: Int64.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<Int64> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == Int64.min ... Int64.max {
+                Gen.choose(in: range, scaling: Int64.defaultScaling)
             } else {
-                Gen.choose(in: Int64.min ... Int64.max, scaling: scaling ?? Int64.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: Int64.min ... Int64.max, scaling: scaling ?? Int64.defaultScaling)
         }
+        return generator.wrapped
     }
 
     /// Generates arbitrary values within the given range.
@@ -499,18 +490,17 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<Int> {
-        ReflectiveGenerator<Int> {
-            if let range {
-                if let scaling {
-                    Gen.choose(in: range, scaling: scaling)
-                } else if range == Int.min ... Int.max {
-                    Gen.choose(in: range, scaling: Int.defaultScaling)
-                } else {
-                    Gen.choose(in: range)
-                }
+        let generator: Generator<Int> = if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else if range == Int.min ... Int.max {
+                Gen.choose(in: range, scaling: Int.defaultScaling)
             } else {
-                Gen.choose(in: Int.min ... Int.max, scaling: scaling ?? Int.defaultScaling)
+                Gen.choose(in: range)
             }
+        } else {
+            Gen.choose(in: Int.min ... Int.max, scaling: scaling ?? Int.defaultScaling)
         }
+        return generator.wrapped
     }
 }

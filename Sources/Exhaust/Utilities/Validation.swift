@@ -5,6 +5,8 @@ import IssueReporting
 // MARK: - Types
 
 /// A report summarizing the results of generator validation.
+///
+/// This type is public because it appears in the return type of ``#examine``. Users inspect reports but do not construct them directly — validation is performed internally by the ``#examine`` macro.
 public struct ValidationReport: Sendable, CustomStringConvertible {
     /// Number of samples requested for the validation run.
     public let sampleCount: Int
@@ -78,6 +80,8 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
 }
 
 /// A specific validation failure detected during generator validation.
+///
+/// Public because it appears in ``ValidationReport/failures``. Users match cases to diagnose failures reported by ``#examine`` but do not construct instances directly.
 public enum ValidationFailure: Sendable, CustomStringConvertible {
     /// Indicates that reflecting and replaying a generated value produced a different result.
     case reflectionRoundTripMismatch(sampleIndex: Int, detail: String)

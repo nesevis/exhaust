@@ -91,7 +91,7 @@ package extension Gen {
         seed: Generator<State>,
         depthRange: ClosedRange<Int>,
         step: @escaping (State, UInt64) -> Generator<UnfoldStep<State, Output>>,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> Generator<Output> {

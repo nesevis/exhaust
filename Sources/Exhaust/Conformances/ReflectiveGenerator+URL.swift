@@ -19,43 +19,41 @@ public extension ReflectiveGenerator {
     ///
     /// - Returns: A generator producing valid `URL` values.
     static func url() -> ReflectiveGenerator<URL> {
-        ReflectiveGenerator<URL> {
-            let scheme: Generator<String> = Gen.pick(choices: [
-                (1, Gen.just("http")),
-                (1, Gen.just("https")),
-            ])
+        let scheme: Generator<String> = Gen.pick(choices: [
+            (1, Gen.just("http")),
+            (1, Gen.just("https")),
+        ])
 
-            let label = alphanumericString(length: 3 ... 10)
-            let host = Gen.arrayOf(label, within: 2 ... 3, scaling: .constant)
-                .map { $0.joined(separator: ".") }
+        let label = alphanumericString(length: 3 ... 10)
+        let host = Gen.arrayOf(label, within: 2 ... 3, scaling: .constant)
+            .map { $0.joined(separator: ".") }
 
-            let pathSegment = alphanumericString(length: 1 ... 8)
-            let path = Gen.arrayOf(pathSegment, within: 0 ... 3, scaling: .constant)
-                .map { segments in
-                    segments.isEmpty ? "" : "/" + segments.joined(separator: "/")
-                }
+        let pathSegment = alphanumericString(length: 1 ... 8)
+        let path = Gen.arrayOf(pathSegment, within: 0 ... 3, scaling: .constant)
+            .map { segments in
+                segments.isEmpty ? "" : "/" + segments.joined(separator: "/")
+            }
 
-            let queryKey = alphanumericString(length: 2 ... 6)
-            let queryValue = alphanumericString(length: 1 ... 8)
-            let queryPair = Gen.zip(queryKey, queryValue)
-                .map { "\($0)=\($1)" }
-            let query = Gen.arrayOf(queryPair, within: 0 ... 2, scaling: .constant)
-                .map { pairs in
-                    pairs.isEmpty ? "" : "?" + pairs.joined(separator: "&")
-                }
+        let queryKey = alphanumericString(length: 2 ... 6)
+        let queryValue = alphanumericString(length: 1 ... 8)
+        let queryPair = Gen.zip(queryKey, queryValue)
+            .map { "\($0)=\($1)" }
+        let query = Gen.arrayOf(queryPair, within: 0 ... 2, scaling: .constant)
+            .map { pairs in
+                pairs.isEmpty ? "" : "?" + pairs.joined(separator: "&")
+            }
 
-            return Gen.liftF(.transform(
-                kind: .map(
-                    forward: { tuple in
-                        let (scheme, host, path, query) = tuple as! (String, String, String, String)
-                        return URL(string: "\(scheme)://\(host)\(path)\(query)")!
-                    },
-                    inputType: (String, String, String, String).self,
-                    outputType: URL.self
-                ),
-                inner: Gen.zip(scheme, host, path, query).erase()
-            ))
-        }
+        return Gen.liftF(.transform(
+            kind: .map(
+                forward: { tuple in
+                    let (scheme, host, path, query) = tuple as! (String, String, String, String)
+                    return URL(string: "\(scheme)://\(host)\(path)\(query)")!
+                },
+                inputType: (String, String, String, String).self,
+                outputType: URL.self
+            ),
+            inner: Gen.zip(scheme, host, path, query).erase()
+        )).wrapped
     }
 }
 

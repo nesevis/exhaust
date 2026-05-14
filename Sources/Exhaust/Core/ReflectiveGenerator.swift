@@ -27,9 +27,9 @@ import ExhaustCore
 public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     package let gen: Generator<Output>
 
-    /// Wraps a generator-producing closure, evaluating it immediately.
-    package init(_ gen: () throws -> Generator<Output>) rethrows {
-        self.gen = try gen()
+    /// Wraps an already-constructed generator.
+    package init(_ gen: Generator<Output>) {
+        self.gen = gen
     }
 
     /// Chains this generator with a dependent generator whose structure depends on the produced value.
@@ -40,23 +40,21 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     /// - Returns: A generator that sequences the two computations.
     public func bind<NewOutput>(
         _ transform: @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
-        fileID: String = #fileID,
+        fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        ReflectiveGenerator<NewOutput> {
-            let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-            return Gen.liftF(.transform(
-                kind: .bind(
-                    fingerprint: fingerprint,
-                    forward: { try transform($0 as! Output).gen.erase() },
-                    backward: nil,
-                    inputType: Output.self,
-                    outputType: NewOutput.self
-                ),
-                inner: gen.erase()
-            ))
-        }
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                forward: { try transform($0 as! Output).gen.erase() },
+                backward: nil,
+                inputType: Output.self,
+                outputType: NewOutput.self
+            ),
+            inner: gen.erase()
+        )).wrapped
     }
 
     /// Applies a forward-only transform to the generated value.
@@ -72,16 +70,23 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     public func map<NewOutput>(
         _ transform: @escaping (Output) throws -> NewOutput
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        ReflectiveGenerator<NewOutput> {
-            Gen.liftF(.transform(
-                kind: .map(
-                    forward: { try transform($0 as! Output) },
-                    inputType: Output.self,
-                    outputType: NewOutput.self
-                ),
-                inner: gen.erase()
-            ))
-        }
+        Gen.liftF(.transform(
+            kind: .map(
+                forward: { try transform($0 as! Output) },
+                inputType: Output.self,
+                outputType: NewOutput.self
+            ),
+            inner: gen.erase()
+        )).wrapped
+    }
+}
+
+// MARK: - Generator → ReflectiveGenerator
+
+package extension FreerMonad where Operation == ReflectiveOperation {
+    /// Wraps this generator in a ``ReflectiveGenerator``.
+    var wrapped: ReflectiveGenerator<Value> {
+        ReflectiveGenerator(self)
     }
 }
 

@@ -34,7 +34,7 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Output> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         return recursive(
-            base: ReflectiveGenerator { Gen.just(base) },
+            base: Gen.just(base).wrapped,
             depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound),
             extend: extend
         )
@@ -66,7 +66,7 @@ public extension ReflectiveGenerator {
         depthRange: ClosedRange<UInt64>,
         extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        recursive(base: ReflectiveGenerator { Gen.just(base) }, depthRange: depthRange, extend: extend)
+        recursive(base: Gen.just(base).wrapped, depthRange: depthRange, extend: extend)
     }
 
     /// Creates a recursive generator with a generator base case and a reducible depth range.
@@ -114,15 +114,13 @@ public extension ReflectiveGenerator {
         depthRange: ClosedRange<UInt64>,
         extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        ReflectiveGenerator {
-            // Bridge the Sendable boundary: Gen.recursive is internal and provides a non-Sendable
-            // recurse thunk. The public API requires @Sendable on the thunk so users can capture it
-            // in #gen(...) closures. The wrap is safe because Generator is @unchecked Sendable.
-            Gen.recursive(base: base.gen, depthRange: depthRange) { recurse, remaining in
-                nonisolated(unsafe) let capturedRecurse = recurse
-                let sendableRecurse: @Sendable () -> ReflectiveGenerator<Output> = { ReflectiveGenerator { capturedRecurse() } }
-                return extend(sendableRecurse, remaining).gen
-            }
-        }
+        // Bridge the Sendable boundary: Gen.recursive is internal and provides a non-Sendable
+        // recurse thunk. The public API requires @Sendable on the thunk so users can capture it
+        // in #gen(...) closures. The wrap is safe because Generator is @unchecked Sendable.
+        Gen.recursive(base: base.gen, depthRange: depthRange) { recurse, remaining in
+            nonisolated(unsafe) let capturedRecurse = recurse
+            let sendableRecurse: @Sendable () -> ReflectiveGenerator<Output> = { capturedRecurse().wrapped }
+            return extend(sendableRecurse, remaining).gen
+        }.wrapped
     }
 }
