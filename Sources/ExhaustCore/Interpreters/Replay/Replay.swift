@@ -709,5 +709,23 @@ extension Interpreters {
         case wrongInputChoice
         /// No branch in a pick or filter site produced a valid value during replay.
         case noSuccessfulBranch
+
+        var errorDescription: String? {
+            switch self {
+            case .wrongInputChoice:
+                "Replay encountered a choice tree node that does not match the generator's expected operation at this position."
+            case .noSuccessfulBranch:
+                "Replay could not find a valid value among the pick branches for the stored choice."
+            }
+        }
+
+        var recoverySuggestion: String? {
+            switch self {
+            case .wrongInputChoice:
+                "This usually means the generator structure changed after the choice sequence was recorded. Re-run the property to generate a fresh counterexample."
+            case .noSuccessfulBranch:
+                "This can happen when a filter predicate or pick branch set changed since the choice sequence was recorded. Re-run the property to generate a fresh counterexample."
+            }
+        }
     }
 }

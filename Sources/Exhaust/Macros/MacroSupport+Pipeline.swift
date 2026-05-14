@@ -291,7 +291,7 @@ package extension __ExhaustRuntime {
         }
         } catch {
             reportIssue(
-                "\(error)",
+                localizedErrorMessage(error),
                 fileID: context.fileID,
                 filePath: context.filePath,
                 line: context.line,
@@ -389,7 +389,7 @@ package extension __ExhaustRuntime {
             }
         } catch {
             reportIssue(
-                "\(error)",
+                localizedErrorMessage(error),
                 fileID: context.fileID,
                 filePath: context.filePath,
                 line: context.line,

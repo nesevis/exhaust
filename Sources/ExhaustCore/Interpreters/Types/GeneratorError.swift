@@ -9,8 +9,8 @@ import Foundation
 
 /// Errors thrown during generator interpretation (forward, backward, or replay passes).
 public enum GeneratorError: LocalizedError {
-    /// The forward interpreter failed to produce a ``ChoiceTree`` alongside the generated value.
-    case couldNotGenerateConcomitantChoiceTree
+    /// The forward interpreter produced a value but failed to build the corresponding ``ChoiceTree``.
+    case choiceTreeConstructionFailed
     /// A generic type mismatch during interpretation.
     case typeMismatch(expected: String, actual: String)
     /// A filter's validity condition was too sparse for the generator to satisfy within its retry budget.
@@ -20,14 +20,27 @@ public enum GeneratorError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .couldNotGenerateConcomitantChoiceTree:
-            "Could not generate concomitant choice tree"
+        case .choiceTreeConstructionFailed:
+            "Generation produced a value but failed to construct the corresponding choice tree."
         case let .typeMismatch(expected, actual):
-            "Type mismatch: expected \(expected), got \(actual)"
+            "Type mismatch during interpretation: expected '\(expected)', got '\(actual)'."
         case .sparseValidityCondition:
-            "Sparse validity condition"
+            "The filter predicate rejected too many candidates within the retry budget."
         case .uniqueBudgetExhausted:
-            "Unique combinator exhausted retry budget without finding a new unique value"
+            "The unique combinator could not find a new distinct value within its retry budget."
+        }
+    }
+
+    public var recoverySuggestion: String? {
+        switch self {
+        case .choiceTreeConstructionFailed:
+            "This likely indicates a generator composition issue. Check that sub-generators return non-nil values for the current choice sequence."
+        case .typeMismatch:
+            "This likely indicates a generator composition issue. Verify that map, bind, and contramap closures produce values of the declared type."
+        case .sparseValidityCondition:
+            "Widen the input generator's range, relax the filter predicate, or increase the filter budget."
+        case .uniqueBudgetExhausted:
+            "Reduce the number of unique values requested, widen the generator's domain, or increase the retry budget."
         }
     }
 }

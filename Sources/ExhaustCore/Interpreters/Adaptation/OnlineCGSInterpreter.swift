@@ -992,7 +992,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 cgsState: &cgsState,
                 derivativeContext: componentContext
             ) else {
-                throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+                throw GeneratorError.choiceTreeConstructionFailed
             }
             results.append(result)
         }

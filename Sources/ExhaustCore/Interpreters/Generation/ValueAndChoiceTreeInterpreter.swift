@@ -533,7 +533,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     context: &context
                 )
             else {
-                throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+                throw GeneratorError.choiceTreeConstructionFailed
             }
             let tree = ChoiceTree.branch(
                 fingerprint: fingerprint,
@@ -612,7 +612,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         }
 
         guard let value = finalValue else {
-            throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+            throw GeneratorError.choiceTreeConstructionFailed
         }
 
         return (value, .group(branches))
@@ -728,7 +728,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 with: inputValue,
                 context: &context
             ) else {
-                throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+                throw GeneratorError.choiceTreeConstructionFailed
             }
             results.append(result)
             choiceTrees.append(tree)

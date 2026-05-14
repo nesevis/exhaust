@@ -55,7 +55,7 @@ public enum ReflectionError: LocalizedError, Equatable {
             case let .pickValueIsNotEquatable(type):
                 "Pick branch value of type '\(type)' lacks Equatable conformance required for reflection matching."
             case let .inputWasOutOfGeneratorRange(value, range):
-                "Reflected bit pattern for '\(value)' falls outside the declared range \(range)"
+                "Reflected value '\(value)' falls outside the declared range \(range)"
             case let .forwardOnlyMap(inputType, outputType):
                 "Reflection failed: forward-only map (\(inputType) -> \(outputType)) detected."
             case let .forwardOnlyBind(inputType, outputType):
