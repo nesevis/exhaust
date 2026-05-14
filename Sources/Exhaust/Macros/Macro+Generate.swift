@@ -1,4 +1,3 @@
-
 /// Combines generators through a transform closure, synthesizing a bidirectional backward mapping when possible.
 ///
 /// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro synthesizes a `Mirror`-based backward mapping automatically. When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
@@ -41,4 +40,3 @@ public macro gen<GeneratedValue>(
 public macro gen<each GeneratedValue>(
     _ generators: repeat ReflectiveGenerator<each GeneratedValue>
 ) -> ReflectiveGenerator<(repeat each GeneratedValue)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
-

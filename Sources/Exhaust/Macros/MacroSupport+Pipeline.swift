@@ -435,8 +435,8 @@ package extension __ExhaustRuntime {
 
     // MARK: - Reflecting
 
-    /// Reduces a counterexample using reflection to seed the reducer.
     // swiftlint:disable:next function_parameter_count
+    /// Reduces a counterexample using reflection to seed the reducer.
     static func __reduceReflected<Output>(
         _ gen: Generator<Output>,
         value: Output,

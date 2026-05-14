@@ -44,4 +44,3 @@ package struct TypeCompatibilityEdge: Equatable {
     /// The shared ``TypeTag`` that makes these nodes compatible, or nil for sequence-to-sequence edges matched by element generator identity.
     package let typeTag: TypeTag?
 }
-

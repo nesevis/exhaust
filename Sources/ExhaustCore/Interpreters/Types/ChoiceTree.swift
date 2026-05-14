@@ -387,7 +387,6 @@ extension ChoiceTree: CustomDebugStringConvertible {
         }
     }
 
-
     /// Returns the branch identifier if this node is a `.branch`, or `nil` otherwise.
     public var branchId: UInt64? {
         if case let .branch(b) = self {

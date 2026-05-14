@@ -3,8 +3,6 @@
 //  Exhaust
 //
 
-import ExhaustCore
-
 public extension ReflectiveGenerator {
     /// Creates a generator that always produces the same constant value.
     ///

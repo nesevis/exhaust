@@ -28,7 +28,7 @@ func registerCGSBenchmarks() {
                 maxRuns: 10000
             )
             do {
-                if let _ = try iterator.next() {
+                if try iterator.next() != nil {
                     totalIterations += 1
                 }
             } catch {}

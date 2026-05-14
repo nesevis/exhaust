@@ -1,4 +1,3 @@
-
 /// Runs a classification-aware property test that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
 /// Given a list of named directions (predicate-labeled regions of the output space), `#explore` tunes the generator per direction, draws K samples per direction, and reports per-direction coverage alongside cross-direction overlap and diagnostic findings.

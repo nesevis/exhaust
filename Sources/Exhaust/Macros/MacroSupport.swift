@@ -15,8 +15,7 @@ import IssueReporting
     @_weakLinked import Testing
 #endif
 
-/// Provides runtime support for `#exhaust`, `#explore`, and `#examine` macro expansions.
-public enum __ExhaustRuntime { // swiftlint:disable:this type_name
+extension __ExhaustRuntime {
     /// Thrown by the detection closure when a rewritten `#expect`/`#require` fails.
     ///
     /// This is a plain error — not a Swift Testing issue — so it produces no test output.
