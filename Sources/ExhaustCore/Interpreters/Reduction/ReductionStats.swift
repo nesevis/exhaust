@@ -1,7 +1,7 @@
 /// Statistics collected from a single reduction run.
 ///
 /// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionMachine`` during reduction and extracted at the end of the pipeline.
-package struct ReductionStats: Sendable {
+public struct ReductionStats: Sendable {
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
     package var encoderProbes: [EncoderName: Int]
 
@@ -54,22 +54,22 @@ extension ReductionStats {
     /// Aggregate wall-time spent in each ``ReductionMachine`` step category.
     ///
     /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
-    package struct StepTimings: Sendable {
-        package var dispatch: UInt64 = 0
-        package var buildSources: UInt64 = 0
-        package var encode: UInt64 = 0
-        package var decode: UInt64 = 0
-        package var rebuild: UInt64 = 0
-        package var convergenceConfirmation: UInt64 = 0
-        package var relaxRound: UInt64 = 0
-        package var reorder: UInt64 = 0
+    public struct StepTimings: Sendable {
+        public var dispatch: UInt64 = 0
+        public var buildSources: UInt64 = 0
+        public var encode: UInt64 = 0
+        public var decode: UInt64 = 0
+        public var rebuild: UInt64 = 0
+        public var convergenceConfirmation: UInt64 = 0
+        public var relaxRound: UInt64 = 0
+        public var reorder: UInt64 = 0
 
-        package var dispatchCount: Int = 0
-        package var encodeCount: Int = 0
-        package var decodeCount: Int = 0
-        package var rebuildCount: Int = 0
-        package var rebuildGraphNanoseconds: UInt64 = 0
-        package var rebuildSourceNanoseconds: UInt64 = 0
+        public var dispatchCount: Int = 0
+        public var encodeCount: Int = 0
+        public var decodeCount: Int = 0
+        public var rebuildCount: Int = 0
+        public var rebuildGraphNanoseconds: UInt64 = 0
+        public var rebuildSourceNanoseconds: UInt64 = 0
 
         package init() {}
 
