@@ -438,7 +438,7 @@ extension GeneratorTuning {
                 // Feed the size into the original getSize continuation to produce the actual length generator, then build the sequence
                 let subSeqGen: AnyGenerator = try .impure(
                     operation: .sequence(
-                        length: subSizeGen._bindReified(getSizeContinuation),
+                        length: subSizeGen.bindReified(getSizeContinuation),
                         gen: elementGen
                     ),
                     continuation: { .pure($0) }

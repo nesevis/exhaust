@@ -100,9 +100,9 @@ package extension Gen {
             state: Generator<State>,
             remaining: UInt64
         ) -> Generator<Output> {
-            state._bindReified(
+            state.bindReified(
                 { currentState in
-                    step(currentState, remaining)._bindReified(
+                    step(currentState, remaining).bindReified(
                         { result in
                             switch result {
                             case let .done(output):

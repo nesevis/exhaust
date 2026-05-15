@@ -321,7 +321,7 @@ struct ExamineFirstPartyGeneratorsTests {
     // MARK: - Collections: slice
 
     @Test func sliceOfGenerator() {
-        withKnownIssue("slice(of: gen) uses a forward-only _bind — reflection not supported") {
+        withKnownIssue("slice(of: gen) uses a forward-only bind — reflection not supported") {
             let report = #examine(
                 #gen(.slice(of: .int(in: 0 ... 50).array(length: 3 ... 6))),
                 samples: 30

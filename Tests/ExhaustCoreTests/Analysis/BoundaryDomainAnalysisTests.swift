@@ -229,10 +229,10 @@ struct ChoiceTreeAnalysisTests {
         // analyzeContinuation rejects .impure continuations. But the ChoiceTree
         // walker sees through it because VACTI evaluates the full chain.
         let gen: Generator<(UInt8, UInt8)> = Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>)
-            ._bindReified { _ in
+            .bindReified { _ in
                 Gen.choose(in: 0 ... 20 as ClosedRange<UInt8>).map { y in y }
             }
-            ._bindReified { y in
+            .bindReified { y in
                 Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>).map { x in (x, y) }
             }
 

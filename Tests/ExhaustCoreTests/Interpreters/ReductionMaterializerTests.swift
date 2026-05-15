@@ -98,7 +98,7 @@ struct ReductionMaterializerTests {
     @Test("Exact mode replays bound values from prefix without suspension")
     func exactBindReplayWithoutSuspension() throws {
         // bind { n in Gen.choose(in: 0 ... n) } where inner generates n
-        let gen: Generator<Int> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bindReified { n in
+        let gen: Generator<Int> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>).bindReified { n in
             Gen.choose(in: 0 ... max(0, n) as ClosedRange<Int>)
         }
 
@@ -125,7 +125,7 @@ struct ReductionMaterializerTests {
         // bind { n in Gen.choose(in: 0 ... n) } using UInt64 to avoid bit-pattern offset.
         // If inner was 10 (bound value was 8), then inner drops to 5,
         // the bound value 8 should clamp to 5.
-        let gen: Generator<UInt64> = Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>)._bindReified { n in
+        let gen: Generator<UInt64> = Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>).bindReified { n in
             Gen.choose(in: 0 ... max(1, n) as ClosedRange<UInt64>)
         }
 
@@ -197,7 +197,7 @@ struct ReductionMaterializerTests {
 
     @Test("Guided mode suspends cursor for bind bound region")
     func guidedCursorSuspension() throws {
-        let gen: Generator<Int> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bindReified { n in
+        let gen: Generator<Int> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>).bindReified { n in
             Gen.choose(in: 0 ... max(0, n) as ClosedRange<Int>)
         }
 
@@ -337,7 +337,7 @@ struct ReductionMaterializerTests {
     @Test("Bind-dependent generator produces fresh validRange after inner value change")
     func freshValidRangeForBindDependent() throws {
         // bind { n in Gen.choose(in: 0 ... n) } using UInt64.
-        let gen: Generator<UInt64> = Gen.choose(in: 1 ... 100 as ClosedRange<UInt64>)._bindReified { n in
+        let gen: Generator<UInt64> = Gen.choose(in: 1 ... 100 as ClosedRange<UInt64>).bindReified { n in
             Gen.choose(in: 0 ... max(1, n) as ClosedRange<UInt64>)
         }
 

@@ -333,7 +333,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                         let subSeqGen: AnyGenerator = try .impure(
                             operation: .sequence(
-                                length: subSizeGen._bindReified(getSizeContinuation),
+                                length: subSizeGen.bindReified(getSizeContinuation),
                                 gen: subdividedElement
                             ),
                             continuation: { .pure($0) }

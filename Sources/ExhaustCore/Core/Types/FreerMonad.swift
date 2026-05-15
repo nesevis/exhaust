@@ -30,7 +30,7 @@ public indirect enum FreerMonad<Operation, Value> { // NOTE: The entire enum is 
 package extension FreerMonad {
     /// Sequences two computations; uses the result of this one to determine the next.
     ///
-    /// For `.pure`, applies the transform immediately. For `.impure`, extends the continuation chain so the transform runs after the operation is interpreted. This is the invisible plumbing behind every generator combinator: `Gen.arrayOf`, `Gen.pick`, and `Gen.zip` all compose via `_bind`.
+    /// For `.pure`, applies the transform immediately. For `.impure`, extends the continuation chain so the transform runs after the operation is interpreted. This is the invisible plumbing behind every generator combinator: `Gen.arrayOf`, `Gen.pick`, and `Gen.zip` all compose via `bind`.
     ///
     /// - Parameter transform: A function that takes the current value and produces a new computation.
     /// - Returns: A new computation representing the sequenced effects.
@@ -48,7 +48,7 @@ package extension FreerMonad {
 
     /// Transforms the eventual result without introducing new effects.
     ///
-    /// Unlike `_bind`, which can introduce additional operations, `_map` only changes the value at the end of the chain. The effect structure (which operations run, in what order) remains unchanged. This is the invisible `_map` that powers `Gen.contramap` and the macro's backward-mapping infrastructure.
+    /// Unlike ``bind(_:)``, which can introduce additional operations, `map` only changes the value at the end of the chain. The effect structure (which operations run, in what order) remains unchanged. This is the invisible `map` that powers `Gen.contramap` and the macro's backward-mapping infrastructure.
     ///
     /// - Parameter transform: A pure function to apply to the final value.
     /// - Returns: A computation that produces the transformed value.

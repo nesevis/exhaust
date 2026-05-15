@@ -229,7 +229,7 @@ package enum ReflectiveOperation {
 
     /// Reifies a forward-only `map` or `bind` as inspectable data visible to interpreters and analysis passes.
     ///
-    /// Structural dual of ``contramap``: contramap transforms the backward (input) side; transform transforms the forward (output) side. Because the transform function is not invertible, reflection through a `.transform` fails with a diagnostic error. For bidirectional transforms, use `mapped(forward:backward:)`, which pairs a contramap with an invisible `_map` — no `.transform` operation is created.
+    /// Structural dual of ``contramap``: contramap transforms the backward (input) side; transform transforms the forward (output) side. Because the transform function is not invertible, reflection through a `.transform` fails with a diagnostic error. For bidirectional transforms, use `mapped(forward:backward:)`, which pairs a contramap with an invisible `map` — no `.transform` operation is created.
     ///
     /// Forward-only transforms do not degrade reduction. The reducer operates on choice sequences, not on reflected values, so a non-invertible output transform has no effect on shrinking quality.
     ///
