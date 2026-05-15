@@ -83,6 +83,7 @@ extension __ExhaustRuntime {
                 var suppressLogs = false
                 var useRandomOnly = false
                 var visualize = false
+                var includeDiff = false
                 var onReportClosure: ((ExhaustReport) -> Void)?
                 var collectOpenPBTStats = false
                 var logLevel: LogLevel = .error
@@ -130,6 +131,8 @@ extension __ExhaustRuntime {
                         }
                     case .collectOpenPBTStats:
                         collectOpenPBTStats = true
+                    case .includeDiff:
+                        includeDiff = true
                     case let .logging(level, format):
                         logLevel = level
                         logFormat = format
@@ -148,7 +151,12 @@ extension __ExhaustRuntime {
 
                     let samplingBudget = budget.samplingBudget
                     let coverageBudget = budget.coverageBudget
-                    let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
+                    let totalBudget = coverageBudget + samplingBudget
+                    let reductionDeadlineNanoseconds = UInt64(totalBudget) * 5 * 1_000_000
+                    let reductionConfig = Interpreters.ReducerConfiguration(
+                        maxStalls: 2,
+                        wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
+                    )
 
                     var report = ExhaustReport()
                     defer { onReportClosure?(report) }
@@ -191,6 +199,7 @@ extension __ExhaustRuntime {
                         reductionConfig: reductionConfig,
                         visualize: visualize,
                         suppressIssueReporting: suppressIssueReporting,
+                        includeDiff: includeDiff,
                         sourceCode: sourceCode,
                         logFormat: logFormat,
                         fileID: fileID,
@@ -208,6 +217,7 @@ extension __ExhaustRuntime {
                                 reductionConfig: reductionConfig,
                                 visualize: visualize,
                                 suppressIssueReporting: suppressIssueReporting,
+                                includeDiff: includeDiff,
                                 sourceCode: sourceCode,
                                 fileID: fileID,
                                 filePath: filePath,
@@ -217,7 +227,7 @@ extension __ExhaustRuntime {
                                 report: &report
                             )
                         } catch {
-                            reportIssue("\(error)", fileID: fileID, filePath: filePath, line: line, column: column)
+                            reportIssue(localizedErrorMessage(error), fileID: fileID, filePath: filePath, line: line, column: column)
                             return reflecting
                         }
                     }

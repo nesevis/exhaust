@@ -80,6 +80,9 @@ public struct ExhaustReport: Sendable {
     /// Per-step aggregate wall-time from the reduction state machine. `nil` when the reduction phase did not run or stats collection was disabled.
     package var stepTimings: ReductionStats.StepTimings?
 
+    /// True when the reduction phase was terminated early by the wall-clock deadline. The counterexample may not be fully reduced.
+    package var reductionWasCapped: Bool = false
+
     /// OpenPBTStats records captured during the run.
     ///
     /// Empty when ``ExhaustSettings/collectOpenPBTStats`` is disabled or the run produced no records. Populated whenever stats collection is enabled, independent of whether the host exposes Swift Testing or XCTest. When a test framework is available, the same records — encoded as JSONL via ``Swift/Sequence/jsonlString()`` — are also attached to the running test. For failing runs, the second-to-last element is the failing example and the last element is the reduced counterexample.
@@ -103,14 +106,15 @@ public struct ExhaustReport: Sendable {
         let timingLabel: String
         if let timings = stepTimings {
             let dispMs = Double(timings.dispatch) / 1_000_000
+            let srcMs = Double(timings.buildSources) / 1_000_000
             let encMs = Double(timings.encode) / 1_000_000
             let decMs = Double(timings.decode) / 1_000_000
             let rebMs = Double(timings.rebuild) / 1_000_000
             let ccMs = Double(timings.convergenceConfirmation) / 1_000_000
             let rlxMs = Double(timings.relaxRound) / 1_000_000
             let reordMs = Double(timings.reorder) / 1_000_000
-            let totalMs = dispMs + encMs + decMs + rebMs + ccMs + rlxMs + reordMs
-            timingLabel = " timing=\(String(format: "%.2f", totalMs))ms(disp=\(String(format: "%.2f", dispMs))/enc=\(String(format: "%.2f", encMs))/dec=\(String(format: "%.2f", decMs))/reb=\(String(format: "%.2f", rebMs))/cc=\(String(format: "%.2f", ccMs))/rlx=\(String(format: "%.2f", rlxMs))/reord=\(String(format: "%.2f", reordMs)))"
+            let totalMs = srcMs + dispMs + encMs + decMs + rebMs + ccMs + rlxMs + reordMs
+            timingLabel = " timing=\(String(format: "%.2f", totalMs))ms(src=\(String(format: "%.2f", srcMs))/disp=\(String(format: "%.2f", dispMs))/enc=\(String(format: "%.2f", encMs))/dec=\(String(format: "%.2f", decMs))/reb=\(String(format: "%.2f", rebMs))/cc=\(String(format: "%.2f", ccMs))/rlx=\(String(format: "%.2f", rlxMs))/reord=\(String(format: "%.2f", reordMs)))"
         } else {
             timingLabel = ""
         }
@@ -128,5 +132,6 @@ public struct ExhaustReport: Sendable {
         filterObservations = stats.filterObservations
         graphStats = stats.graphStats
         stepTimings = stats.stepTimings
+        reductionWasCapped = stats.reductionWasCapped
     }
 }

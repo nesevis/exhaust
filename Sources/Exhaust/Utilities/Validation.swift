@@ -1,5 +1,6 @@
 import CustomDump
 import ExhaustCore
+import Foundation
 import IssueReporting
 
 // MARK: - Types
@@ -274,7 +275,7 @@ private extension Generator where Operation == ReflectiveOperation {
                             ))
                         }
                     }
-                } catch let error as Interpreters.ReflectionError {
+                } catch let error as ReflectionError {
                     switch error {
                     case let .forwardOnlyMap(inputType, outputType):
                         failures.append(.forwardOnlyTransform(
@@ -293,7 +294,7 @@ private extension Generator where Operation == ReflectiveOperation {
                     default:
                         failures.append(.reflectionFailed(
                             sampleIndex: sampleIndex,
-                            errorDescription: "\(error)"
+                            errorDescription: localizedErrorMessage(error)
                         ))
                     }
                 } catch {
@@ -397,4 +398,13 @@ private extension Generator where Operation == ReflectiveOperation {
 
         return report
     }
+}
+
+func localizedErrorMessage(_ error: any Error) -> String {
+    guard let localized = error as? LocalizedError else {
+        return "\(error)"
+    }
+    return [localized.errorDescription, localized.recoverySuggestion]
+        .compactMap(\.self)
+        .joined(separator: "\n\n")
 }

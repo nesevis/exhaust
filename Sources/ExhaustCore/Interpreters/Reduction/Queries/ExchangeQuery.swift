@@ -204,7 +204,6 @@ enum ExchangeQuery {
         graph: ChoiceGraph,
         innerDescendantToBind: [Int: Int]
     ) -> [RedistributionPair] {
-        // Collect non-bind-inner leaves with position and distance.
         var leaves: [(nodeID: Int, position: Int, distance: UInt64)] = []
         for childID in childIDs {
             guard QueryHelpers.isBindInner(childID, innerDescendantToBind: innerDescendantToBind) == false else { continue }
@@ -218,13 +217,11 @@ enum ExchangeQuery {
         }
         guard leaves.count >= 2 else { return [] }
 
-        // Sort by position for the shortlex ordering constraint.
         leaves.sort { $0.position < $1.position }
 
         var pairs: [RedistributionPair] = []
         for index in 0 ..< leaves.count {
             guard leaves[index].distance > 0 else { continue }
-            // Pair with the first later-position leaf (bind-inner leaves were already filtered above).
             if index + 1 < leaves.count {
                 pairs.append(RedistributionPair(
                     source: QueryHelpers.makeLeafEntry(leaves[index].nodeID, innerDescendantToBind: innerDescendantToBind),

@@ -321,18 +321,19 @@ extension Interpreters {
         let bitPattern = convertibleValue.bitPattern64
         if isRangeExplicit, (min ... max).contains(bitPattern) == false {
             // Float types: allow NaN/infinity through so boundary coverage counterexamples are reflectable, but enforce the range for finite values.
+            let range = ChoiceValue(bitPattern, tag: tag).displayRange(min ... max)
             if tag.isFloatingPoint {
                 let numericValue = tag.numericDoubleValue(forBitPattern: bitPattern)
                 if numericValue.isFinite {
                     throw ReflectionError.inputWasOutOfGeneratorRange(
                         String(describing: convertibleValue),
-                        min ... max
+                        range: range
                     )
                 }
             } else {
                 throw ReflectionError.inputWasOutOfGeneratorRange(
                     String(describing: convertibleValue),
-                    min ... max
+                    range: range
                 )
             }
         }
@@ -439,48 +440,5 @@ extension Interpreters {
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
-    }
-
-    /// Errors thrown by the reflection interpreter when a value cannot be mapped back to its choice tree.
-    public enum ReflectionError: LocalizedError, Equatable {
-        /// Indicates that the target value is `nil` but the generator does not produce an optional type.
-        case reflectedNil(type: String, resultType: String)
-        /// Indicates that the contramap backward function received a value of unexpected type.
-        case contramapWasWrongType
-        /// Indicates that the zip target has wrong arity or element types for the declared generators.
-        case zipWasWrongLengthOrType
-        /// Indicates that none of the pick branches could produce a value matching the target.
-        case couldNotMapInputToGenerator
-        /// Indicates that the target value cannot be encoded as a bit pattern for the declared ``TypeTag``.
-        case chooseBitsCouldNotConvertValue(String)
-        /// Indicates that the target value for a sequence operation is not a valid collection.
-        case inputWasWrongForSequence(String)
-        /// Indicates that an individual element within a sequence could not be reflected through the element generator.
-        case couldNotReflectOnSequenceElement(String)
-        /// Indicates that a pick branch value lacks the ``Equatable`` conformance needed to match against the target.
-        case pickValueIsNotEquatable(String)
-        /// Indicates that the reflected bit pattern falls outside the declared chooseBits range.
-        case inputWasOutOfGeneratorRange(String, ClosedRange<UInt64>)
-        /// Reflection failed because a forward-only `map` was detected.
-        /// Use `.mapped(forward:backward:)` instead to enable bidirectional operation.
-        case forwardOnlyMap(inputType: String, outputType: String)
-        /// Reflection failed because a forward-only `bind` was detected.
-        case forwardOnlyBind(inputType: String, outputType: String)
-        /// Reflection failed because a metamorphic transform was detected.
-        /// Metamorph transforms are forward-only and cannot be reflected backward.
-        case forwardOnlyMetamorph
-
-        public var errorDescription: String? {
-            switch self {
-            case let .forwardOnlyMap(inputType, outputType):
-                "Reflection failed — forward-only map (\(inputType) → \(outputType)) detected. Consider using .mapped(forward:backward:) instead."
-            case let .forwardOnlyBind(inputType, outputType):
-                "Reflection failed — forward-only bind (\(inputType) → \(outputType)) detected."
-            case .forwardOnlyMetamorph:
-                "Reflection failed — metamorphic transforms are forward-only and cannot be reflected backward."
-            default:
-                nil
-            }
-        }
     }
 }

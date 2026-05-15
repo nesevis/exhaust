@@ -89,8 +89,7 @@ extension ReductionMachine {
             }
             let graphBefore = graph
             _ = rebuildAndUpdateGraph()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore, previousReplacementScopes: cachedReplacementScopes)
-            cachedReplacementScopes = extractReplacementScopes(from: sources)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
             graphIsStripped = false
             return .dispatched(decision: .rematerialized)
 
@@ -262,6 +261,13 @@ extension ReductionMachine {
                 encoder.refreshState(graph: graph, sequence: sequence)
             }
 
+            if isDeadlineExceeded() {
+                activeEncoder = nil
+                stats.reductionWasCapped = true
+                phase = .reorderPass
+                return .decoded(encoder: encoderName, accepted: true)
+            }
+
             activeEncoder = encoder
             dispatchPhase = .encode
             return .decoded(encoder: encoderName, accepted: true)
@@ -281,6 +287,13 @@ extension ReductionMachine {
         }
 
         countMaterialization()
+
+        if isDeadlineExceeded() {
+            activeEncoder = nil
+            stats.reductionWasCapped = true
+            phase = .reorderPass
+            return .decoded(encoder: encoderName, accepted: false)
+        }
 
         activeEncoder = encoder
         dispatchPhase = .encode
@@ -415,8 +428,7 @@ extension ReductionMachine {
             ])
         } else {
             scopeRejectionCache.clear()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore, previousReplacementScopes: cachedReplacementScopes)
-            cachedReplacementScopes = extractReplacementScopes(from: sources)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
 
             ChoiceGraphScheduler.logReducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",

@@ -33,6 +33,7 @@ package struct ReductionMachine {
     /// Tracks which stage of the reduction pipeline the machine is in. The outer loop cycles through ``beginCycle`` → ``dispatching`` → ``endCycle`` → ``postCycle`` → ``checkTermination``, exiting via ``reorderPass`` → ``done`` when the stall budget is exhausted or all values converge.
     enum Phase {
         case beginCycle
+        case buildSources
         case dispatching
         case endCycle
         case postCycle(remaining: [ChoiceGraphScheduler.PostCycleAction])
@@ -66,7 +67,8 @@ package struct ReductionMachine {
 
     /// Describes the single unit of work performed by one call to ``next()``. Returned to the caller for logging and per-step timing aggregation via ``ReductionStats/StepTimings/record(_:elapsed:)``.
     package enum Transition {
-        case cycleStarted(cycle: Int, sourceCount: Int, sequenceLength: Int)
+        case cycleStarted(cycle: Int, sequenceLength: Int)
+        case sourcesBuilt(sourceCount: Int)
         case cycleEnded(stallBudget: Int)
 
         case dispatched(decision: DispatchOutcome)
@@ -108,6 +110,8 @@ package struct ReductionMachine {
     let maxStalls: Int
     var deferBindInner: Bool
     var graphIsStripped: Bool = false
+    let deadlineNanoseconds: UInt64
+    let startNanoseconds: UInt64
 
     // MARK: - Per-Cycle State
 
@@ -183,6 +187,8 @@ package struct ReductionMachine {
         self.maxStalls = config.maxStalls
         self.deferBindInner = graph.reductionEdges.isEmpty == false
         self.gate = BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
+        self.deadlineNanoseconds = config.wallClockDeadlineNanoseconds
+        self.startNanoseconds = deadlineNanoseconds > 0 ? monotonicNanoseconds() : 0
 
         if collectStats {
             stats.graphStats = ChoiceGraphStats.from(graph)
@@ -213,6 +219,8 @@ package struct ReductionMachine {
         switch phase {
         case .beginCycle:
             return stepBeginCycle()
+        case .buildSources:
+            return stepBuildSources()
         case .dispatching:
             return try stepDispatching()
         case .endCycle:
@@ -238,6 +246,11 @@ package struct ReductionMachine {
         anyAccepted = false
         sequenceBeforeCycle = sequence
 
+        phase = .buildSources
+        return .cycleStarted(cycle: cycles, sequenceLength: sequence.count)
+    }
+
+    private mutating func stepBuildSources() -> Transition {
         sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
 
         ChoiceGraphScheduler.logReducer("graph_cycle_start", isInstrumented: isInstrumented, metadata: [
@@ -247,7 +260,7 @@ package struct ReductionMachine {
 
         phase = .dispatching
         dispatchPhase = .dispatch
-        return .cycleStarted(cycle: cycles, sourceCount: sources.count, sequenceLength: sequence.count)
+        return .sourcesBuilt(sourceCount: sources.count)
     }
 
     // MARK: - End Cycle
@@ -356,6 +369,11 @@ package struct ReductionMachine {
     }
 
     // MARK: - Helpers
+
+    func isDeadlineExceeded() -> Bool {
+        guard deadlineNanoseconds > 0 else { return false }
+        return monotonicNanoseconds() - startNanoseconds >= deadlineNanoseconds
+    }
 
     mutating func countMaterialization() {
         if collectStats {

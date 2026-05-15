@@ -44,7 +44,7 @@ struct CoreGeneratorTests {
             do {
                 _ = try Interpreters.reflect(gen, with: UInt64(25))
                 #expect(Bool(false), "Expected reflection to fail for out-of-range value")
-            } catch let error as Interpreters.ReflectionError {
+            } catch let error as ReflectionError {
                 guard case .inputWasOutOfGeneratorRange = error else {
                     #expect(Bool(false), "Expected inputWasOutOfGeneratorRange, got \(error)")
                     return
@@ -76,7 +76,7 @@ struct CoreGeneratorTests {
 
             // Test reflection fails with different value
             // TODO: This isn't a particularly useful error to be throwing
-            #expect(throws: Interpreters.ReflectionError.contramapWasWrongType) {
+            #expect(throws: ReflectionError.contramapWasWrongType) {
                 _ = try Interpreters.reflect(gen, with: 43)
             }
 

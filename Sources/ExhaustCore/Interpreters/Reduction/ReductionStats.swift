@@ -20,6 +20,9 @@ package struct ReductionStats: Sendable {
     /// Total reduction cycles completed.
     package var cycles: Int
 
+    /// True when the reduction phase was terminated early by the wall-clock deadline.
+    package var reductionWasCapped: Bool = false
+
     // MARK: - Filter Observations
 
     /// Per-fingerprint filter predicate observations accumulated across all materializations.
@@ -53,6 +56,7 @@ extension ReductionStats {
     /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
     package struct StepTimings: Sendable {
         package var dispatch: UInt64 = 0
+        package var buildSources: UInt64 = 0
         package var encode: UInt64 = 0
         package var decode: UInt64 = 0
         package var rebuild: UInt64 = 0
@@ -90,6 +94,8 @@ extension ReductionStats {
                 relaxRound += elapsed
             case .reorderCompleted:
                 reorder += elapsed
+            case .sourcesBuilt:
+                buildSources += elapsed
             case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
                 break
             }

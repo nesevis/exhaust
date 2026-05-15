@@ -130,7 +130,7 @@ public extension ReflectiveGenerator {
             (1, Gen.contramap(
                 { (result: Result<Success, Failure>) throws -> Success in
                     guard case let .success(value) = result else {
-                        throw Interpreters.ReflectionError.contramapWasWrongType
+                        throw ReflectionError.contramapWasWrongType
                     }
                     return value
                 },
@@ -139,7 +139,7 @@ public extension ReflectiveGenerator {
             (1, Gen.contramap(
                 { (result: Result<Success, Failure>) throws -> Failure in
                     guard case let .failure(error) = result else {
-                        throw Interpreters.ReflectionError.contramapWasWrongType
+                        throw ReflectionError.contramapWasWrongType
                     }
                     return error
                 },

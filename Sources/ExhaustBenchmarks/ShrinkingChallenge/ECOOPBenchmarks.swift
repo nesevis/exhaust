@@ -287,6 +287,7 @@ private func printECOOPReport(
     // Per-step timing breakdown (summed across all seeds).
     let timingResults = results.compactMap(\.stepTimings)
     if timingResults.isEmpty == false {
+        var totalSrc: UInt64 = 0
         var totalDisp: UInt64 = 0
         var totalEnc: UInt64 = 0
         var totalDec: UInt64 = 0
@@ -295,6 +296,7 @@ private func printECOOPReport(
         var totalRlx: UInt64 = 0
         var totalReord: UInt64 = 0
         for timing in timingResults {
+            totalSrc += timing.buildSources
             totalDisp += timing.dispatch
             totalEnc += timing.encode
             totalDec += timing.decode
@@ -310,8 +312,8 @@ private func printECOOPReport(
             totalRebSource += timing.rebuildSourceNanoseconds
         }
         let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
-        let totalNs = totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalReord
-        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) reord=\(toMs(totalReord))")
+        let totalNs = totalSrc + totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalReord
+        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) reord=\(toMs(totalReord))")
     }
 
     if enableCounterExamples {

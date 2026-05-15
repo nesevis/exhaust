@@ -105,7 +105,7 @@ package extension Gen {
         return Gen.contramap(
             { (element: C.Element) throws -> Int in
                 guard let index = collection.firstIndex(of: element) else {
-                    throw Interpreters.ReflectionError
+                    throw ReflectionError
                         .couldNotReflectOnSequenceElement(
                             "Collection does not contain \(element)"
                         )

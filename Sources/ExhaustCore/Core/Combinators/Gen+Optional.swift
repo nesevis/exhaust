@@ -9,7 +9,7 @@ package extension Generator where Operation == ReflectiveOperation {
         return .impure(operation: .contramap(
             transform: { result in
                 if let optional = result as? Value?, optional == nil {
-                    throw Interpreters.ReflectionError.reflectedNil(
+                    throw ReflectionError.reflectedNil(
                         type: description,
                         resultType: String(describing: type(of: result))
                     )

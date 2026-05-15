@@ -190,7 +190,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     guard let r = try generateRecursiveAny(
                         g, with: inputValue, context: &context
                     ) else {
-                        throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+                        throw GeneratorError.choiceTreeConstructionFailed
                     }
                     results.append(r)
                 }
