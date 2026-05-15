@@ -1,6 +1,7 @@
 // Defines the protocol that `@Contract`-annotated types conform to.
 //
 // The macro synthesizes conformance — users never implement this directly.
+import Foundation
 
 /// Shared requirements for both synchronous and asynchronous contract specifications.
 ///
@@ -67,11 +68,36 @@ public protocol ContractSpec: ContractSpecBase {
     func checkInvariants() throws
 }
 
+extension ContractSpec {
+    /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
+    static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
+        { commands in
+            var spec = Self()
+            var skips: Set<Int> = []
+            for (index, command) in commands.enumerated() {
+                do {
+                    try spec.run(command)
+                    try spec.checkInvariants()
+                } catch is ContractSkip {
+                    skips.insert(index)
+                } catch {
+                    break
+                }
+            }
+            return skips
+        }
+    }
+}
+
 /// An asynchronous contract specification for testing async SUTs (actors, databases, network services).
 ///
 /// Identical to ``ContractSpec`` except `run(_:)` and `checkInvariants()` are `async`. The `@Contract` macro emits this conformance automatically when any `@Command` or `@Invariant` method is `async`.
 ///
 /// The synchronous core (Freer Monad, ChoiceTree, reduction) remains unchanged — async execution is bridged at the runtime boundary via a non-cooperative GCD thread.
+///
+/// ## Skip Identification
+///
+/// Use ``skipIdentifier(specInit:)`` to obtain a synchronous closure for identifying skipped commands. The closure bridges async execution via `Task` + semaphore, matching the pattern used by the async contract runner's property closure.
 public protocol AsyncContractSpec: ContractSpecBase {
     /// Executes a command against the model and SUT asynchronously.
     ///
@@ -83,4 +109,39 @@ public protocol AsyncContractSpec: ContractSpecBase {
     ///
     /// - Throws: ``ContractCheckFailure`` if any invariant returns `false`.
     func checkInvariants() async throws
+}
+
+extension AsyncContractSpec {
+    /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
+    ///
+    /// Bridges async execution via `Task` + semaphore. The returned closure is safe to call from a GCD thread.
+    ///
+    /// - Parameter specInit: A factory that creates a fresh spec instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.
+    static func skipIdentifier(
+        specInit: @escaping () -> Self
+    ) -> @Sendable ([Command]) -> Set<Int> {
+        nonisolated(unsafe) let specInit = specInit
+        return { commands in
+            let box = SendableBox(specInit())
+            let resultBox = SendableBox(Set<Int>())
+            let semaphore = DispatchSemaphore(value: 0)
+
+            Task { @Sendable in
+                for (index, command) in commands.enumerated() {
+                    do {
+                        try await box.value.run(command)
+                        try await box.value.checkInvariants()
+                    } catch is ContractSkip {
+                        resultBox.value.insert(index)
+                    } catch {
+                        break
+                    }
+                }
+                semaphore.signal()
+            }
+
+            semaphore.wait()
+            return resultBox.value
+        }
+    }
 }

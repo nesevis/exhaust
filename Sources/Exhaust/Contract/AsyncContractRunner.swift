@@ -131,7 +131,8 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                         commandGen: commandGen.gen,
                         commandLimit: resolvedCommandLimit,
                         coverageBudget: covBudget,
-                        property: property
+                        property: property,
+                        identifySkips: Spec.skipIdentifier(specInit: specInit)
                     )
                 }
 
