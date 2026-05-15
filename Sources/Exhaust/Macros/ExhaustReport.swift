@@ -106,14 +106,15 @@ public struct ExhaustReport: Sendable {
         let timingLabel: String
         if let timings = stepTimings {
             let dispMs = Double(timings.dispatch) / 1_000_000
+            let srcMs = Double(timings.buildSources) / 1_000_000
             let encMs = Double(timings.encode) / 1_000_000
             let decMs = Double(timings.decode) / 1_000_000
             let rebMs = Double(timings.rebuild) / 1_000_000
             let ccMs = Double(timings.convergenceConfirmation) / 1_000_000
             let rlxMs = Double(timings.relaxRound) / 1_000_000
             let reordMs = Double(timings.reorder) / 1_000_000
-            let totalMs = dispMs + encMs + decMs + rebMs + ccMs + rlxMs + reordMs
-            timingLabel = " timing=\(String(format: "%.2f", totalMs))ms(disp=\(String(format: "%.2f", dispMs))/enc=\(String(format: "%.2f", encMs))/dec=\(String(format: "%.2f", decMs))/reb=\(String(format: "%.2f", rebMs))/cc=\(String(format: "%.2f", ccMs))/rlx=\(String(format: "%.2f", rlxMs))/reord=\(String(format: "%.2f", reordMs)))"
+            let totalMs = srcMs + dispMs + encMs + decMs + rebMs + ccMs + rlxMs + reordMs
+            timingLabel = " timing=\(String(format: "%.2f", totalMs))ms(src=\(String(format: "%.2f", srcMs))/disp=\(String(format: "%.2f", dispMs))/enc=\(String(format: "%.2f", encMs))/dec=\(String(format: "%.2f", decMs))/reb=\(String(format: "%.2f", rebMs))/cc=\(String(format: "%.2f", ccMs))/rlx=\(String(format: "%.2f", rlxMs))/reord=\(String(format: "%.2f", reordMs)))"
         } else {
             timingLabel = ""
         }

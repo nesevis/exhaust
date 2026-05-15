@@ -79,7 +79,6 @@ struct ReducerStressTests {
             gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .logging(.debug),
             .onReport { report = $0}
         ) { arrays in
             let totalElements = arrays.reduce(0) { $0 + $1.count }
@@ -155,7 +154,7 @@ struct ReducerStressTests {
 
     @Test("Large sequence of compound elements — 80 triples")
     func largeSequenceOfCompounds() {
-        let tripleGen = #gen(.int(in: -100 ... 100), .int(in: -100 ... 100), .int(in: -100 ... 100))
+        let tripleGen = #gen(.int(in: -100 ... 100), .int(in: -200 ... 200), .int(in: -300 ... 300))
         let gen = tripleGen.array(length: 0 ... 100)
         let value = (0 ..< 80).map { i in (i, i * 2, i * 3) }
 
