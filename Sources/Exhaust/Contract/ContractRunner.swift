@@ -508,18 +508,21 @@ func runSCACoverage<Command>(
         let tree: ChoiceTree? = domain.buildTree(row: row, sequenceLengthRange: lengthRange)
         guard let tree else { continue }
 
-        guard let value: [Command] = try? Interpreters.replay(seqGen, using: tree) else {
+        let mode = Materializer.Mode.guided(
+            seed: UInt64(iterations),
+            fallbackTree: nil
+        )
+        guard case let .success(value, freshTree, _) = Materializer.materialize(
+            seqGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+        ) else {
             continue
         }
 
         iterations += 1
         if property(value) == false {
-            // Reflect to get a structurally correct tree with materialized picks, since coverage-built trees lack unselected branches needed by reducer strategies.
-            let reduceTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
-            // Reduce the failing sequence
             if let (_, reducedValue) = try? Interpreters.choiceGraphReduce(
                 gen: seqGen,
-                tree: reduceTree,
+                tree: freshTree,
                 output: value,
                 config: .init(maxStalls: 2),
                 property: property
