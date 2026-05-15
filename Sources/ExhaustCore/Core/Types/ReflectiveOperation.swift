@@ -148,9 +148,11 @@ package enum ReflectiveOperation {
     ///   - isOpaque: When `true`, the resulting ``ChoiceTree/group(_:isOpaque:)`` is marked opaque so coverage analysis skips its subtree.
     case zip(ContiguousArray<AnyGenerator>, isOpaque: Bool = false)
 
-    /// Embeds a constant value into the generator tree without contributing any choices to the choice sequence.
+    /// Embeds a constant value into the generator tree. Produces a `.just` marker in the ``ChoiceSequence`` but carries no randomness — the value is fixed for the lifetime of the generator and the reducer cannot minimize through it.
     ///
-    /// Common uses: base cases of ``Gen/recursive(base:maxDepth:extend:)`` generators, default branches of pick operations, and placeholder generators in opaque zips. Because `.just` adds no entries to the choice sequence, the reducer cannot minimize through it — the value is fixed for the lifetime of the generator.
+    /// Exists as a primitive rather than using ``FreerMonad/pure`` because the reflector must distinguish a deliberate constant from a continuation terminal. Both are `.pure` in the Freer Monad; `.just` is the marker that tells interpreters which one they are looking at.
+    ///
+    /// Common uses: base cases of ``Gen/recursive(base:maxDepth:extend:)`` generators, default branches of pick operations, and placeholder generators in opaque zips.
     ///
     /// - Parameter value: The constant value to always produce.
     case just(Any)
