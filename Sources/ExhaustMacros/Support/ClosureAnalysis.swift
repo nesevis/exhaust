@@ -216,7 +216,7 @@ private func analyzeFunctionCall(
 
 /// Extracts the enum case name from a member access callee expression.
 ///
-/// Returns the member name for patterns like `Pet.cat(...)` or `Shape.circle(...)`, which are syntactically `MemberAccessExprSyntax` nodes. Returns `nil` for direct calls like `Person(...)` or explicit `.init(...)` calls.
+/// Returns the member name for patterns like `Pet.cat(...)` or `Shape.circle(...)`, which are syntactically `MemberAccessExprSyntax` nodes. Returns `nil` for direct calls like `Person(...)`, explicit `.init(...)` calls, and qualified type initializers like `ABI.VersionNumber(...)` where the member starts with an uppercase letter (Swift naming convention: types are UpperCamelCase, enum cases are lowerCamelCase).
 private func extractCaseName(from callee: ExprSyntax) -> String? {
     guard let memberAccess = callee.as(MemberAccessExprSyntax.self) else {
         return nil
@@ -224,6 +224,10 @@ private func extractCaseName(from callee: ExprSyntax) -> String? {
     let member = memberAccess.declName.baseName.text
     // Exclude explicit .init calls — those are struct/class initializers
     guard member != "init" else { return nil }
+    // Uppercase members are qualified type initializers (ABI.VersionNumber(...)),
+    // not enum cases (Pet.cat(...)). Macros lack type info, so we rely on Swift
+    // naming convention: types are UpperCamelCase, cases are lowerCamelCase.
+    guard let first = member.first, first.isLowercase else { return nil }
     return member
 }
 

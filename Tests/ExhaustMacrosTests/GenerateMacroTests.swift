@@ -338,6 +338,83 @@ struct GenerateMacroTests {
         )
     }
 
+    @Test("Qualified type initializer produces Mirror-based backward, not enum case")
+    func qualifiedTypeInitializerUsesMirror() {
+        assertMacroExpansion(
+            """
+            #gen(majorGen, minorGen) { major, minor in
+                ABI.VersionNumber(major: major, minor: minor)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime._macroZip(majorGen, minorGen, labels: ["major", "minor"], forward: { major, minor in
+                ABI.VersionNumber(major: major, minor: minor)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Shorthand qualified type initializer produces Mirror-based backward")
+    func shorthandQualifiedTypeInitializerUsesMirror() {
+        assertMacroExpansion(
+            """
+            #gen(majorGen) { ABI.VersionNumber(major: $0) }
+            """,
+            expandedSource: """
+            __ExhaustRuntime._macroMap(majorGen, label: "major", forward: { ABI.VersionNumber(major: $0) })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Implicit member with uppercase name produces Mirror-based backward")
+    func implicitMemberUppercaseUsesMirror() {
+        assertMacroExpansion(
+            """
+            #gen(majorGen) { .VersionNumber(major: $0) }
+            """,
+            expandedSource: """
+            __ExhaustRuntime._macroMap(majorGen, label: "major", forward: { .VersionNumber(major: $0) })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Deeply qualified enum case with lowercase member produces pattern-matching backward")
+    func deeplyQualifiedEnumCase() {
+        assertMacroExpansion(
+            """
+            #gen(intGen) { x in
+                Foo.Bar.baz(x)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime._macroMap(intGen, backward: { guard case let .baz(v0) = $0 else { return nil }; return v0 }, forward: { x in
+                Foo.Bar.baz(x)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Explicit .init on qualified type produces Mirror-based backward")
+    func qualifiedExplicitInitUsesMirror() {
+        assertMacroExpansion(
+            """
+            #gen(majorGen) { major in
+                ABI.VersionNumber.init(major: major)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime._macroMap(majorGen, label: "major", forward: { major in
+                ABI.VersionNumber.init(major: major)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
     @Test("Reordered enum case parameters produce correctly ordered backward")
     func reorderedEnumCaseBidirectional() {
         assertMacroExpansion(
