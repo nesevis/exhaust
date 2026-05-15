@@ -83,6 +83,7 @@ extension __ExhaustRuntime {
                 var suppressLogs = false
                 var useRandomOnly = false
                 var visualize = false
+                var includeDiff = false
                 var onReportClosure: ((ExhaustReport) -> Void)?
                 var collectOpenPBTStats = false
                 var logLevel: LogLevel = .error
@@ -130,6 +131,8 @@ extension __ExhaustRuntime {
                         }
                     case .collectOpenPBTStats:
                         collectOpenPBTStats = true
+                    case .includeDiff:
+                        includeDiff = true
                     case let .logging(level, format):
                         logLevel = level
                         logFormat = format
@@ -196,6 +199,7 @@ extension __ExhaustRuntime {
                         reductionConfig: reductionConfig,
                         visualize: visualize,
                         suppressIssueReporting: suppressIssueReporting,
+                        includeDiff: includeDiff,
                         sourceCode: sourceCode,
                         logFormat: logFormat,
                         fileID: fileID,
@@ -213,6 +217,7 @@ extension __ExhaustRuntime {
                                 reductionConfig: reductionConfig,
                                 visualize: visualize,
                                 suppressIssueReporting: suppressIssueReporting,
+                                includeDiff: includeDiff,
                                 sourceCode: sourceCode,
                                 fileID: fileID,
                                 filePath: filePath,

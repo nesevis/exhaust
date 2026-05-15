@@ -19,6 +19,8 @@ struct PropertyTestFailure<Output> {
     var transparent: Bool = false
     /// When `true`, the reduction was cut short by the wall-clock deadline and the counterexample may not be fully reduced.
     var reductionWasCapped: Bool = false
+    /// When `true`, includes a structural diff between the original and reduced values. Off by default because the diff is expensive for large values.
+    var includeDiff: Bool = false
 
     /// Dispatches to the appropriate renderer based on the configured log format.
     func render(format: LogFormat) -> String {
@@ -64,7 +66,7 @@ struct PropertyTestFailure<Output> {
             lines.append("  \(line)")
         }
 
-        if let original {
+        if includeDiff, let original {
             if let reductionDiff = diff(original, counterexample) {
                 lines.append("")
                 lines.append("Reduction diff:")

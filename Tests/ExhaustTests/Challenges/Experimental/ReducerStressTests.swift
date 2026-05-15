@@ -24,7 +24,13 @@ struct ReducerStressTests {
         let value = Array(0 ..< 5000)
 
         var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { arr in
+        let output = #exhaust(
+            gen,
+            reflecting: value,
+            .suppress(.issueReporting),
+//            .budget(.extensive),
+            .onReport { report = $0
+            }) { arr in
             arr.count < 10 || arr.reduce(0, +) < 100
         }
         if let report { print("[PROFILE] WideFlatSequence: \(report.profilingSummary)") }

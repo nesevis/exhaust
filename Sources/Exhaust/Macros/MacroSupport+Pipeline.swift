@@ -16,6 +16,7 @@ package extension __ExhaustRuntime {
         let reductionConfig: Interpreters.ReducerConfiguration
         let visualize: Bool
         let suppressIssueReporting: Bool
+        let includeDiff: Bool
         let sourceCode: String?
         let logFormat: LogFormat
         let fileID: StaticString
@@ -355,6 +356,7 @@ package extension __ExhaustRuntime {
                 )
                 failure.replayHint = replayHint
                 failure.reductionWasCapped = report.reductionWasCapped
+                failure.includeDiff = context.includeDiff
                 let rendered = failure.render(format: context.logFormat)
                 report.renderedFailure = rendered
                 ExhaustLog.debug(
@@ -444,6 +446,7 @@ package extension __ExhaustRuntime {
         reductionConfig: Interpreters.ReducerConfiguration,
         visualize: Bool,
         suppressIssueReporting: Bool,
+        includeDiff: Bool,
         sourceCode: String?,
         fileID: StaticString,
         filePath: StaticString,
@@ -514,6 +517,7 @@ package extension __ExhaustRuntime {
                 propertyInvocations: propertyInvocationCount
             )
             failure.replayHint = "No replay seed — counterexample found via reflection."
+            failure.includeDiff = includeDiff
             let rendered = failure.render(format: ExhaustLog.configuration.format)
             report.renderedFailure = rendered
             let reductionEnd = monotonicNanoseconds()

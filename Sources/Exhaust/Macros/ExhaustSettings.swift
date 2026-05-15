@@ -169,6 +169,11 @@ public enum ExhaustSettings {
     /// Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.
     case collectOpenPBTStats
 
+    /// Includes a structural diff between the original failing value and the reduced counterexample in the failure output.
+    ///
+    /// Off by default because the diff computation is expensive for large values. Enable when diagnosing what the reducer changed.
+    case includeDiff
+
     /// Controls log verbosity and format for this test run.
     ///
     /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
