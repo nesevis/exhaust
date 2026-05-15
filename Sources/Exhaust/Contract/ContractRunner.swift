@@ -127,7 +127,8 @@ public func __runContract<Spec: ContractSpec>(
                 commandGen: commandGen.gen,
                 commandLimit: resolvedCommandLimit,
                 coverageBudget: coverageBudget,
-                property: property
+                property: property,
+                identifySkips: Spec.skipIdentifier
             )
         }
 
@@ -438,7 +439,8 @@ func runSCACoverage<Command>(
     commandGen: Generator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
-    property: @escaping @Sendable ([Command]) -> Bool
+    property: @escaping @Sendable ([Command]) -> Bool,
+    identifySkips: @escaping @Sendable ([Command]) -> Set<Int>
 ) -> SCAOutcome<Command> {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
         ExhaustLog.notice(
@@ -520,16 +522,47 @@ func runSCACoverage<Command>(
 
         iterations += 1
         if property(value) == false {
+            var reduceValue = value
+            var reduceTree = freshTree
+
+            let skippedIndices = identifySkips(value)
+            if skippedIndices.isEmpty == false {
+                ExhaustLog.notice(
+                    category: .reducer,
+                    event: "contract_skip_pruning",
+                    metadata: [
+                        "total_commands": "\(value.count)",
+                        "skipped_count": "\(skippedIndices.count)",
+                        "skipped_indices": "\(skippedIndices.sorted())",
+                        "remaining": "\(value.count - skippedIndices.count)",
+                    ]
+                )
+                let prunedTree = pruneSequenceElements(from: freshTree, at: skippedIndices)
+                let prunedSequence = ChoiceSequence.flatten(prunedTree)
+                let prunedMode = Materializer.Mode.guided(
+                    seed: UInt64(iterations),
+                    fallbackTree: nil
+                )
+                if case let .success(rematerializedValue, rematerializedTree, _) = Materializer.materialize(
+                    seqGen, prefix: prunedSequence, mode: prunedMode, fallbackTree: prunedTree
+                ),
+                    property(rematerializedValue) == false
+                {
+                    reduceValue = rematerializedValue
+                    reduceTree = rematerializedTree
+                }
+            }
+
             if let (_, reducedValue) = try? Interpreters.choiceGraphReduce(
                 gen: seqGen,
-                tree: freshTree,
-                output: value,
+                tree: reduceTree,
+                output: reduceValue,
                 config: .init(maxStalls: 2),
                 property: property
             ) {
-                return .failure(commands: reducedValue, original: value)
+                return .failure(commands: reducedValue, original: reduceValue)
             }
-            return .failure(commands: value, original: value)
+            return .failure(commands: reduceValue, original: reduceValue)
         }
     }
 
@@ -546,6 +579,28 @@ func runSCACoverage<Command>(
     )
 
     return .completed
+}
+
+// MARK: - Skip-Aware Pruning
+
+/// Removes elements at the given indices from the first `.sequence` node found in the tree.
+private func pruneSequenceElements(
+    from tree: ChoiceTree,
+    at indices: Set<Int>
+) -> ChoiceTree {
+    switch tree {
+    case let .sequence(_, elements, meta):
+        let pruned = elements.enumerated()
+            .filter { indices.contains($0.offset) == false }
+            .map(\.element)
+        return .sequence(length: UInt64(pruned.count), elements: pruned, meta)
+    case let .group(children, isOpaque):
+        return .group(children.map { pruneSequenceElements(from: $0, at: indices) }, isOpaque: isOpaque)
+    case let .resize(newSize, choices):
+        return .resize(newSize: newSize, choices: choices.map { pruneSequenceElements(from: $0, at: indices) })
+    default:
+        return tree
+    }
 }
 
 /// Builds an ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
