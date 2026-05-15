@@ -41,6 +41,6 @@ package struct SchedulerTuning: Sendable {
     /// Half-width of the bit-pattern window used by bind classification endpoint probing. Unsigned tags probe `0 ... windowRadius`; signed tags probe `simplest ± windowRadius`.
     public var classificationWindowRadius: UInt64 = 10_000
 
-    /// Maximum index distance between source and sink in pairwise exchange operations (redistribution pairs, lockstep suffix windows, type-compatibility edges). Caps O(n²) pair enumeration to O(n × maxPairLookahead) for large homogeneous sequences.
+    /// Maximum index distance between source and sink in pairwise operations (type-compatibility edges, lockstep suffix windows). Caps O(n²) pair enumeration to O(n × maxPairLookahead) for large groups.
     public static let maxPairLookahead: Int = 50
 }

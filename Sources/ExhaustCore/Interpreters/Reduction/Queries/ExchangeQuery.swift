@@ -197,7 +197,7 @@ enum ExchangeQuery {
 
     /// Generates source-sink pairs from leaves within a single homogeneous group.
     ///
-    /// Sorts leaves by position, then for each source (distance from target > 0) pairs it with later-position leaves up to ``SchedulerTuning/maxPairLookahead`` positions ahead.
+    /// Sorts leaves by position, then for each source (distance from target > 0) pairs it with the first later-position leaf. Produces at most C-1 pairs for C leaves.
     private static func pairsFromHomogeneousLeaves(
         childIDs: [Int],
         tag: TypeTag,
@@ -222,11 +222,10 @@ enum ExchangeQuery {
         var pairs: [RedistributionPair] = []
         for index in 0 ..< leaves.count {
             guard leaves[index].distance > 0 else { continue }
-            let limit = min(leaves.count, index + 1 + SchedulerTuning.maxPairLookahead)
-            for sinkIndex in (index + 1) ..< limit {
+            if index + 1 < leaves.count {
                 pairs.append(RedistributionPair(
                     source: QueryHelpers.makeLeafEntry(leaves[index].nodeID, innerDescendantToBind: innerDescendantToBind),
-                    sink: QueryHelpers.makeLeafEntry(leaves[sinkIndex].nodeID, innerDescendantToBind: innerDescendantToBind),
+                    sink: QueryHelpers.makeLeafEntry(leaves[index + 1].nodeID, innerDescendantToBind: innerDescendantToBind),
                     sourceTag: tag,
                     sinkTag: tag
                 ))
