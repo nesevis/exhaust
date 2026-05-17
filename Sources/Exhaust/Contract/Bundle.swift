@@ -26,8 +26,7 @@ import Synchronization
 /// }
 /// ```
 public final class Bundle<Element>: @unchecked Sendable {
-    // @unchecked Sendable: Element is unconstrained to support non-Sendable reference types
-    // (for example, class-based SUTs). The Mutex enforces serialized access mechanically.
+    // @unchecked Sendable: Element is unconstrained to support non-Sendable reference types (for example, class-based SUTs). Mutex<[Element]> would be ideal but fails the `sending` constraint for non-Sendable Element types. The Mutex<Void> + nonisolated(unsafe) pattern provides the same mechanical serialization.
     private nonisolated(unsafe) var _storage = [Element]()
     private let lock = Mutex<Void>(())
 

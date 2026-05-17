@@ -171,7 +171,7 @@ struct ContractDeclarationMacroTests {
 
                 mutating func run(_ command: Command) throws {
                     switch command {
-                        case .enqueue(let value): try self.enqueue(value: value)
+                        case let .enqueue(value): try self.enqueue(value: value)
                         case .dequeue: try self.dequeue()
                     }
                 }
@@ -273,7 +273,7 @@ struct ContractDeclarationMacroTests {
                 mutating func run(_ command: Command) async throws {
                     switch command {
                         case .increment: try await self.increment()
-                        case .decrement: try await self.decrement()
+                        case .decrement: try self.decrement()
                     }
                 }
 
@@ -486,7 +486,7 @@ struct ContractDeclarationMacroTests {
 
                 mutating func run(_ command: Command) throws {
                     switch command {
-                        case .insert(let value): try self.insert(value: value)
+                        case let .insert(value): try self.insert(value: value)
                     }
                 }
 

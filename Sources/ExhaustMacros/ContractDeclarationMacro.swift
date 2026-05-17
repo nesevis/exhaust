@@ -322,16 +322,16 @@ private func synthesizeCommandGenerator(commands: [CommandInfo], context: some M
 }
 
 private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl: Bool) -> DeclSyntax {
-    let tryKeyword = hasAnyAsync ? "try await" : "try"
     var cases: [String] = []
 
     for cmd in commands {
+        let tryKeyword = cmd.isAsync ? "try await" : "try"
         if cmd.parameters.isEmpty {
             cases.append("        case .\(cmd.methodName): \(tryKeyword) self.\(cmd.methodName)()")
         } else {
-            let bindings = cmd.parameters.map { "let \($0.label)" }.joined(separator: ", ")
+            let bindings = cmd.parameters.map(\.label).joined(separator: ", ")
             let args = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
-            cases.append("        case .\(cmd.methodName)(\(bindings)): \(tryKeyword) self.\(cmd.methodName)(\(args))")
+            cases.append("        case let .\(cmd.methodName)(\(bindings)): \(tryKeyword) self.\(cmd.methodName)(\(args))")
         }
     }
 
