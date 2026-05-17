@@ -88,7 +88,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
     // Shared mutable state accessed from Task closures and the drain loop. Thread safety relies on the cooperative single-threaded execution model: all Task closures execute via runSynchronously on the drain loop thread, and LaneExecutor.enqueue (the only re-entry point) is called synchronously within runSynchronously's suspension machinery. No concurrent access is possible as long as all continuations flow through LaneExecutor. If a continuation arrives from a foreign executor (custom-executor actor, Task.sleep), RunQueue itself would race first — the SendableBox invariant is the same as RunQueue's.
     let spec = SendableBox(specInit())
     let failed = SendableBox<String?>(nil)
-    let trace = SendableBox<[String]>([])
+    let trace = SendableBox<[TraceEvent]>([])
     let commandIndices: [SendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in SendableBox(0) }
 
     // Phase 1: Prefix — run sequentially, drain fully before concurrent phase.
@@ -97,21 +97,21 @@ func drainSchedule<Spec: AsyncContractSpec>(
         Task(executorPreference: executors[0]) { @Sendable [spec, failed, prefixDone, trace] in
             for command in prefixCommands {
                 guard failed.value == nil else { break }
-                let description = "\(command)"
-                if recordTrace { trace.value.append("STARTED:prefix:\(description)") }
+                let label = "\(command)"
+                if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: "prefix", label: label)) }
                 do {
                     try await spec.value.run(command)
                     try await spec.value.checkInvariants()
-                    if recordTrace { trace.value.append("COMPLETED:prefix:\(description)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: "prefix", label: label)) }
                 } catch is ContractSkip {
-                    if recordTrace { trace.value.append("COMPLETED:prefix:\(description)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: "prefix", label: label)) }
                 } catch let failure as ContractCheckFailure {
                     let message = failure.message ?? "check failed"
-                    if recordTrace { trace.value.append("FAILED:prefix:\(description):\(message)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: message), lane: "prefix", label: label)) }
                     failed.value = message
                     break
                 } catch {
-                    if recordTrace { trace.value.append("FAILED:prefix:\(description):\(error)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: "prefix", label: label)) }
                     failed.value = "\(error)"
                     break
                 }
@@ -123,7 +123,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
         while prefixDone.value == false {
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
                 if ContinuousClock.now - lastActivity > idleTimeout {
-                    return ConcurrentExecutionResult(passed: false, trace: recordTrace ? parseTrace(trace.value) : [], timedOut: true)
+                    return ConcurrentExecutionResult(passed: false, trace: recordTrace ? buildTrace(trace.value) : [], timedOut: true)
                 }
                 continue
             }
@@ -131,14 +131,14 @@ func drainSchedule<Spec: AsyncContractSpec>(
             lastActivity = ContinuousClock.now
         }
         if failed.value != nil {
-            return ConcurrentExecutionResult(passed: false, trace: recordTrace ? parseTrace(trace.value) : [])
+            return ConcurrentExecutionResult(passed: false, trace: recordTrace ? buildTrace(trace.value) : [])
         }
     }
 
     // Phase 2: Concurrent — spawn one task per lane with interleaving.
     let hasAnyLaneCommands = laneCommands.contains { $0.isEmpty == false }
     if hasAnyLaneCommands == false {
-        return ConcurrentExecutionResult(passed: true, trace: recordTrace ? parseTrace(trace.value) : [])
+        return ConcurrentExecutionResult(passed: true, trace: recordTrace ? buildTrace(trace.value) : [])
     }
 
     for (laneIndex, commands) in laneCommands.enumerated() {
@@ -152,25 +152,26 @@ func drainSchedule<Spec: AsyncContractSpec>(
         }
 
         Task(executorPreference: executor) { @Sendable [spec, failed, runQueue, trace, commandIndex] in
+            let laneLabel = lane.label
             for command in commands {
                 guard failed.value == nil else { return }
                 commandIndex.value += 1
                 let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
-                let label = "\(commandIndex.value)\(lane.label.uppercased()) \(name)"
-                if recordTrace { trace.value.append("STARTED:\(lane.label):\(label)") }
+                let label = "\(commandIndex.value)\(laneLabel.uppercased()) \(name)"
+                if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: laneLabel, label: label)) }
                 do {
                     try await spec.value.run(command)
                     try await spec.value.checkInvariants()
-                    if recordTrace { trace.value.append("COMPLETED:\(lane.label):\(label)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: laneLabel, label: label)) }
                 } catch is ContractSkip {
-                    if recordTrace { trace.value.append("COMPLETED:\(lane.label):\(label)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: laneLabel, label: label)) }
                 } catch let failure as ContractCheckFailure {
                     let message = failure.message ?? "check failed"
-                    if recordTrace { trace.value.append("FAILED:\(lane.label):\(label):\(message)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: message), lane: laneLabel, label: label)) }
                     failed.value = message
                     return
                 } catch {
-                    if recordTrace { trace.value.append("FAILED:\(lane.label):\(label):\(error)") }
+                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: laneLabel, label: label)) }
                     failed.value = "\(error)"
                     return
                 }
@@ -191,7 +192,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
     while runQueue.isFinished == false {
         if runQueue.hasPendingJobs == false {
             if ContinuousClock.now - lastActivity > idleTimeout {
-                let finalTrace: [TraceStep] = recordTrace ? parseTrace(trace.value) : []
+                let finalTrace: [TraceStep] = recordTrace ? buildTrace(trace.value) : []
                 return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
             }
             continue
@@ -206,10 +207,10 @@ func drainSchedule<Spec: AsyncContractSpec>(
         if recordTrace {
             let switchedLanes = lastDrainedLane != nil && lastDrainedLane != lane
             if switchedLanes, let prev = lastDrainedLane, laneHasOpenCommand[prev] == true {
-                trace.value.append("SUSPENDED:\(prev.label)")
+                trace.value.append(TraceEvent(kind: .suspended, lane: prev.label, label: ""))
             }
             if switchedLanes && laneHasOpenCommand[lane] == true {
-                trace.value.append("RESUMED:\(lane.label)")
+                trace.value.append(TraceEvent(kind: .resumed, lane: lane.label, label: ""))
             }
         }
 
@@ -224,6 +225,6 @@ func drainSchedule<Spec: AsyncContractSpec>(
         }
     }
 
-    let finalTrace: [TraceStep] = recordTrace ? parseTrace(trace.value) : []
+    let finalTrace: [TraceStep] = recordTrace ? buildTrace(trace.value) : []
     return ConcurrentExecutionResult(passed: failed.value == nil, trace: finalTrace)
 }

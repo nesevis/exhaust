@@ -1,59 +1,65 @@
-// Converts raw colon-delimited trace markers from the cooperative drain loop into presentable TraceSteps. Three post-processing passes: parse markers into steps with lane metadata, collapse no-op suspend/resume pairs, and merge adjacent started+completed pairs.
+// Converts structured trace events from the cooperative drain loop into presentable TraceSteps. Two post-processing passes: collapse no-op suspend/resume pairs, and merge adjacent started+completed pairs.
 
-/// Converts raw trace markers into presentable TraceSteps with phase annotations.
+/// A raw event emitted by the cooperative drain loop during command execution.
+struct TraceEvent: Sendable {
+    enum Kind: Sendable {
+        case started
+        case completed
+        case failed(message: String)
+        case suspended
+        case resumed
+    }
+
+    var kind: Kind
+    var lane: String
+    var label: String
+}
+
+/// Converts structured trace events into presentable TraceSteps with phase annotations.
 ///
-/// Performs three post-processing passes: (1) parses colon-delimited markers into steps with structured lane metadata, (2) removes suspended/resumed pairs where no interleaving actually occurred between them, and (3) collapses adjacent started+completed pairs into a single entry.
-func parseTrace(_ raw: [String]) -> [TraceStep] {
+/// Performs two post-processing passes: (1) removes suspended/resumed pairs where no interleaving actually occurred between them, and (2) collapses adjacent started+completed pairs into a single entry.
+func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
     var steps: [(step: TraceStep, lane: String)] = []
     var openCommand: [String: String] = [:]
     var stepNumber = 0
 
-    for entry in raw {
-        let parts = entry.split(separator: ":", maxSplits: 3).map(String.init)
-        guard parts.count >= 2 else { continue }
-        let kind = parts[0]
-        let lane = parts[1]
-        let label = parts.count >= 3 ? parts[2] : parts[1]
-
-        switch kind {
-        case "STARTED":
-            if lane != "prefix" {
-                openCommand[lane] = label
+    for event in events {
+        switch event.kind {
+        case .started:
+            if event.lane != "prefix" {
+                openCommand[event.lane] = event.label
             }
             stepNumber += 1
-            let phase = lane == "prefix" ? "(prefix)" : "(started)"
-            steps.append((TraceStep(index: stepNumber, command: "\(label) \(phase)", outcome: .ok), lane))
-        case "COMPLETED":
-            openCommand[lane] = nil
-            if lane == "prefix" {
-                if let lastIndex = steps.lastIndex(where: { $0.step.command == "\(label) (prefix)" }) {
+            let phase = event.lane == "prefix" ? "(prefix)" : "(started)"
+            steps.append((TraceStep(index: stepNumber, command: "\(event.label) \(phase)", outcome: .ok), event.lane))
+        case .completed:
+            openCommand[event.lane] = nil
+            if event.lane == "prefix" {
+                if let lastIndex = steps.lastIndex(where: { $0.step.command == "\(event.label) (prefix)" }) {
                     steps.remove(at: lastIndex)
                     stepNumber -= 1
                 }
                 stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(label) (prefix)", outcome: .ok), lane))
+                steps.append((TraceStep(index: stepNumber, command: "\(event.label) (prefix)", outcome: .ok), event.lane))
             } else {
                 stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(label) (completed)", outcome: .ok), lane))
+                steps.append((TraceStep(index: stepNumber, command: "\(event.label) (completed)", outcome: .ok), event.lane))
             }
-        case "FAILED":
-            openCommand[lane] = nil
-            let message = parts.count >= 4 ? parts[3] : "failed"
+        case let .failed(message):
+            openCommand[event.lane] = nil
             stepNumber += 1
-            let phase = lane == "prefix" ? "(prefix)" : "(completed)"
-            steps.append((TraceStep(index: stepNumber, command: "\(label) \(phase)", outcome: .invariantFailed(name: message)), lane))
-        case "SUSPENDED":
-            if let current = openCommand[lane] {
+            let phase = event.lane == "prefix" ? "(prefix)" : "(completed)"
+            steps.append((TraceStep(index: stepNumber, command: "\(event.label) \(phase)", outcome: .invariantFailed(name: message)), event.lane))
+        case .suspended:
+            if let current = openCommand[event.lane] {
                 stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(current) (suspended)", outcome: .ok), lane))
+                steps.append((TraceStep(index: stepNumber, command: "\(current) (suspended)", outcome: .ok), event.lane))
             }
-        case "RESUMED":
-            if let current = openCommand[lane] {
+        case .resumed:
+            if let current = openCommand[event.lane] {
                 stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(current) (resumed)", outcome: .ok), lane))
+                steps.append((TraceStep(index: stepNumber, command: "\(current) (resumed)", outcome: .ok), event.lane))
             }
-        default:
-            break
         }
     }
 
