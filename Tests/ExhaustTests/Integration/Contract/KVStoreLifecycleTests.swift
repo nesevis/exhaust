@@ -58,7 +58,7 @@ struct KVStoreLifecycleTests {
 struct KVStoreLifecycleContract {
     @Model var isOpen = false
     @Model var contents: [Int: Int] = [:]
-    @SUT var store = BuggyKVStore()
+    @SystemUnderTest var store = BuggyKVStore()
 
     @Invariant
     func countMatchesWhenOpen() -> Bool {

@@ -49,7 +49,7 @@ struct BudgetAffordabilityTests {
 @Contract
 struct BudgetAffordabilitySpec {
     @Model var wasUnaffordable = false
-    @SUT var items: [BillItem] = []
+    @SystemUnderTest var items: [BillItem] = []
 
     @Invariant
     func monotonicity() -> Bool {
@@ -80,7 +80,7 @@ struct BudgetAffordabilitySpec {
 
 @Contract
 struct BuggyBudgetAffordabilitySpec {
-    @SUT var items: [BillItem] = []
+    @SystemUnderTest var items: [BillItem] = []
 
     @Command(weight: 1, .int(in: 1 ... 5), .int(in: 1 ... 2), .int(in: 0 ... 7))
     mutating func addItem(cost: Int, count: Int, categoryMask: Int) throws {

@@ -74,7 +74,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             } else {
                 onReportClosure = closure
             }
-        case let .idleTimeout(ms):
+        case let .idleTimeoutMs(ms):
             idleTimeout = ms
         case let .logging(level, format):
             logLevel = level
@@ -221,11 +221,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             report.reductionInvocations = scaResult.reductionInvocations
             let traceResult = drainSchedule(taggedCommands: scaResult.finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
             let trace = traceResult.trace
-            let specState = captureSpecState(taggedCommands: scaResult.finalInput, specInit: specInit)
+            let specState = scaResult.timedOut ? nil : captureSpecState(taggedCommands: scaResult.finalInput, specInit: specInit)
             let result = ContractResult<Spec>(
                 commands: scaResult.finalInput.map(\.1),
                 trace: trace,
-                systemUnderTest: specState.systemUnderTest,
+                systemUnderTest: specState?.systemUnderTest ?? Spec().systemUnderTest,
                 seed: nil,
                 discoveryMethod: .coverage
             )
@@ -233,7 +233,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             if !suppressIssueReporting {
                 let message = scaResult.timedOut
                     ? renderTimeout(scaResult.finalInput, trace: trace)
-                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value + scaResult.reductionInvocations)
+                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", modelDescription: specState?.modelDescription ?? "(unavailable)", sutDescription: specState.map { "\($0.systemUnderTest)" } ?? "(unavailable)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value + scaResult.reductionInvocations)
                 reportIssue(
                     message,
                     fileID: fileID,
@@ -347,11 +347,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 
                 let traceResult = drainSchedule(taggedCommands: finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
                 let trace = traceResult.trace
-                let specState = captureSpecState(taggedCommands: finalInput, specInit: specInit)
+                let specState = lastRunTimedOut.value ? nil : captureSpecState(taggedCommands: finalInput, specInit: specInit)
                 let result = ContractResult<Spec>(
                     commands: finalInput.map(\.1),
                     trace: trace,
-                    systemUnderTest: specState.systemUnderTest,
+                    systemUnderTest: specState?.systemUnderTest ?? Spec().systemUnderTest,
                     seed: actualSeed,
                     discoveryMethod: seed != nil ? .replay : .randomSampling
                 )
@@ -360,7 +360,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     let discoveryMethod: ContractDiscoveryMethod = seed != nil ? .replay : .randomSampling
                     let message = lastRunTimedOut.value
                         ? renderTimeout(finalInput, trace: trace)
-                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value + report.reductionInvocations)
+                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState?.modelDescription ?? "(unavailable)", sutDescription: specState.map { "\($0.systemUnderTest)" } ?? "(unavailable)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value + report.reductionInvocations)
                     reportIssue(
                         message,
                         fileID: fileID,

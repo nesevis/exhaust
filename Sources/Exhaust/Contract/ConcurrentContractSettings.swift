@@ -40,7 +40,7 @@ public enum ConcurrentContractSettings {
     /// Maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 1000.
     ///
     /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also timeout). The diagnostic indicates which command body likely suspended to a foreign executor.
-    case idleTimeout(Int)
+    case idleTimeoutMs(Int)
 
     /// Collects per-example statistics in the OpenPBTStats JSON Lines format and attaches the result to the test run.
     ///

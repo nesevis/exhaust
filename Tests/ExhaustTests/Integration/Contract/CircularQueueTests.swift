@@ -56,7 +56,7 @@ struct CircularQueueTests {
 @Contract
 struct CircularQueueContract {
     @Model var expected: [Int] = []
-    @SUT var queue = BuggyCircularQueue(capacity: 6)
+    @SystemUnderTest var queue = BuggyCircularQueue(capacity: 6)
 
     @Invariant
     func countWithinBounds() -> Bool {

@@ -61,7 +61,7 @@ struct PostconditionTests {
 
 @Contract
 struct SetUniquenessContract {
-    @SUT var uniqueSet = BuggySet<Int>()
+    @SystemUnderTest var uniqueSet = BuggySet<Int>()
 
     @Command(weight: 3, .int(in: 0 ... 3))
     mutating func add(element: Int) throws {
@@ -92,7 +92,7 @@ struct SetUniquenessContract {
 
 @Contract
 struct StackLIFOContract {
-    @SUT var stack = BuggyStack<Int>()
+    @SystemUnderTest var stack = BuggyStack<Int>()
 
     @Command(weight: 3, .int(in: 0 ... 9))
     mutating func push(value: Int) throws {
@@ -118,7 +118,7 @@ struct StackLIFOContract {
 
 @Contract
 struct DictionaryConsistencyContract {
-    @SUT var dict = TrackedDictionary()
+    @SystemUnderTest var dict = TrackedDictionary()
 
     @Invariant
     func countIsConsistent() -> Bool {

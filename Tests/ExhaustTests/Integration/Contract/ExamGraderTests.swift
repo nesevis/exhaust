@@ -90,7 +90,7 @@ struct ExamGraderTests {
 
 @Contract
 struct ExamGraderContract {
-    @SUT var grader = BuggyExamGrader()
+    @SystemUnderTest var grader = BuggyExamGrader()
 
     @Invariant
     func answersMatchKeyLength() -> Bool {

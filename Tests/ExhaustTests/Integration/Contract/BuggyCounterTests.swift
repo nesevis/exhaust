@@ -58,7 +58,7 @@ struct BuggyCounterTests {
 @Contract
 struct BuggyCounterSpec {
     @Model var expectedValue: Int = 0
-    @SUT var counter = BuggyCounter(capacity: 3)
+    @SystemUnderTest var counter = BuggyCounter(capacity: 3)
 
     @Invariant
     func valueMatches() -> Bool {

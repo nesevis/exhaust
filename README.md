@@ -451,8 +451,10 @@ Define your system under test, the commands that operate on it, and the rules it
 ```swift
 @Contract
 struct CounterSpec {
-    @Model var expected: Int = 0
-    @SUT var counter = Counter(capacity: 5)
+    @Model
+    var expected: Int = 0
+    @SystemUnderTest
+    var counter = Counter(capacity: 5)
 
     @Invariant
     func valueMatchesModel() -> Bool {
@@ -487,7 +489,7 @@ Exhaust generates sequences of `increment` and `reset` commands, executes them a
 
 | Marker | Purpose |
 |---|---|
-| `@SUT` | The system under test. |
+| `@SystemUnderTest` | The system under test. |
 | `@Model` | Optional reference state to compare against the SUT. |
 | `@Command(weight:, generators...)` | An operation on the SUT. Weight controls how often it is chosen. Generator arguments produce the command's parameters. |
 | `@Invariant` | A boolean check run after every command. |
@@ -526,8 +528,10 @@ When your system under test has `async` methods, declare the spec as a `final cl
 ```swift
 @Contract
 final class NonAtomicCounterSpec {
-    @Model var expected: Int = 0
-    @SUT var counter: NonAtomicCounter = .init()
+    @Model
+    var expected: Int = 0
+    @SystemUnderTest
+    var counter: NonAtomicCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {
@@ -601,7 +605,7 @@ Sync contract tests accept `ContractSettings`; async contract tests accept `Conc
 | `.concurrency(N)` | 2 | Number of concurrent execution lanes (async only, 1...8). |
 | `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
-| `.idleTimeout(ms)` | 1000 | Drain loop stall detection (async only). |
+| `.idleTimeoutMs(ms)` | 1000 | Drain loop stall detection (async only). |
 | `.replay(.numeric(seed))` | — | Deterministic reproduction. |
 | `.suppress(.issueReporting)` | — | Suppress issue reporting. |
 | `.collectOpenPBTStats` | off | Records per-example stats in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. |

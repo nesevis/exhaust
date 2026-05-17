@@ -30,7 +30,7 @@ struct ALUTests {
 @Contract
 struct ALUSpec {
     @Model var expected: Int = 0
-    @SUT var alu = FourBitALU()
+    @SystemUnderTest var alu = FourBitALU()
 
     @Invariant
     func registersMatch() -> Bool {

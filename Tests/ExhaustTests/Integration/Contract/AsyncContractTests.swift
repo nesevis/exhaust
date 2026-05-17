@@ -115,7 +115,7 @@ struct AsyncContractTests {
 @Contract
 final class AsyncCounterSpec {
     @Model var expected: Int = 0
-    @SUT var counter: AsyncCounter = .init()
+    @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
     func valueMatches() async -> Bool {
@@ -146,7 +146,7 @@ final class AsyncCounterSpec {
 @Contract
 final class BuggyAsyncCounterSpec {
     @Model var expected: Int = 0
-    @SUT var counter: BuggyAsyncCounter = .init()
+    @SystemUnderTest var counter: BuggyAsyncCounter = .init()
 
     @Invariant
     func valueMatches() async -> Bool {
@@ -171,7 +171,7 @@ final class BuggyAsyncCounterSpec {
 @Contract
 final class AsyncSkipSpec {
     @Model var expected: [Int] = []
-    @SUT var counter: AsyncCounter = .init()
+    @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
     func historyLengthMatches() async -> Bool {
@@ -197,7 +197,7 @@ final class AsyncSkipSpec {
 @Contract
 final class MixedAsyncSpec {
     @Model var expected: Int = 0
-    @SUT var counter: AsyncCounter = .init()
+    @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
     func valueMatches() async -> Bool {

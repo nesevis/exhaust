@@ -19,8 +19,10 @@ A contract has four parts: a system under test, commands that operate on it, inv
 
 @Contract
 struct StackSpec {
-    @Model var expected: [Int] = []
-    @SUT var stack: [Int] = []
+    @Model
+    var expected: [Int] = []
+    @SystemUnderTest
+    var stack: [Int] = []
 
     @Invariant
     func contentsMatch() -> Bool {
@@ -124,8 +126,10 @@ When your system under test has async methods (actors, network services, databas
 ```swift
 @Contract
 final class AsyncCounterSpec {
-    @Model var expected: Int = 0
-    @SUT var counter: AsyncCounter = .init()
+    @Model
+    var expected: Int = 0
+    @SystemUnderTest
+    var counter: AsyncCounter = .init()
 
     @Invariant
     func valueMatches() -> Bool {
@@ -215,7 +219,7 @@ For this reason, SUTs that have races at suspension points (the `let v = state; 
 
 ### Idle timeout
 
-If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeout(ms)` setting (default 1000ms) detects this and reports the stalling command sequence without attempting reduction.
+If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeoutMs(ms)` setting (default 1000ms) detects this and reports the stalling command sequence without attempting reduction.
 
 ## Settings reference
 
@@ -226,7 +230,7 @@ Both sync and async contracts accept settings as variadic arguments to `#exhaust
 | `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sync) or 40 (async). |
 | `.concurrency(N)` | 2 | Number of concurrent lanes (async only, 1...8). |
 | `.budget(.thorough)` | `.thorough` | Controls coverage rows and random sampling iterations. |
-| `.idleTimeout(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (async only). |
+| `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (async only). |
 | `.replay(.numeric(seed))` | — | Deterministic replay of a specific run. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
 | `.logging(.debug)` | `.error` | Log verbosity. |

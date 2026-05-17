@@ -5,7 +5,7 @@ import SwiftSyntaxMacros
 
 /// Attached macro that synthesizes `ContractSpec` conformance from a struct annotated with `@Contract`.
 ///
-/// Scans the struct for `@Model`, `@SUT`, `@Command`, and `@Invariant` annotations, then generates:
+/// Scans the struct for `@Model`, `@SystemUnderTest`, `@Command`, and `@Invariant` annotations, then generates:
 /// - A `Command` enum with one case per `@Command` method.
 /// - A `commandGenerator` static property using `Gen.pick`.
 /// - A `run(_:)` method dispatching commands to their methods.
@@ -82,7 +82,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 node: Syntax(node),
                 message: ContractDiagnostic.sutTypeNotInferred
             ))
-            decls.append("var systemUnderTest: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SUT property\") }")
+            decls.append("var systemUnderTest: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SystemUnderTest property\") }")
         }
 
         // 3. commandGenerator
@@ -142,18 +142,18 @@ private struct SUTProperty {
 private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProperty] {
     members.compactMap { member in
         guard let varDecl = member.decl.as(VariableDeclSyntax.self),
-              hasAttribute("SUT", on: varDecl),
+              hasAttribute("SystemUnderTest", on: varDecl),
               let binding = varDecl.bindings.first
         else { return nil }
 
         let name = binding.pattern.trimmedDescription
 
-        // Try explicit type annotation first: `@SUT var queue: BoundedQueue<Int>`
+        // Try explicit type annotation first: `@SystemUnderTest var queue: BoundedQueue<Int>`
         if let typeAnnotation = binding.typeAnnotation {
             return SUTProperty(name: name, type: typeAnnotation.type.trimmedDescription)
         }
 
-        // Fall back to inferring from initializer: `@SUT var queue = BoundedQueue<Int>(capacity: 3)`
+        // Fall back to inferring from initializer: `@SystemUnderTest var queue = BoundedQueue<Int>(capacity: 3)`
         // Extract the type name from the initializer expression if it's a function call.
         if let initializer = binding.initializer,
            let call = initializer.value.as(FunctionCallExprSyntax.self)
@@ -162,7 +162,7 @@ private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [S
             return SUTProperty(name: name, type: callee)
         }
 
-        // Array literal: `@SUT var stack = [Int]()`
+        // Array literal: `@SystemUnderTest var stack = [Int]()`
         if let initializer = binding.initializer,
            let call = initializer.value.as(FunctionCallExprSyntax.self),
            let arrayType = call.calledExpression.as(ArrayExprSyntax.self)
@@ -170,7 +170,7 @@ private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [S
             return SUTProperty(name: name, type: arrayType.trimmedDescription)
         }
 
-        // Array sugar: `@SUT var stack: [Int] = []`
+        // Array sugar: `@SystemUnderTest var stack: [Int] = []`
         // Already covered by the typeAnnotation path above.
 
         return SUTProperty(name: name, type: nil)
@@ -428,8 +428,8 @@ private func qualifyGenExpression(_ expr: String, paramType: String) -> String {
 
 enum ContractDiagnostic: String, DiagnosticMessage {
     case noCommands = "@Contract requires at least one @Command method"
-    case noSUT = "@Contract requires exactly one @SUT property"
-    case sutTypeNotInferred = "@SUT property type could not be inferred — add an explicit type annotation"
+    case noSUT = "@Contract requires exactly one @SystemUnderTest property"
+    case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
 
     var message: String {
         rawValue

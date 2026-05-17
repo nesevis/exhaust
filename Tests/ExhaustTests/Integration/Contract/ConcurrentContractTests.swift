@@ -46,7 +46,10 @@ struct ConcurrentContractTests {
         let result = try #require(
             await __runContractConcurrent(
                 LeakyBucketSpec.self,
-                settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 50000)), .suppress(.issueReporting)]
+                settings: [
+                    .onReport { print($0.profilingSummary) },
+                    .suppress(.issueReporting)
+                ]
             )
         )
         let hasFailure = result.trace.contains { step in
@@ -82,7 +85,7 @@ struct ConcurrentContractTests {
 
     @Test(".onReport delivers invocation counts")
     func onReportDelivers() async {
-        nonisolated(unsafe) var deliveredReport: ExhaustReport?
+        var deliveredReport: ExhaustReport?
         _ = await __runContractConcurrent(
             NonAtomicCounterSpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
@@ -120,7 +123,7 @@ struct ConcurrentContractTests {
 @Contract
 final class NonAtomicCounterSpec {
     @Model var expected: Int = 0
-    @SUT var counter: NonAtomicCounter = .init()
+    @SystemUnderTest var counter: NonAtomicCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {
@@ -153,7 +156,7 @@ final class NonAtomicCounterSpec {
 @Contract
 final class LeakyBucketSpec {
     @Model var expectedTokens: Int = 0
-    @SUT var bucket: LeakyBucket = .init(capacity: 5)
+    @SystemUnderTest var bucket: LeakyBucket = .init(capacity: 5)
 
     @Invariant
     func tokensNeverNegative() -> Bool {
@@ -185,7 +188,7 @@ final class LeakyBucketSpec {
 @Contract
 final class AtomicCounterSpec {
     @Model var expected: Int = 0
-    @SUT var counter: AtomicCounter = .init()
+    @SystemUnderTest var counter: AtomicCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {
@@ -323,7 +326,7 @@ final class AtomicCounter: @unchecked Sendable {
 @Contract
 final class SilentRaceSpec {
     @Model var expected: Int = 0
-    @SUT var counter: SilentlyRacyCounter = .init()
+    @SystemUnderTest var counter: SilentlyRacyCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {
@@ -342,7 +345,7 @@ final class SilentRaceSpec {
 @Contract
 final class ExposedRaceSpec {
     @Model var expected: Int = 0
-    @SUT var counter: ExposedRacyCounter = .init()
+    @SystemUnderTest var counter: ExposedRacyCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {
@@ -361,7 +364,7 @@ final class ExposedRaceSpec {
 @Contract
 final class ThreeWayRaceSpec {
     @Model var expected: Int = 0
-    @SUT var counter: ThreeWayRacyCounter = .init()
+    @SystemUnderTest var counter: ThreeWayRacyCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {
@@ -591,7 +594,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await __runContractConcurrent(
                 SleepingSpec.self,
-                settings: [.commandLimit(2), .idleTimeout(50), .budget(.custom(coverage: 0, sampling: 10)), .suppress(.issueReporting)]
+                settings: [.commandLimit(2), .idleTimeoutMs(10), .budget(.custom(coverage: 0, sampling: 10)), .suppress(.issueReporting)]
             )
         )
         #expect(result.discoveryMethod == .randomSampling)
@@ -603,7 +606,7 @@ struct DetectionBoundaryTests {
 @Contract
 final class SleepingSpec {
     @Model var count: Int = 0
-    @SUT var counter: SleepingCounter = .init()
+    @SystemUnderTest var counter: SleepingCounter = .init()
 
     @Invariant
     func alwaysTrue() -> Bool { true }

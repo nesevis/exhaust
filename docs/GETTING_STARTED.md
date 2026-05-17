@@ -441,7 +441,7 @@ A few signs you've crossed into `#explore` territory:
 
 Everything above this point has been about pure functions — feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state it shouldn't be reachable to. No single operation is buggy in isolation. The bug lives in the interaction.
 
-Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a struct that describes the system under test (`@SUT`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can also declare a reference model (`@Model`) that commands update alongside the real system. Invariants can then check the real system against the model as an oracle. Either way, Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks (or when the model and SUT disagree, if you've provided a model). The shape looks like this:
+Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a struct that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can also declare a reference model (`@Model`) that commands update alongside the real system. Invariants can then check the real system against the model as an oracle. Either way, Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks (or when the model and SUT disagree, if you've provided a model). The shape looks like this:
 
 ```swift
 @Test func specHolds() {
@@ -450,9 +450,14 @@ Exhaust has a separate facility for this kind of testing, built around a `@Contr
 
 @Contract
 struct Spec {
-    @SUT var sut = MyType()
-    @Command mutating func op() { /* mutate sut */ }
-    @Invariant func holds() -> Bool { /* check sut */ }
+    @SystemUnderTest
+    var sut = MyType()
+
+    @Command
+    mutating func op() { /* mutate sut */ }
+
+    @Invariant
+    func holds() -> Bool { /* check sut */ }
 }
 ```
 

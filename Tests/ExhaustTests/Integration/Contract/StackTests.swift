@@ -22,7 +22,7 @@ struct StackTests {
 @Contract
 struct StackSpec {
     @Model var expected: [Int] = []
-    @SUT var stack: [Int] = []
+    @SystemUnderTest var stack: [Int] = []
 
     @Invariant
     func contentsMatch() -> Bool {

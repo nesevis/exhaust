@@ -14,7 +14,7 @@ import ExhaustCore
 /// - **Postcondition-only**: Use `check()` inside `@Command` methods to verify per-operation guarantees (for example, "after `add(x)`, `contains(x)` is true").
 ///
 /// The struct must contain:
-/// - Exactly one `@SUT` property (system under test).
+/// - Exactly one `@SystemUnderTest` property (system under test).
 /// - At least one `@Command` method (operations to test).
 /// - Zero or more `@Model` properties (abstract state for model-based contracts).
 /// - Zero or more `@Invariant` methods (postconditions checked after every step).
@@ -32,7 +32,7 @@ import ExhaustCore
 /// @Contract
 /// struct BoundedQueueContract {
 ///     @Model var contents: [Int] = []
-///     @SUT   var queue = BoundedQueue<Int>(capacity: 4)
+///     @SystemUnderTest   var queue = BoundedQueue<Int>(capacity: 4)
 ///
 ///     @Invariant
 ///     func countMatches() -> Bool {
@@ -53,7 +53,7 @@ import ExhaustCore
 /// ```swift
 /// @Contract
 /// struct SortedListContract {
-///     @SUT var list = SortedList()
+///     @SystemUnderTest var list = SortedList()
 ///
 ///     @Invariant
 ///     func alwaysSorted() -> Bool {
@@ -88,11 +88,11 @@ public macro Contract() = #externalMacro(module: "ExhaustMacros", type: "Contrac
 @attached(peer)
 public macro Model() = #externalMacro(module: "ExhaustMacros", type: "ModelMacro")
 
-/// Marks a property as the system under test in a `@Contract` struct.
+/// Marks a property as the system under test in a `@Contract` specification.
 ///
-/// Exactly one `@SUT` property is required per `@Contract` specification. It is included in `sutDescription` for failure reports.
+/// Exactly one `@SystemUnderTest` property is required per `@Contract` specification. Its type is exposed as `Spec.SystemUnderTest` in the ``ContractResult``, and its description is included in failure reports.
 @attached(peer)
-public macro SUT() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
+public macro SystemUnderTest() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
 
 /// Marks a method as a command in a `@Contract` struct.
 ///

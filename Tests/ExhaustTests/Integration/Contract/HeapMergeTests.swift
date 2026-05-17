@@ -107,7 +107,7 @@ struct HeapAliasingTests {
 @Contract
 struct HeapMergeContract {
     @Model var expectedContents: [[Int]] = []
-    @SUT var heaps: [BuggyHeap] = []
+    @SystemUnderTest var heaps: [BuggyHeap] = []
     let heapRefs = Bundle<Int>()
 
     @Invariant
@@ -164,7 +164,7 @@ struct HeapMergeContract {
 
 @Contract
 struct HeapAliasingContract {
-    @SUT var allHeaps: [SpliceHeap] = []
+    @SystemUnderTest var allHeaps: [SpliceHeap] = []
     let heapRefs = Bundle<SpliceHeap>()
 
     @Invariant

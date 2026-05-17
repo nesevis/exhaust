@@ -13,7 +13,7 @@ public protocol ContractSpecBase {
     /// The synthesized command enum. Each case corresponds to a `@Command` method.
     associatedtype Command: CustomStringConvertible & Sendable
 
-    /// The type of the system under test, inferred from the `@SUT` property.
+    /// The type of the system under test, inferred from the `@SystemUnderTest` property.
     associatedtype SystemUnderTest
 
     /// Builds a generator for a single command step, weighted by `@Command` annotations.
@@ -37,7 +37,7 @@ public protocol ContractSpecBase {
 ///
 /// ## How It Works
 ///
-/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SUT`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and ``check(_:_:)`` postconditions.
+/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SystemUnderTest`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and ``check(_:_:)`` postconditions.
 ///
 /// ## Example
 ///
@@ -45,7 +45,7 @@ public protocol ContractSpecBase {
 /// @Contract
 /// struct BoundedQueueSpec {
 ///     @Model var contents: [Int] = []
-///     @SUT   var queue = BoundedQueue<Int>(capacity: 4)
+///     @SystemUnderTest   var queue = BoundedQueue<Int>(capacity: 4)
 ///
 ///     @Command(weight: 3, Gen.int(in: 0...99))
 ///     mutating func enqueue(value: Int) throws {

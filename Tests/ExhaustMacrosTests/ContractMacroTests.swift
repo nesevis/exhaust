@@ -7,7 +7,7 @@ private let testMacros: [String: any Macro.Type] = [
     "exhaust": ExhaustContractMacro.self,
     "Contract": ContractDeclarationMacro.self,
     "Model": ModelMacro.self,
-    "SUT": SUTMacro.self,
+    "SystemUnderTest": SUTMacro.self,
     "Command": CommandMacro.self,
     "Invariant": InvariantMacro.self,
 ]
@@ -16,7 +16,7 @@ private let asyncTestMacros: [String: any Macro.Type] = [
     "exhaust": ExhaustConcurrentContractMacro.self,
     "Contract": ContractDeclarationMacro.self,
     "Model": ModelMacro.self,
-    "SUT": SUTMacro.self,
+    "SystemUnderTest": SUTMacro.self,
     "Command": CommandMacro.self,
     "Invariant": InvariantMacro.self,
 ]
@@ -113,7 +113,7 @@ struct ContractDeclarationMacroTests {
             @Contract
             struct QueueSpec {
                 @Model var contents: [Int] = []
-                @SUT var queue: MyQueue
+                @SystemUnderTest var queue: MyQueue
 
                 @Command(weight: 3)
                 mutating func enqueue(value: Int) throws {
@@ -215,7 +215,7 @@ struct ContractDeclarationMacroTests {
             """
             @Contract
             struct AsyncSpec {
-                @SUT var counter: MyCounter
+                @SystemUnderTest var counter: MyCounter
 
                 @Command(weight: 1)
                 mutating func increment() async throws {
@@ -303,7 +303,7 @@ struct ContractDeclarationMacroTests {
             """
             @Contract
             struct AsyncInvSpec {
-                @SUT var counter: MyCounter
+                @SystemUnderTest var counter: MyCounter
 
                 @Command(weight: 1)
                 mutating func increment() throws {
@@ -381,7 +381,7 @@ struct ContractDeclarationMacroTests {
             """
             @Contract
             struct SyncSpec {
-                @SUT var counter: MyCounter
+                @SystemUnderTest var counter: MyCounter
 
                 @Command(weight: 1)
                 mutating func increment() throws {
