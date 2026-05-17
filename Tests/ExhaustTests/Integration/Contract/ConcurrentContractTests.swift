@@ -1,4 +1,4 @@
-import Exhaust
+@testable import Exhaust
 import Testing
 
 // MARK: - Tests
@@ -238,6 +238,57 @@ final class LeakyBucket: @unchecked Sendable {
     }
 }
 
+/// Counter with a race that has NO suspension point between read and write.
+/// The cooperative scheduler cannot interleave within a single continuation,
+/// so this race is invisible to the tool.
+final class SilentlyRacyCounter: @unchecked Sendable {
+    private var _value: Int = 0
+
+    var value: Int { _value }
+
+    func increment() async {
+        _value += 1
+    }
+
+    func racyIncrement() async {
+        let current = _value
+        _value = current + 1
+    }
+}
+
+/// Counter where the race point is exposed via Task.yield() between read and write.
+/// Structurally identical to SilentlyRacyCounter but with an explicit suspension point.
+final class ExposedRacyCounter: @unchecked Sendable {
+    private var _value: Int = 0
+
+    var value: Int { _value }
+
+    func increment() async {
+        _value += 1
+    }
+
+    func racyIncrement() async {
+        let current = _value
+        await Task.yield()
+        _value = current + 1
+    }
+}
+
+/// Three-participant counter where the bug requires three concurrent read-modify-writes
+/// to interleave: each reads the same stale value, then all three write back stale+1,
+/// losing two increments.
+final class ThreeWayRacyCounter: @unchecked Sendable {
+    private var _value: Int = 0
+
+    var value: Int { _value }
+
+    func increment() async {
+        let current = _value
+        await Task.yield()
+        _value = current + 1
+    }
+}
+
 /// Atomic counter — operations are not split across await boundaries.
 final class AtomicCounter: @unchecked Sendable {
     private var _value: Int = 0
@@ -250,5 +301,313 @@ final class AtomicCounter: @unchecked Sendable {
 
     func decrement() async {
         _value -= 1
+    }
+}
+
+// MARK: - Contract: Silent race (no suspension point at the race)
+
+@Contract
+final class SilentRaceSpec {
+    @Model var expected: Int = 0
+    @SUT var counter: SilentlyRacyCounter = .init()
+
+    @Invariant
+    func matchesModel() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 1)
+    func racyIncrement() async throws {
+        expected += 1
+        await counter.racyIncrement()
+    }
+}
+
+// MARK: - Contract: Exposed race (yield at the race point)
+
+@Contract
+final class ExposedRaceSpec {
+    @Model var expected: Int = 0
+    @SUT var counter: ExposedRacyCounter = .init()
+
+    @Invariant
+    func matchesModel() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 1)
+    func racyIncrement() async throws {
+        expected += 1
+        await counter.racyIncrement()
+    }
+}
+
+// MARK: - Contract: Three-way race (requires 3 lanes)
+
+@Contract
+final class ThreeWayRaceSpec {
+    @Model var expected: Int = 0
+    @SUT var counter: ThreeWayRacyCounter = .init()
+
+    @Invariant
+    func matchesModel() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 1)
+    func increment() async throws {
+        expected += 1
+        await counter.increment()
+    }
+}
+
+// MARK: - Trace Parsing Tests
+
+@Suite("Concurrent trace parsing")
+struct ConcurrentTraceTests {
+    @Test("Collapses no-op suspend/resume pairs with no interleaving between them")
+    func collapsesNoOpSuspensions() {
+        let raw = [
+            "STARTED:a:1A foo",
+            "SUSPENDED:a",
+            "RESUMED:a",
+            "COMPLETED:a:1A foo",
+        ]
+        let steps = parseTrace(raw)
+        #expect(steps.count == 1)
+        #expect(steps[0].command.hasSuffix("(completed)"))
+    }
+
+    @Test("Preserves meaningful suspensions when another lane ran between suspend and resume")
+    func preservesMeaningfulSuspensions() {
+        let raw = [
+            "STARTED:a:1A foo",
+            "SUSPENDED:a",
+            "STARTED:b:1B bar",
+            "COMPLETED:b:1B bar",
+            "RESUMED:a",
+            "COMPLETED:a:1A foo",
+        ]
+        let steps = parseTrace(raw)
+        let hasSuspended = steps.contains { $0.command.hasSuffix("(suspended)") }
+        let hasResumed = steps.contains { $0.command.hasSuffix("(resumed)") }
+        #expect(hasSuspended)
+        #expect(hasResumed)
+    }
+
+    @Test("Collapses adjacent started+completed into single entry")
+    func collapsesStartedCompleted() {
+        let raw = [
+            "STARTED:a:1A deposit",
+            "COMPLETED:a:1A deposit",
+            "STARTED:b:1B withdraw",
+            "COMPLETED:b:1B withdraw",
+        ]
+        let steps = parseTrace(raw)
+        #expect(steps.count == 2)
+        #expect(steps[0].command == "1A deposit (completed)")
+        #expect(steps[1].command == "1B withdraw (completed)")
+    }
+
+    @Test("Handles prefix commands correctly")
+    func prefixCommands() {
+        let raw = [
+            "STARTED:prefix:setup",
+            "COMPLETED:prefix:setup",
+            "STARTED:a:1A action",
+            "COMPLETED:a:1A action",
+        ]
+        let steps = parseTrace(raw)
+        #expect(steps.count == 2)
+        #expect(steps[0].command == "setup (prefix)")
+        #expect(steps[1].command == "1A action (completed)")
+    }
+
+    @Test("Failure step carries the invariant name")
+    func failureCarriesInvariantName() {
+        let raw = [
+            "STARTED:a:1A increment",
+            "FAILED:a:1A increment:matchesModel",
+        ]
+        let steps = parseTrace(raw)
+        let failedStep = steps.first { step in
+            if case .invariantFailed = step.outcome { return true }
+            return false
+        }
+        #expect(failedStep != nil)
+        if case let .invariantFailed(name) = failedStep?.outcome {
+            #expect(name == "matchesModel")
+        }
+    }
+}
+
+// MARK: - Scheduler Behavior Tests
+
+@Suite("Cooperative scheduler behavior")
+struct CooperativeSchedulerTests {
+    @Test("Sequential prefix passes without triggering concurrency bugs")
+    func sequentialPrefixPasses() {
+        let commands: [(ScheduleMarker, NonAtomicCounterSpec.Command)] = [
+            (.prefix, .increment),
+            (.prefix, .increment),
+            (.prefix, .decrement),
+        ]
+        let result = drainSchedule(
+            taggedCommands: commands,
+            specInit: { NonAtomicCounterSpec() },
+            concurrencyLevel: 2,
+            recordTrace: true
+        )
+        #expect(result.passed, "Sequential execution should not trigger a concurrency bug")
+    }
+
+    @Test("Same seed produces identical trace across repeated runs")
+    func strictDeterminism() async throws {
+        var traces: [[TraceStep]] = []
+        for _ in 0 ..< 10 {
+            let result = try #require(
+                await __runContractConcurrent(
+                    NonAtomicCounterSpec.self,
+                    settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(12345)), .suppress(.issueReporting)]
+                )
+            )
+            traces.append(result.trace)
+        }
+        for trace in traces.dropFirst() {
+            #expect(trace.count == traces[0].count, "All runs with the same seed must produce identical traces")
+            for (step, expected) in zip(trace, traces[0]) {
+                #expect(step.command == expected.command)
+            }
+        }
+    }
+
+    @Test("Reduction produces a counterexample that still fails on replay")
+    func reducedCounterexampleReproduces() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                NonAtomicCounterSpec.self,
+                settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            )
+        )
+        let replayResult = try #require(
+            await __runContractConcurrent(
+                NonAtomicCounterSpec.self,
+                settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(result.seed!)), .suppress(.issueReporting)]
+            )
+        )
+        #expect(replayResult.commands.count == result.commands.count, "Replaying the seed should reproduce the same counterexample size")
+    }
+
+    @Test("No interleaving possible when SUT has no internal suspension points")
+    func noSuspensionNoInterleaving() async {
+        let result = await __runContractConcurrent(
+            AtomicCounterSpec.self,
+            settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+        )
+        #expect(result == nil, "Atomic counter has no suspension points — no interleaving can occur, so no bug is found")
+    }
+
+    @Test("concurrencyLevel 1 runs everything sequentially and finds no concurrency bugs")
+    func concurrencyLevelOneIsSequential() async {
+        let result = await __runContractConcurrent(
+            NonAtomicCounterSpec.self,
+            settings: [.concurrency(1), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+        )
+        #expect(result == nil, "With concurrency level 1, all commands run as prefix — no interleaving, no bug found")
+    }
+}
+
+// MARK: - Detection Boundary and Multi-Lane Tests
+
+@Suite("Detection boundary and multi-lane behavior")
+struct DetectionBoundaryTests {
+    @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")
+    func raceWithoutYieldNotDetected() async {
+        let result = await __runContractConcurrent(
+            SilentRaceSpec.self,
+            settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+        )
+        #expect(result == nil, "Race without await/yield between read and write is invisible to cooperative scheduling")
+    }
+
+    @Test("Same race WITH suspension point IS detected")
+    func raceWithYieldDetected() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                ExposedRaceSpec.self,
+                settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            )
+        )
+        let hasFailure = result.trace.contains { step in
+            if case .invariantFailed = step.outcome { return true }
+            return false
+        }
+        #expect(hasFailure, "Race with Task.yield() at the interleaving point should be detected")
+    }
+
+    @Test("Three-way race detected with concurrencyLevel 3")
+    func threeWayRaceDetected() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                ThreeWayRaceSpec.self,
+                settings: [.concurrency(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+            )
+        )
+        let hasFailure = result.trace.contains { step in
+            if case .invariantFailed = step.outcome { return true }
+            return false
+        }
+        #expect(hasFailure, "Three concurrent increments with yield should lose updates")
+    }
+
+    @Test("Reduction drives schedule markers toward prefix")
+    func reductionDrivesMarkersTowardPrefix() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                NonAtomicCounterSpec.self,
+                settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            )
+        )
+        #expect(result.commands.count <= 8, "Reducer should shrink the command count")
+        #expect(result.commands.count >= 2, "Need at least 2 commands for interleaving")
+    }
+
+    @Test("Idle timeout fires for SUT that escapes the cooperative executor")
+    func idleTimeoutFires() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                SleepingSpec.self,
+                settings: [.commandLimit(2), .idleTimeout(50), .budget(.custom(coverage: 0, sampling: 10)), .suppress(.issueReporting)]
+            )
+        )
+        #expect(result.discoveryMethod == .randomSampling)
+    }
+}
+
+// MARK: - Contract: Sleeping SUT (escapes cooperative executor)
+
+@Contract
+final class SleepingSpec {
+    @Model var count: Int = 0
+    @SUT var counter: SleepingCounter = .init()
+
+    @Invariant
+    func alwaysTrue() -> Bool { true }
+
+    @Command(weight: 1)
+    func doSleep() async throws {
+        count += 1
+        await counter.sleepAndIncrement()
+    }
+}
+
+/// A SUT whose method uses Task.sleep, which escapes the cooperative executor and triggers the idle timeout.
+final class SleepingCounter: @unchecked Sendable {
+    private var _value: Int = 0
+    var value: Int { _value }
+
+    func sleepAndIncrement() async {
+        try? await Task.sleep(for: .milliseconds(200))
+        _value += 1
     }
 }
