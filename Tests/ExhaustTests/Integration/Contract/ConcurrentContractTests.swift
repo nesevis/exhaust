@@ -11,7 +11,7 @@ struct ConcurrentContractTests {
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 commandLimit: 4,
-                scheduleLength: 20,
+
                 budget: .custom(coverage: 0, sampling: 200),
                 suppressIssueReporting: true
             )
@@ -29,7 +29,6 @@ struct ConcurrentContractTests {
         let result = await __runContractConcurrent(
             AtomicCounterSpec.self,
             commandLimit: 4,
-            scheduleLength: 20,
             budget: .custom(coverage: 0, sampling: 200),
             suppressIssueReporting: true
         )
@@ -42,7 +41,7 @@ struct ConcurrentContractTests {
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 commandLimit: 6,
-                scheduleLength: 30,
+
                 budget: .custom(coverage: 0, sampling: 200),
                 suppressIssueReporting: true
             )
@@ -56,11 +55,15 @@ struct ConcurrentContractTests {
             await __runContractConcurrent(
                 LeakyBucketSpec.self,
                 commandLimit: 8,
-                scheduleLength: 40,
-                budget: .custom(coverage: 0, sampling: 500),
-                suppressIssueReporting: false
+                budget: .custom(coverage: 0, sampling: 50000),
+                suppressIssueReporting: false,
+                logLevel: .error
             )
         )
+        if result.commands.count > 3 {
+            print()
+        }
+        print("Commands: \(result.commands.count) (\(result.commands.count > 3 ? "Suboptimal" : ""))")
         let hasFailure = result.trace.contains { step in
             if case .invariantFailed = step.outcome { return true }
             return false
@@ -73,8 +76,8 @@ struct ConcurrentContractTests {
         let result1 = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
-                commandLimit: 4,
-                scheduleLength: 20,
+                commandLimit: 10,
+
                 budget: .custom(coverage: 0, sampling: 200),
                 seed: 42,
                 suppressIssueReporting: true
@@ -83,8 +86,8 @@ struct ConcurrentContractTests {
         let result2 = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
-                commandLimit: 4,
-                scheduleLength: 20,
+                commandLimit: 10,
+
                 budget: .custom(coverage: 0, sampling: 200),
                 seed: 42,
                 suppressIssueReporting: true

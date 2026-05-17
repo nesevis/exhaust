@@ -1,58 +1,52 @@
 // Generate/test/reduce loop for concurrent contract testing.
 //
-// Generates ConcurrentTestInput values (two command arrays + schedule), evaluates them
-// via the ControlledExecutor drain loop, and reduces failures via ChoiceGraph. Fully async,
-// no GCD.
+// Generates a flat [(UInt8, Command)] array where each command has a thread marker (1=A, 2=B).
+// The array order defines the interleaving schedule. Reduction minimizes markers toward 0 (prefix),
+// naturally discovering which commands must be concurrent. Fully async, no GCD.
 import ExhaustCore
 import IssueReporting
 
 /// Runs a concurrent contract property test for the given async specification type.
 ///
-/// Generates pairs of command sequences and interleaving schedules, executes them through the
-/// controlled executor, and reduces any failures to minimal counterexamples. The interleaving
-/// is deterministic: same seed produces same schedule produces same result.
+/// Generates tagged command sequences and executes them through the controlled executor.
+/// The interleaving is deterministic: same seed produces same result.
 @discardableResult
 public func __runContractConcurrent<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
     commandLimit: Int = 10,
-    scheduleLength: Int = 40,
     budget: ExhaustBudget = .thorough,
     seed: UInt64? = nil,
     suppressIssueReporting: Bool = false,
+    logLevel: LogLevel = .error,
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
     column: UInt = #column
 ) async -> ContractResult<Spec>? {
+    ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
     let commandGen = Spec.commandGenerator.gen
-    let commandsAGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .linear)
-    let commandsBGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .linear)
-    let scheduleGen = Gen.arrayOf(
-        Gen.choose(in: UInt8(0) ... UInt8(1)),
-        within: 1 ... UInt64(scheduleLength),
-        scaling: .constant
+    let taggedCommandGen = buildTaggedCommandGenerator(from: commandGen)
+    let sequenceGen = Gen.arrayOf(
+        taggedCommandGen,
+        within: 1 ... UInt64(commandLimit),
+        scaling: .linear
     )
-
-    let inputGen = Gen.zip(commandsAGen, commandsBGen, scheduleGen).map { values -> ConcurrentTestInput<Spec.Command> in
-        let tuple = values as! ([Spec.Command], [Spec.Command], [UInt8])
-        return ConcurrentTestInput(commandsA: tuple.0, commandsB: tuple.1, schedule: tuple.2)
-    }
 
     let samplingBudget = budget.samplingBudget
-    let reductionDeadline = UInt64(samplingBudget) * 5 * 1_000_000
     let reductionConfig = Interpreters.ReducerConfiguration(
         maxStalls: 2,
-        wallClockDeadlineNanoseconds: reductionDeadline
+        wallClockDeadlineNanoseconds: UInt64(samplingBudget) * 5 * 1_000_000
     )
 
-    let specInit: @Sendable () -> Spec = { Spec() }
+    // Safe: metatypes are stateless.
+    nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-    let property: @Sendable (ConcurrentTestInput<Spec.Command>) -> Bool = { input in
-        evaluateConcurrentProperty(input: input, specInit: specInit)
+    let property: @Sendable ([(ContractThread, Spec.Command)]) -> Bool = { taggedCommands in
+        executeConcurrent(taggedCommands: taggedCommands, specInit: specInit, recordTrace: false).passed
     }
 
     var interpreter = ValueAndChoiceTreeInterpreter(
-        inputGen,
+        sequenceGen,
         materializePicks: true,
         seed: seed,
         maxRuns: samplingBudget
@@ -64,25 +58,54 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             let passed = property(input)
 
             if passed == false {
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "concurrent_failure_found",
+                    metadata: ["commands": "\(input.count)"]
+                )
+                for (marker, cmd) in input {
+                    ExhaustLog.debug(
+                        category: .propertyTest,
+                        event: "concurrent_initial_command",
+                        "[\(marker.description)] \(cmd)"
+                    )
+                }
+
                 let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
-                    gen: inputGen,
+                    gen: sequenceGen,
                     tree: tree,
                     output: input,
                     config: reductionConfig,
                     property: property
                 )
 
-                let finalInput: ConcurrentTestInput<Spec.Command>
+                let finalInput: [(ContractThread, Spec.Command)]
                 if let (_, reduced) = reduceResult.reduced {
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "concurrent_reduced",
+                        metadata: ["from": "\(input.count)", "to": "\(reduced.count)"]
+                    )
+                    for (marker, cmd) in reduced {
+                        ExhaustLog.debug(
+                            category: .propertyTest,
+                            event: "concurrent_reduced_command",
+                            "[\(marker.description)] \(cmd)"
+                        )
+                    }
                     finalInput = reduced
                 } else {
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "concurrent_reduction_no_improvement"
+                    )
                     finalInput = input
                 }
 
-                let trace = buildConcurrentTrace(finalInput, specInit: specInit)
-
+                let traceResult = executeConcurrent(taggedCommands: finalInput, specInit: specInit, recordTrace: true)
+                let trace = traceResult.trace
                 let result = ContractResult<Spec>(
-                    commands: finalInput.commandsA + finalInput.commandsB,
+                    commands: finalInput.map(\.1),
                     trace: trace,
                     systemUnderTest: Spec().systemUnderTest,
                     seed: actualSeed,
@@ -90,9 +113,8 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 )
 
                 if !suppressIssueReporting {
-                    let rendered = renderConcurrentFailure(result, input: finalInput)
                     reportIssue(
-                        rendered,
+                        renderFailure(finalInput, trace: trace, reducedFrom: input.count),
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
@@ -114,228 +136,212 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     }
 
     return nil
+    } // withConfiguration
 }
 
-// MARK: - Drain-level trace
+// MARK: - Generator construction
 
-/// The lifecycle state of a command at a drain step.
-enum DrainPhase: Sendable, CustomStringConvertible {
-    case started
-    case suspended
-    case resumed
-    case completed
-
-    var description: String {
-        switch self {
-        case .started: "started"
-        case .suspended: "suspended"
-        case .resumed: "resumed"
-        case .completed: "completed"
-        }
-    }
-}
-
-/// One step in the drain-level execution trace.
-struct DrainStep: Sendable {
-    var commandIndex: Int
-    var lane: LaneID
-    var command: String
-    var phase: DrainPhase
-    var failure: String?
-}
-
-/// Result of a traced concurrent execution.
-struct ConcurrentTraceResult: Sendable {
-    var passed: Bool
-    var drainTrace: [DrainStep]
-}
-
-/// Re-executes with trace recording at the drain level.
-private func buildConcurrentTrace<Spec: AsyncContractSpec>(
-    _ input: ConcurrentTestInput<Spec.Command>,
-    specInit: @Sendable () -> Spec
-) -> [TraceStep] {
-    let result = evaluateConcurrentPropertyWithTrace(input: input, specInit: specInit)
-    return result.drainTrace.enumerated().map { index, step in
-        let laneLabel = step.lane == .a ? "A" : "B"
-        let phaseLabel: String = switch step.phase {
-        case .started: " (started)"
-        case .suspended: " (suspended)"
-        case .resumed: " (resumed)"
-        case .completed: " (completed)"
-        }
-        let commandName = step.command.split(separator: "(").first.map(String.init) ?? step.command
-        let description = "\(step.commandIndex)\(laneLabel) \(commandName)\(phaseLabel)"
-        let outcome: TraceStep.Outcome = if let failure = step.failure {
-            .invariantFailed(name: failure)
-        } else {
-            .ok
-        }
-        return TraceStep(index: index + 1, command: description, outcome: outcome)
-    }
-}
-
-/// Evaluates the concurrent property with hybrid trace recording.
+/// Rebuilds the command generator with a thread marker per branch.
 ///
-/// Tasks record `started` and `completed` entries from within their execution context (capturing
-/// commands that don't suspend). The drain loop inserts `suspended` and `resumed` markers at
-/// interleaving points. Since the executor is serial, all entries are in correct execution order.
-private func evaluateConcurrentPropertyWithTrace<Spec: AsyncContractSpec>(
-    input: ConcurrentTestInput<Spec.Command>,
-    specInit: @Sendable () -> Spec
-) -> ConcurrentTraceResult {
-    let shared = SharedDrainState()
-    let executorA = LaneExecutor(lane: .a, shared: shared)
-    let executorB = LaneExecutor(lane: .b, shared: shared)
-    let spec = SendableBox(specInit())
-    let failed = SendableBox<String?>(nil)
-    let trace = SendableBox<[DrainStep]>([])
-    let commandIndexA = SendableBox(0)
-    let commandIndexB = SendableBox(0)
-
-    Task(executorPreference: executorA) { @Sendable [spec, failed, shared, trace, commandIndexA] in
-        for (index, command) in input.commandsA.enumerated() {
-            guard failed.value == nil else { return }
-            commandIndexA.value = index + 1
-            let name = "\(command)"
-            trace.value.append(DrainStep(commandIndex: index + 1, lane: .a, command: name, phase: .started, failure: nil))
-            do {
-                try await spec.value.run(command)
-                try await spec.value.checkInvariants()
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .a, command: name, phase: .completed, failure: nil))
-            } catch is ContractSkip {
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .a, command: name, phase: .completed, failure: nil))
-                continue
-            } catch let failure as ContractCheckFailure {
-                let message = failure.message ?? "check failed"
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .a, command: name, phase: .completed, failure: message))
-                failed.value = message
-                return
-            } catch {
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .a, command: name, phase: .completed, failure: "\(error)"))
-                failed.value = "\(error)"
-                return
-            }
-        }
-        shared.markComplete(lane: .a)
+/// Transforms `pick([(w, genA), (w, genB), ...])` into
+/// `pick([(w, zip(threadMarker, genA)), (w, zip(threadMarker, genB)), ...])`.
+/// This gives each array element a pick-at-top structure that the reducer handles naturally —
+/// deletion removes entire elements, value minimization drives the thread marker toward 0.
+private func buildTaggedCommandGenerator<Command>(
+    from commandGen: Generator<Command>
+) -> Generator<(ContractThread, Command)> {
+    guard let choices = extractPickChoices(from: commandGen) else {
+        fatalError("Command generator is in unexpected format")
     }
 
-    Task(executorPreference: executorB) { @Sendable [spec, failed, shared, trace, commandIndexB] in
-        for (index, command) in input.commandsB.enumerated() {
-            guard failed.value == nil else { return }
-            commandIndexB.value = index + 1
-            let name = "\(command)"
-            trace.value.append(DrainStep(commandIndex: index + 1, lane: .b, command: name, phase: .started, failure: nil))
-            do {
-                try await spec.value.run(command)
-                try await spec.value.checkInvariants()
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .b, command: name, phase: .completed, failure: nil))
-            } catch is ContractSkip {
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .b, command: name, phase: .completed, failure: nil))
-                continue
-            } catch let failure as ContractCheckFailure {
-                let message = failure.message ?? "check failed"
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .b, command: name, phase: .completed, failure: message))
-                failed.value = message
-                return
-            } catch {
-                trace.value.append(DrainStep(commandIndex: index + 1, lane: .b, command: name, phase: .completed, failure: "\(error)"))
-                failed.value = "\(error)"
-                return
-            }
-        }
-        shared.markComplete(lane: .b)
+    let threadMarkerGen = Gen.choose(in: UInt8(0) ... UInt8(2))
+        .map { ContractThread(rawValue: $0)! }
+    let taggedChoices = choices.map { choice in
+        let branchGen: Generator<Command> = choice.generator.map { $0 as! Command }
+        let zipped = Gen.zip(threadMarkerGen, branchGen)
+        return (weight: choice.weight, generator: zipped)
     }
 
-    // Drain loop: execute jobs and insert suspended/resumed markers only at lane switches.
-    // Continuations on the same lane (e.g., checkInvariants after run) don't produce markers
-    // because no interleaving occurred — the user's command wasn't interrupted.
-    var lastDrainedLane: LaneID?
-    var laneHasOpenCommand: [LaneID: Bool] = [.a: false, .b: false]
-    var scheduleIndex = 0
-    var failureDetected = false
+    return Gen.pick(choices: taggedChoices)
+}
 
-    while shared.isFinished == false {
-        guard shared.hasPendingJobs else { break }
-        let preferred: LaneID = if scheduleIndex < input.schedule.count {
-            input.schedule[scheduleIndex] == 0 ? .a : .b
+// MARK: - Trace parsing
+
+/// Converts raw trace markers into presentable TraceSteps with phase annotations.
+///
+/// Performs three post-processing passes: (1) parses colon-delimited markers into steps with
+/// structured lane metadata, (2) removes suspended/resumed pairs where no interleaving actually
+/// occurred between them, and (3) collapses adjacent started+completed pairs into a single entry.
+func parseTrace(_ raw: [String]) -> [TraceStep] {
+    var steps: [(step: TraceStep, lane: String)] = []
+    var openCommand: [String: String] = [:]
+    var stepNumber = 0
+
+    for entry in raw {
+        let parts = entry.split(separator: ":", maxSplits: 3).map(String.init)
+        guard parts.count >= 2 else { continue }
+        let kind = parts[0]
+        let lane = parts[1]
+        let label = parts.count >= 3 ? parts[2] : parts[1]
+
+        switch kind {
+        case "STARTED":
+            if lane != "prefix" {
+                openCommand[lane] = label
+            }
+            stepNumber += 1
+            let phase = lane == "prefix" ? "(prefix)" : "(started)"
+            steps.append((TraceStep(index: stepNumber, command: "\(label) \(phase)", outcome: .ok), lane))
+        case "COMPLETED":
+            openCommand[lane] = nil
+            if lane == "prefix" {
+                if let lastIndex = steps.lastIndex(where: { $0.step.command == "\(label) (prefix)" }) {
+                    steps.remove(at: lastIndex)
+                    stepNumber -= 1
+                }
+                stepNumber += 1
+                steps.append((TraceStep(index: stepNumber, command: "\(label) (prefix)", outcome: .ok), lane))
+            } else {
+                stepNumber += 1
+                steps.append((TraceStep(index: stepNumber, command: "\(label) (completed)", outcome: .ok), lane))
+            }
+        case "FAILED":
+            openCommand[lane] = nil
+            let message = parts.count >= 4 ? parts[3] : "failed"
+            stepNumber += 1
+            let phase = lane == "prefix" ? "(prefix)" : "(completed)"
+            steps.append((TraceStep(index: stepNumber, command: "\(label) \(phase)", outcome: .invariantFailed(name: message)), lane))
+        case "SUSPENDED":
+            if let current = openCommand[lane] {
+                stepNumber += 1
+                steps.append((TraceStep(index: stepNumber, command: "\(current) (suspended)", outcome: .ok), lane))
+            }
+        case "RESUMED":
+            if let current = openCommand[lane] {
+                stepNumber += 1
+                steps.append((TraceStep(index: stepNumber, command: "\(current) (resumed)", outcome: .ok), lane))
+            }
+        default:
+            break
+        }
+    }
+
+    // Remove suspended/resumed pairs where no other lane ran between them.
+    var filtered: [(step: TraceStep, lane: String)] = []
+    var index = 0
+    while index < steps.count {
+        let entry = steps[index]
+        if entry.step.command.hasSuffix("(suspended)") {
+            let commandBase = entry.step.command.replacingOccurrences(of: " (suspended)", with: "")
+            let otherLane = entry.lane == "a" ? "b" : "a"
+
+            var hasInterleaving = false
+            var resumeIndex: Int?
+            for ahead in (index + 1) ..< steps.count {
+                let aheadCmd = steps[ahead].step.command
+                if aheadCmd.hasPrefix(commandBase) &&
+                    (aheadCmd.hasSuffix("(resumed)") || aheadCmd.hasSuffix("(completed)"))
+                {
+                    resumeIndex = ahead
+                    break
+                }
+                if steps[ahead].lane == otherLane {
+                    hasInterleaving = true
+                }
+            }
+
+            if hasInterleaving {
+                filtered.append(entry)
+            } else if let ri = resumeIndex, steps[ri].step.command.hasSuffix("(resumed)") {
+                index = ri + 1
+                continue
+            } else {
+                filtered.append(entry)
+            }
         } else {
-            scheduleIndex % 2 == 0 ? .a : .b
+            filtered.append(entry)
         }
-        scheduleIndex += 1
-        guard let (lane, job) = shared.takeJob(preferring: preferred) else { break }
-        let executor = lane == .a ? executorA : executorB
-
-        let switchedLanes = lastDrainedLane != nil && lastDrainedLane != lane
-
-        if switchedLanes, let previousLane = lastDrainedLane, laneHasOpenCommand[previousLane] == true {
-            let commandIndex = previousLane == .a ? commandIndexA.value : commandIndexB.value
-            let commandName = trace.value.last(where: { $0.lane == previousLane })?.command ?? ""
-            trace.value.append(DrainStep(commandIndex: commandIndex, lane: previousLane, command: commandName, phase: .suspended, failure: nil))
-        }
-
-        if switchedLanes && laneHasOpenCommand[lane] == true {
-            let commandIndex = lane == .a ? commandIndexA.value : commandIndexB.value
-            let commandName = trace.value.last(where: { $0.lane == lane })?.command ?? ""
-            trace.value.append(DrainStep(commandIndex: commandIndex, lane: lane, command: commandName, phase: .resumed, failure: nil))
-        }
-
-        job.runSynchronously(on: executor.asUnownedTaskExecutor())
-
-        laneHasOpenCommand[lane] = shared.hasPendingJob(for: lane)
-        lastDrainedLane = lane
-
-        if failed.value != nil {
-            if failureDetected { break }
-            failureDetected = true
-        }
+        index += 1
     }
 
-    // Post-process: each command's final appearance is completed, not resumed/suspended.
-    var finalTrace = trace.value
-    var lastIndexForCommand: [String: Int] = [:]
-    for (index, step) in finalTrace.enumerated() {
-        let key = "\(step.commandIndex)\(step.lane == .a ? "A" : "B")"
-        lastIndexForCommand[key] = index
-    }
-    for index in lastIndexForCommand.values where finalTrace[index].phase != .started {
-        finalTrace[index].phase = .completed
+    // Collapse: started immediately followed by completed for the same command
+    var collapsed: [TraceStep] = []
+    index = 0
+    while index < filtered.count {
+        if index + 1 < filtered.count,
+           filtered[index].step.command.hasSuffix("(started)"),
+           filtered[index + 1].step.command.hasSuffix("(completed)")
+        {
+            let startCmd = filtered[index].step.command.replacingOccurrences(of: " (started)", with: "")
+            let nextCmd = filtered[index + 1].step.command.replacingOccurrences(of: " (completed)", with: "")
+            if startCmd == nextCmd {
+                collapsed.append(TraceStep(
+                    index: collapsed.count + 1,
+                    command: "\(startCmd) (completed)",
+                    outcome: filtered[index + 1].step.outcome
+                ))
+                index += 2
+                continue
+            }
+        }
+        collapsed.append(TraceStep(
+            index: collapsed.count + 1,
+            command: filtered[index].step.command,
+            outcome: filtered[index].step.outcome
+        ))
+        index += 1
     }
 
-    return ConcurrentTraceResult(passed: failed.value == nil, drainTrace: finalTrace)
+    return collapsed
 }
 
 // MARK: - Failure rendering
 
-private func renderConcurrentFailure<Spec: AsyncContractSpec>(
-    _ result: ContractResult<Spec>,
-    input: ConcurrentTestInput<Spec.Command>
+private func renderFailure(
+    _ tagged: [(ContractThread, some CustomStringConvertible)],
+    trace: [TraceStep],
+    reducedFrom originalCount: Int
 ) -> String {
+    let reducedCount = tagged.count
     var lines: [String] = []
-    lines.append("Concurrent contract failure in \(Spec.self)")
-    lines.append("")
-    lines.append("Thread A:")
-    for (index, command) in input.commandsA.enumerated() {
-        lines.append("  \(index + 1)A. \(truncatedCommand("\(command)"))")
+
+    if reducedCount < originalCount {
+        lines.append("Reduced from \(originalCount) to \(reducedCount) commands.")
+        lines.append("")
     }
-    lines.append("")
-    lines.append("Thread B:")
-    for (index, command) in input.commandsB.enumerated() {
-        lines.append("  \(index + 1)B. \(truncatedCommand("\(command)"))")
+
+    let prefixCommands = tagged.filter { $0.0 == .prefix }.map(\.1)
+    let threadACommands = tagged.filter { $0.0 == .threadA }.map(\.1)
+    let threadBCommands = tagged.filter { $0.0 == .threadB }.map(\.1)
+
+    if prefixCommands.isEmpty == false {
+        lines.append("Sequential prefix:")
+        for (index, command) in prefixCommands.enumerated() {
+            lines.append("  \(index + 1). \(command)")
+        }
+        lines.append("")
     }
-    lines.append("")
+
+    if threadACommands.isEmpty == false {
+        lines.append("Thread A:")
+        for (index, command) in threadACommands.enumerated() {
+            lines.append("  \(index + 1)A. \(command)")
+        }
+        lines.append("")
+    }
+
+    if threadBCommands.isEmpty == false {
+        lines.append("Thread B:")
+        for (index, command) in threadBCommands.enumerated() {
+            lines.append("  \(index + 1)B. \(command)")
+        }
+        lines.append("")
+    }
+
     lines.append("Execution trace:")
-    for step in result.trace {
+    for step in trace {
         lines.append("  \(step)")
     }
-    if let seed = result.seed {
-        lines.append("")
-        lines.append("Reproduce: .replay(\(seed))")
-    }
-    return lines.joined(separator: "\n")
-}
 
-private func truncatedCommand(_ command: String) -> String {
-    guard command.count > 15 else { return command }
-    return String(command.prefix(15)) + "\u{2026}"
+    return lines.joined(separator: "\n")
 }
