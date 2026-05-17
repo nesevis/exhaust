@@ -100,6 +100,9 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
         : nil
 
+    var failureContext = FailureContext()
+    failureContext.specName = "\(Spec.self)"
+
     let commandGen = Spec.commandGenerator.gen
     let samplingBudget = budget.samplingBudget
     let coverageBudget = budget.coverageBudget
@@ -183,7 +186,14 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             discoveryMethod: .replay
                         )
                         if !suppressIssueReporting {
-                            let message = renderFailure(input, trace: traceResult.trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: .replay, seed: regressionSeed, iteration: 0, budget: 0, sequencesTested: 1)
+                            var ctx = failureContext
+                            ctx.discoveryMethod = .replay
+                            ctx.seed = regressionSeed
+                            ctx.originalCount = input.count
+                            ctx.sequencesTested = 1
+                            ctx.modelDescription = specState.modelDescription
+                            ctx.sutDescription = "\(specState.systemUnderTest)"
+                            let message = renderFailure(input, trace: traceResult.trace, context: ctx)
                             reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
                         }
                         return result
@@ -231,9 +241,18 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             )
 
             if !suppressIssueReporting {
-                let message = scaResult.timedOut
-                    ? renderTimeout(scaResult.finalInput, trace: trace)
-                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", modelDescription: specState?.modelDescription ?? "(unavailable)", sutDescription: specState.map { "\($0.systemUnderTest)" } ?? "(unavailable)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value + scaResult.reductionInvocations)
+                var ctx = failureContext
+                ctx.discoveryMethod = .coverage
+                ctx.originalCount = scaResult.originalCount
+                ctx.iteration = Int(scaResult.iteration)
+                ctx.budget = coverageBudget
+                ctx.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
+                ctx.timedOut = scaResult.timedOut
+                if let specState {
+                    ctx.modelDescription = specState.modelDescription
+                    ctx.sutDescription = "\(specState.systemUnderTest)"
+                }
+                let message = renderFailure(scaResult.finalInput, trace: trace, context: ctx)
                 reportIssue(
                     message,
                     fileID: fileID,
@@ -357,10 +376,19 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 )
 
                 if !suppressIssueReporting {
-                    let discoveryMethod: ContractDiscoveryMethod = seed != nil ? .replay : .randomSampling
-                    let message = lastRunTimedOut.value
-                        ? renderTimeout(finalInput, trace: trace)
-                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState?.modelDescription ?? "(unavailable)", sutDescription: specState.map { "\($0.systemUnderTest)" } ?? "(unavailable)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value + report.reductionInvocations)
+                    var ctx = failureContext
+                    ctx.discoveryMethod = seed != nil ? .replay : .randomSampling
+                    ctx.seed = actualSeed
+                    ctx.originalCount = input.count
+                    ctx.iteration = samplingIteration
+                    ctx.budget = samplingBudget
+                    ctx.sequencesTested = invocationCounter.value + report.reductionInvocations
+                    ctx.timedOut = lastRunTimedOut.value
+                    if let specState {
+                        ctx.modelDescription = specState.modelDescription
+                        ctx.sutDescription = "\(specState.systemUnderTest)"
+                    }
+                    let message = renderFailure(finalInput, trace: trace, context: ctx)
                     reportIssue(
                         message,
                         fileID: fileID,
@@ -814,29 +842,38 @@ func parseTrace(_ raw: [String]) -> [TraceStep] {
 
 // MARK: - Failure rendering
 
+private struct FailureContext {
+    var specName: String = ""
+    var discoveryMethod: ContractDiscoveryMethod = .randomSampling
+    var seed: UInt64?
+    var iteration: Int = 0
+    var budget: UInt64 = 0
+    var originalCount: Int = 0
+    var sequencesTested: Int = 0
+    var modelDescription: String = "(unavailable)"
+    var sutDescription: String = "(unavailable)"
+    var timedOut: Bool = false
+}
+
 private func renderFailure(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     trace: [TraceStep],
-    reducedFrom originalCount: Int,
-    specName: String,
-    modelDescription: String,
-    sutDescription: String,
-    discoveryMethod: ContractDiscoveryMethod,
-    seed: UInt64?,
-    iteration: Int,
-    budget: UInt64,
-    sequencesTested: Int
+    context: FailureContext
 ) -> String {
+    if context.timedOut {
+        return renderTimeout(tagged, trace: trace)
+    }
+
     var lines: [String] = []
-    if let seed {
-        lines.append("\(specName) failure (iteration \(iteration)/\(budget), found via \(discoveryMethod), seed \(CrockfordBase32.encode(seed)))")
+    if let seed = context.seed {
+        lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod), seed \(CrockfordBase32.encode(seed)))")
     } else {
-        lines.append("\(specName) failure (iteration \(iteration)/\(budget), found via \(discoveryMethod))")
+        lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod))")
     }
     lines.append("")
 
-    if tagged.count < originalCount {
-        lines.append("Reduced from \(originalCount) to \(tagged.count) commands.")
+    if tagged.count < context.originalCount {
+        lines.append("Reduced from \(context.originalCount) to \(tagged.count) commands.")
         lines.append("")
     }
 
@@ -848,13 +885,13 @@ private func renderFailure(
     }
 
     lines.append("")
-    lines.append("Model: \(modelDescription)")
-    lines.append("SUT:   \(sutDescription)")
+    lines.append("Model: \(context.modelDescription)")
+    lines.append("SUT:   \(context.sutDescription)")
 
     lines.append("")
-    lines.append("Command sequences tested: \(sequencesTested)")
+    lines.append("Command sequences tested: \(context.sequencesTested)")
 
-    if let seed {
+    if let seed = context.seed {
         lines.append("")
         lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
     }
