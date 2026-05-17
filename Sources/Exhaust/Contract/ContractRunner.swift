@@ -34,6 +34,7 @@ public func __runContract<Spec: ContractSpec>(
     var suppressLogs = false
     var useRandomOnly = false
     var collectOpenPBTStats = false
+    var includeDiff = false
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
     for setting in settings {
@@ -68,6 +69,8 @@ public func __runContract<Spec: ContractSpec>(
             useRandomOnly = true
         case .collectOpenPBTStats:
             collectOpenPBTStats = true
+        case .includeDiff:
+            includeDiff = true
         case let .logging(level, format):
             logLevel = level
             logFormat = format
@@ -151,7 +154,8 @@ public func __runContract<Spec: ContractSpec>(
                                 let rendered = renderFailure(
                                     result,
                                     failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
-                                    modelDescription: spec.modelDescription
+                                    modelDescription: spec.modelDescription,
+                                    includeDiff: includeDiff
                                 )
                                 reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                             }
@@ -254,7 +258,8 @@ public func __runContract<Spec: ContractSpec>(
             let rendered = renderFailure(
                 result,
                 failureInfo: failureInfo,
-                modelDescription: spec.modelDescription
+                modelDescription: spec.modelDescription,
+                includeDiff: includeDiff
             )
             ExhaustLog.error(
                 category: .propertyTest,
@@ -343,7 +348,8 @@ private func buildTrace<Spec: ContractSpec>(
 func renderFailure<Spec: ContractSpecBase>(
     _ result: ContractResult<Spec>,
     failureInfo: ContractFailureInfo<Spec.Command>,
-    modelDescription: String
+    modelDescription: String,
+    includeDiff: Bool = false
 ) -> String {
     var lines: [String] = []
     lines.append("Contract failure (found via \(failureInfo.discoveryMethod))")
@@ -362,8 +368,7 @@ func renderFailure<Spec: ContractSpecBase>(
         lines.append("  \(step)")
     }
 
-    // Show reduction diff when the original sequence is available and differs.
-    if let original = failureInfo.originalCommands, original.count > result.commands.count {
+    if includeDiff, let original = failureInfo.originalCommands, original.count > result.commands.count {
         let originalDescriptions = original.map { "\($0)" }
         let reducedDescriptions = result.commands.map { "\($0)" }
         if let reductionDiff = diff(originalDescriptions, reducedDescriptions) {
