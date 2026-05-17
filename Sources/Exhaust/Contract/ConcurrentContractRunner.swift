@@ -1,15 +1,20 @@
-// Generate/test/reduce loop for concurrent contract testing.
+// MARK: - Generate / Test / Reduce Loop for Concurrent Contracts
 //
-// Generates a flat [(UInt8, Command)] array where each command has a thread marker (1=A, 2=B).
-// The array order defines the interleaving schedule. Reduction minimizes markers toward 0 (prefix),
-// naturally discovering which commands must be concurrent. Fully async, no GCD.
+// Orchestrates the property-testing loop: generate a tagged command sequence, drain it through the cooperative scheduler, and if a failure is found, reduce it with the choice-graph reducer.
+//
+// The generator produces [(ScheduleMarker, Command)] arrays. Each element has a schedule marker (chooseBits in 0...2) zipped with a command from the spec's weighted pick. The array order defines both the lane partition and the interleaving schedule. The reducer shrinks the counterexample by deleting elements (shorter sequence) and minimizing markers toward 0 (moving commands from concurrent lanes into the sequential prefix).
 import ExhaustCore
 import IssueReporting
 
 /// Runs a concurrent contract property test for the given async specification type.
 ///
-/// Generates tagged command sequences and executes them through the controlled executor.
-/// The interleaving is deterministic: same seed produces same result.
+/// Generates random tagged command sequences where each command carries a schedule marker assigning it to lane A, lane B, or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:recordTrace:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer shrinks both the command sequence and the lane assignments.
+///
+/// The same seed always produces the same interleaving and the same counterexample.
+///
+/// - Parameter commandLimit: Maximum number of commands per generated sequence.
+/// - Parameter budget: Controls how many random sequences to sample before declaring success.
+/// - Parameter seed: When non-nil, replays a specific generation seed for reproducibility.
 @discardableResult
 public func __runContractConcurrent<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
@@ -25,7 +30,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 ) async -> ContractResult<Spec>? {
     ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
     let commandGen = Spec.commandGenerator.gen
-    let taggedCommandGen = buildTaggedCommandGenerator(from: commandGen)
+    let taggedCommandGen = zipScheduleMarker(onto: commandGen)
     let sequenceGen = Gen.arrayOf(
         taggedCommandGen,
         within: 1 ... UInt64(commandLimit),
@@ -41,8 +46,8 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     // Safe: metatypes are stateless.
     nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-    let property: @Sendable ([(ContractThread, Spec.Command)]) -> Bool = { taggedCommands in
-        executeConcurrent(taggedCommands: taggedCommands, specInit: specInit, recordTrace: false).passed
+    let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+        drainSchedule(taggedCommands: taggedCommands, specInit: specInit, recordTrace: false).passed
     }
 
     var interpreter = ValueAndChoiceTreeInterpreter(
@@ -79,7 +84,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     property: property
                 )
 
-                let finalInput: [(ContractThread, Spec.Command)]
+                let finalInput: [(ScheduleMarker, Spec.Command)]
                 if let (_, reduced) = reduceResult.reduced {
                     ExhaustLog.notice(
                         category: .propertyTest,
@@ -102,7 +107,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     finalInput = input
                 }
 
-                let traceResult = executeConcurrent(taggedCommands: finalInput, specInit: specInit, recordTrace: true)
+                let traceResult = drainSchedule(taggedCommands: finalInput, specInit: specInit, recordTrace: true)
                 let trace = traceResult.trace
                 let result = ContractResult<Spec>(
                     commands: finalInput.map(\.1),
@@ -139,26 +144,34 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     } // withConfiguration
 }
 
-// MARK: - Generator construction
+// MARK: - Generator Construction
 
-/// Rebuilds the command generator with a thread marker per branch.
+/// Zips a schedule marker generator onto each branch of the command pick.
 ///
-/// Transforms `pick([(w, genA), (w, genB), ...])` into
-/// `pick([(w, zip(threadMarker, genA)), (w, zip(threadMarker, genB)), ...])`.
-/// This gives each array element a pick-at-top structure that the reducer handles naturally —
-/// deletion removes entire elements, value minimization drives the thread marker toward 0.
-private func buildTaggedCommandGenerator<Command>(
-    from commandGen: Generator<Command>
-) -> Generator<(ContractThread, Command)> {
+/// Takes the spec's command generator (a `pick` over weighted command branches) and prepends a `chooseBits(0...2)` schedule marker to each branch via `zip`. The resulting generator produces `(ScheduleMarker, Command)` tuples where the marker controls lane assignment and the command is the original spec command with all its argument generators intact.
+///
+/// The structure after transformation:
+/// ```
+/// pick([
+///     (w, zip(marker, genCommandA)),
+///     (w, zip(marker, genCommandB)),
+///     ...
+/// ])
+/// ```
+///
+/// This gives each array element a pick-at-top structure that the choice-graph reducer handles naturally: structural deletion removes entire elements (shorter counterexample), and value minimization on the marker's chooseBits drives it toward 0/prefix (less concurrency).
+private func zipScheduleMarker<Command>(
+    onto commandGen: Generator<Command>
+) -> Generator<(ScheduleMarker, Command)> {
     guard let choices = extractPickChoices(from: commandGen) else {
         fatalError("Command generator is in unexpected format")
     }
 
-    let threadMarkerGen = Gen.choose(in: UInt8(0) ... UInt8(2))
-        .map { ContractThread(rawValue: $0)! }
+    let markerGen = Gen.choose(in: UInt8(0) ... UInt8(2))
+        .map { ScheduleMarker(rawValue: $0)! }
     let taggedChoices = choices.map { choice in
         let branchGen: Generator<Command> = choice.generator.map { $0 as! Command }
-        let zipped = Gen.zip(threadMarkerGen, branchGen)
+        let zipped = Gen.zip(markerGen, branchGen)
         return (weight: choice.weight, generator: zipped)
     }
 
@@ -169,9 +182,7 @@ private func buildTaggedCommandGenerator<Command>(
 
 /// Converts raw trace markers into presentable TraceSteps with phase annotations.
 ///
-/// Performs three post-processing passes: (1) parses colon-delimited markers into steps with
-/// structured lane metadata, (2) removes suspended/resumed pairs where no interleaving actually
-/// occurred between them, and (3) collapses adjacent started+completed pairs into a single entry.
+/// Performs three post-processing passes: (1) parses colon-delimited markers into steps with structured lane metadata, (2) removes suspended/resumed pairs where no interleaving actually occurred between them, and (3) collapses adjacent started+completed pairs into a single entry.
 func parseTrace(_ raw: [String]) -> [TraceStep] {
     var steps: [(step: TraceStep, lane: String)] = []
     var openCommand: [String: String] = [:]
@@ -298,7 +309,7 @@ func parseTrace(_ raw: [String]) -> [TraceStep] {
 // MARK: - Failure rendering
 
 private func renderFailure(
-    _ tagged: [(ContractThread, some CustomStringConvertible)],
+    _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     trace: [TraceStep],
     reducedFrom originalCount: Int
 ) -> String {
@@ -311,8 +322,8 @@ private func renderFailure(
     }
 
     let prefixCommands = tagged.filter { $0.0 == .prefix }.map(\.1)
-    let threadACommands = tagged.filter { $0.0 == .threadA }.map(\.1)
-    let threadBCommands = tagged.filter { $0.0 == .threadB }.map(\.1)
+    let laneACommands = tagged.filter { $0.0 == .laneA }.map(\.1)
+    let laneBCommands = tagged.filter { $0.0 == .laneB }.map(\.1)
 
     if prefixCommands.isEmpty == false {
         lines.append("Sequential prefix:")
@@ -322,17 +333,17 @@ private func renderFailure(
         lines.append("")
     }
 
-    if threadACommands.isEmpty == false {
-        lines.append("Thread A:")
-        for (index, command) in threadACommands.enumerated() {
+    if laneACommands.isEmpty == false {
+        lines.append("Lane A:")
+        for (index, command) in laneACommands.enumerated() {
             lines.append("  \(index + 1)A. \(command)")
         }
         lines.append("")
     }
 
-    if threadBCommands.isEmpty == false {
-        lines.append("Thread B:")
-        for (index, command) in threadBCommands.enumerated() {
+    if laneBCommands.isEmpty == false {
+        lines.append("Lane B:")
+        for (index, command) in laneBCommands.enumerated() {
             lines.append("  \(index + 1)B. \(command)")
         }
         lines.append("")

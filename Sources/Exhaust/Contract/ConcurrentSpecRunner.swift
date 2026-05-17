@@ -1,61 +1,78 @@
-// Concurrent contract execution via deterministic interleaving.
+// MARK: - Cooperative Drain Loop for Concurrent Contract Execution
 //
-// A flat [(thread, command)] array defines both the partition and the schedule. Thread markers
-// 1 (A) and 2 (B) assign commands to lanes. The array order defines the interleaving: when
-// draining, each non-prefix marker in sequence tells the executor which lane to advance next.
-// Reduction minimizes markers toward 0 (prefix), naturally discovering which commands must be
-// concurrent to trigger the failure.
+// Executes a tagged command sequence through a cooperative scheduler that deterministically controls interleaving at every `await` boundary. The input is a flat [(ScheduleMarker, Command)] array that encodes both the lane partition AND the interleaving order:
+//
+//   - ScheduleMarker.prefix → runs sequentially before the concurrent phase (state setup)
+//   - ScheduleMarker.laneA / .laneB → assigns to a lane; array position defines drain order
+//
+// The array order of non-prefix markers becomes the schedule: when the drain loop needs to pick which lane to advance, it consults the next marker in sequence. This encoding means reduction can simultaneously shrink commands (array deletion) and reduce concurrency (marker minimization toward 0/prefix) using the existing choice-graph reducer with no special logic.
+//
+// Execution model:
+//   1. Partition commands into prefix / laneA / laneB
+//   2. Drain the prefix phase sequentially on one executor
+//   3. Spawn two Tasks (one per lane) with executorPreference pointing to LaneExecutors
+//   4. Drain the run queue in schedule order until both lanes complete or a failure is detected
+//
+// Each Task.yield() or other suspension point in a command body produces a new continuation in the RunQueue, giving the scheduler a chance to switch lanes at that boundary.
 import ExhaustCore
 
-/// Thread assignment for a command in a concurrent contract test.
+/// Assigns a command to a scheduling lane in a concurrent contract test.
 ///
-/// During generation, commands are assigned to ``threadA`` or ``threadB``. The ``prefix`` value
-/// exists only as a reduction target — the reducer minimizes thread markers toward ``prefix`` to
-/// discover the minimal concurrency needed to trigger a failure.
-public enum ContractThread: UInt8, Sendable, Equatable, CustomStringConvertible {
+/// During generation, the marker generator produces values in 0...2 uniformly. The reducer's value-minimization pass drives markers toward 0 (``prefix``), naturally discovering which commands must remain concurrent to reproduce the failure. Commands whose markers reach ``prefix`` move to the sequential phase, proving they are not part of the minimal concurrent counterexample.
+///
+/// ```
+/// .prefix → sequential setup (run before any interleaving)
+/// .laneA  → assigned to lane A (interleaved with lane B by the scheduler)
+/// .laneB  → assigned to lane B (interleaved with lane A by the scheduler)
+/// ```
+public enum ScheduleMarker: UInt8, Sendable, Equatable, CustomStringConvertible {
     case prefix = 0
-    case threadA = 1
-    case threadB = 2
+    case laneA = 1
+    case laneB = 2
 
     public var description: String {
         switch self {
         case .prefix: "prefix"
-        case .threadA: "a"
-        case .threadB: "b"
+        case .laneA: "a"
+        case .laneB: "b"
         }
     }
 }
 
-/// Result of executing a concurrent test input.
+/// Outcome of draining a single tagged command sequence through the cooperative scheduler.
 struct ConcurrentExecutionResult {
+    /// Whether all invariants held throughout the interleaved execution.
     var passed: Bool
+    /// The execution trace, populated only when `recordTrace` is true.
     var trace: [TraceStep]
 }
 
-/// Executes a tagged command sequence with deterministic interleaving and returns the result.
+/// Drains a tagged command sequence through the cooperative scheduler with deterministic interleaving.
 ///
-/// When `recordTrace` is false, trace recording is skipped for performance (used during
-/// generation and reduction). When true, the full interleaving trace is captured (used for
-/// the final counterexample).
-func executeConcurrent<Spec: AsyncContractSpec>(
-    taggedCommands: [(ContractThread, Spec.Command)],
+/// Execution proceeds in two phases. First, all ``ScheduleMarker/prefix`` commands run sequentially on a single executor — this builds up whatever shared state the concurrent phase needs. Then, ``ScheduleMarker/laneA`` and ``ScheduleMarker/laneB`` commands run concurrently via two Tasks whose continuations are interleaved by the drain loop.
+///
+/// The drain loop advances one continuation at a time (via `runSynchronously`), picking the lane indicated by the next schedule entry. When a command body hits an `await` (for example, `Task.yield()` inside a non-atomic read-modify-write), the task suspends and re-enqueues its continuation. The drain loop then picks the other lane's continuation, producing a deterministic interleaving at that suspension point.
+///
+/// - Parameter recordTrace: When false, trace recording is skipped for performance (used during generation and reduction where only pass/fail matters). When true, the full interleaving trace is captured for the final counterexample report.
+func drainSchedule<Spec: AsyncContractSpec>(
+    taggedCommands: [(ScheduleMarker, Spec.Command)],
     specInit: () -> Spec,
     recordTrace: Bool
 ) -> ConcurrentExecutionResult {
     let prefixCommands = taggedCommands.filter { $0.0 == .prefix }.map(\.1)
-    let threadACommands = taggedCommands.filter { $0.0 == .threadA }.map(\.1)
-    let threadBCommands = taggedCommands.filter { $0.0 == .threadB }.map(\.1)
-    let schedule: [LaneID] = taggedCommands.compactMap { thread, _ in
-        switch thread {
-        case .threadA: .a
-        case .threadB: .b
+    let laneACommands = taggedCommands.filter { $0.0 == .laneA }.map(\.1)
+    let laneBCommands = taggedCommands.filter { $0.0 == .laneB }.map(\.1)
+    let schedule: [LaneID] = taggedCommands.compactMap { marker, _ in
+        switch marker {
+        case .laneA: .a
+        case .laneB: .b
         case .prefix: nil
         }
     }
 
-    let shared = SharedDrainState()
-    let executorA = LaneExecutor(lane: .a, shared: shared)
-    let executorB = LaneExecutor(lane: .b, shared: shared)
+    let runQueue = RunQueue()
+    let executorA = LaneExecutor(lane: .a, runQueue: runQueue)
+    let executorB = LaneExecutor(lane: .b, runQueue: runQueue)
     let spec = SendableBox(specInit())
     let failed = SendableBox<String?>(nil)
     let trace = SendableBox<[String]>([])
@@ -91,7 +108,7 @@ func executeConcurrent<Spec: AsyncContractSpec>(
         }
 
         while prefixDone.value == false {
-            guard let (_, job) = shared.takeJob(preferring: .a) else { continue }
+            guard let (_, job) = runQueue.dequeue(preferring: .a) else { continue }
             job.runSynchronously(on: executorA.asUnownedTaskExecutor())
         }
         if failed.value != nil {
@@ -99,13 +116,13 @@ func executeConcurrent<Spec: AsyncContractSpec>(
         }
     }
 
-    // Phase 2: Concurrent — run thread A and thread B with interleaving.
-    if threadACommands.isEmpty && threadBCommands.isEmpty {
+    // Phase 2: Concurrent — run lane A and lane B with interleaving.
+    if laneACommands.isEmpty && laneBCommands.isEmpty {
         return ConcurrentExecutionResult(passed: true, trace: recordTrace ? parseTrace(trace.value) : [])
     }
 
-    Task(executorPreference: executorA) { @Sendable [spec, failed, shared, trace, commandIndexA] in
-        for command in threadACommands {
+    Task(executorPreference: executorA) { @Sendable [spec, failed, runQueue, trace, commandIndexA] in
+        for command in laneACommands {
             guard failed.value == nil else { return }
             commandIndexA.value += 1
             let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
@@ -128,11 +145,11 @@ func executeConcurrent<Spec: AsyncContractSpec>(
                 return
             }
         }
-        shared.markComplete(lane: .a)
+        runQueue.markComplete(lane: .a)
     }
 
-    Task(executorPreference: executorB) { @Sendable [spec, failed, shared, trace, commandIndexB] in
-        for command in threadBCommands {
+    Task(executorPreference: executorB) { @Sendable [spec, failed, runQueue, trace, commandIndexB] in
+        for command in laneBCommands {
             guard failed.value == nil else { return }
             commandIndexB.value += 1
             let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
@@ -155,11 +172,11 @@ func executeConcurrent<Spec: AsyncContractSpec>(
                 return
             }
         }
-        shared.markComplete(lane: .b)
+        runQueue.markComplete(lane: .b)
     }
 
-    if threadACommands.isEmpty { shared.markComplete(lane: .a) }
-    if threadBCommands.isEmpty { shared.markComplete(lane: .b) }
+    if laneACommands.isEmpty { runQueue.markComplete(lane: .a) }
+    if laneBCommands.isEmpty { runQueue.markComplete(lane: .b) }
 
     // Drain concurrent section with lane-switch tracking for suspended/resumed markers.
     var lastDrainedLane: LaneID?
@@ -167,15 +184,15 @@ func executeConcurrent<Spec: AsyncContractSpec>(
     var scheduleIndex = 0
     var failureDetected = false
 
-    while shared.isFinished == false {
-        guard shared.hasPendingJobs else { break }
+    while runQueue.isFinished == false {
+        guard runQueue.hasPendingJobs else { break }
         let preferred: LaneID = if scheduleIndex < schedule.count {
             schedule[scheduleIndex]
         } else {
             scheduleIndex % 2 == 0 ? .a : .b
         }
         scheduleIndex += 1
-        guard let (lane, job) = shared.takeJob(preferring: preferred) else { break }
+        guard let (lane, job) = runQueue.dequeue(preferring: preferred) else { break }
         let executor = lane == .a ? executorA : executorB
 
         if recordTrace {
@@ -191,7 +208,7 @@ func executeConcurrent<Spec: AsyncContractSpec>(
         }
 
         job.runSynchronously(on: executor.asUnownedTaskExecutor())
-        laneHasOpenCommand[lane] = shared.hasPendingJob(for: lane)
+        laneHasOpenCommand[lane] = runQueue.hasPendingJob(for: lane)
         lastDrainedLane = lane
 
         if failed.value != nil {
