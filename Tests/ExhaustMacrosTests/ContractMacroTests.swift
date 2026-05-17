@@ -441,6 +441,77 @@ struct ContractDeclarationMacroTests {
             macros: testMacros
         )
     }
+
+    @Test("@Command with generator expression produces #gen in commandGenerator")
+    func commandWithGeneratorExpression() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct InsertSpec {
+                @SystemUnderTest var items: [Int]
+
+                @Command(weight: 3, .int(in: 0...99))
+                mutating func insert(value: Int) throws {
+                }
+            }
+            """,
+            expandedSource: """
+            struct InsertSpec {
+                var items: [Int]
+
+                mutating func insert(value: Int) throws {
+                }
+
+                enum Command: CustomStringConvertible, Sendable {
+                    case insert(value: Int)
+
+                    var description: String {
+                        switch self {
+                            case let .insert(value): "insert(\\(value))"
+                        }
+                    }
+                }
+
+                typealias SystemUnderTest = [Int]
+
+                var sut: SystemUnderTest {
+                    items
+                }
+
+                static var commandGenerator: ReflectiveGenerator<Command> {
+                    .oneOf(weighted:
+                        (3, #gen((.int(in: 0...99) as ReflectiveGenerator<Int>)) { value in Command.insert(value: value) })
+                    )
+                }
+
+                mutating func run(_ command: Command) throws {
+                    switch command {
+                        case .insert(let value): try self.insert(value: value)
+                    }
+                }
+
+                func checkInvariants() throws {
+                }
+
+                var systemUnderTest: SystemUnderTest {
+                    items
+                }
+
+                var modelDescription: String {
+                    "(no model properties)"
+                }
+
+                var sutDescription: String {
+                    "items: \\(items)"
+                }
+            }
+
+            extension InsertSpec: ContractSpec {
+            }
+            """,
+            macros: testMacros
+        )
+    }
 }
 
 @Suite("#exhaust async contract macro expansion tests")

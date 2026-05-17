@@ -393,10 +393,18 @@ private func synthesizeModelDescription(modelProps: [String]) -> DeclSyntax {
         """
     }
 
-    let parts = modelProps.map { "\"\($0): \\(\($0))\"" }.joined(separator: " + \", \" + ")
+    if modelProps.count == 1 {
+        let part = "\"\(modelProps[0]): \\(\(modelProps[0]))\""
+        return """
+        var modelDescription: String { \(raw: part) }
+        """
+    }
 
+    let lines = modelProps.map { "\"  \($0): \\(\($0))\"" }.joined(separator: ",\n            ")
     return """
-    var modelDescription: String { \(raw: parts) }
+    var modelDescription: String { [
+            \(raw: lines)
+        ].joined(separator: "\\n") }
     """
 }
 
