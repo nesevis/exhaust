@@ -47,17 +47,20 @@ final class LaneExecutor: TaskExecutor, @unchecked Sendable {
 ///
 /// Marked `@unchecked Sendable` because all access occurs on the single drain loop thread. See the file header for the thread safety argument.
 final class RunQueue: @unchecked Sendable {
-    private var jobs: [(lane: LaneID, job: UnownedJob)] = []
+    private var laneJobs: [[UnownedJob]]
+    private var laneCursors: [Int]
     private var completedLanes: Set<LaneID> = []
     private let laneCount: Int
 
     init(laneCount: Int) {
         self.laneCount = laneCount
+        self.laneJobs = Array(repeating: [], count: laneCount)
+        self.laneCursors = Array(repeating: 0, count: laneCount)
     }
 
-    /// Appends a tagged job to the queue.
+    /// Appends a job to the specified lane's queue.
     func enqueue(lane: LaneID, job: UnownedJob) {
-        jobs.append((lane: lane, job: job))
+        laneJobs[Int(lane.index)].append(job)
     }
 
     /// Records that a lane's task has finished executing all its commands.
@@ -67,29 +70,37 @@ final class RunQueue: @unchecked Sendable {
 
     /// Returns true when all lanes have completed and no jobs remain.
     var isFinished: Bool {
-        completedLanes.count == laneCount && jobs.isEmpty
+        completedLanes.count == laneCount && hasPendingJobs == false
     }
 
-    /// Returns true when at least one job is available for draining.
+    /// Returns true when at least one lane has a pending job.
     var hasPendingJobs: Bool {
-        jobs.isEmpty == false
+        (0 ..< laneCount).contains { laneCursors[$0] < laneJobs[$0].count }
     }
 
-    /// Removes and returns the next job, preferring the specified lane.
+    /// Removes and returns the next job, preferring the specified lane. O(1) for the preferred lane, O(K) fallback where K is the lane count.
     ///
-    /// Falls back to any available job if the preferred lane has none pending. Returns nil only when the queue is empty.
+    /// Falls back to any available job if the preferred lane has none pending. Returns nil only when all lanes are empty.
     func dequeue(preferring preferred: LaneID) -> (lane: LaneID, job: UnownedJob)? {
-        if let index = jobs.firstIndex(where: { $0.lane == preferred }) {
-            return jobs.remove(at: index)
+        let prefIndex = Int(preferred.index)
+        if laneCursors[prefIndex] < laneJobs[prefIndex].count {
+            let job = laneJobs[prefIndex][laneCursors[prefIndex]]
+            laneCursors[prefIndex] += 1
+            return (preferred, job)
         }
-        if jobs.isEmpty == false {
-            return jobs.removeFirst()
+        for laneIndex in 0 ..< laneCount {
+            if laneCursors[laneIndex] < laneJobs[laneIndex].count {
+                let job = laneJobs[laneIndex][laneCursors[laneIndex]]
+                laneCursors[laneIndex] += 1
+                return (LaneID(index: UInt8(laneIndex)), job)
+            }
         }
         return nil
     }
 
     /// Returns true when the specified lane has at least one pending job.
     func hasPendingJob(for lane: LaneID) -> Bool {
-        jobs.contains { $0.lane == lane }
+        let index = Int(lane.index)
+        return laneCursors[index] < laneJobs[index].count
     }
 }
