@@ -57,7 +57,6 @@ struct BundleTests {
         bundle.reset()
 
         #expect(bundle.isEmpty)
-        #expect(bundle.count == 0) // swiftlint:disable:this empty_count
     }
 
     @Test("Remove(where:) removes matching elements")

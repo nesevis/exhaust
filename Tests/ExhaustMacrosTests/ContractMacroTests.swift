@@ -493,10 +493,6 @@ struct ContractDeclarationMacroTests {
                 func checkInvariants() throws {
                 }
 
-                var systemUnderTest: SystemUnderTest {
-                    items
-                }
-
                 var modelDescription: String {
                     "(no model properties)"
                 }

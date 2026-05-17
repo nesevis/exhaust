@@ -15,7 +15,7 @@ struct FailureContext {
 
 /// Formats a concurrent contract failure for reporting.
 ///
-/// Delegates to ``renderTimeout(_:trace:)`` when `context.timedOut` is true. Otherwise renders the full failure report with command partition, execution trace, model/SUT state, and replay seed.
+/// Delegates to ``renderTimeout(_:trace:)`` when `context.timedOut` is true. Otherwise renders the full failure report with command partition, execution trace, and replay seed.
 func renderFailure(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     trace: [TraceStep],

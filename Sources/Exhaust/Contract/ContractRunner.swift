@@ -377,7 +377,9 @@ func renderFailure<Spec: ContractSpecBase>(
 
     lines.append("")
     lines.append("Model: \(modelDescription)")
-    lines.append("SUT:   \(result.systemUnderTest)")
+    if let sut = result.systemUnderTest {
+        lines.append("SUT:   \(sut)")
+    }
 
     if let seed = result.seed {
         lines.append("")

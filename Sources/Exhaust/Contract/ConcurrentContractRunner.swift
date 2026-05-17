@@ -38,7 +38,7 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     let result = ContractResult<Spec>(
         commands: finalInput.map(\.1),
         trace: trace,
-        systemUnderTest: Spec().systemUnderTest,
+        systemUnderTest: nil,
         seed: seed,
         discoveryMethod: discoveryMethod
     )
