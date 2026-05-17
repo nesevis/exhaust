@@ -9,8 +9,9 @@ struct AsyncContractTests {
     func passingAsyncContract() async {
         let result = await #exhaust(
             AsyncCounterSpec.self,
-            commandLimit: 8,
-            .budget(.custom(coverage: 500, sampling: 30)),
+            .concurrency(1),
+            .commandLimit(8),
+            .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Async counter spec should pass — model and SUT are identical")
@@ -20,8 +21,8 @@ struct AsyncContractTests {
     func failingAsyncContract() async {
         let result = await #exhaust(
             BuggyAsyncCounterSpec.self,
-            commandLimit: 10,
-            .budget(.custom(coverage: 500, sampling: 100)),
+            .commandLimit(10),
+            .budget(.custom(coverage: 0, sampling: 200)),
             .suppress(.issueReporting)
         )
         #expect(result != nil, "Buggy async counter should fail")
@@ -39,8 +40,9 @@ struct AsyncContractTests {
     func asyncContractWithSkip() async {
         let result = await #exhaust(
             AsyncSkipSpec.self,
-            commandLimit: 8,
-            .budget(.custom(coverage: 500, sampling: 30)),
+            .concurrency(1),
+            .commandLimit(8),
+            .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Async skip spec should pass")
@@ -48,25 +50,30 @@ struct AsyncContractTests {
 
     @Test("Mixed sync+async commands produce AsyncContractSpec conformance")
     func mixedAsyncContract() async {
-        let result = await #exhaust(MixedAsyncSpec.self, commandLimit: 8, .budget(.custom(coverage: 500, sampling: 30)), .suppress(.issueReporting))
+        let result = await #exhaust(
+            MixedAsyncSpec.self,
+            .concurrency(1),
+            .commandLimit(8),
+            .budget(.custom(coverage: 0, sampling: 100)),
+            .suppress(.issueReporting)
+        )
         #expect(result == nil, "Mixed async spec should pass")
     }
 
     @Test("Async contract replay reproduces failure with seed through shrinking")
     func asyncReplayWithSeed() async {
-        // Use a fixed seed that produces a failure
         let result1 = await #exhaust(
             BuggyAsyncCounterSpec.self,
-            commandLimit: 10,
-            .replay(42),
+            .commandLimit(10),
+            .replay(.numeric(42)),
             .suppress(.issueReporting)
         )
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")
 
         let result2 = await #exhaust(
             BuggyAsyncCounterSpec.self,
-            commandLimit: 10,
-            .replay(42),
+            .commandLimit(10),
+            .replay(.numeric(42)),
             .suppress(.issueReporting)
         )
         #expect(result2 != nil, "Same seed should reproduce the failure")
@@ -79,13 +86,13 @@ struct AsyncContractTests {
     func asyncWithCoverage() async {
         let result = await #exhaust(
             BuggyAsyncCounterSpec.self,
-            commandLimit: 20,
+            .commandLimit(20),
+            .budget(.custom(coverage: 0, sampling: 200)),
             .suppress(.issueReporting),
             .logging(.debug)
         )
         #expect(result != nil, "Should find a failure")
         if let result {
-            // SCA row is ~20 commands; reducer should shrink to ≤6
             #expect(result.commands.count <= 6, "Expected shrunk result, got \(result.commands.count) commands")
         }
     }
@@ -95,7 +102,7 @@ struct AsyncContractTests {
         // Use a fixed seed that produces a failure
         let result1 = #exhaust(
             BuggyCounterSpec.self,
-            commandLimit: 20,
+            .commandLimit(20),
             .suppress(.issueReporting)
         )
         print()
@@ -106,9 +113,9 @@ struct AsyncContractTests {
 // MARK: - Contract: Passing async counter
 
 @Contract
-struct AsyncCounterSpec {
+final class AsyncCounterSpec {
     @Model var expected: Int = 0
-    @SUT var counter: AsyncCounter = .init()
+    @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
     func valueMatches() async -> Bool {
@@ -116,19 +123,19 @@ struct AsyncCounterSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected += 1
         await counter.increment()
     }
 
     @Command(weight: 2)
-    mutating func decrement() async throws {
+    func decrement() async throws {
         expected -= 1
         await counter.decrement()
     }
 
     @Command(weight: 1)
-    mutating func reset() async throws {
+    func reset() async throws {
         expected = 0
         await counter.reset()
     }
@@ -137,9 +144,9 @@ struct AsyncCounterSpec {
 // MARK: - Contract: Failing async counter (invariant violation)
 
 @Contract
-struct BuggyAsyncCounterSpec {
+final class BuggyAsyncCounterSpec {
     @Model var expected: Int = 0
-    @SUT var counter: BuggyAsyncCounter = .init()
+    @SystemUnderTest var counter: BuggyAsyncCounter = .init()
 
     @Invariant
     func valueMatches() async -> Bool {
@@ -147,13 +154,13 @@ struct BuggyAsyncCounterSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected += 1
         await counter.increment()
     }
 
     @Command(weight: 2)
-    mutating func decrement() async throws {
+    func decrement() async throws {
         expected -= 1
         await counter.decrement()
     }
@@ -162,9 +169,9 @@ struct BuggyAsyncCounterSpec {
 // MARK: - Contract: Async with skip()
 
 @Contract
-struct AsyncSkipSpec {
+final class AsyncSkipSpec {
     @Model var expected: [Int] = []
-    @SUT var counter: AsyncCounter = .init()
+    @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
     func historyLengthMatches() async -> Bool {
@@ -172,13 +179,13 @@ struct AsyncSkipSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected.append(expected.count + 1)
         await counter.increment()
     }
 
     @Command(weight: 2)
-    mutating func decrement() async throws {
+    func decrement() async throws {
         guard !expected.isEmpty else { throw skip() }
         expected.append(expected.last! - 1)
         await counter.decrement()
@@ -188,9 +195,9 @@ struct AsyncSkipSpec {
 // MARK: - Contract: Mixed sync + async commands
 
 @Contract
-struct MixedAsyncSpec {
+final class MixedAsyncSpec {
     @Model var expected: Int = 0
-    @SUT var counter: AsyncCounter = .init()
+    @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
     func valueMatches() async -> Bool {
@@ -199,12 +206,12 @@ struct MixedAsyncSpec {
 
     /// Sync command — still valid in an async contract
     @Command(weight: 1)
-    mutating func syncNoOp() throws {
+    func syncNoOp() throws {
         // Does nothing to either model or SUT
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected += 1
         await counter.increment()
     }

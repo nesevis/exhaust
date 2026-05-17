@@ -10,7 +10,7 @@ struct BuggyCounterTests {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,
-                commandLimit: 10,
+                .commandLimit(10),
                 .suppress(.issueReporting)
             )
         )
@@ -29,7 +29,7 @@ struct BuggyCounterTests {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,
-                commandLimit: 10,
+                .commandLimit(10),
                 .suppress(.issueReporting)
             )
         )
@@ -58,7 +58,7 @@ struct BuggyCounterTests {
 @Contract
 struct BuggyCounterSpec {
     @Model var expectedValue: Int = 0
-    @SUT var counter = BuggyCounter(capacity: 3)
+    @SystemUnderTest var counter = BuggyCounter(capacity: 3)
 
     @Invariant
     func valueMatches() -> Bool {

@@ -246,6 +246,7 @@ package enum ChoiceTreeAnalysis {
         }
 
         let typeTag = value.tag
+        if case .laneControl = typeTag { return true }
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
         let isSmall = !overflow && domainSize < finiteDomainThreshold
 

@@ -13,7 +13,7 @@ struct ALUTests {
         let result = try #require(
             #exhaust(
                 ALUSpec.self,
-                commandLimit: 8,
+                .commandLimit(8),
                 .suppress(.issueReporting)
             )
         )
@@ -30,7 +30,7 @@ struct ALUTests {
 @Contract
 struct ALUSpec {
     @Model var expected: Int = 0
-    @SUT var alu = FourBitALU()
+    @SystemUnderTest var alu = FourBitALU()
 
     @Invariant
     func registersMatch() -> Bool {

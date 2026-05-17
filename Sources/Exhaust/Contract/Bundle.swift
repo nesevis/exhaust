@@ -3,7 +3,7 @@ import Synchronization
 
 /// Holds values produced by earlier commands so that later commands can reference them.
 ///
-/// Use ``Bundle`` when a command needs to operate on an entity created by a prior command (for example, deleting a user that was previously created). The drawing mechanism records a ``chooseBits`` effect in the Freer Monad, making bundle indices reducable by the Reducer.
+/// Use ``Bundle`` when a command needs to operate on an entity created by a prior command (for example, deleting a user that was previously created). The drawing mechanism records a ``chooseBits`` effect in the Freer Monad, making bundle indices reducible by the reducer.
 ///
 /// ## Example
 ///
@@ -19,15 +19,14 @@ import Synchronization
 ///     }
 ///
 ///     @Command(weight: 2)
-///     mutating func deleteUser() {
-///         guard let id = userIDs.draw() else { skip() }
+///     mutating func deleteUser() throws {
+///         guard let id = userIDs.draw() else { throw skip() }
 ///         db.deleteUser(id: id)
 ///     }
 /// }
 /// ```
 public final class Bundle<Element>: @unchecked Sendable {
-    // @unchecked Sendable: Element is unconstrained to support non-Sendable reference types
-    // (for example, class-based SUTs). The Mutex enforces serialized access mechanically.
+    // @unchecked Sendable: Element is unconstrained to support non-Sendable reference types (for example, class-based SUTs). Mutex<[Element]> would be ideal but fails the `sending` constraint for non-Sendable Element types. The Mutex<Void> + nonisolated(unsafe) pattern provides the same mechanical serialization.
     private nonisolated(unsafe) var _storage = [Element]()
     private let lock = Mutex<Void>(())
 

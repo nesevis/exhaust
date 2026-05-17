@@ -441,22 +441,35 @@ A few signs you've crossed into `#explore` territory:
 
 Everything above this point has been about pure functions — feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state it shouldn't be reachable to. No single operation is buggy in isolation. The bug lives in the interaction.
 
-Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a struct that describes the system under test (`@SUT`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can also declare a reference model (`@Model`) that commands update alongside the real system. Invariants can then check the real system against the model as an oracle. Either way, Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks (or when the model and SUT disagree, if you've provided a model). The shape looks like this:
+Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a struct that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can also declare a reference model (`@Model`) that commands update alongside the real system. Invariants can then check the real system against the model as an oracle. Either way, Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks (or when the model and SUT disagree, if you've provided a model). The shape looks like this:
 
 ```swift
 @Test func specHolds() {
-    #exhaust(Spec.self, commandLimit: 8)
+    #exhaust(Spec.self)
 }
 
 @Contract
 struct Spec {
-    @SUT var sut = MyType()
-    @Command mutating func op() { /* mutate sut */ }
-    @Invariant func holds() -> Bool { /* check sut */ }
+    @SystemUnderTest
+    var sut = MyType()
+
+    @Command
+    mutating func op() { /* mutate sut */ }
+
+    @Invariant
+    func holds() -> Bool { /* check sut */ }
 }
 ```
 
-It's an advanced capability with its own document. The point here is just to know it exists. If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
+For async SUTs, the contract becomes a `final class` and the runner tests concurrent interleaving at every `await` boundary — finding data races that sequential testing can't reach:
+
+```swift
+@Test func sutIsSafeUnderConcurrency() async {
+    await #exhaust(AsyncSpec.self, .concurrency(2))
+}
+```
+
+Contract testing has its own guide: [Contract Testing with Exhaust](CONTRACT_TESTING.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
 
 ## The tools, in summary
 
@@ -470,4 +483,4 @@ Here's when each tool is the right answer:
 
 **`#explore(generator, directions: [...]) { value in ... }`**. *Guarantee that each declared region of the input space gets exercised.* Use it when you can name the regions you care about and want assurance they were tested, and reach for it when `#exhaust` passes too easily for comfort.
 
-**`@Contract`**. *Test stateful systems across sequences of operations.* Reach for it when the bug you're worried about lives in the ordering or combination of several calls rather than in any single call. Its own document covers the mechanics.
+**`@Contract`**. *Test stateful systems across sequences of operations.* Reach for it when the bug you're worried about lives in the ordering or combination of several calls rather than in any single call. Async contracts also test concurrent interleaving at `await` boundaries. See [Contract Testing with Exhaust](CONTRACT_TESTING.md) for the full guide.

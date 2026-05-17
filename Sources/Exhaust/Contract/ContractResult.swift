@@ -2,7 +2,7 @@
 
 /// The result of a failed contract property test.
 ///
-/// Contains the reduced command sequence, a step-by-step execution trace showing what happened at each step, and the typed SUT state at the point of failure.
+/// Contains the reduced command sequence, a step-by-step execution trace showing what happened at each step, and optionally the typed SUT state at the point of failure.
 public struct ContractResult<Spec: ContractSpecBase> {
     /// The reduced command sequence that triggered the failure.
     public let commands: [Spec.Command]
@@ -10,7 +10,7 @@ public struct ContractResult<Spec: ContractSpecBase> {
     /// Step-by-step execution trace of the failing sequence.
     public let trace: [TraceStep]
 
-    /// The system under test's state after executing the failing sequence.
+    /// The system under test's state after executing the failing sequence. For concurrent contracts, this is the state from a sequential replay — the expected outcome without the race.
     public let systemUnderTest: Spec.SystemUnderTest
 
     /// The seed for deterministic replay, if available.

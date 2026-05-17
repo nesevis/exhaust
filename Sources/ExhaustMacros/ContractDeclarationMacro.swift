@@ -5,7 +5,7 @@ import SwiftSyntaxMacros
 
 /// Attached macro that synthesizes `ContractSpec` conformance from a struct annotated with `@Contract`.
 ///
-/// Scans the struct for `@Model`, `@SUT`, `@Command`, and `@Invariant` annotations, then generates:
+/// Scans the struct for `@Model`, `@SystemUnderTest`, `@Command`, and `@Invariant` annotations, then generates:
 /// - A `Command` enum with one case per `@Command` method.
 /// - A `commandGenerator` static property using `Gen.pick`.
 /// - A `run(_:)` method dispatching commands to their methods.
@@ -82,14 +82,15 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 node: Syntax(node),
                 message: ContractDiagnostic.sutTypeNotInferred
             ))
-            decls.append("var systemUnderTest: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SUT property\") }")
+            decls.append("var systemUnderTest: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SystemUnderTest property\") }")
         }
 
         // 3. commandGenerator
-        decls.append(synthesizeCommandGenerator(commands: commands))
+        decls.append(synthesizeCommandGenerator(commands: commands, context: context))
 
         // 4. run(_:)
-        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: hasAnyAsync))
+        let isClassDecl = declaration.is(ClassDeclSyntax.self)
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: hasAnyAsync, isClassDecl: isClassDecl))
 
         // 5. checkInvariants()
         decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: hasAnyAsync))
@@ -99,6 +100,11 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
 
         // 7. sutDescription
         decls.append(synthesizeSUTDescription(sutProps: sutProps))
+
+        // 8. required init() for classes (satisfies ContractSpecBase.init())
+        if isClassDecl {
+            decls.append("required init() {}")
+        }
 
         return decls
     }
@@ -112,6 +118,7 @@ private struct CommandInfo {
     let weight: String
     let generatorExprs: [String]
     let isAsync: Bool
+    let syntax: FunctionDeclSyntax?
 }
 
 private struct InvariantInfo {
@@ -136,36 +143,24 @@ private struct SUTProperty {
 private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProperty] {
     members.compactMap { member in
         guard let varDecl = member.decl.as(VariableDeclSyntax.self),
-              hasAttribute("SUT", on: varDecl),
+              hasAttribute("SystemUnderTest", on: varDecl),
               let binding = varDecl.bindings.first
         else { return nil }
 
         let name = binding.pattern.trimmedDescription
 
-        // Try explicit type annotation first: `@SUT var queue: BoundedQueue<Int>`
+        // Try explicit type annotation first: `@SystemUnderTest var queue: BoundedQueue<Int>`
         if let typeAnnotation = binding.typeAnnotation {
             return SUTProperty(name: name, type: typeAnnotation.type.trimmedDescription)
         }
 
-        // Fall back to inferring from initializer: `@SUT var queue = BoundedQueue<Int>(capacity: 3)`
-        // Extract the type name from the initializer expression if it's a function call.
+        // Fall back to inferring from initializer: `@SystemUnderTest var queue = BoundedQueue<Int>(capacity: 3)` or `@SystemUnderTest var stack = [Int]()`.
         if let initializer = binding.initializer,
            let call = initializer.value.as(FunctionCallExprSyntax.self)
         {
             let callee = call.calledExpression.trimmedDescription
             return SUTProperty(name: name, type: callee)
         }
-
-        // Array literal: `@SUT var stack = [Int]()`
-        if let initializer = binding.initializer,
-           let call = initializer.value.as(FunctionCallExprSyntax.self),
-           let arrayType = call.calledExpression.as(ArrayExprSyntax.self)
-        {
-            return SUTProperty(name: name, type: arrayType.trimmedDescription)
-        }
-
-        // Array sugar: `@SUT var stack: [Int] = []`
-        // Already covered by the typeAnnotation path above.
 
         return SUTProperty(name: name, type: nil)
     }
@@ -214,7 +209,8 @@ private func extractCommands(from members: MemberBlockItemListSyntax) -> [Comman
             parameters: parameters,
             weight: weight,
             generatorExprs: generatorExprs,
-            isAsync: isAsync
+            isAsync: isAsync,
+            syntax: funcDecl
         )
     }
 }
@@ -279,7 +275,7 @@ private func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
+private func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpansionContext) -> DeclSyntax {
     var choices: [String] = []
 
     for cmd in commands {
@@ -301,8 +297,15 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
                 "\($0.label): \($0.label)"
             }.joined(separator: ", ")
             choices.append("            (\(cmd.weight), #gen(\(genArgs)) { \(closureParams) in Command.\(cmd.methodName)(\(constructorArgs)) })")
+        } else if cmd.parameters.isEmpty {
+            choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         } else {
-            // No generators specified — use .just for parameterless, error otherwise
+            if let syntax = cmd.syntax {
+                context.diagnose(Diagnostic(
+                    node: Syntax(syntax),
+                    message: ContractDiagnostic.commandMissingGenerators
+                ))
+            }
             choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         }
     }
@@ -318,24 +321,25 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSyntax {
-    let tryKeyword = hasAnyAsync ? "try await" : "try"
+private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl: Bool) -> DeclSyntax {
     var cases: [String] = []
 
     for cmd in commands {
+        let tryKeyword = cmd.isAsync ? "try await" : "try"
         if cmd.parameters.isEmpty {
             cases.append("        case .\(cmd.methodName): \(tryKeyword) self.\(cmd.methodName)()")
         } else {
-            let bindings = cmd.parameters.map { "let \($0.label)" }.joined(separator: ", ")
+            let bindings = cmd.parameters.map(\.label).joined(separator: ", ")
             let args = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
-            cases.append("        case .\(cmd.methodName)(\(bindings)): \(tryKeyword) self.\(cmd.methodName)(\(args))")
+            cases.append("        case let .\(cmd.methodName)(\(bindings)): \(tryKeyword) self.\(cmd.methodName)(\(args))")
         }
     }
 
     let casesBlock = cases.joined(separator: "\n")
+    let mutatingKeyword = isClassDecl ? "" : "mutating "
     let signature = hasAnyAsync
-        ? "mutating func run(_ command: Command) async throws"
-        : "mutating func run(_ command: Command) throws"
+        ? "\(mutatingKeyword)func run(_ command: Command) async throws"
+        : "\(mutatingKeyword)func run(_ command: Command) throws"
 
     return """
     \(raw: signature) {
@@ -386,10 +390,18 @@ private func synthesizeModelDescription(modelProps: [String]) -> DeclSyntax {
         """
     }
 
-    let parts = modelProps.map { "\"\($0): \\(\($0))\"" }.joined(separator: " + \", \" + ")
+    if modelProps.count == 1 {
+        let part = "\"\(modelProps[0]): \\(\(modelProps[0]))\""
+        return """
+        var modelDescription: String { \(raw: part) }
+        """
+    }
 
+    let lines = modelProps.map { "\"  \($0): \\(\($0))\"" }.joined(separator: ",\n            ")
     return """
-    var modelDescription: String { \(raw: parts) }
+    var modelDescription: String { [
+            \(raw: lines)
+        ].joined(separator: "\\n") }
     """
 }
 
@@ -421,8 +433,9 @@ private func qualifyGenExpression(_ expr: String, paramType: String) -> String {
 
 enum ContractDiagnostic: String, DiagnosticMessage {
     case noCommands = "@Contract requires at least one @Command method"
-    case noSUT = "@Contract requires exactly one @SUT property"
-    case sutTypeNotInferred = "@SUT property type could not be inferred — add an explicit type annotation"
+    case noSUT = "@Contract requires exactly one @SystemUnderTest property"
+    case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
+    case commandMissingGenerators = "@Command method has parameters but no generator expressions — add generators to the @Command attribute"
 
     var message: String {
         rawValue
@@ -434,7 +447,7 @@ enum ContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-        case .noCommands, .noSUT: .error
+        case .noCommands, .noSUT, .commandMissingGenerators: .error
         case .sutTypeNotInferred: .warning
         }
     }

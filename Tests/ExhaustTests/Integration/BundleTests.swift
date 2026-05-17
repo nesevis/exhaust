@@ -57,6 +57,31 @@ struct BundleTests {
         bundle.reset()
 
         #expect(bundle.isEmpty)
-        #expect(bundle.isEmpty)
+    }
+
+    @Test("Remove(where:) removes matching elements")
+    func removeWhere() {
+        let bundle = Bundle<Int>()
+        bundle.add(1)
+        bundle.add(2)
+        bundle.add(3)
+        bundle.add(4)
+
+        bundle.remove(where: { $0 % 2 == 0 })
+
+        #expect(bundle.count == 2)
+        #expect(bundle.draw(at: 0) == 1)
+        #expect(bundle.draw(at: 1) == 3)
+    }
+
+    @Test("Remove(where:) with no matches leaves bundle unchanged")
+    func removeWhereNoMatch() {
+        let bundle = Bundle<Int>()
+        bundle.add(1)
+        bundle.add(3)
+
+        bundle.remove(where: { $0 > 10 })
+
+        #expect(bundle.count == 2)
     }
 }

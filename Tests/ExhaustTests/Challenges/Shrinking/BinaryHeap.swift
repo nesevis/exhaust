@@ -28,6 +28,7 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 boundGen,
                 .suppress(.issueReporting),
+                .budget(.extensive),
                 .replay(2250),
                 .logging(.debug),
                 .onReport { report = $0 },

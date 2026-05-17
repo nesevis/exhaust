@@ -3,6 +3,9 @@ import ExhaustCore
 
 /// Configuration options for `#exhaust` contract property tests, passed as variadic arguments to control test behavior.
 public enum ContractSettings {
+    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 100.
+    case commandLimit(Int)
+
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.thorough` (500 coverage rows, 500 random samplings).
     case budget(ExhaustBudget)
 
@@ -18,6 +21,9 @@ public enum ContractSettings {
 
     /// Disables structured coverage analysis of command orderings.
     case randomOnly
+
+    /// Includes a structural diff between the original and reduced command sequences in the failure report.
+    case includeDiff
 
     /// Collects per-example statistics in the OpenPBTStats JSON Lines format and attaches the result to the test run.
     ///

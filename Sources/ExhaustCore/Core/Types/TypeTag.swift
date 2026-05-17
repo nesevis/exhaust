@@ -42,6 +42,8 @@ package enum TypeTag: Sendable {
     case character(boundaryIndices: [UInt64])
     /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
     case depthControl
+    /// Tags a structural scheduling decision that coverage analysis should skip but the reducer should minimize normally. Used for lane assignment in concurrent contract testing — the covering array covers command types without the combinatorial cost of lane combinations, while the reducer drives markers toward 0 (prefix) to discover minimal concurrency.
+    case laneControl
 }
 
 package extension TypeTag {
@@ -80,7 +82,7 @@ package extension TypeTag {
     @inline(__always)
     var simplestBitPattern: UInt64 {
         switch self {
-        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character, .depthControl:
+        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character, .depthControl, .laneControl:
             0
         case .int8:
             1 << 7
@@ -198,7 +200,7 @@ package extension TypeTag {
         case .date: Int64(bitPattern64: bitPattern64)
         case .bits: UInt64(bitPattern64: bitPattern64)
         case .character: UInt32(bitPattern64: bitPattern64)
-        case .depthControl: UInt64(bitPattern64: bitPattern64)
+        case .depthControl, .laneControl: UInt64(bitPattern64: bitPattern64)
         }
     }
 }
@@ -251,6 +253,7 @@ extension TypeTag: Hashable {
             hasher.combine(15)
             hasher.combine(boundaryIndices)
         case .depthControl: hasher.combine(16)
+        case .laneControl: hasher.combine(17)
         }
     }
 }
@@ -275,6 +278,7 @@ extension TypeTag: CustomStringConvertible {
         case .bits: "Bits"
         case .character: "Character"
         case .depthControl: "DepthControl"
+        case .laneControl: "Control"
         }
     }
 }

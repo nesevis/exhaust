@@ -7,33 +7,32 @@ private let testMacros: [String: any Macro.Type] = [
     "exhaust": ExhaustContractMacro.self,
     "Contract": ContractDeclarationMacro.self,
     "Model": ModelMacro.self,
-    "SUT": SUTMacro.self,
+    "SystemUnderTest": SUTMacro.self,
     "Command": CommandMacro.self,
     "Invariant": InvariantMacro.self,
 ]
 
 private let asyncTestMacros: [String: any Macro.Type] = [
-    "exhaust": ExhaustAsyncContractMacro.self,
+    "exhaust": ExhaustConcurrentContractMacro.self,
     "Contract": ContractDeclarationMacro.self,
     "Model": ModelMacro.self,
-    "SUT": SUTMacro.self,
+    "SystemUnderTest": SUTMacro.self,
     "Command": CommandMacro.self,
     "Invariant": InvariantMacro.self,
 ]
 
 @Suite("#exhaust contract macro expansion tests")
 struct ContractMacroTests {
-    @Test("Basic #exhaust contract expansion")
+    @Test("Basic #exhaust contract expansion with commandLimit")
     func basicContract() {
         assertMacroExpansion(
             """
-            #exhaust(BoundedQueueSpec.self, commandLimit: 20)
+            #exhaust(BoundedQueueSpec.self, .commandLimit(20))
             """,
             expandedSource: """
             __runContract(
                 BoundedQueueSpec.self,
-                commandLimit: 20,
-                settings: [],
+                settings: [.commandLimit(20)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -48,13 +47,12 @@ struct ContractMacroTests {
     func contractWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(Spec.self, commandLimit: 20, .maxIterations(500))
+            #exhaust(Spec.self, .commandLimit(20), .budget(.thorough))
             """,
             expandedSource: """
             __runContract(
                 Spec.self,
-                commandLimit: 20,
-                settings: [.maxIterations(500)],
+                settings: [.commandLimit(20), .budget(.thorough)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -65,8 +63,8 @@ struct ContractMacroTests {
         )
     }
 
-    @Test("#exhaust contract without commandLimit")
-    func contractWithoutCommandLimit() {
+    @Test("#exhaust contract with no settings")
+    func contractWithoutSettings() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self)
@@ -74,7 +72,6 @@ struct ContractMacroTests {
             expandedSource: """
             __runContract(
                 Spec.self,
-                commandLimit: nil,
                 settings: [],
                 fileID: #fileID,
                 filePath: #filePath,
@@ -86,8 +83,8 @@ struct ContractMacroTests {
         )
     }
 
-    @Test("#exhaust contract without commandLimit but with settings")
-    func contractWithoutCommandLimitWithSettings() {
+    @Test("#exhaust contract with suppress only")
+    func contractWithSuppressOnly() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self, .suppress(.issueReporting))
@@ -95,7 +92,6 @@ struct ContractMacroTests {
             expandedSource: """
             __runContract(
                 Spec.self,
-                commandLimit: nil,
                 settings: [.suppress(.issueReporting)],
                 fileID: #fileID,
                 filePath: #filePath,
@@ -117,7 +113,7 @@ struct ContractDeclarationMacroTests {
             @Contract
             struct QueueSpec {
                 @Model var contents: [Int] = []
-                @SUT var queue: MyQueue
+                @SystemUnderTest var queue: MyQueue
 
                 @Command(weight: 3)
                 mutating func enqueue(value: Int) throws {
@@ -162,11 +158,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyQueue
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     queue
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (3, .just(Command.enqueue)),
                         (2, .just(Command.dequeue))
@@ -175,7 +171,7 @@ struct ContractDeclarationMacroTests {
 
                 mutating func run(_ command: Command) throws {
                     switch command {
-                        case .enqueue(let value): try self.enqueue(value: value)
+                        case let .enqueue(value): try self.enqueue(value: value)
                         case .dequeue: try self.dequeue()
                     }
                 }
@@ -219,7 +215,7 @@ struct ContractDeclarationMacroTests {
             """
             @Contract
             struct AsyncSpec {
-                @SUT var counter: MyCounter
+                @SystemUnderTest var counter: MyCounter
 
                 @Command(weight: 1)
                 mutating func increment() async throws {
@@ -263,11 +259,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyCounter
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     counter
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment)),
                         (1, .just(Command.decrement))
@@ -277,7 +273,7 @@ struct ContractDeclarationMacroTests {
                 mutating func run(_ command: Command) async throws {
                     switch command {
                         case .increment: try await self.increment()
-                        case .decrement: try await self.decrement()
+                        case .decrement: try self.decrement()
                     }
                 }
 
@@ -307,7 +303,7 @@ struct ContractDeclarationMacroTests {
             """
             @Contract
             struct AsyncInvSpec {
-                @SUT var counter: MyCounter
+                @SystemUnderTest var counter: MyCounter
 
                 @Command(weight: 1)
                 mutating func increment() throws {
@@ -342,11 +338,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyCounter
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     counter
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment))
                     )
@@ -385,7 +381,7 @@ struct ContractDeclarationMacroTests {
             """
             @Contract
             struct SyncSpec {
-                @SUT var counter: MyCounter
+                @SystemUnderTest var counter: MyCounter
 
                 @Command(weight: 1)
                 mutating func increment() throws {
@@ -411,11 +407,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyCounter
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     counter
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment))
                     )
@@ -445,20 +441,86 @@ struct ContractDeclarationMacroTests {
             macros: testMacros
         )
     }
+
+    @Test("@Command with generator expression produces #gen in commandGenerator")
+    func commandWithGeneratorExpression() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct InsertSpec {
+                @SystemUnderTest var items: [Int]
+
+                @Command(weight: 3, .int(in: 0...99))
+                mutating func insert(value: Int) throws {
+                }
+            }
+            """,
+            expandedSource: """
+            struct InsertSpec {
+                var items: [Int]
+
+                mutating func insert(value: Int) throws {
+                }
+
+                enum Command: CustomStringConvertible, Sendable {
+                    case insert(value: Int)
+
+                    var description: String {
+                        switch self {
+                            case let .insert(value): "insert(\\(value))"
+                        }
+                    }
+                }
+
+                typealias SystemUnderTest = [Int]
+
+                var systemUnderTest: SystemUnderTest {
+                    items
+                }
+
+                static var commandGenerator: ReflectiveGenerator<Command> {
+                    .oneOf(weighted:
+                        (3, #gen((.int(in: 0...99) as ReflectiveGenerator<Int>)) { value in Command.insert(value: value) })
+                    )
+                }
+
+                mutating func run(_ command: Command) throws {
+                    switch command {
+                        case let .insert(value): try self.insert(value: value)
+                    }
+                }
+
+                func checkInvariants() throws {
+                }
+
+                var modelDescription: String {
+                    "(no model properties)"
+                }
+
+                var sutDescription: String {
+                    "items: \\(items)"
+                }
+            }
+
+            extension InsertSpec: ContractSpec {
+            }
+            """,
+            macros: testMacros
+        )
+    }
 }
 
 @Suite("#exhaust async contract macro expansion tests")
 struct AsyncContractMacroTests {
-    @Test("#exhaust async contract expansion")
+    @Test("#exhaust async contract expansion with no settings")
     func asyncContractExpansion() {
         assertMacroExpansion(
             """
-            #exhaust(AsyncSpec.self, commandLimit: 20)
+            #exhaust(AsyncSpec.self)
             """,
             expandedSource: """
-            __runContractAsync(
+            __runContractConcurrent(
                 AsyncSpec.self,
-                commandLimit: 20,
                 settings: [],
                 fileID: #fileID,
                 filePath: #filePath,
@@ -474,13 +536,12 @@ struct AsyncContractMacroTests {
     func asyncContractWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(AsyncSpec.self, commandLimit: 10, .maxIterations(50))
+            #exhaust(AsyncSpec.self, .commandLimit(10), .concurrency(3))
             """,
             expandedSource: """
-            __runContractAsync(
+            __runContractConcurrent(
                 AsyncSpec.self,
-                commandLimit: 10,
-                settings: [.maxIterations(50)],
+                settings: [.commandLimit(10), .concurrency(3)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,

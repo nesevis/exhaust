@@ -29,7 +29,7 @@ struct KVStoreLifecycleTests {
         let result = try #require(
             #exhaust(
                 KVStoreLifecycleContract.self,
-                commandLimit: 10,
+                .commandLimit(10),
                 .suppress(.issueReporting)
             )
         )
@@ -58,7 +58,7 @@ struct KVStoreLifecycleTests {
 struct KVStoreLifecycleContract {
     @Model var isOpen = false
     @Model var contents: [Int: Int] = [:]
-    @SUT var store = BuggyKVStore()
+    @SystemUnderTest var store = BuggyKVStore()
 
     @Invariant
     func countMatchesWhenOpen() -> Bool {

@@ -10,7 +10,7 @@ struct InvariantOnlyTests {
         let result = try #require(
             #exhaust(
                 CircularBufferContract.self,
-                commandLimit: 6,
+                .commandLimit(6),
                 .suppress(.issueReporting)
             )
         )
@@ -26,7 +26,7 @@ struct InvariantOnlyTests {
         let result = try #require(
             #exhaust(
                 SortedBackingContract.self,
-                commandLimit: 5,
+                .commandLimit(5),
                 .suppress(.issueReporting)
             )
         )
@@ -45,7 +45,7 @@ struct InvariantOnlyTests {
 /// no capacity guard in the SUT implementation.
 @Contract
 struct CircularBufferContract {
-    @SUT var buffer = CircularBuffer(capacity: 2)
+    @SystemUnderTest var buffer = CircularBuffer(capacity: 2)
 
     @Invariant
     func countWithinCapacity() -> Bool {
@@ -73,7 +73,7 @@ struct CircularBufferContract {
 
 @Contract
 struct SortedBackingContract {
-    @SUT var queue = BuggyPriorityQueue()
+    @SystemUnderTest var queue = BuggyPriorityQueue()
 
     @Invariant
     func backingIsSorted() -> Bool {

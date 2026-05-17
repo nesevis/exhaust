@@ -33,7 +33,7 @@ struct ExamGraderTests {
         let result = try #require(
             #exhaust(
                 ExamGraderContract.self,
-                commandLimit: 8,
+                .commandLimit(8),
                 .suppress(.issueReporting)
             )
         )
@@ -90,7 +90,7 @@ struct ExamGraderTests {
 
 @Contract
 struct ExamGraderContract {
-    @SUT var grader = BuggyExamGrader()
+    @SystemUnderTest var grader = BuggyExamGrader()
 
     @Invariant
     func answersMatchKeyLength() -> Bool {

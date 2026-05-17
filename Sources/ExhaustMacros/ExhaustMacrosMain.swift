@@ -12,7 +12,7 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         ExploreMacro.self,
         ExploreAsyncMacro.self,
         ExhaustContractMacro.self,
-        ExhaustAsyncContractMacro.self,
+        ExhaustConcurrentContractMacro.self,
         ContractDeclarationMacro.self,
         ModelMacro.self,
         SUTMacro.self,

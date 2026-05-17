@@ -13,7 +13,7 @@ public protocol ContractSpecBase {
     /// The synthesized command enum. Each case corresponds to a `@Command` method.
     associatedtype Command: CustomStringConvertible & Sendable
 
-    /// The type of the system under test, inferred from the `@SUT` property.
+    /// The type of the system under test, inferred from the `@SystemUnderTest` property.
     associatedtype SystemUnderTest
 
     /// Builds a generator for a single command step, weighted by `@Command` annotations.
@@ -37,7 +37,7 @@ public protocol ContractSpecBase {
 ///
 /// ## How It Works
 ///
-/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SUT`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and ``check(_:_:)`` postconditions.
+/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SystemUnderTest`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and ``check(_:_:)`` postconditions.
 ///
 /// ## Example
 ///
@@ -45,7 +45,8 @@ public protocol ContractSpecBase {
 /// @Contract
 /// struct BoundedQueueSpec {
 ///     @Model var contents: [Int] = []
-///     @SUT   var queue = BoundedQueue<Int>(capacity: 4)
+///     @SystemUnderTest
+///     var queue = BoundedQueue<Int>(capacity: 4)
 ///
 ///     @Command(weight: 3, Gen.int(in: 0...99))
 ///     mutating func enqueue(value: Int) throws {
@@ -69,7 +70,9 @@ public protocol ContractSpec: ContractSpecBase {
 }
 
 extension ContractSpec {
-    /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
+    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
+    ///
+    /// The returned closure is used by the SCA coverage phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction.
     static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
         { commands in
             var spec = Self()
@@ -91,19 +94,19 @@ extension ContractSpec {
 
 /// An asynchronous contract specification for testing async SUTs (actors, databases, network services).
 ///
-/// Identical to ``ContractSpec`` except `run(_:)` and `checkInvariants()` are `async`. The `@Contract` macro emits this conformance automatically when any `@Command` or `@Invariant` method is `async`.
+/// Async contracts are class-based reference types. This is required because concurrent testing executes commands from two tasks against the same spec instance — the custom executor controls interleaving at `await` boundaries to deterministically expose data races and reentrancy bugs.
 ///
-/// The synchronous core (Freer Monad, ChoiceTree, reduction) remains unchanged — async execution is bridged at the runtime boundary via a non-cooperative GCD thread.
+/// The `@Contract` macro emits this conformance automatically when any `@Command` or `@Invariant` method is `async`.
 ///
 /// ## Skip Identification
 ///
 /// Use ``skipIdentifier(specInit:)`` to obtain a synchronous closure for identifying skipped commands. The closure bridges async execution via `Task` + semaphore, matching the pattern used by the async contract runner's property closure.
-public protocol AsyncContractSpec: ContractSpecBase {
+public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
     /// Executes a command against the model and SUT asynchronously.
     ///
     /// - Parameter command: The command to execute.
     /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
-    mutating func run(_ command: Command) async throws
+    func run(_ command: Command) async throws
 
     /// Checks all `@Invariant`-annotated methods asynchronously. Called after every command execution.
     ///

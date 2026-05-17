@@ -12,32 +12,30 @@ import IssueReporting
 ///
 /// - Parameters:
 ///   - specType: The `@Contract`-annotated specification type.
-///   - commandLimit: The maximum number of commands per generated sequence.
-///   - settings: Configuration options controlling iteration count, coverage, and reduction.
-///   - fileID: The file ID of the call site (injected by macro expansion).
-///   - filePath: The file path of the call site (injected by macro expansion).
-///   - line: The line number of the call site (injected by macro expansion).
-///   - column: The column number of the call site (injected by macro expansion).
+///   - settings: Configuration options controlling iteration count, coverage, reduction, and command limits.
 @discardableResult
 public func __runContract<Spec: ContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int?,
     settings: [ContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
     column: UInt = #column
 ) -> ContractResult<Spec>? {
+    var commandLimit: Int?
     var budget = ExhaustBudget.thorough
     var seed: UInt64?
     var suppressIssueReporting = false
     var suppressLogs = false
     var useRandomOnly = false
     var collectOpenPBTStats = false
+    var includeDiff = false
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
     for setting in settings {
         switch setting {
+        case let .commandLimit(limit):
+            commandLimit = limit
         case let .budget(b):
             budget = b
         case let .replay(replaySeed):
@@ -66,11 +64,23 @@ public func __runContract<Spec: ContractSpec>(
             useRandomOnly = true
         case .collectOpenPBTStats:
             collectOpenPBTStats = true
+        case .includeDiff:
+            includeDiff = true
         case let .logging(level, format):
             logLevel = level
             logFormat = format
         }
     }
+
+    #if canImport(Testing)
+        if let traitConfig = ExhaustTraitConfiguration.current {
+            let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                budget = traitBudget
+            }
+        }
+    #endif
+
     return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
@@ -104,6 +114,60 @@ public func __runContract<Spec: ContractSpec>(
             }
             return true
         }
+
+        // --- Phase 0: Regression seeds from .exhaust(regressions:) trait ---
+        #if canImport(Testing)
+            if let traitConfig = ExhaustTraitConfiguration.current, traitConfig.regressions.isEmpty == false {
+                for encodedSeed in traitConfig.regressions {
+                    guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
+                        reportIssue(
+                            "Invalid regression seed: \(encodedSeed)",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                        continue
+                    }
+                    var regressionInterpreter = ValueAndChoiceTreeInterpreter(
+                        commandSequenceGenerator,
+                        materializePicks: true,
+                        seed: regressionSeed,
+                        maxRuns: 1
+                    )
+                    if let (input, _) = try? regressionInterpreter.next() {
+                        if property(input) == false {
+                            let (trace, spec) = buildTrace(input, specType: specType)
+                            let result = ContractResult<Spec>(
+                                commands: input,
+                                trace: trace,
+                                systemUnderTest: spec.systemUnderTest,
+                                seed: regressionSeed,
+                                discoveryMethod: .replay
+                            )
+                            if suppressIssueReporting == false {
+                                let rendered = renderFailure(
+                                    result,
+                                    failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
+                                    modelDescription: spec.modelDescription,
+                                    includeDiff: includeDiff
+                                )
+                                reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
+                            }
+                            return result
+                        } else if suppressIssueReporting == false {
+                            reportIssue(
+                                "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column
+                            )
+                        }
+                    }
+                }
+            }
+        #endif
 
         // --- Phase 1: Sequence Covering Array (SCA) coverage ---
         //
@@ -185,11 +249,12 @@ public func __runContract<Spec: ContractSpec>(
             discoveryMethod: failureInfo.discoveryMethod
         )
 
-        if !suppressIssueReporting {
+        if suppressIssueReporting == false {
             let rendered = renderFailure(
                 result,
                 failureInfo: failureInfo,
-                modelDescription: spec.modelDescription
+                modelDescription: spec.modelDescription,
+                includeDiff: includeDiff
             )
             ExhaustLog.error(
                 category: .propertyTest,
@@ -278,7 +343,8 @@ private func buildTrace<Spec: ContractSpec>(
 func renderFailure<Spec: ContractSpecBase>(
     _ result: ContractResult<Spec>,
     failureInfo: ContractFailureInfo<Spec.Command>,
-    modelDescription: String
+    modelDescription: String,
+    includeDiff: Bool = false
 ) -> String {
     var lines: [String] = []
     lines.append("Contract failure (found via \(failureInfo.discoveryMethod))")
@@ -297,8 +363,7 @@ func renderFailure<Spec: ContractSpecBase>(
         lines.append("  \(step)")
     }
 
-    // Show reduction diff when the original sequence is available and differs.
-    if let original = failureInfo.originalCommands, original.count > result.commands.count {
+    if includeDiff, let original = failureInfo.originalCommands, original.count > result.commands.count {
         let originalDescriptions = original.map { "\($0)" }
         let reducedDescriptions = result.commands.map { "\($0)" }
         if let reductionDiff = diff(originalDescriptions, reducedDescriptions) {
@@ -389,7 +454,7 @@ func estimateCommandLimit(
     let d = Double(min(domainSize, UInt64(Int.max)))
     let d2 = max(d * d, 1.0)
     let ratio = Double(coverageBudget) / d2
-    let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 1000)) : 2
+    let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 100)) : 2
 
     // Exploration floor: enough for each command type to appear several times, ensuring the random phase can reach meaningful state depths.
     let explorationFloor = max(branchCount * 3, 6)
@@ -560,9 +625,9 @@ func runSCACoverage<Command>(
                 config: .init(maxStalls: 2),
                 property: property
             ) {
-                return .failure(commands: reducedValue, original: reduceValue)
+                return .failure(commands: reducedValue, original: value)
             }
-            return .failure(commands: reduceValue, original: reduceValue)
+            return .failure(commands: reduceValue, original: value)
         }
     }
 
@@ -583,8 +648,10 @@ func runSCACoverage<Command>(
 
 // MARK: - Skip-Aware Pruning
 
-/// Removes elements at the given indices from the first `.sequence` node found in the tree.
-private func pruneSequenceElements(
+/// Removes elements at the given indices from `.sequence` nodes in the choice tree.
+///
+/// Walks the tree recursively, pruning indexed elements from the first sequence node encountered and updating its stored length. Used by the skip-pruning pass to excise commands whose preconditions were not met before handing the tree to the reducer.
+func pruneSequenceElements(
     from tree: ChoiceTree,
     at indices: Set<Int>
 ) -> ChoiceTree {

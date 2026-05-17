@@ -70,8 +70,9 @@ struct StringAnagramChallenge {
         let result = #exhaust(
             .string(),
             reflecting: Self.haystack,
+            .budget(.extensive),
             .suppress(.issueReporting),
-            .logging(.debug)
+//            .logging(.debug)
         ) {
             $0.contains(needle) == false
         }
