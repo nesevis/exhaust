@@ -42,6 +42,16 @@ public enum ConcurrentContractSettings {
     /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also timeout). The diagnostic indicates which command body likely suspended to a foreign executor.
     case idleTimeout(Int)
 
+    /// Collects per-example statistics in the OpenPBTStats JSON Lines format and attaches the result to the test run.
+    ///
+    /// Each test example produces one JSON line with status, a string representation, and complexity features derived from the choice tree. Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.
+    case collectOpenPBTStats
+
+    /// Registers a closure that receives an ``ExhaustReport`` after the test completes.
+    ///
+    /// The report includes per-phase timing, invocation counts, and reduction statistics. Multiple `.onReport` closures are chained in order.
+    case onReport(@Sendable (ExhaustReport) -> Void)
+
     /// Controls log verbosity and format for this contract test run.
     ///
     /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.

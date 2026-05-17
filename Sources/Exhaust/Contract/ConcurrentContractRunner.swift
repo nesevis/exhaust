@@ -27,6 +27,8 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     var idleTimeout = 1000
     var suppressIssueReporting = false
     var useRandomOnly = false
+    var collectOpenPBTStats = false
+    var onReportClosure: (@Sendable (ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
     for setting in settings {
@@ -60,6 +62,18 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             }
         case .randomOnly:
             useRandomOnly = true
+        case .collectOpenPBTStats:
+            collectOpenPBTStats = true
+        case let .onReport(closure):
+            if let existing = onReportClosure {
+                let chained = existing
+                onReportClosure = { report in
+                    chained(report)
+                    closure(report)
+                }
+            } else {
+                onReportClosure = closure
+            }
         case let .idleTimeout(ms):
             idleTimeout = ms
         case let .logging(level, format):
@@ -70,6 +84,13 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     precondition((1 ... 8).contains(concurrencyLevel), "concurrencyLevel must be between 1 and 8")
 
     return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
+    let runStart = ContinuousClock.now
+    var report = ExhaustReport()
+    var coverageInvocations = 0
+    let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
+        ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
+        : nil
+
     let commandGen = Spec.commandGenerator.gen
     let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: concurrencyLevel)
     let sequenceGen = Gen.arrayOf(
@@ -95,13 +116,30 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     let resolvedConcurrencyLevel = concurrencyLevel
     let resolvedIdleTimeout = idleTimeout
     let lastRunTimedOut = SendableBox(false)
+    let invocationCounter = SendableBox(0)
     let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+        invocationCounter.value += 1
         let result = drainSchedule(taggedCommands: taggedCommands, specInit: specInit, concurrencyLevel: resolvedConcurrencyLevel, recordTrace: false, idleTimeoutMilliseconds: resolvedIdleTimeout)
         lastRunTimedOut.value = result.timedOut
         return result.passed
     }
 
+    defer {
+        let samplingInvocations = invocationCounter.value - coverageInvocations
+        report.totalMilliseconds = Double((ContinuousClock.now - runStart).components.attoseconds) / 1e15
+        report.setInvocations(coverage: coverageInvocations, randomSampling: samplingInvocations, reduction: report.reductionInvocations)
+        report.seed = seed
+        if let statsAccumulator {
+            let lines = statsAccumulator.finalize()
+            if lines.isEmpty == false {
+                report.openPBTStatsLines = lines
+            }
+        }
+        onReportClosure?(report)
+    }
+
     // --- Phase 1: SCA coverage (command-type orderings with random lane assignments) ---
+    let coverageStart = ContinuousClock.now
     if seed == nil && coverageBudget > 0 && useRandomOnly == false {
         if let scaResult = runConcurrentSCACoverage(
             seqGen: sequenceGen,
@@ -137,9 +175,13 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 )
             }
 
+            coverageInvocations = invocationCounter.value
+            report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
             return result
         }
     }
+    coverageInvocations = invocationCounter.value
+    report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
 
     // --- Phase 2: Random sampling ---
     var interpreter = ValueAndChoiceTreeInterpreter(
@@ -153,6 +195,12 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     do {
         while let (input, tree) = try interpreter.next() {
             let passed = property(input)
+            statsAccumulator?.record(
+                representation: "\(input.map { "[\($0.0)] \($0.1)" })",
+                passed: passed,
+                tree: tree,
+                phase: .random
+            )
 
             if passed == false {
                 ExhaustLog.notice(

@@ -80,6 +80,20 @@ struct ConcurrentContractTests {
         #expect(result.seed != nil, "Random-sampling failures should carry a replay seed")
     }
 
+    @Test(".onReport delivers invocation counts")
+    func onReportDelivers() async {
+        nonisolated(unsafe) var deliveredReport: ExhaustReport?
+        _ = await __runContractConcurrent(
+            NonAtomicCounterSpec.self,
+            settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
+        )
+        #expect(deliveredReport != nil, "onReport closure should be called")
+        if let report = deliveredReport {
+            #expect(report.propertyInvocations > 0, "Should have recorded invocations")
+            #expect(report.totalMilliseconds > 0, "Should have recorded timing")
+        }
+    }
+
     @Test("Deterministic replay produces same result")
     func deterministicReplay() async throws {
         let result1 = try #require(

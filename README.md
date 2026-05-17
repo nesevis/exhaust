@@ -20,7 +20,7 @@ Exhaust works in three modes:
 
 - **Property tests** — generate values and check that a rule holds: `#exhaust(generator) { value in Bool }`.
 - **Directed exploration** — declare semantic regions of the input space and guarantee each one is covered: `#explore(generator, directions: [...]) { value in Bool }`.
-- **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self, commandLimit: 20)`.
+- **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self, .commandLimit(20))`.
 
 ```swift
 @Test func arraySortIsIdempotent() {
@@ -477,7 +477,7 @@ Run the contract with `#exhaust`:
 
 ```swift
 @Test func counterObeysSpec() {
-    #exhaust(CounterSpec.self, commandLimit: 10)
+    #exhaust(CounterSpec.self, .commandLimit(10))
 }
 ```
 
@@ -593,7 +593,7 @@ The reducer drove the first `increment` into the sequential prefix (proving it d
 
 ### Settings
 
-Sync contract tests accept `ContractSettings` (`.budget`, `.replay`, `.randomOnly`, `.collectOpenPBTStats`, `.logging`) plus a `commandLimit:` parameter.
+Sync contract tests accept `ContractSettings`: `.commandLimit()`, `.budget()`, `.replay()`, `.randomOnly`, `.collectOpenPBTStats`, `.suppress()`, `.logging()`.
 
 Async contract tests accept `ConcurrentContractSettings`:
 
@@ -602,9 +602,12 @@ Async contract tests accept `ConcurrentContractSettings`:
 | `.commandLimit(N)` | 10 | Maximum number of commands per test iteration. |
 | `.concurrency(N)` | 2 | Number of concurrent execution lanes (1...8). |
 | `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
+| `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.idleTimeout(ms)` | 1000 | Drain loop stall detection (for SUTs that escape the cooperative scheduler). |
 | `.replay(.numeric(seed))` | — | Deterministic reproduction. |
 | `.suppress(.issueReporting)` | — | Suppress issue reporting. |
+| `.collectOpenPBTStats` | off | Records per-example stats in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. |
+| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing and invocation counts after the run. |
 | `.logging(.debug)` | `.error` | Log verbosity. |
 
 ## Directed Exploration
