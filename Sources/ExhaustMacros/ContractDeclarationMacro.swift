@@ -15,11 +15,11 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
     // MARK: - ExtensionMacro
 
     public static func expansion(
-        of _: AttributeSyntax,
+        of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
         providingExtensionsOf type: some TypeSyntaxProtocol,
         conformingTo _: [TypeSyntax],
-        in _: some MacroExpansionContext
+        in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
         let members = declaration.memberBlock.members
         let commands = extractCommands(from: members)
@@ -27,6 +27,14 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
                 || invariants.contains(where: \.isAsync)
+
+        let isClassDecl = declaration.is(ClassDeclSyntax.self)
+        if hasAnyAsync && isClassDecl == false {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: ContractDiagnostic.asyncRequiresClass
+            ))
+        }
 
         let proto = hasAnyAsync ? "AsyncContractSpec" : "ContractSpec"
         let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
@@ -436,6 +444,7 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case noSUT = "@Contract requires exactly one @SystemUnderTest property"
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
     case commandMissingGenerators = "@Command method has parameters but no generator expressions — add generators to the @Command attribute"
+    case asyncRequiresClass = "@Contract with async commands or invariants must be a class — use 'final class' instead of 'struct'"
 
     var message: String {
         rawValue
@@ -447,7 +456,7 @@ enum ContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-        case .noCommands, .noSUT, .commandMissingGenerators: .error
+        case .noCommands, .noSUT, .commandMissingGenerators, .asyncRequiresClass: .error
         case .sutTypeNotInferred: .warning
         }
     }
