@@ -1,0 +1,154 @@
+@testable import Exhaust
+import Testing
+
+// MARK: - Tests
+
+@Suite("Detection boundary and multi-lane behavior")
+struct DetectionBoundaryTests {
+    @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")
+    func raceWithoutYieldNotDetected() async {
+        let result = await __runContractConcurrent(
+            SilentRaceSpec.self,
+            settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+        )
+        #expect(result == nil, "Race without await/yield between read and write is invisible to cooperative scheduling")
+    }
+
+    @Test("Same race WITH suspension point IS detected")
+    func raceWithYieldDetected() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                ExposedRaceSpec.self,
+                settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            )
+        )
+        let hasFailure = result.trace.contains { step in
+            if case .invariantFailed = step.outcome { return true }
+            return false
+        }
+        #expect(hasFailure, "Race with Task.yield() at the interleaving point should be detected")
+    }
+
+    @Test("Three-way race detected with concurrencyLevel 3")
+    func threeWayRaceDetected() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                ThreeWayRaceSpec.self,
+                settings: [.concurrency(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+            )
+        )
+        let hasFailure = result.trace.contains { step in
+            if case .invariantFailed = step.outcome { return true }
+            return false
+        }
+        #expect(hasFailure, "Three concurrent increments with yield should lose updates")
+    }
+}
+
+// MARK: - Spec: Silent race (no suspension point at the race)
+
+@Contract
+final class SilentRaceSpec {
+    @Model
+    var expected: Int = 0
+    @SystemUnderTest
+    var counter: SilentlyRacyCounter = .init()
+
+    @Invariant
+    func matchesModel() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 1)
+    func racyIncrement() async throws {
+        expected += 1
+        await counter.racyIncrement()
+    }
+}
+
+// MARK: - Spec: Exposed race (yield at the race point)
+
+@Contract
+final class ExposedRaceSpec {
+    @Model
+    var expected: Int = 0
+    @SystemUnderTest
+    var counter: ExposedRacyCounter = .init()
+
+    @Invariant
+    func matchesModel() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 1)
+    func racyIncrement() async throws {
+        expected += 1
+        await counter.racyIncrement()
+    }
+}
+
+// MARK: - Spec: Three-way race (requires 3 lanes)
+
+@Contract
+final class ThreeWayRaceSpec {
+    @Model
+    var expected: Int = 0
+    @SystemUnderTest
+    var counter: ThreeWayRacyCounter = .init()
+
+    @Invariant
+    func matchesModel() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 1)
+    func increment() async throws {
+        expected += 1
+        await counter.increment()
+    }
+}
+
+// MARK: - SUTs
+
+final class SilentlyRacyCounter: @unchecked Sendable {
+    private var _value: Int = 0
+
+    var value: Int { _value }
+
+    func increment() async {
+        _value += 1
+    }
+
+    func racyIncrement() async {
+        let current = _value
+        _value = current + 1
+    }
+}
+
+final class ExposedRacyCounter: @unchecked Sendable {
+    private var _value: Int = 0
+
+    var value: Int { _value }
+
+    func increment() async {
+        _value += 1
+    }
+
+    func racyIncrement() async {
+        let current = _value
+        await Task.yield()
+        _value = current + 1
+    }
+}
+
+final class ThreeWayRacyCounter: @unchecked Sendable {
+    private var _value: Int = 0
+
+    var value: Int { _value }
+
+    func increment() async {
+        let current = _value
+        await Task.yield()
+        _value = current + 1
+    }
+}
