@@ -83,6 +83,15 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     }
     precondition((1 ... 8).contains(concurrencyLevel), "concurrencyLevel must be between 1 and 8")
 
+    #if canImport(Testing)
+        if let traitConfig = ExhaustTraitConfiguration.current {
+            let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                budget = traitBudget
+            }
+        }
+    #endif
+
     return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
     let runStart = ContinuousClock.now
     var report = ExhaustReport()
@@ -140,6 +149,56 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         }
         onReportClosure?(report)
     }
+
+    // --- Phase 0: Regression seeds from .exhaust(regressions:) trait ---
+    #if canImport(Testing)
+        if let traitConfig = ExhaustTraitConfiguration.current, traitConfig.regressions.isEmpty == false {
+            for encodedSeed in traitConfig.regressions {
+                guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
+                    reportIssue(
+                        "Invalid regression seed: \(encodedSeed)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    continue
+                }
+                var regressionInterpreter = ValueAndChoiceTreeInterpreter(
+                    sequenceGen,
+                    materializePicks: true,
+                    seed: regressionSeed,
+                    maxRuns: 1
+                )
+                if let (input, _) = try? regressionInterpreter.next() {
+                    let passed = property(input)
+                    if passed == false {
+                        let traceResult = drainSchedule(taggedCommands: input, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
+                        let result = ContractResult<Spec>(
+                            commands: input.map(\.1),
+                            trace: traceResult.trace,
+                            systemUnderTest: Spec().systemUnderTest,
+                            seed: regressionSeed,
+                            discoveryMethod: .replay
+                        )
+                        if !suppressIssueReporting {
+                            let message = renderFailure(input, trace: traceResult.trace, reducedFrom: input.count, specName: "\(Spec.self)", discoveryMethod: .replay, seed: regressionSeed, iteration: 0, budget: 0, sequencesTested: 1)
+                            reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
+                        }
+                        return result
+                    } else if !suppressIssueReporting {
+                        reportIssue(
+                            "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                    }
+                }
+            }
+        }
+    #endif
 
     // --- Phase 1: SCA coverage (command-type orderings with random lane assignments) ---
     let coverageStart = ContinuousClock.now

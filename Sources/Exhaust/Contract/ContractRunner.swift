@@ -73,6 +73,16 @@ public func __runContract<Spec: ContractSpec>(
             logFormat = format
         }
     }
+
+    #if canImport(Testing)
+        if let traitConfig = ExhaustTraitConfiguration.current {
+            let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                budget = traitBudget
+            }
+        }
+    #endif
+
     return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
         let samplingBudget = budget.samplingBudget
         let coverageBudget = budget.coverageBudget
@@ -106,6 +116,59 @@ public func __runContract<Spec: ContractSpec>(
             }
             return true
         }
+
+        // --- Phase 0: Regression seeds from .exhaust(regressions:) trait ---
+        #if canImport(Testing)
+            if let traitConfig = ExhaustTraitConfiguration.current, traitConfig.regressions.isEmpty == false {
+                for encodedSeed in traitConfig.regressions {
+                    guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
+                        reportIssue(
+                            "Invalid regression seed: \(encodedSeed)",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                        continue
+                    }
+                    var regressionInterpreter = ValueAndChoiceTreeInterpreter(
+                        commandSequenceGenerator,
+                        materializePicks: true,
+                        seed: regressionSeed,
+                        maxRuns: 1
+                    )
+                    if let (input, _) = try? regressionInterpreter.next() {
+                        if property(input) == false {
+                            let (trace, spec) = buildTrace(input, specType: specType)
+                            let result = ContractResult<Spec>(
+                                commands: input,
+                                trace: trace,
+                                systemUnderTest: spec.systemUnderTest,
+                                seed: regressionSeed,
+                                discoveryMethod: .replay
+                            )
+                            if !suppressIssueReporting {
+                                let rendered = renderFailure(
+                                    result,
+                                    failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
+                                    modelDescription: spec.modelDescription
+                                )
+                                reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
+                            }
+                            return result
+                        } else if !suppressIssueReporting {
+                            reportIssue(
+                                "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column
+                            )
+                        }
+                    }
+                }
+            }
+        #endif
 
         // --- Phase 1: Sequence Covering Array (SCA) coverage ---
         //
