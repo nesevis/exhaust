@@ -8,7 +8,7 @@ struct MultiModelTests {
         let result = #exhaust(
             MultiModelSpec.self,
             .commandLimit(8),
-//            .suppress(.issueReporting)
+            .suppress(.issueReporting)
         )
         #expect(result != nil, "Buggy insert should cause model/SUT divergence")
         if let result {

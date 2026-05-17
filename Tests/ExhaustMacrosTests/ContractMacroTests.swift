@@ -158,11 +158,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyQueue
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     queue
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (3, .just(Command.enqueue)),
                         (2, .just(Command.dequeue))
@@ -259,11 +259,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyCounter
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     counter
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment)),
                         (1, .just(Command.decrement))
@@ -338,11 +338,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyCounter
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     counter
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment))
                     )
@@ -407,11 +407,11 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = MyCounter
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     counter
                 }
 
-                static var commandGenerator: Generator<Command> {
+                static var commandGenerator: ReflectiveGenerator<Command> {
                     .oneOf(weighted:
                         (1, .just(Command.increment))
                     )
@@ -474,7 +474,7 @@ struct ContractDeclarationMacroTests {
 
                 typealias SystemUnderTest = [Int]
 
-                var sut: SystemUnderTest {
+                var systemUnderTest: SystemUnderTest {
                     items
                 }
 

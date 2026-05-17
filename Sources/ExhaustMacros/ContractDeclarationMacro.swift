@@ -86,7 +86,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         }
 
         // 3. commandGenerator
-        decls.append(synthesizeCommandGenerator(commands: commands))
+        decls.append(synthesizeCommandGenerator(commands: commands, context: context))
 
         // 4. run(_:)
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
@@ -118,6 +118,7 @@ private struct CommandInfo {
     let weight: String
     let generatorExprs: [String]
     let isAsync: Bool
+    let syntax: FunctionDeclSyntax?
 }
 
 private struct InvariantInfo {
@@ -153,25 +154,13 @@ private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [S
             return SUTProperty(name: name, type: typeAnnotation.type.trimmedDescription)
         }
 
-        // Fall back to inferring from initializer: `@SystemUnderTest var queue = BoundedQueue<Int>(capacity: 3)`
-        // Extract the type name from the initializer expression if it's a function call.
+        // Fall back to inferring from initializer: `@SystemUnderTest var queue = BoundedQueue<Int>(capacity: 3)` or `@SystemUnderTest var stack = [Int]()`.
         if let initializer = binding.initializer,
            let call = initializer.value.as(FunctionCallExprSyntax.self)
         {
             let callee = call.calledExpression.trimmedDescription
             return SUTProperty(name: name, type: callee)
         }
-
-        // Array literal: `@SystemUnderTest var stack = [Int]()`
-        if let initializer = binding.initializer,
-           let call = initializer.value.as(FunctionCallExprSyntax.self),
-           let arrayType = call.calledExpression.as(ArrayExprSyntax.self)
-        {
-            return SUTProperty(name: name, type: arrayType.trimmedDescription)
-        }
-
-        // Array sugar: `@SystemUnderTest var stack: [Int] = []`
-        // Already covered by the typeAnnotation path above.
 
         return SUTProperty(name: name, type: nil)
     }
@@ -220,7 +209,8 @@ private func extractCommands(from members: MemberBlockItemListSyntax) -> [Comman
             parameters: parameters,
             weight: weight,
             generatorExprs: generatorExprs,
-            isAsync: isAsync
+            isAsync: isAsync,
+            syntax: funcDecl
         )
     }
 }
@@ -285,7 +275,7 @@ private func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
+private func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpansionContext) -> DeclSyntax {
     var choices: [String] = []
 
     for cmd in commands {
@@ -307,8 +297,15 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
                 "\($0.label): \($0.label)"
             }.joined(separator: ", ")
             choices.append("            (\(cmd.weight), #gen(\(genArgs)) { \(closureParams) in Command.\(cmd.methodName)(\(constructorArgs)) })")
+        } else if cmd.parameters.isEmpty {
+            choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         } else {
-            // No generators specified — use .just for parameterless, error otherwise
+            if let syntax = cmd.syntax {
+                context.diagnose(Diagnostic(
+                    node: Syntax(syntax),
+                    message: ContractDiagnostic.commandMissingGenerators
+                ))
+            }
             choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         }
     }
@@ -438,6 +435,7 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case noCommands = "@Contract requires at least one @Command method"
     case noSUT = "@Contract requires exactly one @SystemUnderTest property"
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
+    case commandMissingGenerators = "@Command method has parameters but no generator expressions — add generators to the @Command attribute"
 
     var message: String {
         rawValue
@@ -449,7 +447,7 @@ enum ContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-        case .noCommands, .noSUT: .error
+        case .noCommands, .noSUT, .commandMissingGenerators: .error
         case .sutTypeNotInferred: .warning
         }
     }

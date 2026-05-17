@@ -625,9 +625,9 @@ func runSCACoverage<Command>(
                 config: .init(maxStalls: 2),
                 property: property
             ) {
-                return .failure(commands: reducedValue, original: reduceValue)
+                return .failure(commands: reducedValue, original: value)
             }
-            return .failure(commands: reduceValue, original: reduceValue)
+            return .failure(commands: reduceValue, original: value)
         }
     }
 

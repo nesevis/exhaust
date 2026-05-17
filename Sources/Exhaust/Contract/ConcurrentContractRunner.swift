@@ -34,12 +34,11 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
         idleTimeoutMilliseconds: idleTimeout
     )
     let trace = traceResult.trace
-    let specState = timedOut ? nil : captureSpecState(taggedCommands: finalInput, specInit: specInit)
 
     let result = ContractResult<Spec>(
         commands: finalInput.map(\.1),
         trace: trace,
-        systemUnderTest: specState?.systemUnderTest ?? Spec().systemUnderTest,
+        systemUnderTest: Spec().systemUnderTest,
         seed: seed,
         discoveryMethod: discoveryMethod
     )
@@ -47,10 +46,6 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     if suppressIssueReporting == false {
         failureContext.discoveryMethod = discoveryMethod
         failureContext.timedOut = timedOut
-        if let specState {
-            failureContext.modelDescription = specState.modelDescription
-            failureContext.sutDescription = "\(specState.systemUnderTest)"
-        }
         let message = renderFailure(finalInput, trace: trace, context: failureContext)
         reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
     }

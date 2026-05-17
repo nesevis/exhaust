@@ -10,8 +10,6 @@ struct FailureContext {
     var budget: UInt64 = 0
     var originalCount: Int = 0
     var sequencesTested: Int = 0
-    var modelDescription: String = "(unavailable)"
-    var sutDescription: String = "(unavailable)"
     var timedOut: Bool = false
 }
 
@@ -46,10 +44,6 @@ func renderFailure(
     for step in trace {
         lines.append("  \(step)")
     }
-
-    lines.append("")
-    lines.append("Model: \(context.modelDescription)")
-    lines.append("SUT:   \(context.sutDescription)")
 
     lines.append("")
     lines.append("Command sequences tested: \(context.sequencesTested)")
