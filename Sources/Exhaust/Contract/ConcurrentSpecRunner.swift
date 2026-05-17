@@ -195,11 +195,9 @@ func drainSchedule<Spec: AsyncContractSpec>(
             }
             continue
         }
-        let preferred: LaneID = if scheduleIndex < schedule.count {
-            schedule[scheduleIndex]
-        } else {
-            LaneID(index: UInt8(scheduleIndex % concurrencyLevel))
-        }
+        let preferred = scheduleIndex < schedule.count
+            ? schedule[scheduleIndex]
+            : LaneID(index: UInt8(scheduleIndex % concurrencyLevel))
         scheduleIndex += 1
         guard let (lane, job) = runQueue.dequeue(preferring: preferred) else { break }
         let executor = executors[Int(lane.index)]
