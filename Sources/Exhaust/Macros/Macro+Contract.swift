@@ -76,7 +76,8 @@ import ExhaustCore
     named(checkInvariants),
     named(systemUnderTest),
     named(modelDescription),
-    named(sutDescription)
+    named(sutDescription),
+    named(init)
 )
 @attached(extension, conformances: ContractSpec, AsyncContractSpec)
 public macro Contract() = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")

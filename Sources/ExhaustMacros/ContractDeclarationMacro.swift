@@ -89,7 +89,8 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeCommandGenerator(commands: commands))
 
         // 4. run(_:)
-        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: hasAnyAsync))
+        let isClassDecl = declaration.is(ClassDeclSyntax.self)
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: hasAnyAsync, isClassDecl: isClassDecl))
 
         // 5. checkInvariants()
         decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: hasAnyAsync))
@@ -99,6 +100,11 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
 
         // 7. sutDescription
         decls.append(synthesizeSUTDescription(sutProps: sutProps))
+
+        // 8. required init() for classes (satisfies ContractSpecBase.init())
+        if isClassDecl {
+            decls.append("required init() {}")
+        }
 
         return decls
     }
@@ -318,7 +324,7 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSyntax {
+private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl: Bool) -> DeclSyntax {
     let tryKeyword = hasAnyAsync ? "try await" : "try"
     var cases: [String] = []
 
@@ -333,9 +339,10 @@ private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> 
     }
 
     let casesBlock = cases.joined(separator: "\n")
+    let mutatingKeyword = isClassDecl ? "" : "mutating "
     let signature = hasAnyAsync
-        ? "mutating func run(_ command: Command) async throws"
-        : "mutating func run(_ command: Command) throws"
+        ? "\(mutatingKeyword)func run(_ command: Command) async throws"
+        : "\(mutatingKeyword)func run(_ command: Command) throws"
 
     return """
     \(raw: signature) {

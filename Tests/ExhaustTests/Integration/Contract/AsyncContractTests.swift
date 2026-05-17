@@ -106,7 +106,7 @@ struct AsyncContractTests {
 // MARK: - Contract: Passing async counter
 
 @Contract
-struct AsyncCounterSpec {
+final class AsyncCounterSpec {
     @Model var expected: Int = 0
     @SUT var counter: AsyncCounter = .init()
 
@@ -116,19 +116,19 @@ struct AsyncCounterSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected += 1
         await counter.increment()
     }
 
     @Command(weight: 2)
-    mutating func decrement() async throws {
+    func decrement() async throws {
         expected -= 1
         await counter.decrement()
     }
 
     @Command(weight: 1)
-    mutating func reset() async throws {
+    func reset() async throws {
         expected = 0
         await counter.reset()
     }
@@ -137,7 +137,7 @@ struct AsyncCounterSpec {
 // MARK: - Contract: Failing async counter (invariant violation)
 
 @Contract
-struct BuggyAsyncCounterSpec {
+final class BuggyAsyncCounterSpec {
     @Model var expected: Int = 0
     @SUT var counter: BuggyAsyncCounter = .init()
 
@@ -147,13 +147,13 @@ struct BuggyAsyncCounterSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected += 1
         await counter.increment()
     }
 
     @Command(weight: 2)
-    mutating func decrement() async throws {
+    func decrement() async throws {
         expected -= 1
         await counter.decrement()
     }
@@ -162,7 +162,7 @@ struct BuggyAsyncCounterSpec {
 // MARK: - Contract: Async with skip()
 
 @Contract
-struct AsyncSkipSpec {
+final class AsyncSkipSpec {
     @Model var expected: [Int] = []
     @SUT var counter: AsyncCounter = .init()
 
@@ -172,13 +172,13 @@ struct AsyncSkipSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected.append(expected.count + 1)
         await counter.increment()
     }
 
     @Command(weight: 2)
-    mutating func decrement() async throws {
+    func decrement() async throws {
         guard !expected.isEmpty else { throw skip() }
         expected.append(expected.last! - 1)
         await counter.decrement()
@@ -188,7 +188,7 @@ struct AsyncSkipSpec {
 // MARK: - Contract: Mixed sync + async commands
 
 @Contract
-struct MixedAsyncSpec {
+final class MixedAsyncSpec {
     @Model var expected: Int = 0
     @SUT var counter: AsyncCounter = .init()
 
@@ -199,12 +199,12 @@ struct MixedAsyncSpec {
 
     /// Sync command — still valid in an async contract
     @Command(weight: 1)
-    mutating func syncNoOp() throws {
+    func syncNoOp() throws {
         // Does nothing to either model or SUT
     }
 
     @Command(weight: 3)
-    mutating func increment() async throws {
+    func increment() async throws {
         expected += 1
         await counter.increment()
     }
