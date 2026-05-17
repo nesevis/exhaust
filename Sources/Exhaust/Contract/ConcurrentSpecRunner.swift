@@ -45,6 +45,8 @@ struct ConcurrentExecutionResult {
     var passed: Bool
     /// The execution trace, populated only when `recordTrace` is true.
     var trace: [TraceStep]
+    /// Whether execution stalled because no continuations arrived within the idle timeout.
+    var timedOut: Bool = false
 }
 
 /// Drains a tagged command sequence through the cooperative scheduler with deterministic interleaving.
@@ -54,11 +56,14 @@ struct ConcurrentExecutionResult {
 /// The drain loop advances one continuation at a time (via `runSynchronously`), picking the lane indicated by the next schedule entry. When a command body hits an `await` (for example, `Task.yield()` inside a non-atomic read-modify-write), the task suspends and re-enqueues its continuation. The drain loop then picks the other lane's continuation, producing a deterministic interleaving at that suspension point.
 ///
 /// - Parameter recordTrace: When false, trace recording is skipped for performance (used during generation and reduction where only pass/fail matters). When true, the full interleaving trace is captured for the final counterexample report.
+/// - Parameter idleTimeoutMilliseconds: Maximum wall-clock time (in milliseconds) the drain loop waits with no pending jobs before declaring a timeout. Prevents infinite hangs when a continuation escapes to a foreign executor. Pass `Int.max` to disable.
 func drainSchedule<Spec: AsyncContractSpec>(
     taggedCommands: [(ScheduleMarker, Spec.Command)],
     specInit: () -> Spec,
-    recordTrace: Bool
+    recordTrace: Bool,
+    idleTimeoutMilliseconds: Int = 1000
 ) -> ConcurrentExecutionResult {
+    let idleTimeout: Duration = .milliseconds(idleTimeoutMilliseconds)
     let prefixCommands = taggedCommands.filter { $0.0 == .prefix }.map(\.1)
     let laneACommands = taggedCommands.filter { $0.0 == .laneA }.map(\.1)
     let laneBCommands = taggedCommands.filter { $0.0 == .laneB }.map(\.1)
@@ -107,9 +112,16 @@ func drainSchedule<Spec: AsyncContractSpec>(
             prefixDone.value = true
         }
 
+        var lastActivity = ContinuousClock.now
         while prefixDone.value == false {
-            guard let (_, job) = runQueue.dequeue(preferring: .a) else { continue }
+            guard let (_, job) = runQueue.dequeue(preferring: .a) else {
+                if ContinuousClock.now - lastActivity > idleTimeout {
+                    return ConcurrentExecutionResult(passed: false, trace: recordTrace ? parseTrace(trace.value) : [], timedOut: true)
+                }
+                continue
+            }
             job.runSynchronously(on: executorA.asUnownedTaskExecutor())
+            lastActivity = ContinuousClock.now
         }
         if failed.value != nil {
             return ConcurrentExecutionResult(passed: false, trace: recordTrace ? parseTrace(trace.value) : [])
@@ -183,9 +195,16 @@ func drainSchedule<Spec: AsyncContractSpec>(
     var laneHasOpenCommand: [LaneID: Bool] = [.a: false, .b: false]
     var scheduleIndex = 0
     var failureDetected = false
+    var lastActivity = ContinuousClock.now
 
     while runQueue.isFinished == false {
-        guard runQueue.hasPendingJobs else { break }
+        if runQueue.hasPendingJobs == false {
+            if ContinuousClock.now - lastActivity > idleTimeout {
+                let finalTrace: [TraceStep] = recordTrace ? parseTrace(trace.value) : []
+                return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
+            }
+            continue
+        }
         let preferred: LaneID = if scheduleIndex < schedule.count {
             schedule[scheduleIndex]
         } else {
@@ -210,6 +229,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
         job.runSynchronously(on: executor.asUnownedTaskExecutor())
         laneHasOpenCommand[lane] = runQueue.hasPendingJob(for: lane)
         lastDrainedLane = lane
+        lastActivity = ContinuousClock.now
 
         if failed.value != nil {
             if failureDetected { break }

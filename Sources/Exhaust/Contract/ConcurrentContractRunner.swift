@@ -21,6 +21,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     commandLimit: Int = 10,
     budget: ExhaustBudget = .thorough,
     seed: UInt64? = nil,
+    idleTimeout: Int = 1000,
     suppressIssueReporting: Bool = false,
     logLevel: LogLevel = .error,
     fileID: StaticString = #fileID,
@@ -46,8 +47,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     // Safe: metatypes are stateless.
     nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
+    let lastRunTimedOut = SendableBox(false)
     let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
-        drainSchedule(taggedCommands: taggedCommands, specInit: specInit, recordTrace: false).passed
+        let result = drainSchedule(taggedCommands: taggedCommands, specInit: specInit, recordTrace: false, idleTimeoutMilliseconds: idleTimeout)
+        lastRunTimedOut.value = result.timedOut
+        return result.passed
     }
 
     var interpreter = ValueAndChoiceTreeInterpreter(
@@ -66,7 +70,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "concurrent_failure_found",
-                    metadata: ["commands": "\(input.count)"]
+                    metadata: ["commands": "\(input.count)", "timedOut": "\(lastRunTimedOut.value)"]
                 )
                 for (marker, cmd) in input {
                     ExhaustLog.debug(
@@ -76,38 +80,47 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     )
                 }
 
-                let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
-                    gen: sequenceGen,
-                    tree: tree,
-                    output: input,
-                    config: reductionConfig,
-                    property: property
-                )
-
                 let finalInput: [(ScheduleMarker, Spec.Command)]
-                if let (_, reduced) = reduceResult.reduced {
+
+                if lastRunTimedOut.value {
                     ExhaustLog.notice(
                         category: .propertyTest,
-                        event: "concurrent_reduced",
-                        metadata: ["from": "\(input.count)", "to": "\(reduced.count)"]
-                    )
-                    for (marker, cmd) in reduced {
-                        ExhaustLog.debug(
-                            category: .propertyTest,
-                            event: "concurrent_reduced_command",
-                            "[\(marker.description)] \(cmd)"
-                        )
-                    }
-                    finalInput = reduced
-                } else {
-                    ExhaustLog.notice(
-                        category: .propertyTest,
-                        event: "concurrent_reduction_no_improvement"
+                        event: "concurrent_timeout_skipping_reduction"
                     )
                     finalInput = input
+                } else {
+                    let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
+                        gen: sequenceGen,
+                        tree: tree,
+                        output: input,
+                        config: reductionConfig,
+                        property: property
+                    )
+
+                    if let (_, reduced) = reduceResult.reduced {
+                        ExhaustLog.notice(
+                            category: .propertyTest,
+                            event: "concurrent_reduced",
+                            metadata: ["from": "\(input.count)", "to": "\(reduced.count)"]
+                        )
+                        for (marker, cmd) in reduced {
+                            ExhaustLog.debug(
+                                category: .propertyTest,
+                                event: "concurrent_reduced_command",
+                                "[\(marker.description)] \(cmd)"
+                            )
+                        }
+                        finalInput = reduced
+                    } else {
+                        ExhaustLog.notice(
+                            category: .propertyTest,
+                            event: "concurrent_reduction_no_improvement"
+                        )
+                        finalInput = input
+                    }
                 }
 
-                let traceResult = drainSchedule(taggedCommands: finalInput, specInit: specInit, recordTrace: true)
+                let traceResult = drainSchedule(taggedCommands: finalInput, specInit: specInit, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
                 let trace = traceResult.trace
                 let result = ContractResult<Spec>(
                     commands: finalInput.map(\.1),
@@ -118,8 +131,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 )
 
                 if !suppressIssueReporting {
+                    let message = lastRunTimedOut.value
+                        ? renderTimeout(finalInput, trace: trace)
+                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count)
                     reportIssue(
-                        renderFailure(finalInput, trace: trace, reducedFrom: input.count),
+                        message,
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
@@ -352,6 +368,53 @@ private func renderFailure(
     lines.append("Execution trace:")
     for step in trace {
         lines.append("  \(step)")
+    }
+
+    return lines.joined(separator: "\n")
+}
+
+private func renderTimeout(
+    _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
+    trace: [TraceStep]
+) -> String {
+    var lines: [String] = []
+    lines.append("Concurrent contract timed out: the drain loop stalled with no pending continuations.")
+    lines.append("This typically means a command body suspended to a foreign executor (custom-executor actor, Task.sleep, or blocking I/O) that does not flow through the cooperative scheduler.")
+    lines.append("")
+
+    let prefixCommands = tagged.filter { $0.0 == .prefix }.map(\.1)
+    let laneACommands = tagged.filter { $0.0 == .laneA }.map(\.1)
+    let laneBCommands = tagged.filter { $0.0 == .laneB }.map(\.1)
+
+    if prefixCommands.isEmpty == false {
+        lines.append("Sequential prefix:")
+        for (index, command) in prefixCommands.enumerated() {
+            lines.append("  \(index + 1). \(command)")
+        }
+        lines.append("")
+    }
+
+    if laneACommands.isEmpty == false {
+        lines.append("Lane A:")
+        for (index, command) in laneACommands.enumerated() {
+            lines.append("  \(index + 1)A. \(command)")
+        }
+        lines.append("")
+    }
+
+    if laneBCommands.isEmpty == false {
+        lines.append("Lane B:")
+        for (index, command) in laneBCommands.enumerated() {
+            lines.append("  \(index + 1)B. \(command)")
+        }
+        lines.append("")
+    }
+
+    if trace.isEmpty == false {
+        lines.append("Partial execution trace (up to stall point):")
+        for step in trace {
+            lines.append("  \(step)")
+        }
     }
 
     return lines.joined(separator: "\n")
