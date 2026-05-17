@@ -85,6 +85,10 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     // Safe: metatypes are stateless.
     nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
+    let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
+    let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
+        rawIdentifySkips(taggedCommands.map(\.1))
+    }
     let resolvedConcurrencyLevel = concurrencyLevel
     let resolvedIdleTimeout = idleTimeout
     let lastRunTimedOut = SendableBox(false)
@@ -104,6 +108,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             concurrencyLevel: concurrencyLevel,
             idleTimeout: idleTimeout,
             property: property,
+            identifySkips: identifySkips,
             lastRunTimedOut: lastRunTimedOut
         ) {
             let traceResult = drainSchedule(taggedCommands: scaResult.finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
@@ -169,10 +174,20 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     )
                     finalInput = input
                 } else {
+                    let (reduceValue, reduceTree) = pruneSkippedCommands(
+                        value: input,
+                        tree: tree,
+                        generator: sequenceGen,
+                        seed: 0,
+                        property: property,
+                        identifySkips: identifySkips,
+                        logEvent: "concurrent_skip_pruning"
+                    )
+
                     let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
                         gen: sequenceGen,
-                        tree: tree,
-                        output: input,
+                        tree: reduceTree,
+                        output: reduceValue,
                         config: reductionConfig,
                         property: property
                     )
@@ -196,7 +211,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             category: .propertyTest,
                             event: "concurrent_reduction_no_improvement"
                         )
-                        finalInput = input
+                        finalInput = reduceValue
                     }
                 }
 
@@ -297,6 +312,43 @@ private func zipScheduleMarker<Command>(
     return Gen.pick(choices: taggedChoices)
 }
 
+// MARK: - Skip Pruning
+
+/// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree that still fail the property.
+///
+/// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree, the tree is rematerialized, and the property is re-checked. If the pruned sequence still fails, the pruned value and tree are returned; otherwise the originals are returned unchanged.
+private func pruneSkippedCommands<Value>(
+    value: Value,
+    tree: ChoiceTree,
+    generator: Generator<Value>,
+    seed: UInt64,
+    property: @Sendable (Value) -> Bool,
+    identifySkips: (Value) -> Set<Int>,
+    logEvent: String
+) -> (value: Value, tree: ChoiceTree) {
+    let skippedIndices = identifySkips(value)
+    guard skippedIndices.isEmpty == false else {
+        return (value, tree)
+    }
+
+    ExhaustLog.notice(
+        category: .reducer,
+        event: logEvent,
+        metadata: ["skipped_count": "\(skippedIndices.count)"]
+    )
+    let prunedTree = pruneSequenceElements(from: tree, at: skippedIndices)
+    let prunedSequence = ChoiceSequence.flatten(prunedTree)
+    let prunedMode = Materializer.Mode.guided(seed: seed, fallbackTree: nil)
+    if case let .success(rematerialized, rematerializedTree, _) = Materializer.materialize(
+        generator, prefix: prunedSequence, mode: prunedMode, fallbackTree: prunedTree
+    ),
+        property(rematerialized) == false
+    {
+        return (rematerialized, rematerializedTree)
+    }
+    return (value, tree)
+}
+
 // MARK: - SCA Coverage Phase
 
 private struct SCAFailureResult<Command> {
@@ -318,6 +370,7 @@ private func runConcurrentSCACoverage<Command>(
     concurrencyLevel: Int,
     idleTimeout: Int,
     property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
+    identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
     lastRunTimedOut: SendableBox<Bool>
 ) -> SCAFailureResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -407,16 +460,26 @@ private func runConcurrentSCACoverage<Command>(
                 return SCAFailureResult(finalInput: value, originalCount: value.count, timedOut: true)
             }
 
+            let (reduceValue, reduceTree) = pruneSkippedCommands(
+                value: value,
+                tree: freshTree,
+                generator: seqGen,
+                seed: iterations,
+                property: property,
+                identifySkips: identifySkips,
+                logEvent: "concurrent_sca_skip_pruning"
+            )
+
             if let (_, reduced) = try? Interpreters.choiceGraphReduce(
                 gen: seqGen,
-                tree: freshTree,
-                output: value,
+                tree: reduceTree,
+                output: reduceValue,
                 config: reductionConfig,
                 property: property
             ) {
                 return SCAFailureResult(finalInput: reduced, originalCount: value.count, timedOut: false)
             }
-            return SCAFailureResult(finalInput: value, originalCount: value.count, timedOut: false)
+            return SCAFailureResult(finalInput: reduceValue, originalCount: value.count, timedOut: false)
         }
     }
 

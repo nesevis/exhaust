@@ -586,7 +586,7 @@ func runSCACoverage<Command>(
 // MARK: - Skip-Aware Pruning
 
 /// Removes elements at the given indices from the first `.sequence` node found in the tree.
-private func pruneSequenceElements(
+func pruneSequenceElements(
     from tree: ChoiceTree,
     at indices: Set<Int>
 ) -> ChoiceTree {
