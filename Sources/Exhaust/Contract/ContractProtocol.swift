@@ -70,7 +70,9 @@ public protocol ContractSpec: ContractSpecBase {
 }
 
 extension ContractSpec {
-    /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
+    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
+    ///
+    /// The returned closure is used by the SCA coverage phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction.
     static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
         { commands in
             var spec = Self()

@@ -1,6 +1,7 @@
 // SCA (Sequence Covering Array) coverage phase for concurrent contract testing.
 import ExhaustCore
 
+/// Packages the outcome of a failed SCA coverage probe for the concurrent runner, carrying the reduced input, original length, and reduction statistics so the caller can assemble the final ``ContractResult``.
 struct SCAFailureResult<Command> {
     var finalInput: [(ScheduleMarker, Command)]
     var originalCount: Int

@@ -11,6 +11,9 @@ import IssueReporting
 
 // MARK: - Failure Result Assembly
 
+/// Assembles the final ``ContractResult`` for a concurrent contract failure.
+///
+/// Re-drains the failing schedule with trace recording enabled, runs a sequential oracle to capture the expected (race-free) SUT state, and renders the failure report. Called from both the SCA coverage and random sampling phases when a counterexample is confirmed.
 private func buildFailureResult<Spec: AsyncContractSpec>(
     finalInput: [(ScheduleMarker, Spec.Command)],
     specInit: () -> Spec,

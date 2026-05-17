@@ -1,6 +1,7 @@
 // Parses ConcurrentContractSettings into a resolved configuration struct.
 import ExhaustCore
 
+/// Flattened configuration produced by parsing a `[ConcurrentContractSettings]` array. Holds all resolved values with defaults applied, ready for the concurrent runner to consume without re-interpreting the enum cases.
 struct ResolvedConcurrentConfig {
     var commandLimit: Int?
     var concurrencyLevel: Int = 2

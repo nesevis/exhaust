@@ -3,7 +3,7 @@ import ExhaustCore
 
 // MARK: - Sequential Oracle
 
-/// Result of running the command sequence sequentially on a fresh spec.
+/// Captures the SUT and model state after a sequential (race-free) replay of the failing command sequence. Provides the "expected" baseline in failure reports so the user can see what the system should have produced without the interleaving.
 struct SequentialOracleResult<Spec: AsyncContractSpec> {
     var systemUnderTest: Spec.SystemUnderTest
     var modelDescription: String

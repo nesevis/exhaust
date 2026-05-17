@@ -1,6 +1,6 @@
 // Converts structured trace events from the cooperative drain loop into presentable TraceSteps. Two post-processing passes: collapse no-op suspend/resume pairs, and merge adjacent started+completed pairs.
 
-/// A raw event emitted by the cooperative drain loop during command execution.
+/// A raw event emitted by the cooperative drain loop during command execution. These are intermediate records that ``buildTrace(_:)`` post-processes into presentable ``TraceStep`` values — collapsing no-op suspend/resume pairs and merging adjacent started+completed events for the same command.
 struct TraceEvent: Sendable {
     enum Kind: Sendable {
         case started

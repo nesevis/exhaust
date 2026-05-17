@@ -12,12 +12,7 @@ import IssueReporting
 ///
 /// - Parameters:
 ///   - specType: The `@Contract`-annotated specification type.
-///   - commandLimit: The maximum number of commands per generated sequence.
-///   - settings: Configuration options controlling iteration count, coverage, and reduction.
-///   - fileID: The file ID of the call site (injected by macro expansion).
-///   - filePath: The file path of the call site (injected by macro expansion).
-///   - line: The line number of the call site (injected by macro expansion).
-///   - column: The column number of the call site (injected by macro expansion).
+///   - settings: Configuration options controlling iteration count, coverage, reduction, and command limits.
 @discardableResult
 public func __runContract<Spec: ContractSpec>(
     _ specType: Spec.Type,
@@ -653,7 +648,9 @@ func runSCACoverage<Command>(
 
 // MARK: - Skip-Aware Pruning
 
-/// Removes elements at the given indices from the first `.sequence` node found in the tree.
+/// Removes elements at the given indices from `.sequence` nodes in the choice tree.
+///
+/// Walks the tree recursively, pruning indexed elements from the first sequence node encountered and updating its stored length. Used by the skip-pruning pass to excise commands whose preconditions were not met before handing the tree to the reducer.
 func pruneSequenceElements(
     from tree: ChoiceTree,
     at indices: Set<Int>
