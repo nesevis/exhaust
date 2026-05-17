@@ -26,6 +26,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     var seed: UInt64?
     var idleTimeout = 1000
     var suppressIssueReporting = false
+    var suppressLogs = false
     var useRandomOnly = false
     var collectOpenPBTStats = false
     var onReportClosure: ((ExhaustReport) -> Void)?
@@ -56,9 +57,10 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             case .issueReporting:
                 suppressIssueReporting = true
             case .logs:
-                break
+                suppressLogs = true
             case .all:
                 suppressIssueReporting = true
+                suppressLogs = true
             }
         case .randomOnly:
             useRandomOnly = true
@@ -92,7 +94,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         }
     #endif
 
-    return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
+    return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
     let runStart = ContinuousClock.now
     nonisolated(unsafe) var report = ExhaustReport()
     nonisolated(unsafe) var coverageInvocations = 0
@@ -778,8 +780,6 @@ func parseTrace(_ raw: [String]) -> [TraceStep] {
         let entry = steps[index]
         if entry.step.command.hasSuffix("(suspended)") {
             let commandBase = entry.step.command.replacingOccurrences(of: " (suspended)", with: "")
-            let otherLane = entry.lane == "a" ? "b" : "a"
-
             var hasInterleaving = false
             var resumeIndex: Int?
             for ahead in (index + 1) ..< steps.count {
@@ -790,7 +790,7 @@ func parseTrace(_ raw: [String]) -> [TraceStep] {
                     resumeIndex = ahead
                     break
                 }
-                if steps[ahead].lane == otherLane {
+                if steps[ahead].lane != entry.lane {
                     hasInterleaving = true
                 }
             }
