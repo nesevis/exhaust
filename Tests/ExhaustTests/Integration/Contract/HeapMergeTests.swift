@@ -30,7 +30,7 @@ struct HeapMergeTests {
         let result = try #require(
             #exhaust(
                 HeapMergeContract.self,
-                commandLimit: 12,
+                .commandLimit(12),
                 .budget(.extensive),
                 .suppress(.issueReporting),
                 .replay(2_244_429_497_963_284_422)
@@ -55,7 +55,7 @@ struct HeapAliasingTests {
         let result = try #require(
             #exhaust(
                 HeapAliasingContract.self,
-                commandLimit: 20,
+                .commandLimit(20),
                 .suppress(.issueReporting),
                 .replay(6_161_601_321_680_111_336)
             )

@@ -1,7 +1,7 @@
 // Macro declarations for contract-based property testing.
 //
 // `@Contract` synthesizes protocol conformance from annotated structs.
-// `#exhaust(Spec.self, commandLimit: N)` runs a contract property test at the call site.
+// `#exhaust(Spec.self, .commandLimit(N))` runs a contract property test at the call site.
 //
 import ExhaustCore
 

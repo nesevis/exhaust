@@ -33,7 +33,7 @@ struct BudgetAffordabilityTests {
         let result = try #require(
             #exhaust(
                 BuggyBudgetAffordabilitySpec.self,
-                commandLimit: 8,
+                .commandLimit(8),
                 .suppress(.issueReporting)
             )
         )

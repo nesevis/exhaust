@@ -9,7 +9,7 @@ struct StackTests {
     func passingStack() {
         let result = #exhaust(
             StackSpec.self,
-            commandLimit: 15,
+            .commandLimit(15),
             .budget(.custom(coverage: 500, sampling: 50)),
             .suppress(.issueReporting)
         )

@@ -82,7 +82,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 ///
 /// ```swift
 /// @Test func boundedQueueBehavior() {
-///     #exhaust(BoundedQueueSpec.self, commandLimit: 20)
+///     #exhaust(BoundedQueueSpec.self, .commandLimit(20))
 /// }
 /// ```
 ///
@@ -113,7 +113,6 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 @discardableResult
 public macro exhaust<Spec: ContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int? = nil,
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
 

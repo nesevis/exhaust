@@ -102,7 +102,7 @@ struct AsyncContractTests {
         // Use a fixed seed that produces a failure
         let result1 = #exhaust(
             BuggyCounterSpec.self,
-            commandLimit: 20,
+            .commandLimit(20),
             .suppress(.issueReporting)
         )
         print()

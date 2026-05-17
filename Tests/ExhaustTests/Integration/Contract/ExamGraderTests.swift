@@ -33,7 +33,7 @@ struct ExamGraderTests {
         let result = try #require(
             #exhaust(
                 ExamGraderContract.self,
-                commandLimit: 8,
+                .commandLimit(8),
                 .suppress(.issueReporting)
             )
         )

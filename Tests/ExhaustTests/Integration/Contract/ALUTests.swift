@@ -13,7 +13,7 @@ struct ALUTests {
         let result = try #require(
             #exhaust(
                 ALUSpec.self,
-                commandLimit: 8,
+                .commandLimit(8),
                 .suppress(.issueReporting)
             )
         )

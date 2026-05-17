@@ -10,7 +10,7 @@ struct InvariantOnlyTests {
         let result = try #require(
             #exhaust(
                 CircularBufferContract.self,
-                commandLimit: 6,
+                .commandLimit(6),
                 .suppress(.issueReporting)
             )
         )
@@ -26,7 +26,7 @@ struct InvariantOnlyTests {
         let result = try #require(
             #exhaust(
                 SortedBackingContract.self,
-                commandLimit: 5,
+                .commandLimit(5),
                 .suppress(.issueReporting)
             )
         )

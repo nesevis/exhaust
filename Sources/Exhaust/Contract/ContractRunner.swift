@@ -21,13 +21,13 @@ import IssueReporting
 @discardableResult
 public func __runContract<Spec: ContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int?,
     settings: [ContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
     column: UInt = #column
 ) -> ContractResult<Spec>? {
+    var commandLimit: Int?
     var budget = ExhaustBudget.thorough
     var seed: UInt64?
     var suppressIssueReporting = false
@@ -38,6 +38,8 @@ public func __runContract<Spec: ContractSpec>(
     var logFormat: LogFormat = .keyValue
     for setting in settings {
         switch setting {
+        case let .commandLimit(limit):
+            commandLimit = limit
         case let .budget(b):
             budget = b
         case let .replay(replaySeed):

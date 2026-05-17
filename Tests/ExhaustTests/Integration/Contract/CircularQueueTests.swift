@@ -37,7 +37,7 @@ struct CircularQueueTests {
         let result = try #require(
             #exhaust(
                 CircularQueueContract.self,
-                commandLimit: 10,
+                .commandLimit(10),
                 .budget(.thorough),
                 .suppress(.issueReporting),
                 .replay(12_892_450_489_757_532_783)

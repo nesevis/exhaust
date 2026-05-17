@@ -29,7 +29,7 @@ struct KVStoreLifecycleTests {
         let result = try #require(
             #exhaust(
                 KVStoreLifecycleContract.self,
-                commandLimit: 10,
+                .commandLimit(10),
                 .suppress(.issueReporting)
             )
         )

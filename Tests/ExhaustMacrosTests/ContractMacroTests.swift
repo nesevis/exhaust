@@ -23,17 +23,16 @@ private let asyncTestMacros: [String: any Macro.Type] = [
 
 @Suite("#exhaust contract macro expansion tests")
 struct ContractMacroTests {
-    @Test("Basic #exhaust contract expansion")
+    @Test("Basic #exhaust contract expansion with commandLimit")
     func basicContract() {
         assertMacroExpansion(
             """
-            #exhaust(BoundedQueueSpec.self, commandLimit: 20)
+            #exhaust(BoundedQueueSpec.self, .commandLimit(20))
             """,
             expandedSource: """
             __runContract(
                 BoundedQueueSpec.self,
-                commandLimit: 20,
-                settings: [],
+                settings: [.commandLimit(20)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -48,13 +47,12 @@ struct ContractMacroTests {
     func contractWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(Spec.self, commandLimit: 20, .maxIterations(500))
+            #exhaust(Spec.self, .commandLimit(20), .budget(.thorough))
             """,
             expandedSource: """
             __runContract(
                 Spec.self,
-                commandLimit: 20,
-                settings: [.maxIterations(500)],
+                settings: [.commandLimit(20), .budget(.thorough)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -65,8 +63,8 @@ struct ContractMacroTests {
         )
     }
 
-    @Test("#exhaust contract without commandLimit")
-    func contractWithoutCommandLimit() {
+    @Test("#exhaust contract with no settings")
+    func contractWithoutSettings() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self)
@@ -74,7 +72,6 @@ struct ContractMacroTests {
             expandedSource: """
             __runContract(
                 Spec.self,
-                commandLimit: nil,
                 settings: [],
                 fileID: #fileID,
                 filePath: #filePath,
@@ -86,8 +83,8 @@ struct ContractMacroTests {
         )
     }
 
-    @Test("#exhaust contract without commandLimit but with settings")
-    func contractWithoutCommandLimitWithSettings() {
+    @Test("#exhaust contract with suppress only")
+    func contractWithSuppressOnly() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self, .suppress(.issueReporting))
@@ -95,7 +92,6 @@ struct ContractMacroTests {
             expandedSource: """
             __runContract(
                 Spec.self,
-                commandLimit: nil,
                 settings: [.suppress(.issueReporting)],
                 fileID: #fileID,
                 filePath: #filePath,

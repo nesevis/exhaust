@@ -10,7 +10,7 @@ struct BuggyCounterTests {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,
-                commandLimit: 10,
+                .commandLimit(10),
                 .suppress(.issueReporting)
             )
         )
@@ -29,7 +29,7 @@ struct BuggyCounterTests {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,
-                commandLimit: 10,
+                .commandLimit(10),
                 .suppress(.issueReporting)
             )
         )
