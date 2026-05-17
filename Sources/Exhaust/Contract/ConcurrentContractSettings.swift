@@ -19,7 +19,7 @@ public enum ConcurrentContractSettings {
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.thorough`.
     case budget(ExhaustBudget)
 
-    /// Maximum number of commands per generated sequence. Default is 10.
+    /// Maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 40.
     case commandLimit(Int)
 
     /// Replays a specific test run using a fixed seed.

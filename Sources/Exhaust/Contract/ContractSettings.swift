@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Configuration options for `#exhaust` contract property tests, passed as variadic arguments to control test behavior.
 public enum ContractSettings {
-    /// Maximum number of commands per generated sequence. Default is 10 when omitted; when the command generator's domain is analyzable, a suitable limit is estimated automatically.
+    /// Maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 100.
     case commandLimit(Int)
 
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.thorough` (500 coverage rows, 500 random samplings).

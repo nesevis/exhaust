@@ -391,7 +391,7 @@ func estimateCommandLimit(
     let d = Double(min(domainSize, UInt64(Int.max)))
     let d2 = max(d * d, 1.0)
     let ratio = Double(coverageBudget) / d2
-    let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 1000)) : 2
+    let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 100)) : 2
 
     // Exploration floor: enough for each command type to appear several times, ensuring the random phase can reach meaningful state depths.
     let explorationFloor = max(branchCount * 3, 6)
