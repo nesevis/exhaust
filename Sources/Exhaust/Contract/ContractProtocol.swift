@@ -91,19 +91,19 @@ extension ContractSpec {
 
 /// An asynchronous contract specification for testing async SUTs (actors, databases, network services).
 ///
-/// Identical to ``ContractSpec`` except `run(_:)` and `checkInvariants()` are `async`. The `@Contract` macro emits this conformance automatically when any `@Command` or `@Invariant` method is `async`.
+/// Async contracts are class-based reference types. This is required because concurrent testing executes commands from two tasks against the same spec instance — the custom executor controls interleaving at `await` boundaries to deterministically expose data races and reentrancy bugs.
 ///
-/// The synchronous core (Freer Monad, ChoiceTree, reduction) remains unchanged — async execution is bridged at the runtime boundary via a non-cooperative GCD thread.
+/// The `@Contract` macro emits this conformance automatically when any `@Command` or `@Invariant` method is `async`.
 ///
 /// ## Skip Identification
 ///
 /// Use ``skipIdentifier(specInit:)`` to obtain a synchronous closure for identifying skipped commands. The closure bridges async execution via `Task` + semaphore, matching the pattern used by the async contract runner's property closure.
-public protocol AsyncContractSpec: ContractSpecBase {
+public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
     /// Executes a command against the model and SUT asynchronously.
     ///
     /// - Parameter command: The command to execute.
     /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
-    mutating func run(_ command: Command) async throws
+    func run(_ command: Command) async throws
 
     /// Checks all `@Invariant`-annotated methods asynchronously. Called after every command execution.
     ///
