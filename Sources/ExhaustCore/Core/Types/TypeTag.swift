@@ -42,6 +42,8 @@ package enum TypeTag: Sendable {
     case character(boundaryIndices: [UInt64])
     /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
     case depthControl
+    /// Lane control: a structural scheduling decision (like lane assignment in concurrent contract testing) that should not appear as a parameter in coverage arrays but participates fully in value search and minimization. Coverage analysis skips this tag; the reducer treats it as a normal integer leaf.
+    case laneControl
 }
 
 package extension TypeTag {
@@ -80,7 +82,7 @@ package extension TypeTag {
     @inline(__always)
     var simplestBitPattern: UInt64 {
         switch self {
-        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character, .depthControl:
+        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character, .depthControl, .laneControl:
             0
         case .int8:
             1 << 7
@@ -198,7 +200,7 @@ package extension TypeTag {
         case .date: Int64(bitPattern64: bitPattern64)
         case .bits: UInt64(bitPattern64: bitPattern64)
         case .character: UInt32(bitPattern64: bitPattern64)
-        case .depthControl: UInt64(bitPattern64: bitPattern64)
+        case .depthControl, .laneControl: UInt64(bitPattern64: bitPattern64)
         }
     }
 }
@@ -251,6 +253,7 @@ extension TypeTag: Hashable {
             hasher.combine(15)
             hasher.combine(boundaryIndices)
         case .depthControl: hasher.combine(16)
+        case .laneControl: hasher.combine(17)
         }
     }
 }
@@ -275,6 +278,7 @@ extension TypeTag: CustomStringConvertible {
         case .bits: "Bits"
         case .character: "Character"
         case .depthControl: "DepthControl"
+        case .laneControl: "Control"
         }
     }
 }

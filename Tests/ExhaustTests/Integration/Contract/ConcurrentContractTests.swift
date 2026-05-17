@@ -10,10 +10,7 @@ struct ConcurrentContractTests {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
-                commandLimit: 4,
-
-                budget: .custom(coverage: 0, sampling: 200),
-                suppressIssueReporting: true
+                settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
         )
         let hasFailure = result.trace.contains { step in
@@ -28,9 +25,7 @@ struct ConcurrentContractTests {
     func atomicCounterPasses() async {
         let result = await __runContractConcurrent(
             AtomicCounterSpec.self,
-            commandLimit: 4,
-            budget: .custom(coverage: 0, sampling: 200),
-            suppressIssueReporting: true
+            settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
         )
         #expect(result == nil, "Atomic counter should pass under any interleaving")
     }
@@ -40,10 +35,7 @@ struct ConcurrentContractTests {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
-                commandLimit: 6,
-
-                budget: .custom(coverage: 0, sampling: 200),
-                suppressIssueReporting: true
+                settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
         )
         #expect(result.commands.count <= 6, "Reducer should shrink the counterexample")
@@ -54,16 +46,9 @@ struct ConcurrentContractTests {
         let result = try #require(
             await __runContractConcurrent(
                 LeakyBucketSpec.self,
-                commandLimit: 8,
-                budget: .custom(coverage: 0, sampling: 50000),
-                suppressIssueReporting: false,
-                logLevel: .error
+                settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 50000)), .suppress(.issueReporting)]
             )
         )
-        if result.commands.count > 3 {
-            print()
-        }
-        print("Commands: \(result.commands.count) (\(result.commands.count > 3 ? "Suboptimal" : ""))")
         let hasFailure = result.trace.contains { step in
             if case .invariantFailed = step.outcome { return true }
             return false
@@ -76,21 +61,13 @@ struct ConcurrentContractTests {
         let result1 = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
-                commandLimit: 10,
-
-                budget: .custom(coverage: 0, sampling: 200),
-                seed: 42,
-                suppressIssueReporting: true
+                settings: [.commandLimit(10), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(42)), .suppress(.issueReporting)]
             )
         )
         let result2 = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
-                commandLimit: 10,
-
-                budget: .custom(coverage: 0, sampling: 200),
-                seed: 42,
-                suppressIssueReporting: true
+                settings: [.commandLimit(10), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(42)), .suppress(.issueReporting)]
             )
         )
         #expect(result1.commands.count == result2.commands.count, "Same seed should produce same counterexample size")

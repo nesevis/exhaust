@@ -13,7 +13,7 @@ private let testMacros: [String: any Macro.Type] = [
 ]
 
 private let asyncTestMacros: [String: any Macro.Type] = [
-    "exhaust": ExhaustAsyncContractMacro.self,
+    "exhaust": ExhaustConcurrentContractMacro.self,
     "Contract": ContractDeclarationMacro.self,
     "Model": ModelMacro.self,
     "SUT": SUTMacro.self,
@@ -449,16 +449,15 @@ struct ContractDeclarationMacroTests {
 
 @Suite("#exhaust async contract macro expansion tests")
 struct AsyncContractMacroTests {
-    @Test("#exhaust async contract expansion")
+    @Test("#exhaust async contract expansion with no settings")
     func asyncContractExpansion() {
         assertMacroExpansion(
             """
-            #exhaust(AsyncSpec.self, commandLimit: 20)
+            #exhaust(AsyncSpec.self)
             """,
             expandedSource: """
-            __runContractAsync(
+            __runContractConcurrent(
                 AsyncSpec.self,
-                commandLimit: 20,
                 settings: [],
                 fileID: #fileID,
                 filePath: #filePath,
@@ -474,13 +473,12 @@ struct AsyncContractMacroTests {
     func asyncContractWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(AsyncSpec.self, commandLimit: 10, .maxIterations(50))
+            #exhaust(AsyncSpec.self, .commandLimit(10), .concurrency(3))
             """,
             expandedSource: """
-            __runContractAsync(
+            __runContractConcurrent(
                 AsyncSpec.self,
-                commandLimit: 10,
-                settings: [.maxIterations(50)],
+                settings: [.commandLimit(10), .concurrency(3)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,

@@ -109,6 +109,7 @@ package enum ZobristHash {
         case .bits: 14
         case .character: 15
         case .depthControl: 16
+        case .laneControl: 17
         }
     }
 }

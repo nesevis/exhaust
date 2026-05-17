@@ -215,6 +215,23 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 /// ```
 ///
 /// This gives each array element a pick-at-top structure that the choice-graph reducer handles naturally: structural deletion removes entire elements (shorter counterexample), and value minimization on the marker's chooseBits drives it toward 0/prefix (less concurrency).
+private extension Gen {
+    static func chooseLaneControl(in range: ClosedRange<UInt8>) -> Generator<UInt8> {
+        let operation = ReflectiveOperation.chooseBits(
+            min: UInt64(range.lowerBound),
+            max: UInt64(range.upperBound),
+            tag: .laneControl,
+            isRangeExplicit: true
+        )
+        return .impure(operation: operation) { result in
+            guard let convertible = result as? any BitPatternConvertible else {
+                fatalError("chooseLaneControl: unexpected result type")
+            }
+            return .pure(UInt8(convertible.bitPattern64))
+        }
+    }
+}
+
 private func zipScheduleMarker<Command>(
     onto commandGen: Generator<Command>,
     concurrencyLevel: Int
@@ -226,7 +243,7 @@ private func zipScheduleMarker<Command>(
     let markerGen: Generator<ScheduleMarker> = if concurrencyLevel == 1 {
         Gen.just(ScheduleMarker.prefix)
     } else {
-        Gen.choose(in: UInt8(0) ... UInt8(concurrencyLevel))
+        Gen.chooseLaneControl(in: 0 ... UInt8(concurrencyLevel))
             .map { ScheduleMarker(rawValue: $0) }
     }
     let taggedChoices = choices.map { choice in

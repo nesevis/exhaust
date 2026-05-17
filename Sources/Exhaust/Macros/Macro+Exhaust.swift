@@ -117,22 +117,9 @@ public macro exhaust<Spec: ContractSpec>(
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
 
-/// Runs an async contract property test that generates command sequences, executes them against an async system under test, and verifies that contracts hold after every step.
+/// Runs an async contract property test that generates command sequences, assigns them to concurrent execution lanes, and verifies that contracts hold under deterministic interleaving at every `await` boundary.
 ///
-/// Identical to the synchronous `#exhaust(Spec.self, commandLimit:)` overload but for types conforming to ``AsyncContractSpec``. Must be called with `await` since the expanded function is `async`. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; async `run`/`checkInvariants` calls are bridged via `Task` + semaphore.
-///
-/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
-@freestanding(expression)
-@discardableResult
-public macro exhaust<Spec: AsyncContractSpec>(
-    _ specType: Spec.Type,
-    commandLimit: Int? = nil,
-    _ settings: ContractSettings...
-) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncContractMacro")
-
-/// Runs a concurrent contract property test that generates command sequences, assigns them to multiple execution lanes, and verifies that contracts hold under deterministic interleaving at every `await` boundary.
-///
-/// Use this overload for ``AsyncContractSpec`` types when you want to test concurrent access patterns. The cooperative scheduler controls interleaving deterministically — the same seed produces the same interleaving and the same counterexample.
+/// The cooperative scheduler controls interleaving deterministically — the same seed produces the same interleaving and the same counterexample. By default, commands are distributed across two concurrent lanes. Use `.concurrency(N)` to test with more lanes, or `.concurrency(1)` for a sequential baseline.
 ///
 /// ```swift
 /// let result = await #exhaust(MySpec.self, .concurrency(3), .budget(.thorough))
