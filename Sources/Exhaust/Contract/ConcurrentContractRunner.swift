@@ -20,7 +20,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     line: UInt = #line,
     column: UInt = #column
 ) async -> ContractResult<Spec>? {
-    var commandLimit = 10
+    var commandLimit: Int?
     var concurrencyLevel = 2
     var budget = ExhaustBudget.thorough
     var seed: UInt64?
@@ -92,15 +92,18 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         : nil
 
     let commandGen = Spec.commandGenerator.gen
+    let samplingBudget = budget.samplingBudget
+    let coverageBudget = budget.coverageBudget
+    let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
+        commandGen: commandGen,
+        coverageBudget: coverageBudget
+    )
     let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: concurrencyLevel)
     let sequenceGen = Gen.arrayOf(
         taggedCommandGen,
-        within: 1 ... UInt64(commandLimit),
+        within: 1 ... UInt64(resolvedCommandLimit),
         scaling: .linear
     )
-
-    let samplingBudget = budget.samplingBudget
-    let coverageBudget = budget.coverageBudget
     let reductionConfig = Interpreters.ReducerConfiguration(
         maxStalls: 2,
         wallClockDeadlineNanoseconds: UInt64(samplingBudget) * 5 * 1_000_000
@@ -144,7 +147,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         if let scaResult = runConcurrentSCACoverage(
             seqGen: sequenceGen,
             commandGen: commandGen,
-            commandLimit: commandLimit,
+            commandLimit: resolvedCommandLimit,
             coverageBudget: coverageBudget,
             concurrencyLevel: concurrencyLevel,
             idleTimeout: idleTimeout,
