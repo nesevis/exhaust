@@ -19,8 +19,8 @@ import Synchronization
 ///     }
 ///
 ///     @Command(weight: 2)
-///     mutating func deleteUser() {
-///         guard let id = userIDs.draw() else { skip() }
+///     mutating func deleteUser() throws {
+///         guard let id = userIDs.draw() else { throw skip() }
 ///         db.deleteUser(id: id)
 ///     }
 /// }
