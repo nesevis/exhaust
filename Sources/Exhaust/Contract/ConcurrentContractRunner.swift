@@ -174,15 +174,16 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     let passed = property(input)
                     if passed == false {
                         let traceResult = drainSchedule(taggedCommands: input, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
+                        let specState = captureSpecState(taggedCommands: input, specInit: specInit)
                         let result = ContractResult<Spec>(
                             commands: input.map(\.1),
                             trace: traceResult.trace,
-                            systemUnderTest: Spec().systemUnderTest,
+                            systemUnderTest: specState.systemUnderTest,
                             seed: regressionSeed,
                             discoveryMethod: .replay
                         )
                         if !suppressIssueReporting {
-                            let message = renderFailure(input, trace: traceResult.trace, reducedFrom: input.count, specName: "\(Spec.self)", discoveryMethod: .replay, seed: regressionSeed, iteration: 0, budget: 0, sequencesTested: 1)
+                            let message = renderFailure(input, trace: traceResult.trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: .replay, seed: regressionSeed, iteration: 0, budget: 0, sequencesTested: 1)
                             reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
                         }
                         return result
@@ -216,10 +217,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         ) {
             let traceResult = drainSchedule(taggedCommands: scaResult.finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
             let trace = traceResult.trace
+            let specState = captureSpecState(taggedCommands: scaResult.finalInput, specInit: specInit)
             let result = ContractResult<Spec>(
                 commands: scaResult.finalInput.map(\.1),
                 trace: trace,
-                systemUnderTest: Spec().systemUnderTest,
+                systemUnderTest: specState.systemUnderTest,
                 seed: nil,
                 discoveryMethod: .coverage
             )
@@ -227,7 +229,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             if !suppressIssueReporting {
                 let message = scaResult.timedOut
                     ? renderTimeout(scaResult.finalInput, trace: trace)
-                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value)
+                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value)
                 reportIssue(
                     message,
                     fileID: fileID,
@@ -332,10 +334,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 
                 let traceResult = drainSchedule(taggedCommands: finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
                 let trace = traceResult.trace
+                let specState = captureSpecState(taggedCommands: finalInput, specInit: specInit)
                 let result = ContractResult<Spec>(
                     commands: finalInput.map(\.1),
                     trace: trace,
-                    systemUnderTest: Spec().systemUnderTest,
+                    systemUnderTest: specState.systemUnderTest,
                     seed: actualSeed,
                     discoveryMethod: seed != nil ? .replay : .randomSampling
                 )
@@ -344,7 +347,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     let discoveryMethod: ContractDiscoveryMethod = seed != nil ? .replay : .randomSampling
                     let message = lastRunTimedOut.value
                         ? renderTimeout(finalInput, trace: trace)
-                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value)
+                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value)
                     reportIssue(
                         message,
                         fileID: fileID,
@@ -435,6 +438,41 @@ private func zipScheduleMarker<Command>(
     }
 
     return Gen.pick(choices: taggedChoices)
+}
+
+// MARK: - Spec State Capture
+
+/// Replays a tagged command sequence sequentially on a fresh spec to capture the model and SUT descriptions at the point of failure.
+///
+/// Runs all commands as prefix (ignoring lane assignments) so the model state reflects the full sequence in array order. Returns the spec's ``modelDescription`` and ``systemUnderTest`` from the diverged state.
+private func captureSpecState<Spec: AsyncContractSpec>(
+    taggedCommands: [(ScheduleMarker, Spec.Command)],
+    specInit: () -> Spec
+) -> (modelDescription: String, systemUnderTest: Spec.SystemUnderTest) {
+    let commands = taggedCommands.map(\.1)
+    let spec = SendableBox(specInit())
+    let runQueue = RunQueue(laneCount: 1)
+    let executor = LaneExecutor(lane: LaneID(index: 0), runQueue: runQueue)
+    let done = SendableBox(false)
+
+    Task(executorPreference: executor) { @Sendable [spec] in
+        for command in commands {
+            do {
+                try await spec.value.run(command)
+                try await spec.value.checkInvariants()
+            } catch {
+                break
+            }
+        }
+        done.value = true
+    }
+
+    while done.value == false {
+        guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else { continue }
+        job.runSynchronously(on: executor.asUnownedTaskExecutor())
+    }
+
+    return (modelDescription: spec.value.modelDescription, systemUnderTest: spec.value.systemUnderTest)
 }
 
 // MARK: - Skip Pruning
@@ -758,6 +796,8 @@ private func renderFailure(
     trace: [TraceStep],
     reducedFrom originalCount: Int,
     specName: String,
+    modelDescription: String,
+    sutDescription: String,
     discoveryMethod: ContractDiscoveryMethod,
     seed: UInt64?,
     iteration: Int,
@@ -783,6 +823,10 @@ private func renderFailure(
     for step in trace {
         lines.append("  \(step)")
     }
+
+    lines.append("")
+    lines.append("Model: \(modelDescription)")
+    lines.append("SUT:   \(sutDescription)")
 
     lines.append("")
     lines.append("Command sequences tested: \(sequencesTested)")
