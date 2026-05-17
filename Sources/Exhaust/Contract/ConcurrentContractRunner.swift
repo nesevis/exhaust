@@ -26,6 +26,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     var seed: UInt64?
     var idleTimeout = 1000
     var suppressIssueReporting = false
+    var useRandomOnly = false
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
     for setting in settings {
@@ -57,6 +58,8 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             case .all:
                 suppressIssueReporting = true
             }
+        case .randomOnly:
+            useRandomOnly = true
         case let .idleTimeout(ms):
             idleTimeout = ms
         case let .logging(level, format):
@@ -99,7 +102,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     }
 
     // --- Phase 1: SCA coverage (command-type orderings with random lane assignments) ---
-    if seed == nil && coverageBudget > 0 {
+    if seed == nil && coverageBudget > 0 && useRandomOnly == false {
         if let scaResult = runConcurrentSCACoverage(
             seqGen: sequenceGen,
             commandGen: commandGen,

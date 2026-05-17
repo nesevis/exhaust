@@ -32,6 +32,11 @@ public enum ConcurrentContractSettings {
     /// Use `.suppress(.issueReporting)` when the run is expected to find a failing command sequence and the test asserts on the returned value. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     case suppress(SuppressOption)
 
+    /// Disables structured coverage analysis of command orderings, using only random sampling.
+    ///
+    /// Use this when coverage is too slow for a particular spec (many commands with large argument domains) or when you want to isolate random sampling behavior.
+    case randomOnly
+
     /// Maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 1000.
     ///
     /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also timeout). The diagnostic indicates which command body likely suspended to a foreign executor.
