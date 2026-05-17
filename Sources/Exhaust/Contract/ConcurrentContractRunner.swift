@@ -94,15 +94,15 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     let commandGen = Spec.commandGenerator.gen
     let samplingBudget = budget.samplingBudget
     let coverageBudget = budget.coverageBudget
-    let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
+    let resolvedCommandLimit = commandLimit ?? min(estimateCommandLimit(
         commandGen: commandGen,
         coverageBudget: coverageBudget
-    )
+    ), 40)
     let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: concurrencyLevel)
     let sequenceGen = Gen.arrayOf(
         taggedCommandGen,
         within: 1 ... UInt64(resolvedCommandLimit),
-        scaling: .linear
+        scaling: .constant
     )
     let reductionConfig = Interpreters.ReducerConfiguration(
         maxStalls: 2,
@@ -168,7 +168,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             if !suppressIssueReporting {
                 let message = scaResult.timedOut
                     ? renderTimeout(scaResult.finalInput, trace: trace)
-                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, discoveryMethod: .coverage, seed: nil)
+                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value)
                 reportIssue(
                     message,
                     fileID: fileID,
@@ -195,8 +195,10 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     )
     let actualSeed = interpreter.baseSeed
 
+    var samplingIteration = 0
     do {
         while let (input, tree) = try interpreter.next() {
+            samplingIteration += 1
             let passed = property(input)
             statsAccumulator?.record(
                 representation: "\(input.map { "[\($0.0)] \($0.1)" })",
@@ -283,7 +285,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     let discoveryMethod: ContractDiscoveryMethod = seed != nil ? .replay : .randomSampling
                     let message = lastRunTimedOut.value
                         ? renderTimeout(finalInput, trace: trace)
-                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, discoveryMethod: discoveryMethod, seed: actualSeed)
+                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value)
                     reportIssue(
                         message,
                         fileID: fileID,
@@ -418,6 +420,7 @@ private func pruneSkippedCommands<Value>(
 private struct SCAFailureResult<Command> {
     var finalInput: [(ScheduleMarker, Command)]
     var originalCount: Int
+    var iteration: UInt64
     var timedOut: Bool
 }
 
@@ -521,7 +524,7 @@ private func runConcurrentSCACoverage<Command>(
             )
 
             if timedOut {
-                return SCAFailureResult(finalInput: value, originalCount: value.count, timedOut: true)
+                return SCAFailureResult(finalInput: value, originalCount: value.count, iteration: iterations, timedOut: true)
             }
 
             let (reduceValue, reduceTree) = pruneSkippedCommands(
@@ -541,9 +544,9 @@ private func runConcurrentSCACoverage<Command>(
                 config: reductionConfig,
                 property: property
             ) {
-                return SCAFailureResult(finalInput: reduced, originalCount: value.count, timedOut: false)
+                return SCAFailureResult(finalInput: reduced, originalCount: value.count, iteration: iterations, timedOut: false)
             }
-            return SCAFailureResult(finalInput: reduceValue, originalCount: value.count, timedOut: false)
+            return SCAFailureResult(finalInput: reduceValue, originalCount: value.count, iteration: iterations, timedOut: false)
         }
     }
 
@@ -695,11 +698,19 @@ private func renderFailure(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     trace: [TraceStep],
     reducedFrom originalCount: Int,
+    specName: String,
     discoveryMethod: ContractDiscoveryMethod,
-    seed: UInt64?
+    seed: UInt64?,
+    iteration: Int,
+    budget: UInt64,
+    sequencesTested: Int
 ) -> String {
     var lines: [String] = []
-    lines.append("Concurrent contract failure (found via \(discoveryMethod))")
+    if let seed {
+        lines.append("\(specName) failure (iteration \(iteration)/\(budget), found via \(discoveryMethod), seed \(CrockfordBase32.encode(seed)))")
+    } else {
+        lines.append("\(specName) failure (iteration \(iteration)/\(budget), found via \(discoveryMethod))")
+    }
     lines.append("")
 
     if tagged.count < originalCount {
@@ -713,6 +724,9 @@ private func renderFailure(
     for step in trace {
         lines.append("  \(step)")
     }
+
+    lines.append("")
+    lines.append("Command sequences tested: \(sequencesTested)")
 
     if let seed {
         lines.append("")
