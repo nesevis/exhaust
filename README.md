@@ -13,7 +13,7 @@ Exhaust is a property-based testing library for Swift. Instead of writing indivi
 
 - **Structured coverage** — boundary values and parameter interactions are tested systematically before random sampling begins, so edge cases are covered by design rather than luck.
 - **Automatic reduction** — when a failure is found, Exhaust reduces it to the smallest possible counterexample, typically within 100ms. No custom reduction functions needed.
-- **Contract testing** — generate random sequences of commands against a stateful system and verify that invariants hold after every step.
+- **Contract testing** — generate random sequences of commands against a stateful system and verify that invariants hold after every step. Async contracts run commands concurrently with deterministic interleaving at `await` boundaries, finding data races the sequential runner can't.
 - **Inspectable generators** — generators are data structures, not opaque closures. The library runs them forward to generate, backward to decompose, and replays them for deterministic reproduction.
 
 Exhaust works in three modes:
@@ -102,7 +102,7 @@ Then add it as a dependency of your test target:
 |---|---|
 | `#gen(...)` | Build a generator from primitives, with automatic bidirectional mapping |
 | `#exhaust(gen) { ... }` | Test a property and report a minimal counterexample on failure |
-| `#exhaust(Spec.self, ...)` | Run a contract test against a stateful system |
+| `#exhaust(Spec.self, ...)` | Run a contract test against a stateful system (async specs get concurrent interleaving) |
 | `#explore(gen, directions:) { ... }` | Test a property with per-direction coverage guarantees |
 | `#example(gen)` | Generate values outside of tests — for prototyping and snapshots |
 | `#examine(gen)` | Validate that a generator round-trips correctly through reflection and replay |
@@ -519,53 +519,93 @@ struct DatabaseSpec {
 
 `add()` stores a value in the bundle. `draw(at:)` retrieves one without removing it, and `consume(at:)` retrieves and removes it for exclusive-use patterns. When the bundle is empty, `draw` and `consume` return `nil` — use `throw skip()` to indicate the command's precondition isn't met.
 
-### Async Contracts
+### Async Contracts (Concurrent Interleaving)
 
-When your system under test is an actor, uses `async` methods, or interacts with async APIs, mark the relevant `@Command` or `@Invariant` methods as `async`. The macro detects this and generates an `AsyncContractSpec` conformance automatically — no separate macro or annotation needed.
+When your system under test has `async` methods, declare the spec as a `final class` and make commands non-mutating. The async runner distributes commands across concurrent execution lanes and deterministically interleaves their continuations at every `await` boundary — finding lost updates, check-then-act races, and non-atomic read-modify-write bugs.
 
 ```swift
 @Contract
-struct AccountSpec {
-    @Model var expected: Decimal = 0
-    @SUT var account = BankAccount()
+final class NonAtomicCounterSpec {
+    @Model var expected: Int = 0
+    @SUT var counter: NonAtomicCounter = .init()
 
     @Invariant
-    func balanceMatches() async -> Bool {
-        await account.balance == expected
+    func matchesModel() -> Bool {
+        counter.value == expected
     }
 
-    @Command(weight: 3, #gen(.int(in: 1...1000)))
-    mutating func deposit(amount: Int) async throws {
-        expected += Decimal(amount)
-        await account.deposit(amount)
+    @Command(weight: 3)
+    func increment() async throws {
+        expected += 1
+        await counter.increment()
     }
 
-    @Command(weight: 1)
-    mutating func close() async throws {
+    @Command(weight: 2)
+    func decrement() async throws {
         guard expected > 0 else { throw skip() }
-        expected = 0
-        await account.close()
+        expected -= 1
+        await counter.decrement()
     }
 }
 ```
 
-Run it the same way — the test function must be `async`:
+Run it with `await` and configure the concurrency level:
 
 ```swift
-@Test func accountBehavior() async {
-    await #exhaust(AccountSpec.self, commandLimit: 15)
+@Test func counterIsSafeUnderConcurrency() async {
+    await #exhaust(
+        NonAtomicCounterSpec.self,
+        .concurrency(2),
+        .commandLimit(6)
+    )
 }
 ```
 
-Sync and async commands can be mixed freely in the same contract.
+The cooperative scheduler controls interleaving deterministically — the same seed always produces the same interleaving and the same counterexample. When a failure is found, the reducer shrinks both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug:
+
+```
+Concurrent contract failure (found via random sampling)
+
+Reduced from 6 to 3 commands.
+
+Sequential prefix:
+  1. increment
+
+Lane A:
+  1A. increment
+
+Lane B:
+  1B. increment
+
+Execution trace:
+  1. increment (prefix)
+  2. 1A increment (started)
+  3. 1A increment (suspended)
+  4. 1B increment (completed) ✗ invariant 'matchesModel'
+
+Reproduce: .replay("7MK2N9")
+```
+
+The reducer drove the first `increment` into the sequential prefix (proving it doesn't need to be concurrent), leaving only two concurrent increments as the minimal race.
+
+> [!Note]
+> The cooperative scheduler interleaves at `await` boundaries only. A race between two statements with no `await` between them is invisible to this tool. Use Thread Sanitizer for purely synchronous races.
 
 ### Settings
 
-Contract tests accept the same settings as `#exhaust` (`.budget`, `.replay`, `.randomOnly`, `.collectOpenPBTStats`, `.logging`), plus:
+Sync contract tests accept `ContractSettings` (`.budget`, `.replay`, `.randomOnly`, `.collectOpenPBTStats`, `.logging`) plus a `commandLimit:` parameter.
+
+Async contract tests accept `ConcurrentContractSettings`:
 
 | Setting | Default | Effect |
 |---|---|---|
-| `commandLimit:` | (required) | Maximum number of commands per test iteration. |
+| `.commandLimit(N)` | 10 | Maximum number of commands per test iteration. |
+| `.concurrency(N)` | 2 | Number of concurrent execution lanes (1...8). |
+| `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
+| `.idleTimeout(ms)` | 1000 | Drain loop stall detection (for SUTs that escape the cooperative scheduler). |
+| `.replay(.numeric(seed))` | — | Deterministic reproduction. |
+| `.suppress(.issueReporting)` | — | Suppress issue reporting. |
+| `.logging(.debug)` | `.error` | Log verbosity. |
 
 ## Directed Exploration
 

@@ -456,7 +456,15 @@ struct Spec {
 }
 ```
 
-It's an advanced capability with its own document. The point here is just to know it exists. If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
+For async SUTs, the contract becomes a `final class` and the runner tests concurrent interleaving at every `await` boundary — finding data races that sequential testing can't reach:
+
+```swift
+@Test func sutIsSafeUnderConcurrency() async {
+    await #exhaust(AsyncSpec.self, .concurrency(2), .commandLimit(8))
+}
+```
+
+Contract testing has its own guide: [Contract Testing with Exhaust](CONTRACT_TESTING.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
 
 ## The tools, in summary
 
@@ -470,4 +478,4 @@ Here's when each tool is the right answer:
 
 **`#explore(generator, directions: [...]) { value in ... }`**. *Guarantee that each declared region of the input space gets exercised.* Use it when you can name the regions you care about and want assurance they were tested, and reach for it when `#exhaust` passes too easily for comfort.
 
-**`@Contract`**. *Test stateful systems across sequences of operations.* Reach for it when the bug you're worried about lives in the ordering or combination of several calls rather than in any single call. Its own document covers the mechanics.
+**`@Contract`**. *Test stateful systems across sequences of operations.* Reach for it when the bug you're worried about lives in the ordering or combination of several calls rather than in any single call. Async contracts also test concurrent interleaving at `await` boundaries. See [Contract Testing with Exhaust](CONTRACT_TESTING.md) for the full guide.
