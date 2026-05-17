@@ -35,10 +35,13 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     )
     let trace = traceResult.trace
 
+    // Run the commands sequentially on a fresh spec. If the sequential replay passes, the resulting state is the expected outcome — what the system should have produced without the race.
+    let oracle = timedOut ? nil : sequentialOracle(commands: finalInput.map(\.1), specInit: specInit)
+
     let result = ContractResult<Spec>(
         commands: finalInput.map(\.1),
         trace: trace,
-        systemUnderTest: nil,
+        systemUnderTest: oracle?.systemUnderTest ?? Spec().systemUnderTest,
         seed: seed,
         discoveryMethod: discoveryMethod
     )
@@ -46,6 +49,12 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     if suppressIssueReporting == false {
         failureContext.discoveryMethod = discoveryMethod
         failureContext.timedOut = timedOut
+        failureContext.oracleDescription = oracle.map { oracle in
+            let hasModel = oracle.modelDescription != "(no model properties)"
+            return hasModel
+                ? "Expected result (from sequential replay of @Model):\n  \(oracle.modelDescription)"
+                : "Expected result (from sequential replay of @SystemUnderTest):\n  \(oracle.sutDescription)"
+        }
         let message = renderFailure(finalInput, trace: trace, context: failureContext)
         reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
     }

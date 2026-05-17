@@ -11,6 +11,7 @@ struct FailureContext {
     var originalCount: Int = 0
     var sequencesTested: Int = 0
     var timedOut: Bool = false
+    var oracleDescription: String?
 }
 
 /// Formats a concurrent contract failure for reporting.
@@ -43,6 +44,11 @@ func renderFailure(
     lines.append("Execution trace:")
     for step in trace {
         lines.append("  \(step)")
+    }
+
+    if let oracleDescription = context.oracleDescription {
+        lines.append("")
+        lines.append(oracleDescription)
     }
 
     lines.append("")

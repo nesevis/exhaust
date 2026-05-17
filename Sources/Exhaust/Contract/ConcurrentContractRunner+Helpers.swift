@@ -1,5 +1,53 @@
-// Skip pruning for concurrent contract testing.
+// Skip pruning and sequential oracle for concurrent contract testing.
 import ExhaustCore
+
+// MARK: - Sequential Oracle
+
+/// Result of running the command sequence sequentially on a fresh spec.
+struct SequentialOracleResult<Spec: AsyncContractSpec> {
+    var systemUnderTest: Spec.SystemUnderTest
+    var modelDescription: String
+    var sutDescription: String
+}
+
+/// Runs the command sequence sequentially on a fresh spec and returns the expected state if all invariants pass.
+///
+/// Provides the "expected" state in the failure report — what the system should have produced without the race. If the sequential replay also fails, returns nil (the bug exists even without concurrency).
+func sequentialOracle<Spec: AsyncContractSpec>(
+    commands: [Spec.Command],
+    specInit: () -> Spec
+) -> SequentialOracleResult<Spec>? {
+    let spec = SendableBox(specInit())
+    let runQueue = RunQueue(laneCount: 1)
+    let executor = LaneExecutor(lane: LaneID(index: 0), runQueue: runQueue)
+    let passed = SendableBox(true)
+    let done = SendableBox(false)
+
+    Task(executorPreference: executor) { @Sendable [spec] in
+        for command in commands {
+            do {
+                try await spec.value.run(command)
+                try await spec.value.checkInvariants()
+            } catch {
+                passed.value = false
+                break
+            }
+        }
+        done.value = true
+    }
+
+    while done.value == false {
+        guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else { continue }
+        job.runSynchronously(on: executor.asUnownedTaskExecutor())
+    }
+
+    guard passed.value else { return nil }
+    return SequentialOracleResult(
+        systemUnderTest: spec.value.systemUnderTest,
+        modelDescription: spec.value.modelDescription,
+        sutDescription: "\(spec.value.systemUnderTest)"
+    )
+}
 
 /// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree that still fail the property.
 ///
