@@ -45,7 +45,8 @@ public protocol ContractSpecBase {
 /// @Contract
 /// struct BoundedQueueSpec {
 ///     @Model var contents: [Int] = []
-///     @SystemUnderTest   var queue = BoundedQueue<Int>(capacity: 4)
+///     @SystemUnderTest
+///     var queue = BoundedQueue<Int>(capacity: 4)
 ///
 ///     @Command(weight: 3, Gen.int(in: 0...99))
 ///     mutating func enqueue(value: Int) throws {

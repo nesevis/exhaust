@@ -282,7 +282,7 @@ package enum BoundaryDomainAnalysis {
         case .depthControl:
             0 // Depth 0 = shallowest (base case)
         case .laneControl:
-            0
+            0 // Marker 0 = prefix (sequential)
         }
     }
 

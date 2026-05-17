@@ -130,6 +130,7 @@ final class NonAtomicCounterSpec {
 
 // MARK: - SUT
 
+/// Deliberately unsynchronized — @unchecked Sendable is required because the cooperative scheduler accesses the instance from multiple Tasks via SendableBox.
 final class NonAtomicCounter: @unchecked Sendable {
     private var _value: Int = 0
 

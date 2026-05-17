@@ -147,7 +147,7 @@ public func __runContract<Spec: ContractSpec>(
                                 seed: regressionSeed,
                                 discoveryMethod: .replay
                             )
-                            if !suppressIssueReporting {
+                            if suppressIssueReporting == false {
                                 let rendered = renderFailure(
                                     result,
                                     failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
@@ -156,7 +156,7 @@ public func __runContract<Spec: ContractSpec>(
                                 reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                             }
                             return result
-                        } else if !suppressIssueReporting {
+                        } else if suppressIssueReporting == false {
                             reportIssue(
                                 "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
                                 fileID: fileID,
@@ -250,7 +250,7 @@ public func __runContract<Spec: ContractSpec>(
             discoveryMethod: failureInfo.discoveryMethod
         )
 
-        if !suppressIssueReporting {
+        if suppressIssueReporting == false {
             let rendered = renderFailure(
                 result,
                 failureInfo: failureInfo,

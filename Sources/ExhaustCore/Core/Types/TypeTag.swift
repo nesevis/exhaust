@@ -42,7 +42,7 @@ package enum TypeTag: Sendable {
     case character(boundaryIndices: [UInt64])
     /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
     case depthControl
-    /// Lane control: a structural scheduling decision (like lane assignment in concurrent contract testing) that should not appear as a parameter in coverage arrays but participates fully in value search and minimization. Coverage analysis skips this tag; the reducer treats it as a normal integer leaf.
+    /// Tags a structural scheduling decision that coverage analysis should skip but the reducer should minimize normally. Used for lane assignment in concurrent contract testing — the covering array covers command types without the combinatorial cost of lane combinations, while the reducer drives markers toward 0 (prefix) to discover minimal concurrency.
     case laneControl
 }
 

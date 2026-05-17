@@ -32,7 +32,8 @@ import ExhaustCore
 /// @Contract
 /// struct BoundedQueueContract {
 ///     @Model var contents: [Int] = []
-///     @SystemUnderTest   var queue = BoundedQueue<Int>(capacity: 4)
+///     @SystemUnderTest
+///     var queue = BoundedQueue<Int>(capacity: 4)
 ///
 ///     @Invariant
 ///     func countMatches() -> Bool {

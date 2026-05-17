@@ -60,6 +60,7 @@ final class LeakyBucketSpec {
 
 // MARK: - SUT
 
+/// Deliberately unsynchronized — @unchecked Sendable is required because the cooperative scheduler accesses the instance from multiple Tasks via SendableBox.
 final class LeakyBucket: @unchecked Sendable {
     private var _tokens: Int = 0
     private let _capacity: Int

@@ -9,7 +9,7 @@ import ExhaustCore
 /// #exhaust(MySpec.self, .concurrency(4), .budget(.thorough))
 /// ```
 public enum ConcurrentContractSettings {
-    /// Number of concurrent execution lanes (1...8). Default is 2.
+    /// Sets the number of concurrent execution lanes (1...8). Default is 2.
     ///
     /// Each lane runs its assigned commands in a separate Task. The cooperative scheduler interleaves their continuations at every `await` boundary. Higher values explore more complex interleavings but grow the search space combinatorially.
     ///
@@ -19,7 +19,7 @@ public enum ConcurrentContractSettings {
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.thorough`.
     case budget(ExhaustBudget)
 
-    /// Maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 40.
+    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 40.
     case commandLimit(Int)
 
     /// Replays a specific test run using a fixed seed.
@@ -37,7 +37,7 @@ public enum ConcurrentContractSettings {
     /// Use this when coverage is too slow for a particular spec (many commands with large argument domains) or when you want to isolate random sampling behavior.
     case randomOnly
 
-    /// Maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 1000.
+    /// Sets the maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 1000.
     ///
     /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also timeout). The diagnostic indicates which command body likely suspended to a foreign executor.
     case idleTimeoutMs(Int)

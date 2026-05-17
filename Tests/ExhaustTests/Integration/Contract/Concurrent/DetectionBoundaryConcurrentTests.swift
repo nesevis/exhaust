@@ -110,6 +110,7 @@ final class ThreeWayRaceSpec {
 
 // MARK: - SUTs
 
+/// Deliberately unsynchronized — @unchecked Sendable is required because the cooperative scheduler accesses the instance from multiple Tasks via SendableBox.
 final class SilentlyRacyCounter: @unchecked Sendable {
     private var _value: Int = 0
 
@@ -125,6 +126,7 @@ final class SilentlyRacyCounter: @unchecked Sendable {
     }
 }
 
+/// Deliberately unsynchronized — @unchecked Sendable is required because the cooperative scheduler accesses the instance from multiple Tasks via SendableBox.
 final class ExposedRacyCounter: @unchecked Sendable {
     private var _value: Int = 0
 
@@ -141,6 +143,7 @@ final class ExposedRacyCounter: @unchecked Sendable {
     }
 }
 
+/// Deliberately unsynchronized — @unchecked Sendable is required because the cooperative scheduler accesses the instance from multiple Tasks via SendableBox.
 final class ThreeWayRacyCounter: @unchecked Sendable {
     private var _value: Int = 0
 

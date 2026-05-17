@@ -187,7 +187,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             seed: regressionSeed,
                             discoveryMethod: .replay
                         )
-                        if !suppressIssueReporting {
+                        if suppressIssueReporting == false {
                             var ctx = failureContext
                             ctx.discoveryMethod = .replay
                             ctx.seed = regressionSeed
@@ -199,7 +199,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
                         }
                         return result
-                    } else if !suppressIssueReporting {
+                    } else if suppressIssueReporting == false {
                         reportIssue(
                             "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
                             fileID: fileID,
@@ -242,7 +242,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 discoveryMethod: .coverage
             )
 
-            if !suppressIssueReporting {
+            if suppressIssueReporting == false {
                 var ctx = failureContext
                 ctx.discoveryMethod = .coverage
                 ctx.originalCount = scaResult.originalCount
@@ -377,7 +377,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     discoveryMethod: seed != nil ? .replay : .randomSampling
                 )
 
-                if !suppressIssueReporting {
+                if suppressIssueReporting == false {
                     var ctx = failureContext
                     ctx.discoveryMethod = seed != nil ? .replay : .randomSampling
                     ctx.seed = actualSeed
