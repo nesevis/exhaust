@@ -2,36 +2,73 @@
 //
 // Orchestrates the property-testing loop: generate a tagged command sequence, drain it through the cooperative scheduler, and if a failure is found, reduce it with the choice-graph reducer.
 //
-// The generator produces [(ScheduleMarker, Command)] arrays. Each element has a schedule marker (chooseBits in 0...2) zipped with a command from the spec's weighted pick. The array order defines both the lane partition and the interleaving schedule. The reducer shrinks the counterexample by deleting elements (shorter sequence) and minimizing markers toward 0 (moving commands from concurrent lanes into the sequential prefix).
+// The generator produces [(ScheduleMarker, Command)] arrays. Each element has a schedule marker (chooseBits in 0...N) zipped with a command from the spec's weighted pick. The array order defines both the lane partition and the interleaving schedule. The reducer shrinks the counterexample by deleting elements (shorter sequence) and minimizing markers toward 0 (moving commands from concurrent lanes into the sequential prefix).
 import ExhaustCore
 import IssueReporting
 
 /// Runs a concurrent contract property test for the given async specification type.
 ///
-/// Generates random tagged command sequences where each command carries a schedule marker assigning it to lane A, lane B, or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:recordTrace:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer shrinks both the command sequence and the lane assignments.
+/// Generates random tagged command sequences where each command carries a schedule marker assigning it to one of N concurrent lanes or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer shrinks both the command sequence and the lane assignments.
 ///
 /// The same seed always produces the same interleaving and the same counterexample.
-///
-/// - Parameter commandLimit: Maximum number of commands per generated sequence.
-/// - Parameter budget: Controls how many random sequences to sample before declaring success.
-/// - Parameter seed: When non-nil, replays a specific generation seed for reproducibility.
 @discardableResult
 public func __runContractConcurrent<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
-    commandLimit: Int = 10,
-    budget: ExhaustBudget = .thorough,
-    seed: UInt64? = nil,
-    idleTimeout: Int = 1000,
-    suppressIssueReporting: Bool = false,
-    logLevel: LogLevel = .error,
+    settings: [ConcurrentContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
     column: UInt = #column
 ) async -> ContractResult<Spec>? {
-    ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
+    var commandLimit = 10
+    var concurrencyLevel = 2
+    var budget = ExhaustBudget.thorough
+    var seed: UInt64?
+    var idleTimeout = 1000
+    var suppressIssueReporting = false
+    var logLevel: LogLevel = .error
+    var logFormat: LogFormat = .keyValue
+    for setting in settings {
+        switch setting {
+        case let .concurrency(level):
+            concurrencyLevel = level
+        case let .budget(b):
+            budget = b
+        case let .commandLimit(limit):
+            commandLimit = limit
+        case let .replay(replaySeed):
+            seed = replaySeed.resolve()
+            if seed == nil {
+                reportIssue(
+                    "Invalid replay seed: \(replaySeed)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return nil
+            }
+        case let .suppress(option):
+            switch option {
+            case .issueReporting:
+                suppressIssueReporting = true
+            case .logs:
+                break
+            case .all:
+                suppressIssueReporting = true
+            }
+        case let .idleTimeout(ms):
+            idleTimeout = ms
+        case let .logging(level, format):
+            logLevel = level
+            logFormat = format
+        }
+    }
+    precondition((1 ... 8).contains(concurrencyLevel), "concurrencyLevel must be between 1 and 8")
+
+    return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
     let commandGen = Spec.commandGenerator.gen
-    let taggedCommandGen = zipScheduleMarker(onto: commandGen)
+    let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: concurrencyLevel)
     let sequenceGen = Gen.arrayOf(
         taggedCommandGen,
         within: 1 ... UInt64(commandLimit),
@@ -47,9 +84,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     // Safe: metatypes are stateless.
     nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
+    let resolvedConcurrencyLevel = concurrencyLevel
+    let resolvedIdleTimeout = idleTimeout
     let lastRunTimedOut = SendableBox(false)
     let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
-        let result = drainSchedule(taggedCommands: taggedCommands, specInit: specInit, recordTrace: false, idleTimeoutMilliseconds: idleTimeout)
+        let result = drainSchedule(taggedCommands: taggedCommands, specInit: specInit, concurrencyLevel: resolvedConcurrencyLevel, recordTrace: false, idleTimeoutMilliseconds: resolvedIdleTimeout)
         lastRunTimedOut.value = result.timedOut
         return result.passed
     }
@@ -120,7 +159,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     }
                 }
 
-                let traceResult = drainSchedule(taggedCommands: finalInput, specInit: specInit, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
+                let traceResult = drainSchedule(taggedCommands: finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
                 let trace = traceResult.trace
                 let result = ContractResult<Spec>(
                     commands: finalInput.map(\.1),
@@ -164,7 +203,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 
 /// Zips a schedule marker generator onto each branch of the command pick.
 ///
-/// Takes the spec's command generator (a `pick` over weighted command branches) and prepends a `chooseBits(0...2)` schedule marker to each branch via `zip`. The resulting generator produces `(ScheduleMarker, Command)` tuples where the marker controls lane assignment and the command is the original spec command with all its argument generators intact.
+/// Takes the spec's command generator (a `pick` over weighted command branches) and prepends a `chooseBits(0...N)` schedule marker to each branch via `zip`, where N is the concurrency level. The resulting generator produces `(ScheduleMarker, Command)` tuples where the marker controls lane assignment and the command is the original spec command with all its argument generators intact.
 ///
 /// The structure after transformation:
 /// ```
@@ -177,14 +216,19 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 ///
 /// This gives each array element a pick-at-top structure that the choice-graph reducer handles naturally: structural deletion removes entire elements (shorter counterexample), and value minimization on the marker's chooseBits drives it toward 0/prefix (less concurrency).
 private func zipScheduleMarker<Command>(
-    onto commandGen: Generator<Command>
+    onto commandGen: Generator<Command>,
+    concurrencyLevel: Int
 ) -> Generator<(ScheduleMarker, Command)> {
     guard let choices = extractPickChoices(from: commandGen) else {
         fatalError("Command generator is in unexpected format")
     }
 
-    let markerGen = Gen.choose(in: UInt8(0) ... UInt8(2))
-        .map { ScheduleMarker(rawValue: $0)! }
+    let markerGen: Generator<ScheduleMarker> = if concurrencyLevel == 1 {
+        Gen.just(ScheduleMarker.prefix)
+    } else {
+        Gen.choose(in: UInt8(0) ... UInt8(concurrencyLevel))
+            .map { ScheduleMarker(rawValue: $0) }
+    }
     let taggedChoices = choices.map { choice in
         let branchGen: Generator<Command> = choice.generator.map { $0 as! Command }
         let zipped = Gen.zip(markerGen, branchGen)
@@ -337,33 +381,7 @@ private func renderFailure(
         lines.append("")
     }
 
-    let prefixCommands = tagged.filter { $0.0 == .prefix }.map(\.1)
-    let laneACommands = tagged.filter { $0.0 == .laneA }.map(\.1)
-    let laneBCommands = tagged.filter { $0.0 == .laneB }.map(\.1)
-
-    if prefixCommands.isEmpty == false {
-        lines.append("Sequential prefix:")
-        for (index, command) in prefixCommands.enumerated() {
-            lines.append("  \(index + 1). \(command)")
-        }
-        lines.append("")
-    }
-
-    if laneACommands.isEmpty == false {
-        lines.append("Lane A:")
-        for (index, command) in laneACommands.enumerated() {
-            lines.append("  \(index + 1)A. \(command)")
-        }
-        lines.append("")
-    }
-
-    if laneBCommands.isEmpty == false {
-        lines.append("Lane B:")
-        for (index, command) in laneBCommands.enumerated() {
-            lines.append("  \(index + 1)B. \(command)")
-        }
-        lines.append("")
-    }
+    renderCommandPartition(tagged, into: &lines)
 
     lines.append("Execution trace:")
     for step in trace {
@@ -382,33 +400,7 @@ private func renderTimeout(
     lines.append("This typically means a command body suspended to a foreign executor (custom-executor actor, Task.sleep, or blocking I/O) that does not flow through the cooperative scheduler.")
     lines.append("")
 
-    let prefixCommands = tagged.filter { $0.0 == .prefix }.map(\.1)
-    let laneACommands = tagged.filter { $0.0 == .laneA }.map(\.1)
-    let laneBCommands = tagged.filter { $0.0 == .laneB }.map(\.1)
-
-    if prefixCommands.isEmpty == false {
-        lines.append("Sequential prefix:")
-        for (index, command) in prefixCommands.enumerated() {
-            lines.append("  \(index + 1). \(command)")
-        }
-        lines.append("")
-    }
-
-    if laneACommands.isEmpty == false {
-        lines.append("Lane A:")
-        for (index, command) in laneACommands.enumerated() {
-            lines.append("  \(index + 1)A. \(command)")
-        }
-        lines.append("")
-    }
-
-    if laneBCommands.isEmpty == false {
-        lines.append("Lane B:")
-        for (index, command) in laneBCommands.enumerated() {
-            lines.append("  \(index + 1)B. \(command)")
-        }
-        lines.append("")
-    }
+    renderCommandPartition(tagged, into: &lines)
 
     if trace.isEmpty == false {
         lines.append("Partial execution trace (up to stall point):")
@@ -418,4 +410,32 @@ private func renderTimeout(
     }
 
     return lines.joined(separator: "\n")
+}
+
+private func renderCommandPartition(
+    _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
+    into lines: inout [String]
+) {
+    let prefixCommands = tagged.filter { $0.0.isPrefix }.map(\.1)
+    if prefixCommands.isEmpty == false {
+        lines.append("Sequential prefix:")
+        for (index, command) in prefixCommands.enumerated() {
+            lines.append("  \(index + 1). \(command)")
+        }
+        lines.append("")
+    }
+
+    let maxLane = tagged.map(\.0.rawValue).max() ?? 0
+    for laneValue in UInt8(1) ... max(maxLane, 1) {
+        let marker = ScheduleMarker(rawValue: laneValue)
+        let laneCommands = tagged.filter { $0.0 == marker }.map(\.1)
+        if laneCommands.isEmpty == false {
+            let label = marker.description.uppercased()
+            lines.append("Lane \(label):")
+            for (index, command) in laneCommands.enumerated() {
+                lines.append("  \(index + 1)\(label). \(command)")
+            }
+            lines.append("")
+        }
+    }
 }

@@ -2,40 +2,44 @@
 //
 // Executes a tagged command sequence through a cooperative scheduler that deterministically controls interleaving at every `await` boundary. The input is a flat [(ScheduleMarker, Command)] array that encodes both the lane partition AND the interleaving order:
 //
-//   - ScheduleMarker.prefix → runs sequentially before the concurrent phase (state setup)
-//   - ScheduleMarker.laneA / .laneB → assigns to a lane; array position defines drain order
+//   - ScheduleMarker(rawValue: 0) → prefix: runs sequentially before the concurrent phase (state setup)
+//   - ScheduleMarker(rawValue: 1...N) → assigns to lane a...n; array position defines drain order
 //
 // The array order of non-prefix markers becomes the schedule: when the drain loop needs to pick which lane to advance, it consults the next marker in sequence. This encoding means reduction can simultaneously shrink commands (array deletion) and reduce concurrency (marker minimization toward 0/prefix) using the existing choice-graph reducer with no special logic.
 //
 // Execution model:
-//   1. Partition commands into prefix / laneA / laneB
+//   1. Partition commands into prefix + one array per lane
 //   2. Drain the prefix phase sequentially on one executor
-//   3. Spawn two Tasks (one per lane) with executorPreference pointing to LaneExecutors
-//   4. Drain the run queue in schedule order until both lanes complete or a failure is detected
+//   3. Spawn N Tasks (one per lane) with executorPreference pointing to their LaneExecutor
+//   4. Drain the run queue in schedule order until all lanes complete or a failure is detected
 //
 // Each Task.yield() or other suspension point in a command body produces a new continuation in the RunQueue, giving the scheduler a chance to switch lanes at that boundary.
 import ExhaustCore
 
 /// Assigns a command to a scheduling lane in a concurrent contract test.
 ///
-/// During generation, the marker generator produces values in 0...2 uniformly. The reducer's value-minimization pass drives markers toward 0 (``prefix``), naturally discovering which commands must remain concurrent to reproduce the failure. Commands whose markers reach ``prefix`` move to the sequential phase, proving they are not part of the minimal concurrent counterexample.
+/// During generation, the marker generator produces values in 0...N (where N is the concurrency level). The reducer's value-minimization pass drives markers toward 0 (prefix), naturally discovering which commands must remain concurrent to reproduce the failure. Commands whose markers reach prefix move to the sequential phase, proving they are not part of the minimal concurrent counterexample.
 ///
-/// ```
-/// .prefix → sequential setup (run before any interleaving)
-/// .laneA  → assigned to lane A (interleaved with lane B by the scheduler)
-/// .laneB  → assigned to lane B (interleaved with lane A by the scheduler)
-/// ```
-public enum ScheduleMarker: UInt8, Sendable, Equatable, CustomStringConvertible {
-    case prefix = 0
-    case laneA = 1
-    case laneB = 2
+/// Value 0 is the sequential prefix. Values 1 through N map to lanes "a" through the Nth letter.
+public struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, CustomStringConvertible {
+    public let rawValue: UInt8
+
+    public init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
+
+    /// The sequential prefix marker. Commands with this marker run before any interleaving begins.
+    public static let prefix = ScheduleMarker(rawValue: 0)
+
+    /// Whether this marker assigns to the sequential prefix rather than a concurrent lane.
+    public var isPrefix: Bool { rawValue == 0 }
+
+    /// The zero-based lane index, or nil if this is the prefix marker.
+    var laneIndex: UInt8? { rawValue > 0 ? rawValue - 1 : nil }
 
     public var description: String {
-        switch self {
-        case .prefix: "prefix"
-        case .laneA: "a"
-        case .laneB: "b"
-        }
+        if rawValue == 0 { return "prefix" }
+        return String(UnicodeScalar(UInt8(ascii: "a") + rawValue - 1))
     }
 }
 
@@ -51,43 +55,45 @@ struct ConcurrentExecutionResult {
 
 /// Drains a tagged command sequence through the cooperative scheduler with deterministic interleaving.
 ///
-/// Execution proceeds in two phases. First, all ``ScheduleMarker/prefix`` commands run sequentially on a single executor — this builds up whatever shared state the concurrent phase needs. Then, ``ScheduleMarker/laneA`` and ``ScheduleMarker/laneB`` commands run concurrently via two Tasks whose continuations are interleaved by the drain loop.
+/// Execution proceeds in two phases. First, all prefix commands run sequentially on a single executor — this builds up whatever shared state the concurrent phase needs. Then, lane-assigned commands run concurrently via N Tasks whose continuations are interleaved by the drain loop.
 ///
-/// The drain loop advances one continuation at a time (via `runSynchronously`), picking the lane indicated by the next schedule entry. When a command body hits an `await` (for example, `Task.yield()` inside a non-atomic read-modify-write), the task suspends and re-enqueues its continuation. The drain loop then picks the other lane's continuation, producing a deterministic interleaving at that suspension point.
+/// The drain loop advances one continuation at a time (via `runSynchronously`), picking the lane indicated by the next schedule entry. When a command body hits an `await` (for example, `Task.yield()` inside a non-atomic read-modify-write), the task suspends and re-enqueues its continuation. The drain loop then picks another lane's continuation, producing a deterministic interleaving at that suspension point.
 ///
+/// - Parameter concurrencyLevel: The number of concurrent lanes (1...8). When 1, all non-prefix commands run on a single lane with no interleaving (fast path).
 /// - Parameter recordTrace: When false, trace recording is skipped for performance (used during generation and reduction where only pass/fail matters). When true, the full interleaving trace is captured for the final counterexample report.
 /// - Parameter idleTimeoutMilliseconds: Maximum wall-clock time (in milliseconds) the drain loop waits with no pending jobs before declaring a timeout. Prevents infinite hangs when a continuation escapes to a foreign executor. Pass `Int.max` to disable.
 func drainSchedule<Spec: AsyncContractSpec>(
     taggedCommands: [(ScheduleMarker, Spec.Command)],
     specInit: () -> Spec,
+    concurrencyLevel: Int,
     recordTrace: Bool,
     idleTimeoutMilliseconds: Int = 1000
 ) -> ConcurrentExecutionResult {
     let idleTimeout: Duration = .milliseconds(idleTimeoutMilliseconds)
-    let prefixCommands = taggedCommands.filter { $0.0 == .prefix }.map(\.1)
-    let laneACommands = taggedCommands.filter { $0.0 == .laneA }.map(\.1)
-    let laneBCommands = taggedCommands.filter { $0.0 == .laneB }.map(\.1)
+
+    let prefixCommands = taggedCommands.filter { $0.0.isPrefix }.map(\.1)
+    let laneCommands: [[Spec.Command]] = (0 ..< concurrencyLevel).map { laneIndex in
+        let marker = ScheduleMarker(rawValue: UInt8(laneIndex + 1))
+        return taggedCommands.filter { $0.0 == marker }.map(\.1)
+    }
     let schedule: [LaneID] = taggedCommands.compactMap { marker, _ in
-        switch marker {
-        case .laneA: .a
-        case .laneB: .b
-        case .prefix: nil
-        }
+        guard let laneIndex = marker.laneIndex else { return nil }
+        return LaneID(index: laneIndex)
     }
 
-    let runQueue = RunQueue()
-    let executorA = LaneExecutor(lane: .a, runQueue: runQueue)
-    let executorB = LaneExecutor(lane: .b, runQueue: runQueue)
+    let runQueue = RunQueue(laneCount: concurrencyLevel)
+    let executors: [LaneExecutor] = (0 ..< concurrencyLevel).map { index in
+        LaneExecutor(lane: LaneID(index: UInt8(index)), runQueue: runQueue)
+    }
     let spec = SendableBox(specInit())
     let failed = SendableBox<String?>(nil)
     let trace = SendableBox<[String]>([])
-    let commandIndexA = SendableBox(0)
-    let commandIndexB = SendableBox(0)
+    let commandIndices: [SendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in SendableBox(0) }
 
     // Phase 1: Prefix — run sequentially, drain fully before concurrent phase.
     if prefixCommands.isEmpty == false {
         let prefixDone = SendableBox(false)
-        Task(executorPreference: executorA) { @Sendable [spec, failed, prefixDone, trace] in
+        Task(executorPreference: executors[0]) { @Sendable [spec, failed, prefixDone, trace] in
             for command in prefixCommands {
                 guard failed.value == nil else { break }
                 let description = "\(command)"
@@ -114,13 +120,13 @@ func drainSchedule<Spec: AsyncContractSpec>(
 
         var lastActivity = ContinuousClock.now
         while prefixDone.value == false {
-            guard let (_, job) = runQueue.dequeue(preferring: .a) else {
+            guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
                 if ContinuousClock.now - lastActivity > idleTimeout {
                     return ConcurrentExecutionResult(passed: false, trace: recordTrace ? parseTrace(trace.value) : [], timedOut: true)
                 }
                 continue
             }
-            job.runSynchronously(on: executorA.asUnownedTaskExecutor())
+            job.runSynchronously(on: executors[0].asUnownedTaskExecutor())
             lastActivity = ContinuousClock.now
         }
         if failed.value != nil {
@@ -128,71 +134,55 @@ func drainSchedule<Spec: AsyncContractSpec>(
         }
     }
 
-    // Phase 2: Concurrent — run lane A and lane B with interleaving.
-    if laneACommands.isEmpty && laneBCommands.isEmpty {
+    // Phase 2: Concurrent — spawn one task per lane with interleaving.
+    let hasAnyLaneCommands = laneCommands.contains { $0.isEmpty == false }
+    if hasAnyLaneCommands == false {
         return ConcurrentExecutionResult(passed: true, trace: recordTrace ? parseTrace(trace.value) : [])
     }
 
-    Task(executorPreference: executorA) { @Sendable [spec, failed, runQueue, trace, commandIndexA] in
-        for command in laneACommands {
-            guard failed.value == nil else { return }
-            commandIndexA.value += 1
-            let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
-            let label = "\(commandIndexA.value)A \(name)"
-            if recordTrace { trace.value.append("STARTED:a:\(label)") }
-            do {
-                try await spec.value.run(command)
-                try await spec.value.checkInvariants()
-                if recordTrace { trace.value.append("COMPLETED:a:\(label)") }
-            } catch is ContractSkip {
-                if recordTrace { trace.value.append("COMPLETED:a:\(label)") }
-            } catch let failure as ContractCheckFailure {
-                let message = failure.message ?? "check failed"
-                if recordTrace { trace.value.append("FAILED:a:\(label):\(message)") }
-                failed.value = message
-                return
-            } catch {
-                if recordTrace { trace.value.append("FAILED:a:\(label):\(error)") }
-                failed.value = "\(error)"
-                return
-            }
-        }
-        runQueue.markComplete(lane: .a)
-    }
+    for (laneIndex, commands) in laneCommands.enumerated() {
+        let lane = LaneID(index: UInt8(laneIndex))
+        let executor = executors[laneIndex]
+        let commandIndex = commandIndices[laneIndex]
 
-    Task(executorPreference: executorB) { @Sendable [spec, failed, runQueue, trace, commandIndexB] in
-        for command in laneBCommands {
-            guard failed.value == nil else { return }
-            commandIndexB.value += 1
-            let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
-            let label = "\(commandIndexB.value)B \(name)"
-            if recordTrace { trace.value.append("STARTED:b:\(label)") }
-            do {
-                try await spec.value.run(command)
-                try await spec.value.checkInvariants()
-                if recordTrace { trace.value.append("COMPLETED:b:\(label)") }
-            } catch is ContractSkip {
-                if recordTrace { trace.value.append("COMPLETED:b:\(label)") }
-            } catch let failure as ContractCheckFailure {
-                let message = failure.message ?? "check failed"
-                if recordTrace { trace.value.append("FAILED:b:\(label):\(message)") }
-                failed.value = message
-                return
-            } catch {
-                if recordTrace { trace.value.append("FAILED:b:\(label):\(error)") }
-                failed.value = "\(error)"
-                return
-            }
+        if commands.isEmpty {
+            runQueue.markComplete(lane: lane)
+            continue
         }
-        runQueue.markComplete(lane: .b)
-    }
 
-    if laneACommands.isEmpty { runQueue.markComplete(lane: .a) }
-    if laneBCommands.isEmpty { runQueue.markComplete(lane: .b) }
+        Task(executorPreference: executor) { @Sendable [spec, failed, runQueue, trace, commandIndex] in
+            for command in commands {
+                guard failed.value == nil else { return }
+                commandIndex.value += 1
+                let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
+                let label = "\(commandIndex.value)\(lane.label.uppercased()) \(name)"
+                if recordTrace { trace.value.append("STARTED:\(lane.label):\(label)") }
+                do {
+                    try await spec.value.run(command)
+                    try await spec.value.checkInvariants()
+                    if recordTrace { trace.value.append("COMPLETED:\(lane.label):\(label)") }
+                } catch is ContractSkip {
+                    if recordTrace { trace.value.append("COMPLETED:\(lane.label):\(label)") }
+                } catch let failure as ContractCheckFailure {
+                    let message = failure.message ?? "check failed"
+                    if recordTrace { trace.value.append("FAILED:\(lane.label):\(label):\(message)") }
+                    failed.value = message
+                    return
+                } catch {
+                    if recordTrace { trace.value.append("FAILED:\(lane.label):\(label):\(error)") }
+                    failed.value = "\(error)"
+                    return
+                }
+            }
+            runQueue.markComplete(lane: lane)
+        }
+    }
 
     // Drain concurrent section with lane-switch tracking for suspended/resumed markers.
     var lastDrainedLane: LaneID?
-    var laneHasOpenCommand: [LaneID: Bool] = [.a: false, .b: false]
+    var laneHasOpenCommand: [LaneID: Bool] = Dictionary(
+        uniqueKeysWithValues: (0 ..< concurrencyLevel).map { (LaneID(index: UInt8($0)), false) }
+    )
     var scheduleIndex = 0
     var failureDetected = false
     var lastActivity = ContinuousClock.now
@@ -208,21 +198,19 @@ func drainSchedule<Spec: AsyncContractSpec>(
         let preferred: LaneID = if scheduleIndex < schedule.count {
             schedule[scheduleIndex]
         } else {
-            scheduleIndex % 2 == 0 ? .a : .b
+            LaneID(index: UInt8(scheduleIndex % concurrencyLevel))
         }
         scheduleIndex += 1
         guard let (lane, job) = runQueue.dequeue(preferring: preferred) else { break }
-        let executor = lane == .a ? executorA : executorB
+        let executor = executors[Int(lane.index)]
 
         if recordTrace {
             let switchedLanes = lastDrainedLane != nil && lastDrainedLane != lane
             if switchedLanes, let prev = lastDrainedLane, laneHasOpenCommand[prev] == true {
-                let laneLabel = prev == .a ? "a" : "b"
-                trace.value.append("SUSPENDED:\(laneLabel)")
+                trace.value.append("SUSPENDED:\(prev.label)")
             }
             if switchedLanes && laneHasOpenCommand[lane] == true {
-                let laneLabel = lane == .a ? "a" : "b"
-                trace.value.append("RESUMED:\(laneLabel)")
+                trace.value.append("RESUMED:\(lane.label)")
             }
         }
 
