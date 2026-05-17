@@ -76,6 +76,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     )
 
     let samplingBudget = budget.samplingBudget
+    let coverageBudget = budget.coverageBudget
     let reductionConfig = Interpreters.ReducerConfiguration(
         maxStalls: 2,
         wallClockDeadlineNanoseconds: UInt64(samplingBudget) * 5 * 1_000_000
@@ -93,6 +94,46 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         return result.passed
     }
 
+    // --- Phase 1: SCA coverage (command-type orderings with random lane assignments) ---
+    if seed == nil && coverageBudget > 0 {
+        if let scaResult = runConcurrentSCACoverage(
+            seqGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            coverageBudget: coverageBudget,
+            concurrencyLevel: concurrencyLevel,
+            idleTimeout: idleTimeout,
+            property: property,
+            lastRunTimedOut: lastRunTimedOut
+        ) {
+            let traceResult = drainSchedule(taggedCommands: scaResult.finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
+            let trace = traceResult.trace
+            let result = ContractResult<Spec>(
+                commands: scaResult.finalInput.map(\.1),
+                trace: trace,
+                systemUnderTest: Spec().systemUnderTest,
+                seed: nil,
+                discoveryMethod: .coverage
+            )
+
+            if !suppressIssueReporting {
+                let message = scaResult.timedOut
+                    ? renderTimeout(scaResult.finalInput, trace: trace)
+                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, discoveryMethod: .coverage, seed: nil)
+                reportIssue(
+                    message,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            }
+
+            return result
+        }
+    }
+
+    // --- Phase 2: Random sampling ---
     var interpreter = ValueAndChoiceTreeInterpreter(
         sequenceGen,
         materializePicks: true,
@@ -170,9 +211,10 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 )
 
                 if !suppressIssueReporting {
+                    let discoveryMethod: ContractDiscoveryMethod = seed != nil ? .replay : .randomSampling
                     let message = lastRunTimedOut.value
                         ? renderTimeout(finalInput, trace: trace)
-                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count)
+                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, discoveryMethod: discoveryMethod, seed: actualSeed)
                     reportIssue(
                         message,
                         fileID: fileID,
@@ -253,6 +295,143 @@ private func zipScheduleMarker<Command>(
     }
 
     return Gen.pick(choices: taggedChoices)
+}
+
+// MARK: - SCA Coverage Phase
+
+private struct SCAFailureResult<Command> {
+    var finalInput: [(ScheduleMarker, Command)]
+    var originalCount: Int
+    var timedOut: Bool
+}
+
+/// Runs SCA coverage for concurrent contract command sequences.
+///
+/// Builds a covering array over command-type orderings (the schedule marker is tagged `.laneControl` and excluded from the covering array parameters). Each row materializes a specific command ordering with random lane assignments, testing the property under deterministic interleaving.
+///
+/// - Returns: A failure result if a counterexample is found during coverage, or nil if all rows pass.
+private func runConcurrentSCACoverage<Command>(
+    seqGen: Generator<[(ScheduleMarker, Command)]>,
+    commandGen: Generator<Command>,
+    commandLimit: Int,
+    coverageBudget: UInt64,
+    concurrencyLevel: Int,
+    idleTimeout: Int,
+    property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
+    lastRunTimedOut: SendableBox<Bool>
+) -> SCAFailureResult<Command>? {
+    guard let pickChoices = extractPickChoices(from: commandGen) else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "concurrent_sca_skipped",
+            "Command generator is not a top-level pick — SCA not applicable"
+        )
+        return nil
+    }
+
+    let sequenceLength = commandLimit
+    guard sequenceLength >= 2 else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "concurrent_sca_skipped",
+            "Sequence length must be >= 2 for SCA"
+        )
+        return nil
+    }
+
+    let strengthCap = switch sequenceLength {
+    case ...6: 6
+    case ...8: 5
+    case ...12: 4
+    case ...20: 3
+    default: 2
+    }
+
+    guard let domain = SCADomain.build(
+        sequenceLength: sequenceLength,
+        pickChoices: pickChoices,
+        coverageBudget: coverageBudget,
+        strengthCap: strengthCap
+    ) else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "concurrent_sca_skipped",
+            "Domain construction failed"
+        )
+        return nil
+    }
+
+    let domainSizes = domain.profile.domainSizes
+    let strength = min(domain.maxStrength, domainSizes.count, 4)
+    guard strength >= 2 else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "concurrent_sca_skipped",
+            "Too few parameters for covering array"
+        )
+        return nil
+    }
+
+    let generator = PullBasedCoveringArrayGenerator(
+        domainSizes: domainSizes,
+        strength: strength
+    )
+    let lengthRange = UInt64(0) ... UInt64(commandLimit)
+    let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
+
+    var iterations: UInt64 = 0
+    while iterations < coverageBudget, let row = generator.next() {
+        let tree: ChoiceTree? = domain.buildTree(row: row, sequenceLengthRange: lengthRange)
+        guard let tree else { continue }
+
+        let mode = Materializer.Mode.guided(
+            seed: iterations,
+            fallbackTree: nil
+        )
+        guard case let .success(value, freshTree, _) = Materializer.materialize(
+            seqGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+        ) else {
+            continue
+        }
+
+        iterations += 1
+        if property(value) == false {
+            let timedOut = lastRunTimedOut.value
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "concurrent_sca_failure",
+                metadata: ["iteration": "\(iterations)", "commands": "\(value.count)", "timedOut": "\(timedOut)"]
+            )
+
+            if timedOut {
+                return SCAFailureResult(finalInput: value, originalCount: value.count, timedOut: true)
+            }
+
+            if let (_, reduced) = try? Interpreters.choiceGraphReduce(
+                gen: seqGen,
+                tree: freshTree,
+                output: value,
+                config: reductionConfig,
+                property: property
+            ) {
+                return SCAFailureResult(finalInput: reduced, originalCount: value.count, timedOut: false)
+            }
+            return SCAFailureResult(finalInput: value, originalCount: value.count, timedOut: false)
+        }
+    }
+
+    ExhaustLog.notice(
+        category: .propertyTest,
+        event: "concurrent_sca_coverage",
+        metadata: [
+            "command_types": "\(pickChoices.count)",
+            "iterations": "\(iterations)",
+            "sequence_length": "\(sequenceLength)",
+            "strength": "\(strength)",
+        ]
+    )
+
+    return nil
 }
 
 // MARK: - Trace parsing
@@ -388,13 +567,16 @@ func parseTrace(_ raw: [String]) -> [TraceStep] {
 private func renderFailure(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     trace: [TraceStep],
-    reducedFrom originalCount: Int
+    reducedFrom originalCount: Int,
+    discoveryMethod: ContractDiscoveryMethod,
+    seed: UInt64?
 ) -> String {
-    let reducedCount = tagged.count
     var lines: [String] = []
+    lines.append("Concurrent contract failure (found via \(discoveryMethod))")
+    lines.append("")
 
-    if reducedCount < originalCount {
-        lines.append("Reduced from \(originalCount) to \(reducedCount) commands.")
+    if tagged.count < originalCount {
+        lines.append("Reduced from \(originalCount) to \(tagged.count) commands.")
         lines.append("")
     }
 
@@ -403,6 +585,11 @@ private func renderFailure(
     lines.append("Execution trace:")
     for step in trace {
         lines.append("  \(step)")
+    }
+
+    if let seed {
+        lines.append("")
+        lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
     }
 
     return lines.joined(separator: "\n")

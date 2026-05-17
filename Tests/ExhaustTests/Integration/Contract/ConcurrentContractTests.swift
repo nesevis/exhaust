@@ -56,6 +56,30 @@ struct ConcurrentContractTests {
         #expect(hasFailure, "Should detect token over-drain from interleaved tryConsume")
     }
 
+    @Test("Coverage phase reports discoveryMethod .coverage with no seed")
+    func coverageDiscoveryMethod() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                NonAtomicCounterSpec.self,
+                settings: [.commandLimit(6), .budget(.custom(coverage: 500, sampling: 0)), .suppress(.issueReporting)]
+            )
+        )
+        #expect(result.discoveryMethod == .coverage, "Failure found during coverage should report .coverage")
+        #expect(result.seed == nil, "Coverage-discovered failures should not carry a seed")
+    }
+
+    @Test("Random sampling reports discoveryMethod .randomSampling with a seed")
+    func randomSamplingDiscoveryMethod() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                NonAtomicCounterSpec.self,
+                settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            )
+        )
+        #expect(result.discoveryMethod == .randomSampling, "Failure found during random sampling should report .randomSampling")
+        #expect(result.seed != nil, "Random-sampling failures should carry a replay seed")
+    }
+
     @Test("Deterministic replay produces same result")
     func deterministicReplay() async throws {
         let result1 = try #require(
