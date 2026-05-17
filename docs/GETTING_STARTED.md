@@ -445,7 +445,7 @@ Exhaust has a separate facility for this kind of testing, built around a `@Contr
 
 ```swift
 @Test func specHolds() {
-    #exhaust(Spec.self, commandLimit: 8)
+    #exhaust(Spec.self)
 }
 
 @Contract
@@ -460,7 +460,7 @@ For async SUTs, the contract becomes a `final class` and the runner tests concur
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {
-    await #exhaust(AsyncSpec.self, .concurrency(2), .commandLimit(8))
+    await #exhaust(AsyncSpec.self, .concurrency(2))
 }
 ```
 

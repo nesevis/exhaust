@@ -593,17 +593,15 @@ The reducer drove the first `increment` into the sequential prefix (proving it d
 
 ### Settings
 
-Sync contract tests accept `ContractSettings`: `.commandLimit()`, `.budget()`, `.replay()`, `.randomOnly`, `.collectOpenPBTStats`, `.suppress()`, `.logging()`.
-
-Async contract tests accept `ConcurrentContractSettings`:
+Sync contract tests accept `ContractSettings`; async contract tests accept `ConcurrentContractSettings`:
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.commandLimit(N)` | 10 | Maximum number of commands per test iteration. |
-| `.concurrency(N)` | 2 | Number of concurrent execution lanes (1...8). |
+| `.commandLimit(N)` | auto-estimated | Maximum commands per sequence. Auto-estimated from the command domain when omitted (capped at 100 sync, 40 async). Reduce for specs with expensive command bodies. |
+| `.concurrency(N)` | 2 | Number of concurrent execution lanes (async only, 1...8). |
 | `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
-| `.idleTimeout(ms)` | 1000 | Drain loop stall detection (for SUTs that escape the cooperative scheduler). |
+| `.idleTimeout(ms)` | 1000 | Drain loop stall detection (async only). |
 | `.replay(.numeric(seed))` | — | Deterministic reproduction. |
 | `.suppress(.issueReporting)` | — | Suppress issue reporting. |
 | `.collectOpenPBTStats` | off | Records per-example stats in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. |

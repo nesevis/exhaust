@@ -28,7 +28,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
     var suppressIssueReporting = false
     var useRandomOnly = false
     var collectOpenPBTStats = false
-    var onReportClosure: (@Sendable (ExhaustReport) -> Void)?
+    var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
     for setting in settings {
@@ -94,8 +94,8 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 
     return ExhaustLog.withConfiguration(.init(minimumLevel: logLevel)) {
     let runStart = ContinuousClock.now
-    var report = ExhaustReport()
-    var coverageInvocations = 0
+    nonisolated(unsafe) var report = ExhaustReport()
+    nonisolated(unsafe) var coverageInvocations = 0
     let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
         ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
         : nil
@@ -215,6 +215,10 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             identifySkips: identifySkips,
             lastRunTimedOut: lastRunTimedOut
         ) {
+            if let stats = scaResult.reductionStats {
+                report.applyReductionStats(stats)
+            }
+            report.reductionInvocations = scaResult.reductionInvocations
             let traceResult = drainSchedule(taggedCommands: scaResult.finalInput, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: true, idleTimeoutMilliseconds: idleTimeout)
             let trace = traceResult.trace
             let specState = captureSpecState(taggedCommands: scaResult.finalInput, specInit: specInit)
@@ -229,7 +233,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             if !suppressIssueReporting {
                 let message = scaResult.timedOut
                     ? renderTimeout(scaResult.finalInput, trace: trace)
-                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value)
+                    : renderFailure(scaResult.finalInput, trace: trace, reducedFrom: scaResult.originalCount, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: .coverage, seed: nil, iteration: Int(scaResult.iteration), budget: coverageBudget, sequencesTested: invocationCounter.value + scaResult.reductionInvocations)
                 reportIssue(
                     message,
                     fileID: fileID,
@@ -301,13 +305,22 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                         logEvent: "concurrent_skip_pruning"
                     )
 
+                    nonisolated(unsafe) var reductionPropertyInvocations = 0
+                    let countingProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+                        reductionPropertyInvocations += 1
+                        return property(taggedCommands)
+                    }
+                    let reductionStart = ContinuousClock.now
                     let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
                         gen: sequenceGen,
                         tree: reduceTree,
                         output: reduceValue,
                         config: reductionConfig,
-                        property: property
+                        property: countingProperty
                     )
+                    report.applyReductionStats(reduceResult.stats)
+                    report.reductionMilliseconds = Double((ContinuousClock.now - reductionStart).components.attoseconds) / 1e15
+                    report.reductionInvocations = reductionPropertyInvocations
 
                     if let (_, reduced) = reduceResult.reduced {
                         ExhaustLog.notice(
@@ -347,7 +360,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     let discoveryMethod: ContractDiscoveryMethod = seed != nil ? .replay : .randomSampling
                     let message = lastRunTimedOut.value
                         ? renderTimeout(finalInput, trace: trace)
-                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value)
+                        : renderFailure(finalInput, trace: trace, reducedFrom: input.count, specName: "\(Spec.self)", modelDescription: specState.modelDescription, sutDescription: "\(specState.systemUnderTest)", discoveryMethod: discoveryMethod, seed: actualSeed, iteration: samplingIteration, budget: samplingBudget, sequencesTested: invocationCounter.value + report.reductionInvocations)
                     reportIssue(
                         message,
                         fileID: fileID,
@@ -519,6 +532,8 @@ private struct SCAFailureResult<Command> {
     var originalCount: Int
     var iteration: UInt64
     var timedOut: Bool
+    var reductionStats: ReductionStats?
+    var reductionInvocations: Int = 0
 }
 
 /// Runs SCA coverage for concurrent contract command sequences.
@@ -634,14 +649,22 @@ private func runConcurrentSCACoverage<Command>(
                 logEvent: "concurrent_sca_skip_pruning"
             )
 
-            if let (_, reduced) = try? Interpreters.choiceGraphReduce(
+            nonisolated(unsafe) var reductionPropertyInvocations = 0
+            let countingProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
+                reductionPropertyInvocations += 1
+                return property(taggedCommands)
+            }
+            if let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
                 gen: seqGen,
                 tree: reduceTree,
                 output: reduceValue,
                 config: reductionConfig,
-                property: property
+                property: countingProperty
             ) {
-                return SCAFailureResult(finalInput: reduced, originalCount: value.count, iteration: iterations, timedOut: false)
+                if let (_, reduced) = reduceResult.reduced {
+                    return SCAFailureResult(finalInput: reduced, originalCount: value.count, iteration: iterations, timedOut: false, reductionStats: reduceResult.stats, reductionInvocations: reductionPropertyInvocations)
+                }
+                return SCAFailureResult(finalInput: reduceValue, originalCount: value.count, iteration: iterations, timedOut: false, reductionStats: reduceResult.stats, reductionInvocations: reductionPropertyInvocations)
             }
             return SCAFailureResult(finalInput: reduceValue, originalCount: value.count, iteration: iterations, timedOut: false)
         }

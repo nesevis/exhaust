@@ -14,7 +14,7 @@ A contract has four parts: a system under test, commands that operate on it, inv
 
 ```swift
 @Test func stackBehavesCorrectly() {
-    #exhaust(StackSpec.self, commandLimit: 15)
+    #exhaust(StackSpec.self, .commandLimit(15))
 }
 
 @Contract
@@ -45,7 +45,7 @@ struct StackSpec {
 
 Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands — a weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-`commandLimit:` sets the maximum length of generated command sequences. Longer sequences explore deeper states but take longer to test and to reduce. Start with 8 to 15 and increase if you suspect the bug needs state buildup.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sync contracts, 40 for async). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit — a spec with cheap commands runs in under 15ms even at the 40-command cap. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Model-based oracles
 
@@ -92,7 +92,7 @@ The distinction between `@Invariant` and `check`: invariants run after every com
 
 ```swift
 @Test func queueMaintainsFIFOOrder() {
-    #exhaust(CircularQueueSpec.self, commandLimit: 10, .budget(.thorough))
+    #exhaust(CircularQueueSpec.self, .commandLimit(10), .budget(.thorough))
 }
 ```
 
@@ -223,7 +223,7 @@ Both sync and async contracts accept settings as variadic arguments to `#exhaust
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | 10 | Maximum commands per generated sequence. |
+| `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sync) or 40 (async). |
 | `.concurrency(N)` | 2 | Number of concurrent lanes (async only, 1...8). |
 | `.budget(.thorough)` | `.thorough` | Controls coverage rows and random sampling iterations. |
 | `.idleTimeout(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (async only). |

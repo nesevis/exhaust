@@ -50,7 +50,7 @@ public enum ConcurrentContractSettings {
     /// Registers a closure that receives an ``ExhaustReport`` after the test completes.
     ///
     /// The report includes per-phase timing, invocation counts, and reduction statistics. Multiple `.onReport` closures are chained in order.
-    case onReport(@Sendable (ExhaustReport) -> Void)
+    case onReport((ExhaustReport) -> Void)
 
     /// Controls log verbosity and format for this contract test run.
     ///
