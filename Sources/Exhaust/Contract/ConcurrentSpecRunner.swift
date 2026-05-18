@@ -122,7 +122,8 @@ func drainSchedule<Spec: AsyncContractSpec>(
         var lastActivity = ContinuousClock.now
         while prefixDone.value == false {
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                if ContinuousClock.now - lastActivity > idleTimeout {
+                let elapsed = ContinuousClock.now - lastActivity
+                if elapsed > idleTimeout {
                     return ConcurrentExecutionResult(passed: false, trace: recordTrace ? buildTrace(trace.value) : [], timedOut: true)
                 }
                 continue
@@ -191,7 +192,8 @@ func drainSchedule<Spec: AsyncContractSpec>(
 
     while runQueue.isFinished == false {
         if runQueue.hasPendingJobs == false {
-            if ContinuousClock.now - lastActivity > idleTimeout {
+            let elapsed = ContinuousClock.now - lastActivity
+            if elapsed > idleTimeout {
                 let finalTrace: [TraceStep] = recordTrace ? buildTrace(trace.value) : []
                 return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
             }
