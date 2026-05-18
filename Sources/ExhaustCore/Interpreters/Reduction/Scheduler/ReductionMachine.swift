@@ -84,6 +84,35 @@ package struct ReductionMachine {
         case terminated
     }
 
+    // MARK: - Encoder Pass
+
+    /// Owns the per-encoder-pass state for the dispatching sub-system.
+    ///
+    /// Constructed in ``beginEncoderPass`` when a source yields a transformation and an encoder is selected. Mutated across ``stepEncode`` (produce candidate, check cache), ``stepDecode`` (materialize, check property), and consumed in ``stepFinishEncoder`` (harvest convergence, record stats). Set to nil at the end of ``stepFinishEncoder``.
+    struct EncoderPass {
+        var encoder: any GraphEncoder
+        let transformation: GraphTransformation
+        let boundValueFingerprint: UInt64?
+
+        let baseHash: UInt64
+        let hasBind: Bool
+
+        var candidateBuffer: ChoiceSequence
+        var lastProbeAccepted: Bool = false
+
+        var pendingMutation: ProjectedMutation?
+        var pendingProbeHash: UInt64 = 0
+        var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
+
+        var probeCount: Int = 0
+        var acceptCount: Int = 0
+        var cacheHitCount: Int = 0
+        var decoderRejectCount: Int = 0
+        var anyAccepted: Bool = false
+        var anyRequiresRebuild: Bool = false
+        var latestTreeIsStripped: Bool = false
+    }
+
     // MARK: - State
 
     var phase: Phase = .beginCycle
@@ -122,28 +151,9 @@ package struct ReductionMachine {
     var hadReplacementShortlexRejection: Bool = false
     var sequenceBeforeCycle: ChoiceSequence = []
 
-    // MARK: - Per-Encoder-Pass State
+    // MARK: - Active Encoder Pass
 
-    var activeEncoder: (any GraphEncoder)?
-    var activeTransformation: GraphTransformation?
-    var activeBoundValueFingerprint: UInt64?
-    var candidateBuffer: ChoiceSequence = []
-    var lastProbeAccepted: Bool = false
-    var encoderBaseHash: UInt64 = 0
-    var encoderHasBind: Bool = false
-    var pendingMutation: EncoderProbe?
-    var pendingProbeHash: UInt64 = 0
-    var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
-
-    // MARK: - Per-Encoder-Pass Accumulators
-
-    var encoderProbeCount: Int = 0
-    var encoderAcceptCount: Int = 0
-    var encoderCacheHitCount: Int = 0
-    var encoderDecoderRejectCount: Int = 0
-    var encoderAnyAccepted: Bool = false
-    var encoderAnyRequiresRebuild: Bool = false
-    var encoderLatestTreeIsStripped: Bool = false
+    var activePass: EncoderPass?
 
     // MARK: - Init
 
