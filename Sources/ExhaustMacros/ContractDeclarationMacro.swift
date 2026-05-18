@@ -110,7 +110,11 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeSUTDescription(sutProps: sutProps))
 
         // 8. required init() for classes (satisfies ContractSpecBase.init())
-        if isClassDecl {
+        let hasUserInit = members.contains { member in
+            guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
+            return initDecl.signature.parameterClause.parameters.isEmpty
+        }
+        if isClassDecl && hasUserInit == false {
             decls.append("required init() {}")
         }
 
