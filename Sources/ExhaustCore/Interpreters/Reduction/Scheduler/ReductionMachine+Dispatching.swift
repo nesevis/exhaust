@@ -41,7 +41,7 @@ extension ReductionMachine {
             transformation: transformation,
             graph: graph,
             sequence: sequence,
-            gate: gate,
+            gate: convergence.gate,
             scopeCache: scopeRejectionCache,
             graphIsStripped: graphIsStripped,
             anyAccepted: anyAccepted
@@ -64,7 +64,7 @@ extension ReductionMachine {
                 return .dispatched(decision: .skipped)
             }
             if classification.topology != .identical || classification.liftability != .both {
-                gate.markFruitless(fingerprint)
+                convergence.gate.markFruitless(fingerprint)
                 return .dispatched(decision: .skipped)
             }
             decision = .readyToDispatch(boundValueFingerprint: fingerprint)
@@ -89,7 +89,7 @@ extension ReductionMachine {
             }
             let graphBefore = graph
             _ = rebuildAndUpdateGraph()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
             graphIsStripped = false
             return .dispatched(decision: .rematerialized)
 
@@ -125,9 +125,9 @@ extension ReductionMachine {
                 scope: scope,
                 graph: graph,
                 gen: gen,
-                upstreamBudget: gate.decayedBudget(fingerprint: fingerprint)
+                upstreamBudget: convergence.gate.decayedBudget(fingerprint: fingerprint)
             )
-            gate.markDispatched(fingerprint)
+            convergence.gate.markDispatched(fingerprint)
         } else {
             encoder = ChoiceGraphScheduler.selectEncoder(for: transformation.operation)
         }
@@ -310,13 +310,13 @@ extension ReductionMachine {
 
         pass.encoder.flushPartialConvergence()
 
-        let convergence = pass.encoder.convergenceRecords
-        if convergence.isEmpty == false {
-            graph.recordConvergence(byNodeID: convergence)
+        let convergenceRecords = pass.encoder.convergenceRecords
+        if convergenceRecords.isEmpty == false {
+            graph.recordConvergence(byNodeID: convergenceRecords)
         }
 
         if let fingerprint = pass.boundValueFingerprint {
-            gate.recordOutcome(fingerprint: fingerprint, accepted: pass.anyAccepted)
+            self.convergence.gate.recordOutcome(fingerprint: fingerprint, accepted: pass.anyAccepted)
         }
 
         if hadReplacementShortlexRejection == false,
@@ -417,14 +417,14 @@ extension ReductionMachine {
                 return first.operation.isValueDependent == false
             }
             sources = structuralSources
-                + CandidateSourceBuilder.buildValueSources(from: graph, deferBindInner: deferBindInner)
+                + CandidateSourceBuilder.buildValueSources(from: graph, deferBindInner: convergence.deferBindInner)
 
             ChoiceGraphScheduler.logReducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {
             scopeRejectionCache.clear()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
 
             ChoiceGraphScheduler.logReducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
