@@ -67,6 +67,8 @@ public struct FilterSourceLocation: Sendable {
 /// Per-fingerprint filter predicate observation counts.
 ///
 /// Tracks how many times a filter's predicate was evaluated (``attempts``) and how many of those evaluations returned true (``passes``). Accumulated during generation and reduction to measure filter constraint tightness.
+///
+/// - SeeAlso: ``FitnessAccumulator`` (per-choice fitness during CGS warmup), ``CoOccurrenceMatrix`` (per-direction pairwise membership during exploration). All three accumulate empirical outcome counts over generator samples at different granularities.
 public struct FilterObservation: Sendable {
     /// Number of times the filter predicate was evaluated.
     public var attempts: Int = 0

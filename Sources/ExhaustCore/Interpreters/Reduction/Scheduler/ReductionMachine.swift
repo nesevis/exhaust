@@ -84,6 +84,35 @@ package struct ReductionMachine {
         case terminated
     }
 
+    // MARK: - Encoder Pass
+
+    /// Owns the per-encoder-pass state for the dispatching sub-system.
+    ///
+    /// Constructed in ``beginEncoderPass`` when a source yields a transformation and an encoder is selected. Mutated across ``stepEncode`` (produce candidate, check cache), ``stepDecode`` (materialize, check property), and consumed in ``stepFinishEncoder`` (harvest convergence, record stats). Set to nil at the end of ``stepFinishEncoder``.
+    struct EncoderPass {
+        var encoder: any GraphEncoder
+        let transformation: GraphTransformation
+        let boundValueFingerprint: UInt64?
+
+        let baseHash: UInt64
+        let hasBind: Bool
+
+        var candidateBuffer: ChoiceSequence
+        var lastProbeAccepted: Bool = false
+
+        var pendingMutation: ProjectedMutation?
+        var pendingProbeHash: UInt64 = 0
+        var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
+
+        var probeCount: Int = 0
+        var acceptCount: Int = 0
+        var cacheHitCount: Int = 0
+        var decoderRejectCount: Int = 0
+        var anyAccepted: Bool = false
+        var anyRequiresRebuild: Bool = false
+        var latestTreeIsStripped: Bool = false
+    }
+
     // MARK: - State
 
     var phase: Phase = .beginCycle
@@ -103,12 +132,48 @@ package struct ReductionMachine {
     let collectStats: Bool
     let isInstrumented: Bool
 
+    // MARK: - Convergence Tracker
+
+    /// Owns the reduction loop's termination and phase-transition state.
+    ///
+    /// Four components work together to decide when reduction is complete:
+    ///
+    /// - **stallBudget**: Global termination signal. Counts cycles without progress (no accepted probes and no structural improvement). When exhausted, the reducer exits to the reorder pass.
+    /// - **deferBindInner**: Structural/value phase boundary. Structural work (deletion, replacement, migration) runs first with bind-inner scopes deferred. When structural reduction stalls, the deferral is released and value search on bind-inner leaves begins.
+    /// - **gate**: Per-bind-site dispatch control. Prevents redundant bound-value composition probing by tracking which bind sites have been dispatched, which are fruitless, and applying exponential budget decay on repeated stalls.
+    ///
+    /// Per-leaf convergence data (``ConvergedOrigin`` on ``ChooseBitsMetadata``) is separate — it lives on graph nodes because it is warm-start data for encoders, not loop-control state. The ``confirmConvergence()`` post-cycle action probes those records for staleness and clears any that a structural change has invalidated.
+    struct ConvergenceTracker {
+        var stallBudget: Int
+        let maxStalls: Int
+        var deferBindInner: Bool
+        var gate: BoundValueGate
+
+        func evaluatePostCycle(
+            outcome: ChoiceGraphScheduler.CycleOutcome
+        ) -> ChoiceGraphScheduler.PostCycleEvaluation {
+            ChoiceGraphScheduler.evaluatePostCycle(
+                outcome: outcome,
+                stallBudget: stallBudget,
+                maxStalls: maxStalls,
+                deferBindInner: deferBindInner
+            )
+        }
+
+        mutating func apply(_ evaluation: ChoiceGraphScheduler.PostCycleEvaluation) {
+            stallBudget = evaluation.newStallBudget
+            deferBindInner = evaluation.newDeferBindInner
+        }
+
+        mutating func resetForNewCycle() {
+            gate.resetForNewCycle()
+        }
+    }
+
     // MARK: - Loop Control
 
     var cycles: Int = 0
-    var stallBudget: Int
-    let maxStalls: Int
-    var deferBindInner: Bool
+    var convergence: ConvergenceTracker
     var graphIsStripped: Bool = false
     let deadlineNanoseconds: UInt64
     let startNanoseconds: UInt64
@@ -116,34 +181,14 @@ package struct ReductionMachine {
     // MARK: - Per-Cycle State
 
     var sources: [any CandidateSource] = []
-    var gate: BoundValueGate
     var scopeRejectionCache: CandidateRejectionCache = .init()
     var anyAccepted: Bool = false
     var hadReplacementShortlexRejection: Bool = false
     var sequenceBeforeCycle: ChoiceSequence = []
 
-    // MARK: - Per-Encoder-Pass State
+    // MARK: - Active Encoder Pass
 
-    var activeEncoder: (any GraphEncoder)?
-    var activeTransformation: GraphTransformation?
-    var activeBoundValueFingerprint: UInt64?
-    var candidateBuffer: ChoiceSequence = []
-    var lastProbeAccepted: Bool = false
-    var encoderBaseHash: UInt64 = 0
-    var encoderHasBind: Bool = false
-    var pendingMutation: EncoderProbe?
-    var pendingProbeHash: UInt64 = 0
-    var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
-
-    // MARK: - Per-Encoder-Pass Accumulators
-
-    var encoderProbeCount: Int = 0
-    var encoderAcceptCount: Int = 0
-    var encoderCacheHitCount: Int = 0
-    var encoderDecoderRejectCount: Int = 0
-    var encoderAnyAccepted: Bool = false
-    var encoderAnyRequiresRebuild: Bool = false
-    var encoderLatestTreeIsStripped: Bool = false
+    var activePass: EncoderPass?
 
     // MARK: - Init
 
@@ -183,10 +228,12 @@ package struct ReductionMachine {
         self.tuning = config.tuning
         self.collectStats = collectStats
         self.isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
-        self.stallBudget = config.maxStalls
-        self.maxStalls = config.maxStalls
-        self.deferBindInner = graph.reductionEdges.isEmpty == false
-        self.gate = BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
+        self.convergence = ConvergenceTracker(
+            stallBudget: config.maxStalls,
+            maxStalls: config.maxStalls,
+            deferBindInner: graph.reductionEdges.isEmpty == false,
+            gate: BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
+        )
         self.deadlineNanoseconds = config.wallClockDeadlineNanoseconds
         self.startNanoseconds = deadlineNanoseconds > 0 ? monotonicNanoseconds() : 0
 
@@ -240,7 +287,7 @@ package struct ReductionMachine {
 
     private mutating func stepBeginCycle() -> Transition {
         cycles += 1
-        gate.resetForNewCycle()
+        convergence.resetForNewCycle()
         scopeRejectionCache.clearCoarse()
         hadReplacementShortlexRejection = false
         anyAccepted = false
@@ -251,11 +298,11 @@ package struct ReductionMachine {
     }
 
     private mutating func stepBuildSources() -> Transition {
-        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner)
+        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner)
 
         ChoiceGraphScheduler.logReducer("graph_cycle_start", isInstrumented: isInstrumented, metadata: [
             "cycle": "\(cycles)", "seq_len": "\(sequence.count)",
-            "sources": "\(sources.count)", "stall_budget": "\(stallBudget)",
+            "sources": "\(sources.count)", "stall_budget": "\(convergence.stallBudget)",
         ])
 
         phase = .dispatching
@@ -266,28 +313,24 @@ package struct ReductionMachine {
     // MARK: - End Cycle
 
     private mutating func stepEndCycle() -> Transition {
-        let evaluation = ChoiceGraphScheduler.evaluatePostCycle(
+        let evaluation = convergence.evaluatePostCycle(
             outcome: ChoiceGraphScheduler.CycleOutcome(
                 anyAccepted: anyAccepted,
                 hadReplacementShortlexRejection: hadReplacementShortlexRejection,
                 allConverged: allValuesConverged(),
                 improved: sequence != sequenceBeforeCycle,
                 structurallyImproved: sequence.count < sequenceBeforeCycle.count
-            ),
-            stallBudget: stallBudget,
-            maxStalls: maxStalls,
-            deferBindInner: deferBindInner
+            )
         )
 
-        stallBudget = evaluation.newStallBudget
-        deferBindInner = evaluation.newDeferBindInner
+        convergence.apply(evaluation)
 
         if evaluation.actions.isEmpty {
             phase = .checkTermination
         } else {
             phase = .postCycle(remaining: evaluation.actions)
         }
-        return .cycleEnded(stallBudget: stallBudget)
+        return .cycleEnded(stallBudget: convergence.stallBudget)
     }
 
     // MARK: - Post-Cycle Actions
@@ -297,7 +340,7 @@ package struct ReductionMachine {
     ) throws -> Transition {
         guard let action = remaining.first else {
             phase = .checkTermination
-            return .cycleEnded(stallBudget: stallBudget)
+            return .cycleEnded(stallBudget: convergence.stallBudget)
         }
         let rest = Array(remaining.dropFirst())
         phase = rest.isEmpty ? .checkTermination : .postCycle(remaining: rest)
@@ -330,7 +373,7 @@ package struct ReductionMachine {
            allValuesConverged()
         {
             phase = .reorderPass
-        } else if stallBudget > 0 {
+        } else if convergence.stallBudget > 0 {
             ChoiceGraphScheduler.logReducer("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
                 "cycle": "\(cycles)", "improved": "\(sequence != sequenceBeforeCycle ? "true" : "false")",
                 "seq_len": "\(sequence.count)", "total_mats": "\(stats.totalMaterializations)",
@@ -355,7 +398,7 @@ package struct ReductionMachine {
         }
 
         if case .beginCycle = phase {
-            return .cycleEnded(stallBudget: stallBudget)
+            return .cycleEnded(stallBudget: convergence.stallBudget)
         }
         return .terminated
     }

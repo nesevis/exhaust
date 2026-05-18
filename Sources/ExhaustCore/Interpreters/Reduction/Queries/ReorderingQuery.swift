@@ -48,12 +48,8 @@ enum ReorderingQuery {
             let depth = nodeDepth(nodeID: nodeID, graph: graph)
 
             var byCategory: [SiblingGroupKey: [ClosedRange<Int>]] = [:]
-            for (range, kind) in zip(childRanges, childKinds) {
-                if case let .chooseBits(metadata) = kind,
-                   case .depthControl = metadata.typeTag
-                {
-                    continue
-                }
+            for (childID, (range, kind)) in Swift.zip(node.children, Swift.zip(childRanges, childKinds)) {
+                if graph.nodes[childID].scopeAnnotation.isDepthControl { continue }
                 byCategory[siblingGroupKey(kind), default: []].append(range)
             }
 

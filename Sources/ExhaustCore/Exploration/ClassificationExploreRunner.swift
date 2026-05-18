@@ -12,6 +12,8 @@ import Foundation
 /// Classification-aware exploration runner that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
 /// Implements the three-stage orchestration: warm-up (untuned sampling for ordering signal), per-direction tuning passes (most-hit-first, with cross-direction classification and budget pooling), and direction-preserving reduction on failure.
+///
+/// The runner's per-direction hit tracking (`RunState.hits`, `warmupHits`, `tuningPassSamples`) is the exploration-level analogue of ``FitnessAccumulator``'s per-choice fitness tracking in the CGS pipeline. Both accumulate empirical outcome counts to steer generation, but at different granularities: directions (named predicate regions) versus individual pick-site branches.
 package struct ClassificationExploreRunner<Output>: ~Copyable {
     private let gen: Generator<Output>
     private let property: (Output) -> Bool

@@ -41,7 +41,7 @@ extension ReductionMachine {
             transformation: transformation,
             graph: graph,
             sequence: sequence,
-            gate: gate,
+            gate: convergence.gate,
             scopeCache: scopeRejectionCache,
             graphIsStripped: graphIsStripped,
             anyAccepted: anyAccepted
@@ -64,7 +64,7 @@ extension ReductionMachine {
                 return .dispatched(decision: .skipped)
             }
             if classification.topology != .identical || classification.liftability != .both {
-                gate.markFruitless(fingerprint)
+                convergence.gate.markFruitless(fingerprint)
                 return .dispatched(decision: .skipped)
             }
             decision = .readyToDispatch(boundValueFingerprint: fingerprint)
@@ -89,7 +89,7 @@ extension ReductionMachine {
             }
             let graphBefore = graph
             _ = rebuildAndUpdateGraph()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
             graphIsStripped = false
             return .dispatched(decision: .rematerialized)
 
@@ -125,33 +125,26 @@ extension ReductionMachine {
                 scope: scope,
                 graph: graph,
                 gen: gen,
-                upstreamBudget: gate.decayedBudget(fingerprint: fingerprint)
+                upstreamBudget: convergence.gate.decayedBudget(fingerprint: fingerprint)
             )
-            gate.markDispatched(fingerprint)
+            convergence.gate.markDispatched(fingerprint)
         } else {
             encoder = ChoiceGraphScheduler.selectEncoder(for: transformation.operation)
         }
 
         encoder.start(scope: scope)
 
-        activeEncoder = encoder
-        activeTransformation = transformation
-        activeBoundValueFingerprint = boundValueFingerprint
-        candidateBuffer = sequence
-        lastProbeAccepted = false
-        encoderBaseHash = ZobristHash.hash(of: sequence)
-        encoderHasBind = sequence.contains { entry in
-            if case .bind = entry { return true }
-            return false
-        }
-
-        encoderProbeCount = 0
-        encoderAcceptCount = 0
-        encoderCacheHitCount = 0
-        encoderDecoderRejectCount = 0
-        encoderAnyAccepted = false
-        encoderAnyRequiresRebuild = false
-        encoderLatestTreeIsStripped = false
+        activePass = EncoderPass(
+            encoder: encoder,
+            transformation: transformation,
+            boundValueFingerprint: boundValueFingerprint,
+            baseHash: ZobristHash.hash(of: sequence),
+            hasBind: sequence.contains { entry in
+                if case .bind = entry { return true }
+                return false
+            },
+            candidateBuffer: sequence
+        )
 
         dispatchPhase = .encode
         return .dispatched(decision: .encoderStarted(encoder: encoder.name))
@@ -161,58 +154,62 @@ extension ReductionMachine {
 
     /// Asks the active encoder for its next candidate via ``GraphEncoder/nextProbe(into:lastAccepted:)``. Returns `nil` from the encoder as a transition to ``DispatchPhase/finishEncoder``. A reject-cache hit skips decoding and stays in the encode phase for the next probe.
     private mutating func stepEncode() -> Transition {
-        guard var encoder = activeEncoder else {
+        guard var pass = activePass else {
             dispatchPhase = .dispatch
             return .dispatched(decision: .sourceExhausted)
         }
 
-        guard let mutation = encoder.nextProbe(into: &candidateBuffer, lastAccepted: lastProbeAccepted) else {
-            activeEncoder = encoder
+        let lastAccepted = pass.lastProbeAccepted
+        guard let mutation = pass.encoder.nextProbe(
+            into: &pass.candidateBuffer,
+            lastAccepted: lastAccepted
+        ) else {
+            activePass = pass
             dispatchPhase = .finishEncoder
-            return .encoded(encoder: encoder.name, cacheHit: false)
+            return .encoded(encoder: pass.encoder.name, cacheHit: false)
         }
 
-        encoderProbeCount += 1
-        lastProbeAccepted = false
+        pass.probeCount += 1
+        pass.lastProbeAccepted = false
 
         let probeHash = ZobristHash.incrementalHash(
-            baseHash: encoderBaseHash,
+            baseHash: pass.baseHash,
             baseSequence: sequence,
-            probe: candidateBuffer
+            probe: pass.candidateBuffer
         )
         if rejectCache.contains(probeHash) {
-            encoderCacheHitCount += 1
-            activeEncoder = encoder
-            return .encoded(encoder: encoder.name, cacheHit: true)
+            pass.cacheHitCount += 1
+            activePass = pass
+            return .encoded(encoder: pass.encoder.name, cacheHit: true)
         }
 
         let selection = ChoiceGraphScheduler.selectDecoder(
             for: mutation,
-            requiresExactDecoder: encoder.requiresExactDecoder,
-            hasBind: encoderHasBind
+            requiresExactDecoder: pass.encoder.requiresExactDecoder,
+            hasBind: pass.hasBind
         )
 
-        pendingMutation = mutation
-        pendingProbeHash = probeHash
-        pendingDecoderSelection = selection
-        activeEncoder = encoder
+        pass.pendingMutation = mutation
+        pass.pendingProbeHash = probeHash
+        pass.pendingDecoderSelection = selection
+        activePass = pass
         dispatchPhase = .decode
-        return .encoded(encoder: encoder.name, cacheHit: false)
+        return .encoded(encoder: pass.encoder.name, cacheHit: false)
     }
 
     // MARK: - Decode
 
     /// Materializes the pending candidate through ``SequenceDecoder/decodeAny`` and checks the property. On acceptance, updates core state and applies the mutation to the graph. On rejection, inserts the probe hash into the reject cache. Transitions to ``DispatchPhase/encode`` for the next probe, or ``DispatchPhase/finishEncoder`` when the graph requires a full rebuild.
     private mutating func stepDecode() throws -> Transition {
-        guard var encoder = activeEncoder,
-              let mutation = pendingMutation,
-              let selection = pendingDecoderSelection
+        guard var pass = activePass,
+              let mutation = pass.pendingMutation,
+              let selection = pass.pendingDecoderSelection
         else {
             dispatchPhase = .dispatch
             return .decoded(encoder: .valueSearch, accepted: false)
         }
 
-        let encoderName = encoder.name
+        let encoderName = pass.encoder.name
 
         let decoder: SequenceDecoder = selection.preferExact
             ? .exact(materializePicks: selection.materializePicks)
@@ -221,35 +218,35 @@ extension ReductionMachine {
         var filterObservations: [UInt64: FilterObservation] = [:]
 
         if let result = try decoder.decodeAny(
-            candidate: candidateBuffer,
+            candidate: pass.candidateBuffer,
             gen: gen,
             tree: tree,
             originalSequence: sequence,
             property: property,
             filterObservations: &filterObservations,
-            precomputedHash: pendingProbeHash
+            precomputedHash: pass.pendingProbeHash
         ) {
             sequence = result.sequence
             tree = result.tree
             output = result.output
-            lastProbeAccepted = true
-            encoderAnyAccepted = true
-            encoderAcceptCount += 1
+            pass.lastProbeAccepted = true
+            pass.anyAccepted = true
+            pass.acceptCount += 1
 
             if collectStats {
                 stats.totalMaterializations += 1
             }
-            encoderLatestTreeIsStripped = selection.materializePicks == false
+            pass.latestTreeIsStripped = selection.materializePicks == false
 
             var mutatedStructurally = false
-            if encoder.requiresExactDecoder {
-                encoderAnyRequiresRebuild = true
+            if pass.encoder.requiresExactDecoder {
+                pass.anyRequiresRebuild = true
                 mutatedStructurally = true
             } else {
                 let application = graph.apply(mutation)
                 if application.requiresFullRebuild {
-                    encoderAnyRequiresRebuild = true
-                    activeEncoder = encoder
+                    pass.anyRequiresRebuild = true
+                    activePass = pass
                     dispatchPhase = .finishEncoder
                     return .decoded(encoder: encoderName, accepted: true)
                 }
@@ -258,44 +255,44 @@ extension ReductionMachine {
             countMaterialization()
 
             if mutatedStructurally {
-                encoder.refreshState(graph: graph, sequence: sequence)
+                pass.encoder.refreshState(graph: graph, sequence: sequence)
             }
 
             if isDeadlineExceeded() {
-                activeEncoder = nil
+                activePass = nil
                 stats.reductionWasCapped = true
                 phase = .reorderPass
                 return .decoded(encoder: encoderName, accepted: true)
             }
 
-            activeEncoder = encoder
+            activePass = pass
             dispatchPhase = .encode
             return .decoded(encoder: encoderName, accepted: true)
         }
 
-        rejectCache.insert(pendingProbeHash)
-        encoderDecoderRejectCount += 1
+        rejectCache.insert(pass.pendingProbeHash)
+        pass.decoderRejectCount += 1
         if isInstrumented {
             ChoiceGraphScheduler.logReplacementProbeRejection(
                 mutation: mutation,
                 encoder: encoderName,
                 graph: graph,
                 baseSequenceCount: sequence.count,
-                probeSequenceCount: candidateBuffer.count,
-                probeHash: pendingProbeHash
+                probeSequenceCount: pass.candidateBuffer.count,
+                probeHash: pass.pendingProbeHash
             )
         }
 
         countMaterialization()
 
         if isDeadlineExceeded() {
-            activeEncoder = nil
+            activePass = nil
             stats.reductionWasCapped = true
             phase = .reorderPass
             return .decoded(encoder: encoderName, accepted: false)
         }
 
-        activeEncoder = encoder
+        activePass = pass
         dispatchPhase = .encode
         return .decoded(encoder: encoderName, accepted: false)
     }
@@ -304,76 +301,73 @@ extension ReductionMachine {
 
     /// Flushes partial convergence, harvests convergence records, records gate outcomes for bound value scopes, accumulates per-encoder stats, and evaluates the post-acceptance action. Transitions to ``DispatchPhase/dispatch`` (continue dispatching) or ``DispatchPhase/rebuild`` (structural acceptance requires graph rebuild).
     private mutating func stepFinishEncoder() -> Transition {
-        guard var encoder = activeEncoder else {
+        guard var pass = activePass else {
             dispatchPhase = .dispatch
             return .dispatched(decision: .sourceExhausted)
         }
 
-        let encoderName = encoder.name
+        let encoderName = pass.encoder.name
 
-        encoder.flushPartialConvergence()
+        pass.encoder.flushPartialConvergence()
 
-        let convergence = encoder.convergenceRecords
-        if convergence.isEmpty == false {
-            graph.recordConvergence(byNodeID: convergence)
+        let convergenceRecords = pass.encoder.convergenceRecords
+        if convergenceRecords.isEmpty == false {
+            graph.recordConvergence(byNodeID: convergenceRecords)
         }
 
-        if let fingerprint = activeBoundValueFingerprint {
-            gate.recordOutcome(fingerprint: fingerprint, accepted: encoderAnyAccepted)
+        if let fingerprint = pass.boundValueFingerprint {
+            self.convergence.gate.recordOutcome(fingerprint: fingerprint, accepted: pass.anyAccepted)
         }
 
         if hadReplacementShortlexRejection == false,
-           encoder.hadReplacementShortlexRejection
+           pass.encoder.hadReplacementShortlexRejection
         {
             hadReplacementShortlexRejection = true
         }
 
         if collectStats {
-            stats.encoderProbes[encoderName, default: 0] += encoderProbeCount
-            stats.encoderProbesAccepted[encoderName, default: 0] += encoderAcceptCount
-            stats.encoderProbesRejectedByCache[encoderName, default: 0] += encoderCacheHitCount
-            stats.encoderProbesRejectedByDecoder[encoderName, default: 0] += encoderDecoderRejectCount
+            stats.encoderProbes[encoderName, default: 0] += pass.probeCount
+            stats.encoderProbesAccepted[encoderName, default: 0] += pass.acceptCount
+            stats.encoderProbesRejectedByCache[encoderName, default: 0] += pass.cacheHitCount
+            stats.encoderProbesRejectedByDecoder[encoderName, default: 0] += pass.decoderRejectCount
         }
 
         ChoiceGraphScheduler.logReducer("graph_encoder_pass", isInstrumented: isInstrumented, metadata: [
-            "encoder": encoderName.rawValue, "probes": "\(encoderProbeCount)",
-            "accepted": "\(encoderAcceptCount)", "cache_hits": "\(encoderCacheHitCount)",
-            "decoder_rejects": "\(encoderDecoderRejectCount)", "seq_len": "\(sequence.count)",
+            "encoder": encoderName.rawValue, "probes": "\(pass.probeCount)",
+            "accepted": "\(pass.acceptCount)", "cache_hits": "\(pass.cacheHitCount)",
+            "decoder_rejects": "\(pass.decoderRejectCount)", "seq_len": "\(sequence.count)",
         ])
 
         let probeOutcome = ChoiceGraphScheduler.ProbeLoopOutcome(
-            accepted: encoderAnyAccepted,
-            requiresRebuild: encoderAnyRequiresRebuild,
-            treeIsStripped: encoderLatestTreeIsStripped
+            accepted: pass.anyAccepted,
+            requiresRebuild: pass.anyRequiresRebuild,
+            treeIsStripped: pass.latestTreeIsStripped
         )
 
-        let transformation = activeTransformation!
         let acceptanceAction = ChoiceGraphScheduler.evaluateAcceptance(
             outcome: probeOutcome,
-            operation: transformation.operation
+            operation: pass.transformation.operation
         )
 
-        if encoderAnyAccepted {
+        if pass.anyAccepted {
             anyAccepted = true
         }
 
-        activeEncoder = nil
-        activeBoundValueFingerprint = nil
-
         switch acceptanceAction {
         case .continueDispatching:
-            if encoderAnyAccepted == false {
+            if pass.anyAccepted == false {
                 scopeRejectionCache.recordRejection(
-                    operation: transformation.operation,
+                    operation: pass.transformation.operation,
                     sequence: sequence,
                     graph: graph
                 )
             }
-            activeTransformation = nil
+            activePass = nil
             dispatchPhase = .dispatch
             return .dispatched(decision: .sourceExhausted)
 
         case .rebuildAndResume:
+            activePass = pass
             dispatchPhase = .rebuild
             return .dispatched(decision: .sourceExhausted)
         }
@@ -384,8 +378,8 @@ extension ReductionMachine {
     /// Rebuilds the graph from the current tree after a structural acceptance, clears stale convergence in bound subtrees when a bound value scope triggered the rebuild, and reconstructs candidate sources. Uses ``ChoiceGraphDiff/isStructurallyIdentical`` to decide whether structural sources can be preserved or must also be rebuilt.
     private mutating func stepRebuild() -> Transition {
         var boundPositionRange: ClosedRange<Int>?
-        if let transformation = activeTransformation,
-           case let .minimize(.boundValue(bindScope)) = transformation.operation,
+        if let pass = activePass,
+           case let .minimize(.boundValue(bindScope)) = pass.transformation.operation,
            bindScope.bindNodeID < graph.nodes.count,
            case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind,
            graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
@@ -394,10 +388,12 @@ extension ReductionMachine {
             boundPositionRange = graph.nodes[boundChildID].positionRange
         }
 
+        let latestTreeIsStripped = activePass?.latestTreeIsStripped ?? false
+
         let graphBefore = graph
         let graphStart = monotonicNanoseconds()
         let diff = rebuildAndUpdateGraph()
-        graphIsStripped = encoderLatestTreeIsStripped
+        graphIsStripped = latestTreeIsStripped
 
         if let boundRange = boundPositionRange {
             for nodeID in graph.leafNodes {
@@ -421,14 +417,14 @@ extension ReductionMachine {
                 return first.operation.isValueDependent == false
             }
             sources = structuralSources
-                + CandidateSourceBuilder.buildValueSources(from: graph, deferBindInner: deferBindInner)
+                + CandidateSourceBuilder.buildValueSources(from: graph, deferBindInner: convergence.deferBindInner)
 
             ChoiceGraphScheduler.logReducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {
             scopeRejectionCache.clear()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
 
             ChoiceGraphScheduler.logReducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
@@ -441,7 +437,7 @@ extension ReductionMachine {
             stats.stepTimings.rebuildSourceNanoseconds += sourceEnd - graphEnd
         }
 
-        activeTransformation = nil
+        activePass = nil
         dispatchPhase = .dispatch
         return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.isStructurallyIdentical == false)
     }

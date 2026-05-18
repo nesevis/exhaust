@@ -9,6 +9,8 @@
 /// Symmetric co-occurrence matrix recording how many samples matched each pair of directions.
 ///
 /// The diagonal contains per-direction totals. Off-diagonal cells count samples that matched both directions. A separate counter tracks samples that matched no declared direction.
+///
+/// - SeeAlso: ``FitnessAccumulator`` (per-choice fitness), ``FilterObservation`` (per-filter predicate satisfaction). All three are output-space observation types that accumulate empirical outcome counts during sampling.
 public struct CoOccurrenceMatrix: Sendable {
     /// The number of directions (matrix dimension).
     public let directionCount: Int
