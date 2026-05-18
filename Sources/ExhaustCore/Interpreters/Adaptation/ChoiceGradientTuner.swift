@@ -42,6 +42,8 @@
 /// The three stages compose: CGS provides the right ranking, fitness sharing prevents overcommitment to the winner, and adaptive smoothing ensures no single site strangles diversity.
 ///
 /// Online CGS warmup is based on the per-value derivative sampling algorithm (Goldstein, Ch. 3, Fig 3.3). The offline weight-baking pipeline draws on Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025). Fitness sharing and adaptive smoothing are Exhaust extensions.
+///
+/// The tuner's ``FitnessAccumulator`` is the CGS-level instance of the output-space observation pattern. ``FilterObservation`` tracks the same kind of data (predicate satisfaction counts) at filter sites during generation. ``ClassificationExploreRunner`` tracks it at the direction level during exploration. The accumulation pattern is shared; the dimension and consumer differ.
 package enum ChoiceGradientTuner<FinalOutput> {
     /// How baked pick weights are derived from the accumulated fitness data.
     ///

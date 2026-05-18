@@ -7,6 +7,8 @@
 
 /// Collects per-site, per-choice fitness data during tuning runs.
 /// Reference semantics so the accumulator is shared across recursive calls.
+///
+/// - SeeAlso: ``FilterObservation`` (per-filter-site predicate satisfaction), ``CoOccurrenceMatrix`` (per-direction pairwise membership), ``ClassificationExploreRunner`` (per-direction hit tracking). These types accumulate empirical observations about different dimensions of the generator's output space — choice-level fitness, filter validity, and directional coverage — using the same count-based accumulation pattern.
 package final class FitnessAccumulator {
     /// Identifies a specific choice at a specific pick site.
     public struct SiteChoiceKey: Hashable {
