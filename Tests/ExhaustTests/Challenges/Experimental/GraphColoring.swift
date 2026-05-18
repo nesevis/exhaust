@@ -51,7 +51,7 @@ struct GraphColoringChallenge {
 
      This challenge specifically exercises the descendant-aware
      `mayReshapeOnAcceptance` and value-yield prioritization fixed by
-     ``QueryHelpers.buildInnerDescendantToBind`` — without those
+     ``ScopeAnnotation.isBindInner`` — without those
      fixes, vertex-label mutations take the value-only fast path and
      desync the bound subtree's edge index domain.
      */

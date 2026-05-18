@@ -27,6 +27,9 @@ package struct ChoiceGraphNode {
     /// Structural address from the tree root to this node. Stable across rebuilds as long as the tree shape above this node does not change. Two nodes in successive graphs with the same ``ChoicePath`` are the same logical node.
     package let choicePath: ChoicePath
 
+    /// Pre-computed scope properties derivable during the tree walk. Consumed by scope query files to classify nodes without re-deriving the information via full-graph traversals.
+    package let scopeAnnotation: ScopeAnnotation
+
     /// Returns a copy with the node kind replaced. All other fields carry forward from `self`.
     func with(kind: ChoiceGraphNodeKind) -> ChoiceGraphNode {
         ChoiceGraphNode(
@@ -35,7 +38,8 @@ package struct ChoiceGraphNode {
             positionRange: positionRange,
             children: children,
             parent: parent,
-            choicePath: choicePath
+            choicePath: choicePath,
+            scopeAnnotation: scopeAnnotation
         )
     }
 }
@@ -78,6 +82,34 @@ package enum ChoiceGraphNodeKind {
 }
 
 // MARK: - Per-Kind Metadata
+
+/// Pre-computed scope properties derivable during the ``ChoiceGraphBuilder`` tree walk.
+///
+/// These properties are consumed by scope query files (``MinimizationQuery``, ``ExchangeQuery``, ``ReorderingQuery``) to classify leaves without re-deriving the information via full-graph traversals. Each field replaces a specific ``QueryHelpers`` computation that previously required an O(N) walk of the assembled graph.
+package struct ScopeAnnotation {
+    /// True if this node is inside a bind's inner subtree. Any mutation of a bind-inner leaf triggers a bound subtree rebuild (not the value-only fast path), because the bound's shape, ranges, or content may depend on the inner value.
+    package let isBindInner: Bool
+
+    /// The outermost enclosing bind's node ID when ``isBindInner`` is true; nil otherwise. Outermost-wins semantics: when binds are nested, descendant leaves are claimed by the outermost enclosing bind, matching the reshape cost that the scheduler must account for.
+    package let controllingBindNodeID: Int?
+
+    /// The controlling bind's ``BindMetadata/bindDepth``, or nil for non-bind-inner nodes. Used by ``MinimizationQuery`` for top-down depth ordering of bind-inner value search.
+    package let controllingBindDepth: Int?
+
+    /// True if this is a ``TypeTag/depthControl`` chooseBits leaf. Depth-control leaves are independent recursive depth markers excluded from lockstep, redistribution, swap, reorder, and composed downstream operations.
+    package let isDepthControl: Bool
+
+    /// For sequence nodes: the number of elements beyond ``SequenceMetadata/lengthConstraint`` lower bound that are eligible for deletion. Nil for non-sequence nodes.
+    package let deletableElementCount: Int?
+
+    static let `default` = ScopeAnnotation(
+        isBindInner: false,
+        controllingBindNodeID: nil,
+        controllingBindDepth: nil,
+        isDepthControl: false,
+        deletableElementCount: nil
+    )
+}
 
 /// Metadata for a ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf node.
 package struct ChooseBitsMetadata {

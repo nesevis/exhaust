@@ -139,7 +139,7 @@ extension ChoiceGraphScheduler {
 
         let downstreamLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }
-            if QueryHelpers.isDepthControl(leafID, graph: liftedGraph) { return false }
+            if liftedGraph.nodes[leafID].scopeAnnotation.isDepthControl { return false }
             return boundRange.contains(range.lowerBound)
         }
         guard downstreamLeaves.isEmpty == false else { return nil }

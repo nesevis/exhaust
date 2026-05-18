@@ -18,6 +18,12 @@ struct ChoiceGraphBuilder {
     var dependencyEdges: [DependencyEdge] = []
     var nextNodeID = 0
 
+    /// Tracks the outermost enclosing bind's node ID for nodes inside a bind's inner subtree. Set when entering a bind's inner child; cleared when entering the bound child. Outermost-wins: once set, nested binds do not override.
+    var enclosingBindNodeID: Int?
+
+    /// The ``BindMetadata/bindDepth`` of the outermost enclosing bind, when inside a bind's inner subtree.
+    var enclosingBindDepth: Int?
+
     // MARK: - Entry Point
 
     /// Builds a ``ChoiceGraph`` from a choice tree.
@@ -49,6 +55,8 @@ struct ChoiceGraphBuilder {
     ) -> Int {
         switch tree {
         case let .choice(value, metadata):
+            let isDepthControl: Bool
+            if case .depthControl = value.tag { isDepthControl = true } else { isDepthControl = false }
             let nodeID = emitNode(
                 kind: .chooseBits(ChooseBitsMetadata(
                     typeTag: value.tag,
@@ -59,7 +67,14 @@ struct ChoiceGraphBuilder {
                 positionRange: isActive ? (offset ... offset) : nil,
                 children: [],
                 parent: parent,
-                choicePath: path
+                choicePath: path,
+                scopeAnnotation: ScopeAnnotation(
+                    isBindInner: enclosingBindNodeID != nil,
+                    controllingBindNodeID: enclosingBindNodeID,
+                    controllingBindDepth: enclosingBindDepth,
+                    isDepthControl: isDepthControl,
+                    deletableElementCount: nil
+                )
             )
             if let parent {
                 containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -72,7 +87,14 @@ struct ChoiceGraphBuilder {
                 positionRange: isActive ? (offset ... offset) : nil,
                 children: [],
                 parent: parent,
-                choicePath: path
+                choicePath: path,
+                scopeAnnotation: ScopeAnnotation(
+                    isBindInner: enclosingBindNodeID != nil,
+                    controllingBindNodeID: enclosingBindNodeID,
+                    controllingBindDepth: enclosingBindDepth,
+                    isDepthControl: false,
+                    deletableElementCount: nil
+                )
             )
             if let parent {
                 containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
@@ -158,7 +180,8 @@ struct ChoiceGraphBuilder {
                 positionRange: nil,
                 children: childIDs,
                 parent: parent,
-                choicePath: path
+                choicePath: path,
+                scopeAnnotation: nodes[nodeID].scopeAnnotation
             )
             return 0
         }
@@ -190,6 +213,9 @@ struct ChoiceGraphBuilder {
 
         consumed += 1 // close marker
 
+        let minLength = Int(metadata.validRange?.lowerBound ?? 0)
+        let deletableCount = max(0, elements.count - minLength)
+
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
             kind: .sequence(SequenceMetadata(
@@ -205,7 +231,14 @@ struct ChoiceGraphBuilder {
             positionRange: offset ... (offset + consumed - 1),
             children: childIDs,
             parent: parent,
-            choicePath: path
+            choicePath: path,
+            scopeAnnotation: ScopeAnnotation(
+                isBindInner: enclosingBindNodeID != nil,
+                controllingBindNodeID: enclosingBindNodeID,
+                controllingBindDepth: enclosingBindDepth,
+                isDepthControl: false,
+                deletableElementCount: deletableCount
+            )
         )
         return consumed
     }
@@ -275,7 +308,8 @@ struct ChoiceGraphBuilder {
             positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
             children: childIDs,
             parent: parent,
-            choicePath: path
+            choicePath: path,
+            scopeAnnotation: nodes[nodeID].scopeAnnotation
         )
         return consumed
     }
@@ -352,7 +386,8 @@ struct ChoiceGraphBuilder {
                 positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
                 children: childIDs,
                 parent: parent,
-                choicePath: path
+                choicePath: path,
+                scopeAnnotation: nodes[nodeID].scopeAnnotation
             )
         }
         return consumed
@@ -400,6 +435,14 @@ struct ChoiceGraphBuilder {
 
         var consumed = isActive ? 1 : 0
 
+        // Walk the inner subtree with bind-inner context. Outermost-wins: only set if not already inside another bind's inner subtree.
+        let savedBindNodeID = enclosingBindNodeID
+        let savedBindDepth = enclosingBindDepth
+        if enclosingBindNodeID == nil {
+            enclosingBindNodeID = nodeID
+            enclosingBindDepth = bindDepth
+        }
+
         let innerStartID = nextNodeID
         if isActive {
             let innerConsumed = walk(inner, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth, path: path + [.bindInner])
@@ -407,6 +450,10 @@ struct ChoiceGraphBuilder {
         } else {
             walk(inner, offset: 0, parent: nodeID, bindDepth: bindDepth, path: [], isActive: false)
         }
+
+        // Restore bind-inner context before walking the bound subtree — bound children are NOT bind-inner.
+        enclosingBindNodeID = savedBindNodeID
+        enclosingBindDepth = savedBindDepth
 
         let boundStartID = nextNodeID
         if isActive {
@@ -431,7 +478,8 @@ struct ChoiceGraphBuilder {
             positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
             children: childIDs,
             parent: parent,
-            choicePath: path
+            choicePath: path,
+            scopeAnnotation: nodes[nodeID].scopeAnnotation
         )
         return consumed
     }
@@ -460,7 +508,8 @@ struct ChoiceGraphBuilder {
         positionRange: ClosedRange<Int>?,
         children: [Int],
         parent: Int?,
-        choicePath: ChoicePath
+        choicePath: ChoicePath,
+        scopeAnnotation: ScopeAnnotation = .default
     ) -> Int {
         let nodeID = nextNodeID
         nextNodeID += 1
@@ -470,7 +519,8 @@ struct ChoiceGraphBuilder {
             positionRange: positionRange,
             children: children,
             parent: parent,
-            choicePath: choicePath
+            choicePath: choicePath,
+            scopeAnnotation: scopeAnnotation
         ))
         return nodeID
     }

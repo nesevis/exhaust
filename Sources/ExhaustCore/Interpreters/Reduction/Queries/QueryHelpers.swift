@@ -5,37 +5,8 @@
 
 // MARK: - Scope Query Helpers
 
-/// Shared helpers used by the scope query namespaces (``MinimizationQuery``, ``ExchangeQuery``, ``RemovalQuery``, and siblings).
-///
-/// These previously lived as instance methods on ``ChoiceGraph`` but are now called as pure functions from the static scope builders so that multiple builders can share a single ``buildInnerDescendantToBind(graph:)`` allocation per enumeration pass.
+/// Shared helpers used by the scope query namespaces (``RemovalQuery``, ``ExchangeQuery``, and siblings).
 enum QueryHelpers {
-    /// Builds an index from any ``chooseBits`` leaf inside a bind's inner subtree to the enclosing bind's node ID.
-    ///
-    /// Used by minimization and exchange scope construction to tag bind-inner leaves in ``LeafEntry/mayReshapeOnAcceptance`` and to compute value yield for prioritization. Covers both scalar inner (the inner child is itself a leaf) and multi-leaf inner (the inner child is a sequence, zip, or pick container — every ``chooseBits`` descendant gets mapped).
-    ///
-    /// When a bind is nested inside another bind's inner subtree, descendant leaves are claimed by the outermost enclosing bind. ``ChoiceGraph.nodes`` is constructed top-down, so iterating in index order visits outer binds first and the conditional write preserves outermost-wins semantics. Yield priority tracks the outer reshape cost, which is the correct signal for scheduling — mutating such a leaf triggers reshape at every enclosing bind.
-    ///
-    /// Callers that need both minimization and exchange scopes should build this once and pass it to both to avoid duplicate allocations.
-    static func buildInnerDescendantToBind(graph: ChoiceGraph) -> [Int: Int] {
-        var index: [Int: Int] = [:]
-        for node in graph.nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            var stack = [innerChildID]
-            while let current = stack.popLast() {
-                let currentNode = graph.nodes[current]
-                if case .chooseBits = currentNode.kind {
-                    if index[current] == nil {
-                        index[current] = node.id
-                    }
-                }
-                stack.append(contentsOf: currentNode.children)
-            }
-        }
-        return index
-    }
-
     /// Walks through transparent wrappers (groups, structurally-constant binds) beneath a node to find the first sequence node.
     ///
     /// Returns the sequence node's ID, or nil if no sequence is found beneath the transparent chain. Used by both removal scope construction (aligned deletion) and exchange scope construction (cross-zip homogeneous redistribution).
@@ -63,60 +34,5 @@ enum QueryHelpers {
         case .sequence:
             return nodeID
         }
-    }
-
-    /// Builds an index from bind-inner leaf node IDs to their controlling bind's ``BindMetadata/bindDepth``.
-    ///
-    /// Used by ``MinimizationQuery`` to annotate ``LeafEntry/bindDepth`` for top-down depth ordering of bind-inner value search. Only includes leaves that appear in `innerDescendantToBind` (bind-inner leaves).
-    static func buildBindDepthByLeaf(
-        graph: ChoiceGraph,
-        innerDescendantToBind: [Int: Int]
-    ) -> [Int: Int] {
-        var result: [Int: Int] = [:]
-        for (leafNodeID, bindNodeID) in innerDescendantToBind {
-            guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { continue }
-            result[leafNodeID] = metadata.bindDepth
-        }
-        return result
-    }
-
-    /// Returns true when a leaf is the inner child of a bind. Bind-inner mutations require a full graph rebuild (not the value-only fast path) because the materializer may produce a tree with a different bound-subtree shape — different array length, different value ranges, different content — even when the bind has no *nested* binds or picks.
-    ///
-    /// The previous predicate filtered on ``BindMetadata/isStructurallyConstant`` and missed Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`: the bound contains only plain choices (so `isStructurallyConstant == true`), but its length and element validRanges depend on `n`, so changing `n` changes the live tree's shape. The value-only fast path then left the graph holding the old bound subtree's nodes at positions that no longer corresponded to value entries in the live sequence, producing a position drift bug.
-    ///
-    /// Always treating bind-inner leaves as `mayReshape: true` is correct and simple. The cost is that the rare workloads where the bound subtree is genuinely shape-and-content-stable pay for a full rebuild; in exchange the contract is uniform.
-    static func isBindInner(
-        _ leafNodeID: Int,
-        innerDescendantToBind: [Int: Int]
-    ) -> Bool {
-        innerDescendantToBind[leafNodeID] != nil
-    }
-
-    /// Returns true when a leaf carries the ``TypeTag/depthControl`` tag.
-    ///
-    /// Depth-control leaves are independent recursive depth markers. They participate in bind-inner value search (reducing depth is valid) but must not be coordinated with other leaves — no lockstep, redistribution, swap, reorder, or composed downstream.
-    static func isDepthControl(
-        _ nodeID: Int,
-        graph: ChoiceGraph
-    ) -> Bool {
-        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return false }
-        if case .depthControl = metadata.typeTag { return true }
-        return false
-    }
-
-    /// Wraps a leaf node ID in a ``LeafEntry`` with the bind-inner reshape marker and bind depth populated from the supplied indices.
-    static func makeLeafEntry(
-        _ nodeID: Int,
-        innerDescendantToBind: [Int: Int],
-        bindDepthByLeaf: [Int: Int] = [:]
-    ) -> LeafEntry {
-        LeafEntry(
-            nodeID: nodeID,
-            mayReshapeOnAcceptance: isBindInner(
-                nodeID,
-                innerDescendantToBind: innerDescendantToBind
-            ),
-            bindDepth: bindDepthByLeaf[nodeID]
-        )
     }
 }

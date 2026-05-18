@@ -23,7 +23,7 @@ enum PermutationQuery {
             var shapeGroups: [NodeShapeKey: [Int]] = [:]
             for childID in node.children {
                 guard graph.nodes[childID].positionRange != nil else { continue }
-                if QueryHelpers.isDepthControl(childID, graph: graph) { continue }
+                if graph.nodes[childID].scopeAnnotation.isDepthControl { continue }
                 let key = nodeShapeKey(graph.nodes[childID])
                 shapeGroups[key, default: []].append(childID)
             }
