@@ -1,36 +1,22 @@
 # Exhaust
 
 [![Swift 6.2+](https://img.shields.io/badge/Swift-6.2%2B-orange)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%2010.15%2B%20%7C%20iOS%2013%2B%20%7C%20tvOS%2013%2B%20%7C%20watchOS%206%2B%20%7C%20visionOS%201%2B%20%7C%20Linux-blue)](https://developer.apple.com)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%2010.15%2B%20%7C%20iOS%2013%2B%20%7C%20tvOS%2013%2B%20%7C%20watchOS%206%2B%20%7C%20visionOS%201%2B-blue)](https://developer.apple.com)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
-> [!Note]
-> Exhaust is under active development. Some APIs may change before the 1.0 release.
+# Find the bugs you didn't think of.
 
-## Why `#expect` when you can `#exhaust`?
-
-Exhaust is a property-based testing library for Swift. Instead of writing individual test cases by hand, you describe the rules your code must obey and let Exhaust find the violations.
-
-- **Structured coverage** — boundary values and parameter interactions are tested systematically before random sampling begins, so edge cases are covered by design rather than luck.
-- **Automatic reduction** — when a failure is found, Exhaust reduces it to the smallest possible counterexample, typically within 100ms. No custom reduction functions needed.
-- **Contract testing** — generate random sequences of commands against a stateful system and verify that invariants hold after every step. Async contracts run commands concurrently with deterministic interleaving at `await` boundaries, finding data races the sequential runner can't.
-- **Inspectable generators** — generators are data structures, not opaque closures. The library runs them forward to generate, backward to decompose, and replays them for deterministic reproduction.
-
-Exhaust works in three modes:
-
-- **Property tests** — generate values and check that a rule holds: `#exhaust(generator) { value in Bool }`.
-- **Directed exploration** — declare semantic regions of the input space and guarantee each one is covered: `#explore(generator, directions: [...]) { value in Bool }`.
-- **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self, .commandLimit(20))`.
+Every test you write checks inputs you chose by hand. Exhaust checks the rule itself, across hundreds of inputs, automatically. Describe what your code promises, and Exhaust finds where it breaks, then reduces the failure to the smallest possible counterexample.
 
 ```swift
-@Test func arraySortIsIdempotent() {
+@Test func sortedArraysStayTheSame() {
     #exhaust(.int().array(length: 0...100)) { array in
-        array.sorted() == array.sorted().sorted()
+        #expect(array.sorted() == array.sorted().sorted())
     }
 }
 ```
 
-If the property fails, Exhaust finds a counterexample and automatically reduces it to its minimal form. Here's what that looks like:
+If the property fails, Exhaust finds the counterexample and reduces it automatically:
 
 ```
 Counterexample:
@@ -39,23 +25,79 @@ Counterexample:
     [1]: 1
   ]
 
-Reduction diff:
-    [
-  -   [0]: 5164405737346173473,
-  +   [0]: 0,
-  -   [1]: 1003725769087814462,
-  +   [1]: 1,
-  -   [2]: 10522596906257742416,
-  -   [3]: 4995439813772349581,
-  -   [4]: 1284889415569056115
-    ]
-
 Property invoked: 31 times
 
 Reproduce: .replay("8SYM3KW758FWP")
 ```
 
-Exhaust found a five-element counterexample and reduced it to two elements — the minimal case that violates the property.
+Three lines. Millisecond feedback. No custom shrinkers, no `Arbitrary` conformances, no separate slow-test target. Property tests that read like unit tests and live right next to them.
+
+> [!Note]
+> Exhaust is under active development. Some APIs may change before the 1.0 release.
+
+## Guides
+
+New to property-based testing? **[Getting Started](docs/GETTING_STARTED.md)** walks you from your first `#exhaust` call through generators, properties, and reading failure reports — no prior PBT experience needed.
+
+Testing a stateful system? **[Contract Testing](docs/CONTRACT_TESTING.md)** covers generating sequences of operations against mutable objects, model-based oracles, and concurrent interleaving for async code.
+
+## What Makes Exhaust Different
+
+### Generators are data, not closures
+
+Exhaust's generators are inspectable data structures. The library runs them forward to generate, backward to reflect, and replays them for deterministic reproduction. Reduction and structured coverage come free with every generator.
+
+### Structured coverage before random sampling
+
+Before random sampling begins, Exhaust systematically tests boundary values and parameter interactions — the edge cases that random sampling needs thousands of iterations to stumble into. If the generator's domain is small enough, it enumerates exhaustively and skips the random phase entirely.
+
+### Reflection from known values
+
+Already have a failing value from a bug report or production log? Feed it to the generator and get back the minimal reproducing case:
+
+```swift
+let fromBugReport = [1337, 80085, 69, 67]
+
+#exhaust(gen, reflecting: fromBugReport) {
+    #expect(Set($0).count < 3)
+}
+// Reduces to [-1, 0, 1]
+```
+
+### Filters that don't time out
+
+Most PBT libraries implement filters by generating values until one passes the predicate. When valid values are sparse, tests can appear to hang. Exhaust analyses the generator, measures which choices are more likely to lead toward valid outputs, and reweights generation accordingly. Values still pass through the predicate, but are now more likely to succeed. `.filter { $0.isBalanced }` on a tree generator now works efficiently instead of timing out.
+
+### Concurrent contract testing
+
+Generate random sequences of operations against a stateful system and verify invariants after every step. Async contracts run commands concurrently with deterministic interleaving at `await` suspension points, finding data races the sequential runner can't:
+
+```
+Sequential prefix:
+  1. increment
+
+Lane A:
+  1A. increment
+
+Lane B:
+  1B. increment
+
+Execution trace:
+  1. increment (prefix)
+  2. 1A increment (started)
+  3. 1A increment (suspended)
+  4. 1B increment (completed) ✗ invariant 'matchesModel'
+
+Reproduce: .replay("7MK2N9")
+```
+
+The reducer drove the first `increment` into the sequential prefix, leaving only two concurrent increments as the minimal race.
+
+## Three Modes
+
+- **Property tests** — generate values and check that a rule holds: `#exhaust(generator) { value in Bool }`.
+- **Directed exploration** — declare semantic regions of the input space and guarantee each one is covered: `#explore(generator, directions: [...]) { value in Bool }`.
+- **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self, .commandLimit(20))`.
 
 ## Table of Contents
 
@@ -68,6 +110,7 @@ Exhaust found a five-element counterexample and reduced it to two elements — t
 - [Running Properties](#running-properties)
   - [Using `#expect` and `#require`](#using-expect-and-require)
   - [Run Statistics](#run-statistics)
+  - [Test Observability](#test-observability)
 - [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)
 - [Quick Examples](#quick-examples)
 - [Filters and Classification](#filters-and-classification)
@@ -92,7 +135,7 @@ Then add it as a dependency of your test target:
 ```swift
 .testTarget(
     name: "MyTests",
-    dependencies: ["Exhaust"]
+    dependencies: [.product(name: "Exhaust", package: "exhaust")]
 )
 ```
 
@@ -145,7 +188,7 @@ let personGen = #gen(.string(length: 1...20), .int(in: 0...120)) { name, age in
 
 ## Recursive Generators
 
-Some domains are naturally recursive — trees, nested JSON, abstract syntax trees. `.recursive` lets you define generators that reference themselves, with a depth range to keep things finite:
+Some domains are naturally recursive: trees, nested JSON, abstract syntax trees. `.recursive` lets you define generators that reference themselves, with a depth range to keep things finite:
 
 ```swift
 indirect enum JSONValue: Equatable {
@@ -192,9 +235,9 @@ let gen = #gen(.int().array(length: 0...100))
 }
 ```
 
-The original value is always at tuple position zero, followed by the transformed copies. Transforms can return different types — for example `{ $0.count }` alongside `{ $0.sorted() }` produces a tuple of `(original, Int, [Int])`.
+The original value is always at tuple position zero, followed by the transformed copies. Transforms can return different types. For example, `{ $0.count }` alongside `{ $0.sorted() }` produces a tuple of `(original, Int, [Int])`.
 
-Each transform receives its own independently generated copy — identical in value but separate objects, safe to mutate independently. This means transforms can call mutating methods or hold references without affecting each other, which makes `metamorph` safe for reference types and in-place algorithms. When a failure is found, Exhaust reduces the original value and all transformed copies follow automatically.
+Each transform receives its own independently generated copy, identical in value but separate objects, safe to mutate independently. This means transforms can call mutating methods or hold references without affecting each other, which makes `metamorph` safe for reference types and in-place algorithms. When a failure is found, Exhaust reduces the original value and all transformed copies follow automatically.
 
 ## Running Properties
 
@@ -223,9 +266,11 @@ Configure behaviour with settings:
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
 | `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). Passed as a named parameter, not a setting. |
-| `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and reduces your generator. |
+| `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualisation — useful for understanding how Exhaust represents and reduces your generator. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
 | `.collectOpenPBTStats` | off | Collects per-example statistics and attaches them to the test run in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. See [Test Observability](#test-observability). |
+| `.includeDiff` | off | Includes a structural diff between the original failing value and the reduced counterexample in the failure output. |
+| `.suppress(.issueReporting)` | — | Silences issue reporting. Use when asserting on the return value directly. `.suppress(.logs)` silences console output. `.suppress(.all)` for a completely silent run. |
 | `.logging(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. Use `.logging(.debug, .jsonl)` for structured JSON output. |
 
 ### Using `#expect` and `#require`
@@ -295,11 +340,11 @@ await #exhaust(gen) { value in
 Exhaust decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path, everything else uses the assertion path.
 
 > [!Tip]
-> The property closure may be called thousands of times during coverage, sampling, and reduction. Keep it as fast as possible — avoid disk I/O, network calls, and expensive setup. If your system under test requires heavyweight initialization, do it once outside the closure and pass it in.
+> The property closure may be called thousands of times during coverage, sampling, and reduction. Keep it as fast as possible: avoid disk I/O, network calls, and expensive setup. If your system under test requires heavyweight initialisation, do it once outside the closure and pass it in.
 
 ### Run Statistics
 
-The `.onReport` setting delivers an `ExhaustReport` with timing and invocation data for each phase of the test run. It includes per-phase wall-clock times (coverage, generation, reduction, reflection), total property invocations, materialization counts during reduction, and per-encoder probe breakdowns. Use it to understand where time is spent and whether coverage or reduction budgets need tuning.
+The `.onReport` setting delivers an `ExhaustReport` with timing and invocation data for each phase of the test run. It includes per-phase wall-clock times (coverage, generation, reduction, reflection), total property invocations, materialisation counts during reduction, and per-encoder probe breakdowns. Use it to understand where time is spent and whether coverage or reduction budgets need tuning.
 
 ```swift
 #exhaust(gen, .onReport { report in
@@ -311,7 +356,7 @@ The `.onReport` setting delivers an `ExhaustReport` with timing and invocation d
 
 ### Test Observability
 
-The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats](https://dl.acm.org/doi/fullHtml/10.1145/3654777.3676407) JSON Lines format and attaches it to the test run. You can inspect the attached `.jsonl` file with the [Tyche](https://tyche-pbt.github.io/tyche-extension/) data inspector to visualize input distributions, sample breakdowns, and individual test examples.
+The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats](https://dl.acm.org/doi/fullHtml/10.1145/3654777.3676407) JSON Lines format and attaches it to the test run. You can inspect the attached `.jsonl` file with the [Tyche](https://tyche-pbt.github.io/tyche-extension/) data inspector to visualise input distributions, sample breakdowns, and individual test examples.
 
 ```swift
 #exhaust(gen, .collectOpenPBTStats) { value in
@@ -328,7 +373,7 @@ The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAtta
 A property test that passes does not mean the generator is good — it may mean the generator never reaches the interesting part of the input space. OpenPBTStats data helps you answer three questions that passing tests hide:
 
 1. **How many inputs were actually valid?** If a large proportion of generated values are discarded by filters, the generator is wasting its budget on rejected samples. The sample breakdown shows this directly — a high `gave_up` count signals that the generator needs restructuring or that CGS tuning should be enabled.
-2. **How are values distributed?** Complexity features (derived from the choice tree) reveal whether generated values cluster around simple cases or spread across the domain. A generator that always produces small arrays or zero-heavy integers may miss bugs that only appear at scale. Visualizing the `complexity_mean` distribution in Tyche can expose these blind spots.
+2. **How are values distributed?** Complexity features (derived from the choice tree) reveal whether generated values cluster around simple cases or spread across the domain. A generator that always produces small arrays or zero-heavy integers may miss bugs that only appear at scale. Visualising the `complexity_mean` distribution in Tyche can expose these blind spots.
 3. **Are any regions of the input space missing?** By inspecting individual examples and their features, you can check whether boundary values, large inputs, and negative cases all appear. If an important region is absent, the generator or its filter predicates may need adjustment.
 
 Tyche renders these signals as interactive charts — sample breakdowns, feature distributions, and per-example drill-down — so you can diagnose generator quality visually rather than reading thousands of lines of test output.
@@ -399,7 +444,7 @@ let evenGen = #gen(.int().filter { $0 % 2 == 0 })
 
 Most property-based testing frameworks implement filters as rejection sampling: generate a value, test the predicate, throw it away and retry if it fails. This works when the valid region is large, but becomes impractical when valid values are sparse (balanced trees, well-formed inputs, values satisfying multiple constraints).
 
-Exhaust takes a different approach. Because generators are inspectable data structures, Exhaust can analyse the generator's branching points and measure how often each branch leads to a value that satisfies the predicate. It then reweights the branches to favour valid outputs before generation begins — a technique called Choice Gradient Sampling (CGS).
+Exhaust takes a different approach. Because generators are inspectable data structures, Exhaust can analyse the generator's branching points and measure how often each branch leads to a value that satisfies the predicate. It then reweights the branches to favour valid outputs before generation begins, a technique called Choice Gradient Sampling (CGS).
 
 The result is that filtered generators produce valid values efficiently even when the acceptance rate under rejection sampling would be vanishingly small.
 
@@ -444,7 +489,7 @@ A subtle bug in a generator — a backward mapping that doesn't round-trip, or a
 
 ## Contract Testing
 
-Property tests verify pure functions, but much of real-world code is stateful — databases, caches, network sessions, UI controllers. Exhaust generates random sequences of operations against a stateful system and checks that invariants hold after every step. When something breaks, Exhaust reduces the trace to the shortest command sequence that reproduces the failure.
+Property tests verify pure functions, but much of real-world code is stateful: databases, caches, network sessions, UI controllers. Exhaust generates random sequences of operations against a stateful system and checks that invariants hold after every step. When something breaks, Exhaust reduces the trace to the shortest command sequence that reproduces the failure.
 
 Define your system under test, the commands that operate on it, and the rules it must obey:
 
@@ -498,7 +543,7 @@ Commands can also assert postconditions inline with `try check(condition, "messa
 
 ### Bundles
 
-Some commands need to reference entities created by earlier commands — deleting a user that was previously created, or closing an account that was previously opened. `Bundle<T>` provides this capability:
+Some commands need to reference entities created by earlier commands: deleting a user that was previously created, or closing an account that was previously opened. `Bundle<T>` provides this capability:
 
 ```swift
 @Contract
@@ -523,7 +568,7 @@ struct DatabaseSpec {
 
 ### Async Contracts (Concurrent Interleaving)
 
-When your system under test has `async` methods, declare the spec as a `final class` and make commands non-mutating. The async runner distributes commands across concurrent execution lanes and deterministically interleaves their continuations at every `await` boundary — finding lost updates, check-then-act races, and non-atomic read-modify-write bugs.
+When your system under test has `async` methods, declare the spec as a `final class` and make commands non-mutating. The async runner distributes commands across concurrent execution lanes and deterministically interleaves their continuations at every `await` suspension point — finding lost updates, check-then-act races, and non-atomic read-modify-write bugs.
 
 ```swift
 @Contract
@@ -565,7 +610,7 @@ Run it with `await` and configure the concurrency level:
 }
 ```
 
-The cooperative scheduler controls interleaving deterministically — the same seed always produces the same interleaving and the same counterexample. When a failure is found, the reducer shrinks both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug:
+The cooperative scheduler controls interleaving deterministically. The same seed always produces the same interleaving and the same counterexample. When a failure is found, the reducer reduces both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug:
 
 ```
 Concurrent contract failure (found via random sampling)
@@ -593,7 +638,7 @@ Reproduce: .replay("7MK2N9")
 The reducer drove the first `increment` into the sequential prefix (proving it doesn't need to be concurrent), leaving only two concurrent increments as the minimal race.
 
 > [!Note]
-> The cooperative scheduler interleaves at `await` boundaries only. A race between two statements with no `await` between them is invisible to this tool. Use Thread Sanitizer for purely synchronous races.
+> The cooperative scheduler interleaves at `await` suspension points only. A race between two statements with no `await` between them is invisible to this tool. Use Thread Sanitizer for purely synchronous races.
 
 ### Settings
 
@@ -608,15 +653,16 @@ Sync contract tests accept `ContractSettings`; async contract tests accept `Conc
 | `.idleTimeoutMs(ms)` | 1000 | Drain loop stall detection (async only). |
 | `.replay(.numeric(seed))` | — | Deterministic reproduction. |
 | `.suppress(.issueReporting)` | — | Suppress issue reporting. |
+| `.includeDiff` | off | Includes a structural diff between the original and reduced counterexample (sync only). |
 | `.collectOpenPBTStats` | off | Records per-example stats in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. |
-| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing and invocation counts after the run. |
+| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing and invocation counts after the run (async only). |
 | `.logging(.debug)` | `.error` | Log verbosity. |
 
 ## Directed Exploration
 
 Most property tests are built to pass. Exhaust gives you confidence that the property holds across the generator's structural boundaries, but it can't guarantee that your specific semantic concerns were covered. A test that passes across hundreds of iterations might never have generated a value in the region you care about.
 
-Directed exploration lets you declare the questions you want the test to answer — named directions over the output space — and guarantees each one receives a minimum number of samples:
+Directed exploration lets you declare the questions you want the test to answer as named directions over the output space, and guarantees each one receives a minimum number of samples:
 
 ```swift
 @Test func balanceCheckerCoversEdgeCases() {
@@ -659,15 +705,17 @@ For each direction, Exhaust tunes the generator via Choice Gradient Sampling to 
 
 ## How It Works
 
-Generators in Exhaust are inspectable data structures, not opaque closures. Structured coverage, automatic reduction, reflection, and deterministic replay all fall out of being able to inspect and manipulate generator structure.
+Every generator records the choices it makes during generation: which branch of a `oneOf`, which integer from a range, how many elements in an array. Exhaust operates on these recorded choices in three modes:
 
-Exhaust supports three execution modes:
-
-- **Generation (forward)** — the generator is interpreted to produce a value, recording every choice made along the way. This is the normal path during test execution.
+- **Generation (forward)** — the generator is interpreted to produce a value, recording every choice along the way. This is the normal path during test execution.
 - **Reflection (backward)** — given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what powers `reflecting:` and automatic reduction without custom reduction functions.
 - **Replay** — a recorded sequence of choices is fed back to reproduce the exact same value, powering deterministic reproduction via `.replay(seed)`.
 
-Reduction operates on the recorded sequences and trees of choices rather than the output value, making it type-agnostic and preserving all generator invariants. A failing test case has two independent aspects: its *shape* (how many values exist and how they depend on each other) and its *values* (what those values are). The reducer treats these as separate problems. Each cycle first simplifies the shape — remove elements, flatten branches, shorten sequences — then simplifies the values within that fixed shape — drive numbers toward zero, simplify floats. This repeats until neither makes progress. When both stall, the reducer tries to escape: searching shape and values jointly along dependency edges, or temporarily worsening one value to unlock progress elsewhere.
+Reduction operates on the recorded choices rather than the output value, making it type-agnostic and preserving all generator invariants.
+
+A failing test case has two independent aspects: its *shape* (how many values exist and how they depend on each other) and its *values* (what those values are). The reducer treats these as separate problems. Each cycle first simplifies the shape, removing elements, flattening branches, and shortening sequences. Then it simplifies the values within that fixed shape, driving numbers toward zero and simplifying floats.
+
+This repeats until neither makes progress. When both stall, the reducer tries to escape by searching shape and values jointly along dependency edges, or temporarily worsening one value to unlock progress elsewhere.
 
 ## Requirements
 
