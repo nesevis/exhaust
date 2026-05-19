@@ -63,16 +63,9 @@ package extension FreerMonad {
         }
     }
 
-    /// Erases the specific value type to `Any`, enabling type-heterogeneous operations.
+    /// Erases the value type to `Any` so computations with different output types can be stored together and passed through interpreter boundaries.
     ///
-    /// This operation is essential for implementing interpreters that need to work with computations producing different value types. By erasing to `Any`, we can:
-    /// - Store computations with different value types in the same collection
-    /// - Pass computations through interpreter boundaries that don't know specific types
-    /// - Enable reflection-based operations that work with runtime type information
-    ///
-    /// **Type safety note:** While this operation sacrifices compile-time type safety, it's typically used in controlled contexts where the interpreter can safely cast values back to their expected types.
-    ///
-    /// **Performance:** The erasure is structural - it traverses and rebuilds the entire computation tree to change the type parameter. This is necessary because Swift's type system requires the full generic signature to match.
+    /// Erasure is structural: it traverses and rebuilds the entire continuation chain because Swift requires the full generic signature to match. Every call allocates a new chain. The ``FreerMonad/erase()-1loq6`` specialization for `Value == Any` short-circuits this to a no-op.
     ///
     /// - Returns: An equivalent computation with value type erased to `Any`.
     func erase() -> FreerMonad<Operation, Any> {
@@ -99,13 +92,9 @@ package extension FreerMonad {
 extension FreerMonad: @unchecked Sendable {}
 
 package extension FreerMonad where Value == Any {
-    /// Optimized erasure for computations that are already type-erased.
+    /// Short-circuits erasure when the value type is already `Any`, avoiding the chain traversal that the generic ``erase()`` would otherwise perform.
     ///
-    /// This specialization provides a no-op implementation of `erase()` for computations where the value type is already `Any`. This avoids unnecessary traversal and reconstruction of the computation tree.
-    ///
-    /// This optimization handles cases where `erase()` might be called multiple times on the same computation, ensuring idempotency and better performance.
-    ///
-    /// - Returns: The same computation unchanged (since it's already erased).
+    /// - Returns: `self`, unchanged.
     func erase() -> FreerMonad<Operation, Any> {
         self
     }

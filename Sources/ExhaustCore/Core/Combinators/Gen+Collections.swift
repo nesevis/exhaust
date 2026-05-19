@@ -2,12 +2,11 @@
 // These combinators handle the complexities of generating structured data with proper reduction behavior.
 
 package extension Gen {
-    /// Creates a generator for an array of random values.
+    /// Generates arrays whose length comes from an optional length generator.
     ///
-    /// This implementation is stack-safe and can generate very large arrays without overflowing.
-    /// It works by first generating a random length, then using a primitive ``.sequence`` operation which the interpreter can execute iteratively.
+    /// When `length` is nil, the array length scales with the size parameter (0...size). Pass an explicit length generator to decouple length from size — for example, a fixed-range ``choose(in:scaling:)`` or a ``just(_:)`` for a constant.
     ///
-    /// The array length is controlled by the provided length generator, which defaults to a size-based range if not specified.
+    /// - Note: Stack-safe for arbitrarily large arrays — the interpreter drives the element loop iteratively, not recursively.
     ///
     /// - Parameters:
     ///   - elementGenerator: A self-contained generator for the elements of the array.
@@ -34,10 +33,9 @@ package extension Gen {
         }
     }
 
-    /// Creates a generator for an array with length constrained to a specific range.
+    /// Generates arrays with length constrained to explicit bounds.
     ///
-    /// This variant allows precise control over array length by specifying exact bounds.
-    /// The `scaling` parameter controls how the length range interacts with the size parameter (1–100), following Hedgehog's Range model:
+    /// Use this overload when the length bounds should not scale with the size parameter's default range (0...size). The `scaling` parameter controls how the length range interacts with the size parameter (1-100), following Hedgehog's Range model:
     ///
     /// - `.constant`: The full range is available at all sizes.
     /// - `.linear` (default): The upper bound grows linearly from the lower bound toward the specified upper bound as size increases.
@@ -68,9 +66,9 @@ package extension Gen {
         }
     }
 
-    /// Creates a generator for an array with exactly the specified length.
+    /// Generates arrays of exactly the specified length.
     ///
-    /// This is a convenience method that generates arrays of a fixed size, useful when you need predictable collection sizes for testing.
+    /// Shorthand for `arrayOf(elementGenerator, within: exactly ... exactly)`. Use this when the array length is a fixed constant rather than a range.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements.
@@ -83,9 +81,9 @@ package extension Gen {
         arrayOf(elementGenerator, Gen.choose(in: exactly ... exactly))
     }
 
-    /// Creates a generator for dictionaries with random key-value pairs.
+    /// Generates dictionaries with random key-value pairs.
     ///
-    /// Generates a key array first, then binds on the key count to generate exactly the right number of values. Duplicate keys keep the first value.
+    /// Produces a key array first, then generates exactly that many values via a dependent bind. Duplicate keys keep the first value.
     ///
     /// - Parameters:
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
@@ -118,9 +116,9 @@ package extension Gen {
         )
     }
 
-    /// Creates a generator for a set of random values.
+    /// Generates sets of random values.
     ///
-    /// Generates an array and converts it to a set. Duplicate elements are collapsed, so the resulting set may be smaller than the requested length.
+    /// Produces an array and converts it to a set. Duplicate elements are collapsed, so the resulting set may be smaller than the requested length.
     ///
     /// - Parameters:
     ///   - elementGenerator: A generator for the elements of the set (must be Hashable).
@@ -133,7 +131,9 @@ package extension Gen {
         arrayOf(elementGenerator, length).map { Set($0) }
     }
 
-    /// Creates a generator for a set with size constrained to a specific range.
+    /// Generates sets with size constrained to explicit bounds.
+    ///
+    /// Use this overload when the size bounds should not scale with the size parameter's default range. Duplicate elements are collapsed, so the resulting set may be smaller than the requested length.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for set elements (must be Hashable).
@@ -148,7 +148,9 @@ package extension Gen {
         arrayOf(elementGenerator, within: range, scaling: scaling).map { Set($0) }
     }
 
-    /// Creates a generator for a set with exactly the specified number of elements.
+    /// Generates sets of exactly the specified size.
+    ///
+    /// Shorthand for `setOf(elementGenerator, within: exactly ... exactly)`. Duplicate elements are collapsed, so the resulting set may be smaller than `exactly`.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for set elements (must be Hashable).
@@ -161,9 +163,9 @@ package extension Gen {
         arrayOf(elementGenerator, exactly: exactly).map { Set($0) }
     }
 
-    /// Shuffles the output of an array generator into a random permutation.
+    /// Produces a uniform random permutation of the array from an inner generator.
     ///
-    /// Uses a sort-key approach: generates one random ``UInt64`` per element, then sorts the array by those keys. This produces a uniform permutation and reduces cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
+    /// Reduction drives sort keys toward zero, converging on the original generation order (identity permutation). Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
     ///
     /// - Parameter gen: An array generator whose output should be shuffled.
     /// - Returns: A generator that produces a randomly permuted array.
@@ -184,9 +186,9 @@ package extension Gen {
         }
     }
 
-    /// Creates an array generator whose length is controlled by the current size parameter.
+    /// Generates arrays whose length grows with the size parameter.
     ///
-    /// This is a convenience method that combines ``getSize`` with ``arrayOf`` to create arrays that grow in complexity as tests progress. The size parameter acts as an upper bound, with the actual length chosen randomly within the constraint.
+    /// Use this when array length should scale with test complexity. The size parameter acts as an upper bound, with the actual length chosen randomly within the constraint.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements.
@@ -243,9 +245,9 @@ package extension Gen {
             )
     }
 
-    /// Creates a generator for a contiguous subrange of a generated collection.
+    /// Generates a contiguous subrange of a generated collection.
     ///
-    /// Composes the input generator with ``slice(of:)`` via `bind`, producing the collection's `SubSequence` type. Reduction comes for free: ``slice(of:)`` already reduces toward shorter subranges and earlier start positions, and the inner generator reduces its elements independently.
+    /// Composes the input generator with ``slice(of:)`` via bind. Reduction comes for free: ``slice(of:)`` reduces toward shorter subranges and earlier start positions, and the inner generator reduces its elements independently.
     ///
     /// - Parameter gen: A generator that produces a collection.
     /// - Returns: A generator that produces a contiguous subrange of the generated collection.
@@ -257,9 +259,9 @@ package extension Gen {
         }
     }
 
-    /// Creates a generator that picks a random element from a collection.
+    /// Picks a random element from a collection.
     ///
-    /// Reflection uses hash-based O(1) lookup to find the element's first index in the collection.
+    /// Prefer this overload when elements conform to ``Hashable`` — reflection uses hash-based O(1) lookup to find the element's index.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.
@@ -290,9 +292,9 @@ package extension Gen {
         )
     }
 
-    /// Creates a generator that picks a random element from a collection.
+    /// Picks a random element from a collection whose elements are ``Equatable`` but not ``Hashable``.
     ///
-    /// Reflection uses linear equality scan to find the element's index.
+    /// Reflection uses a linear equality scan (O(n)) to find the element's index. Prefer the ``Hashable`` overload when available for O(1) reflection.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.
@@ -318,7 +320,7 @@ package extension Gen {
         )
     }
 
-    /// Creates a generator that picks a random element from a collection, identified by a hashable key path for O(1) reflection.
+    /// Picks a random element from a collection, using a ``Hashable`` key path for O(1) reflection lookup.
     ///
     /// Use this overload when elements are not ``Hashable`` themselves but have a hashable property that uniquely identifies them.
     ///
@@ -357,9 +359,9 @@ package extension Gen {
         )
     }
 
-    /// Creates a generator that picks a random element from a collection, identified by an equatable key path for reflection.
+    /// Picks a random element from a collection, using an ``Equatable`` key path for linear-scan reflection.
     ///
-    /// Use this overload when elements are not ``Equatable`` but have an equatable property that uniquely identifies them. Prefer the ``Hashable`` overload when the key conforms to ``Hashable`` for O(1) lookup.
+    /// Use this overload when elements are not ``Equatable`` but have an equatable property that uniquely identifies them. Prefer the ``Hashable`` key-path overload when the key conforms to ``Hashable`` for O(1) lookup.
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.

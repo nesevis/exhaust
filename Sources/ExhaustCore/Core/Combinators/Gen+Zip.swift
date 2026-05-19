@@ -6,7 +6,9 @@
 //
 
 package extension Gen {
-    /// Combines two or more generators into a tuple generator, running each in sequence.
+    /// Composes a fixed number of independent generators into a single tuple result.
+    ///
+    /// Use zip for fixed-arity parallel composition where the child count is known at construction time. Coverage analysis enumerates parameter combinations across zip children directly — unlike ``sequence``, which must generate a length first. The reducer treats each child as an independent scope, so simplifying one child does not affect the others.
     ///
     /// ```swift
     /// let pairGen = Gen.zip(Gen.int(in: 0...99), Gen.string())

@@ -1,7 +1,7 @@
 package extension Gen {
-    /// Creates a generator that only produces values satisfying the given predicate.
+    /// Restricts a generator to values satisfying a predicate.
     ///
-    /// For ``FilterType/choiceGradientSampling`` and ``FilterType/auto``, eagerly tunes the inner generator via CGS warmup at construction time so that generation interpreters pay no tuning cost per invocation.
+    /// For ``FilterType/choiceGradientSampling`` and ``FilterType/auto``, eagerly tunes the inner generator via CGS warmup at construction time so generation interpreters pay no tuning cost per invocation. When constructed inside an interpreter bind continuation (``isInterpreting`` is true), tuning is deferred to the interpreter's fingerprint-keyed cache instead.
     ///
     /// - Parameters:
     ///   - generator: The base generator to filter.

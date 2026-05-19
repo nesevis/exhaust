@@ -1,31 +1,19 @@
-/// A bidirectional generator that can both produce values and reflect on them.
+/// A bidirectional generator that can produce values, reflect on them, and replay recorded choices.
 ///
-/// Generator is the foundation of advanced property-based testing, enabling generators that work in **three distinct modes**:
+/// Operates in three modes, each driven by a different interpreter over the same ``FreerMonad`` structure:
 ///
 /// ## 1. Generation (Forward Pass)
 /// Produces random values using entropy, just like traditional generators.
 ///
 /// ## 2. Reflection (Backward Pass)
-/// **Key innovation**: Analyzes any value to discover which random choices could have produced it.
+/// Analyzes any value to discover which random choices could have produced it. This enables reduction of values that were not produced by the PRNG — for example, values from crash reports or external test corpora.
 ///
 /// ## 3. Replay (Deterministic Forward)
 /// Recreates exact values from recorded choice paths.
 ///
-/// ## Why This Matters
+/// Without reflection, a reducer can only simplify values it generated itself and still holds traces for. With reflection, the reducer can accept any value of the output type and decompose it into a choice sequence, making reduction, mutation, and example-based generation work on values from any source.
 ///
-/// Traditional generators lose the connection between values and the randomness that produced them.
-/// Generator **reconstructs that connection**, enabling:
-///
-/// - **Reduction without traces**: Reduce any value, even from crash reports or external sources
-/// - **Mutation testing**: Modify values while preserving validity constraints
-/// - **Example-based generation**: Generate similar values to provided examples
-/// - **Validation**: Check if values could have been produced by a generator
-///
-/// ## Implementation
-///
-/// Generator is a type alias for `FreerMonad<ReflectiveOperation, Output>`, separating the description of generation from its interpretation. This enables the same generator structure to be used for all three modes through different interpreters.
-///
-/// The bidirectional generator design is based on Harrison Goldstein's dissertation, "Property-Based Testing for the People" (UPenn, 2024).
+/// Generator is a type alias for `FreerMonad<ReflectiveOperation, Output>`, separating the description of generation from its interpretation. The bidirectional generator design is based on Harrison Goldstein's dissertation, "Property-Based Testing for the People" (UPenn, 2024).
 ///
 /// **Construction**: Use ``Gen`` combinators, never construct directly.
 ///

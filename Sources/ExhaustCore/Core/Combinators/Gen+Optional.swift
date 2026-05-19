@@ -1,7 +1,7 @@
 package extension Generator where Operation == ReflectiveOperation {
-    /// Lifts this generator's output from `T` to `T?` so reflection can distinguish the `.some` branch from `.none`.
+    /// Wraps the output as `T?` so the reflection interpreter can prune this branch when the target is `nil`.
     ///
-    /// Without this, reflecting on a `nil` target has no way to prune the non-optional path: the reflector would attempt to decompose `nil` as if it were a valid `T`, and fail. With it, `nil` throws `ReflectionError.reflectedNil`, which the enclosing `pick` catches to eliminate that branch.
+    /// Without the lift, reflecting on a `nil` target would attempt to decompose it as a valid `T` and fail. The lifted version throws ``ReflectionError/reflectedNil(type:resultType:)`` on nil targets, which the enclosing ``pick`` catches to eliminate the `.some` branch and select `.none` instead.
     ///
     /// - Returns: A generator that produces optional versions of the original values.
     func liftToOptional() -> Generator<Value?> {

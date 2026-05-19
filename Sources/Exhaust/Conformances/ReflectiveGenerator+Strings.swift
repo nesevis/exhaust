@@ -194,7 +194,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
 
 /// Builds a string generator directly from a pre-computed ``ScalarRangeSet``.
 ///
-/// String <-> [Character] isn't bijective when the CharacterSet includes combining marks.
+/// String <-> [Character] is not bijective when the CharacterSet includes combining marks.
 /// The generator produces single-scalar characters, but Array(string) splits by grapheme clusters — so if "e" followed by U+0301 (combining accent) were generated as two characters, the String merges them into "é", and Array(...) returns one Character instead of two. We use `unicodeScalars.map` in the backward direction to preserve the original scalar count.
 private func stringGenerator(
     from srs: ScalarRangeSet,

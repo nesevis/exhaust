@@ -9,7 +9,7 @@
 
 // MARK: - Graph Operation
 
-/// The seven fundamental operations on a ``ChoiceGraph``.
+/// The seven operations on a ``ChoiceGraph``.
 ///
 /// Remove, replace, permute, and migrate are exact (one-shot) reductions. Minimize is a multi-probe binary search. Exchange is an approximate reduction that may temporarily worsen shortlex before enabling further progress. Reorder is a final canonicalization pass.
 ///

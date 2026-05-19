@@ -20,9 +20,9 @@ package enum Gen {
 }
 
 package extension Gen {
-    /// Lifts a reflective operation into a generator with type-safe result handling.
+    /// Injects a ``ReflectiveOperation`` into the ``FreerMonad`` spine as a single impure step.
     ///
-    /// Wraps a ``ReflectiveOperation`` in a type-safe generator by injecting it into the ``FreerMonad`` spine as an impure step. The returned generator handles the unsafe casting and reports an error when the reflection system returns an unexpected type.
+    /// Entry point for building new combinators: every generator primitive bottoms out in a `liftF` call. The continuation casts the interpreter's `Any` result back to `Output` and throws ``GeneratorError/typeMismatch`` on failure (which indicates a framework bug, not user error).
     ///
     /// - Parameter operation: The low-level reflective operation to lift.
     /// - Returns: A generator that executes the operation and validates the result type.
@@ -40,26 +40,26 @@ package extension Gen {
         }
     }
 
-    /// Applies a pruning operation to a generator.
+    /// Wraps a generator with a prune marker that tells the reflection interpreter to abandon this branch when a preceding ``contramap`` returns nil.
     ///
-    /// Pruning is used during reduction to eliminate branches that don't contribute to the final result. This optimization helps make property-based testing more efficient by focusing on relevant test cases.
+    /// Separate from ``contramap`` because the two responsibilities are distinct: contramap transforms the input, prune decides whether to continue. Merging them would force every contramap to handle the nil case even when failure is impossible. Use ``comap(_:_:)`` when you need both in a single call.
     ///
-    /// - Parameter generator: The generator to apply pruning to.
-    /// - Returns: A generator with pruning applied.
+    /// - Parameter generator: The generator to wrap with a prune marker.
+    /// - Returns: A generator that can be pruned during reflection.
     static func prune<Output>(
         _ generator: Generator<Output>
     ) -> Generator<Output> {
         liftF(.prune(next: generator.erase()))
     }
 
-    /// Applies a contravariant transformation to a generator's input during reflection.
+    /// Attaches a total backward transformation for reflection.
     ///
-    /// Attaches a backward transformation that the reflection interpreter applies when walking the generator in reverse. This allows a generator expecting one input type to work with a different input type via a transformation function.
+    /// Use contramap when the backward mapping always succeeds — for example, extracting a stored property or casting between related types. When the mapping can fail (returning nil to reject a reflection branch), use ``comap(_:_:)`` instead, which pairs the contramap with a ``prune``.
     ///
     /// - Parameters:
-    ///   - transform: A function that transforms the new input type to the expected input type.
-    ///   - generator: The generator to apply the transformation to.
-    /// - Returns: A generator that accepts the new input type.
+    ///   - transform: A function that extracts the inner generator's input from the outer type.
+    ///   - generator: The generator to attach the backward transformation to.
+    /// - Returns: A generator that applies `transform` during the reflection backward pass.
     static func contramap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> some Any,
         _ generator: Generator<Output>
@@ -86,16 +86,14 @@ package extension Gen {
         }
     }
 
-    /// Applies a contravariant transformation with optional failure handling.
+    /// Attaches a partial backward transformation that prunes on failure.
     ///
-    /// This is a specialized version of ``contramap`` that combines transformation with pruning.
-    /// If the transformation returns nil, the generator branch is pruned during reflection.
-    /// This is useful for generators that should only succeed under certain conditions.
+    /// Combines ``contramap`` with ``prune``: when `transform` returns nil, the reflection interpreter abandons this branch and tries alternatives. Use this when the backward mapping is partial — for example, when reflecting on an enum case that only matches one branch of a ``pick``.
     ///
     /// - Parameters:
-    ///   - transform: A function that transforms the input, returning nil to indicate failure.
-    ///   - generator: The generator to apply the transformation to.
-    /// - Returns: A generator that prunes on transformation failure.
+    ///   - transform: A function that extracts the inner generator's input, returning nil to reject the branch.
+    ///   - generator: The generator to attach the backward transformation to.
+    /// - Returns: A generator that prunes during reflection when the transform returns nil.
     static func comap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> (some Any)?,
         _ generator: Generator<Output>

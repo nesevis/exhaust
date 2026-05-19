@@ -41,7 +41,7 @@ package extension Gen {
     ///
     /// Use this overload when the base case itself needs randomness (for example random leaf values).
     ///
-    /// The generator is eagerly unfolded at construction time into a plain generator tree — no special runtime operation exists. This means recursive generators are fully transparent to all interpreters (generation, reflection, replay, CGS tuning).
+    /// Eagerly unfolded at construction time into a plain generator tree, so all interpreters (generation, reflection, replay, CGS tuning) handle it without special-case logic.
     ///
     /// - Parameters:
     ///   - base: Generator for the base case.
@@ -78,7 +78,7 @@ package extension Gen {
 
     /// Generates values by iteratively transforming state from a seed, with reducible iteration depth.
     ///
-    /// Starting from an initial state produced by `seed`, the generator repeatedly calls `step` to either produce the final value (`.done`) or continue with new state (`.recurse`). The `remaining` parameter counts down from the chosen depth to zero; `step` must return `.done` when `remaining` is zero.
+    /// Use unfold for iterative state machines where each step consumes the previous state and either continues or terminates. For tree-shaped recursion with branching, use ``recursive(base:depthRange:extend:)`` instead.
     ///
     /// The iteration count is drawn from `depthRange` as a reducible depth-control choice. The reducer can collapse iterations through structural operations to find the minimum number of steps needed to trigger a property failure. Because the chosen depth may be less than the upper bound, `step` should not assume that `remaining` starts at any particular value — use it only for relative decisions (for example, "generate a leaf when `remaining` is zero") rather than absolute thresholds.
     ///
@@ -137,7 +137,9 @@ package extension Gen {
 
     // MARK: - Depth Control
 
-    /// Generates a depth index tagged with ``TypeTag/depthControl``. Excluded from value search during reduction — structural operations handle depth reduction while preserving structural context.
+    /// Generates a depth index tagged with ``TypeTag/depthControl``.
+    ///
+    /// Separate from ``chooseBits`` so the reducer excludes depth choices from value search. Depth is changed only by structural operations (remove, replace), which can collapse entire recursive layers while preserving context. Value search on depth would risk creating structurally incoherent trees.
     static func chooseDepth(in range: ClosedRange<UInt64>) -> Generator<UInt64> {
         let operation = ReflectiveOperation.chooseBits(
             min: range.lowerBound,

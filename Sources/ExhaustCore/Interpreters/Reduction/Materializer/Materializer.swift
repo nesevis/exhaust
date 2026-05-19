@@ -79,9 +79,9 @@ package enum Materializer {
         }
     }
 
-    /// Non-generic materialization entry point that takes an already-erased generator.
+    /// Materializes a value from an already-erased generator and a choice-sequence prefix.
     ///
-    /// This is the hot-path API used by the reduction pipeline. By eliminating the `<Output>` generic parameter on the recursive descent, the runtime no longer pays per-Output-type metadata cache lookups inside ``generateRecursive``. Callers that hold a typed ``Generator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
+    /// Accepts ``AnyGenerator`` to avoid the per-`Output`-type metadata cache lookups that a generic `<Output>` parameter would impose inside ``generateRecursive``. Callers that hold a typed ``Generator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
     public static func materializeAny(
         _ gen: AnyGenerator,
         prefix: consuming ChoiceSequence,

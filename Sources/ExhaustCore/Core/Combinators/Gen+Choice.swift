@@ -9,15 +9,13 @@
 /// Operations for making choices and generating random values within ranges.
 /// These combinators handle weighted selection and bounded value generation.
 package extension Gen {
-    /// Creates a generator that randomly selects from multiple weighted options.
+    /// Selects from multiple weighted generator options by random draw.
     ///
-    /// This combinator enables probabilistic generation where different outcomes have different likelihoods. The weights don't need to sum to any particular value - they're interpreted as relative frequencies.
-    ///
-    /// During reduction, the system will try simpler choices first based on their position in the choices array and their weights.
+    /// Weights are relative frequencies — they do not need to sum to any particular value. During reduction, earlier choices in the array and lower-weighted branches are tried first.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators.
-    /// - Precondition: At least one choice must be provided
+    /// - Precondition: At least one choice must be provided.
     static func pick<Output>(
         choices: [(weight: UInt64, generator: Generator<Output>)],
         fileID: StaticString = #fileID,
@@ -46,11 +44,9 @@ package extension Gen {
         return liftF(.pick(choices: array, branchCount: branchCount))
     }
 
-    /// Creates a generator that randomly selects from multiple weighted options.
+    /// Selects from multiple weighted generator options.
     ///
-    /// This combinator enables probabilistic generation where different outcomes have different likelihoods. The weights don't need to sum to any particular value - they're interpreted as relative frequencies.
-    ///
-    /// During reduction, the system will try simpler choices first based on their position in the choices array and their weights.
+    /// Accepts `Int` weights so callers can use integer literals without explicit `UInt64` annotation. Delegates to the `UInt64` overload after conversion.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators.
@@ -74,11 +70,9 @@ package extension Gen {
         )
     }
 
-    /// Generates a random value within a specified range for types conforming to BitPatternConvertible.
+    /// Generates a random value within a range for any ``BitPatternConvertible`` type.
     ///
-    /// This is the primary method for generating bounded random values. It works by converting the range bounds to bit patterns, generating a random bit pattern within those bounds, then converting back to the target type.
-    ///
-    /// The type parameter allows the compiler to infer the return type, while the range parameter controls the bounds. If no range is provided, the full range for the type is used.
+    /// When no range is provided, the full domain of the type is used. The range is marked as explicit so the reducer treats it as a hard bound that must not be narrowed.
     ///
     /// - Parameters:
     ///   - range: The range of values to generate from. Defaults to the type's full range.
@@ -96,7 +90,9 @@ package extension Gen {
         )
     }
 
-    /// Chooses a random element from a collection by generating a random index.
+    /// Generates a random element from a collection whose elements are ``Equatable``.
+    ///
+    /// Reflection uses equality-based index lookup. Round-robin indexing on the generated index prevents out-of-bounds failures when the reducer narrows the index range.
     static func choose<C: Collection>(
         from collection: C
     ) -> Generator<C.Element> where C.Element: Equatable, C.Index == Int {
@@ -118,7 +114,9 @@ package extension Gen {
         )
     }
 
-    /// Chooses a random element from a collection by generating a random index.
+    /// Generates a random element from a collection without requiring ``Equatable`` conformance.
+    ///
+    /// Forward-only: reflection is not supported because there is no way to find the element's index without equality comparison.
     static func choose<C: Collection>(
         from collection: C
     ) -> Generator<C.Element> where C.Index == Int {

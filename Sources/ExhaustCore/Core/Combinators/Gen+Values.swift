@@ -2,30 +2,22 @@
 // These combinators handle scenarios where exact values or validation are required.
 
 package extension Gen {
-    /// Creates a generator that always produces the same constant value.
+    /// Produces a constant value, accepting any target during reflection.
     ///
-    /// This generator always succeeds during both generation and reflection phases, regardless of what target value is being reflected against. It's the most permissive constant value generator.
-    ///
-    /// For validation during reflection, see ``Gen/exact(_:)`` instead.
+    /// Use `just` for base cases and placeholders where the constant's identity does not matter to the property — for example, default branches in a ``pick`` or leaf values in ``recursive(base:depthRange:extend:)``. Because reflection always succeeds regardless of the target value, `just` cannot detect structural mismatches. When the constant must match exactly during reflection, use ``exact(_:)`` instead.
     ///
     /// - Parameter value: The constant value to always generate.
-    /// - Returns: A generator that produces the constant value.
+    /// - Returns: A generator that produces `value` on every invocation.
     static func just<Output>(_ value: Output) -> Generator<Output> {
         liftF(.just(value))
     }
 
-    /// Creates a generator that produces an exact constant value with validation during reflection.
+    /// Produces a constant value, rejecting mismatches during reflection.
     ///
-    /// **Key difference from ``Gen/just(_:)``:**
-    /// - **``Gen/just(_:)``**: Always succeeds during reflection regardless of target value
-    /// - **``Gen/exact(_:)``**: Only succeeds during reflection if target value exactly matches the constant
-    ///
-    /// **Forward pass (generation):** Always produces the constant value **Backward pass (reflection):** Fails if the target value doesn't match exactly
-    ///
-    /// Without this validation, reflection would silently accept any value, masking structural mismatches between the generator and the target.
+    /// Use `exact` when the constant carries structural meaning and a wrong value should cause the reflection branch to fail — for example, a fixed delimiter in a parsed format, or a sentinel in an enum payload. Generation always produces `value`. Reflection succeeds only when the target equals `value`; otherwise it returns nil and the enclosing ``prune`` eliminates the branch. When match validation is not needed, use ``just(_:)`` instead.
     ///
     /// - Parameter value: The constant value to generate and validate against.
-    /// - Returns: A generator that produces the constant and validates during reflection.
+    /// - Returns: A generator that produces `value` and rejects non-matching targets during reflection.
     static func exact<Value: Equatable>(_ value: Value) -> Generator<Value> {
         // Use contramap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.

@@ -6,9 +6,9 @@
 //
 
 package extension Gen {
-    /// Creates a generator that categorizes generated values for statistical analysis.
+    /// Attaches observational labels to generated values for distribution reporting.
     ///
-    /// Wraps the provided generator with classification predicates that track how frequently different types of test data are generated. When test execution completes, statistics are automatically reported to help developers understand test coverage and generator bias.
+    /// Classification is transparent to all interpreters — it does not alter the choice sequence, steer sampling, or prune reflection paths. When test execution completes, statistics are reported showing counts and percentages for each classifier. Values can satisfy multiple classifiers simultaneously.
     ///
     /// **Usage**: Apply labeled predicates to understand what kinds of values your generator produces:
     /// ```swift
