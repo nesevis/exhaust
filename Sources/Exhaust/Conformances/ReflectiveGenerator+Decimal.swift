@@ -20,6 +20,8 @@ public extension ReflectiveGenerator {
     ///
     /// Designed for fixed-point use cases (currency, financial calculations) — not suitable for arbitrary-precision `Decimal` generation.
     ///
+    /// Reflection snaps off-precision values to the nearest representable step and clamps out-of-range values to the nearest bound. This means `reflecting:` with a value that is not exactly representable at the requested precision, or that falls outside the range, will start reduction from the closest representable value rather than rejecting.
+    ///
     /// - Parameters:
     ///   - range: The closed range of `Decimal` values to generate within.
     ///   - precision: The number of decimal places. Must be non-negative. Zero produces integer `Decimal` values.
