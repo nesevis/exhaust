@@ -259,6 +259,8 @@ extension Interpreters {
                 } else if let convertible = value as? any BitPatternConvertible {
                     isPicked = choice.generator.associatedRange?
                         .contains(convertible.bitPattern64) ?? false
+                } else {
+                    isPicked = reflectionPaths.isEmpty == false
                 }
 
                 var results: [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []
