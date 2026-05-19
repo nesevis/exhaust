@@ -47,6 +47,29 @@ package enum TypeTag: Sendable {
 }
 
 package extension TypeTag {
+    var discriminator: Int {
+        switch self {
+        case .uint: 0
+        case .uint64: 1
+        case .uint32: 2
+        case .uint16: 3
+        case .uint8: 4
+        case .int: 5
+        case .int64: 6
+        case .int32: 7
+        case .int16: 8
+        case .int8: 9
+        case .double: 10
+        case .float: 11
+        case .float16: 12
+        case .date: 13
+        case .bits: 14
+        case .character: 15
+        case .depthControl: 16
+        case .laneControl: 17
+        }
+    }
+
     /// Whether this tag represents a signed integer type.
     var isSigned: Bool {
         switch self {
@@ -219,14 +242,18 @@ extension TypeTag: Equatable {
              (.int16, .int16), (.int8, .int8),
              (.double, .double), (.float, .float), (.float16, .float16),
              (.bits, .bits),
-             (.depthControl, .depthControl):
-            true
+             (.depthControl, .depthControl),
+             (.laneControl, .laneControl):
+            return true
         case let (.character(lhsIndices), .character(rhsIndices)):
-            lhsIndices == rhsIndices
+            return lhsIndices == rhsIndices
         case let (.date(lhsLower, lhsInterval, lhsTZ), .date(rhsLower, rhsInterval, rhsTZ)):
-            lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ
+            return lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ
         default:
-            false
+            if lhs.discriminator == rhs.discriminator {
+                preconditionFailure("TypeTag.== missing case for: \(lhs), \(rhs)")
+            }
+            return false
         }
     }
 }

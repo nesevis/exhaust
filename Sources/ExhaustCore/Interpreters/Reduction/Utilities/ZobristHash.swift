@@ -61,7 +61,7 @@ package enum ZobristHash {
     static func contribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
         var bits: UInt64 = switch value {
         case let .value(v):
-            v.choice.bitPattern64 ^ (tagBits(v.choice.tag) << 48)
+            v.choice.bitPattern64 ^ (UInt64(v.choice.tag.discriminator) << 48)
         case .sequence(true, validRange: _, isLengthExplicit: true):
             1
         case .sequence(true, validRange: _, isLengthExplicit: false):
@@ -90,26 +90,4 @@ package enum ZobristHash {
         return bits
     }
 
-    private static func tagBits(_ tag: TypeTag) -> UInt64 {
-        switch tag {
-        case .uint: 0
-        case .uint64: 1
-        case .uint32: 2
-        case .uint16: 3
-        case .uint8: 4
-        case .int: 5
-        case .int64: 6
-        case .int32: 7
-        case .int16: 8
-        case .int8: 9
-        case .double: 10
-        case .float: 11
-        case .float16: 12
-        case .date: 13
-        case .bits: 14
-        case .character: 15
-        case .depthControl: 16
-        case .laneControl: 17
-        }
-    }
 }
