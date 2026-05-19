@@ -344,9 +344,9 @@ private func expandExhaust(
     }
 
     let sourceCode = trailingClosure.statements.trimmedDescription
-        .replacing("\\", with: "\\\\")
-        .replacing("\"", with: "\\\"")
-        .replacing("\n", with: "\\n")
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+        .replacingOccurrences(of: "\n", with: "\\n")
 
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
     let reflectingLine = reflectingExpr.map { "reflecting: \($0)," } ?? ""

@@ -193,7 +193,12 @@ package extension TypeTag {
         case .double: Double(bitPattern64: bitPattern64)
         case .float: Float(bitPattern64: bitPattern64)
         #if arch(arm64) || arch(arm64_32)
-            case .float16: Float16(bitPattern64: bitPattern64)
+            case .float16:
+                if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
+                    Float16(bitPattern64: bitPattern64)
+                } else {
+                    Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
+                }
         #else
             case .float16: Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
         #endif

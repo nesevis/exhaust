@@ -227,24 +227,26 @@ package enum BoundaryDomainAnalysis {
             values.formUnion(floats.map(\.bitPattern64))
         case .float16:
             #if arch(arm64) || arch(arm64_32)
-                let floats = [
-                    -Float16.greatestFiniteMagnitude,
-                    -Float16(1.0),
-                    -Float16.leastNormalMagnitude,
-                    -Float16.leastNonzeroMagnitude,
-                    -Float16(0.0),
-                    Float16(0.0),
-                    Float16.leastNonzeroMagnitude,
-                    Float16.leastNormalMagnitude,
-                    Float16.ulpOfOne,
-                    Float16(1.0),
-                    Float16(1.0).nextUp,
-                    Float16.greatestFiniteMagnitude,
-                    Float16.nan,
-                    Float16.infinity,
-                    -Float16.infinity,
-                ]
-                values.formUnion(floats.map(\.bitPattern64))
+                if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
+                    let floats = [
+                        -Float16.greatestFiniteMagnitude,
+                        -Float16(1.0),
+                        -Float16.leastNormalMagnitude,
+                        -Float16.leastNonzeroMagnitude,
+                        -Float16(0.0),
+                        Float16(0.0),
+                        Float16.leastNonzeroMagnitude,
+                        Float16.leastNormalMagnitude,
+                        Float16.ulpOfOne,
+                        Float16(1.0),
+                        Float16(1.0).nextUp,
+                        Float16.greatestFiniteMagnitude,
+                        Float16.nan,
+                        Float16.infinity,
+                        -Float16.infinity,
+                    ]
+                    values.formUnion(floats.map(\.bitPattern64))
+                }
             #endif
         default:
             break
@@ -450,7 +452,7 @@ package enum DSTTransitions {
 package enum CalendarBoundaries {
     /// Returns seconds-since-reference-date for the first and last month start, year start, and any Feb 29 within [lower, upper].
     package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
-        let zone = TimeZone(identifier: timeZoneID) ?? .gmt
+        let zone = TimeZone(identifier: timeZoneID) ?? TimeZone(secondsFromGMT: 0)!
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone
 

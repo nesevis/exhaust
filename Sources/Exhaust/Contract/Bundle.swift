@@ -1,5 +1,5 @@
 // A container for referencing entities produced by prior commands in contract tests.
-import Synchronization
+import Foundation
 
 /// Holds values produced by earlier commands so that later commands can reference them.
 ///
@@ -26,28 +26,28 @@ import Synchronization
 /// }
 /// ```
 public final class Bundle<Element>: @unchecked Sendable {
-    // @unchecked Sendable: Element is unconstrained to support non-Sendable reference types (for example, class-based SUTs). Mutex<[Element]> would be ideal but fails the `sending` constraint for non-Sendable Element types. The Mutex<Void> + nonisolated(unsafe) pattern provides the same mechanical serialization.
+    // @unchecked Sendable: Element is unconstrained to support non-Sendable reference types (for example, class-based SUTs). The NSLock + nonisolated(unsafe) pattern provides mechanical serialization.
     private nonisolated(unsafe) var _storage = [Element]()
-    private let lock = Mutex<Void>(())
+    private let lock = NSLock()
 
     /// Creates an empty bundle.
     public init() {}
 
     /// The number of elements currently in the bundle.
     public var count: Int {
-        lock.withLock { _ in _storage.count }
+        lock.withLocking { _storage.count }
     }
 
     /// Whether the bundle contains any elements.
     public var isEmpty: Bool {
-        lock.withLock { _ in _storage.isEmpty }
+        lock.withLocking { _storage.isEmpty }
     }
 
     /// Stores a value in the bundle for later retrieval by ``draw(at:)`` or ``consume(at:)``.
     ///
     /// - Parameter element: The value to store.
     public func add(_ element: Element) {
-        lock.withLock { _ in _storage.append(element) }
+        lock.withLocking { _storage.append(element) }
     }
 
     /// Selects a value from the bundle without removing it, or returns `nil` if the bundle is empty.
@@ -57,7 +57,7 @@ public final class Bundle<Element>: @unchecked Sendable {
     /// - Parameter index: The index to draw from, typically provided by a ``chooseBits`` effect in the generated command runner.
     /// - Returns: The element at the given index (wrapped around), or `nil` if the bundle is empty.
     public func draw(at index: Int) -> Element? {
-        lock.withLock { _ in
+        lock.withLocking {
             guard _storage.isEmpty == false else { return nil }
             return _storage[index % _storage.count]
         }
@@ -70,7 +70,7 @@ public final class Bundle<Element>: @unchecked Sendable {
     /// - Parameter index: The index to consume from, typically provided by a ``chooseBits`` effect in the generated command runner.
     /// - Returns: The removed element, or `nil` if the bundle is empty.
     public func consume(at index: Int) -> Element? {
-        lock.withLock { _ in
+        lock.withLocking {
             guard _storage.isEmpty == false else { return nil }
             let wrappedIndex = index % _storage.count
             return _storage.remove(at: wrappedIndex)
@@ -81,11 +81,11 @@ public final class Bundle<Element>: @unchecked Sendable {
     ///
     /// Use this when bulk removal of specific elements is required.
     public func remove(where predicate: (Element) -> Bool) {
-        lock.withLock { _ in _storage.removeAll(where: predicate) }
+        lock.withLocking { _storage.removeAll(where: predicate) }
     }
 
     /// Removes all elements from the bundle.
     public func reset() {
-        lock.withLock { _ in _storage.removeAll() }
+        lock.withLocking { _storage.removeAll() }
     }
 }

@@ -5,6 +5,7 @@ import Testing
 
 @Suite("Atomic counter concurrent tests")
 struct AtomicCounterConcurrentTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Thread-safe counter passes under all interleavings")
     func atomicCounterPasses() async {
         let result = await __runContractConcurrent(
@@ -14,6 +15,7 @@ struct AtomicCounterConcurrentTests {
         #expect(result == nil, "Atomic counter should pass under any interleaving")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("No interleaving possible when SUT has no internal suspension points")
     func noSuspensionNoInterleaving() async {
         let result = await __runContractConcurrent(

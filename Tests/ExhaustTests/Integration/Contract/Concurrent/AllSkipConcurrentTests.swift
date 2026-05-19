@@ -3,6 +3,7 @@ import Testing
 
 @Suite("All-skip concurrent contract tests")
 struct AllSkipConcurrentTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("100% skip rate does not hang or crash")
     func allCommandsSkip() async {
         let result = await __runContractConcurrent(
@@ -12,6 +13,7 @@ struct AllSkipConcurrentTests {
         #expect(result == nil, "A spec where every command skips should produce no failure")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("100% skip rate with coverage phase")
     func allCommandsSkipWithCoverage() async {
         let result = await __runContractConcurrent(

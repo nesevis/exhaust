@@ -8,6 +8,7 @@ import Testing
 
 @Suite("Int128 / UInt128 Generators")
 struct LargeNumericGeneratorTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("UInt128 round-trips through bit pattern")
     func uint128RoundTrip() {
         let gen = #gen(.uint128())
@@ -22,6 +23,7 @@ struct LargeNumericGeneratorTests {
         #expect(counterExample == nil)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Int128 round-trips through bit pattern")
     func int128RoundTrip() {
         let gen = #gen(.int128())
@@ -35,6 +37,7 @@ struct LargeNumericGeneratorTests {
         #expect(counterExample == nil)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Int128 generates negative values")
     func int128Negatives() {
         let gen = #gen(.int128())
@@ -46,12 +49,14 @@ struct LargeNumericGeneratorTests {
         #expect(counterExample != nil)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("UInt128 validates with #examine")
     func examineUInt128() {
         let gen = #gen(.uint128())
         #examine(gen, samples: 50)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Int128 validates with #examine")
     func examineInt128() {
         let gen = #gen(.int128())

@@ -3,6 +3,7 @@ import Testing
 
 @Suite("Cooperative scheduler behavior")
 struct CooperativeSchedulerTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Sequential prefix passes without triggering concurrency bugs")
     func sequentialPrefixPasses() {
         let commands: [(ScheduleMarker, NonAtomicCounterSpec.Command)] = [
@@ -19,6 +20,7 @@ struct CooperativeSchedulerTests {
         #expect(result.passed, "Sequential execution should not trigger a concurrency bug")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Same seed produces identical trace across repeated runs")
     func strictDeterminism() async throws {
         var traces: [[TraceStep]] = []
@@ -39,6 +41,7 @@ struct CooperativeSchedulerTests {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Reduction produces a counterexample that still fails on replay")
     func reducedCounterexampleReproduces() async throws {
         let result = try #require(
@@ -56,6 +59,7 @@ struct CooperativeSchedulerTests {
         #expect(replayResult.commands.count == result.commands.count, "Replaying the seed should reproduce the same counterexample size")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("concurrencyLevel 1 runs everything sequentially and finds no concurrency bugs")
     func concurrencyLevelOneIsSequential() async {
         let result = await __runContractConcurrent(

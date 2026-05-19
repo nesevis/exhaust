@@ -5,6 +5,7 @@ import Testing
 
 @Suite("Leaky bucket concurrent tests")
 struct LeakyBucketConcurrentTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Detects check-then-act bug that requires state buildup")
     func detectsLeakyBucket() async throws {
         let result = try #require(

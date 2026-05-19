@@ -34,6 +34,7 @@ public enum LogLevel: Int, CaseIterable, Comparable, Sendable {
 
     #if canImport(OSLog)
         /// Maps this level to the corresponding ``OSLogType`` for Apple's unified logging system.
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         package var osLogType: OSLogType {
             switch self {
             case .trace, .debug:
@@ -321,7 +322,11 @@ package enum ExhaustLog {
             format: configuration.format
         )
         #if canImport(OSLog)
-            logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
+            if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
+                logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
+            } else {
+                print(rendered)
+            }
         #else
             print(rendered)
         #endif
@@ -347,35 +352,44 @@ package enum ExhaustLog {
     }
 
     #if canImport(OSLog)
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let coreLogger = Logger(subsystem: subsystem, category: Category.core.rawValue)
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let extensionsLogger = Logger(
             subsystem: subsystem,
             category: Category.extensions.rawValue
         )
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let generationLogger = Logger(
             subsystem: subsystem,
             category: Category.generation.rawValue
         )
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let replayLogger = Logger(
             subsystem: subsystem,
             category: Category.replay.rawValue
         )
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let reflectionLogger = Logger(
             subsystem: subsystem,
             category: Category.reflection.rawValue
         )
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let materializeLogger = Logger(
             subsystem: subsystem,
             category: Category.materialize.rawValue
         )
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let reducerLogger = Logger(
             subsystem: subsystem,
             category: Category.reducer.rawValue
         )
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let adaptationLogger = Logger(
             subsystem: subsystem,
             category: Category.adaptation.rawValue
         )
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static let propertyTestLogger = Logger(
             subsystem: subsystem,
             category: Category.propertyTest.rawValue
@@ -396,6 +410,7 @@ package enum ExhaustLog {
     }
 
     #if canImport(OSLog)
+        @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static func logger(for category: Category) -> Logger {
             switch category {
             case .core:

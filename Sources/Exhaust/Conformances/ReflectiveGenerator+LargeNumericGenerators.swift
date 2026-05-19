@@ -7,6 +7,7 @@ import ExhaustCore
 
 // MARK: - Int128 / UInt128 generators
 
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public extension ReflectiveGenerator {
     /// Generates arbitrary ``UInt128`` values across the full range.
     ///

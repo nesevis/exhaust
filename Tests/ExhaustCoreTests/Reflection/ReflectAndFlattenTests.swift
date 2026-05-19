@@ -7,6 +7,7 @@
 //
 
 import ExhaustCore
+import SE0270_RangeSet
 import Testing
 
 @Suite("Reflect and Flatten Integration Tests")

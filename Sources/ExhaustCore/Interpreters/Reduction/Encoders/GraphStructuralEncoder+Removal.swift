@@ -3,6 +3,8 @@
 //  Exhaust
 //
 
+import SE0270_RangeSet
+
 extension GraphStructuralEncoder {
     /// Builds a removal probe from an element or subtree removal scope.
     func buildRemovalProbe(

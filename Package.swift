@@ -7,23 +7,16 @@ import PackageDescription
 
 let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
 
-#if os(macOS)
-    let swiftLintPlugins: [Target.PluginUsage] = [
-        .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
-    ]
-    let swiftLintDependency: [Package.Dependency] = [
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1"),
-    ]
-#else
-    let swiftLintPlugins: [Target.PluginUsage] = []
-    let swiftLintDependency: [Package.Dependency] = []
-#endif
+let swiftLintPlugins: [Target.PluginUsage] = []
+let swiftLintDependency: [Package.Dependency] = []
 
 let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
     : .target(
         name: "ExhaustCore",
-        dependencies: [],
+        dependencies: [
+            .product(name: "SE0270_RangeSet", package: "swift-se0270-range-set"),
+        ],
         swiftSettings: [
             .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
         ],
@@ -33,12 +26,12 @@ let coreTarget: Target = usePrecompiled
 let package = Package(
     name: "Exhaust",
     platforms: [
-        .macOS(.v15),
-        .iOS(.v18),
-        .macCatalyst(.v18),
-        .tvOS(.v18),
-        .watchOS(.v11),
-        .visionOS(.v2),
+        .macOS(.v10_15),
+        .iOS(.v13),
+        .macCatalyst(.v13),
+        .tvOS(.v13),
+        .watchOS(.v6),
+        .visionOS(.v1),
     ],
     products: [
         .library(
@@ -53,6 +46,7 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-se0270-range-set", from: "1.0.0"),
     ] + swiftLintDependency,
     targets: [
         coreTarget,

@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SE0270_RangeSet
 
 // MARK: - ScalarRangeSet
 
@@ -11,7 +12,7 @@ import Foundation
 /// Provides O(log n) index-to-scalar lookup for single-pick generation.
 ///
 /// When ``bottomCodepoint`` is non-nil, index 0 is reserved for that scalar and all other indices are offset by 1. The bottom codepoint does not need to be a member of the underlying range set. This makes the reducer (which shrinks toward bit pattern 0, that is, index 0) converge toward the nominated character without any pipeline changes.
-package struct ScalarRangeSet: Sendable {
+package struct ScalarRangeSet: @unchecked Sendable {
     /// The underlying set of Unicode scalar value ranges.
     public let rangeSet: RangeSet<UInt32>
 

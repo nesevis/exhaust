@@ -5,6 +5,7 @@
 
 import ExhaustCore
 import Foundation
+import SE0270_RangeSet
 import Testing
 
 // MARK: - Boundary Domain Analysis

@@ -14,6 +14,7 @@ import IssueReporting
 /// Assembles the final ``ContractResult`` for a concurrent contract failure.
 ///
 /// Re-drains the failing schedule with trace recording enabled, runs a sequential oracle to capture the expected (race-free) SUT state, and renders the failure report. Called from both the SCA coverage and random sampling phases when a counterexample is confirmed.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private func buildFailureResult<Spec: AsyncContractSpec>(
     finalInput: [(ScheduleMarker, Spec.Command)],
     specInit: () -> Spec,
@@ -72,6 +73,7 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
 /// Generates random tagged command sequences where each command carries a schedule marker assigning it to one of N concurrent lanes or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer shrinks both the command sequence and the lane assignments.
 ///
 /// The same seed always produces the same interleaving and the same counterexample.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @discardableResult
 public func __runContractConcurrent<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,

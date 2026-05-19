@@ -5,6 +5,7 @@ import Testing
 
 @Suite("Detection boundary and multi-lane behavior")
 struct DetectionBoundaryTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")
     func raceWithoutYieldNotDetected() async {
         let result = await __runContractConcurrent(
@@ -14,6 +15,7 @@ struct DetectionBoundaryTests {
         #expect(result == nil, "Race without await/yield between read and write is invisible to cooperative scheduling")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Same race WITH suspension point IS detected")
     func raceWithYieldDetected() async throws {
         let result = try #require(
@@ -29,6 +31,7 @@ struct DetectionBoundaryTests {
         #expect(hasFailure, "Race with Task.yield() at the interleaving point should be detected")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Three-way race detected with concurrencyLevel 3")
     func threeWayRaceDetected() async throws {
         let result = try #require(

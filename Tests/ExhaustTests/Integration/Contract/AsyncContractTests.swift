@@ -5,6 +5,7 @@ import Testing
 
 @Suite("Async contract tests")
 struct AsyncContractTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Passing async spec produces no counterexample")
     func passingAsyncContract() async {
         let result = await #exhaust(
@@ -17,6 +18,7 @@ struct AsyncContractTests {
         #expect(result == nil, "Async counter spec should pass — model and SUT are identical")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Failing async spec produces a counterexample")
     func failingAsyncContract() async {
         let result = await #exhaust(
@@ -36,6 +38,7 @@ struct AsyncContractTests {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async contract with skip() works correctly")
     func asyncContractWithSkip() async {
         let result = await #exhaust(
@@ -48,6 +51,7 @@ struct AsyncContractTests {
         #expect(result == nil, "Async skip spec should pass")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Mixed sync+async commands produce AsyncContractSpec conformance")
     func mixedAsyncContract() async {
         let result = await #exhaust(
@@ -60,6 +64,7 @@ struct AsyncContractTests {
         #expect(result == nil, "Mixed async spec should pass")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async contract replay reproduces failure with seed through shrinking")
     func asyncReplayWithSeed() async {
         let result1 = await #exhaust(
@@ -82,6 +87,7 @@ struct AsyncContractTests {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async contract with SCA coverage finds and shrinks failure")
     func asyncWithCoverage() async {
         let result = await #exhaust(
@@ -97,6 +103,7 @@ struct AsyncContractTests {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("sync contract replay reproduces failure deterministically")
     func syncReplayWithCoverage() {
         // Use a fixed seed that produces a failure

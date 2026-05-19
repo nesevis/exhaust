@@ -223,7 +223,7 @@ private extension Generator where Operation == ReflectiveOperation {
         var roundTripSuccesses = 0
         var determinismSuccesses = 0
         var uniqueSequences: Set<ChoiceSequence> = []
-        let startTime = ContinuousClock.now
+        let startNanoseconds = monotonicNanoseconds()
 
         var iterator = ValueAndChoiceTreeInterpreter(
             self,
@@ -335,10 +335,8 @@ private extension Generator where Operation == ReflectiveOperation {
             }
         }
 
-        let elapsed = ContinuousClock.now - startTime
-        let elapsedSeconds =
-            Double(elapsed.components.seconds)
-                + Double(elapsed.components.attoseconds) * 1e-18
+        let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
+        let elapsedSeconds = Double(elapsedNanoseconds) * 1e-9
 
         if valuesGenerated == 0 {
             failures.append(.noValuesGenerated)

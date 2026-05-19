@@ -3,6 +3,8 @@
 //  Exhaust
 //
 
+import SE0270_RangeSet
+
 extension GraphStructuralEncoder {
     /// Builds a migration probe that moves elements from a source sequence to a receiver sequence.
     func buildMigrationProbe(
