@@ -190,7 +190,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
         uniqueKeysWithValues: (0 ..< concurrencyLevel).map { (LaneID(index: UInt8($0)), false) }
     )
     var scheduleIndex = 0
-    var failureDetected = false
+
     var lastActivity = ContinuousClock.now
 
     while runQueue.isFinished == false {
@@ -225,8 +225,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
         lastActivity = ContinuousClock.now
 
         if failed.value != nil {
-            if failureDetected { break }
-            failureDetected = true
+            break
         }
     }
 
