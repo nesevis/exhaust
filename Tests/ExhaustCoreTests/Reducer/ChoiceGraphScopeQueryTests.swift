@@ -156,7 +156,7 @@ struct ChoiceGraphScopeQueryTests {
         let scopes = PermutationQuery.build(graph: graph)
 
         #expect(scopes.count == 1)
-        if case let .siblingPermutation(scope) = scopes.first {
+        if let scope = scopes.first {
             #expect(scope.swappableGroups.count == 1)
             #expect(scope.swappableGroups[0].count == 2)
         }

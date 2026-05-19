@@ -143,7 +143,7 @@ struct PostAcceptanceTests {
         )
         let action = ChoiceGraphScheduler.evaluateAcceptance(
             outcome: outcome,
-            operation: .permute(.siblingPermutation(parentNodeID: 0, swappableGroups: []))
+            operation: .permute(PermutationScope(parentNodeID: 0, swappableGroups: []))
         )
         #expect(action == .continueDispatching)
     }

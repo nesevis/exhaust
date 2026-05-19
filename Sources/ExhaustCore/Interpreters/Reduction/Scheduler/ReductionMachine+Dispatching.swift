@@ -299,75 +299,95 @@ extension ReductionMachine {
 
     // MARK: - Finish Encoder
 
-    /// Flushes partial convergence, harvests convergence records, records gate outcomes for bound value scopes, accumulates per-encoder stats, and evaluates the post-acceptance action. Transitions to ``DispatchPhase/dispatch`` (continue dispatching) or ``DispatchPhase/rebuild`` (structural acceptance requires graph rebuild).
+    /// Produces a ``PassReport`` from the active encoder pass and applies it.
     private mutating func stepFinishEncoder() -> Transition {
         guard var pass = activePass else {
             dispatchPhase = .dispatch
             return .dispatched(decision: .sourceExhausted)
         }
 
-        let encoderName = pass.encoder.name
-
         pass.encoder.flushPartialConvergence()
 
-        let convergenceRecords = pass.encoder.convergenceRecords
-        if convergenceRecords.isEmpty == false {
-            graph.recordConvergence(byNodeID: convergenceRecords)
+        let report = PassReport(
+            encoderName: pass.encoder.name,
+            transformation: pass.transformation,
+            boundValueFingerprint: pass.boundValueFingerprint,
+            probeCount: pass.probeCount,
+            acceptCount: pass.acceptCount,
+            cacheHitCount: pass.cacheHitCount,
+            decoderRejectCount: pass.decoderRejectCount,
+            anyAccepted: pass.anyAccepted,
+            anyRequiresRebuild: pass.anyRequiresRebuild,
+            latestTreeIsStripped: pass.latestTreeIsStripped,
+            convergenceRecords: pass.encoder.convergenceRecords,
+            hadReplacementShortlexRejection: pass.encoder.hadReplacementShortlexRejection
+        )
+
+        activePass = nil
+        return applyPassReport(report)
+    }
+
+    // MARK: - Apply Pass Report
+
+    /// Applies post-pass policy from a completed encoder pass.
+    ///
+    /// Called identically whether the pass was stepped (via the main dispatching loop) or run to completion (via reorder/relax). Handles convergence recording, gate outcome, shortlex rejection propagation, stats accumulation, logging, and acceptance evaluation routing.
+    mutating func applyPassReport(_ report: PassReport) -> Transition {
+        if report.convergenceRecords.isEmpty == false {
+            graph.recordConvergence(byNodeID: report.convergenceRecords)
         }
 
-        if let fingerprint = pass.boundValueFingerprint {
-            self.convergence.gate.recordOutcome(fingerprint: fingerprint, accepted: pass.anyAccepted)
+        if let fingerprint = report.boundValueFingerprint {
+            convergence.gate.recordOutcome(fingerprint: fingerprint, accepted: report.anyAccepted)
         }
 
         if hadReplacementShortlexRejection == false,
-           pass.encoder.hadReplacementShortlexRejection
+           report.hadReplacementShortlexRejection
         {
             hadReplacementShortlexRejection = true
         }
 
         if collectStats {
-            stats.encoderProbes[encoderName, default: 0] += pass.probeCount
-            stats.encoderProbesAccepted[encoderName, default: 0] += pass.acceptCount
-            stats.encoderProbesRejectedByCache[encoderName, default: 0] += pass.cacheHitCount
-            stats.encoderProbesRejectedByDecoder[encoderName, default: 0] += pass.decoderRejectCount
+            stats.encoderProbes[report.encoderName, default: 0] += report.probeCount
+            stats.encoderProbesAccepted[report.encoderName, default: 0] += report.acceptCount
+            stats.encoderProbesRejectedByCache[report.encoderName, default: 0] += report.cacheHitCount
+            stats.encoderProbesRejectedByDecoder[report.encoderName, default: 0] += report.decoderRejectCount
         }
 
         ChoiceGraphScheduler.logReducer("graph_encoder_pass", isInstrumented: isInstrumented, metadata: [
-            "encoder": encoderName.rawValue, "probes": "\(pass.probeCount)",
-            "accepted": "\(pass.acceptCount)", "cache_hits": "\(pass.cacheHitCount)",
-            "decoder_rejects": "\(pass.decoderRejectCount)", "seq_len": "\(sequence.count)",
+            "encoder": report.encoderName.rawValue, "probes": "\(report.probeCount)",
+            "accepted": "\(report.acceptCount)", "cache_hits": "\(report.cacheHitCount)",
+            "decoder_rejects": "\(report.decoderRejectCount)", "seq_len": "\(sequence.count)",
         ])
 
         let probeOutcome = ChoiceGraphScheduler.ProbeLoopOutcome(
-            accepted: pass.anyAccepted,
-            requiresRebuild: pass.anyRequiresRebuild,
-            treeIsStripped: pass.latestTreeIsStripped
+            accepted: report.anyAccepted,
+            requiresRebuild: report.anyRequiresRebuild,
+            treeIsStripped: report.latestTreeIsStripped
         )
 
         let acceptanceAction = ChoiceGraphScheduler.evaluateAcceptance(
             outcome: probeOutcome,
-            operation: pass.transformation.operation
+            operation: report.transformation.operation
         )
 
-        if pass.anyAccepted {
+        if report.anyAccepted {
             anyAccepted = true
         }
 
         switch acceptanceAction {
         case .continueDispatching:
-            if pass.anyAccepted == false {
+            if report.anyAccepted == false {
                 scopeRejectionCache.recordRejection(
-                    operation: pass.transformation.operation,
+                    operation: report.transformation.operation,
                     sequence: sequence,
                     graph: graph
                 )
             }
-            activePass = nil
             dispatchPhase = .dispatch
             return .dispatched(decision: .sourceExhausted)
 
         case .rebuildAndResume:
-            activePass = pass
             dispatchPhase = .rebuild
             return .dispatched(decision: .sourceExhausted)
         }

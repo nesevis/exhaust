@@ -26,7 +26,7 @@
 /// ```
 ///
 /// The ``dispatching`` phase uses four sub-phases (``DispatchPhase``) that decompose the probe loop into individual steps: evaluate a source, encode a candidate, decode it against the property, and optionally rebuild the graph.
-package struct ReductionMachine {
+package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Phase
 
