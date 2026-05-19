@@ -30,6 +30,7 @@ struct ProbeSession {
 
     // MARK: - Phase
 
+    /// Tracks the session's position within the encode-decode cycle.
     enum Phase {
         case encode
         case decode
@@ -38,6 +39,7 @@ struct ProbeSession {
 
     // MARK: - Step Result
 
+    /// Describes what happened during one ``step(state:)`` call, returned to the machine for timing classification and control flow.
     enum StepResult {
         case encoded(encoder: EncoderName, cacheHit: Bool)
         case decoded(encoder: EncoderName, accepted: Bool)
@@ -89,6 +91,7 @@ struct ProbeSession {
 
     // MARK: - Step
 
+    /// Advances the session by one encode or decode sub-phase.
     mutating func step(state: inout some ProbeSessionState) throws -> StepResult {
         switch phase {
         case .encode:
@@ -218,6 +221,7 @@ struct ProbeSession {
 
     // MARK: - Report
 
+    /// Produces the pass report by flushing partial convergence and snapshotting all counters.
     mutating func report() -> PassReport {
         encoder.flushPartialConvergence()
 
@@ -239,6 +243,7 @@ struct ProbeSession {
 
     // MARK: - Run To Completion
 
+    /// Runs the full encode-decode loop to completion, checking the optional deadline after each decode.
     mutating func runToCompletion(
         state: inout some ProbeSessionState,
         deadlineCheck: (() -> Bool)? = nil

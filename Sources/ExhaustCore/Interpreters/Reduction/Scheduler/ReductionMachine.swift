@@ -25,7 +25,7 @@
 ///            → beginCycle | reorderPass → done
 /// ```
 ///
-/// The ``dispatching`` phase uses four sub-phases (``DispatchPhase``) that decompose the probe loop into individual steps: evaluate a source, encode a candidate, decode it against the property, and optionally rebuild the graph.
+/// The ``dispatching`` phase uses three sub-phases (``DispatchPhase``): select and evaluate a source (``dispatch``), delegate to the active ``ProbeSession`` for encode-decode stepping (``probing``), and optionally rebuild the graph after a structural acceptance (``rebuild``).
 package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Phase
@@ -111,7 +111,7 @@ package struct ReductionMachine: ProbeSessionState {
     /// - **deferBindInner**: Structural/value phase boundary. Structural work (deletion, replacement, migration) runs first with bind-inner scopes deferred. When structural reduction stalls, the deferral is released and value search on bind-inner leaves begins.
     /// - **gate**: Per-bind-site dispatch control. Prevents redundant bound-value composition probing by tracking which bind sites have been dispatched, which are fruitless, and applying exponential budget decay on repeated stalls.
     ///
-    /// Per-leaf convergence data (``ConvergedOrigin`` on ``ChooseBitsMetadata``) is separate — it lives on graph nodes because it is warm-start data for encoders, not loop-control state. The ``confirmConvergence()`` post-cycle action probes those records for staleness and clears any that a structural change has invalidated.
+    /// Per-leaf convergence data lives in ``ChoiceGraph/convergenceStore``, keyed by node ID. It is warm-start data for encoders, not loop-control state. The ``confirmConvergence()`` post-cycle action probes those records for staleness and clears any that a structural change has invalidated.
     struct ConvergenceTracker {
         var stallBudget: Int
         let maxStalls: Int

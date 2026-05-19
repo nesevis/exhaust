@@ -60,9 +60,9 @@ package struct ChoiceGraph {
     /// Last-observed upstream bit pattern and downstream topology fingerprint per bind site. Keyed by `BindMetadata.fingerprint`. Survives rebuilds so the scheduler can passively classify binds by comparing topology across natural upstream variation without materialisation probes.
     var bindTopologyObservations: [UInt64: BindTopologyObservation] = [:]
 
-    /// Convergence records from prior encoder passes, keyed by graph node ID. Each entry records the bound at which a value search converged for a leaf, its signal, and the cycle number. Replaces the per-leaf ``ChooseBitsMetadata`` storage: convergence is reduction-session state, not structural metadata.
+    /// Convergence records from prior encoder passes, keyed by graph node ID. Each entry records the bound at which a value search converged for a leaf, its signal, and the cycle number. Stored at graph level rather than per-node because convergence is reduction-session state, not structural metadata — it must survive value-only graph updates without per-node copy overhead.
     ///
-    /// Written by ``recordConvergence(byNodeID:)`` after encoder passes and by ``transferConvergence(from:)`` after full rebuilds. Read by ``MinimizationQuery`` (skip converged leaves), ``allValuesConverged()`` (termination check), and ``extractWarmStarts()`` (encoder warm-start input). Cleared per-leaf by ``clearConvergence(_:)`` when staleness probing detects an invalid floor, and in bulk for bound subtree regions by the scheduler after reshape.
+    /// Written by ``recordConvergence(byNodeID:)`` after encoder passes and transferred across full rebuilds by ``ChoiceGraphScheduler/transferConvergence(_:to:)``. Read by ``MinimizationQuery`` (skip converged leaves), ``ChoiceGraphScheduler/allValuesConverged(in:graph:)`` (termination check), and ``ChoiceGraphScheduler/extractWarmStarts(from:)`` (encoder warm-start input). Cleared per-leaf by ``clearConvergence(_:)`` when staleness probing detects an invalid floor, and in bulk by ``clearConvergence(inPositionRange:)`` for bound subtree regions after reshape.
     package var convergenceStore: [Int: ConvergedOrigin] = [:]
 
     // MARK: - Non-Caching Computed Properties
