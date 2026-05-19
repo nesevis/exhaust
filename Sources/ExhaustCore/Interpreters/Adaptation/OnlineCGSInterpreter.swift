@@ -469,6 +469,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     cgsState: &cgsState,
                     derivativeContext: derivativeContext
                 ) else { return nil }
+                context.sizeOverride = nil
                 return try runContinuation(
                     result: result,
                     continuation: continuation,

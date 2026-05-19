@@ -316,6 +316,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             guard let result = try generateRecursiveAny(
                 resizeGen, with: inputValue, context: &context
             ) else { return nil }
+            context.sizeOverride = nil
             let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [result.1])
             return try runContinuation(
                 result: result.0, calleeChoiceTree: calleeTree,

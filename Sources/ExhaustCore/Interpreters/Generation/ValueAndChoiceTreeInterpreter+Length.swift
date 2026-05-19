@@ -56,6 +56,7 @@ extension ValueAndChoiceTreeInterpreter {
                 ) else {
                     return nil
                 }
+                context.sizeOverride = nil
                 return try interpretLengthContinuation(
                     result: innerResult,
                     calleeTree: .resize(newSize: newSize, choices: [innerTree]),

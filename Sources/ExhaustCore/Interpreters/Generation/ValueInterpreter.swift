@@ -248,6 +248,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             guard let value = try generateRecursiveAny(innerGen, with: inputValue, context: &context) else {
                 return nil
             }
+            context.sizeOverride = nil
             let nextGen = try continuation(value)
             if case let .pure(final) = nextGen { return final }
             return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
