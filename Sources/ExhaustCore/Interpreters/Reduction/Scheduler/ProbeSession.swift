@@ -182,7 +182,6 @@ struct ProbeSession {
                 let application = state.graph.apply(mutation)
                 if application.requiresFullRebuild {
                     anyRequiresRebuild = true
-                    state.countMaterialization()
                     phase = .finished
                     return .decoded(encoder: encoderName, accepted: true)
                 }

@@ -3,141 +3,14 @@
 //  Exhaust
 //
 
-// MARK: - Probe Loop
+// MARK: - Probe Loop Types
 
 extension ChoiceGraphScheduler {
-    /// Outcome of a single ``runProbeLoop`` invocation.
-    ///
-    /// ``requiresRebuild`` is true when at least one accepted probe triggered a structural change (reshape, removal, pivot). The scheduler must rebuild the graph from the tree before the next dispatch. When false, all accepted probes were value-only and the graph remains structurally valid.
-    ///
-    /// ``treeIsStripped`` reports whether the latest accepted probe used `materializePicks: false`. When true and a rebuild is needed, the scheduler must re-materialize with `materializePicks: true` first.
+    /// Outcome summary for acceptance evaluation after a probe pass.
     struct ProbeLoopOutcome {
         let accepted: Bool
         let requiresRebuild: Bool
         let treeIsStripped: Bool
-    }
-
-    /// Runs an encoder's probe loop, accepting improvements. Used by the reorder pass and relax round.
-    static func runProbeLoop(
-        encoder: inout any GraphEncoder,
-        scope: EncoderInput,
-        state: inout ReductionMachine
-    ) throws -> ProbeLoopOutcome {
-        encoder.start(scope: scope)
-
-        var lastAccepted = false
-        var anyAccepted = false
-        var anyRequiresRebuild = false
-        var latestAcceptedTreeIsStripped = false
-        var probeCount = 0
-        var acceptCount = 0
-        var cacheHitCount = 0
-        var decoderRejectCount = 0
-        let baseHash = ZobristHash.hash(of: state.sequence)
-        let hasBind = state.sequence.contains { entry in
-            if case .bind = entry { return true }
-            return false
-        }
-
-        var candidateBuffer = state.sequence
-        while let mutation = encoder.nextProbe(into: &candidateBuffer, lastAccepted: lastAccepted) {
-            probeCount += 1
-            lastAccepted = false
-            var mutatedStructurally = false
-
-            let probeHash = ZobristHash.incrementalHash(
-                baseHash: baseHash,
-                baseSequence: state.sequence,
-                probe: candidateBuffer
-            )
-            if state.rejectCache.contains(probeHash) {
-                cacheHitCount += 1
-                continue
-            }
-
-            let selection = Self.selectDecoder(
-                for: mutation,
-                requiresExactDecoder: encoder.requiresExactDecoder,
-                hasBind: hasBind
-            )
-            let decoder: SequenceDecoder = selection.preferExact
-                ? .exact(materializePicks: selection.materializePicks)
-                : .guided(fallbackTree: state.tree, materializePicks: selection.materializePicks)
-
-            var filterObservations: [UInt64: FilterObservation] = [:]
-
-            if let result = try decoder.decodeAny(
-                candidate: candidateBuffer,
-                gen: state.gen,
-                tree: state.tree,
-                originalSequence: state.sequence,
-                property: state.property,
-                filterObservations: &filterObservations,
-                precomputedHash: probeHash
-            ) {
-                state.sequence = result.sequence
-                state.tree = result.tree
-                state.output = result.output
-                lastAccepted = true
-                anyAccepted = true
-                acceptCount += 1
-                if state.collectStats {
-                    state.stats.totalMaterializations += 1
-                }
-                latestAcceptedTreeIsStripped = selection.materializePicks == false
-
-                if encoder.requiresExactDecoder {
-                    anyRequiresRebuild = true
-                    mutatedStructurally = true
-                } else {
-                    let application = state.graph.apply(mutation)
-                    if application.requiresFullRebuild {
-                        anyRequiresRebuild = true
-                        break
-                    }
-                }
-            } else {
-                state.rejectCache.insert(probeHash)
-                decoderRejectCount += 1
-                if state.isInstrumented {
-                    logReplacementProbeRejection(
-                        mutation: mutation,
-                        encoder: encoder.name,
-                        graph: state.graph,
-                        baseSequenceCount: state.sequence.count,
-                        probeSequenceCount: candidateBuffer.count,
-                        probeHash: probeHash
-                    )
-                }
-            }
-
-            if state.collectStats {
-                state.stats.totalMaterializations += 1
-            }
-
-            if mutatedStructurally {
-                encoder.refreshState(graph: state.graph, sequence: state.sequence)
-            }
-        }
-
-        if state.collectStats {
-            state.stats.encoderProbes[encoder.name, default: 0] += probeCount
-            state.stats.encoderProbesAccepted[encoder.name, default: 0] += acceptCount
-            state.stats.encoderProbesRejectedByCache[encoder.name, default: 0] += cacheHitCount
-            state.stats.encoderProbesRejectedByDecoder[encoder.name, default: 0] += decoderRejectCount
-        }
-
-        Self.logReducer("graph_encoder_pass", isInstrumented: state.isInstrumented, metadata: [
-            "encoder": encoder.name.rawValue, "probes": "\(probeCount)",
-            "accepted": "\(acceptCount)", "cache_hits": "\(cacheHitCount)",
-            "decoder_rejects": "\(decoderRejectCount)", "seq_len": "\(state.sequence.count)",
-        ])
-
-        return ProbeLoopOutcome(
-            accepted: anyAccepted,
-            requiresRebuild: anyRequiresRebuild,
-            treeIsStripped: latestAcceptedTreeIsStripped
-        )
     }
 
     // MARK: - Decoder Selection
