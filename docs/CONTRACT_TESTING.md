@@ -1,12 +1,12 @@
 # Contract testing with Exhaust
 
-This guide covers testing stateful systems — things with mutable internal state where bugs emerge from sequences of operations rather than single calls. If you've read the [getting started guide](GETTING_STARTED.md), you're familiar with `#exhaust` for pure functions. `@Contract` is the equivalent for objects with memory.
+This guide covers testing stateful systems, things with mutable internal state where bugs emerge from sequences of operations rather than single calls. If you've read the [getting started guide](GETTING_STARTED.md), you're familiar with `#exhaust` for pure functions. `@Contract` is the equivalent for objects with memory.
 
 ## When to reach for `@Contract`
 
-A stack, a database connection pool, a bounded queue, an authentication session, an undo stack. These all share a trait: calling `push` alone can't find the bug. The bug lives in `push, push, pop, pop, push, pop` — a specific ordering that leaves the data structure in a state it shouldn't be reachable to.
+A stack, a database connection pool, a bounded queue, an authentication session, an undo stack. These all share a trait: calling `push` alone can't find the bug. The bug lives in `push, push, pop, pop, push, pop`, a specific ordering that leaves the data structure in a state it shouldn't be reachable to.
 
-Unit tests for stateful systems tend to be manually-scripted scenarios: set up some state, run a sequence you thought of, assert. Contract testing generates the sequences instead. Exhaust picks the operations, picks their arguments, runs them in generated order, and checks that your invariants hold after every step. When something breaks, you get a minimal sequence that reproduces the failure — often three or four operations where you'd have written a twenty-step test to find the same bug by hand.
+Unit tests for stateful systems tend to be manually-scripted scenarios: set up some state, run a sequence you thought of, assert. Contract testing generates the sequences instead. Exhaust picks the operations, picks their arguments, runs them in generated order, and checks that your invariants hold after every step. When something breaks, you get a minimal sequence that reproduces the failure, often three or four operations where you'd have written a twenty-step test to find the same bug by hand.
 
 ## The shape of a contract
 
@@ -22,38 +22,38 @@ struct StackSpec {
     @Model
     var expected: [Int] = []
     @SystemUnderTest
-    var stack: [Int] = []
+    var stack = MyStack<Int>()
 
     @Invariant
     func contentsMatch() -> Bool {
-        stack == expected
+        stack.elements == expected
     }
 
     @Command(weight: 3, .int(in: 0...9))
     mutating func push(value: Int) throws {
         expected.append(value)
-        stack.append(value)
+        stack.push(value)
     }
 
     @Command(weight: 2)
     mutating func pop() throws {
         guard !expected.isEmpty else { throw skip() }
         let modelValue = expected.removeLast()
-        let sutValue = stack.removeLast()
+        let sutValue = stack.pop()
         try check(modelValue == sutValue, "pop values should match")
     }
 }
 ```
 
-Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands — a weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
+Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands. A weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sync contracts, 40 for async). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit — a spec with cheap commands runs in under 15ms even at the 40-command cap. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sync contracts, 40 for async). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. A spec with cheap commands runs in under 15ms even at the 40-command cap. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Model-based oracles
 
-The `@Model` annotation marks properties that track expected state. The model doesn't have to be sophisticated — it just needs to agree with the SUT on whatever the invariants check. A model for a bounded queue might be a plain `[Int]` tracking FIFO order. A model for a counter might be a single `Int`.
+The `@Model` annotation marks properties that track expected state. The model doesn't have to be sophisticated. It just needs to agree with the system under test (SUT) on whatever the invariants check. A model for a bounded queue might be a plain `[Int]` tracking FIFO order. A model for a counter might be a single `Int`.
 
-The model's job is to make invariants trivial to write. Without a model, invariants have to derive expected behaviour from the SUT's current state alone, which is often hard. With a model, the invariant is just `sut.value == model.value`.
+The model's job is to make invariants trivial to write. Without a model, invariants have to derive expected behaviour from the system under test's current state alone, which is often hard. With a model, the invariant is just `sut.value == model.value`.
 
 You don't have to use a model. Contracts that only need structural invariants (count within bounds, no duplicates, LIFO ordering) work fine without one.
 
@@ -74,7 +74,7 @@ mutating func put(value: Int) throws {
 
 The generator expression (`.int(in: 0...20)`) produces the argument. Multiple arguments get multiple generators, separated by commas.
 
-**`skip()` is a precondition guard.** When a command's precondition fails (popping an empty stack, draining an empty pool), throw `skip()` rather than letting the command execute in an invalid state. Skipped commands don't count as failures — they're filtered out during generation, and Exhaust learns to avoid sequences dominated by skipped operations.
+**`skip()` is a precondition guard.** When a command's precondition fails (popping an empty stack, draining an empty pool), throw `skip()` rather than letting the command execute in an invalid state. Skipped commands don't count as failures. They're filtered out during generation, and Exhaust learns to avoid sequences dominated by skipped operations.
 
 **`check(_:_:)` is a postcondition assertion.** It runs inline within the command body, verifying a condition that should hold immediately after the operation:
 
@@ -88,7 +88,7 @@ mutating func get() throws {
 }
 ```
 
-The distinction between `@Invariant` and `check`: invariants run after every command (including commands that didn't write the check). Postconditions run only inside the command that defines them. Use invariants for properties that must always hold; use postconditions for return-value checks and per-operation guarantees.
+The distinction between `@Invariant` and `check`: invariants run after every command (including commands that didn't write the check). Postconditions run only inside the command that defines them. Use invariants for properties that must always hold. Use postconditions for return-value checks and per-operation guarantees.
 
 ## Running the test
 
@@ -98,7 +98,7 @@ The distinction between `@Invariant` and `check`: invariants run after every com
 }
 ```
 
-Exhaust first runs a coverage phase that systematically covers command-type orderings (every pairwise combination of command types at each position), then switches to random sampling. If a failure is found in either phase, reduction kicks in to shrink the command sequence to a minimal counterexample.
+Exhaust first runs a coverage phase that systematically covers command-type orderings (every pairwise combination of command types at each position), then switches to random sampling. If a failure is found in either phase, the reducer reduces the command sequence to a minimal counterexample.
 
 The failure report shows the reduced sequence and the execution trace:
 
@@ -159,11 +159,11 @@ Three differences from sync contracts: the spec is a `final class` (not a struct
 }
 ```
 
-The `@Contract` macro detects async methods and generates the correct conformance automatically.
+Exhaust detects async methods and generates the correct conformance automatically.
 
 ## Concurrent contract testing
 
-The async contract runner doesn't just run commands sequentially — it runs them concurrently across multiple execution lanes, deterministically interleaving at every `await` boundary. This finds bugs that only manifest under concurrent access: lost updates, check-then-act races, non-atomic read-modify-write patterns.
+The async contract runner runs commands concurrently across multiple execution lanes, deterministically interleaving at every `await` suspension point. This finds bugs that only manifest under concurrent access: lost updates, check-then-act races, non-atomic read-modify-write patterns.
 
 ```swift
 @Test func counterIsSafeUnderConcurrency() async {
@@ -176,7 +176,7 @@ The async contract runner doesn't just run commands sequentially — it runs the
 }
 ```
 
-`.concurrency(2)` means commands are distributed across two concurrent lanes. The cooperative scheduler controls interleaving deterministically — the same seed always produces the same interleaving. When a failure is found, reduction shrinks both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug.
+`.concurrency(2)` means commands are distributed across two concurrent lanes. The cooperative scheduler controls interleaving deterministically. The same seed always produces the same interleaving. When a failure is found, the reducer reduces both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug.
 
 A typical failure report:
 
@@ -207,7 +207,7 @@ The trace shows exactly where the interleaving happened. The reducer drove the f
 
 ### What the scheduler can and cannot find
 
-The cooperative scheduler interleaves at `await` boundaries — wherever a command body suspends (via `Task.yield()`, an actor call, or any other suspension point). It cannot interleave within synchronous code. A race between two statements with no `await` between them is invisible to the scheduler and requires Thread Sanitizer or actual preemptive concurrency to detect.
+The cooperative scheduler interleaves at `await` suspension points, wherever a command body suspends (via `Task.yield()`, an actor call, or any other suspension point). It cannot interleave within synchronous code. A race between two statements with no `await` between them is invisible to the scheduler and requires Thread Sanitizer or actual preemptive concurrency to detect.
 
 For this reason, SUTs that have races at suspension points (the `let v = state; await Task.yield(); state = v + 1` pattern) are exactly what this tool finds well. SUTs whose races are purely synchronous (no suspension between read and write) need a different tool.
 
@@ -215,7 +215,7 @@ For this reason, SUTs that have races at suspension points (the `let v = state; 
 
 `.concurrency(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. Use 3 or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
 
-`.concurrency(1)` runs everything sequentially — useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
+`.concurrency(1)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
 
 ### Idle timeout
 
@@ -230,9 +230,13 @@ Both sync and async contracts accept settings as variadic arguments to `#exhaust
 | `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sync) or 40 (async). |
 | `.concurrency(N)` | 2 | Number of concurrent lanes (async only, 1...8). |
 | `.budget(.thorough)` | `.thorough` | Controls coverage rows and random sampling iterations. |
+| `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (async only). |
 | `.replay(.numeric(seed))` | — | Deterministic replay of a specific run. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
+| `.includeDiff` | off | Includes a structural diff between the original and reduced command sequences (sync only). |
+| `.collectOpenPBTStats` | off | Records per-example stats in OpenPBTStats JSON Lines format. |
+| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing and invocation counts after the run (async only). |
 | `.logging(.debug)` | `.error` | Log verbosity. |
 
 ## Designing good contracts
@@ -247,4 +251,4 @@ A few patterns that tend to produce effective contracts:
 
 **Weight common operations higher.** If `insert` happens ten times more often than `clear` in production, reflect that in the weights. Exhaust's coverage phase explores all command orderings regardless of weight, but the random sampling phase and the reducer benefit from realistic relative frequencies.
 
-**Test the boundary between "works alone" and "breaks together."** A contract that only has one command rarely finds anything. The bugs live in the interactions — two commands that race for the same resource, three operations whose order matters, a sequence that fills a buffer to capacity and then overflows.
+**Test the boundary between "works alone" and "breaks together."** A contract that only has one command rarely finds anything. The bugs live in the interactions: two commands that race for the same resource, three operations whose order matters, a sequence that fills a buffer to capacity and then overflows.
