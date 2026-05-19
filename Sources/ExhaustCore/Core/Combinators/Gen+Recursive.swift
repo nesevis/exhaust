@@ -55,7 +55,7 @@ package extension Gen {
     ) -> Generator<Output> {
         // Build all layers eagerly. Layer 0 = base, layer N = extend applied N times.
         var layers: [Generator<Output>] = [base]
-        for layer in 0 ... depthRange.upperBound {
+        for layer in 0 ..< depthRange.upperBound {
             let availableLayers = layers // capture current set
             // recurse() draws its OWN depth independently
             let recurseGen = chooseDepth(in: 0 ... UInt64(layer))
