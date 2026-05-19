@@ -241,8 +241,8 @@ package extension Gen {
         let scaledLower: Double
         let scaledUpper: Double
         if isExponential {
-            scaledLower = lowerSpan > 0 ? pow(lowerSpan, fraction) : 0
-            scaledUpper = upperSpan > 0 ? pow(upperSpan, fraction) : 0
+            scaledLower = lowerSpan > 0 ? Swift.min(pow(lowerSpan, fraction), lowerSpan) : 0
+            scaledUpper = upperSpan > 0 ? Swift.min(pow(upperSpan, fraction), upperSpan) : 0
         } else {
             scaledLower = lowerSpan * fraction
             scaledUpper = upperSpan * fraction
