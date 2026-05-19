@@ -17,13 +17,15 @@ struct SequentialOracleResult<Spec: AsyncContractSpec> {
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func sequentialOracle<Spec: AsyncContractSpec>(
     commands: [Spec.Command],
-    specInit: () -> Spec
+    specInit: () -> Spec,
+    idleTimeoutMilliseconds: Int = 1000
 ) -> SequentialOracleResult<Spec>? {
     let spec = SendableBox(specInit())
     let runQueue = RunQueue(laneCount: 1)
     let executor = LaneExecutor(lane: LaneID(index: 0), runQueue: runQueue)
     let passed = SendableBox(true)
     let done = SendableBox(false)
+    let idleTimeout: Duration = .milliseconds(idleTimeoutMilliseconds)
 
     Task(executorPreference: executor) { @Sendable [spec] in
         for command in commands {
@@ -38,9 +40,14 @@ func sequentialOracle<Spec: AsyncContractSpec>(
         done.value = true
     }
 
+    var lastActivity = ContinuousClock.now
     while done.value == false {
-        guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else { continue }
+        guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
+            if ContinuousClock.now - lastActivity > idleTimeout { return nil }
+            continue
+        }
         job.runSynchronously(on: executor.asUnownedTaskExecutor())
+        lastActivity = ContinuousClock.now
     }
 
     guard passed.value else { return nil }

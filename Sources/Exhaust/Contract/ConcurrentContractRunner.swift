@@ -40,7 +40,7 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     let trace = traceResult.trace
     
     // Run the commands sequentially on a fresh spec. If the sequential replay passes, the resulting state is the expected outcome — what the system should have produced without the race.
-    let oracle = timedOut ? nil : sequentialOracle(commands: finalInput.map(\.1), specInit: specInit)
+    let oracle = timedOut ? nil : sequentialOracle(commands: finalInput.map(\.1), specInit: specInit, idleTimeoutMilliseconds: idleTimeout)
     
     let result = ContractResult<Spec>(
         commands: finalInput.map(\.1),
