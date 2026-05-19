@@ -99,15 +99,11 @@ package struct ScopeAnnotation {
     /// True if this is a ``TypeTag/depthControl`` chooseBits leaf. Depth-control leaves are independent recursive depth markers excluded from lockstep, redistribution, swap, reorder, and composed downstream operations.
     package let isDepthControl: Bool
 
-    /// For sequence nodes: the number of elements beyond ``SequenceMetadata/lengthConstraint`` lower bound that are eligible for deletion. Nil for non-sequence nodes.
-    package let deletableElementCount: Int?
-
     static let `default` = ScopeAnnotation(
         isBindInner: false,
         controllingBindNodeID: nil,
         controllingBindDepth: nil,
-        isDepthControl: false,
-        deletableElementCount: nil
+        isDepthControl: false
     )
 }
 

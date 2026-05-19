@@ -72,8 +72,7 @@ struct ChoiceGraphBuilder {
                     isBindInner: enclosingBindNodeID != nil,
                     controllingBindNodeID: enclosingBindNodeID,
                     controllingBindDepth: enclosingBindDepth,
-                    isDepthControl: isDepthControl,
-                    deletableElementCount: nil
+                    isDepthControl: isDepthControl
                 )
             )
             if let parent {
@@ -92,8 +91,7 @@ struct ChoiceGraphBuilder {
                     isBindInner: enclosingBindNodeID != nil,
                     controllingBindNodeID: enclosingBindNodeID,
                     controllingBindDepth: enclosingBindDepth,
-                    isDepthControl: false,
-                    deletableElementCount: nil
+                    isDepthControl: false
                 )
             )
             if let parent {
@@ -213,9 +211,6 @@ struct ChoiceGraphBuilder {
 
         consumed += 1 // close marker
 
-        let minLength = Int(metadata.validRange?.lowerBound ?? 0)
-        let deletableCount = max(0, elements.count - minLength)
-
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
             kind: .sequence(SequenceMetadata(
@@ -236,8 +231,7 @@ struct ChoiceGraphBuilder {
                 isBindInner: enclosingBindNodeID != nil,
                 controllingBindNodeID: enclosingBindNodeID,
                 controllingBindDepth: enclosingBindDepth,
-                isDepthControl: false,
-                deletableElementCount: deletableCount
+                isDepthControl: false
             )
         )
         return consumed
