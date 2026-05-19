@@ -73,43 +73,6 @@ public extension ReflectiveGenerator {
         )
     }
 
-    /// Creates a generator that only produces unique values, deduplicated by an equatable key path.
-    ///
-    /// The value extracted by the key path is used as the deduplication key. Two values are considered duplicates if they produce the same key under equality comparison. This uses linear scan for duplicate detection.
-    ///
-    /// ```swift
-    /// let gen = #gen(.element(from: configs, id: \.name)).unique(by: \.name)
-    /// ```
-    ///
-    /// - Parameters:
-    ///   - by: A key path to the equatable property used for deduplication.
-    ///   - fileID: Source file identifier for fingerprinting (auto-captured).
-    ///   - line: Source line number for fingerprinting (auto-captured).
-    /// - Returns: A generator that only yields values with unique keys.
-    func unique<Key: Equatable>(
-        by path: KeyPath<Output, Key> & Sendable,
-        fileID: StaticString = #fileID,
-        line: UInt = #line,
-        column: UInt = #column
-    ) -> ReflectiveGenerator<Output> {
-        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
-        var seen: [Key] = []
-        return FreerMonad.impure(
-            operation: .unique(
-                gen: gen.erase(),
-                fingerprint: fingerprint,
-                keyExtractor: { value in
-                    let key = (value as! Output)[keyPath: path]
-                    if seen.contains(where: { $0 == key }) {
-                        return AnyHashable(seen.count)
-                    }
-                    seen.append(key)
-                    return AnyHashable(seen.count)
-                }
-            ),
-        ) { .pure($0 as! Output) }.wrapped
-    }
-
     /// Creates a generator that only produces unique values, deduplicated by a transform.
     ///
     /// The transform function extracts a hashable key from each generated value.

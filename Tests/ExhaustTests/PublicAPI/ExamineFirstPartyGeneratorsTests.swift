@@ -518,20 +518,6 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
-    @Test("unique(by:) deduplicates by equatable key path")
-    func uniqueByEquatable() {
-        let items = [
-            KeyPathFixture(id: 1, label: .init(value: "alpha")),
-            KeyPathFixture(id: 2, label: .init(value: "beta")),
-            KeyPathFixture(id: 3, label: .init(value: "gamma")),
-        ]
-        let report = #examine(
-            .element(from: items, id: \KeyPathFixture.id)
-                .unique(by: \KeyPathFixture.label),
-            samples: 50
-        )
-        #expect(report.passed)
-    }
 }
 
 // MARK: - Helpers
