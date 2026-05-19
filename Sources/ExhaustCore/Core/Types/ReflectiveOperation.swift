@@ -15,6 +15,16 @@
 //
 // The remaining seven cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`, `transform`.
 
+// MARK: - Why One Enum
+//
+// Thirteen cases in one enum rather than separate "structural" and "modifier" enums.
+//
+// 1. Swift exhaustive switch checking enforces that every interpreter handles every case. Splitting into two enums loses this guarantee at the composition boundary — a new interpreter could silently ignore all modifier cases.
+//
+// 2. The "transparent" cases (classify, unique, filter, resize) are not uniformly transparent. Tuning has dedicated handlers for all four. Generation interprets filter with CGS-aware logic. Only replay treats classify/unique as pure pass-throughs. A two-enum split would suggest a uniformity that does not exist.
+//
+// 3. mapInnerGenerator() already factors the structural recursion pattern for cases that wrap a single inner generator. Adaptation uses it at three call sites. A second enum would not reduce code beyond what this method already eliminates.
+
 // swiftlint:disable:next orphaned_doc_comment
 /// The primitive operations that enable bidirectional property-based testing.
 ///

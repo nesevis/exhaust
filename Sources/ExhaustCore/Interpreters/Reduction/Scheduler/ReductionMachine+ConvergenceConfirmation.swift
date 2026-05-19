@@ -32,7 +32,7 @@ extension ReductionMachine {
 
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
-            guard let origin = metadata.convergedOrigin else { continue }
+            guard let origin = graph.convergenceStore[nodeID] else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
 
             let minBound: UInt64 = metadata.validRange?.lowerBound ?? 0
@@ -136,9 +136,6 @@ extension ReductionMachine {
     }
 
     private mutating func clearConvergence(nodeID: Int) {
-        if case var .chooseBits(leafMetadata) = graph.nodes[nodeID].kind {
-            leafMetadata.convergedOrigin = nil
-            graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(leafMetadata))
-        }
+        graph.clearConvergence(nodeID)
     }
 }

@@ -25,8 +25,8 @@
 ///            → beginCycle | reorderPass → done
 /// ```
 ///
-/// The ``dispatching`` phase uses four sub-phases (``DispatchPhase``) that decompose the probe loop into individual steps: evaluate a source, encode a candidate, decode it against the property, and optionally rebuild the graph.
-package struct ReductionMachine {
+/// The ``dispatching`` phase uses three sub-phases (``DispatchPhase``): select and evaluate a source (``dispatch``), delegate to the active ``ProbeSession`` for encode-decode stepping (``probing``), and optionally rebuild the graph after a structural acceptance (``rebuild``).
+package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Phase
 
@@ -42,12 +42,10 @@ package struct ReductionMachine {
         case done
     }
 
-    /// Tracks where the machine is within a single ``Phase/dispatching`` step. Each call to ``next()`` during dispatching advances through one sub-phase: selecting a source (``dispatch``), producing a candidate (``encode``), materializing and checking the property (``decode``), flushing encoder state (``finishEncoder``), or rebuilding the graph after a structural acceptance (``rebuild``).
+    /// Tracks where the machine is within a single ``Phase/dispatching`` step.
     enum DispatchPhase {
         case dispatch
-        case encode
-        case decode
-        case finishEncoder
+        case probing
         case rebuild
     }
 
@@ -84,35 +82,6 @@ package struct ReductionMachine {
         case terminated
     }
 
-    // MARK: - Encoder Pass
-
-    /// Owns the per-encoder-pass state for the dispatching sub-system.
-    ///
-    /// Constructed in ``beginEncoderPass`` when a source yields a transformation and an encoder is selected. Mutated across ``stepEncode`` (produce candidate, check cache), ``stepDecode`` (materialize, check property), and consumed in ``stepFinishEncoder`` (harvest convergence, record stats). Set to nil at the end of ``stepFinishEncoder``.
-    struct EncoderPass {
-        var encoder: any GraphEncoder
-        let transformation: GraphTransformation
-        let boundValueFingerprint: UInt64?
-
-        let baseHash: UInt64
-        let hasBind: Bool
-
-        var candidateBuffer: ChoiceSequence
-        var lastProbeAccepted: Bool = false
-
-        var pendingMutation: ProjectedMutation?
-        var pendingProbeHash: UInt64 = 0
-        var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
-
-        var probeCount: Int = 0
-        var acceptCount: Int = 0
-        var cacheHitCount: Int = 0
-        var decoderRejectCount: Int = 0
-        var anyAccepted: Bool = false
-        var anyRequiresRebuild: Bool = false
-        var latestTreeIsStripped: Bool = false
-    }
-
     // MARK: - State
 
     var phase: Phase = .beginCycle
@@ -142,7 +111,7 @@ package struct ReductionMachine {
     /// - **deferBindInner**: Structural/value phase boundary. Structural work (deletion, replacement, migration) runs first with bind-inner scopes deferred. When structural reduction stalls, the deferral is released and value search on bind-inner leaves begins.
     /// - **gate**: Per-bind-site dispatch control. Prevents redundant bound-value composition probing by tracking which bind sites have been dispatched, which are fruitless, and applying exponential budget decay on repeated stalls.
     ///
-    /// Per-leaf convergence data (``ConvergedOrigin`` on ``ChooseBitsMetadata``) is separate — it lives on graph nodes because it is warm-start data for encoders, not loop-control state. The ``confirmConvergence()`` post-cycle action probes those records for staleness and clears any that a structural change has invalidated.
+    /// Per-leaf convergence data lives in ``ChoiceGraph/convergenceStore``, keyed by node ID. It is warm-start data for encoders, not loop-control state. The ``confirmConvergence()`` post-cycle action probes those records for staleness and clears any that a structural change has invalidated.
     struct ConvergenceTracker {
         var stallBudget: Int
         let maxStalls: Int
@@ -186,9 +155,10 @@ package struct ReductionMachine {
     var hadReplacementShortlexRejection: Bool = false
     var sequenceBeforeCycle: ChoiceSequence = []
 
-    // MARK: - Active Encoder Pass
+    // MARK: - Active Probe Session
 
-    var activePass: EncoderPass?
+    var activeSession: ProbeSession?
+    var pendingReport: PassReport?
 
     // MARK: - Init
 
@@ -434,26 +404,36 @@ package struct ReductionMachine {
             operation: .reorder(reorderScope),
             priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
         )
-        let reorderScopeBundle = EncoderInput(
+        let scope = EncoderInput(
             transformation: reorderTransformation,
             baseSequence: sequence,
             tree: tree,
             graph: graph,
             warmStartRecords: [:]
         )
-        var reorderEncoder: any GraphEncoder = GraphReorderEncoder()
+        var encoder: any GraphEncoder = GraphReorderEncoder()
+        encoder.start(scope: scope)
+
         let savedRejectCache = rejectCache
         rejectCache = []
-        let reorderOutcome = try ChoiceGraphScheduler.runProbeLoop(
-            encoder: &reorderEncoder,
-            scope: reorderScopeBundle,
-            state: &self
+
+        var session = ProbeSession(
+            encoder: encoder,
+            transformation: reorderTransformation,
+            boundValueFingerprint: nil,
+            baseSequence: sequence,
+            hasBind: sequence.contains { if case .bind = $0 { return true }; return false }
         )
+        let report = try session.runToCompletion(state: &self)
+
         rejectCache = savedRejectCache
-        if isInstrumented, reorderOutcome.accepted {
+
+        _ = applyPassReport(report)
+
+        if isInstrumented, report.anyAccepted {
             ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
         }
-        return reorderOutcome.accepted
+        return report.anyAccepted
     }
 
     /// Rebuilds the ``ChoiceGraph`` from the current tree, inheriting bind classifications and convergence records from the previous graph. Returns the diff so the caller can decide whether to rebuild structural or value-only sources.

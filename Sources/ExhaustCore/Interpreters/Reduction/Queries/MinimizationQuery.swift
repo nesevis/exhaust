@@ -28,7 +28,7 @@ enum MinimizationQuery {
             let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
             guard currentBitPattern != targetBitPattern else { continue }
 
-            if let converged = metadata.convergedOrigin,
+            if let converged = graph.convergenceStore[nodeID],
                converged.bound == currentBitPattern
             {
                 continue

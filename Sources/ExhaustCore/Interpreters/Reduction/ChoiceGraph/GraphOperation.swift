@@ -86,10 +86,7 @@ enum GraphOperation {
                 [ancestorPickNodeID, descendantPickNodeID]
             }
         case let .permute(scope):
-            switch scope {
-            case let .siblingPermutation(_, swappableGroups):
-                swappableGroups.flatMap(\.self)
-            }
+            scope.swappableGroups.flatMap(\.self)
         case let .migrate(scope):
             scope.elementNodeIDs + [scope.receiverSequenceNodeID]
         case .minimize, .exchange:
@@ -134,9 +131,9 @@ extension GraphOperation {
                 && graph.nodes[ancestorPickNodeID].positionRange != nil
                 && descendantPickNodeID < graph.nodes.count
                 && graph.nodes[descendantPickNodeID].positionRange != nil
-        case let .permute(.siblingPermutation(parentNodeID, _)):
-            return parentNodeID < graph.nodes.count
-                && graph.nodes[parentNodeID].positionRange != nil
+        case let .permute(scope):
+            return scope.parentNodeID < graph.nodes.count
+                && graph.nodes[scope.parentNodeID].positionRange != nil
         case let .migrate(scope):
             if let parentSeqID = scope.sourceParentSequenceNodeID {
                 guard parentSeqID < graph.nodes.count else { return false }

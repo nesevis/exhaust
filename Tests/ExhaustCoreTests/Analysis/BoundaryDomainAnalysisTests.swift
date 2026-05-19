@@ -620,6 +620,141 @@ struct OpaqueGroupTests {
     }
 }
 
+// MARK: - Character Boundary Membership
+
+@Suite("Character Boundary Indices")
+struct CharacterBoundaryIndicesTests {
+    @Test("Boundary indices map to scalars within the CharacterSet")
+    func boundaryIndicesAreWithinCharacterSet() {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
+        let srs = allowed.scalarRangeSet()
+
+        for index in srs.boundaryIndices {
+            let scalar = srs.scalar(at: Int(index))
+            #expect(
+                allowed.contains(scalar),
+                "Boundary index \(index) maps to U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
+            )
+        }
+    }
+
+    @Test("interestingCharacterScalars outside the CharacterSet are excluded from boundary indices")
+    func interestingScalarsNotInSetAreExcluded() {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
+        let srs = allowed.scalarRangeSet()
+
+        let excludedScalars = BoundaryDomainAnalysis.interestingCharacterScalars
+            .filter { allowed.contains(Unicode.Scalar($0)!) == false }
+
+        #expect(excludedScalars.isEmpty == false, "Test requires at least one interesting scalar outside the set")
+
+        for scalarValue in excludedScalars {
+            let indexForScalar = srs.boundaryIndices.first { index in
+                srs.scalar(at: Int(index)).value == scalarValue
+            }
+            #expect(
+                indexForScalar == nil,
+                "U+\(String(scalarValue, radix: 16, uppercase: true)) is not in the CharacterSet but appears as boundary index"
+            )
+        }
+    }
+
+    @Test("Coverage replay of character chooseBits produces only scalars within the CharacterSet")
+    func coverageReplayProducesOnlyAllowedCharacters() throws {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
+        let srs = allowed.scalarRangeSet()
+        let tag = TypeTag.character(boundaryIndices: srs.boundaryIndices)
+        let max = UInt64(srs.scalarCount - 1)
+
+        let operation = ReflectiveOperation.chooseBits(
+            min: 0,
+            max: max,
+            tag: tag,
+            isRangeExplicit: true
+        )
+        let charGen: Generator<Character> = Gen.contramap(
+            { (char: Character) throws -> UInt32 in
+                guard let scalar = char.unicodeScalars.first else {
+                    throw ReflectionError.couldNotReflectOnSequenceElement("Character has no scalars")
+                }
+                return UInt32(srs.index(of: scalar))
+            },
+            Generator<Character>.impure(operation: operation) { result in
+                guard let convertible = result as? any BitPatternConvertible else {
+                    throw GeneratorError.typeMismatch(
+                        expected: "any BitPatternConvertible",
+                        actual: String(describing: Swift.type(of: result))
+                    )
+                }
+                return .pure(Character(srs.scalar(at: Int(convertible.bitPattern64))))
+            }
+        )
+        let gen: Generator<[Character]> = Gen.arrayOf(charGen, within: 1 ... 6)
+
+        guard let analysis = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Generator should be analyzable")
+            return
+        }
+
+        let profile: any CoverageProfile = switch analysis {
+        case let .finite(profile): profile
+        case let .boundary(profile): profile
+        }
+
+        let domainSizes = profile.domainSizes
+        let analysisKind: String = switch analysis {
+        case .finite: "finite"
+        case .boundary: "boundary"
+        }
+        print("Analysis: \(analysisKind), params=\(profile.parameterCount), domains=\(domainSizes)")
+        #expect(domainSizes.isEmpty == false, "Analysis should produce at least one parameter")
+
+        var rowsTested = 0
+        if profile.parameterCount >= 2 {
+            let generator = PullBasedCoveringArrayGenerator(
+                domainSizes: domainSizes,
+                strength: 2
+            )
+            while let row = generator.next(), rowsTested < 2000 {
+                guard let tree = profile.buildTree(from: row) else { continue }
+                let mode = Materializer.Mode.guided(seed: UInt64(rowsTested), fallbackTree: nil)
+                guard case let .success(chars, _, _) = Materializer.materialize(
+                    gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                ) else { continue }
+                for char in chars {
+                    for scalar in char.unicodeScalars {
+                        #expect(
+                            allowed.contains(scalar),
+                            "Coverage row \(rowsTested) produced U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
+                        )
+                    }
+                }
+                rowsTested += 1
+            }
+        } else if profile.parameterCount == 1 {
+            for i in 0 ..< min(Int(domainSizes[0]), 2000) {
+                let row = CoveringArrayRow(values: [UInt64(i)])
+                guard let tree = profile.buildTree(from: row) else { continue }
+                let mode = Materializer.Mode.guided(seed: UInt64(i), fallbackTree: nil)
+                guard case let .success(chars, _, _) = Materializer.materialize(
+                    gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                ) else { continue }
+                for char in chars {
+                    for scalar in char.unicodeScalars {
+                        #expect(
+                            allowed.contains(scalar),
+                            "Coverage row \(i) produced U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
+                        )
+                    }
+                }
+                rowsTested += 1
+            }
+        }
+
+        #expect(rowsTested > 0, "Coverage should produce at least one materializable row (got \(rowsTested))")
+    }
+}
+
 // MARK: - Helpers
 
 private func analyzeBoundary(_ gen: Generator<some Any>) -> BoundaryDomainProfile? {

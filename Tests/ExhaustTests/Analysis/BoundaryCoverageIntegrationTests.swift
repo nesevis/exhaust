@@ -3,6 +3,7 @@
 //  Exhaust
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
 
@@ -36,5 +37,17 @@ struct BoundaryCoverageIntegrationTests {
             str.count == str.utf16.count
         }
         #expect(result != nil, "Boundary coverage should find a string where count != utf16.count")
+    }
+
+    @Test("String boundary coverage respects CharacterSet membership")
+    func stringBoundaryCoverageRespectsCharacterSet() {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
+        let gen = #gen(.string(from: allowed, length: 1 ... 6))
+
+        let result = #exhaust(gen, .budget(.custom(coverage: 2000, sampling: 0)), .suppress(.issueReporting)) { str in
+            str.unicodeScalars.allSatisfy { allowed.contains($0) }
+        }
+
+        #expect(result == nil, "Boundary coverage should not inject characters outside the CharacterSet")
     }
 }

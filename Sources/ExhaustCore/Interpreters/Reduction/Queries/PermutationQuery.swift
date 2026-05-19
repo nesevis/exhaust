@@ -38,7 +38,7 @@ enum PermutationQuery {
 
             guard swappableGroups.isEmpty == false else { continue }
 
-            scopes.append(.siblingPermutation(
+            scopes.append(PermutationScope(
                 parentNodeID: nodeID,
                 swappableGroups: swappableGroups
             ))

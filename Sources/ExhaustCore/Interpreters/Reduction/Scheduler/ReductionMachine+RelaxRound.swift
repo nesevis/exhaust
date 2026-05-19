@@ -106,18 +106,20 @@ extension ReductionMachine {
             )
 
             var exploitEncoder = ChoiceGraphScheduler.selectEncoder(for: exploitTransformation.operation)
-            let outcome = try ChoiceGraphScheduler.runProbeLoop(
-                encoder: &exploitEncoder,
-                scope: exploitScope,
-                state: &self
+            exploitEncoder.start(scope: exploitScope)
+
+            var session = ProbeSession(
+                encoder: exploitEncoder,
+                transformation: exploitTransformation,
+                boundValueFingerprint: nil,
+                baseSequence: sequence,
+                hasBind: sequence.contains { if case .bind = $0 { return true }; return false }
             )
+            let report = try session.runToCompletion(state: &self)
 
-            let convergence = exploitEncoder.convergenceRecords
-            if convergence.isEmpty == false {
-                graph.recordConvergence(byNodeID: convergence)
-            }
+            _ = applyPassReport(report)
 
-            if outcome.accepted, outcome.requiresRebuild {
+            if report.anyAccepted, report.anyRequiresRebuild {
                 _ = rebuildAndUpdateGraph()
                 exploitSources = CandidateSourceBuilder.buildSources(from: graph)
             }
