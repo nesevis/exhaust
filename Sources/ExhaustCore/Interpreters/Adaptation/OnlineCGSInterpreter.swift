@@ -483,7 +483,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Filter
 
-            case let .filter(gen, _, _, filterPredicate, tuned, _):
+            case let .filter(gen, _, _, filterPredicate, tuned, sourceLocation):
                 let tunedGen = tuned ?? gen
 
                 var attempts = 0 as UInt64
@@ -512,6 +512,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     }
                     attempts += 1
                 }
+                sourceLocation.onBudgetExhausted?()
                 throw GeneratorError.sparseValidityCondition
 
             // MARK: - Classify

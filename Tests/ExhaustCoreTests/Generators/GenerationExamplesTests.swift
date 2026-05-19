@@ -34,7 +34,7 @@ struct GenerationExamplesTests {
                     filterType: .auto,
                     predicate: { ($0 as! UInt).isMultiple(of: 3) },
                     tuned: nil,
-                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column),
                 ),
                 continuation: { .pure($0 as! UInt) }
             )

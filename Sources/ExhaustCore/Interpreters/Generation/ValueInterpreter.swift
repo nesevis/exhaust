@@ -288,6 +288,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 attempts += 1
             }
             guard let value = accepted else {
+                sourceLocation.onBudgetExhausted?()
                 throw GeneratorError.sparseValidityCondition
             }
             let nextGen = try continuation(value)

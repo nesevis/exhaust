@@ -356,6 +356,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
                 attempts += 1
             }
+            sourceLocation.onBudgetExhausted?()
             throw GeneratorError.sparseValidityCondition
 
         // MARK: classify

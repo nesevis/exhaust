@@ -1,9 +1,5 @@
-//
-//  ReflectiveGenerator+Filter.swift
-//  Exhaust
-//
-//  Created by Chris Kolbu on 13/5/2026.
-//
+import ExhaustCore
+import IssueReporting
 
 public extension ReflectiveGenerator {
     /// Creates a filtered generator that only produces values satisfying a predicate.
@@ -47,7 +43,16 @@ public extension ReflectiveGenerator {
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
-                column: column
+                column: column,
+                onBudgetExhausted: {
+                    reportIssue(
+                        "Filter exhausted its retry budget (\(GenerationContext.maxFilterRuns) attempts) without producing a valid value. Consider restructuring the generator to produce valid values directly.",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                }
             )
         ).wrapped
     }

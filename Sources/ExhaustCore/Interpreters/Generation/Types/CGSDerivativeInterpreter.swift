@@ -148,7 +148,7 @@ package enum CGSDerivativeInterpreter {
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
-            case let .filter(gen, _, _, predicate, tuned, _):
+            case let .filter(gen, _, _, predicate, tuned, sourceLocation):
                 let filterGen = tuned ?? gen
                 var attempts: UInt64 = 0
                 while attempts < GenerationContext.maxFilterRuns {
@@ -165,6 +165,7 @@ package enum CGSDerivativeInterpreter {
                     }
                     attempts += 1
                 }
+                sourceLocation.onBudgetExhausted?()
                 throw GeneratorError.sparseValidityCondition
 
             case let .classify(gen, _, _):
