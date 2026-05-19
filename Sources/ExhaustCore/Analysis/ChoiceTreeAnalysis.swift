@@ -357,7 +357,8 @@ package enum ChoiceTreeAnalysis {
             return false
         }
 
-        let maxElementSlots = min(2, Int(lengthRange.upperBound), elements.count)
+        let clampedUpperBound = lengthRange.upperBound > UInt64(Int.max) ? Int.max : Int(lengthRange.upperBound)
+        let maxElementSlots = min(2, clampedUpperBound, elements.count)
         var elementSlotParams: [[BoundaryParameter]] = []
         for elementIndex in 0 ..< maxElementSlots {
             var slotParams: [BoundaryParameter] = []
