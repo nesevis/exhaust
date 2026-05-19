@@ -4,17 +4,16 @@
 //
 
 import Foundation
-import SE0270_RangeSet
 
 // MARK: - ScalarRangeSet
 
-/// A set of `UInt32` ranges representing Unicode scalar values, backed by ``RangeSet``.
+/// A set of `UInt32` ranges representing Unicode scalar values, backed by ``ExhaustRangeSet``.
 /// Provides O(log n) index-to-scalar lookup for single-pick generation.
 ///
 /// When ``bottomCodepoint`` is non-nil, index 0 is reserved for that scalar and all other indices are offset by 1. The bottom codepoint does not need to be a member of the underlying range set. This makes the reducer (which shrinks toward bit pattern 0, that is, index 0) converge toward the nominated character without any pipeline changes.
 package struct ScalarRangeSet: @unchecked Sendable {
     /// The underlying set of Unicode scalar value ranges.
-    public let rangeSet: RangeSet<UInt32>
+    public let rangeSet: ExhaustRangeSet<UInt32>
 
     /// Cached sorted, non-overlapping ranges (avoids re-allocating on every lookup).
     private let rangesArray: [Range<UInt32>]
@@ -36,9 +35,9 @@ package struct ScalarRangeSet: @unchecked Sendable {
     /// Pre-computed flat indices for ``BoundaryDomainAnalysis/interestingCharacterScalars`` that are present in this range set. Passed to ``TypeTag/character(boundaryIndices:)`` so boundary analysis receives correct index-space values.
     public let boundaryIndices: [UInt64]
 
-    /// Creates a ``ScalarRangeSet`` from a `RangeSet<UInt32>`, optionally pinning index zero to `bottomCodepoint` so the reducer converges toward that scalar.
-    public init(_ rangeSet: RangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
-        precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty RangeSet")
+    /// Creates a ``ScalarRangeSet`` from a `ExhaustRangeSet<UInt32>`, optionally pinning index zero to `bottomCodepoint` so the reducer converges toward that scalar.
+    public init(_ rangeSet: ExhaustRangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
+        precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty ExhaustRangeSet")
 
         let rangesArray = Array(rangeSet.ranges)
         var cumulative: [Int] = []
@@ -161,7 +160,7 @@ extension CharacterSet {
     package func scalarRangeSet(bottomCodepoint: Unicode.Scalar? = nil) -> ScalarRangeSet {
         let bitmap = bitmapRepresentation
         let planeSize = 8192
-        var rangeSet = RangeSet<UInt32>()
+        var rangeSet = ExhaustRangeSet<UInt32>()
 
         precondition(bitmap.count >= planeSize, "CharacterSet bitmapRepresentation is malformed")
 
@@ -188,13 +187,13 @@ extension CharacterSet {
         return ScalarRangeSet(rangeSet, bottomCodepoint: bottomCodepoint)
     }
 
-    // MARK: - Bitmap parsing into RangeSet<UInt32>
+    // MARK: - Bitmap parsing into ExhaustRangeSet<UInt32>
 
     private func extractRanges(
         from bitmap: Data,
         byteStart: Int,
         planeBase: UInt32,
-        into rangeSet: inout RangeSet<UInt32>
+        into rangeSet: inout ExhaustRangeSet<UInt32>
     ) {
         var rangeStart: UInt32?
         var rangeEnd: UInt32 = 0

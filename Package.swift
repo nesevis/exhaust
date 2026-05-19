@@ -14,9 +14,7 @@ let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
     : .target(
         name: "ExhaustCore",
-        dependencies: [
-            .product(name: "SE0270_RangeSet", package: "swift-se0270-range-set"),
-        ],
+        dependencies: [],
         swiftSettings: [
             .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
         ],
@@ -46,7 +44,6 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
-        .package(url: "https://github.com/swiftlang/swift-se0270-range-set", from: "1.0.0"),
     ] + swiftLintDependency,
     targets: [
         coreTarget,
