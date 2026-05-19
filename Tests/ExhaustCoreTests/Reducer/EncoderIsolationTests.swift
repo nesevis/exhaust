@@ -151,6 +151,73 @@ struct EncoderIsolationTests {
             #expect(removedCounts[index] <= removedCounts[index - 1], "Batch size should not increase on rejection")
         }
     }
+    // MARK: - GraphBinarySearchEncoder
+
+    @Test("Binary search encoder produces probes for negative signed values")
+    func binarySearchEncoderNegativeSigned() {
+        // Int16(-5) has bit pattern 0x7FFB, below zero's 0x8000 in XOR sign-magnitude.
+        // Before the fix, `guard currentBitPattern > targetBitPattern` rejected this
+        // and the encoder produced zero probes.
+        let tree = ChoiceTree.group([
+            .choice(
+                ChoiceValue(Int16(-5), tag: .int16),
+                .init(validRange: Int16(-10).bitPattern64 ... Int16(10).bitPattern64, isRangeExplicit: true)
+            ),
+        ])
+        let graph = ChoiceGraph.build(from: tree)
+        guard let scope = minimizationScope(tree: tree, graph: graph) else {
+            Issue.record("No minimization scope found")
+            return
+        }
+
+        var encoder = GraphBinarySearchEncoder()
+        encoder.start(scope: scope)
+
+        var candidateBuffer = ChoiceSequence.flatten(tree)
+        var probeCount = 0
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
+            probeCount += 1
+        }
+
+        #expect(probeCount > 0, "Encoder must produce probes for negative signed values (got 0)")
+    }
+
+    @Test("Binary search encoder converges toward zero for negative signed values")
+    func binarySearchEncoderNegativeSignedConvergence() {
+        let tree = ChoiceTree.group([
+            .choice(
+                ChoiceValue(Int16(-8), tag: .int16),
+                .init(validRange: Int16(-10).bitPattern64 ... Int16(10).bitPattern64, isRangeExplicit: true)
+            ),
+        ])
+        let graph = ChoiceGraph.build(from: tree)
+        guard let scope = minimizationScope(tree: tree, graph: graph) else {
+            Issue.record("No minimization scope found")
+            return
+        }
+
+        var encoder = GraphBinarySearchEncoder()
+        encoder.start(scope: scope)
+
+        var candidateBuffer = ChoiceSequence.flatten(tree)
+        var probeBitPatterns: [UInt64] = []
+        while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
+            let values = candidateBuffer.compactMap { $0.value?.choice.bitPattern64 }
+            if let first = values.first {
+                probeBitPatterns.append(first)
+            }
+        }
+
+        let zeroBitPattern = Int16(0).bitPattern64
+        let currentBitPattern = Int16(-8).bitPattern64
+        #expect(probeBitPatterns.isEmpty == false)
+        // All probes should be between current and zero in bit-pattern space.
+        // Current (negative) is below zero, so probes should be above current.
+        for probe in probeBitPatterns {
+            #expect(probe >= currentBitPattern, "Probe \(probe) below current \(currentBitPattern)")
+            #expect(probe <= zeroBitPattern, "Probe \(probe) above zero \(zeroBitPattern)")
+        }
+    }
 }
 
 // MARK: - Helpers

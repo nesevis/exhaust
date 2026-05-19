@@ -110,6 +110,27 @@ struct BoundaryDomainAnalysisTests {
         #expect(profile.parameters[1].domainSize == 2)
     }
 
+    @Test("Array with minimum length > 2 produces non-empty domain")
+    func arrayMinLengthAboveTwo() {
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: UInt64(5) ... 10, scaling: .constant)
+        let profile = analyzeBoundary(gen)
+        #expect(profile != nil, "Array with min length 5 should be analyzable")
+        if let profile {
+            #expect(profile.parameters.count == 1)
+            if case let .compositeSequence(_, _, lengthSlots) = profile.parameters[0].kind {
+                #expect(profile.parameters[0].domainSize > 0, "Composite domain size must not be zero")
+                #expect(lengthSlots.isEmpty == false, "Length slots must not be empty")
+                #expect(lengthSlots.contains { $0.length == 5 }, "Lower bound length must be present")
+                let lengths = lengthSlots.map(\.length)
+                for length in lengths {
+                    #expect(length >= 5 && length <= 10, "Length \(length) outside range 5...10")
+                }
+            } else {
+                Issue.record("Expected compositeSequence parameter")
+            }
+        }
+    }
+
     @Test("ASCII string generator is analyzable")
     func asciiStringIsAnalyzable() {
         let gen = asciiStringGen(length: 1 ... 5)

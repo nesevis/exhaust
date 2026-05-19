@@ -59,7 +59,8 @@ public final class Bundle<Element>: @unchecked Sendable {
     public func draw(at index: Int) -> Element? {
         lock.withLocking {
             guard _storage.isEmpty == false else { return nil }
-            return _storage[index % _storage.count]
+            let count = _storage.count
+            return _storage[((index % count) + count) % count]
         }
     }
 
@@ -72,7 +73,8 @@ public final class Bundle<Element>: @unchecked Sendable {
     public func consume(at index: Int) -> Element? {
         lock.withLocking {
             guard _storage.isEmpty == false else { return nil }
-            let wrappedIndex = index % _storage.count
+            let count = _storage.count
+            let wrappedIndex = ((index % count) + count) % count
             return _storage.remove(at: wrappedIndex)
         }
     }

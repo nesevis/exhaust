@@ -51,14 +51,18 @@ struct GraphBinarySearchEncoder: GraphEncoder {
 
         let currentBitPattern = metadata.value.bitPattern64
         let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
-        guard currentBitPattern > targetBitPattern else { return }
+        guard currentBitPattern != targetBitPattern else { return }
 
         leafNodeID = entry.nodeID
         sequenceIndex = range.lowerBound
         typeTag = metadata.typeTag
         validRange = metadata.validRange
         isRangeExplicit = metadata.isRangeExplicit
-        stepper = BinarySearchStepper(lo: targetBitPattern, hi: currentBitPattern)
+        if currentBitPattern > targetBitPattern {
+            stepper = BinarySearchStepper(lo: targetBitPattern, hi: currentBitPattern, direction: .findSmallest)
+        } else {
+            stepper = BinarySearchStepper(lo: currentBitPattern, hi: targetBitPattern, direction: .findLargest)
+        }
     }
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {

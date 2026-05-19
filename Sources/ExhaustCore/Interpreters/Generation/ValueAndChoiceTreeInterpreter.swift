@@ -597,14 +597,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             lengthTrees.metadata
         )
 
-        if let (result, _) = try runContinuation(
+        if let continued = try runContinuation(
             result: results,
             calleeChoiceTree: choiceTree,
             continuation: continuation,
             inputValue: inputValue,
             context: &context
         ) {
-            return (result, choiceTree)
+            return continued
         }
         return nil
     }

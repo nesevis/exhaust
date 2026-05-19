@@ -64,7 +64,7 @@ extension UInt16: BitPatternConvertible {
     }
 
     public init(bitPattern64: UInt64) {
-        self = UInt16(bitPattern64)
+        self = UInt16(truncatingIfNeeded: bitPattern64)
     }
 
     package static var bitPatternRange: ClosedRange<UInt64> {
@@ -86,7 +86,7 @@ extension UInt32: BitPatternConvertible {
     }
 
     public init(bitPattern64: UInt64) {
-        self = UInt32(bitPattern64)
+        self = UInt32(truncatingIfNeeded: bitPattern64)
     }
 
     package static var bitPatternRange: ClosedRange<UInt64> {

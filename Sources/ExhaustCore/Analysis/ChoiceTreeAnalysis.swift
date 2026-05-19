@@ -357,7 +357,8 @@ package enum ChoiceTreeAnalysis {
             return false
         }
 
-        let maxElementSlots = min(2, Int(lengthRange.upperBound), elements.count)
+        let clampedUpperBound = lengthRange.upperBound > UInt64(Int.max) ? Int.max : Int(lengthRange.upperBound)
+        let maxElementSlots = min(2, clampedUpperBound, elements.count)
         var elementSlotParams: [[BoundaryParameter]] = []
         for elementIndex in 0 ..< maxElementSlots {
             var slotParams: [BoundaryParameter] = []
@@ -371,7 +372,8 @@ package enum ChoiceTreeAnalysis {
             elementSlotParams.append(slotParams)
         }
 
-        let maxAnalyzedLength: UInt64 = expandSequencePairs && elementSlotParams.count >= 2 ? 2 : min(1, UInt64(maxElementSlots))
+        let baseMaxLength: UInt64 = expandSequencePairs && elementSlotParams.count >= 2 ? 2 : min(1, UInt64(maxElementSlots))
+        let maxAnalyzedLength = max(baseMaxLength, lengthRange.lowerBound)
         let lengthValues = Set([0, 1, 2, lengthRange.lowerBound])
             .filter { $0 <= maxAnalyzedLength && lengthRange.contains($0) }
             .sorted()

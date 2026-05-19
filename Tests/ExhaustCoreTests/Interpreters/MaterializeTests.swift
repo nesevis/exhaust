@@ -355,4 +355,61 @@ struct MaterializeTests {
         }
         #expect(materialized == [0, 0, 0, 0, 0])
     }
+
+    // MARK: - Sequence continuation tree completeness
+
+    @Test("Sequence with non-pure continuation preserves continuation tree (VACTI)")
+    func sequenceContinuationTreeVACTI() throws {
+        // Gen.shuffled chains a FreerMonad.bind after an arrayOf (.sequence),
+        // making the sequence's continuation non-pure. The continuation produces
+        // a second .sequence (sort keys) whose tree nodes must be preserved.
+        let gen = Gen.shuffled(Gen.arrayOf(
+            Gen.choose(in: UInt64(0) ... 100),
+            exactly: 3
+        ))
+        var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 20)
+        var roundTripFailures = 0
+        var total = 0
+        while let (value, tree) = try iter.next() {
+            total += 1
+            let sequence = ChoiceSequence.flatten(tree)
+            switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
+            case let .success(materialized, _, _):
+                if materialized != value {
+                    roundTripFailures += 1
+                }
+            case .rejected, .failed:
+                roundTripFailures += 1
+            }
+        }
+        #expect(total > 0)
+        #expect(roundTripFailures == 0, "VACTI tree missing continuation nodes: \(roundTripFailures)/\(total) round-trips failed")
+    }
+
+    @Test("Sequence with non-pure continuation preserves continuation tree (direct bind)")
+    func sequenceContinuationTreeDirectBind() throws {
+        // Directly exercise FreerMonad.bind after a .sequence operation:
+        // generate a 2-element array, then bind to choose an index into it.
+        let arrayGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 50), exactly: 2)
+        let gen: Generator<UInt64> = arrayGen.bind { array in
+            Gen.choose(in: UInt64(0) ... UInt64(array.count))
+        }
+        var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 99, maxRuns: 20)
+        var roundTripFailures = 0
+        var total = 0
+        while let (value, tree) = try iter.next() {
+            total += 1
+            let sequence = ChoiceSequence.flatten(tree)
+            switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
+            case let .success(materialized, _, _):
+                if materialized != value {
+                    roundTripFailures += 1
+                }
+            case .rejected, .failed:
+                roundTripFailures += 1
+            }
+        }
+        #expect(total > 0)
+        #expect(roundTripFailures == 0, "VACTI tree missing continuation nodes: \(roundTripFailures)/\(total) round-trips failed")
+    }
 }

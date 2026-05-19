@@ -74,6 +74,32 @@ struct BundleTests {
         #expect(bundle.draw(at: 1) == 3)
     }
 
+    @Test("Draw handles negative indices via Euclidean modulo")
+    func drawNegativeIndex() {
+        let bundle = Bundle<String>()
+        bundle.add("a")
+        bundle.add("b")
+        bundle.add("c")
+
+        #expect(bundle.draw(at: -1) == "c")
+        #expect(bundle.draw(at: -2) == "b")
+        #expect(bundle.draw(at: -3) == "a")
+        #expect(bundle.draw(at: -4) == "c")
+    }
+
+    @Test("Consume handles negative indices via Euclidean modulo")
+    func consumeNegativeIndex() {
+        let bundle = Bundle<String>()
+        bundle.add("a")
+        bundle.add("b")
+        bundle.add("c")
+
+        #expect(bundle.consume(at: -1) == "c")
+        #expect(bundle.count == 2)
+        #expect(bundle.consume(at: -1) == "b")
+        #expect(bundle.count == 1)
+    }
+
     @Test("Remove(where:) with no matches leaves bundle unchanged")
     func removeWhereNoMatch() {
         let bundle = Bundle<Int>()

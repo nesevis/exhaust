@@ -419,12 +419,12 @@ extension Materializer {
             ? .just
             : .sequence(length: length, elements: elements, lengthMeta)
 
-        if let (result, _) = try runContinuation(
+        if let continued = try runContinuation(
             result: results, calleeChoiceTree: choiceTree,
             continuation: continuation, inputValue: inputValue,
             context: &context, continuationFallback: continuationFallback
         ) {
-            return (result, choiceTree)
+            return continued
         }
         return nil
     }
