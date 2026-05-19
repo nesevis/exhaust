@@ -60,6 +60,11 @@ package struct ChoiceGraph {
     /// Last-observed upstream bit pattern and downstream topology fingerprint per bind site. Keyed by `BindMetadata.fingerprint`. Survives rebuilds so the scheduler can passively classify binds by comparing topology across natural upstream variation without materialisation probes.
     var bindTopologyObservations: [UInt64: BindTopologyObservation] = [:]
 
+    /// Convergence records from prior encoder passes, keyed by graph node ID. Each entry records the bound at which a value search converged for a leaf, its signal, and the cycle number. Replaces the per-leaf ``ChooseBitsMetadata`` storage: convergence is reduction-session state, not structural metadata.
+    ///
+    /// Written by ``recordConvergence(byNodeID:)`` after encoder passes and by ``transferConvergence(from:)`` after full rebuilds. Read by ``MinimizationQuery`` (skip converged leaves), ``allValuesConverged()`` (termination check), and ``extractWarmStarts()`` (encoder warm-start input). Cleared per-leaf by ``clearConvergence(_:)`` when staleness probing detects an invalid floor, and in bulk for bound subtree regions by the scheduler after reshape.
+    package var convergenceStore: [Int: ConvergedOrigin] = [:]
+
     // MARK: - Non-Caching Computed Properties
 
     /// Type-compatibility edges between antichain members with matching types. Recomputed on each access.
@@ -67,42 +72,28 @@ package struct ChoiceGraph {
         computeTypeCompatibilityEdges()
     }
 
-    /// Writes convergence records from an encoder pass onto the corresponding leaf nodes by sequence position.
-    ///
-    /// Used by ``ChoiceGraphScheduler/transferConvergence(_:to:)`` after a full ``ChoiceGraph/build(from:)`` rebuild, where node IDs are not stable across the rebuild and positional matching is the only option. Within a single graph instance, encoders use the cheaper ``recordConvergence(byNodeID:)`` overload instead.
-    ///
-    /// - Complexity: O(N + R) where N is the node count and R is the record count. Builds a position-to-index lookup table once in O(N), then resolves each record in O(1).
-    /// - Parameter records: Map from flat sequence index to the convergence floor at that position.
-    mutating func recordConvergence(_ records: [Int: ConvergedOrigin]) {
-        guard records.isEmpty == false else { return }
-
-        var positionToIndex: [Int: Int] = [:]
-        positionToIndex.reserveCapacity(records.count)
-        for nodeID in liveNodeIDs {
-            guard case .chooseBits = nodes[nodeID].kind else { continue }
-            guard let position = nodes[nodeID].positionRange?.lowerBound else { continue }
-            positionToIndex[position] = nodeID
-        }
-
-        for (sequenceIndex, origin) in records {
-            guard let nodeIndex = positionToIndex[sequenceIndex] else { continue }
-            guard case var .chooseBits(metadata) = nodes[nodeIndex].kind else { continue }
-            metadata.convergedOrigin = origin
-            nodes[nodeIndex] = nodes[nodeIndex].with(kind: .chooseBits(metadata))
-        }
-    }
-
-    /// Writes convergence records from an encoder pass onto leaf nodes by node ID.
-    ///
-    /// Preferred over ``recordConvergence(_:)`` for harvesting from encoders within a single graph instance: node IDs are stable and the lookup is O(1) per record instead of O(N) per record (the positional version walks every node looking for a position match). Encoders' internal `convergenceStore` is keyed by node ID so that records survive in-pass position shifts triggered by ``GraphEncoder/refreshState(graph:sequence:)``.
+    /// Writes convergence records from an encoder pass into the store by node ID.
     ///
     /// - Parameter records: Map from graph node ID to the convergence floor at that node's leaf.
     mutating func recordConvergence(byNodeID records: [Int: ConvergedOrigin]) {
         for (nodeID, origin) in records {
             guard nodeID < nodes.count else { continue }
-            guard case var .chooseBits(metadata) = nodes[nodeID].kind else { continue }
-            metadata.convergedOrigin = origin
-            nodes[nodeID] = nodes[nodeID].with(kind: .chooseBits(metadata))
+            guard case .chooseBits = nodes[nodeID].kind else { continue }
+            convergenceStore[nodeID] = origin
+        }
+    }
+
+    /// Clears the convergence record for a single leaf node.
+    mutating func clearConvergence(_ nodeID: Int) {
+        convergenceStore.removeValue(forKey: nodeID)
+    }
+
+    /// Clears convergence records for all leaf nodes whose position falls within the given range.
+    mutating func clearConvergence(inPositionRange range: ClosedRange<Int>) {
+        for nodeID in leafNodes {
+            guard let nodeRange = nodes[nodeID].positionRange else { continue }
+            guard range.contains(nodeRange.lowerBound) else { continue }
+            convergenceStore.removeValue(forKey: nodeID)
         }
     }
 }

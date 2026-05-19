@@ -49,8 +49,7 @@ extension ChoiceGraph {
             typeTag: metadata.typeTag,
             validRange: metadata.validRange,
             isRangeExplicit: metadata.isRangeExplicit,
-            value: change.newValue,
-            convergedOrigin: metadata.convergedOrigin
+            value: change.newValue
         )
         nodes[change.leafNodeID] = nodes[change.leafNodeID].with(kind: .chooseBits(updatedMetadata))
     }

@@ -396,14 +396,7 @@ extension ReductionMachine {
         graphIsStripped = latestTreeIsStripped
 
         if let boundRange = boundPositionRange {
-            for nodeID in graph.leafNodes {
-                guard let nodeRange = graph.nodes[nodeID].positionRange else { continue }
-                guard boundRange.contains(nodeRange.lowerBound) else { continue }
-                guard case var .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
-                guard metadata.convergedOrigin != nil else { continue }
-                metadata.convergedOrigin = nil
-                graph.nodes[nodeID] = graph.nodes[nodeID].with(kind: .chooseBits(metadata))
-            }
+            graph.clearConvergence(inPositionRange: boundRange)
         }
         let graphEnd = monotonicNanoseconds()
 

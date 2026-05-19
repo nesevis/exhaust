@@ -17,31 +17,25 @@ extension ChoiceGraphScheduler {
             let currentBitPattern = metadata.value.bitPattern64
             let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
             if currentBitPattern == targetBitPattern { continue }
-            if metadata.convergedOrigin != nil { continue }
+            if graph.convergenceStore[nodeID] != nil { continue }
             return false
         }
         return true
     }
 
-    /// Extracts warm-start convergence records from all leaf nodes, keyed by graph nodeID.
+    /// Extracts warm-start convergence records from the graph's convergence store, keyed by graph nodeID.
     ///
-    /// NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survives any in-pass refresh that shifts the leaf's sequence position. The previous positional keying broke as soon as a refresh re-derived `leaf.sequenceIndex`.
+    /// NodeID keying lets the encoder look up records via `state.warmStartRecords[leaf.nodeID]` and survives any in-pass refresh that shifts the leaf's sequence position.
     static func extractWarmStarts(from graph: ChoiceGraph) -> [Int: ConvergedOrigin] {
-        var records: [Int: ConvergedOrigin] = [:]
-        for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
-            guard let origin = metadata.convergedOrigin else { continue }
-            records[nodeID] = origin
-        }
-        return records
+        graph.convergenceStore
     }
 
     /// Extracts all convergence records keyed by ``ChoicePath`` for cross-rebuild transfer. Leaves with empty paths (inactive branches) are skipped — their convergence records do not survive structural rebuilds.
     static func extractAllConvergence(from graph: ChoiceGraph) -> [ChoicePath: (origin: ConvergedOrigin, typeTag: TypeTag)] {
         var records: [ChoicePath: (origin: ConvergedOrigin, typeTag: TypeTag)] = [:]
-        for nodeID in graph.leafNodes {
+        for (nodeID, origin) in graph.convergenceStore {
+            guard nodeID < graph.nodes.count else { continue }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
-            guard let origin = metadata.convergedOrigin else { continue }
             let path = graph.nodes[nodeID].choicePath
             guard path.isEmpty == false else { continue }
             records[path] = (origin: origin, typeTag: metadata.typeTag)
@@ -56,14 +50,14 @@ extension ChoiceGraphScheduler {
     ) {
         for nodeID in graph.leafNodes {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
-            guard let range = graph.nodes[nodeID].positionRange else { continue }
+            guard graph.nodes[nodeID].positionRange != nil else { continue }
 
             let path = graph.nodes[nodeID].choicePath
             guard path.isEmpty == false else { continue }
             guard let oldRecord = records[path] else { continue }
             guard oldRecord.typeTag == metadata.typeTag else { continue }
 
-            graph.recordConvergence([range.lowerBound: oldRecord.origin])
+            graph.convergenceStore[nodeID] = oldRecord.origin
         }
     }
 }

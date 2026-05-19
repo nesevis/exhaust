@@ -7,7 +7,7 @@
 
 /// Stores the convergence bound and observation from a prior encoder pass.
 ///
-/// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored per graph node in ``ChoiceGraphNode/convergedOrigin`` and harvested by the scheduler after each probe loop.
+/// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored in ``ChoiceGraph/convergenceStore`` keyed by node ID and harvested by the scheduler after each probe loop.
 package struct ConvergedOrigin: Sendable {
     /// The bit-pattern value at which the search converged. Warm-start data.
     package let bound: UInt64

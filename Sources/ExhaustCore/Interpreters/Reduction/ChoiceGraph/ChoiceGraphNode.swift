@@ -120,9 +120,6 @@ package struct ChooseBitsMetadata {
 
     /// Current value from the ``ChoiceSequence``.
     package let value: ChoiceValue
-
-    /// Cached convergence floor from a prior value search pass, or nil if this leaf has not been searched. Invalidated on structural changes.
-    package var convergedOrigin: ConvergedOrigin?
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.
