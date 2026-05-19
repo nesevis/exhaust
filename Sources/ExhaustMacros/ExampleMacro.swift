@@ -31,14 +31,22 @@ public struct ExampleMacro: ExpressionMacro {
             __ExhaustRuntime.__exampleArray(
                 \(raw: generatorExpr),
                 count: \(raw: countExpr),
-                seed: \(raw: seedExpr)
+                seed: \(raw: seedExpr),
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
             )
             """
         } else {
             return """
             __ExhaustRuntime.__example(
                 \(raw: generatorExpr),
-                seed: \(raw: seedExpr)
+                seed: \(raw: seedExpr),
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
             )
             """
         }
