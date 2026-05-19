@@ -10,7 +10,7 @@
 /// The deletion antichain identifies element nodes that are pairwise independent (no containment or dependency path). Grouping these by parent sequence yields a set of independent sequences. The first probe attempts to remove all deletable elements from every independent sequence at once. On rejection, the target list is bisected and each half is tried independently.
 ///
 /// Runs before the emptying builder — a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
-struct BatchedCrossSequenceRemovalSource: CandidateSource {
+struct BatchedCrossSequenceRemovalSource {
     /// Each entry represents one independent sequence with its deletable elements and yield.
     private let sequences: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)]
     /// Queue of index ranges to try. Bisection appends two halves on rejection.
@@ -188,7 +188,7 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
 /// Emits per-parent removal scopes at geometrically decreasing batch sizes for a single sequence.
 ///
 /// Starts at the maximum batch size (all deletable elements) and halves on rejection. Alternates head/tail anchors at each batch size. Each emitted scope fully specifies which positions to remove — the encoder applies it in one probe.
-struct BatchRemovalSource: CandidateSource {
+struct BatchRemovalSource {
     private let sequenceNodeID: Int
     private let elements: [(nodeID: Int, positionRange: ClosedRange<Int>)]
     private let maxBatch: Int

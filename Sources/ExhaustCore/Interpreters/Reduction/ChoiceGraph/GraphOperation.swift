@@ -62,7 +62,7 @@ enum GraphOperation {
         return 0
     }
 
-    /// Invokes `body` for each node ID whose position range is affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes without allocating an intermediate array.
+    /// Invokes `body` for each node ID whose position range is affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes inline.
     ///
     /// Returns `false` for search-based operations (minimize, exchange) and covering-aligned removal where the affected set is nondeterministic or not applicable.
     func forEachAffectedNodeID(_ body: (Int) -> Void) -> Bool {

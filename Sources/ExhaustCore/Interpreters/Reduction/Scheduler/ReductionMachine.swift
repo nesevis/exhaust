@@ -149,7 +149,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Per-Cycle State
 
-    var sources: [any CandidateSource] = []
+    var sources: [AnyCandidateSource] = []
     var scopeRejectionCache: CandidateRejectionCache = .init()
     var anyAccepted: Bool = false
     var hadReplacementShortlexRejection: Bool = false

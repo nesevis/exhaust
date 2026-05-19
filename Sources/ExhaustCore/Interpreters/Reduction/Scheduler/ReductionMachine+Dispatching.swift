@@ -276,7 +276,7 @@ extension ReductionMachine {
 
         if diff.isStructurallyIdentical {
             let structuralSources = sources.filter { source in
-                guard let sorted = source as? SortedCandidateSource,
+                guard case let .sorted(sorted) = source,
                       let first = sorted.peekTransformation
                 else {
                     return true
