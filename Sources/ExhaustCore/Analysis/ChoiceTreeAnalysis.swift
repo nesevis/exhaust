@@ -371,7 +371,8 @@ package enum ChoiceTreeAnalysis {
             elementSlotParams.append(slotParams)
         }
 
-        let maxAnalyzedLength: UInt64 = expandSequencePairs && elementSlotParams.count >= 2 ? 2 : min(1, UInt64(maxElementSlots))
+        let baseMaxLength: UInt64 = expandSequencePairs && elementSlotParams.count >= 2 ? 2 : min(1, UInt64(maxElementSlots))
+        let maxAnalyzedLength = max(baseMaxLength, lengthRange.lowerBound)
         let lengthValues = Set([0, 1, 2, lengthRange.lowerBound])
             .filter { $0 <= maxAnalyzedLength && lengthRange.contains($0) }
             .sorted()
