@@ -41,6 +41,8 @@ struct GraphSwapEncoder: GraphEncoder {
         var step: Int
         /// When non-nil, the encoder is bisecting between ``acceptedSlotIndex`` and ``bisectHi`` (rejected).
         var bisectHi: Int?
+        /// True until the first ``nextExtensionProbe`` feedback is consumed. The first call carries feedback for the initial swap, not an extension probe, so the state-advancement must be skipped.
+        var awaitingInitialFeedback = true
     }
 
     // MARK: - GraphEncoder

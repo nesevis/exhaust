@@ -97,7 +97,15 @@ extension GraphSwapEncoder {
     mutating func nextExtensionProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard var state = extensionState else { return nil }
 
-        if lastAccepted == false {
+        if state.awaitingInitialFeedback {
+            state.awaitingInitialFeedback = false
+            if lastAccepted == false {
+                extensionState = nil
+                return nil
+            }
+            // Initial swap accepted — state is already at the correct position.
+            // Skip the advancement block and fall through to the doubling phase.
+        } else if lastAccepted == false {
             // Previous extension probe rejected.
             if state.bisectHi != nil {
                 let result = bisectExtension(into: &candidate, state: &state)
@@ -105,7 +113,6 @@ extension GraphSwapEncoder {
                 return result
             }
             if state.step <= 1 {
-                // First extension rejected at step 1 — no room.
                 extensionState = nil
                 return nil
             }
@@ -115,20 +122,20 @@ extension GraphSwapEncoder {
             let result = bisectExtension(into: &candidate, state: &state)
             extensionState = result == nil ? nil : state
             return result
-        }
+        } else {
+            // Extension probe accepted. Update state and push further.
+            let targetSlotIndex = state.bisectHi != nil
+                ? (state.acceptedSlotIndex + (state.bisectHi! - state.acceptedSlotIndex) / 2)
+                : min(state.contentSlotIndex + state.step, state.slots.count - 1)
 
-        // Previous extension probe accepted. Update state and push further.
-        let targetSlotIndex = state.bisectHi != nil
-            ? (state.acceptedSlotIndex + (state.bisectHi! - state.acceptedSlotIndex) / 2)
-            : min(state.contentSlotIndex + state.step, state.slots.count - 1)
+            state.acceptedSlotIndex = targetSlotIndex
+            state.contentSlotIndex = targetSlotIndex
 
-        state.acceptedSlotIndex = targetSlotIndex
-        state.contentSlotIndex = targetSlotIndex
-
-        if state.bisectHi != nil {
-            let result = bisectExtension(into: &candidate, state: &state)
-            extensionState = result == nil ? nil : state
-            return result
+            if state.bisectHi != nil {
+                let result = bisectExtension(into: &candidate, state: &state)
+                extensionState = result == nil ? nil : state
+                return result
+            }
         }
 
         // Doubling phase: double the step and try the next target.
