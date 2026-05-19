@@ -46,8 +46,8 @@ extension CandidateSourceBuilder {
     static func buildPermutationCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var entries: [(parentNodeID: Int, group: [Int], position: Int)] = []
         for scope in PermutationQuery.build(graph: graph) {
-            guard case let .siblingPermutation(parentNodeID, swappableGroups) = scope else { continue }
-            for group in swappableGroups {
+            let parentNodeID = scope.parentNodeID
+            for group in scope.swappableGroups {
                 guard group.count >= 2 else { continue }
                 let position = graph.nodes[group[0]].positionRange?.lowerBound ?? 0
                 entries.append((parentNodeID: parentNodeID, group: group, position: position))
@@ -59,7 +59,7 @@ extension CandidateSourceBuilder {
         return entries.map { entry in
             let estimatedCost = entry.group.count <= 2 ? 1 : (1 + Int(log2(Double(entry.group.count))))
             return GraphTransformation(
-                operation: .permute(.siblingPermutation(
+                operation: .permute(PermutationScope(
                     parentNodeID: entry.parentNodeID,
                     swappableGroups: [entry.group]
                 )),

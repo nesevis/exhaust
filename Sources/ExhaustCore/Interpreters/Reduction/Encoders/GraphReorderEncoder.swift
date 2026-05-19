@@ -7,7 +7,7 @@
 ///
 /// Shortlex reduction produces counterexamples like `[0, -1, 1]` because zigzag encoding maps `-1` to shortlex key `1` and `1` to key `2`. This encoder reorders to `[-1, 0, 1]` — the ascending numeric order a user expects — and validates that the property still fails.
 ///
-/// Runs as a final pass after the main graph reduction loop. Receives a pre-filtered ``NumericReorderScope`` from ``ReorderingQuery`` and emits one probe per eligible group, deepest-first. On acceptance, ``refreshState(graph:sequence:)`` updates the internal sequence so subsequent groups operate on the latest accepted state.
+/// Runs as a final pass after the main graph reduction loop. Receives a pre-filtered ``ReorderingScope`` from ``ReorderingQuery`` and emits one probe per eligible group, deepest-first. On acceptance, ``refreshState(graph:sequence:)`` updates the internal sequence so subsequent groups operate on the latest accepted state.
 struct GraphReorderEncoder: GraphEncoder {
     let name: EncoderName = .numericReorder
 
@@ -16,7 +16,7 @@ struct GraphReorderEncoder: GraphEncoder {
     private var currentSequence: ChoiceSequence = []
 
     mutating func start(scope: EncoderInput) {
-        guard case let .reorder(.numericReorder(reorderScope)) = scope.transformation.operation else {
+        guard case let .reorder(reorderScope) = scope.transformation.operation else {
             groups = []
             groupIndex = 0
             return

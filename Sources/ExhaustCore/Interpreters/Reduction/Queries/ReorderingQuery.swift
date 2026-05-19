@@ -68,7 +68,7 @@ enum ReorderingQuery {
             return lhs.ranges[0].lowerBound > rhs.ranges[0].lowerBound
         }
 
-        return .numericReorder(NumericReorderScope(groups: sorted))
+        return ReorderingScope(groups: sorted)
     }
 
     // MARK: - Private Helpers

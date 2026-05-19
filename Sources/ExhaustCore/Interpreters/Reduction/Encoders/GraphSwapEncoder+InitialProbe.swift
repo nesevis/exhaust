@@ -15,7 +15,8 @@ extension GraphSwapEncoder {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ProjectedMutation? {
-        guard case let .siblingPermutation(parentNodeID, swappableGroups) = scope else { return nil }
+        let parentNodeID = scope.parentNodeID
+        let swappableGroups = scope.swappableGroups
         guard let group = swappableGroups.first,
               group.count >= 2
         else {

@@ -210,9 +210,12 @@ struct TandemGroup {
 /// Defines the scope of a permutation operation.
 ///
 /// Permutation reorders children at a node without modifying structure or values. It is an exact reduction with zero structural and value yield, accepted purely on shortlex improvement.
-enum PermutationScope {
-    /// Reorder same-shaped siblings within a zip or sequence node.
-    case siblingPermutation(parentNodeID: Int, swappableGroups: [[Int]])
+struct PermutationScope {
+    /// The parent node whose children are reordered.
+    let parentNodeID: Int
+
+    /// Groups of same-shaped sibling node IDs eligible for pairwise swapping.
+    let swappableGroups: [[Int]]
 }
 
 // MARK: - Migration Scopes
@@ -247,18 +250,11 @@ struct MigrationScope {
 /// Defines the scope of a numeric reordering operation.
 ///
 /// Reordering sorts type-homogeneous sequence element groups into ascending numeric order as a final canonicalization pass after all other reduction is complete.
-enum ReorderingScope {
-    /// Reorder sequence element groups into natural numeric order.
-    case numericReorder(NumericReorderScope)
-}
-
-/// Scope for numeric reordering of type-homogeneous sequence element groups.
-///
-/// Groups are derived from graph ``SequenceMetadata/childPositionRanges`` and pre-filtered for compatibility. Pre-sorted deepest-first, rightmost-first so inner groups settle before outer groups compare them.
-struct NumericReorderScope {
+struct ReorderingScope {
     /// Pre-filtered reorderable groups, sorted deepest-first then rightmost-first.
     let groups: [ReorderableGroup]
 }
+
 
 /// A group of type-homogeneous sibling elements within a sequence node eligible for numeric reordering.
 struct ReorderableGroup {
