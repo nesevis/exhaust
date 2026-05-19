@@ -1,6 +1,7 @@
 // Converts structured trace events from the cooperative drain loop into presentable TraceSteps. Two post-processing passes: collapse no-op suspend/resume pairs, and merge adjacent started+completed pairs.
 
 /// A raw event emitted by the cooperative drain loop during command execution. These are intermediate records that ``buildTrace(_:)`` post-processes into presentable ``TraceStep`` values — collapsing no-op suspend/resume pairs and merging adjacent started+completed events for the same command.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct TraceEvent: Sendable {
     enum Kind: Sendable {
         case started
@@ -18,6 +19,7 @@ struct TraceEvent: Sendable {
 /// Converts structured trace events into presentable TraceSteps with phase annotations.
 ///
 /// Performs two post-processing passes: (1) removes suspended/resumed pairs where no interleaving actually occurred between them, and (2) collapses adjacent started+completed pairs into a single entry.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
     var steps: [(step: TraceStep, lane: String)] = []
     var openCommand: [String: String] = [:]

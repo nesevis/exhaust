@@ -4,6 +4,7 @@ import ExhaustCore
 // MARK: - Sequential Oracle
 
 /// Captures the SUT and model state after a sequential (race-free) replay of the failing command sequence. Provides the "expected" baseline in failure reports so the user can see what the system should have produced without the interleaving.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct SequentialOracleResult<Spec: AsyncContractSpec> {
     var systemUnderTest: Spec.SystemUnderTest
     var modelDescription: String
@@ -13,6 +14,7 @@ struct SequentialOracleResult<Spec: AsyncContractSpec> {
 /// Runs the command sequence sequentially on a fresh spec and returns the expected state if all invariants pass.
 ///
 /// Provides the "expected" state in the failure report — what the system should have produced without the race. If the sequential replay also fails, returns nil (the bug exists even without concurrency).
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func sequentialOracle<Spec: AsyncContractSpec>(
     commands: [Spec.Command],
     specInit: () -> Spec

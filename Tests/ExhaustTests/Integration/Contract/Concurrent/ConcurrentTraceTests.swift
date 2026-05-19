@@ -3,6 +3,7 @@ import Testing
 
 @Suite("Concurrent trace parsing")
 struct ConcurrentTraceTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Collapses no-op suspend/resume pairs with no interleaving between them")
     func collapsesNoOpSuspensions() {
         let events: [TraceEvent] = [
@@ -16,6 +17,7 @@ struct ConcurrentTraceTests {
         #expect(steps[0].command.hasSuffix("(completed)"))
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Preserves meaningful suspensions when another lane ran between suspend and resume")
     func preservesMeaningfulSuspensions() {
         let events: [TraceEvent] = [
@@ -33,6 +35,7 @@ struct ConcurrentTraceTests {
         #expect(hasResumed)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Collapses adjacent started+completed into single entry")
     func collapsesStartedCompleted() {
         let events: [TraceEvent] = [
@@ -47,6 +50,7 @@ struct ConcurrentTraceTests {
         #expect(steps[1].command == "1B withdraw (completed)")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Handles prefix commands correctly")
     func prefixCommands() {
         let events: [TraceEvent] = [
@@ -61,6 +65,7 @@ struct ConcurrentTraceTests {
         #expect(steps[1].command == "1A action (completed)")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Failure step carries the invariant name")
     func failureCarriesInvariantName() {
         let events: [TraceEvent] = [
@@ -78,6 +83,7 @@ struct ConcurrentTraceTests {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Command name containing colons does not break parsing")
     func commandWithColons() {
         let events: [TraceEvent] = [

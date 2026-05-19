@@ -5,6 +5,7 @@ import Testing
 
 @Suite("Non-atomic counter concurrent tests")
 struct NonAtomicCounterConcurrentTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Detects lost-update bug in non-atomic counter")
     func detectsLostUpdate() async throws {
         let result = try #require(
@@ -21,6 +22,7 @@ struct NonAtomicCounterConcurrentTests {
         #expect(hasFailure, "Should detect invariant failure from interleaved read-modify-write")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Reduced counterexample is smaller than original")
     func reductionShrinks() async throws {
         let result = try #require(
@@ -32,6 +34,7 @@ struct NonAtomicCounterConcurrentTests {
         #expect(result.commands.count <= 6, "Reducer should shrink the counterexample")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Coverage phase reports discoveryMethod .coverage with no seed")
     func coverageDiscoveryMethod() async throws {
         let result = try #require(
@@ -44,6 +47,7 @@ struct NonAtomicCounterConcurrentTests {
         #expect(result.seed == nil, "Coverage-discovered failures should not carry a seed")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Random sampling reports discoveryMethod .randomSampling with a seed")
     func randomSamplingDiscoveryMethod() async throws {
         let result = try #require(
@@ -56,6 +60,7 @@ struct NonAtomicCounterConcurrentTests {
         #expect(result.seed != nil, "Random-sampling failures should carry a replay seed")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test(".onReport delivers invocation counts")
     func onReportDelivers() async {
         var deliveredReport: ExhaustReport?
@@ -70,6 +75,7 @@ struct NonAtomicCounterConcurrentTests {
         }
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Deterministic replay produces same result")
     func deterministicReplay() async throws {
         let result1 = try #require(
@@ -87,6 +93,7 @@ struct NonAtomicCounterConcurrentTests {
         #expect(result1.commands.count == result2.commands.count, "Same seed should produce same counterexample size")
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Reduction drives schedule markers toward prefix")
     func reductionDrivesMarkersTowardPrefix() async throws {
         let result = try #require(

@@ -7,17 +7,8 @@ import PackageDescription
 
 let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
 
-#if os(macOS)
-    let swiftLintPlugins: [Target.PluginUsage] = [
-        .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins"),
-    ]
-    let swiftLintDependency: [Package.Dependency] = [
-        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1"),
-    ]
-#else
-    let swiftLintPlugins: [Target.PluginUsage] = []
-    let swiftLintDependency: [Package.Dependency] = []
-#endif
+let swiftLintPlugins: [Target.PluginUsage] = []
+let swiftLintDependency: [Package.Dependency] = []
 
 let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
@@ -33,12 +24,12 @@ let coreTarget: Target = usePrecompiled
 let package = Package(
     name: "Exhaust",
     platforms: [
-        .macOS(.v15),
-        .iOS(.v18),
-        .macCatalyst(.v18),
-        .tvOS(.v18),
-        .watchOS(.v11),
-        .visionOS(.v2),
+        .macOS(.v10_15),
+        .iOS(.v13),
+        .macCatalyst(.v13),
+        .tvOS(.v13),
+        .watchOS(.v6),
+        .visionOS(.v1),
     ],
     products: [
         .library(

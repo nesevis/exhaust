@@ -124,11 +124,13 @@ struct ExamineFirstPartyGeneratorsTests {
 
     // MARK: - 128-bit integers
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func int128() {
         let report = #examine(.int128(), samples: 30)
         #expect(report.passed)
     }
 
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test func uint128() {
         let report = #examine(.uint128(), samples: 30)
         #expect(report.passed)

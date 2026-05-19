@@ -11,6 +11,7 @@ import ExhaustCore
 // MARK: - Floating-point generators
 
 #if arch(arm64) || arch(arm64_32)
+    @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
     public extension ReflectiveGenerator {
         /// Generates arbitrary `Float16` values within the given range.
         ///

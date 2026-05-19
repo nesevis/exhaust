@@ -44,7 +44,7 @@ extension GraphStructuralEncoder {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        var rangeSet = RangeSet<Int>()
+        var rangeSet = ExhaustRangeSet<Int>()
         for target in scope.targets {
             for nodeID in target.elementNodeIDs {
                 guard let extent = elementExtent(for: nodeID, inSequence: target.sequenceNodeID, graph: graph) else {
@@ -86,7 +86,7 @@ extension GraphStructuralEncoder {
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
         guard let range = graph.nodes[nodeID].positionRange else { return nil }
-        var rangeSet = RangeSet<Int>()
+        var rangeSet = ExhaustRangeSet<Int>()
         rangeSet.insert(contentsOf: range.lowerBound ..< range.upperBound + 1)
         var candidate = sequence
         candidate.removeSubranges(rangeSet)

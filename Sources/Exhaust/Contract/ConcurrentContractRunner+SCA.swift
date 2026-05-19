@@ -2,6 +2,7 @@
 import ExhaustCore
 
 /// Packages the outcome of a failed SCA coverage probe for the concurrent runner, carrying the reduced input, original length, and reduction statistics so the caller can assemble the final ``ContractResult``.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct SCAFailureResult<Command> {
     var finalInput: [(ScheduleMarker, Command)]
     var originalCount: Int
@@ -16,6 +17,7 @@ struct SCAFailureResult<Command> {
 /// Builds a covering array over command-type orderings (the schedule marker is tagged `.laneControl` and excluded from the covering array parameters). Each row materializes a specific command ordering with random lane assignments, testing the property under deterministic interleaving.
 ///
 /// - Returns: A failure result if a counterexample is found during coverage, or nil if all rows pass.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func runConcurrentSCACoverage<Command>(
     seqGen: Generator<[(ScheduleMarker, Command)]>,
     commandGen: Generator<Command>,

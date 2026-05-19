@@ -42,8 +42,8 @@ extension GraphStructuralEncoder {
         }
         guard movedEntries.isEmpty == false else { return nil }
 
-        var removalRangeSet = RangeSet<Int>()
-        removalRangeSet.insert(contentsOf: sourceFullRange.lowerBound ..< sourceFullRange.upperBound + 1)
+        var removalExhaustRangeSet = ExhaustRangeSet<Int>()
+        removalExhaustRangeSet.insert(contentsOf: sourceFullRange.lowerBound ..< sourceFullRange.upperBound + 1)
 
         let insertionPoint = scope.receiverPositionRange.upperBound
         let removedBeforeInsertion = sourceFullRange.upperBound < insertionPoint
@@ -52,7 +52,7 @@ extension GraphStructuralEncoder {
         let adjustedInsertionPoint = insertionPoint - removedBeforeInsertion
 
         var candidate = sequence
-        candidate.removeSubranges(removalRangeSet)
+        candidate.removeSubranges(removalExhaustRangeSet)
         candidate.insert(contentsOf: movedEntries, at: adjustedInsertionPoint)
 
         guard candidate.shortLexPrecedes(sequence) else { return nil }

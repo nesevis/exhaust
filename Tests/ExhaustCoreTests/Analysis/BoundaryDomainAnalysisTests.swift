@@ -763,7 +763,7 @@ private func analyzeBoundary(_ gen: Generator<some Any>) -> BoundaryDomainProfil
 }
 
 private func asciiStringGen(length: ClosedRange<Int>) -> Generator<String> {
-    var rangeSet = RangeSet<UInt32>()
+    var rangeSet = ExhaustRangeSet<UInt32>()
     rangeSet.insert(contentsOf: 0x0020 ..< 0x007F)
     let asciiSRS = ScalarRangeSet(rangeSet)
     let charGen = Gen.contramap(

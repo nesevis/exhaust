@@ -21,6 +21,7 @@ import ExhaustCore
 /// During generation, the marker generator produces values in 0...N (where N is the concurrency level). The reducer's value-minimization pass drives markers toward 0 (prefix), naturally discovering which commands must remain concurrent to reproduce the failure. Commands whose markers reach prefix move to the sequential phase, proving they are not part of the minimal concurrent counterexample.
 ///
 /// Value 0 is the sequential prefix. Values 1 through N map to lanes "a" through the Nth letter.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, CustomStringConvertible {
     public let rawValue: UInt8
 
@@ -44,6 +45,7 @@ public struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, C
 }
 
 /// Outcome of draining a single tagged command sequence through the cooperative scheduler.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct ConcurrentExecutionResult {
     /// Whether all invariants held throughout the interleaved execution.
     var passed: Bool
@@ -62,6 +64,7 @@ struct ConcurrentExecutionResult {
 /// - Parameter concurrencyLevel: The number of concurrent lanes (1...8). When 1, all non-prefix commands run on a single lane with no interleaving (fast path).
 /// - Parameter recordTrace: When false, trace recording is skipped for performance (used during generation and reduction where only pass/fail matters). When true, the full interleaving trace is captured for the final counterexample report.
 /// - Parameter idleTimeoutMilliseconds: Maximum wall-clock time (in milliseconds) the drain loop waits with no pending jobs before declaring a timeout. Prevents infinite hangs when a continuation escapes to a foreign executor. Pass `Int.max` to disable.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func drainSchedule<Spec: AsyncContractSpec>(
     taggedCommands: [(ScheduleMarker, Spec.Command)],
     specInit: () -> Spec,

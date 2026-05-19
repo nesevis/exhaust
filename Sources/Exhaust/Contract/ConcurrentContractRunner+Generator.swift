@@ -1,6 +1,7 @@
 // Schedule marker generator construction for concurrent contract testing.
 import ExhaustCore
 
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 extension Gen {
     /// Produces a lane-control chooseBits tagged with ``TypeTag.laneControl``, excluding it from the covering array's parameter set at high concurrency levels.
     static func chooseLaneControl(in range: ClosedRange<UInt8>) -> Generator<UInt8> {
@@ -33,6 +34,7 @@ extension Gen {
 /// ```
 ///
 /// This gives each array element a pick-at-top structure that the choice-graph reducer handles naturally: structural deletion removes entire elements (shorter counterexample), and value minimization on the marker's chooseBits drives it toward 0/prefix (less concurrency).
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func zipScheduleMarker<Command>(
     onto commandGen: Generator<Command>,
     concurrencyLevel: Int

@@ -5,6 +5,7 @@ import Testing
 
 @Suite("Idle timeout concurrent tests")
 struct IdleTimeoutConcurrentTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Idle timeout fires for SUT that escapes the cooperative executor")
     func idleTimeoutFires() async throws {
         let result = try #require(
