@@ -18,6 +18,7 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
     /// The range most recently emitted as a probe, awaiting feedback.
     private var lastEmittedRange: (start: Int, end: Int)?
     private var exhausted: Bool
+    private var cachedPriority: DispatchPriority?
 
     init(graph: ChoiceGraph) {
         // Group antichain members by parent sequence.
@@ -74,34 +75,52 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
             lastEmittedRange = nil
             exhausted = true
         }
+        cachedPriority = nil
+        recomputePriority()
     }
 
-    var peekPriority: DispatchPriority? {
-        guard exhausted == false else { return nil }
+    var peekPriority: DispatchPriority? { cachedPriority }
+
+    private mutating func recomputePriority() {
+        guard exhausted == false else {
+            cachedPriority = nil
+            return
+        }
         // Active pending range — the normal case where the next ``next(lastAccepted:)`` call will pop ``pendingRanges.last`` and emit a probe for that range.
         if let range = pendingRanges.last {
-            let totalYield = sequences[range.start ..< range.end].reduce(0) { $0 + $1.yield }
-            return DispatchPriority(
+            var totalYield = 0
+            for index in range.start ..< range.end {
+                totalYield += sequences[index].yield
+            }
+            cachedPriority = DispatchPriority(
                 structuralBenefit: totalYield,
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: 1
             )
+            return
         }
         // Deferred bisection — the previous ``next(lastAccepted:)`` call emitted a probe whose rejection feedback has not yet been consumed. The next call will bisect ``lastEmittedRange`` into two halves and pop the higher-yield half (``[emitted.start, mid)``) first. Report that half's yield so the scheduler sees non-nil yield and dispatches ``next`` to actually perform the bisection. Without this branch, the scheduler drops the source from its merge the moment ``pendingRanges`` drains post-root, and the bisection code in ``next`` is never reached — making the halving tree functionally dead code in the current architecture.
         if let emitted = lastEmittedRange {
             let count = emitted.end - emitted.start
-            guard count >= 2 else { return nil }
+            guard count >= 2 else {
+                cachedPriority = nil
+                return
+            }
             let mid = emitted.start + count / 2
-            let firstHalfYield = sequences[emitted.start ..< mid].reduce(0) { $0 + $1.yield }
-            return DispatchPriority(
+            var firstHalfYield = 0
+            for index in emitted.start ..< mid {
+                firstHalfYield += sequences[index].yield
+            }
+            cachedPriority = DispatchPriority(
                 structuralBenefit: firstHalfYield,
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: 1
             )
+            return
         }
-        return nil
+        cachedPriority = nil
     }
 
     mutating func next(lastAccepted: Bool) -> GraphTransformation? {
@@ -126,21 +145,32 @@ struct BatchedCrossSequenceRemovalSource: CandidateSource {
 
         guard let range = pendingRanges.popLast() else {
             exhausted = true
+            cachedPriority = nil
             return nil
         }
         lastEmittedRange = range
 
-        let selectedSequences = sequences[range.start ..< range.end]
-        let targets = selectedSequences.map(\.target)
-        let totalYield = selectedSequences.reduce(0) { $0 + $1.yield }
-        let maxElementYield = selectedSequences.map(\.yield).max() ?? 0
-        let maxBatch = selectedSequences.reduce(0) { $0 + $1.deletableCount }
+        let slice = sequences[range.start ..< range.end]
+        let targets = slice.map(\.target)
+        var totalYield = 0
+        var maxElementYield = 0
+        var maxBatch = 0
+        for entry in slice {
+            totalYield += entry.yield
+            if entry.yield > maxElementYield {
+                maxElementYield = entry.yield
+            }
+            maxBatch += entry.deletableCount
+        }
 
         let scope = ElementRemovalScope(
             targets: targets,
             maxBatch: maxBatch,
             maxElementYield: maxElementYield
         )
+
+        recomputePriority()
+
         return GraphTransformation(
             operation: .remove(.elements(scope)),
             priority: DispatchPriority(
@@ -165,6 +195,7 @@ struct BatchRemovalSource: CandidateSource {
     private var currentBatch: Int
     private var triedTail: Bool
     private var exhausted: Bool
+    private var cachedPriority: DispatchPriority?
 
     init(sequenceNodeID: Int, graph: ChoiceGraph) {
         self.sequenceNodeID = sequenceNodeID
@@ -176,6 +207,7 @@ struct BatchRemovalSource: CandidateSource {
             currentBatch = 0
             triedTail = false
             exhausted = true
+            cachedPriority = nil
             return
         }
         let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
@@ -194,18 +226,11 @@ struct BatchRemovalSource: CandidateSource {
         currentBatch = startBatch
         triedTail = false
         exhausted = startBatch <= 0
+        cachedPriority = nil
+        recomputePriority()
     }
 
-    var peekPriority: DispatchPriority? {
-        guard exhausted == false, currentBatch > 0 else { return nil }
-        let batchYield = computeYield(batchSize: currentBatch, anchor: triedTail ? .head : .tail)
-        return DispatchPriority(
-            structuralBenefit: batchYield,
-            valueBenefit: 0,
-            reductionMagnitude: 0,
-            estimatedCost: 1
-        )
-    }
+    var peekPriority: DispatchPriority? { cachedPriority }
 
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard exhausted == false, currentBatch > 0 else { return nil }
@@ -219,16 +244,20 @@ struct BatchRemovalSource: CandidateSource {
         }
         guard offset >= 0, offset + currentBatch <= elements.count else {
             exhausted = true
+            cachedPriority = nil
             return nil
         }
 
-        let selectedElements = Array(elements[offset ..< offset + currentBatch])
-        let batchYield = selectedElements.reduce(0) { $0 + $1.positionRange.count }
+        let slice = elements[offset ..< offset + currentBatch]
+        var batchYield = 0
+        for element in slice {
+            batchYield += element.positionRange.count
+        }
 
         let scope = ElementRemovalScope(
             targets: [SequenceRemovalTarget(
                 sequenceNodeID: sequenceNodeID,
-                elementNodeIDs: selectedElements.map(\.nodeID)
+                elementNodeIDs: slice.map(\.nodeID)
             )],
             maxBatch: currentBatch,
             maxElementYield: batchYield
@@ -257,18 +286,36 @@ struct BatchRemovalSource: CandidateSource {
             }
         }
 
+        recomputePriority()
         return transformation
     }
 
     private enum RemovalAnchor { case head, tail }
 
-    private func computeYield(batchSize: Int, anchor: RemovalAnchor) -> Int {
+    private mutating func recomputePriority() {
+        guard exhausted == false, currentBatch > 0 else {
+            cachedPriority = nil
+            return
+        }
+        let anchor: RemovalAnchor = triedTail ? .head : .tail
         let offset = switch anchor {
-        case .tail: elements.count - batchSize
+        case .tail: elements.count - currentBatch
         case .head: elements.count - maxBatch
         }
-        guard offset >= 0, offset + batchSize <= elements.count else { return 0 }
-        return elements[offset ..< offset + batchSize].reduce(0) { $0 + $1.positionRange.count }
+        guard offset >= 0, offset + currentBatch <= elements.count else {
+            cachedPriority = nil
+            return
+        }
+        var batchYield = 0
+        for element in elements[offset ..< offset + currentBatch] {
+            batchYield += element.positionRange.count
+        }
+        cachedPriority = DispatchPriority(
+            structuralBenefit: batchYield,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 1
+        )
     }
 }
 

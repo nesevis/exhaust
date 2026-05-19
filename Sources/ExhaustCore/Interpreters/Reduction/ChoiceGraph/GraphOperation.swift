@@ -62,38 +62,52 @@ enum GraphOperation {
         return 0
     }
 
-    /// Collects node IDs whose position ranges are affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes for deterministic duplicate detection.
+    /// Invokes `body` for each node ID whose position range is affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes without allocating an intermediate array.
     ///
-    /// Returns nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
-    func affectedNodeIDs(in _: ChoiceGraph) -> [Int]? {
+    /// Returns `false` for search-based operations (minimize, exchange) and covering-aligned removal where the affected set is nondeterministic or not applicable.
+    func forEachAffectedNodeID(_ body: (Int) -> Void) -> Bool {
         switch self {
         case let .remove(scope):
             switch scope {
             case let .elements(elementScope):
-                elementScope.targets.flatMap(\.elementNodeIDs)
+                for target in elementScope.targets {
+                    for nodeID in target.elementNodeIDs {
+                        body(nodeID)
+                    }
+                }
             case let .subtree(nodeID, _):
-                [nodeID]
+                body(nodeID)
             case .coveringAligned:
-                nil
+                return false
             }
         case let .replace(scope):
             switch scope {
             case let .selfSimilar(targetNodeID, donorNodeID, _):
-                [targetNodeID, donorNodeID]
+                body(targetNodeID)
+                body(donorNodeID)
             case let .branchPivot(pickNodeID, _):
-                [pickNodeID]
+                body(pickNodeID)
             case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
-                [ancestorPickNodeID, descendantPickNodeID]
+                body(ancestorPickNodeID)
+                body(descendantPickNodeID)
             }
         case let .permute(scope):
-            scope.swappableGroups.flatMap(\.self)
+            for group in scope.swappableGroups {
+                for nodeID in group {
+                    body(nodeID)
+                }
+            }
         case let .migrate(scope):
-            scope.elementNodeIDs + [scope.receiverSequenceNodeID]
+            for nodeID in scope.elementNodeIDs {
+                body(nodeID)
+            }
+            body(scope.receiverSequenceNodeID)
         case .minimize, .exchange:
-            nil
+            return false
         case .reorder:
-            nil
+            return false
         }
+        return true
     }
 }
 

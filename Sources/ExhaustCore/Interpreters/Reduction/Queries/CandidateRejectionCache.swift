@@ -75,24 +75,19 @@ struct CandidateRejectionCache {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> UInt64? {
-        guard let nodeIDs = operation.affectedNodeIDs(in: graph) else {
-            return nil
-        }
-
         var hash = operationDiscriminator(operation)
         hash ^= operation.scopeSubDiscriminator
 
-        // Mix in Zobrist contributions at each targeted position.
-        for nodeID in nodeIDs {
+        guard operation.forEachAffectedNodeID({ nodeID in
             guard nodeID < graph.nodes.count,
                   let range = graph.nodes[nodeID].positionRange
-            else {
-                continue
-            }
+            else { return }
             for position in range {
                 guard position < sequence.count else { break }
                 hash ^= ZobristHash.contribution(at: position, sequence[position])
             }
+        }) else {
+            return nil
         }
 
         return hash
@@ -103,20 +98,17 @@ struct CandidateRejectionCache {
         operation: GraphOperation,
         graph: ChoiceGraph
     ) -> UInt64? {
-        guard let nodeIDs = operation.affectedNodeIDs(in: graph) else {
-            return nil
-        }
-
-        // Use a different discriminator salt to avoid collisions with the fine-grained hash.
         var hash: UInt64 = operationDiscriminator(operation) ^ 0xC0A8_5E00_DEAD_BEEF
         hash ^= operation.scopeSubDiscriminator
 
-        for nodeID in nodeIDs {
+        guard operation.forEachAffectedNodeID({ nodeID in
             var bits = UInt64(nodeID) &* 0x9E37_79B9_7F4A_7C15
             bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
             bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
             bits ^= bits >> 31
             hash ^= bits
+        }) else {
+            return nil
         }
 
         return hash

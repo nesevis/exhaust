@@ -30,8 +30,8 @@ protocol ReductionScope {
     /// Whether this scope's data depends on leaf values and must be rebuilt after value-only acceptances.
     var stability: ScopeStability { get }
 
-    /// Node IDs whose position ranges are affected by this scope's operation. Nil for search-based operations (minimize, exchange) where the outcome is nondeterministic.
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]?
+    /// Invokes `body` for each node ID whose position range is affected by this scope's operation. Returns `false` for search-based operations (minimize, exchange) where the outcome is nondeterministic.
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool
 }
 
 // MARK: - Conformances
@@ -59,8 +59,8 @@ extension RemovalScope: ReductionScope {
 
     var stability: ScopeStability { .structural }
 
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
-        operation.affectedNodeIDs(in: graph)
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool {
+        operation.forEachAffectedNodeID(body)
     }
 }
 
@@ -87,8 +87,8 @@ extension ReplacementScope: ReductionScope {
 
     var stability: ScopeStability { .structural }
 
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
-        operation.affectedNodeIDs(in: graph)
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool {
+        operation.forEachAffectedNodeID(body)
     }
 }
 
@@ -106,8 +106,8 @@ extension MinimizationScope: ReductionScope {
 
     var stability: ScopeStability { .valueDerived }
 
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
-        nil
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool {
+        false
     }
 }
 
@@ -125,8 +125,8 @@ extension ExchangeScope: ReductionScope {
 
     var stability: ScopeStability { .valueDerived }
 
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
-        nil
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool {
+        false
     }
 }
 
@@ -144,8 +144,8 @@ extension PermutationScope: ReductionScope {
 
     var stability: ScopeStability { .structural }
 
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
-        operation.affectedNodeIDs(in: graph)
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool {
+        operation.forEachAffectedNodeID(body)
     }
 }
 
@@ -163,8 +163,8 @@ extension MigrationScope: ReductionScope {
 
     var stability: ScopeStability { .structural }
 
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
-        operation.affectedNodeIDs(in: graph)
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool {
+        operation.forEachAffectedNodeID(body)
     }
 }
 
@@ -182,7 +182,7 @@ extension ReorderingScope: ReductionScope {
 
     var stability: ScopeStability { .structural }
 
-    func affectedNodeIDs(in graph: ChoiceGraph) -> [Int]? {
-        nil
+    func forEachAffectedNodeID(in graph: ChoiceGraph, _ body: (Int) -> Void) -> Bool {
+        false
     }
 }
