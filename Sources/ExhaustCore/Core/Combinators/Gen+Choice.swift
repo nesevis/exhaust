@@ -96,6 +96,10 @@ package extension Gen {
     static func choose<C: Collection>(
         from collection: C
     ) -> Generator<C.Element> where C.Element: Equatable, C.Index == Int {
+        precondition(
+            collection.isEmpty == false,
+            "Cannot choose from an empty collection"
+        )
         // Use Gen.contramap directly rather than .mapped because the backward closure throws and .mapped propagates that via rethrows (from FreerMonad.bind), which would force this function to be marked throws — even though the throw only happens at reflection time, never during construction.
         let count = collection.count
         return Gen.contramap(
@@ -120,6 +124,10 @@ package extension Gen {
     static func choose<C: Collection>(
         from collection: C
     ) -> Generator<C.Element> where C.Index == Int {
+        precondition(
+            collection.isEmpty == false,
+            "Cannot choose from an empty collection"
+        )
         let count = collection.count
         return Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
             // We're using round-robin indexing here so that the lookup does not fail when reducing
