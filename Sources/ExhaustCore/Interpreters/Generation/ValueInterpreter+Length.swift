@@ -46,6 +46,7 @@ extension ValueInterpreter {
                 ) else {
                     return nil
                 }
+                context.sizeOverride = nil
                 return try interpretLengthContinuation(
                     result: innerResult, continuation: continuation, context: &context
                 )

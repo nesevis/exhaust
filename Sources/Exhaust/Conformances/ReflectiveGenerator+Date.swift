@@ -13,6 +13,8 @@ public extension ReflectiveGenerator {
     /// The `timeZone` is used by boundary analysis to include DST transitions for that zone.
     /// Defaults to `TimeZone.current` when not specified.
     ///
+    /// Reflection rounds off-grid dates down to the nearest interval step. This means `reflecting:` with a date that does not fall exactly on a grid point will start reduction from the closest earlier grid point rather than rejecting the value.
+    ///
     /// ```swift
     /// let gen = #gen(.date(
     ///     between: startDate ... endDate,

@@ -3,6 +3,7 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -269,6 +270,33 @@ struct DateGeneratorTests {
             let upper = lower.addingTimeInterval(86400 * 365)
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
             #examine(gen, samples: 20, seed: 42)
+        }
+
+        @Test("Off-grid date reflection snaps to nearest earlier grid point")
+        func offGridDateSnapsDown() throws {
+            let lower = DateGeneratorTests.epoch
+            let upper = lower.addingTimeInterval(86400)
+            let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
+
+            let offGrid = lower.addingTimeInterval(10.5 * 3600)
+            let expectedSnap = lower.addingTimeInterval(10 * 3600)
+
+            let tree = try #require(try Interpreters.reflect(gen.gen, with: offGrid))
+            let replayed = try #require(try Interpreters.replay(gen.gen, using: tree))
+            #expect(replayed == expectedSnap)
+        }
+
+        @Test("On-grid date reflection round-trips correctly")
+        func onGridDateRoundTrip() throws {
+            let lower = DateGeneratorTests.epoch
+            let upper = lower.addingTimeInterval(86400)
+            let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
+
+            let onGrid = lower.addingTimeInterval(10 * 3600)
+
+            let tree = try #require(try Interpreters.reflect(gen.gen, with: onGrid))
+            let replayed = try #require(try Interpreters.replay(gen.gen, using: tree))
+            #expect(replayed == onGrid)
         }
     }
 }

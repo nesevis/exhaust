@@ -95,7 +95,12 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
     @usableFromInline
     package static func < (lhs: Self, rhs: Self) -> Bool {
         if lhs.tag.isFloatingPoint {
-            return lhs.decodedDoubleValue < rhs.decodedDoubleValue
+            let lhsDouble = lhs.decodedDoubleValue
+            let rhsDouble = rhs.decodedDoubleValue
+            if lhsDouble.isNaN || rhsDouble.isNaN {
+                return lhs.bitPattern64 < rhs.bitPattern64
+            }
+            return lhsDouble < rhsDouble
         } else if lhs.tag.isSigned {
             return lhs.decodedSignedValue < rhs.decodedSignedValue
         } else {

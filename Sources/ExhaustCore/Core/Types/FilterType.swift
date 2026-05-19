@@ -39,7 +39,7 @@ public enum FilterType: Equatable, Hashable {
 /// Source location captured at a ``Generator/filter(_:_:fileID:filePath:line:column:)`` call site.
 ///
 /// Stored alongside filter observations so that runtime warnings can point to the `.filter(...)` line rather than the `#exhaust` macro site.
-public struct FilterSourceLocation: Sendable {
+public struct FilterSourceLocation: @unchecked Sendable {
     /// The `#fileID` of the filter call site.
     public let fileID: StaticString
     /// The `#filePath` of the filter call site.
@@ -48,17 +48,21 @@ public struct FilterSourceLocation: Sendable {
     public let line: UInt
     /// The `#column` of the filter call site.
     public let column: UInt
+    /// Called when the filter exhausts its retry budget without producing a valid value.
+    public let onBudgetExhausted: (() -> Void)?
 
     public init(
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
-        column: UInt
+        column: UInt,
+        onBudgetExhausted: (() -> Void)? = nil
     ) {
         self.fileID = fileID
         self.filePath = filePath
         self.line = line
         self.column = column
+        self.onBudgetExhausted = onBudgetExhausted
     }
 }
 

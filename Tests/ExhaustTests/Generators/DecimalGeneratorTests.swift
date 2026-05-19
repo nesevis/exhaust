@@ -3,6 +3,7 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -125,6 +126,37 @@ struct DecimalGeneratorTests {
             )
 
             #expect(output == threshold)
+        }
+    }
+
+    // MARK: - Reflection (backward mapping)
+
+    @Suite("Reflection")
+    struct ReflectionTests {
+        @Test("Out-of-range decimal reflection clamps to nearest bound")
+        func outOfRangeReflectionClamps() throws {
+            let gen = #gen(.decimal(in: Decimal(10) ... Decimal(20), precision: 2))
+            let outOfRange = Decimal(25)
+
+            let tree = try #require(try Interpreters.reflect(gen.gen, with: outOfRange))
+            let replayed = try #require(try Interpreters.replay(gen.gen, using: tree) as Decimal?)
+            #expect(replayed == Decimal(20))
+        }
+
+        @Test("Off-precision decimal reflection snaps to nearest representable step")
+        func offPrecisionReflectionSnaps() throws {
+            let gen = #gen(.decimal(in: Decimal(0) ... Decimal(100), precision: 1))
+            let offPrecision = Decimal(string: "12.345")!
+
+            let tree = try #require(try Interpreters.reflect(gen.gen, with: offPrecision))
+            let replayed = try #require(try Interpreters.replay(gen.gen, using: tree) as Decimal?)
+            #expect(replayed == Decimal(string: "12.3")!)
+        }
+
+        @Test("In-range on-precision decimal reflection round-trips exactly")
+        func onPrecisionRoundTrip() {
+            let gen = #gen(.decimal(in: Decimal(10) ... Decimal(20), precision: 2))
+            #examine(gen, samples: 20, seed: 42)
         }
     }
 }

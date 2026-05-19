@@ -73,6 +73,7 @@ struct ExamineTests {
             #exhaust(gen, .budget(.custom(coverage: 0, sampling: 30))) { _ in true }
         } matching: { issue in
             issue.description.contains("Filter validity rate")
+                || issue.description.contains("retry budget")
         }
     }
 

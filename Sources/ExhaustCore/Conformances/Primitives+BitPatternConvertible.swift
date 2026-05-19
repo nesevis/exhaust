@@ -5,33 +5,6 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
-extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
-    package static var tag: TypeTag {
-        Wrapped.tag
-    }
-
-    package static var defaultScaling: SizeScaling<Self> {
-        .constant
-    }
-
-    package static var bitPatternRange: ClosedRange<UInt64> {
-        Wrapped.bitPatternRange
-    }
-
-    package init(bitPattern64: UInt64) {
-        self = .some(Wrapped(bitPattern64: bitPattern64))
-    }
-
-    package var bitPattern64: UInt64 {
-        switch self {
-        case .none:
-            0
-        case let .some(wrapped):
-            wrapped.bitPattern64
-        }
-    }
-}
-
 extension UInt8: BitPatternConvertible {
     package static var tag: TypeTag {
         .uint8
