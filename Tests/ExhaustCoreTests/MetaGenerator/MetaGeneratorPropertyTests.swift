@@ -387,7 +387,90 @@ struct MetaGeneratorPropertyTests {
         }
     }
 
-    // MARK: 13. Random Recipes with Just/Zip
+    // MARK: 13. Optional Generators
+
+    @Test("Optional generators produce both nil and non-nil values")
+    func optionalProducesBothBranches() throws {
+        let optionalRecipes: [GenRecipe] = [
+            .combinator(.optional(.leaf(.int(-10 ... 10)))),
+            .combinator(.optional(.leaf(.bool))),
+            .combinator(.optional(.leaf(.justInt(7)))),
+        ]
+
+        for recipe in optionalRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 50)
+            var sawNil = false
+            var sawSome = false
+            while let (value, _) = try valueIter.next() {
+                let mirror = Mirror(reflecting: value)
+                if mirror.displayStyle == .optional, mirror.children.first == nil {
+                    sawNil = true
+                } else {
+                    sawSome = true
+                }
+                if sawNil && sawSome { break }
+            }
+            #expect(sawNil, "Optional recipe \(recipe) never produced nil")
+            #expect(sawSome, "Optional recipe \(recipe) never produced a value")
+        }
+    }
+
+    @Test("Optional generators replay deterministically")
+    func optionalReplayDeterminism() throws {
+        let optionalRecipes: [GenRecipe] = [
+            .combinator(.optional(.leaf(.int(-10 ... 10)))),
+            .combinator(.optional(.leaf(.bool))),
+        ]
+
+        for recipe in optionalRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 15)
+            while let (_, tree) = try valueIter.next() {
+                let r1 = try? Interpreters.replay(gen, using: tree)
+                let r2 = try? Interpreters.replay(gen, using: tree)
+                guard let r1, let r2 else { continue }
+                #expect(
+                    anyEquals(r1, r2),
+                    "Optional replay not deterministic for recipe: \(recipe)"
+                )
+            }
+        }
+    }
+
+    @Test("Optional generators materialize consistently")
+    func optionalMaterializeAgreement() throws {
+        let optionalRecipes: [GenRecipe] = [
+            .combinator(.optional(.leaf(.int(0 ... 100)))),
+            .combinator(.optional(.leaf(.justInt(5)))),
+        ]
+
+        for recipe in optionalRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 15)
+            while let (value, _) = try valueIter.next() {
+                guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
+                guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
+                let sequence = ChoiceSequence.flatten(reflectedTree)
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { continue }
+                #expect(
+                    anyEquals(materialized, replayed),
+                    "Optional materialize disagrees with replay for recipe: \(recipe)"
+                )
+            }
+        }
+    }
+
+    @Test("anyEquals correctly compares optional values")
+    func optionalEquality() {
+        #expect(anyEquals(Optional<Any>.none as Any, Optional<Any>.none as Any))
+        #expect(anyEquals(Optional<Any>.some(42) as Any, Optional<Any>.some(42) as Any))
+        #expect(anyEquals(Optional<Any>.some(42) as Any, 42 as Any))
+        #expect(anyEquals(Optional<Any>.none as Any, Optional<Any>.some(42) as Any) == false)
+        #expect(anyEquals(Optional<Any>.some(1) as Any, Optional<Any>.some(2) as Any) == false)
+    }
+
+    // MARK: 14. Random Recipes with Just/Zip
 
     @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("This blows the stack when ran repeatedly"))
     func randomJustZipRecipesRoundTrip() throws {

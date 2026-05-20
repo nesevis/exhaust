@@ -154,6 +154,9 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
         case filtered(GenRecipe, KnownPredicate)
         case resized(GenRecipe, size: UInt64)
         case zipped(GenRecipe, GenRecipe)
+        case optional(GenRecipe)
+        case boundArray(element: GenRecipe, maxLength: UInt64)
+        case boundRange(GenRecipe)
 
         var description: String {
             switch self {
@@ -169,6 +172,12 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                 "resize(\(size), \(inner))"
             case let .zipped(a, b):
                 "zip(\(a), \(b))"
+            case let .optional(inner):
+                "\(inner)?"
+            case let .boundArray(element: element, maxLength: maxLength):
+                "\(element).boundArray(maxLength: \(maxLength))"
+            case let .boundRange(inner):
+                "\(inner).boundRange"
             }
         }
     }
@@ -200,8 +209,13 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
             case let .resized(inner, size: _):
                 return inner.outputType
             case let .zipped(a, _):
-                // Zipped produces an array of the first recipe's type (both must match)
                 return a.outputType
+            case let .optional(inner):
+                return inner.outputType
+            case let .boundArray(element: element, maxLength: _):
+                return .arrayOf(element.outputType)
+            case .boundRange:
+                return .int
             }
         }
     }
@@ -218,7 +232,7 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<Gen
         return leafGenerator(producing: type)
     }
 
-    return Gen.pick(choices: [
+    var choices: [(Int, Generator<GenRecipe>)] = [
         (3, leafGenerator(producing: type)),
         (1, mappedGenerator(producing: type, maxDepth: maxDepth)),
         (1, arrayGenerator(producing: type, maxDepth: maxDepth)),
@@ -226,7 +240,14 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<Gen
         (1, filteredGenerator(producing: type, maxDepth: maxDepth)),
         (1, resizedGenerator(producing: type, maxDepth: maxDepth)),
         (1, zippedGenerator(producing: type, maxDepth: maxDepth)),
-    ])
+    ]
+    if type == .int {
+        choices.append((1, boundRangeGenerator(maxDepth: maxDepth)))
+    }
+    if case .arrayOf = type {
+        choices.append((1, boundArrayGenerator(producing: type, maxDepth: maxDepth)))
+    }
+    return Gen.pick(choices: choices)
 }
 
 private func leafGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
@@ -352,6 +373,29 @@ private func zippedGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
     }
 }
 
+private func optionalGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { inner in
+        .combinator(.optional(inner))
+    }
+}
+
+private func boundArrayGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    guard case let .arrayOf(elementType) = type else {
+        return leafGenerator(producing: type)
+    }
+    return Gen.choose(in: 1 ... 5 as ClosedRange<UInt64>).bind { maxLength in
+        recipeGenerator(producing: elementType, maxDepth: maxDepth - 1).map { elementRecipe in
+            GenRecipe.combinator(.boundArray(element: elementRecipe, maxLength: maxLength))
+        }
+    }
+}
+
+private func boundRangeGenerator(maxDepth: Int) -> Generator<GenRecipe> {
+    leafGenerator(producing: .int).map { inner in
+        .combinator(.boundRange(inner))
+    }
+}
+
 // MARK: - Recipe Interpreter
 
 /// Builds a real `AnyGenerator` from a `GenRecipe`.
@@ -404,8 +448,28 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
         return Gen.resize(size, buildGenerator(from: inner))
 
     case let .zipped(a, b):
-        // Zip produces a pair; we pick the first element to keep the output type consistent
         return Gen.zip(buildGenerator(from: a), buildGenerator(from: b)).map { first, _ in first }
+
+    case let .optional(inner):
+        let innerGen = buildGenerator(from: inner)
+        return Gen.pick(choices: [
+            (1, Gen.just(Optional<Any>.none as Any)),
+            (5, innerGen.map { Optional<Any>.some($0) as Any }),
+        ])
+
+    case let .boundArray(element: element, maxLength: maxLength):
+        let elementGen = buildGenerator(from: element)
+        return Gen.choose(in: 0 ... maxLength).bind { length in
+            Gen.arrayOf(elementGen, exactly: length).erase()
+        }
+
+    case let .boundRange(inner):
+        let innerGen = buildGenerator(from: inner)
+        return innerGen.bind { loAny in
+            let lo = loAny as! Int
+            let hi = lo + 50
+            return Gen.choose(in: lo ... hi).map { $0 as Any }
+        }
     }
 }
 
@@ -416,7 +480,21 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
 /// Uses `isEqualToAny` for `Equatable` types, falls back to element-wise
 /// comparison for `[Any]`.
 func anyEquals(_ lhs: Any, _ rhs: Any) -> Bool {
-    // Try Equatable comparison first
+    let lhsMirror = Mirror(reflecting: lhs)
+    let rhsMirror = Mirror(reflecting: rhs)
+    let lhsIsOptional = lhsMirror.displayStyle == .optional
+    let rhsIsOptional = rhsMirror.displayStyle == .optional
+    if lhsIsOptional || rhsIsOptional {
+        let lhsHasValue = lhsIsOptional ? lhsMirror.children.first != nil : true
+        let rhsHasValue = rhsIsOptional ? rhsMirror.children.first != nil : true
+        if lhsHasValue == false && rhsHasValue == false { return true }
+        if lhsHasValue == false || rhsHasValue == false { return false }
+        let lhsInner: Any = lhsIsOptional ? lhsMirror.children.first!.value : lhs
+        let rhsInner: Any = rhsIsOptional ? rhsMirror.children.first!.value : rhs
+        return anyEquals(lhsInner, rhsInner)
+    }
+
+    // Try Equatable comparison
     if let lhsEq = lhs as? any Equatable {
         return lhsEq.isEqualToAny(rhs)
     }
