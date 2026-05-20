@@ -51,12 +51,12 @@ extension ValueAndChoiceTreeInterpreter {
 
             case let .resize(newSize, inner):
                 context.sizeOverride = newSize
+                defer { context.sizeOverride = nil }
                 guard let (innerResult, innerTree) = try generateRecursiveAny(
                     inner, with: (), context: &context
                 ) else {
                     return nil
                 }
-                context.sizeOverride = nil
                 return try interpretLengthContinuation(
                     result: innerResult,
                     calleeTree: .resize(newSize: newSize, choices: [innerTree]),

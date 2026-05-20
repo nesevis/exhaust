@@ -519,11 +519,10 @@ extension Materializer {
             return inner
         }
         context.sizeOverride = newSize
+        defer { context.sizeOverride = nil }
         guard let result = try generateRecursive(
             gen, with: inputValue, context: &context, fallbackTree: innerFallback
         ) else { return nil }
-        // Defensive clear — consumed by getSize, but guard against missing getSize.
-        context.sizeOverride = nil
         let calleeTree: ChoiceTree = context.skipTree
             ? .just
             : .resize(newSize: newSize, choices: [result.1])

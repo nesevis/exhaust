@@ -313,10 +313,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         case let .impure(operation: .resize(newSize, resizeGen), continuation):
             context.sizeOverride = newSize
+            defer { context.sizeOverride = nil }
             guard let result = try generateRecursiveAny(
                 resizeGen, with: inputValue, context: &context
             ) else { return nil }
-            context.sizeOverride = nil
             let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [result.1])
             return try runContinuation(
                 result: result.0, calleeChoiceTree: calleeTree,
