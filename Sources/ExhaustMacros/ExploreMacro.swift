@@ -105,11 +105,6 @@ private func expandExplore(
         .filter { $0.label?.text != "directions" }
         .map(\.expression.trimmedDescription)
 
-    let sourceCode = trailingClosure.statements.trimmedDescription
-        .replacingOccurrences(of: "\\", with: "\\\\")
-        .replacingOccurrences(of: "\"", with: "\\\"")
-        .replacingOccurrences(of: "\n", with: "\\n")
-
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
     if runtimeFunction == "__exploreExpect" || runtimeFunction == "__exploreExpectAsync" {
@@ -131,7 +126,7 @@ private func expandExplore(
             \(raw: generatorExpr),
             settings: \(raw: settingsArray),
             directions: \(raw: directionsExpr),
-            sourceCode: "\(raw: sourceCode)",
+
             fileID: #fileID,
             filePath: #filePath,
             line: #line,
@@ -149,7 +144,6 @@ private func expandExplore(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
         directions: \(raw: directionsExpr),
-        sourceCode: "\(raw: sourceCode)",
         fileID: #fileID,
         filePath: #filePath,
         line: #line,
@@ -203,7 +197,7 @@ private func expandExploreFunctionReference(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
         directions: \(raw: directionsExpr),
-        sourceCode: nil,
+
         fileID: #fileID,
         filePath: #filePath,
         line: #line,

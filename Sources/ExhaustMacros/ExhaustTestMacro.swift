@@ -423,8 +423,6 @@ private func expandExhaust(
         }
     }
 
-    let sourceCode = escapeForStringLiteral(trailingClosure.statements.trimmedDescription)
-
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
     let reflectingLine = reflectingExpr.map { "reflecting: \($0)," } ?? ""
 
@@ -454,7 +452,7 @@ private func expandExhaust(
             \(raw: generatorExpr),
             settings: \(raw: settingsArray),
             \(raw: reflectingLine)
-            sourceCode: "\(raw: sourceCode)",
+
             fileID: #fileID,
             filePath: #filePath,
             line: #line,
@@ -471,7 +469,6 @@ private func expandExhaust(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
         \(raw: reflectingLine)
-        sourceCode: "\(raw: sourceCode)",
         fileID: #fileID,
         filePath: #filePath,
         line: #line,
@@ -526,7 +523,7 @@ private func expandExhaustFunctionReference(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
         \(raw: reflectingLine)
-        sourceCode: nil,
+
         fileID: #fileID,
         filePath: #filePath,
         line: #line,

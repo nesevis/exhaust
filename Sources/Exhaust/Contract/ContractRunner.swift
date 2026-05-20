@@ -221,7 +221,6 @@ public func __runContract<Spec: ContractSpec>(
                     logLevel: logLevel,
                     logFormat: logFormat
                 ),
-                sourceCode: nil,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,

@@ -17,7 +17,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -135,9 +135,6 @@ public extension __ExhaustRuntime {
                     "warmup_samples": "\(result.warmupSamples)",
                     "seed": "\(result.seed)",
                 ]
-                if let sourceCode {
-                    passMetadata["source"] = sourceCode
-                }
                 let coveredCount = directionCoverage.filter(\.isCovered).count
                 passMetadata["coverage"] = "\(coveredCount)/\(directions.count)"
                 ExhaustLog.notice(
@@ -169,7 +166,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -186,7 +183,7 @@ public extension __ExhaustRuntime {
                     refGen,
                     settings: settings + [.suppress(.issueReporting)],
                     directions: directions,
-                    sourceCode: sourceCode,
+
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -200,7 +197,7 @@ public extension __ExhaustRuntime {
                     refGen,
                     settings: settings,
                     directions: directions,
-                    sourceCode: sourceCode,
+
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -242,7 +239,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -255,7 +252,6 @@ public extension __ExhaustRuntime {
                 refGen,
                 settings: settings,
                 directions: directions,
-                sourceCode: sourceCode,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -273,7 +269,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
         directions: [(String, @Sendable (Output) -> Bool)],
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -293,7 +289,7 @@ public extension __ExhaustRuntime {
                             refGen,
                             settings: settings + [.suppress(.issueReporting)],
                             directions: directions,
-                            sourceCode: sourceCode,
+        
                             fileID: fileID,
                             filePath: filePath,
                             line: line,
@@ -306,7 +302,7 @@ public extension __ExhaustRuntime {
                         refGen,
                         settings: settings + [.suppress(.issueReporting)],
                         directions: directions,
-                        sourceCode: sourceCode,
+    
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
@@ -320,7 +316,7 @@ public extension __ExhaustRuntime {
                         refGen,
                         settings: settings,
                         directions: directions,
-                        sourceCode: sourceCode,
+    
                         property: { _ in true }
                     )
                     continuation.resume(returning: emptyReport)

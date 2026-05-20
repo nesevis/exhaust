@@ -21,7 +21,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [],
-                sourceCode: "person.age >= 0",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -47,7 +46,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [.maxIterations(1000), .replay(42)],
-                sourceCode: "person.age >= 0",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -61,7 +59,7 @@ struct ExhaustMacroTests {
         )
     }
 
-    @Test("Function reference passes nil sourceCode")
+    @Test("Function reference expansion")
     func functionReference() {
         assertMacroExpansion(
             """
@@ -71,7 +69,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [],
-                sourceCode: nil,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -83,7 +80,7 @@ struct ExhaustMacroTests {
         )
     }
 
-    @Test("Function reference with settings passes nil sourceCode")
+    @Test("Function reference with settings")
     func functionReferenceWithSettings() {
         assertMacroExpansion(
             """
@@ -93,7 +90,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [.maxIterations(500)],
-                sourceCode: nil,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -122,7 +118,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustAsync(
                 personGen,
                 settings: [],
-                sourceCode: "await actor.validate(person)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -153,7 +148,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpectAsync(
                 personGen,
                 settings: [],
-                sourceCode: "let result = await actor.validate(person)\\n#expect(result)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -186,7 +180,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustAsync(
                 personGen,
                 settings: [],
-                sourceCode: nil,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -213,7 +206,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "Issue.record()",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -246,7 +238,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "if value < 0 {\\n    Issue.record(\\\"negative\\\")\\n}\\n#expect(value > 0)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -288,7 +279,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 gen,
                 settings: [],
-                sourceCode: "switch value {\\ncase 1: true\\ncase 2: false\\ndefault: false\\n}",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -321,7 +311,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "switch value {\\ncase 1: #expect(value > 0)\\ndefault: #expect(value != 0)\\n}",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -359,7 +348,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "let box = ThreadSafeBox(0)\\nbox.put(value)\\nbox.get() == value",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -402,7 +390,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "doSomething()\\ndoSomethingElse(value)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -443,7 +430,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "let result = try compute(value)\\nuse(result)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -476,7 +462,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "let result = try? compute(value)\\nuse(result)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -518,7 +503,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "if value < 0 {\\n    throw TestError()\\n}",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -553,7 +537,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 gen,
                 settings: [],
-                sourceCode: "let x = compute(value)\\nreturn x == 0",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -580,7 +563,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 gen,
                 settings: [],
-                sourceCode: "value == 0",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -607,7 +589,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "let x = compute(value)\\n#expect(x == 0)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -641,7 +622,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "if value < 0 {\\n    Issue.record(\\\"negative\\\")\\n}",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -656,69 +636,6 @@ struct ExhaustMacroTests {
                 if value < 0 {
                     try __ExhaustRuntime.__detectRequire(false)
                 }
-            }
-            )
-            """,
-            macros: testMacros
-        )
-    }
-
-    // MARK: - Tab Escaping in sourceCode
-
-    @Test("Tab-indented multi-statement closure escapes tabs in sourceCode")
-    func tabIndentedClosureEscapesTabs() {
-        assertMacroExpansion(
-            """
-            #exhaust(gen) { value in
-            \tlet x = compute(value)
-            \treturn x == 0
-            }
-            """,
-            expandedSource: """
-            __ExhaustRuntime.__exhaust(
-                gen,
-                settings: [],
-                sourceCode: "let x = compute(value)\\n\\treturn x == 0",
-                fileID: #fileID,
-                filePath: #filePath,
-                line: #line,
-                column: #column,
-                property: { value in
-            \tlet x = compute(value)
-            \treturn x == 0
-            }
-            )
-            """,
-            macros: testMacros
-        )
-    }
-
-    @Test("Tab-indented void closure with #expect escapes tabs in sourceCode")
-    func tabIndentedVoidClosureEscapesTabs() {
-        assertMacroExpansion(
-            """
-            #exhaust(gen) { value in
-            \tlet x = compute(value)
-            \t#expect(x == 0)
-            }
-            """,
-            expandedSource: """
-            __ExhaustRuntime.__exhaustExpect(
-                gen,
-                settings: [],
-                sourceCode: "let x = compute(value)\\n\\t#expect(x == 0)",
-                fileID: #fileID,
-                filePath: #filePath,
-                line: #line,
-                column: #column,
-                function: #function,
-                property: { value in
-            \tlet x = compute(value)
-            \t#expect(x == 0)
-            },
-                detection: { value in
-            \tlet x = compute(value)
-            \ttry __ExhaustRuntime.__detectRequire(x == 0)
             }
             )
             """,
@@ -747,48 +664,5 @@ struct ExhaustMacroTests {
             ],
             macros: testMacros
         )
-    }
-}
-
-@Suite("escapeForStringLiteral")
-struct EscapeForStringLiteralTests {
-    @Test("Escapes tab characters")
-    func escapesTab() {
-        let input = "line1\n\tline2"
-        let result = escapeForStringLiteral(input)
-        #expect(result == "line1\\n\\tline2")
-    }
-
-    @Test("Escapes carriage returns")
-    func escapesCarriageReturn() {
-        let input = "line1\r\nline2"
-        let result = escapeForStringLiteral(input)
-        #expect(result == "line1\\r\\nline2")
-    }
-
-    @Test("Escapes backslashes before other characters")
-    func escapesBackslashFirst() {
-        let input = "a\\b\n\tc"
-        let result = escapeForStringLiteral(input)
-        #expect(result == "a\\\\b\\n\\tc")
-    }
-
-    @Test("Escapes double quotes")
-    func escapesQuotes() {
-        let input = "value == \"hello\""
-        let result = escapeForStringLiteral(input)
-        #expect(result == "value == \\\"hello\\\"")
-    }
-
-    @Test("Result contains no raw control characters")
-    func noRawControlCharacters() {
-        let input = "let x = value\n\tif x > 0 {\n\t\treturn true\n\t}"
-        let result = escapeForStringLiteral(input)
-        for scalar in result.unicodeScalars {
-            #expect(
-                scalar.value >= 0x20 || scalar == " ",
-                "Found raw control character U+\(String(scalar.value, radix: 16, uppercase: true))"
-            )
-        }
     }
 }
