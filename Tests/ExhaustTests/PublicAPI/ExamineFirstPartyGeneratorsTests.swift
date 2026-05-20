@@ -207,6 +207,11 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
+    @Test func characterVariadicUnion() {
+        let report = #examine(.character(from: .decimalDigits, .letters), samples: 30)
+        #expect(report.passed)
+    }
+
     // MARK: - UUID
 
     @Test func uuid() {
