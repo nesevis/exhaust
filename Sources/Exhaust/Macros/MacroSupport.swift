@@ -333,10 +333,6 @@ public extension __ExhaustRuntime {
             function: StaticString,
             property: @Sendable (Output) -> Bool
         ) -> (counterexample: Output, seed: UInt64)? {
-            let suppressIssueReporting = settings.contains { setting in
-                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
-                return false
-            }
             guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
             for encodedSeed in traitConfig.regressions {
                 guard let seed = CrockfordBase32.decode(encodedSeed) else {
@@ -367,15 +363,8 @@ public extension __ExhaustRuntime {
                     property: property
                 )
                 if replayResult == nil {
-                    if suppressIssueReporting == false {
-                        reportIssue(
-                            "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                    }
+                    // Seed now passes — the bug was fixed. The seed sits inert as a
+                    // silent regression guard until the property fails again.
                 } else if let counterexample = replayResult {
                     return (counterexample, seed)
                 }
