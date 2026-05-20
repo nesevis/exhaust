@@ -1,4 +1,5 @@
 // MARK: - Cooperative Drain Loop for Concurrent Contract Execution
+
 //
 // Executes a tagged command sequence through a cooperative scheduler that deterministically controls interleaving at every `await` boundary. The input is a flat [(ScheduleMarker, Command)] array that encodes both the lane partition AND the interleaving order:
 //
@@ -35,10 +36,14 @@ public struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, C
     public static let prefix = ScheduleMarker(rawValue: 0)
 
     /// Whether this marker assigns to the sequential prefix rather than a concurrent lane.
-    public var isPrefix: Bool { rawValue == 0 }
+    public var isPrefix: Bool {
+        rawValue == 0
+    }
 
     /// The zero-based lane index, or nil if this is the prefix marker.
-    var laneIndex: UInt8? { rawValue > 0 ? rawValue - 1 : nil }
+    var laneIndex: UInt8? {
+        rawValue > 0 ? rawValue - 1 : nil
+    }
 
     public var description: String {
         if rawValue == 0 { return "prefix" }
@@ -76,7 +81,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
 ) -> ConcurrentExecutionResult {
     let idleTimeout: Duration = .milliseconds(idleTimeoutMilliseconds)
 
-    let prefixCommands = taggedCommands.filter { $0.0.isPrefix }.map(\.1)
+    let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
     let laneCommands: [[Spec.Command]] = (0 ..< concurrencyLevel).map { laneIndex in
         let marker = ScheduleMarker(rawValue: UInt8(laneIndex + 1))
         return taggedCommands.filter { $0.0 == marker }.map(\.1)
@@ -216,7 +221,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
             if switchedLanes, let prev = lastDrainedLane, laneHasOpenCommand[prev] == true {
                 trace.value.append(TraceEvent(kind: .suspended, lane: prev.label, label: ""))
             }
-            if switchedLanes && laneHasOpenCommand[lane] == true {
+            if switchedLanes, laneHasOpenCommand[lane] == true {
                 trace.value.append(TraceEvent(kind: .resumed, lane: lane.label, label: ""))
             }
         }

@@ -3,7 +3,6 @@ import Testing
 
 @Suite("PostAcceptance")
 struct PostAcceptanceTests {
-
     private static let defaultPriority = DispatchPriority(
         structuralBenefit: 1,
         valueBenefit: 0,

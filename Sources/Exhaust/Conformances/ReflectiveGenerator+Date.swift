@@ -51,15 +51,15 @@ public extension ReflectiveGenerator {
                 isRangeExplicit: true
             )
         ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
-        .wrapped.mapped(
-            forward: { step in
-                Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
-            },
-            backward: { date in
-                let offset = date.timeIntervalSinceReferenceDate - Double(lowerSeconds)
-                return Int64(floor(offset / Double(intervalSeconds)))
-            }
-        )
+            .wrapped.mapped(
+                forward: { step in
+                    Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
+                },
+                backward: { date in
+                    let offset = date.timeIntervalSinceReferenceDate - Double(lowerSeconds)
+                    return Int64(floor(offset / Double(intervalSeconds)))
+                }
+            )
     }
 
     /// Generates dates within `span` on either side of `anchor`, spaced by `interval`.

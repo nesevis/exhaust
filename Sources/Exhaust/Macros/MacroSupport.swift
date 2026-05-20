@@ -15,18 +15,18 @@ import IssueReporting
     @_weakLinked import Testing
 #endif
 
-extension __ExhaustRuntime {
+public extension __ExhaustRuntime {
     /// Thrown by the detection closure when a rewritten `#expect`/`#require` fails.
     ///
     /// This is a plain error — not a Swift Testing issue — so it produces no test output.
     /// The pipeline's try/catch detects it as a property failure without any console noise.
-    public struct DetectionFailure: Error {}
+    struct DetectionFailure: Error {}
 
     /// Detection replacement for `#expect(_ condition: Bool)` and `#require(_ condition: Bool)`.
     ///
     /// Throws ``DetectionFailure`` when the condition is `false`.
     /// Does not call `Issue.record()` — produces no Swift Testing output.
-    public static func __detectRequire(_ condition: Bool) throws { // swiftlint:disable:this identifier_name
+    static func __detectRequire(_ condition: Bool) throws { // swiftlint:disable:this identifier_name
         if condition == false {
             throw DetectionFailure()
         }
@@ -36,7 +36,7 @@ extension __ExhaustRuntime {
     ///
     /// Throws ``DetectionFailure`` when the value is `nil`. Returns the unwrapped value otherwise.
     /// Does not call `Issue.record()` — produces no Swift Testing output.
-    public static func __detectRequire<Value>(_ value: Value?) throws -> Value { // swiftlint:disable:this identifier_name
+    static func __detectRequire<Value>(_ value: Value?) throws -> Value { // swiftlint:disable:this identifier_name
         guard let unwrapped = value else {
             throw DetectionFailure()
         }
@@ -58,7 +58,7 @@ extension __ExhaustRuntime {
     ///   - property: The property to test — returns `true` for passing values.
     /// - Returns: The reduced counterexample if the property failed, or `nil` if all iterations passed.
     @discardableResult
-    public static func __exhaust<Output>(
+    static func __exhaust<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
@@ -381,7 +381,7 @@ extension __ExhaustRuntime {
     ///
     /// Wraps the property into a `Bool`-returning form via `withExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
     @discardableResult
-    public static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
+    static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
@@ -496,7 +496,7 @@ extension __ExhaustRuntime {
     ///
     /// Bridges the async property to sync, then dispatches the synchronous core onto a GCD thread where semaphore-blocking is safe.
     @discardableResult
-    public static func __exhaustAsync<Output>( // swiftlint:disable:this function_parameter_count
+    static func __exhaustAsync<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
@@ -529,7 +529,7 @@ extension __ExhaustRuntime {
     ///
     /// Bridges the async detection to sync, dispatches the pipeline onto a GCD thread, then re-runs the async property in the original context so `#expect` failures record with reduced values.
     @discardableResult
-    public static func __exhaustExpectAsync<Output>( // swiftlint:disable:this function_parameter_count
+    static func __exhaustExpectAsync<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
@@ -644,13 +644,13 @@ extension __ExhaustRuntime {
     // MARK: - Example
 
     /// Generates a single value from a generator. Runtime target of `#example` expansion.
-    public static func __example<Output>(
+    static func __example<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         seed: UInt64?,
-        fileID: StaticString = #fileID,
-        filePath: StaticString = #filePath,
-        line: UInt = #line,
-        column: UInt = #column
+        fileID _: StaticString = #fileID,
+        filePath _: StaticString = #filePath,
+        line _: UInt = #line,
+        column _: UInt = #column
     ) -> Output {
         let gen = refGen.gen
         return Gen.$isInterpreting.withValue(true) {
@@ -665,7 +665,7 @@ extension __ExhaustRuntime {
     }
 
     /// Generates an array of values from a generator. Runtime target of `#example` expansion.
-    public static func __exampleArray<Output>(
+    static func __exampleArray<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         count: UInt64,
         seed: UInt64?,
@@ -700,7 +700,7 @@ extension __ExhaustRuntime {
     ///
     /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
     @discardableResult
-    public static func __examine(
+    static func __examine(
         _ refGen: ReflectiveGenerator<some Equatable>,
         samples: Int,
         seed: UInt64?,
@@ -726,7 +726,7 @@ extension __ExhaustRuntime {
     ///
     /// Falls back to choice-sequence comparison for non-`Equatable` types.
     @discardableResult
-    public static func __examine(
+    static func __examine(
         _ refGen: ReflectiveGenerator<some Any>,
         samples: Int,
         seed: UInt64?,

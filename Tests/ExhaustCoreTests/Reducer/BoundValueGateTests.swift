@@ -3,7 +3,6 @@ import Testing
 
 @Suite("BoundValueGate")
 struct BoundValueGateTests {
-
     private static let tuning = SchedulerTuning()
 
     // MARK: - Fresh Gate

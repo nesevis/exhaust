@@ -30,7 +30,6 @@ public extension ReflectiveGenerator {
                 classifiers: classifiers.map { pair in
                     (pair.0, { pair.1($0 as! Output) })
                 }
-            )
-        ) { .pure($0 as! Output) }.wrapped
+            )) { .pure($0 as! Output) }.wrapped
     }
 }

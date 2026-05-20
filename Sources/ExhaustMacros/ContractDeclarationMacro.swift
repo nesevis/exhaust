@@ -29,7 +29,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 || invariants.contains(where: \.isAsync)
 
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
-        if hasAnyAsync && isClassDecl == false {
+        if hasAnyAsync, isClassDecl == false {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: ContractDiagnostic.asyncRequiresClass
@@ -114,7 +114,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
             return initDecl.signature.parameterClause.parameters.isEmpty
         }
-        if isClassDecl && hasUserInit == false {
+        if isClassDecl, hasUserInit == false {
             decls.append("required init() {}")
         }
 
@@ -309,8 +309,6 @@ private func synthesizeCommandGenerator(commands: [CommandInfo], context: some M
                 "\($0.label): \($0.label)"
             }.joined(separator: ", ")
             choices.append("            (\(cmd.weight), #gen(\(genArgs)) { \(closureParams) in Command.\(cmd.methodName)(\(constructorArgs)) })")
-        } else if cmd.parameters.isEmpty {
-            choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         } else {
             if let syntax = cmd.syntax {
                 context.diagnose(Diagnostic(

@@ -36,10 +36,10 @@ struct CalculatorShrinkingChallenge {
         }
         #expect(result == .div(.value(0), .add(.value(0), .value(0))))
     }
-    
-    // This test ought to reduce to the minimal CE, but a bug fix that allowed for multiple bind-inner leaf scope dispatches surfaced a 1.4% counterexample:
-    // 98.6% div(value(0), add(value(0), value(0))) (986 seeds)
-    // 1.4% div(value(0), div(value(0), value(-1)))
+
+    /// This test ought to reduce to the minimal CE, but a bug fix that allowed for multiple bind-inner leaf scope dispatches surfaced a 1.4% counterexample:
+    /// 98.6% div(value(0), add(value(0), value(0))) (986 seeds)
+    /// 1.4% div(value(0), div(value(0), value(-1)))
     @Test("Calculator pathological 1")
     func calculatorPathological1() {
         let gen = #gen(CalculatorFixture.expression(depth: 5))

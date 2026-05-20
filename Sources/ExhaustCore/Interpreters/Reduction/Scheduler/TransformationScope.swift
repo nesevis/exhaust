@@ -255,7 +255,6 @@ struct ReorderingScope {
     let groups: [ReorderableGroup]
 }
 
-
 /// A group of type-homogeneous sibling elements within a sequence node eligible for numeric reordering.
 struct ReorderableGroup {
     /// Containment-tree depth of the parent sequence node.

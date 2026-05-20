@@ -3,7 +3,6 @@ import Testing
 
 @Suite("PostCycleEvaluation")
 struct PostCycleDecisionTests {
-
     private static let maxStalls = 4
 
     private static func evaluate(

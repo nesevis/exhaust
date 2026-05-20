@@ -24,7 +24,7 @@ struct NestedListsShrinkingChallenge {
             gen,
             reflecting: Self.counterExample,
             .budget(.extensive),
-            .suppress(.issueReporting),
+            .suppress(.issueReporting)
 //            .logging(.debug, .keyValue)
 //                .replay(13580297670505979531)
         ) { arrs in

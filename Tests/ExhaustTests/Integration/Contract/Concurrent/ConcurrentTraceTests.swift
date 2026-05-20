@@ -1,5 +1,5 @@
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Concurrent trace parsing")
 struct ConcurrentTraceTests {

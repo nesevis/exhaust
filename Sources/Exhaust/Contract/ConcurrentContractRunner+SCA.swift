@@ -23,8 +23,8 @@ func runConcurrentSCACoverage<Command>(
     commandGen: Generator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
-    concurrencyLevel: Int,
-    idleTimeout: Int,
+    concurrencyLevel _: Int,
+    idleTimeout _: Int,
     property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
     identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
     lastRunTimedOut: SendableBox<Bool>

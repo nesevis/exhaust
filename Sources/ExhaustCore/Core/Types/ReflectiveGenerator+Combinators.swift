@@ -45,7 +45,7 @@ public extension ReflectiveGenerator {
         nonisolated(unsafe) let backward = backward
         return try mapped(forward: forward, backward: { $0[keyPath: backward] })
     }
-    
+
     /// Chains this generator with a dependent generator, with a backward extraction function for reflection.
     ///
     /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `forward` function takes the inner value and returns a dependent generator. The `backward` function extracts the inner value from the final output, enabling reflection to decompose through the bind.

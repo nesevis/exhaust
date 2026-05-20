@@ -35,7 +35,7 @@ struct GenerationExamplesTests {
                     filterType: .auto,
                     predicate: { ($0 as! UInt).isMultiple(of: 3) },
                     tuned: nil,
-                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column),
+                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                 ),
                 continuation: { .pure($0 as! UInt) }
             )
@@ -81,7 +81,7 @@ struct GenerationExamplesTests {
 
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
         func vACTGdoesntswallomaps() throws {
-            let gen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling).map { $0 }.map { second in
+            let gen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling).map(\.self).map { second in
                 second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })

@@ -46,7 +46,7 @@ struct ReducerStressTests {
         }
 
         let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { outer in
-            let flat = outer.flatMap { $0 }.flatMap { $0 }
+            let flat = outer.flatMap(\.self).flatMap(\.self)
             return flat.count < 10 || flat.reduce(0, +) < 100
         }
         #expect(output != nil)
@@ -60,7 +60,7 @@ struct ReducerStressTests {
         let value = (0 ..< 5000).map { $0 * 4 - 10000 }
 
         let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { arr in
-            arr.filter { $0 > 0 }.count < 3 || arr.reduce(0, +) == 0
+            arr.count(where: { $0 > 0 }) < 3 || arr.reduce(0, +) == 0
         }
         #expect(output != nil)
     }
@@ -78,7 +78,7 @@ struct ReducerStressTests {
             .suppress(.issueReporting)
         ) { arrays in
             let totalElements = arrays.reduce(0) { $0 + $1.count }
-            let totalSum = arrays.flatMap { $0 }.reduce(0, +)
+            let totalSum = arrays.flatMap(\.self).reduce(0, +)
             return totalElements < 20 || totalSum < 200
         }
         #expect(output != nil)

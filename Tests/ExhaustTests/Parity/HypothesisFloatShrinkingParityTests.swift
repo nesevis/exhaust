@@ -109,7 +109,7 @@ struct HypothesisFloatShrinkingParityTests {
                         return v > lower && v < upper && v.rounded(.towardZero) != v
                     },
                     tuned: nil,
-                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column),
+                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                 ),
                 continuation: { .pure($0 as! Double) }
             )

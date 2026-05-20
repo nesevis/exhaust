@@ -1,5 +1,5 @@
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Tests
 
@@ -133,7 +133,9 @@ final class ThreeWayRaceSpec {
 final class SilentlyRacyCounter: @unchecked Sendable {
     private var _value: Int = 0
 
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     func increment() async {
         _value += 1
@@ -149,7 +151,9 @@ final class SilentlyRacyCounter: @unchecked Sendable {
 final class ExposedRacyCounter: @unchecked Sendable {
     private var _value: Int = 0
 
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     func increment() async {
         _value += 1
@@ -166,7 +170,9 @@ final class ExposedRacyCounter: @unchecked Sendable {
 final class ThreeWayRacyCounter: @unchecked Sendable {
     private var _value: Int = 0
 
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     func increment() async {
         let current = _value

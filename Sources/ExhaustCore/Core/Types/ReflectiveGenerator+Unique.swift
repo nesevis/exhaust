@@ -97,7 +97,7 @@ public extension ReflectiveGenerator {
                 keyExtractor: { value in
                     AnyHashable(transform(value as! Output))
                 }
-            ),
+            )
         ) { .pure($0 as! Output) }.wrapped
     }
 }

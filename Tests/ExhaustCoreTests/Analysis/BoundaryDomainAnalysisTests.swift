@@ -584,7 +584,7 @@ struct OpaqueGroupTests {
             isOpaque: true
         )
         let gen = Gen.zip(
-            opaqueFloats.map { $0.0 },
+            opaqueFloats.map(\.0),
             Gen.choose(in: 0 ... 100)
         )
         guard let result = ChoiceTreeAnalysis.analyze(gen) else {
@@ -610,7 +610,7 @@ struct OpaqueGroupTests {
             isOpaque: true
         )
         let gen = Gen.zip(
-            opaqueScaled.map { $0.0 },
+            opaqueScaled.map(\.0),
             Gen.choose(in: 0 ... 10)
         )
         guard let result = ChoiceTreeAnalysis.analyze(gen) else {
@@ -682,7 +682,7 @@ struct CharacterBoundaryIndicesTests {
     }
 
     @Test("Coverage replay of character chooseBits produces only scalars within the CharacterSet")
-    func coverageReplayProducesOnlyAllowedCharacters() throws {
+    func coverageReplayProducesOnlyAllowedCharacters() {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
         let srs = allowed.scalarRangeSet()
         let tag = TypeTag.character(boundaryIndices: srs.boundaryIndices)
@@ -724,7 +724,7 @@ struct CharacterBoundaryIndicesTests {
         }
 
         let domainSizes = profile.domainSizes
-        let analysisKind: String = switch analysis {
+        let analysisKind = switch analysis {
         case .finite: "finite"
         case .boundary: "boundary"
         }

@@ -76,8 +76,8 @@ func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
             var resumeIndex: Int?
             for ahead in (index + 1) ..< steps.count {
                 let aheadCmd = steps[ahead].step.command
-                if aheadCmd.hasPrefix(commandBase) &&
-                    (aheadCmd.hasSuffix("(resumed)") || aheadCmd.hasSuffix("(completed)"))
+                if aheadCmd.hasPrefix(commandBase),
+                   aheadCmd.hasSuffix("(resumed)") || aheadCmd.hasSuffix("(completed)")
                 {
                     resumeIndex = ahead
                     break

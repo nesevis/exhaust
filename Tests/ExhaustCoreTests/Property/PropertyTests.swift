@@ -77,7 +77,7 @@ struct RoundtripPropertyTests {
         let innerIntGen: Generator<Int> = Gen.choose(in: 0 ... 100)
         let optionalGen: Generator<Int?> = Gen.pick(choices: [
             (1, Gen.just(Int?.none)),
-            (5, innerIntGen.liftToOptional() ),
+            (5, innerIntGen.liftToOptional()),
         ])
         try exhaustCheck(optionalGen) { value in
             guard let tree = try? Interpreters.reflect(optionalGen, with: value),
@@ -298,8 +298,8 @@ struct ReplayMaterializerEquivalenceTests {
     }
 }
 
-private func assertReplayMaterializerEquivalence<Output: Equatable>(
-    _ gen: Generator<Output>,
+private func assertReplayMaterializerEquivalence(
+    _ gen: Generator<some Equatable>,
     maxIterations: Int = 200
 ) throws {
     try assertReplayMaterializerEquivalence(gen, maxIterations: maxIterations, isEqual: ==)

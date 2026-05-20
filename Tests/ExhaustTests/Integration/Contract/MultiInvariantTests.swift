@@ -42,11 +42,25 @@ struct FiveInvariantSpec {
     @SystemUnderTest
     var counter: BuggyModCounter = .init()
 
-    @Invariant func countMatches() -> Bool { counter.value == expected }
-    @Invariant func neverNegative() -> Bool { counter.value >= 0 }
-    @Invariant func withinBounds() -> Bool { counter.value <= 100 }
-    @Invariant func evenStepsEven() -> Bool { expected % 2 == 0 ? counter.value % 2 == 0 : true }
-    @Invariant func oddStepsOdd() -> Bool { expected % 2 == 1 ? counter.value % 2 == 1 : true }
+    @Invariant func countMatches() -> Bool {
+        counter.value == expected
+    }
+
+    @Invariant func neverNegative() -> Bool {
+        counter.value >= 0
+    }
+
+    @Invariant func withinBounds() -> Bool {
+        counter.value <= 100
+    }
+
+    @Invariant func evenStepsEven() -> Bool {
+        expected % 2 == 0 ? counter.value % 2 == 0 : true
+    }
+
+    @Invariant func oddStepsOdd() -> Bool {
+        expected % 2 == 1 ? counter.value % 2 == 1 : true
+    }
 
     @Command(weight: 3)
     mutating func increment() throws {
@@ -64,11 +78,25 @@ struct PassingFiveInvariantSpec {
     @SystemUnderTest
     var counter: CorrectCounter = .init()
 
-    @Invariant func countMatches() -> Bool { counter.value == expected }
-    @Invariant func neverNegative() -> Bool { counter.value >= 0 }
-    @Invariant func withinBounds() -> Bool { counter.value <= 1000 }
-    @Invariant func parity() -> Bool { counter.value % 2 == expected % 2 }
-    @Invariant func monotonic() -> Bool { counter.value >= 0 }
+    @Invariant func countMatches() -> Bool {
+        counter.value == expected
+    }
+
+    @Invariant func neverNegative() -> Bool {
+        counter.value >= 0
+    }
+
+    @Invariant func withinBounds() -> Bool {
+        counter.value <= 1000
+    }
+
+    @Invariant func parity() -> Bool {
+        counter.value % 2 == expected % 2
+    }
+
+    @Invariant func monotonic() -> Bool {
+        counter.value >= 0
+    }
 
     @Command(weight: 3)
     mutating func increment() throws {
@@ -94,6 +122,11 @@ struct BuggyModCounter {
 
 struct CorrectCounter {
     private(set) var value: Int = 0
-    mutating func increment() { value += 1 }
-    mutating func reset() { value = 0 }
+    mutating func increment() {
+        value += 1
+    }
+
+    mutating func reset() {
+        value = 0
+    }
 }

@@ -61,7 +61,7 @@ struct MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             let mappedGen: AnyGenerator = Gen.contramap(
                 { (newOutput: Any) throws -> Any in newOutput },
-                gen.map { $0 }
+                gen.map(\.self)
             )
             return checkPairedValues(gen, mappedGen, maxRuns: 10) { v1, v2 in
                 anyEquals(v1, v2)
@@ -351,7 +351,7 @@ struct MetaGeneratorPropertyTests {
                 } else {
                     sawSome = true
                 }
-                if sawNil && sawSome { break }
+                if sawNil, sawSome { break }
             }
             #expect(sawNil, "Optional recipe \(recipe) never produced nil")
             #expect(sawSome, "Optional recipe \(recipe) never produced a value")
@@ -405,11 +405,11 @@ struct MetaGeneratorPropertyTests {
 
     @Test("anyEquals correctly compares optional values")
     func optionalEquality() {
-        #expect(anyEquals(Optional<Any>.none as Any, Optional<Any>.none as Any))
-        #expect(anyEquals(Optional<Any>.some(42) as Any, Optional<Any>.some(42) as Any))
-        #expect(anyEquals(Optional<Any>.some(42) as Any, 42 as Any))
-        #expect(anyEquals(Optional<Any>.none as Any, Optional<Any>.some(42) as Any) == false)
-        #expect(anyEquals(Optional<Any>.some(1) as Any, Optional<Any>.some(2) as Any) == false)
+        #expect(anyEquals(Any?.none as Any, Any?.none as Any))
+        #expect(anyEquals(Any?.some(42) as Any, Any?.some(42) as Any))
+        #expect(anyEquals(Any?.some(42) as Any, 42 as Any))
+        #expect(anyEquals(Any?.none as Any, Any?.some(42) as Any) == false)
+        #expect(anyEquals(Any?.some(1) as Any, Any?.some(2) as Any) == false)
     }
 
     // MARK: 14. Random Recipes with Just/Zip

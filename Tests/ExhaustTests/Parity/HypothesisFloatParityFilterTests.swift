@@ -92,7 +92,7 @@ private func filtered<Output>(
             filterType: .auto,
             predicate: { predicate($0 as! Output) },
             tuned: nil,
-            sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column),
+            sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
         ),
         continuation: { .pure($0 as! Output) }
     )

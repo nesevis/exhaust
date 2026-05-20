@@ -46,14 +46,14 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 recursiveGen,
                 .suppress(.issueReporting),
-                .replay(.numeric(10358026062479193394)),
+                .replay(.numeric(10_358_026_062_479_193_394)),
                 .logging(.debug),
                 property: BinaryHeapFixture.property
             )
         )
 
         let outputValues = BinaryHeapFixture.toList(output)
-        
+
         // This is a pathological seed that results in a basin [0, 0, 1, 2]
         withKnownIssue {
             #expect(outputValues.sorted() == [0, 0, 0, 1])

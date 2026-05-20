@@ -395,13 +395,13 @@ private func boundArrayGenerator(producing type: RecipeType, maxDepth: Int) -> G
     }
 }
 
-private func recursiveGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+private func recursiveGenerator(producing type: RecipeType, maxDepth _: Int) -> Generator<GenRecipe> {
     leafGenerator(producing: type).map { base in
         .combinator(.recursive(base: base, maxDepth: 2))
     }
 }
 
-private func boundRangeGenerator(maxDepth: Int) -> Generator<GenRecipe> {
+private func boundRangeGenerator(maxDepth _: Int) -> Generator<GenRecipe> {
     leafGenerator(producing: .int).map { inner in
         .combinator(.boundRange(inner))
     }
@@ -464,8 +464,8 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
     case let .optional(inner):
         let innerGen = buildGenerator(from: inner)
         return Gen.pick(choices: [
-            (1, Gen.just(Optional<Any>.none as Any)),
-            (5, innerGen.map { Optional<Any>.some($0) as Any }),
+            (1, Gen.just(Any?.none as Any)),
+            (5, innerGen.map { Any?.some($0) as Any }),
         ])
 
     case let .boundArray(element: element, maxLength: maxLength):
@@ -487,7 +487,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
         return Gen.recursive(base: baseGen, depthRange: 0 ... Int(maxDepth)) { recurse, remaining in
             Gen.pick(choices: [
                 (1, baseGen),
-                (Int(remaining), recurse().map { $0 }),
+                (Int(remaining), recurse().map(\.self)),
             ])
         }
     }

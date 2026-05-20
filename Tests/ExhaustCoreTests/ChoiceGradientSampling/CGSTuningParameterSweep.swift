@@ -17,7 +17,9 @@ struct CGSTuningParameterSweep {
             let label: String
             let tuneMs: Double
             let result: GenerationResult
-            var totalMs: Double { tuneMs + result.generationMs }
+            var totalMs: Double {
+                tuneMs + result.generationMs
+            }
         }
 
         var rows: [Row] = []
@@ -66,13 +68,13 @@ struct CGSTuningParameterSweep {
             let tuneStr = row.tuneMs > 0 ? pad(row.tuneMs, width: 8) : "       —"
             print(
                 "\(row.label)"
-                + "  \(tuneStr)"
-                + "  \(pad(row.result.generationMs, width: 7))"
-                + "  \(pad(row.totalMs, width: 9))"
-                + "  \(pad(row.result.attempts, width: 8))"
-                + "  \(pad(row.result.uniqueCount, width: 6))"
-                + "  \(pad(row.result.validityRate, width: 8))"
-                + "  \(row.result.heightDistribution)"
+                    + "  \(tuneStr)"
+                    + "  \(pad(row.result.generationMs, width: 7))"
+                    + "  \(pad(row.totalMs, width: 9))"
+                    + "  \(pad(row.result.attempts, width: 8))"
+                    + "  \(pad(row.result.uniqueCount, width: 6))"
+                    + "  \(pad(row.result.validityRate, width: 8))"
+                    + "  \(row.result.heightDistribution)"
             )
         }
 
@@ -88,7 +90,7 @@ struct CGSTuningParameterSweep {
                     recurse(),
                     Gen.choose(in: 0 ... 99 as ClosedRange<UInt>),
                     recurse()
-                ).map { left, value, right in SweepBST.node(left: left, value: value, right: right) })
+                ).map { left, value, right in SweepBST.node(left: left, value: value, right: right) }),
             ])
         }
         let isDeepValidBST: (SweepBST) -> Bool = { $0.isValidBST() && $0.height >= 3 }
@@ -99,7 +101,9 @@ struct CGSTuningParameterSweep {
             let label: String
             let tuneMs: Double
             let result: GenerationResult
-            var totalMs: Double { tuneMs + result.generationMs }
+            var totalMs: Double {
+                tuneMs + result.generationMs
+            }
         }
 
         var rows: [Row] = []
@@ -147,13 +151,13 @@ struct CGSTuningParameterSweep {
             let tuneStr = row.tuneMs > 0 ? pad(row.tuneMs, width: 8) : "       —"
             print(
                 "\(row.label)"
-                + "  \(tuneStr)"
-                + "  \(pad(row.result.generationMs, width: 7))"
-                + "  \(pad(row.totalMs, width: 9))"
-                + "  \(pad(row.result.attempts, width: 8))"
-                + "  \(pad(row.result.uniqueCount, width: 6))"
-                + "  \(pad(row.result.validityRate, width: 8))"
-                + "  \(row.result.heightDistribution)"
+                    + "  \(tuneStr)"
+                    + "  \(pad(row.result.generationMs, width: 7))"
+                    + "  \(pad(row.totalMs, width: 9))"
+                    + "  \(pad(row.result.attempts, width: 8))"
+                    + "  \(pad(row.result.uniqueCount, width: 6))"
+                    + "  \(pad(row.result.validityRate, width: 8))"
+                    + "  \(row.result.heightDistribution)"
             )
         }
 

@@ -1,5 +1,5 @@
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("All-skip concurrent contract tests")
 struct AllSkipConcurrentTests {
@@ -34,7 +34,9 @@ final class AlwaysSkipSpec {
     var value: Int = 0
 
     @Invariant
-    func alwaysTrue() -> Bool { true }
+    func alwaysTrue() -> Bool {
+        true
+    }
 
     @Command(weight: 1)
     func skipAlways() async throws {

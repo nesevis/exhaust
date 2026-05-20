@@ -512,7 +512,6 @@ struct ExamineFirstPartyGeneratorsTests {
         )
         #expect(report.passed)
     }
-
 }
 
 // MARK: - Helpers

@@ -3,7 +3,6 @@ import Testing
 
 @Suite("DecoderSelection")
 struct DecoderSelectionTests {
-
     // MARK: - requiresExactDecoder
 
     @Test("requiresExactDecoder forces exact regardless of other flags",

@@ -4,6 +4,7 @@
 //
 
 // MARK: - flatMap / flatMapped
+
 //
 // Aliases for bind / bound. Most Swift developers encounter flatMap before bind,
 // so these aid discoverability without duplicating implementation.

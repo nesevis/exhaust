@@ -93,7 +93,7 @@ func renderCommandPartition(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     into lines: inout [String]
 ) {
-    let prefixCommands = tagged.filter { $0.0.isPrefix }.map(\.1)
+    let prefixCommands = tagged.filter(\.0.isPrefix).map(\.1)
     if prefixCommands.isEmpty == false {
         lines.append("Sequential prefix:")
         for (index, command) in prefixCommands.enumerated() {

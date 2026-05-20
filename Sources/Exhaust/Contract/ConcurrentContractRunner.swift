@@ -38,10 +38,10 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
         idleTimeoutMilliseconds: idleTimeout
     )
     let trace = traceResult.trace
-    
+
     // Run the commands sequentially on a fresh spec. If the sequential replay passes, the resulting state is the expected outcome — what the system should have produced without the race.
     let oracle = timedOut ? nil : sequentialOracle(commands: finalInput.map(\.1), specInit: specInit, idleTimeoutMilliseconds: idleTimeout)
-    
+
     let result = ContractResult<Spec>(
         commands: finalInput.map(\.1),
         trace: trace,
@@ -49,20 +49,20 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
         seed: seed,
         discoveryMethod: discoveryMethod
     )
-    
+
     if suppressIssueReporting == false {
         failureContext.discoveryMethod = discoveryMethod
         failureContext.timedOut = timedOut
         failureContext.oracleDescription = oracle.map { oracle in
             let hasModel = oracle.modelDescription != "(no model properties)"
             return hasModel
-            ? "Expected result (from sequential replay of @Model):\n  \(oracle.modelDescription)"
-            : "Expected result (from sequential replay of @SystemUnderTest):\n  \(oracle.sutDescription)"
+                ? "Expected result (from sequential replay of @Model):\n  \(oracle.modelDescription)"
+                : "Expected result (from sequential replay of @SystemUnderTest):\n  \(oracle.sutDescription)"
         }
         let message = renderFailure(finalInput, trace: trace, context: failureContext)
         reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
     }
-    
+
     return result
 }
 
@@ -76,7 +76,7 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @discardableResult
 public func __runContractConcurrent<Spec: AsyncContractSpec>(
-    _ specType: Spec.Type,
+    _: Spec.Type,
     settings: [ConcurrentContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
@@ -98,19 +98,20 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
         return nil
     }
     precondition((1 ... 8).contains(config.concurrencyLevel), "concurrencyLevel must be between 1 and 8")
-    
-#if canImport(Testing)
-    let traitConfig = ExhaustTraitConfiguration.current
-    let regressionSeeds = traitConfig?.regressions ?? []
-    if let traitConfig {
-        let hasInlineBudget = settings.contains {
-            if case .budget = $0 { true } else { false } }
-        if hasInlineBudget == false, let traitBudget = traitConfig.budget {
-            config.budget = traitBudget
+
+    #if canImport(Testing)
+        let traitConfig = ExhaustTraitConfiguration.current
+        let regressionSeeds = traitConfig?.regressions ?? []
+        if let traitConfig {
+            let hasInlineBudget = settings.contains {
+                if case .budget = $0 { true } else { false }
+            }
+            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                config.budget = traitBudget
+            }
         }
-    }
-#endif
-    
+    #endif
+
     // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop — a deadlock under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
     let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
     return await __ExhaustRuntime.dispatchToGCD {
@@ -119,12 +120,12 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             nonisolated(unsafe) var report = ExhaustReport()
             nonisolated(unsafe) var coverageInvocations = 0
             let statsAccumulator: OpenPBTStatsAccumulator? = config.collectOpenPBTStats
-            ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
-            : nil
-            
+                ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
+                : nil
+
             var failureContext = FailureContext()
             failureContext.specName = "\(Spec.self)"
-            
+
             let commandGen = Spec.commandGenerator.gen
             let samplingBudget = config.budget.samplingBudget
             let coverageBudget = config.budget.coverageBudget
@@ -142,10 +143,10 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 maxStalls: 2,
                 wallClockDeadlineNanoseconds: UInt64(samplingBudget) * 5 * 1_000_000
             )
-            
+
             // Safe: metatypes are stateless.
             nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
-            
+
             let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
             let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
                 rawIdentifySkips(taggedCommands.map(\.1))
@@ -160,7 +161,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 lastRunTimedOut.value = result.timedOut
                 return result.passed
             }
-            
+
             defer {
                 let samplingInvocations = invocationCounter.value - coverageInvocations
                 report.totalMilliseconds = Double((ContinuousClock.now - runStart).components.attoseconds) / 1e15
@@ -174,63 +175,63 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 }
                 config.onReportClosure?(report)
             }
-            
+
             // --- Phase 0: Regression seeds from .exhaust(regressions:) trait ---
-#if canImport(Testing)
-            if regressionSeeds.isEmpty == false {
-                for encodedSeed in regressionSeeds {
-                    guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
-                        reportIssue(
-                            "Invalid regression seed: \(encodedSeed)",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                        continue
-                    }
-                    var regressionInterpreter = ValueAndChoiceTreeInterpreter(
-                        sequenceGen,
-                        materializePicks: true,
-                        seed: regressionSeed,
-                        maxRuns: 1
-                    )
-                    if let (input, _) = try? regressionInterpreter.next() {
-                        let passed = property(input)
-                        if passed == false {
-                            var ctx = failureContext
-                            ctx.seed = regressionSeed
-                            ctx.originalCount = input.count
-                            ctx.sequencesTested = 1
-                            return buildFailureResult(
-                                finalInput: input,
-                                specInit: specInit,
-                                concurrencyLevel: concurrencyLevel,
-                                idleTimeout: idleTimeout,
-                                seed: regressionSeed,
-                                discoveryMethod: .replay,
-                                timedOut: false,
-                                failureContext: &ctx,
-                                suppressIssueReporting: config.suppressIssueReporting,
-                                fileID: fileID, filePath: filePath, line: line, column: column
-                            )
-                        } else if config.suppressIssueReporting == false {
+            #if canImport(Testing)
+                if regressionSeeds.isEmpty == false {
+                    for encodedSeed in regressionSeeds {
+                        guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
                             reportIssue(
-                                "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                                "Invalid regression seed: \(encodedSeed)",
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,
                                 column: column
                             )
+                            continue
+                        }
+                        var regressionInterpreter = ValueAndChoiceTreeInterpreter(
+                            sequenceGen,
+                            materializePicks: true,
+                            seed: regressionSeed,
+                            maxRuns: 1
+                        )
+                        if let (input, _) = try? regressionInterpreter.next() {
+                            let passed = property(input)
+                            if passed == false {
+                                var ctx = failureContext
+                                ctx.seed = regressionSeed
+                                ctx.originalCount = input.count
+                                ctx.sequencesTested = 1
+                                return buildFailureResult(
+                                    finalInput: input,
+                                    specInit: specInit,
+                                    concurrencyLevel: concurrencyLevel,
+                                    idleTimeout: idleTimeout,
+                                    seed: regressionSeed,
+                                    discoveryMethod: .replay,
+                                    timedOut: false,
+                                    failureContext: &ctx,
+                                    suppressIssueReporting: config.suppressIssueReporting,
+                                    fileID: fileID, filePath: filePath, line: line, column: column
+                                )
+                            } else if config.suppressIssueReporting == false {
+                                reportIssue(
+                                    "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                                    fileID: fileID,
+                                    filePath: filePath,
+                                    line: line,
+                                    column: column
+                                )
+                            }
                         }
                     }
                 }
-            }
-#endif
-            
+            #endif
+
             // --- Phase 1: SCA coverage (command-type orderings with random lane assignments) ---
             let coverageStart = ContinuousClock.now
-            if config.seed == nil && coverageBudget > 0 && config.useRandomOnly == false {
+            if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
                 if let scaResult = runConcurrentSCACoverage(
                     seqGen: sequenceGen,
                     commandGen: commandGen,
@@ -246,7 +247,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                         report.applyReductionStats(stats)
                     }
                     report.reductionInvocations = scaResult.reductionInvocations
-                    
+
                     var ctx = failureContext
                     ctx.originalCount = scaResult.originalCount
                     ctx.iteration = Int(scaResult.iteration)
@@ -264,7 +265,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                         suppressIssueReporting: config.suppressIssueReporting,
                         fileID: fileID, filePath: filePath, line: line, column: column
                     )
-                    
+
                     coverageInvocations = invocationCounter.value
                     report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
                     return result
@@ -272,7 +273,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             }
             coverageInvocations = invocationCounter.value
             report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
-            
+
             // --- Phase 2: Random sampling ---
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
@@ -281,7 +282,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 maxRuns: samplingBudget
             )
             let actualSeed = interpreter.baseSeed
-            
+
             var samplingIteration = 0
             do {
                 while let (input, tree) = try interpreter.next() {
@@ -293,7 +294,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                         tree: tree,
                         phase: .random
                     )
-                    
+
                     if passed == false {
                         ExhaustLog.notice(
                             category: .propertyTest,
@@ -307,9 +308,9 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                                 "[\(marker.description)] \(cmd)"
                             )
                         }
-                        
+
                         let finalInput: [(ScheduleMarker, Spec.Command)]
-                        
+
                         if lastRunTimedOut.value {
                             ExhaustLog.notice(
                                 category: .propertyTest,
@@ -326,7 +327,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                                 identifySkips: identifySkips,
                                 logEvent: "concurrent_skip_pruning"
                             )
-                            
+
                             nonisolated(unsafe) var reductionPropertyInvocations = 0
                             let countingProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
                                 reductionPropertyInvocations += 1
@@ -343,7 +344,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             report.applyReductionStats(reduceResult.stats)
                             report.reductionMilliseconds = Double((ContinuousClock.now - reductionStart).components.attoseconds) / 1e15
                             report.reductionInvocations = reductionPropertyInvocations
-                            
+
                             if let (_, reduced) = reduceResult.reduced {
                                 ExhaustLog.notice(
                                     category: .propertyTest,
@@ -366,7 +367,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                                 finalInput = reduceValue
                             }
                         }
-                        
+
                         let discoveryMethod: ContractDiscoveryMethod = config.seed != nil ? .replay : .randomSampling
                         var ctx = failureContext
                         ctx.seed = actualSeed
@@ -397,7 +398,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     column: column
                 )
             }
-            
+
             return nil
         } // withConfiguration
     } // dispatchToGCD

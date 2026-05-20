@@ -24,7 +24,7 @@ struct ChoiceValueOrderingTests {
         let nanEquivLarge = ((nan < large) == false) && ((large < nan) == false)
         let smallEquivLarge = ((small < large) == false) && ((large < small) == false)
 
-        if nanEquivSmall && nanEquivLarge {
+        if nanEquivSmall, nanEquivLarge {
             #expect(smallEquivLarge, "Transitivity of equivalence violated")
         }
     }

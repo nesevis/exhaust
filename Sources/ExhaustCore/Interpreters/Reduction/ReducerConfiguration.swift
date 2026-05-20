@@ -4,19 +4,19 @@ package extension Interpreters {
     /// Controls the ChoiceGraph reducer's pass pipeline: stall budget, scope scheduling, and visualization.
     struct ReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
-        public let maxStalls: Int
+        package let maxStalls: Int
 
         /// Wall-clock deadline for the reduction phase, in nanoseconds. The machine checks this after each decode step and terminates early when exceeded. Zero means no limit.
-        public let wallClockDeadlineNanoseconds: UInt64
+        package let wallClockDeadlineNanoseconds: UInt64
 
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
-        public var visualize: Bool = false
+        package var visualize: Bool = false
 
         /// Tuning constants for the scheduler's internal heuristics.
-        public let tuning: SchedulerTuning = .init()
+        package let tuning: SchedulerTuning = .init()
 
         /// Creates a configuration with the given stall budget and optional wall-clock deadline.
-        public init(
+        package init(
             maxStalls: Int,
             wallClockDeadlineNanoseconds: UInt64 = 0
         ) {
@@ -39,7 +39,7 @@ package struct SchedulerTuning: Sendable {
     public var relaxMaterializationBudget: Int = 10
 
     /// Half-width of the bit-pattern window used by bind classification endpoint probing. Unsigned tags probe `0 ... windowRadius`; signed tags probe `simplest ± windowRadius`.
-    public var classificationWindowRadius: UInt64 = 10_000
+    public var classificationWindowRadius: UInt64 = 10000
 
     /// Maximum index distance between source and sink in pairwise operations (type-compatibility edges, lockstep suffix windows). Caps O(n²) pair enumeration to O(n × maxPairLookahead) for large groups.
     public static let maxPairLookahead: Int = 50

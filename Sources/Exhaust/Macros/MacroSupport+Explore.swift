@@ -177,7 +177,7 @@ public extension __ExhaustRuntime {
         property: @Sendable (Output) throws -> Void,
         detection: @Sendable (Output) throws -> Void
     ) -> ExploreReport<Output> {
-        return withoutActuallyEscaping(detection) { detection in
+        withoutActuallyEscaping(detection) { detection in
             let boolProperty = wrapDetectionProperty(detection)
 
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?

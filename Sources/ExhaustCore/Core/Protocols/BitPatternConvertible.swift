@@ -5,7 +5,7 @@
 ///
 /// Attempts to cast the value to each ``BitPatternConvertible`` conformer and compares its ``BitPatternConvertible/bitPattern64`` against ``TypeTag/simplestBitPattern``. Returns `nil` when the value is not a recognized ``BitPatternConvertible`` type.
 package func isAtSemanticSimplest(_ value: Any) -> Bool? {
-    func check<T: BitPatternConvertible>(_ value: Any, as type: T.Type) -> Bool? {
+    func check<T: BitPatternConvertible>(_ value: Any, as _: T.Type) -> Bool? {
         guard let typed = value as? T else { return nil }
         return typed.bitPattern64 == T.tag.simplestBitPattern
     }

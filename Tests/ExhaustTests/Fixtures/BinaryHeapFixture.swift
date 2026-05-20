@@ -128,7 +128,7 @@ enum BinaryHeapFixture {
                 )
             return #gen(.oneOf(weighted: (1, .just(.empty)), (5, nodeGen)))
         }
-        .filter { Self.invariant($0) }
+        .filter { invariant($0) }
     }
 
     /// Property under test: if the heap satisfies the min-heap invariant, then ``toSortedList(_:)`` produces a sorted list with the same elements as ``toList(_:)``. False because of the buggy ``toSortedList(_:)``.

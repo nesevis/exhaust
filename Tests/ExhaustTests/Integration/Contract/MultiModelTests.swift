@@ -70,8 +70,13 @@ struct BuggyKeyValueStore {
     private var storage: [String: Int] = [:]
     private var _count: Int = 0
 
-    var count: Int { _count }
-    var keys: [String] { Array(storage.keys) }
+    var count: Int {
+        _count
+    }
+
+    var keys: [String] {
+        Array(storage.keys)
+    }
 
     mutating func insert(key: String, value: Int) {
         storage[key] = value

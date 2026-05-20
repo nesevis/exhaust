@@ -4,9 +4,8 @@ import Testing
 
 @Suite("Scheduler Decisions")
 struct SchedulerDecisionTests {
-
     // MARK: - Convergence Detection
-    
+
     let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
 
     @Test("Scheduler detects convergence when property always passes")
@@ -110,4 +109,3 @@ struct SchedulerDecisionTests {
         #expect(reducedValue.0 == 10 || reducedValue.1 == 10)
     }
 }
-

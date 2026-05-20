@@ -3,7 +3,6 @@ import Testing
 
 @Suite("Encoder Probe Sequences")
 struct EncoderIsolationTests {
-
     // MARK: - GraphValueEncoder
 
     @Test("Value encoder binary search narrows toward zero on rejection")
@@ -151,6 +150,7 @@ struct EncoderIsolationTests {
             #expect(removedCounts[index] <= removedCounts[index - 1], "Batch size should not increase on rejection")
         }
     }
+
     // MARK: - GraphBinarySearchEncoder
 
     @Test("Binary search encoder produces probes for negative signed values")
@@ -236,7 +236,7 @@ private func minimizationScope(
             valueBenefit: 0,
             reductionMagnitude: 0,
             estimatedCost: 10
-        ),
+        )
     )
     return EncoderInput(
         transformation: transformation,
@@ -261,7 +261,7 @@ private func removalScope(
             valueBenefit: 0,
             reductionMagnitude: 0,
             estimatedCost: firstScope.maxBatch
-        ),
+        )
     )
     return EncoderInput(
         transformation: transformation,

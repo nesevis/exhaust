@@ -250,7 +250,6 @@ struct ReducerReduceValuesTests {
         // p <= left, p <= right, and left < right  ==>  (0, 0, 1)
         #expect(result.1 == (0, 0, 1))
     }
-
 }
 
 // MARK: - Helpers

@@ -28,14 +28,13 @@ struct CouplingShrinkingChallenge {
 
     /// The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
     static let property: ([Int]) -> Bool = { arr in
-        let result = arr.indices.allSatisfy { i in
+        arr.indices.allSatisfy { i in
             let j = arr[i]
             if j != i, arr[j] == i {
                 return false
             }
             return true
         }
-        return result
     }
 
     @Test("Coupling")

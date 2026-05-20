@@ -1,4 +1,5 @@
 // MARK: - CGS Tuning Benchmark
+
 //
 // Measures the cost of online CGS tuning during generation.
 // The generator places a filter inside a bind so that CGS tuning

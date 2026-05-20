@@ -1,5 +1,5 @@
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Tests
 
@@ -13,7 +13,7 @@ struct LeakyBucketConcurrentTests {
                 LeakyBucketSpec.self,
                 settings: [
                     .onReport { print($0.profilingSummary) },
-                    .suppress(.issueReporting)
+                    .suppress(.issueReporting),
                 ]
             )
         )
@@ -66,9 +66,13 @@ final class LeakyBucket: @unchecked Sendable {
     private var _tokens: Int = 0
     private let _capacity: Int
 
-    init(capacity: Int) { _capacity = capacity }
+    init(capacity: Int) {
+        _capacity = capacity
+    }
 
-    var tokens: Int { _tokens }
+    var tokens: Int {
+        _tokens
+    }
 
     func refill() async {
         guard _tokens < _capacity else { return }

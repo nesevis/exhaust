@@ -1,4 +1,5 @@
 // MARK: - Cooperative Task Executor for Deterministic Interleaving
+
 //
 // This file implements a cooperative scheduling pattern identical to Swift's own CooperativeExecutor (stdlib/public/Concurrency/CooperativeExecutor.swift). N LaneExecutor instances share a single RunQueue. The drain loop — run synchronously by the calling thread — picks jobs from the queue based on a generated schedule and executes each via runSynchronously(on:).
 //
@@ -58,8 +59,8 @@ final class RunQueue: @unchecked Sendable {
 
     init(laneCount: Int) {
         self.laneCount = laneCount
-        self.laneJobs = Array(repeating: [], count: laneCount)
-        self.laneCursors = Array(repeating: 0, count: laneCount)
+        laneJobs = Array(repeating: [], count: laneCount)
+        laneCursors = Array(repeating: 0, count: laneCount)
     }
 
     /// Appends a job to the specified lane's queue. May be called from any thread.
@@ -93,12 +94,10 @@ final class RunQueue: @unchecked Sendable {
                 laneCursors[prefIndex] += 1
                 return (preferred, job)
             }
-            for laneIndex in 0 ..< laneCount {
-                if laneCursors[laneIndex] < laneJobs[laneIndex].count {
-                    let job = laneJobs[laneIndex][laneCursors[laneIndex]]
-                    laneCursors[laneIndex] += 1
-                    return (LaneID(index: UInt8(laneIndex)), job)
-                }
+            for laneIndex in 0 ..< laneCount where laneCursors[laneIndex] < laneJobs[laneIndex].count {
+                let job = laneJobs[laneIndex][laneCursors[laneIndex]]
+                laneCursors[laneIndex] += 1
+                return (LaneID(index: UInt8(laneIndex)), job)
             }
             return nil
         }

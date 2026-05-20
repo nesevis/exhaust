@@ -9,7 +9,7 @@ public extension __ExhaustRuntime {
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { (output: Output) throws -> Any in
-                guard let value = Self._mirrorExtract(output, label: label) else {
+                guard let value = _mirrorExtract(output, label: label) else {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return value

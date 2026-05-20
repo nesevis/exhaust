@@ -3,7 +3,6 @@ import Testing
 
 @Suite("DispatchDecision")
 struct DispatchDecisionTests {
-
     private static let tuning = SchedulerTuning()
 
     // MARK: - Fixtures

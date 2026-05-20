@@ -27,7 +27,7 @@ struct GraphEncoderTests {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: firstScope.maxBatch
-            ),
+            )
         )
         return EncoderInput(
             transformation: transformation,
@@ -53,7 +53,7 @@ struct GraphEncoderTests {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: 10
-            ),
+            )
         )
         return EncoderInput(
             transformation: transformation,
@@ -215,7 +215,7 @@ struct GraphEncoderTests {
                 valueBenefit: 0,
                 reductionMagnitude: 0,
                 estimatedCost: 1
-            ),
+            )
         )
         let scope = EncoderInput(
             transformation: transformation,

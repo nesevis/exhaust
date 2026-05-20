@@ -1,5 +1,5 @@
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Tests
 
@@ -141,7 +141,9 @@ final class NonAtomicCounterSpec {
 final class NonAtomicCounter: @unchecked Sendable {
     private var _value: Int = 0
 
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     func increment() async {
         let current = _value

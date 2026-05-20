@@ -1,5 +1,5 @@
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Tests
 
@@ -28,7 +28,9 @@ final class SleepingSpec {
     var counter: SleepingCounter = .init()
 
     @Invariant
-    func alwaysTrue() -> Bool { true }
+    func alwaysTrue() -> Bool {
+        true
+    }
 
     @Command(weight: 1)
     func doSleep() async throws {
@@ -42,7 +44,9 @@ final class SleepingSpec {
 /// Deliberately unsynchronized — @unchecked Sendable is required because the cooperative scheduler accesses the instance from multiple Tasks via SendableBox.
 final class SleepingCounter: @unchecked Sendable {
     private var _value: Int = 0
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     func sleepAndIncrement() async {
         try? await Task.sleep(for: .milliseconds(200))

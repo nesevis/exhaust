@@ -68,4 +68,3 @@ public struct ExhaustConcurrentContractMacro: ExpressionMacro {
         """
     }
 }
-
