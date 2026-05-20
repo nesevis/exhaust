@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 26/3/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Experimental Challenge: Sparse Modular Zigzag")
+@Suite("Experimental Challenge: Sparse Modular Zigzag", .tags(.challenge))
 struct SparseModularZigzagChallenge {
     /*
      A challenge designed to attack multiple reducer weak points simultaneously:

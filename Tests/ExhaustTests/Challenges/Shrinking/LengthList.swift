@@ -5,12 +5,13 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Length List")
+@Suite("Shrinking Challenge: Length List", .tags(.challenge))
 struct LengthListShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/lengthlist.md

@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Shrinking Challenge: Difference")
+@Suite("Shrinking Challenge: Difference", .tags(.challenge))
 struct DifferenceShrinkingChallenge {
     /// https://github.com/jlink/shrinking-challenge/blob/main/challenges/difference.md
     /// There are two tests in this challenge. Both deal with the absolute difference between two random positive integer parameters.

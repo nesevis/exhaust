@@ -3,12 +3,13 @@
 //  Exhaust
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 @testable import ExhaustCore
 
-@Suite("Reducer Stress Tests")
+@Suite("Reducer Stress Tests", .tags(.challenge, .slow))
 struct ReducerStressTests {
     // Generators that produce large, structurally complex counterexamples
     // to stress the rebuild and source construction paths. Uses `reflecting:`

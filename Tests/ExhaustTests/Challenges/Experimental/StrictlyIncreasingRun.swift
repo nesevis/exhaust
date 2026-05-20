@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Experimental Challenge: Strictly Increasing Run")
+@Suite("Experimental Challenge: Strictly Increasing Run", .tags(.challenge))
 struct StrictlyIncreasingRunChallenge {
     /*
      This tests that an array of integers contains no contiguous run of 3

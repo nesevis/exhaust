@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Experimental Challenge: String Anagram")
+@Suite("Experimental Challenge: String Anagram", .tags(.challenge))
 struct StringAnagramChallenge {
     /*
      This tests that two distinct byte arrays (representing strings) of the same

@@ -5,13 +5,14 @@
 //  Created by Chris Kolbu on 17/3/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
 // MARK: - Bound5
 
-@Suite("Bound5 Scaling Variants")
+@Suite("Bound5 Scaling Variants", .tags(.challenge, .slow))
 struct Bound5ScalingVariant {
     typealias Bound5 = Bound5Fixture.Tuple
 
@@ -52,7 +53,7 @@ struct Bound5ScalingVariant {
 
 // MARK: - Binary Heap
 
-@Suite("Binary Heap Scaling Variants")
+@Suite("Binary Heap Scaling Variants", .tags(.challenge, .slow))
 struct BinaryHeapScalingVariant {
     typealias Heap = BinaryHeapFixture.Heap<Int>
 
@@ -114,7 +115,7 @@ struct BinaryHeapScalingVariant {
 
 // MARK: - Calculator
 
-@Suite("Calculator Scaling Variants")
+@Suite("Calculator Scaling Variants", .tags(.challenge, .slow))
 struct CalculatorScalingVariant {
     typealias Expr = CalculatorFixture.Expr
 
@@ -184,7 +185,7 @@ struct CalculatorScalingVariant {
 
 // MARK: - Coupling
 
-@Suite("Coupling Scaling Variants")
+@Suite("Coupling Scaling Variants", .tags(.challenge, .slow))
 struct CouplingScalingVariant {
     @Test("Scaling variant", arguments: [ScalingVariant.constant])
     func coupling(variant: ScalingVariant) throws {
@@ -220,7 +221,7 @@ struct CouplingScalingVariant {
 
 // MARK: - Deletion
 
-@Suite("Deletion Scaling Variants")
+@Suite("Deletion Scaling Variants", .tags(.challenge, .slow))
 struct DeletionScalingVariant {
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func deletion(variant: ScalingVariant) {
@@ -254,7 +255,7 @@ struct DeletionScalingVariant {
 
 // MARK: - Difference
 
-@Suite("Difference Scaling Variants")
+@Suite("Difference Scaling Variants", .tags(.challenge, .slow))
 struct DifferenceScalingVariant {
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func difference(variant: ScalingVariant) {
@@ -275,7 +276,7 @@ struct DifferenceScalingVariant {
 
 // MARK: - Distinct
 
-@Suite("Distinct Scaling Variants")
+@Suite("Distinct Scaling Variants", .tags(.challenge, .slow))
 struct DistinctScalingVariant {
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func distinct(variant: ScalingVariant) {
@@ -298,7 +299,7 @@ struct DistinctScalingVariant {
 
 // MARK: - Large Union List
 
-@Suite("Large Union List Scaling Variants")
+@Suite("Large Union List Scaling Variants", .tags(.challenge, .slow))
 struct LargeUnionListScalingVariant {
     @Test("Scaling variant", arguments: [ScalingVariant.constant])
     func largeUnionList(variant: ScalingVariant) {
@@ -324,7 +325,7 @@ struct LargeUnionListScalingVariant {
 
 // MARK: - Nested Lists
 
-@Suite("Nested Lists Scaling Variants")
+@Suite("Nested Lists Scaling Variants", .tags(.challenge, .slow))
 struct NestedListsScalingVariant {
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func nestedLists(variant: ScalingVariant) {
@@ -348,7 +349,7 @@ struct NestedListsScalingVariant {
 
 // MARK: - Reverse
 
-@Suite("Reverse Scaling Variants")
+@Suite("Reverse Scaling Variants", .tags(.challenge, .slow))
 struct ReverseScalingVariant {
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func reverse(variant: ScalingVariant) {
@@ -373,7 +374,7 @@ struct ReverseScalingVariant {
 
 // MARK: - Length List
 
-@Suite("Length List Scaling Variants")
+@Suite("Length List Scaling Variants", .tags(.challenge, .slow))
 struct LengthListScalingVariant {
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func lengthList(variant: ScalingVariant) {

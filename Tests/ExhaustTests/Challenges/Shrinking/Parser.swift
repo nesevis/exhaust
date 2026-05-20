@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 21/3/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Shrinking Challenge: Parser")
+@Suite("Shrinking Challenge: Parser", .tags(.challenge))
 struct ParserShrinkingChallenge {
     /*
      https://github.com/mc-imperial/hypothesis-ecoop-2020-artifact/tree/master/smartcheck-benchmarks/evaluations/parser

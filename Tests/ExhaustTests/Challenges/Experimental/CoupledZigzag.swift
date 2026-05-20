@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 26/3/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Experimental Challenge: Coupled Zigzag")
+@Suite("Experimental Challenge: Coupled Zigzag", .tags(.challenge))
 struct CoupledZigzagChallenge {
     /*
      Two coordinates coupled by the property but structurally separated

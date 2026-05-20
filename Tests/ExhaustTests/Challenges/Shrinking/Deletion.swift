@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Shrinking Challenge: Deletion")
+@Suite("Shrinking Challenge: Deletion", .tags(.challenge))
 struct DeletionShrinkingChallenge {
     /// https://github.com/jlink/shrinking-challenge/blob/main/challenges/deletion.md
     /// This tests the property "if we remove an element from a list, the element is no longer in the list".

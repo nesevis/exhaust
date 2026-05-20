@@ -5,12 +5,13 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Coupling")
+@Suite("Shrinking Challenge: Coupling", .tags(.challenge))
 struct CouplingShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/coupling.md

@@ -1,8 +1,9 @@
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Experimental Challenge: fast-check Dichotomy")
+@Suite("Experimental Challenge: fast-check Dichotomy", .tags(.challenge))
 struct FastCheckDichotomyChallenge {
     /*
      Ported from fast-check's regression test for barely-infinite shrinking

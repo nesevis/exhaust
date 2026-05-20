@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 21/3/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Experimental Challenge: Replacement")
+@Suite("Experimental Challenge: Replacement", .tags(.challenge))
 struct ReplacementChallenge {
     /*
      From the MacIver & Donaldson ECOOP 2020 artifact (hypothesis-ecoop-2020-artifact,

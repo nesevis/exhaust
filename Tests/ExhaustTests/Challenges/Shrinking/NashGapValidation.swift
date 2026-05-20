@@ -1,8 +1,9 @@
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Nash-Gap Validation")
+@Suite("Shrinking Challenge: Nash-Gap Validation", .tags(.challenge))
 struct NashGapValidation {
     // MARK: - Mixed coupling: coupled pairs + independent high-value coordinates
 

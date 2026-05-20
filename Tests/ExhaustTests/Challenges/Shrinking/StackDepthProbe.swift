@@ -5,11 +5,12 @@
 //  Probes for bind-bound materialization at extreme depths.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Bind-Bound Materialization Probe")
+@Suite("Bind-Bound Materialization Probe", .tags(.challenge))
 struct BindBoundMaterializationProbe {
     indirect enum SimpleExp: Equatable {
         case leaf(Int)

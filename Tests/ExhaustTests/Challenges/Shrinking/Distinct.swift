@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Shrinking Challenge: Distinct")
+@Suite("Shrinking Challenge: Distinct", .tags(.challenge))
 struct DistinctShrinkingChallenge {
     /// https://github.com/jlink/shrinking-challenge/blob/main/challenges/distinct.md
     /// This tests the example provided for the property "a list of integers containing at least three distinct elements".

@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 17/4/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Experimental Challenge: Graph Coloring")
+@Suite("Experimental Challenge: Graph Coloring", .tags(.challenge, .slow))
 struct GraphColoringChallenge {
     /*
      Multi-leaf bind-inner shrinking challenge with multiple local minima.

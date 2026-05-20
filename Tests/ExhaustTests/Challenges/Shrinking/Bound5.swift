@@ -5,13 +5,14 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import OSLog
 import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Bound5")
+@Suite("Shrinking Challenge: Bound5", .tags(.challenge))
 struct Bound5ShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/bound5.md

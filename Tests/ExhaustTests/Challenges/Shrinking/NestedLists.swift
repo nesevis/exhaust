@@ -5,11 +5,12 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Shrinking Challenge: Nested Lists")
+@Suite("Shrinking Challenge: Nested Lists", .tags(.challenge))
 struct NestedListsShrinkingChallenge {
     /// https://github.com/jlink/shrinking-challenge/blob/main/challenges/nestedlists.md
     /// This tests the performance of shrinking a list of lists, testing the false property that the sum of lengths of the element lists is at most 10.
