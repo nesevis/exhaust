@@ -58,9 +58,6 @@ struct ShortlexKeyTests {
         let zero = ChoiceValue(Int64(0), tag: .int64)
         #expect(zero.shortlexKey < min.shortlexKey)
         #expect(zero.shortlexKey < max.shortlexKey)
-//        #expect(max.shortlexKey == UInt64(Int64.max))
-//        // Int64.min has magnitude Int64.max + 1
-//        #expect(min.shortlexKey == UInt64(Int64.max) + 1)
     }
 
     // MARK: Other signed widths

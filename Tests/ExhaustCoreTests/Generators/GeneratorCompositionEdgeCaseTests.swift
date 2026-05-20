@@ -59,11 +59,9 @@ struct GeneratorCompositionEdgeCaseTests {
         let outerGen = Gen.zip(middleGen, Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling))
 
         var iterator = ValueInterpreter(outerGen)
-        let nestedTuple = try iterator.next()!
-        // TOOD: write #expects
-
-        // All values should be generated successfully
-        // Type system ensures correctness
+        let value = try #require(try iterator.next())
+        let ((_, _), _) = value.0
+        _ = value.1
     }
 
     @Test("Empty array generator in composition")

@@ -20,13 +20,11 @@ struct NestedListsShrinkingChallenge {
     @Test("Nested Lists")
     func nestedListsFull() {
         let gen = #gen(.uint().array().array())
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: Self.counterExample,
             .budget(.extensive),
             .suppress(.issueReporting),
-            .onReport { report = $0 },
 //            .logging(.debug, .keyValue)
 //                .replay(13580297670505979531)
         ) { arrs in
@@ -36,7 +34,6 @@ struct NestedListsShrinkingChallenge {
             }
             return count <= 10
         }
-        if let report { print("[PROFILE] NestedLists: \(report.profilingSummary)") }
 
         #expect(output == [Array(repeating: UInt(0), count: 11)])
     }

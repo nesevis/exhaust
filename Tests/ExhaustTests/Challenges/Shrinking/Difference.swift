@@ -37,15 +37,12 @@ struct DifferenceShrinkingChallenge {
             arr[0] < 10 || arr[0] != arr[1]
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: [700, 700],
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             property: property
         )
-        if let report { print("[PROFILE] Difference1: \(report.profilingSummary)") }
 
         #expect(output == [10, 10])
     }
@@ -62,16 +59,13 @@ struct DifferenceShrinkingChallenge {
             return diff < 1 || diff > 4
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 10000)),
 //            .reflecting([700, 701]),
-            .onReport { report = $0 },
             property: property
         )
-        if let report { print("[PROFILE] Difference2: \(report.profilingSummary)") }
 
         #expect(output == [10, 6])
     }
@@ -80,12 +74,10 @@ struct DifferenceShrinkingChallenge {
     func differenceTest3() {
         let gen = #gen(.int()).array(length: 2)
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .budget(.extensive),
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) { arr in
             if arr[0] < 10 { return true }
             let (result, overflow) = arr[0].subtractingReportingOverflow(arr[1])
@@ -93,7 +85,6 @@ struct DifferenceShrinkingChallenge {
             let diff = abs(result)
             return diff != 1
         }
-        if let report { print("[PROFILE] Difference3: \(report.profilingSummary)") }
         #expect(output == [10, 9])
     }
 }

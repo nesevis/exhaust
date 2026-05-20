@@ -28,7 +28,6 @@ struct ParserShrinkingChallenge {
 
     @Test("Parser, Full")
     func parserFull() throws {
-        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 ParserFixture.langGen,
@@ -36,11 +35,9 @@ struct ParserShrinkingChallenge {
                 .budget(.extensive),
                 .logging(.debug, .keyValue),
                 .suppress(.issueReporting),
-                .onReport { report = $0 },
                 property: ParserFixture.property
             )
         )
-        if let report { print("[PROFILE] Parser: \(report.profilingSummary)") }
 
         print("Output: \(output)")
         #expect(ParserFixture.property(output) == false)

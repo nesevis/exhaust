@@ -346,23 +346,15 @@ struct GraphColoringChallenge {
 
     @Test("Graph coloring shrinks to a canonical CE class")
     func graphColoringRandomSeed() {
-        var report: ExhaustReport?
         let result = #exhaust(
             Self.gen,
             .suppress(.issueReporting),
             .budget(.extensive),
-//            .onReport { report = $0 },
-//            .logging(.debug),
             property: Self.property
         )
-//        let value = try #require(result)
 
         guard let value = result else {
             return
-        }
-
-        if let report {
-            print("[PROFILE] GraphColoring: \(report.profilingSummary)")
         }
 //        print("[CE] \(value)")
 

@@ -37,18 +37,15 @@ struct NashGapValidation {
         // Large counterexample where all constraints are satisfied.
         let value = (18, 22, 15, 25, 28, 19, 27, 20)
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             .logging(.debug)
         ) { a, b, c, d, e, f, g, h in
             // Fails when: both coupled sums >= 10 AND all four independent values >= 15.
             a + b < 10 || c + d < 10 || e < 15 || f < 15 || g < 15 || h < 15
         }
-        if let report { print("[PROFILE] MixedCoupling: \(report.profilingSummary)") }
 
         if let output {
             #expect(output.0 + output.1 >= 10)
@@ -82,17 +79,14 @@ struct NashGapValidation {
 
         let value = (12, 28, 19, 35, 8, 27, 38, 22, 31, 25)
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             .logging(.debug)
         ) { a, b, c, d, e, f, g, h, i, j in
             a + b < 8 || c + d < 8 || e + f < 8 || g < 20 || h < 20 || i < 20 || j < 20
         }
-        if let report { print("[PROFILE] WideMixedCoupling: \(report.profilingSummary)") }
 
         if let output {
             #expect(output.0 + output.1 >= 8)

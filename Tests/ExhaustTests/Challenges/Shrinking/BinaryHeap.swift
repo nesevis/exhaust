@@ -23,7 +23,6 @@ struct BinaryHeapShrinkingChallenge {
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {
         let boundGen = #gen(.uint64(in: 0 ... 20)).bind { BinaryHeapFixture.heapGen(depth: $0) }
-        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 boundGen,
@@ -31,17 +30,9 @@ struct BinaryHeapShrinkingChallenge {
                 .budget(.extensive),
                 .replay(2250),
                 .logging(.debug),
-                .onReport { report = $0 },
                 property: BinaryHeapFixture.property
             )
         )
-        let rep = try #require(report)
-        // Temporarily commented while BoundValueScope is disabled and the inner-descendant rework is in progress. Restore once the multi-leaf inner fix lands and the counts stabilise.
-//        #expect(rep.propertyInvocations == 336)
-//        #expect(rep.totalMaterializations == 404)
-
-        print(rep.profilingSummary)
-
         let outputValues = BinaryHeapFixture.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
         // 1 *should* be the last value, as this is the shortlex smallest, but

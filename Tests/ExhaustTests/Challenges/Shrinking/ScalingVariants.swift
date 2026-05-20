@@ -34,19 +34,16 @@ struct Bound5ScalingVariant {
             e: [12744, -11152, -18025, -29069, 30825]
         )
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) { b5 in
             if b5.arr.isEmpty {
                 return true
             }
             return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
         }
-        if let report { print("[PROFILE] Bound5Scaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -70,17 +67,14 @@ struct BinaryHeapScalingVariant {
             return sorted == xs.sorted() && xs == xs.sorted()
         }
 
-        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 gen,
                 .suppress(.issueReporting),
                 .replay(10_128_299_447_377_935_498),
-                .onReport { report = $0 },
                 property: property
             )
         )
-        if let report { print("[PROFILE] BinaryHeapScaling(\(variant)): \(report.profilingSummary)") }
         let outputValues = BinaryHeapFixture.toList(output).sorted()
         #expect(Set(outputValues) == [0, 1])
     }
@@ -129,16 +123,13 @@ struct CalculatorScalingVariant {
         let scaling: SizeScaling<Int> = variant.scaling()
         let gen = #gen(Self.expression(depth: 4, scaling: scaling))
 
-        var report: ExhaustReport?
         let result = #exhaust(
             gen,
             reflecting: Expr.div(.value(5), .add(.value(3), .value(-3))),
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) { expr in
             CalculatorFixture.property(expr)
         }
-        if let report { print("[PROFILE] CalculatorScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(
             result == .div(.value(0), .div(.value(0), .value(1))) ||
@@ -206,13 +197,11 @@ struct CouplingScalingVariant {
             }
             .filter { arr in arr.allSatisfy { arr.indices.contains($0) } }
 
-        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 gen,
                 .suppress(.issueReporting),
-                .replay(9_293_532_994_034_525_134),
-                .onReport { report = $0 }
+                .replay(9_293_532_994_034_525_134)
             ) { arr in
                 arr.indices.allSatisfy { i in
                     let j = arr[i]
@@ -223,7 +212,6 @@ struct CouplingScalingVariant {
                 }
             }
         )
-        if let report { print("[PROFILE] CouplingScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(value.count == 2)
         #expect(value == [1, 0])
@@ -252,15 +240,12 @@ struct DeletionScalingVariant {
             return xs.contains(x) == false
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: ([5, 3, 5, 7], 5),
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             property: property
         )
-        if let report { print("[PROFILE] DeletionScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(output?.0 == [0, 0])
         #expect(output?.1 == 0)
@@ -276,16 +261,13 @@ struct DifferenceScalingVariant {
         let intScaling: SizeScaling<Int> = variant.scaling()
         let gen = #gen(.int(in: 1 ... 1000, scaling: intScaling)).array(length: 2)
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: [700, 700],
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) { arr in
             arr[0] < 10 || arr[0] != arr[1]
         }
-        if let report { print("[PROFILE] DifferenceScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(output == [10, 10])
     }
@@ -302,16 +284,13 @@ struct DistinctScalingVariant {
 
         let gen = #gen(.int(scaling: intScaling).array(length: 3 ... 30, scaling: arrayScaling))
 
-        var report: ExhaustReport?
         let counterExample = #exhaust(
             gen,
             reflecting: [1337, 80085, 69, 67],
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) {
             Set($0).count < 3
         }
-        if let report { print("[PROFILE] DistinctScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(counterExample == [-1, 0, 1])
     }
@@ -330,18 +309,15 @@ struct LargeUnionListScalingVariant {
 
         let value = [[76132], [-61180, -48610, 71763], [-25593]]
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .logging(.debug, .keyValue),
-            .onReport { report = $0 }
+            .logging(.debug, .keyValue)
         ) { arr in
             print("Attempt: \(arr)")
             return Set(arr.flatMap(\.self)).count <= 4
         }
-        if let report { print("[PROFILE] LargeUnionListScaling(\(variant)): \(report.profilingSummary)") }
         print()
         #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
@@ -359,16 +335,13 @@ struct NestedListsScalingVariant {
 
         let value: [[UInt]] = [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11]]
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) { arr in
             arr.map(\.count).reduce(0, +) <= 10
         }
-        if let report { print("[PROFILE] NestedListsScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(output == [Array(repeating: UInt(0), count: 11)])
     }
@@ -387,16 +360,13 @@ struct ReverseScalingVariant {
 
         let value: [UInt] = [5, 3, 1, 4, 2]
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) { arr in
             arr.elementsEqual(arr.reversed())
         }
-        if let report { print("[PROFILE] ReverseScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(output == [0, 1])
     }
@@ -415,16 +385,13 @@ struct LengthListScalingVariant {
 
         let value: [UInt] = [100, 200, 900, 50, 300]
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
+            .suppress(.issueReporting)
         ) { arr in
             arr.max() ?? 0 < 900
         }
-        if let report { print("[PROFILE] LengthListScaling(\(variant)): \(report.profilingSummary)") }
 
         #expect(output == [900])
     }

@@ -369,16 +369,6 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
-//    @Test func oneOfCaseIterableEquatable() {
-//        let report = #examine(.array(Direction.allCases), samples: 50)
-//        #expect(report.passed)
-//    }
-//
-//    @Test func oneOfCaseIterableNonEquatable() {
-//        let report = #examine(.array(DirectionNonEquatable.allCases), samples: 50)
-//        #expect(report.passed)
-//    }
-
     @Test func oneOfWeighted() {
         let report = #examine(
             .oneOf(weighted: (3, .int(in: 0 ... 10)), (1, .int(in: 90 ... 100))),
