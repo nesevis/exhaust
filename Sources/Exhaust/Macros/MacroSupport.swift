@@ -74,7 +74,14 @@ public extension __ExhaustRuntime {
         return Gen.$isInterpreting.withValue(true) {
             withoutActuallyEscaping(property) { property in
                 let property: @Sendable (Output) -> Bool = { value in
-                    (try? property(value)) ?? false
+                    do {
+                        return try property(value)
+                    } catch {
+                        #if canImport(XCTest)
+                            if error is XCTSkip { return true }
+                        #endif
+                        return false
+                    }
                 }
 
                 var budget = ExhaustBudget.standard

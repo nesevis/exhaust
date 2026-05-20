@@ -5,6 +5,10 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
+#if canImport(XCTest)
+    @preconcurrency @_weakLinked import XCTest
+#endif
+
 package extension __ExhaustRuntime {
     // MARK: - Pipeline Context
 
@@ -611,6 +615,9 @@ package extension __ExhaustRuntime {
                 try detection(value)
                 return true
             } catch {
+                #if canImport(XCTest)
+                    if error is XCTSkip { return true }
+                #endif
                 return false
             }
         }
@@ -625,7 +632,15 @@ package extension __ExhaustRuntime {
             let resultBox = SendableBox(false)
             let semaphore = DispatchSemaphore(value: 0)
             Task { @Sendable in
-                resultBox.value = await (try? property(valueBox.value)) ?? false
+                do {
+                    resultBox.value = try await property(valueBox.value)
+                } catch {
+                    #if canImport(XCTest)
+                        if error is XCTSkip {
+                            resultBox.value = true
+                        }
+                    #endif
+                }
                 semaphore.signal()
             }
             semaphore.wait()
@@ -645,7 +660,13 @@ package extension __ExhaustRuntime {
                 do {
                     try await detection(valueBox.value)
                 } catch {
-                    resultBox.value = false
+                    #if canImport(XCTest)
+                        if (error is XCTSkip) == false {
+                            resultBox.value = false
+                        }
+                    #else
+                        resultBox.value = false
+                    #endif
                 }
                 semaphore.signal()
             }
