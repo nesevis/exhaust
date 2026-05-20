@@ -70,9 +70,14 @@ let package = Package(
                 .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             ]
         ),
+        .target(
+            name: "ExhaustTestSupport",
+            dependencies: ["ExhaustCore"],
+            plugins: swiftLintPlugins
+        ),
         .testTarget(
             name: "ExhaustTests",
-            dependencies: ["Exhaust", "ExhaustCore"],
+            dependencies: ["Exhaust", "ExhaustCore", "ExhaustTestSupport"],
             plugins: swiftLintPlugins
         ),
         .testTarget(
@@ -105,7 +110,7 @@ if usePrecompiled == false {
     package.targets.append(
         .testTarget(
             name: "ExhaustCoreTests",
-            dependencies: ["ExhaustCore"],
+            dependencies: ["ExhaustCore", "ExhaustTestSupport"],
             plugins: swiftLintPlugins
         )
     )
