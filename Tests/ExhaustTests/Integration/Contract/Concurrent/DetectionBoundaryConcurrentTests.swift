@@ -46,6 +46,22 @@ struct DetectionBoundaryTests {
         }
         #expect(hasFailure, "Three concurrent increments with yield should lose updates")
     }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Four-way race detected with concurrencyLevel 4 (exercises chooseLaneControl)")
+    func fourWayRaceDetected() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                ThreeWayRaceSpec.self,
+                settings: [.concurrency(4), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+            )
+        )
+        let hasFailure = result.trace.contains { step in
+            if case .invariantFailed = step.outcome { return true }
+            return false
+        }
+        #expect(hasFailure, "Four concurrent increments with yield should lose updates")
+    }
 }
 
 // MARK: - Spec: Silent race (no suspension point at the race)
