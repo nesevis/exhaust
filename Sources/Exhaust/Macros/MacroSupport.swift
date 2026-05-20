@@ -49,7 +49,7 @@ public extension __ExhaustRuntime {
     /// - Parameters:
     ///   - gen: The generator to produce test values from.
     ///   - settings: An array of `ExhaustSettings` controlling test behavior.
-    ///   - sourceCode: A string representation of the property closure body, captured at compile time. `nil` when a function reference is passed instead of a trailing closure.
+
     ///   - fileID: The file ID of the call site (injected by macro expansion).
     ///   - filePath: The file path of the call site (injected by macro expansion).
     ///   - line: The line number of the call site (injected by macro expansion).
@@ -62,7 +62,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -207,7 +207,7 @@ public extension __ExhaustRuntime {
                         visualize: visualize,
                         suppressIssueReporting: suppressIssueReporting,
                         includeDiff: includeDiff,
-                        sourceCode: sourceCode,
+
                         logFormat: logFormat,
                         fileID: fileID,
                         filePath: filePath,
@@ -225,7 +225,7 @@ public extension __ExhaustRuntime {
                                 visualize: visualize,
                                 suppressIssueReporting: suppressIssueReporting,
                                 includeDiff: includeDiff,
-                                sourceCode: sourceCode,
+        
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,
@@ -291,9 +291,6 @@ public extension __ExhaustRuntime {
                             passMetadata["coverage_invocations"] = "\(coverageIterations)"
                             passMetadata["random_invocations"] = "\(report.randomSamplingInvocations)"
                         }
-                        if let sourceCode {
-                            passMetadata["source"] = sourceCode
-                        }
                         ExhaustLog.notice(
                             category: .propertyTest,
                             event: "property_passed",
@@ -325,7 +322,7 @@ public extension __ExhaustRuntime {
         private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
             gen: Generator<Output>,
             settings: [ExhaustSettings],
-            sourceCode: String?,
+    
             fileID: StaticString,
             filePath: StaticString,
             line: UInt,
@@ -354,7 +351,7 @@ public extension __ExhaustRuntime {
                         if case .budget = setting { return true }
                         return false
                     },
-                    sourceCode: sourceCode,
+
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -381,7 +378,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -423,8 +420,7 @@ public extension __ExhaustRuntime {
                 withExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
-                            gen: gen, settings: settings, sourceCode: sourceCode,
-                            fileID: fileID, filePath: filePath, line: line, column: column,
+                            gen: gen, settings: settings,                            fileID: fileID, filePath: filePath, line: line, column: column,
                             function: function, property: boolProperty
                         ) {
                             pipelineResult = regression.counterexample
@@ -445,7 +441,7 @@ public extension __ExhaustRuntime {
                         refGen,
                         settings: augmentedSettings,
                         reflecting: reflecting,
-                        sourceCode: sourceCode,
+
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
@@ -496,7 +492,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -510,8 +506,7 @@ public extension __ExhaustRuntime {
                 refGen,
                 settings: settings,
                 reflecting: reflecting,
-                sourceCode: sourceCode,
-                fileID: fileID,
+                               fileID: fileID,
                 filePath: filePath,
                 line: line,
                 column: column,
@@ -529,7 +524,7 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         reflecting: Output? = nil,
-        sourceCode: String?,
+
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -560,8 +555,7 @@ public extension __ExhaustRuntime {
                 #if canImport(Testing)
                     withKnownIssue(isIntermittent: true) {
                         if let regression = replayRegressionSeeds(
-                            gen: gen, settings: settings, sourceCode: sourceCode,
-                            fileID: fileID, filePath: filePath, line: line, column: column,
+                            gen: gen, settings: settings,                            fileID: fileID, filePath: filePath, line: line, column: column,
                             function: function, property: syncDetection
                         ) {
                             pipelineResult = regression.counterexample
@@ -579,7 +573,7 @@ public extension __ExhaustRuntime {
                             refGen,
                             settings: augmentedSettings,
                             reflecting: reflecting,
-                            sourceCode: sourceCode,
+    
                             fileID: fileID,
                             filePath: filePath,
                             line: line,
@@ -599,7 +593,7 @@ public extension __ExhaustRuntime {
                         refGen,
                         settings: augmentedSettings,
                         reflecting: reflecting,
-                        sourceCode: sourceCode,
+
                         fileID: fileID,
                         filePath: filePath,
                         line: line,

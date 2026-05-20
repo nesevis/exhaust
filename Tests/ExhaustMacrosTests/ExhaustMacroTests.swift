@@ -21,7 +21,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [],
-                sourceCode: "person.age >= 0",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -47,7 +46,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [.maxIterations(1000), .replay(42)],
-                sourceCode: "person.age >= 0",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -61,7 +59,7 @@ struct ExhaustMacroTests {
         )
     }
 
-    @Test("Function reference passes nil sourceCode")
+    @Test("Function reference expansion")
     func functionReference() {
         assertMacroExpansion(
             """
@@ -71,7 +69,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [],
-                sourceCode: nil,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -83,7 +80,7 @@ struct ExhaustMacroTests {
         )
     }
 
-    @Test("Function reference with settings passes nil sourceCode")
+    @Test("Function reference with settings")
     func functionReferenceWithSettings() {
         assertMacroExpansion(
             """
@@ -93,7 +90,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaust(
                 personGen,
                 settings: [.maxIterations(500)],
-                sourceCode: nil,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -122,7 +118,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustAsync(
                 personGen,
                 settings: [],
-                sourceCode: "await actor.validate(person)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -153,7 +148,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpectAsync(
                 personGen,
                 settings: [],
-                sourceCode: "let result = await actor.validate(person)\\n#expect(result)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -186,7 +180,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustAsync(
                 personGen,
                 settings: [],
-                sourceCode: nil,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -213,7 +206,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "Issue.record()",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -246,7 +238,6 @@ struct ExhaustMacroTests {
             __ExhaustRuntime.__exhaustExpect(
                 gen,
                 settings: [],
-                sourceCode: "if value < 0 {\\n    Issue.record(\\\"negative\\\")\\n}\\n#expect(value > 0)",
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -269,6 +260,390 @@ struct ExhaustMacroTests {
             macros: testMacros
         )
     }
+
+    // MARK: - Vacuous Void Closure Detection
+
+    @Test("Single-statement switch expression routes to Bool path")
+    func switchExpressionBoolPath() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                switch value {
+                case 1: true
+                case 2: false
+                default: false
+                }
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaust(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                property: { value in
+                switch value {
+                case 1: true
+                case 2: false
+                default: false
+                }
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Single-statement switch with #expect routes to Void path")
+    func switchWithExpectVoidPath() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                switch value {
+                case 1: #expect(value > 0)
+                default: #expect(value != 0)
+                }
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                switch value {
+                case 1: #expect(value > 0)
+                default: #expect(value != 0)
+                }
+            },
+                detection: { value in
+                switch value {
+                case 1: try __ExhaustRuntime.__detectRequire(value > 0)
+                default: try __ExhaustRuntime.__detectRequire(value != 0)
+                }
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with no failure mechanism emits diagnostic")
+    func vacuousClosureDiscardedComparison() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                let box = ThreadSafeBox(0)
+                box.put(value)
+                box.get() == value
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                let box = ThreadSafeBox(0)
+                box.put(value)
+                box.get() == value
+            },
+                detection: { value in
+                let box = ThreadSafeBox(0)
+                box.put(value)
+                box.get() == value
+            }
+            )
+            """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: ExhaustMacroDiagnostic.closureCannotFail.rawValue,
+                    line: 1,
+                    column: 15,
+                    severity: .error
+                ),
+            ],
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with only void calls emits diagnostic")
+    func vacuousClosureVoidCalls() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                doSomething()
+                doSomethingElse(value)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                doSomething()
+                doSomethingElse(value)
+            },
+                detection: { value in
+                doSomething()
+                doSomethingElse(value)
+            }
+            )
+            """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: ExhaustMacroDiagnostic.closureCannotFail.rawValue,
+                    line: 1,
+                    column: 15,
+                    severity: .error
+                ),
+            ],
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with try has failure mechanism — no diagnostic")
+    func tryIsFailureMechanism() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                let result = try compute(value)
+                use(result)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                let result = try compute(value)
+                use(result)
+            },
+                detection: { value in
+                let result = try compute(value)
+                use(result)
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with try? has no failure mechanism — emits diagnostic")
+    func tryQuestionIsNotFailureMechanism() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                let result = try? compute(value)
+                use(result)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                let result = try? compute(value)
+                use(result)
+            },
+                detection: { value in
+                let result = try? compute(value)
+                use(result)
+            }
+            )
+            """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: ExhaustMacroDiagnostic.closureCannotFail.rawValue,
+                    line: 1,
+                    column: 15,
+                    severity: .error
+                ),
+            ],
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with throw has failure mechanism — no diagnostic")
+    func throwIsFailureMechanism() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                if value < 0 {
+                    throw TestError()
+                }
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                if value < 0 {
+                    throw TestError()
+                }
+            },
+                detection: { value in
+                if value < 0 {
+                    throw TestError()
+                }
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with explicit return does not emit diagnostic")
+    func explicitReturnNoDiagnostic() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                let x = compute(value)
+                return x == 0
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaust(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                property: { value in
+                let x = compute(value)
+                return x == 0
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Single-expression closure with comparison does not emit diagnostic")
+    func singleExpressionNoDiagnostic() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                value == 0
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaust(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                property: { value in
+                value == 0
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with #expect has failure mechanism — no diagnostic")
+    func expectIsFailureMechanism() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                let x = compute(value)
+                #expect(x == 0)
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                let x = compute(value)
+                #expect(x == 0)
+            },
+                detection: { value in
+                let x = compute(value)
+                try __ExhaustRuntime.__detectRequire(x == 0)
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-statement closure with Issue.record has failure mechanism — no diagnostic")
+    func issueRecordIsFailureMechanism() {
+        assertMacroExpansion(
+            """
+            #exhaust(gen) { value in
+                if value < 0 {
+                    Issue.record("negative")
+                }
+            }
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__exhaustExpect(
+                gen,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
+                function: #function,
+                property: { value in
+                if value < 0 {
+                    Issue.record("negative")
+                }
+            },
+                detection: { value in
+                if value < 0 {
+                    try __ExhaustRuntime.__detectRequire(false)
+                }
+            }
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - Error Diagnostics
 
     @Test("Missing property produces error")
     func missingProperty() {

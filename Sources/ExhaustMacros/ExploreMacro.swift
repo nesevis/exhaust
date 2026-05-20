@@ -1,3 +1,4 @@
+import Foundation
 import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
@@ -19,9 +20,14 @@ public struct ExploreMacro: ExpressionMacro {
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
-            let runtimeFunction = closureIsVoidReturning(trailingClosure)
-                ? "__exploreExpect"
-                : "__explore"
+            let isVoid = closureIsVoidReturning(trailingClosure)
+            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(trailingClosure),
+                    message: ExhaustMacroDiagnostic.closureCannotFail
+                ))
+            }
+            let runtimeFunction = isVoid ? "__exploreExpect" : "__explore"
             return try expandExplore(
                 of: node,
                 args: args,
@@ -44,9 +50,14 @@ public struct ExploreAsyncMacro: ExpressionMacro {
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
-            let runtimeFunction = closureIsVoidReturning(trailingClosure)
-                ? "__exploreExpectAsync"
-                : "__exploreAsync"
+            let isVoid = closureIsVoidReturning(trailingClosure)
+            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(trailingClosure),
+                    message: ExhaustMacroDiagnostic.closureCannotFail
+                ))
+            }
+            let runtimeFunction = isVoid ? "__exploreExpectAsync" : "__exploreAsync"
             return try expandExplore(
                 of: node,
                 args: args,
@@ -94,11 +105,6 @@ private func expandExplore(
         .filter { $0.label?.text != "directions" }
         .map(\.expression.trimmedDescription)
 
-    let sourceCode = trailingClosure.statements.trimmedDescription
-        .replacingOccurrences(of: "\\", with: "\\\\")
-        .replacingOccurrences(of: "\"", with: "\\\"")
-        .replacingOccurrences(of: "\n", with: "\\n")
-
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
     if runtimeFunction == "__exploreExpect" || runtimeFunction == "__exploreExpectAsync" {
@@ -120,7 +126,7 @@ private func expandExplore(
             \(raw: generatorExpr),
             settings: \(raw: settingsArray),
             directions: \(raw: directionsExpr),
-            sourceCode: "\(raw: sourceCode)",
+
             fileID: #fileID,
             filePath: #filePath,
             line: #line,
@@ -138,7 +144,6 @@ private func expandExplore(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
         directions: \(raw: directionsExpr),
-        sourceCode: "\(raw: sourceCode)",
         fileID: #fileID,
         filePath: #filePath,
         line: #line,
@@ -192,7 +197,7 @@ private func expandExploreFunctionReference(
         \(raw: generatorExpr),
         settings: \(raw: settingsArray),
         directions: \(raw: directionsExpr),
-        sourceCode: nil,
+
         fileID: #fileID,
         filePath: #filePath,
         line: #line,

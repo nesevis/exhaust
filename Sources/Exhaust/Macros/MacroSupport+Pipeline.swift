@@ -21,7 +21,6 @@ package extension __ExhaustRuntime {
         let visualize: Bool
         let suppressIssueReporting: Bool
         let includeDiff: Bool
-        let sourceCode: String?
         let logFormat: LogFormat
         let fileID: StaticString
         let filePath: StaticString
@@ -113,9 +112,6 @@ package extension __ExhaustRuntime {
                 "iterations": "\(iterations)",
                 "property_invocations": "\(iterations)",
             ]
-            if let sourceCode = context.sourceCode {
-                passMetadata["source"] = sourceCode
-            }
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "property_passed",
@@ -350,7 +346,7 @@ package extension __ExhaustRuntime {
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
                     original: value,
-                    sourceCode: context.sourceCode,
+
                     seed: seed,
                     iteration: iteration,
                     phaseBudget: phaseBudget,
@@ -413,7 +409,6 @@ package extension __ExhaustRuntime {
         var failure = PropertyTestFailure(
             counterexample: value,
             original: nil as Output?,
-            sourceCode: context.sourceCode,
             seed: seed,
             iteration: iteration,
             phaseBudget: phaseBudget,
@@ -451,7 +446,6 @@ package extension __ExhaustRuntime {
         visualize: Bool,
         suppressIssueReporting: Bool,
         includeDiff: Bool,
-        sourceCode: String?,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -513,7 +507,6 @@ package extension __ExhaustRuntime {
             var failure = PropertyTestFailure(
                 counterexample: reducedValue,
                 original: value,
-                sourceCode: sourceCode,
                 seed: nil,
                 iteration: 1,
                 phaseBudget: 1,
@@ -561,7 +554,6 @@ package extension __ExhaustRuntime {
         var failure = PropertyTestFailure(
             counterexample: value,
             original: nil as Output?,
-            sourceCode: sourceCode,
             seed: nil,
             iteration: 1,
             phaseBudget: 1,

@@ -460,6 +460,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             case let .resize(newSize, gen):
                 context.sizeOverride = newSize
+                defer { context.sizeOverride = nil }
                 guard let result = try generateRecursive(
                     gen,
                     with: inputValue,
@@ -469,7 +470,6 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     cgsState: &cgsState,
                     derivativeContext: derivativeContext
                 ) else { return nil }
-                context.sizeOverride = nil
                 return try runContinuation(
                     result: result,
                     continuation: continuation,

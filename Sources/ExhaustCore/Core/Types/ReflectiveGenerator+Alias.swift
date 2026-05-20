@@ -17,7 +17,7 @@ public extension ReflectiveGenerator {
     /// - Parameter transform: A function that takes the generated value and returns a new generator.
     /// - Returns: A generator that sequences the two computations.
     func flatMap<NewOutput>(
-        _ transform: @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
+        _ transform: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
         fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column

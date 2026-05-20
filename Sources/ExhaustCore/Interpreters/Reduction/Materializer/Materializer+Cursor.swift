@@ -54,6 +54,9 @@ extension Materializer {
         mutating func popScope() {
             scopeDepth &-= 1
             if scopeDepth >= 4 {
+                guard scopeOverflow?.isEmpty == false else {
+                    preconditionFailure("popScope: scopeOverflow is empty at depth \(scopeDepth + 1)")
+                }
                 scopeOverflow!.removeLast()
                 let limit = scopeOverflow!.isEmpty
                     ? scopeLimits.3

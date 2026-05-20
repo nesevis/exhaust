@@ -510,6 +510,243 @@ struct ContractDeclarationMacroTests {
     }
 }
 
+@Suite("@Contract tab indentation tests")
+struct ContractTabIndentationTests {
+    @Test("@Contract with tab indentation synthesizes correctly indented members")
+    func tabIndentationWithMultipleCommands() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct QueueSpec {
+            \t@Model var contents: [Int] = []
+            \t@SystemUnderTest var queue: MyQueue
+
+            \t@Command(weight: 3)
+            \tmutating func enqueue(value: Int) throws {
+            \t}
+
+            \t@Command(weight: 2)
+            \tmutating func dequeue() throws {
+            \t}
+
+            \t@Invariant
+            \tfunc countMatches() -> Bool {
+            \t\ttrue
+            \t}
+            }
+            """,
+            expandedSource: """
+            struct QueueSpec {
+            \tvar contents: [Int] = []
+            \tvar queue: MyQueue
+
+            \tmutating func enqueue(value: Int) throws {
+            \t}
+
+            \tmutating func dequeue() throws {
+            \t}
+
+            \tfunc countMatches() -> Bool {
+            \t\ttrue
+            \t}
+
+            \tenum Command: CustomStringConvertible, Sendable {
+            \t\tcase enqueue(value: Int)
+            \t\tcase dequeue
+
+            \t\tvar description: String {
+            \t\t\tswitch self {
+            \t\t\t\tcase let .enqueue(value): "enqueue(\\(value))"
+            \t\t\t\tcase .dequeue: "dequeue"
+            \t\t\t}
+            \t\t}
+            \t}
+
+            \ttypealias SystemUnderTest = MyQueue
+
+            \tvar systemUnderTest: SystemUnderTest {
+            \t\tqueue
+            \t}
+
+            \tstatic var commandGenerator: ReflectiveGenerator<Command> {
+            \t\t.oneOf(weighted:
+            \t\t\t(3, .just(Command.enqueue)),
+            \t\t\t(2, .just(Command.dequeue))
+            \t\t)
+            \t}
+
+            \tmutating func run(_ command: Command) throws {
+            \t\tswitch command {
+            \t\t\tcase let .enqueue(value): try self.enqueue(value: value)
+            \t\t\tcase .dequeue: try self.dequeue()
+            \t\t}
+            \t}
+
+            \tfunc checkInvariants() throws {
+            \t\ttry check(countMatches(), "countMatches")
+            \t}
+
+            \tvar modelDescription: String {
+            \t\t"contents: \\(contents)"
+            \t}
+
+            \tvar sutDescription: String {
+            \t\t"queue: \\(queue)"
+            \t}
+            }
+
+            extension QueueSpec: ContractSpec {
+            }
+            """,
+            macros: testMacros,
+            indentationWidth: .tabs(1)
+        )
+    }
+
+    @Test("@Contract with tab indentation and generator expressions")
+    func tabIndentationWithGeneratorExpressions() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct InsertSpec {
+            \t@SystemUnderTest var items: [Int]
+
+            \t@Command(weight: 3, .int(in: 0...99))
+            \tmutating func insert(value: Int) throws {
+            \t}
+            }
+            """,
+            expandedSource: """
+            struct InsertSpec {
+            \tvar items: [Int]
+
+            \tmutating func insert(value: Int) throws {
+            \t}
+
+            \tenum Command: CustomStringConvertible, Sendable {
+            \t\tcase insert(value: Int)
+
+            \t\tvar description: String {
+            \t\t\tswitch self {
+            \t\t\t\tcase let .insert(value): "insert(\\(value))"
+            \t\t\t}
+            \t\t}
+            \t}
+
+            \ttypealias SystemUnderTest = [Int]
+
+            \tvar systemUnderTest: SystemUnderTest {
+            \t\titems
+            \t}
+
+            \tstatic var commandGenerator: ReflectiveGenerator<Command> {
+            \t\t.oneOf(weighted:
+            \t\t\t(3, #gen((.int(in: 0...99) as ReflectiveGenerator<Int>)) { value in Command.insert(value: value) })
+            \t\t)
+            \t}
+
+            \tmutating func run(_ command: Command) throws {
+            \t\tswitch command {
+            \t\t\tcase let .insert(value): try self.insert(value: value)
+            \t\t}
+            \t}
+
+            \tfunc checkInvariants() throws {
+            \t}
+
+            \tvar modelDescription: String {
+            \t\t"(no model properties)"
+            \t}
+
+            \tvar sutDescription: String {
+            \t\t"items: \\(items)"
+            \t}
+            }
+
+            extension InsertSpec: ContractSpec {
+            }
+            """,
+            macros: testMacros,
+            indentationWidth: .tabs(1)
+        )
+    }
+
+    @Test("@Contract with tab indentation and multiple model properties")
+    func tabIndentationWithMultipleModelProperties() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct Spec {
+            \t@Model var count: Int = 0
+            \t@Model var name: String = ""
+            \t@SystemUnderTest var sut: MySUT
+
+            \t@Command(weight: 1)
+            \tmutating func doSomething() throws {
+            \t}
+            }
+            """,
+            expandedSource: """
+            struct Spec {
+            \tvar count: Int = 0
+            \tvar name: String = ""
+            \tvar sut: MySUT
+
+            \tmutating func doSomething() throws {
+            \t}
+
+            \tenum Command: CustomStringConvertible, Sendable {
+            \t\tcase doSomething
+
+            \t\tvar description: String {
+            \t\t\tswitch self {
+            \t\t\t\tcase .doSomething: "doSomething"
+            \t\t\t}
+            \t\t}
+            \t}
+
+            \ttypealias SystemUnderTest = MySUT
+
+            \tvar systemUnderTest: SystemUnderTest {
+            \t\tsut
+            \t}
+
+            \tstatic var commandGenerator: ReflectiveGenerator<Command> {
+            \t\t.oneOf(weighted:
+            \t\t\t(1, .just(Command.doSomething))
+            \t\t)
+            \t}
+
+            \tmutating func run(_ command: Command) throws {
+            \t\tswitch command {
+            \t\t\tcase .doSomething: try self.doSomething()
+            \t\t}
+            \t}
+
+            \tfunc checkInvariants() throws {
+            \t}
+
+            \tvar modelDescription: String {
+            \t\t[
+            \t\t\t"  count: \\(count)",
+            \t\t\t"  name: \\(name)"
+            \t\t].joined(separator: "\\n")
+            \t}
+
+            \tvar sutDescription: String {
+            \t\t"sut: \\(sut)"
+            \t}
+            }
+
+            extension Spec: ContractSpec {
+            }
+            """,
+            macros: testMacros,
+            indentationWidth: .tabs(1)
+        )
+    }
+}
+
 @Suite("#exhaust async contract macro expansion tests")
 struct AsyncContractMacroTests {
     @Test("#exhaust async contract expansion with no settings")

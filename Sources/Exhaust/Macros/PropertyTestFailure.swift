@@ -6,7 +6,6 @@ import Foundation
 struct PropertyTestFailure<Output> {
     let counterexample: Output
     let original: Output?
-    let sourceCode: String?
     let seed: UInt64?
     let iteration: Int
     let phaseBudget: UInt64
