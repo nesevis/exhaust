@@ -20,9 +20,14 @@ public struct ExploreMacro: ExpressionMacro {
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
-            let runtimeFunction = closureIsVoidReturning(trailingClosure)
-                ? "__exploreExpect"
-                : "__explore"
+            let isVoid = closureIsVoidReturning(trailingClosure)
+            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(trailingClosure),
+                    message: ExhaustMacroDiagnostic.closureCannotFail
+                ))
+            }
+            let runtimeFunction = isVoid ? "__exploreExpect" : "__explore"
             return try expandExplore(
                 of: node,
                 args: args,
@@ -45,9 +50,14 @@ public struct ExploreAsyncMacro: ExpressionMacro {
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
-            let runtimeFunction = closureIsVoidReturning(trailingClosure)
-                ? "__exploreExpectAsync"
-                : "__exploreAsync"
+            let isVoid = closureIsVoidReturning(trailingClosure)
+            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(trailingClosure),
+                    message: ExhaustMacroDiagnostic.closureCannotFail
+                ))
+            }
+            let runtimeFunction = isVoid ? "__exploreExpectAsync" : "__exploreAsync"
             return try expandExplore(
                 of: node,
                 args: args,

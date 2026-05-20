@@ -16,6 +16,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exampleMissingGenerator = "#example requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
     case exhaustContractMissingSpec = "#exhaust requires a spec type argument"
+    case closureCannotFail = "Closure has no failure mechanism (throw, try, #expect, #require, or Issue.record); test will always pass"
 
     var message: String {
         rawValue
@@ -42,7 +43,8 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
              .exploreMissingDirections,
              .exampleMissingGenerator,
              .examineMissingGenerator,
-             .exhaustContractMissingSpec:
+             .exhaustContractMissingSpec,
+             .closureCannotFail:
             .error
         }
     }

@@ -20,9 +20,14 @@ public struct ExhaustTestMacro: ExpressionMacro {
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
-            let runtimeFunction = closureIsVoidReturning(trailingClosure)
-                ? "__exhaustExpect"
-                : "__exhaust"
+            let isVoid = closureIsVoidReturning(trailingClosure)
+            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(trailingClosure),
+                    message: ExhaustMacroDiagnostic.closureCannotFail
+                ))
+            }
+            let runtimeFunction = isVoid ? "__exhaustExpect" : "__exhaust"
             return try expandExhaust(
                 of: node,
                 args: args,
@@ -46,12 +51,14 @@ public struct ExhaustTestMacro: ExpressionMacro {
 ///
 /// Returns `true` (Void path) when the closure body cannot be a Bool-returning predicate:
 /// - Multi-statement closures with no `return <value>`.
-/// - Single statements that are control flow (`if`, `guard`, `for`, `while`, `do`, `switch`).
+/// - Single `switch`/`if` expressions whose branches contain failure mechanisms (`#expect`, `throw`, `try`, `Issue.record`).
+/// - Single statements that are statement-only constructs (`guard`, `for`, `while`, `repeat`, `do`, `throw`).
 /// - Single statements that are `#expect` or `#require` macro invocations.
 /// - Single statements that are `Issue.record(...)` calls.
 ///
 /// Returns `false` (Bool path) when the closure looks like a predicate:
 /// - Single-expression closures (implicit return of a value).
+/// - Single `switch`/`if` expressions with no failure mechanisms (expression switch/if, implicitly returned).
 /// - Multi-statement closures containing `return <value>`.
 func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
     let statements = closure.statements
@@ -64,8 +71,23 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
 
     let item = onlyStatement.item
 
-    // Control flow statements that contain `return <value>` are Bool-returning (for example, a do/catch that returns true/false on each path).
-    if isControlFlowStatement(Syntax(item)) {
+    // Switch and if are expressions in Swift 5.9+. In a single-statement closure
+    // they are implicitly returned unless the branches contain assertion or throwing
+    // constructs, which mark the closure as imperative (void path).
+    if item.is(SwitchExprSyntax.self) || item.is(IfExprSyntax.self)
+        || item.as(ExpressionStmtSyntax.self).map({ $0.expression.is(SwitchExprSyntax.self) || $0.expression.is(IfExprSyntax.self) }) ?? false
+    {
+        if containsReturnWithValueRecursive(Syntax(item)) {
+            return false
+        }
+        if containsFailureMechanismRecursive(Syntax(item)) {
+            return true
+        }
+        return false
+    }
+
+    // Pure statements (guard, for, while, repeat, do, throw) are always void.
+    if isStatementOnlyConstruct(Syntax(item)) {
         return containsReturnWithValueRecursive(Syntax(item)) == false
     }
 
@@ -96,17 +118,15 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
     return false
 }
 
-/// Checks whether a syntax node represents a control flow statement (if, guard, for, while, do, switch).
-private func isControlFlowStatement(_ node: Syntax) -> Bool {
-    node.is(IfExprSyntax.self)
-        || node.is(GuardStmtSyntax.self)
+/// Checks whether a syntax node is a statement-only construct that never produces a value (guard, for, while, repeat, do, throw).
+private func isStatementOnlyConstruct(_ node: Syntax) -> Bool {
+    node.is(GuardStmtSyntax.self)
         || node.is(ForStmtSyntax.self)
         || node.is(WhileStmtSyntax.self)
         || node.is(RepeatStmtSyntax.self)
         || node.is(DoStmtSyntax.self)
-        || node.is(SwitchExprSyntax.self)
         || node.is(ThrowStmtSyntax.self)
-        || node.as(ExpressionStmtSyntax.self).map { isControlFlowStatement(Syntax($0.expression)) } ?? false
+        || node.as(ExpressionStmtSyntax.self).map { isStatementOnlyConstruct(Syntax($0.expression)) } ?? false
 }
 
 /// Checks whether any statement in the closure body is a `return` with an expression value.
@@ -168,6 +188,65 @@ private func isIssueRecordCall(_ node: FunctionCallExprSyntax) -> Bool {
         return true
     }
 
+    return false
+}
+
+// MARK: - Vacuous Closure Detection
+
+/// Returns `true` when a void-path closure has no mechanism to signal failure.
+///
+/// A void-path closure can signal failure via `throw`/`try`, `#expect`/`#require`,
+/// or `Issue.record`. If none of these appear (outside nested closures), the
+/// closure always passes — every run is vacuously successful. This includes
+/// single-statement control flow (for example, a switch expression whose
+/// branch values are silently discarded).
+func voidClosureLacksFailureMechanism(_ closure: ClosureExprSyntax) -> Bool {
+    return containsFailureMechanism(closure.statements) == false
+}
+
+/// Recursively walks statements looking for any construct that can signal test failure.
+private func containsFailureMechanism(_ statements: CodeBlockItemListSyntax) -> Bool {
+    for statement in statements {
+        if containsFailureMechanismRecursive(Syntax(statement.item)) {
+            return true
+        }
+    }
+    return false
+}
+
+private func containsFailureMechanismRecursive(_ node: Syntax) -> Bool {
+    // Plain `try` (not `try?` or `try!`) propagates thrown errors as failures.
+    if let tryExpr = node.as(TryExprSyntax.self),
+       tryExpr.questionOrExclamationMark == nil
+    {
+        return true
+    }
+
+    if node.is(ThrowStmtSyntax.self) {
+        return true
+    }
+
+    // #expect(...) or #require(...)
+    if let macroExpr = node.as(MacroExpansionExprSyntax.self) {
+        let name = macroExpr.macroName.text
+        if name == "expect" || name == "require" {
+            return true
+        }
+    }
+
+    // Issue.record(...)
+    if let call = node.as(FunctionCallExprSyntax.self), isIssueRecordCall(call) {
+        return true
+    }
+
+    for child in node.children(viewMode: .sourceAccurate) {
+        if child.is(ClosureExprSyntax.self) {
+            continue
+        }
+        if containsFailureMechanismRecursive(child) {
+            return true
+        }
+    }
     return false
 }
 
@@ -344,10 +423,7 @@ private func expandExhaust(
         }
     }
 
-    let sourceCode = trailingClosure.statements.trimmedDescription
-        .replacingOccurrences(of: "\\", with: "\\\\")
-        .replacingOccurrences(of: "\"", with: "\\\"")
-        .replacingOccurrences(of: "\n", with: "\\n")
+    let sourceCode = escapeForStringLiteral(trailingClosure.statements.trimmedDescription)
 
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
     let reflectingLine = reflectingExpr.map { "reflecting: \($0)," } ?? ""
@@ -474,9 +550,14 @@ public struct ExhaustAsyncTestMacro: ExpressionMacro {
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
-            let runtimeFunction = closureIsVoidReturning(trailingClosure)
-                ? "__exhaustExpectAsync"
-                : "__exhaustAsync"
+            let isVoid = closureIsVoidReturning(trailingClosure)
+            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(trailingClosure),
+                    message: ExhaustMacroDiagnostic.closureCannotFail
+                ))
+            }
+            let runtimeFunction = isVoid ? "__exhaustExpectAsync" : "__exhaustAsync"
             return try expandExhaust(
                 of: node,
                 args: args,
