@@ -32,6 +32,18 @@ struct ChoiceGraphBuilder {
     ///
     /// - Parameter tree: The generator's compositional structure. Produced by the materializer with `materializePicks` controlling whether inactive branches have full subtrees.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
+        if case .just = tree {
+            return ChoiceGraph(
+                nodes: [],
+                containmentEdges: [],
+                dependencyEdges: [],
+                selfSimilarityGroups: [:],
+                liveNodeIDs: [],
+                leafNodes: [],
+                topologicalOrder: [],
+                dependencyAdjacency: []
+            )
+        }
         var builder = ChoiceGraphBuilder()
         _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0, path: [])
         return builder.assembleGraph()

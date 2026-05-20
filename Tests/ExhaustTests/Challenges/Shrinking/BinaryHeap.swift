@@ -42,19 +42,15 @@ struct BinaryHeapShrinkingChallenge {
     @Test("Binary heap, Recursive combinator")
     func binaryHeapRecursive() throws {
         let recursiveGen = BinaryHeapFixture.heapGenRecursive()
-        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 recursiveGen,
                 .suppress(.issueReporting),
                 .replay(.numeric(10358026062479193394)),
                 .logging(.debug),
-                .onReport { report = $0 },
                 property: BinaryHeapFixture.property
             )
         )
-        let rep = try #require(report)
-        print(rep.profilingSummary)
 
         let outputValues = BinaryHeapFixture.toList(output)
         

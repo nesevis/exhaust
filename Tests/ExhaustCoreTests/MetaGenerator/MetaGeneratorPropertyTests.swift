@@ -8,9 +8,10 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
-@Suite("Meta-Generator Property Tests")
+@Suite("Meta-Generator Property Tests", .tags(.dogfood))
 struct MetaGeneratorPropertyTests {
     /// Recipe generator for Int-producing recipes at depth 2.
     private let intRecipeGen = recipeGenerator(producing: .int, maxDepth: 2)
