@@ -145,7 +145,7 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     /// - Parameter transform: A function that takes the generated value and returns a new generator.
     /// - Returns: A generator that sequences the two computations.
     public func bind<NewOutput>(
-        _ transform: @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
+        _ transform: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
         fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
@@ -174,7 +174,7 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     /// - Parameter transform: A function to apply to each generated value.
     /// - Returns: A generator producing the transformed values.
     public func map<NewOutput>(
-        _ transform: @escaping (Output) throws -> NewOutput
+        _ transform: @Sendable @escaping (Output) throws -> NewOutput
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         Gen.liftF(.transform(
             kind: .map(
