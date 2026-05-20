@@ -6,122 +6,77 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
-// MARK: - Test Cases
-
-@Suite("Monad law tests")
+@Suite("Monad law tests", .tags(.dogfood))
 struct MonadLawTests {
-    @Test("A pure monad should interpret to its value without affecting state")
+    @Test("pure(a) interprets to a with no side effects")
     func pureValueInterpretation() throws {
-        // Arrange
-        let output = "hello"
-        let pureMonad = LoggingFreerMonad.pure(output)
-
-        // Act
-        let result = try interpret(pureMonad)
-
-        // Assert
-        #expect(result.value == output)
-        #expect(result.log.isEmpty, "A pure case should not affect the store.")
+        try exhaustCheck(Gen.choose(in: -1000 ... 1000)) { value in
+            let result = try interpret(LoggingFreerMonad.pure(value))
+            return result.value == value && result.log.isEmpty
+        }
     }
 
-    // MARK: - Functor Laws
-
-    /// A Functor must satisfy: `m.map { $0 }` is equivalent to `m`
     @Test("Functor Law: Identity (map(id) == id)")
     func functorIdentity() throws {
-        // Arrange
-        let functor = log("Action").map { 42 }
-
-        // Act
-        let lhsResult = try interpret(functor.map(\.self))
-        let rhsResult = try interpret(functor)
-
-        // Assert
-        #expect(lhsResult.value == rhsResult.value)
-        #expect(lhsResult.log == rhsResult.log)
+        try exhaustCheck(Gen.choose(in: -1000 ... 1000)) { value in
+            let monad = log("Action").map { value }
+            let lhs = try interpret(monad.map(\.self))
+            let rhs = try interpret(monad)
+            return lhs.value == rhs.value && lhs.log == rhs.log
+        }
     }
 
-    /// A Functor must satisfy: `m.map { function2(function1($0)) }` is equivalent to `m.map(function1).map(function2)`
-    @Test("Functor Law: Composition (map(g • f) == map(f).map(g))")
+    @Test("Functor Law: Composition (map(g . f) == map(f).map(g))")
     func functorComposition() throws {
-        // Arrange
-        let functor = log("Start").map { 10 } // Initial monad producing an Int
-        let function1: (Int) -> String = { "\($0 * 2)" }
-        let function2: (String) -> String = { "Value is \($0)" }
-
-        // Act
-        let lhsResult = try interpret(functor.map { function2(function1($0)) })
-        let rhsResult = try interpret(functor.map(function1).map(function2))
-
-        // Assert
-        #expect(lhsResult.value == rhsResult.value)
-        #expect(lhsResult.log == rhsResult.log, "The side-effects (logs) should be identical.")
-        #expect(lhsResult.value == "Value is 20")
+        try exhaustCheck(Gen.choose(in: -1000 ... 1000)) { value in
+            let monad = log("Start").map { value }
+            let f: (Int) -> String = { "\($0 * 2)" }
+            let g: (String) -> String = { "Value is \($0)" }
+            let lhs = try interpret(monad.map { g(f($0)) })
+            let rhs = try interpret(monad.map(f).map(g))
+            return lhs.value == rhs.value && lhs.log == rhs.log
+        }
     }
 
-    // MARK: Monad Laws
-
-    /// A Monad must satisfy: `pure(output).bind(function)` is equivalent to `f(output)`
     @Test("Monad Law: Left Identity (return a >>= f == f a)")
     func monadLeftIdentity() throws {
-        // Arrange
-        let output = "World"
-        let function: (String) -> LoggingFreerMonad<String> = { name in
-            log("Hello, \(name)").map { _ in "Done" }
+        try exhaustCheck(Gen.choose(in: -1000 ... 1000)) { value in
+            let f: (Int) -> LoggingFreerMonad<String> = { n in
+                log("Received \(n)").map { _ in "Done" }
+            }
+            let lhs = try interpret(LoggingFreerMonad.pure(value).bind(f))
+            let rhs = try interpret(f(value))
+            return lhs.value == rhs.value && lhs.log == rhs.log
         }
-
-        // Act
-        let lhsResult = try interpret(LoggingFreerMonad.pure(output).bind(function))
-        let rhsResult = try interpret(function(output))
-
-        // Assert
-        #expect(lhsResult.value == rhsResult.value)
-        #expect(lhsResult.log == rhsResult.log)
     }
 
-    /// A Monad must satisfy: `monad.bind { .pure($0) }` is equivalent to `monad`
     @Test("Monad Law: Right Identity (m >>= return == m)")
     func monadRightIdentity() throws {
-        // Arrange
-        let monad = log("Step 1").bind { log("Step 2") }.map { 123 }
-
-        // Act
-        let lhsResult = try interpret(monad.bind { .pure($0) })
-        let rhsResult = try interpret(monad)
-
-        // Assert
-        #expect(lhsResult.value == rhsResult.value)
-        #expect(lhsResult.log == rhsResult.log)
+        try exhaustCheck(Gen.choose(in: -1000 ... 1000)) { value in
+            let monad = log("Step").map { value }
+            let lhs = try interpret(monad.bind { .pure($0) })
+            let rhs = try interpret(monad)
+            return lhs.value == rhs.value && lhs.log == rhs.log
+        }
     }
 
-    /// A Monad must satisfy: `(monad.bind(function1)).bind(function2)` is equivalent to `m.bind { x in function1(x).bind(function2) }`
     @Test("Monad Law: Associativity ((m >>= f) >>= g == m >>= (x -> f(x) >>= g))")
     func monadAssociativity() throws {
-        // Arrange: Use a chain that changes types to stress the generic interpreter.
-        let monad: LoggingFreerMonad<String> = log("Start").map { "Value from m" }
-
-        let function1: (String) -> LoggingFreerMonad<Int> = { val in
-            log("function1 received '\(val)'").map { 42 }
+        try exhaustCheck(Gen.choose(in: -1000 ... 1000)) { value in
+            let monad: LoggingFreerMonad<Int> = log("Start").map { value }
+            let f: (Int) -> LoggingFreerMonad<String> = { n in
+                log("f(\(n))").map { "\(n)" }
+            }
+            let g: (String) -> LoggingFreerMonad<Bool> = { s in
+                log("g(\(s))").map { s.isEmpty == false }
+            }
+            let lhs = try interpret(monad.bind(f).bind(g))
+            let rhs = try interpret(monad.bind { x in f(x).bind(g) })
+            return lhs.value == rhs.value && lhs.log == rhs.log
         }
-
-        let function2: (Int) -> LoggingFreerMonad<Bool> = { val in
-            log("function2 received \(val)").map { true }
-        }
-
-        // Act
-        let lhsResult = try interpret(monad.bind(function1).bind(function2))
-        let rhsResult = try interpret(monad.bind { x in function1(x).bind(function2) })
-
-        // Assert
-        #expect(lhsResult.value == rhsResult.value)
-        #expect(lhsResult.log == rhsResult.log, "The sequence of operations must be identical.")
-
-        // Also check the final state to be sure the test is meaningful
-        let expectedLog = ["Start", "function1 received 'Value from m'", "function2 received 42"]
-        #expect(lhsResult.log == expectedLog)
-        #expect(lhsResult.value == true)
     }
 }
 

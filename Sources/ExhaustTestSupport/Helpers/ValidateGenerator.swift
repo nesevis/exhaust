@@ -6,13 +6,9 @@ import Testing
 /// matches the original.
 @discardableResult
 package func validateGenerator<Output: Equatable>(_ gen: Generator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {
-    var iterator = ValueInterpreter(gen)
-    if let instance = try iterator.next() {
-        let recipe = try #require(try Interpreters.reflect(gen, with: instance))
-        let replay = try #require(try Interpreters.replay(gen, using: recipe))
-        #expect(instance == replay)
-        return (recipe, instance)
-    } else {
-        fatalError("Generator produced no values")
-    }
+    let (instance, _) = try generate(gen)
+    let recipe = try #require(try Interpreters.reflect(gen, with: instance))
+    let replay = try #require(try Interpreters.replay(gen, using: recipe))
+    #expect(instance == replay)
+    return (recipe, instance)
 }

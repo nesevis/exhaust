@@ -9,23 +9,32 @@ package func exhaustCheck<Value>(
     _ gen: Generator<Value>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
-    property: (Value) -> Bool
+    property: (Value) throws -> Bool
 ) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
     while let value = try iter.next() {
-        #expect(property(value), "Property failed for value: \(value)")
+        #expect(try property(value), "Property failed for value: \(value)")
     }
 }
 
-/// Two-tuple variant that unpacks the generated pair before passing to the property.
+package func exhaustCheck<Value>(
+    _ gen: Generator<Value>,
+    maxIterations: UInt64 = 100,
+    seed: UInt64 = 42,
+    property: (Value) -> Bool
+) throws {
+    try exhaustCheck(gen, maxIterations: maxIterations, seed: seed) { value throws -> Bool in
+        property(value)
+    }
+}
+
 package func exhaustCheck<A, B>(
     _ gen: Generator<(A, B)>,
     maxIterations: UInt64 = 200,
     seed: UInt64 = 42,
     property: (A, B) -> Bool
 ) throws {
-    var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = try iter.next() {
-        #expect(property(value.0, value.1), "Property failed for value: \(value)")
+    try exhaustCheck(gen, maxIterations: maxIterations, seed: seed) { value throws -> Bool in
+        property(value.0, value.1)
     }
 }
