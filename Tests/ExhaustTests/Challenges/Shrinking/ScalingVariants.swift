@@ -315,7 +315,6 @@ struct LargeUnionListScalingVariant {
             .suppress(.issueReporting),
             .logging(.debug, .keyValue)
         ) { arr in
-            print("Attempt: \(arr)")
             return Set(arr.flatMap(\.self)).count <= 4
         }
         print()

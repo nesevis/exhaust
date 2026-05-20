@@ -35,7 +35,6 @@ struct CouplingShrinkingChallenge {
             }
             return true
         }
-        print("Arr: \(arr) (\(result))")
         return result
     }
 
