@@ -1,5 +1,5 @@
 /// Typed identifier for a sequence encoder.
-public enum EncoderName: String, Hashable, Sendable {
+public enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Removes elements from sequences. Tries batch removal (halving, quartering) first for large cuts, then falls back to per-element removal. Also handles cross-sequence aligned removal where corresponding elements in sibling sequences are deleted together.
     case deletion
 

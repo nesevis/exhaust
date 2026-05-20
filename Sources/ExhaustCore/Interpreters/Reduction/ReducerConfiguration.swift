@@ -9,6 +9,9 @@ package extension Interpreters {
         /// Wall-clock deadline for the reduction phase, in nanoseconds. The machine checks this after each decode step and terminates early when exceeded. Zero means no limit.
         package let wallClockDeadlineNanoseconds: UInt64
 
+        /// When non-nil, only encoders whose name is in this set are dispatched. Transformations targeting other encoders are skipped. Use this to stage reduction in multiple passes (for example, structural-only followed by value-only).
+        package let enabledEncoders: Set<EncoderName>?
+
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         package var visualize: Bool = false
 
@@ -18,10 +21,12 @@ package extension Interpreters {
         /// Creates a configuration with the given stall budget and optional wall-clock deadline.
         package init(
             maxStalls: Int,
-            wallClockDeadlineNanoseconds: UInt64 = 0
+            wallClockDeadlineNanoseconds: UInt64 = 0,
+            enabledEncoders: Set<EncoderName>? = nil
         ) {
             self.maxStalls = maxStalls
             self.wallClockDeadlineNanoseconds = wallClockDeadlineNanoseconds
+            self.enabledEncoders = enabledEncoders
         }
     }
 }
