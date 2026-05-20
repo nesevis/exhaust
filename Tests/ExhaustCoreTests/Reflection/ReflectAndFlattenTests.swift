@@ -7,6 +7,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Reflect and Flatten Integration Tests")
@@ -510,6 +511,8 @@ struct ReflectAndFlattenTests {
         #expect(materialized == 64)
     }
 }
+
+// MARK: - Helpers
 
 extension ExhaustRangeSet where Bound == Int {
     mutating func insert(contentsOf closedRange: ClosedRange<Bound>) {

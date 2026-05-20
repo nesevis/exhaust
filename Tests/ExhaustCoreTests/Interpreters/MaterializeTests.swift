@@ -6,6 +6,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
 
@@ -42,7 +43,7 @@ struct MaterializeTests {
             #expect(materializeViaReflection(intGen, value) == value)
         }
 
-        let booleanGen = boolGen()
+        let booleanGen = Gen.choose(from: [true, false])
         var boolIter = ValueInterpreter(booleanGen, seed: 42, maxRuns: 10)
         while let value = try boolIter.next() {
             #expect(materializeViaReflection(booleanGen, value) == value)
@@ -121,7 +122,7 @@ struct MaterializeTests {
     func compositeRoundtrip() throws {
         let zip2Gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
-            boolGen()
+            Gen.choose(from: [true, false])
         )
         var zip2Iter = ValueInterpreter(zip2Gen, seed: 42, maxRuns: 200)
         while let value = try zip2Iter.next() {
@@ -135,7 +136,7 @@ struct MaterializeTests {
         let zip3Gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
-            boolGen()
+            Gen.choose(from: [true, false])
         )
         var zip3Iter = ValueInterpreter(zip3Gen, seed: 42, maxRuns: 200)
         while let value = try zip3Iter.next() {

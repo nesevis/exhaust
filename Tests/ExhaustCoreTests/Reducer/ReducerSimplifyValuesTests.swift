@@ -8,23 +8,9 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
-
-// MARK: - Helpers
-
-private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-
-/// Generate a value and its choice tree from a generator with a given seed.
-private func generate<Output>(
-    _ gen: Generator<Output>,
-    seed: UInt64 = 42
-) throws -> (value: Output, tree: ChoiceTree) {
-    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
-    return try #require(iter.prefix(1).last)
-}
-
-// MARK: - ShortlexKey
 
 @Suite("ChoiceValue.shortlexKey")
 struct ShortlexKeyTests {
@@ -66,9 +52,6 @@ struct ShortlexKeyTests {
         let zero = ChoiceValue(Int64(0), tag: .int64)
         #expect(zero.shortlexKey < min.shortlexKey)
         #expect(zero.shortlexKey < max.shortlexKey)
-//        #expect(max.shortlexKey == UInt64(Int64.max))
-//        // Int64.min has magnitude Int64.max + 1
-//        #expect(min.shortlexKey == UInt64(Int64.max) + 1)
     }
 
     // MARK: Other signed widths
@@ -142,8 +125,6 @@ struct ShortlexKeyTests {
         #expect(inf.shortlexKey < nan.shortlexKey)
     }
 }
-
-// MARK: - Reducer Pass 3 Tests
 
 @Suite("Reducer Pass 3: simplify values")
 struct ReducerSimplifyValuesTests {
@@ -369,3 +350,7 @@ struct ReducerSimplifyValuesTests {
         #expect(result.1 == rematerialized)
     }
 }
+
+// MARK: - Helpers
+
+private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)

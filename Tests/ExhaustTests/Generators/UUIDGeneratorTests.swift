@@ -42,11 +42,11 @@ struct UUIDGeneratorTests {
     @Test("UUID generator validates with #examine")
     func examine() {
         let gen = #gen(.uuid())
-        #examine(gen, samples: 50)
+        #expect(#examine(gen, samples: 50).passed)
 
         let gen2 = #gen(.uuid()).bind { _ in gen }
         withKnownIssue("Forward-only bind is correctly detected by #examine") {
-            #examine(gen2, samples: 1)
+            #expect(#examine(gen2, samples: 1).passed)
         }
     }
 }

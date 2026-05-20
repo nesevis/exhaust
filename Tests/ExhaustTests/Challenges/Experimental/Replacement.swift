@@ -35,18 +35,14 @@ struct ReplacementChallenge {
     func replacementFull() throws {
         let gen = #gen(.int(in: 0 ... 1_000_000), .int(in: 2 ... 10).array())
 
-        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 gen,
-                .suppress(.issueReporting),
-                .onReport { report = $0 }
+                .suppress(.issueReporting)
             ) { initial, multipliers in
                 Self.prods(initial, multipliers).allSatisfy { $0 < 1_000_000 }
             }
         )
-
-        if let report { print("[PROFILE] Replacement: \(report.profilingSummary)") }
         #expect(Self.prods(output.0, output.1).contains { $0 >= 1_000_000 })
     }
 

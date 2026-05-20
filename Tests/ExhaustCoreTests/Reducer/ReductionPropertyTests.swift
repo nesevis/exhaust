@@ -1,3 +1,4 @@
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -149,16 +150,6 @@ struct ReductionPropertyTests {
             #expect(reduced == originalSequence)
         }
     }
-}
-
-// MARK: - Helpers
-
-private func generate<Output>(
-    _ gen: Generator<Output>,
-    seed: UInt64
-) throws -> (value: Output, tree: ChoiceTree) {
-    var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
-    return try #require(try iterator.next())
 }
 
 private extension Tag {

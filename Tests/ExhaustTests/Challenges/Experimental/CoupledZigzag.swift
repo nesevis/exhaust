@@ -45,21 +45,15 @@ struct CoupledZigzagChallenge {
         let counterExample = (10, 9)
         #expect(property(counterExample) == false)
 
-        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 gen,
                 .suppress(.issueReporting),
                 .replay(12_768_154_885_595_245_120),
-                .onReport { report = $0 },
                 .logging(.debug, .keyValue),
                 property: property
             )
         )
-        if let report {
-            print("[PROFILE] CoupledZigzag: \(report.profilingSummary)")
-            print("[PROFILE] Cycles: \(report.cycles)")
-        }
 
         #expect(value == counterExample)
     }
@@ -94,21 +88,15 @@ struct CoupledZigzagChallenge {
         let counterExample = (10, 9)
         #expect(property(counterExample) == false)
 
-        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 gen,
                 .suppress(.issueReporting),
                 .budget(.extensive),
                 .replay(15_376_868_453_505_688_755),
-                .onReport { report = $0 },
                 property: property
             )
         )
-        if let report {
-            print("[PROFILE] CoupledZigzagNested: \(report.profilingSummary)")
-            print("[PROFILE] Cycles: \(report.cycles)")
-        }
 
         #expect(value == counterExample)
     }

@@ -1,32 +1,8 @@
-//
-//  Generator.swift
-//  Exhaust
-//
-//  Created by Chris Kolbu on 25/7/2025.
-//
-
 import ExhaustCore
-import Testing
-
-@discardableResult
-func validateGenerator<Output: Equatable>(_ gen: Generator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {
-    var iterator = ValueInterpreter(gen)
-    if let instance = try iterator.next() {
-        let recipe = try #require(try Interpreters.reflect(gen, with: instance))
-        let replay = try #require(try Interpreters.replay(gen, using: recipe))
-        #expect(instance == replay)
-        return (recipe, instance)
-    } else {
-        fatalError("Boo")
-    }
-}
-
-// MARK: - ExhaustCore-level string/character generators
-
 import Foundation
 
 /// ASCII character generator (U+0020–U+007E) with reflection support.
-func asciiCharGen() -> Generator<Character> {
+package func asciiCharGen() -> Generator<Character> {
     let srs = CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -43,7 +19,7 @@ func asciiCharGen() -> Generator<Character> {
 }
 
 /// Default (non-control, non-illegal Unicode) character generator with reflection support.
-func defaultCharGen() -> Generator<Character> {
+package func defaultCharGen() -> Generator<Character> {
     let srs = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters).scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -60,7 +36,7 @@ func defaultCharGen() -> Generator<Character> {
 }
 
 /// ASCII string generator with size-scaled length.
-func asciiStringGen() -> Generator<String> {
+package func asciiStringGen() -> Generator<String> {
     let charGen = asciiCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
@@ -68,8 +44,29 @@ func asciiStringGen() -> Generator<String> {
     )
 }
 
+/// ASCII string generator with explicit length range.
+package func asciiStringGen(length: ClosedRange<UInt64>) -> Generator<String> {
+    let srs = CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()
+    let charGen = Gen.contramap(
+        { (char: Character) throws -> Int in
+            guard let scalar = char.unicodeScalars.first else {
+                throw ReflectionError.couldNotReflectOnSequenceElement(
+                    "Character has no scalars"
+                )
+            }
+            return srs.index(of: scalar)
+        },
+        Gen.choose(in: 0 ... srs.scalarCount - 1)
+            .map { Character(srs.scalar(at: $0)) }
+    )
+    return Gen.contramap(
+        { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
+        Gen.arrayOf(charGen, within: length).map { String($0) }
+    )
+}
+
 /// Default Unicode string generator with size-scaled length.
-func stringGen() -> Generator<String> {
+package func stringGen() -> Generator<String> {
     let charGen = defaultCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
@@ -77,13 +74,17 @@ func stringGen() -> Generator<String> {
     )
 }
 
-/// Bool generator equivalent to .bool() — picks from [true, false].
-func boolGen() -> Generator<Bool> {
-    Gen.choose(from: [true, false])
+/// String generator from a CharacterSet with explicit length range.
+package func stringGen(from characterSet: CharacterSet, length: ClosedRange<UInt64>) -> Generator<String> {
+    let cGen = charGen(from: characterSet)
+    return Gen.contramap(
+        { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
+        Gen.arrayOf(cGen, within: length).map { String($0) }
+    )
 }
 
 /// Character generator from a CharacterSet.
-func charGen(from characterSet: CharacterSet) -> Generator<Character> {
+package func charGen(from characterSet: CharacterSet) -> Generator<Character> {
     let srs = characterSet.scalarRangeSet()
     return Gen.contramap(
         { (char: Character) throws -> Int in
@@ -100,7 +101,7 @@ func charGen(from characterSet: CharacterSet) -> Generator<Character> {
 }
 
 /// Makes a generator optional: picks between .none (weight 1) and .some (weight 5).
-func optionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
+package func optionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
     Gen.pick(choices: [
         (1, Gen.just(Value?.none)),
         (5, asOptionalGen(gen)),
@@ -108,7 +109,7 @@ func optionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
 }
 
 /// Wraps a non-optional generator into an optional one (the .some branch).
-func asOptionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
+package func asOptionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
     let description = String(describing: Value.self)
     return .impure(operation: .contramap(
         transform: { result in

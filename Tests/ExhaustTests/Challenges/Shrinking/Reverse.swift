@@ -16,18 +16,15 @@ struct ReverseShrinkingChallenge {
     @Test("Reverse, Full")
     func reverseFull() {
         let gen = #gen(.uint()).array(length: 1 ... 1000)
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
             .collectOpenPBTStats,
             .replay(33_556_013_978_236_435),
-            .logging(.debug, .keyValue),
-            .onReport { report = $0 }
+            .logging(.debug, .keyValue)
         ) { arr in
             return arr.elementsEqual(arr.reversed())
         }
-        if let report { print("[PROFILE] Reverse: \(report.profilingSummary)") }
 
         #expect(output == [0, 1])
     }

@@ -9,35 +9,9 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
-
-// MARK: - Benchmark Problem
-
-private struct BenchmarkProblem<Value: Hashable> {
-    let name: String
-    let generator: Generator<Value>
-    let predicate: (Value) -> Bool
-    /// Maps a valid value to its quality bucket (e.g. height for trees, distinct count for lists).
-    let qualityBucket: (Value) -> Int
-    let bucketLabel: String
-}
-
-// MARK: - Benchmark Result
-
-private struct BenchmarkResult {
-    let strategyName: String
-    let uniqueCount: Int
-    let totalGenerated: Int
-    let elapsed: Duration
-    let qualityDistribution: [Int: Int]
-
-    var reachedTarget: Bool {
-        uniqueCount >= 100
-    }
-}
-
-// MARK: - Benchmark
 
 @Suite("Uniqueness Benchmark")
 struct UniquenessBenchmarkTests {
@@ -458,6 +432,29 @@ struct UniquenessBenchmarkTests {
         } else {
             return String(format: "%.2fs", ms / 1000)
         }
+    }
+}
+
+// MARK: - Types
+
+private struct BenchmarkProblem<Value: Hashable> {
+    let name: String
+    let generator: Generator<Value>
+    let predicate: (Value) -> Bool
+    /// Maps a valid value to its quality bucket (e.g. height for trees, distinct count for lists).
+    let qualityBucket: (Value) -> Int
+    let bucketLabel: String
+}
+
+private struct BenchmarkResult {
+    let strategyName: String
+    let uniqueCount: Int
+    let totalGenerated: Int
+    let elapsed: Duration
+    let qualityDistribution: [Int: Int]
+
+    var reachedTarget: Bool {
+        uniqueCount >= 100
     }
 }
 

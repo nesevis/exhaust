@@ -28,14 +28,11 @@ struct LengthListShrinkingChallenge {
 
     @Test("Length List, Full")
     func lengthListFull() {
-        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             property: Self.property
         )
-        if let report { print("[PROFILE] LengthList: \(report.profilingSummary)") }
 
         #expect(output == [900])
     }

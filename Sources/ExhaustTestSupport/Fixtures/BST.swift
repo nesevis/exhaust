@@ -1,15 +1,11 @@
-//
-//  BST.swift
-//  ExhaustTests
-//
-
 import ExhaustCore
 
-enum BST: Equatable, Hashable, CustomStringConvertible {
+/// Binary search tree for testing recursive generators and tree-shaped data.
+package enum BST: Equatable, Hashable, CustomStringConvertible {
     case leaf
     indirect case node(left: BST, value: UInt, right: BST)
 
-    static func arbitrary(maxDepth: Int = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> Generator<BST> {
+    package static func arbitrary(maxDepth: Int = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> Generator<BST> {
         bstGenerator(maxDepth: maxDepth, valueRange: valueRange)
     }
 
@@ -23,7 +19,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         return Gen.pick(choices: [(1, Gen.just(.leaf)), (3, nodeBranch)])
     }
 
-    static func arbitraryRecursive(maxDepth: UInt64 = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> Generator<BST> {
+    package static func arbitraryRecursive(maxDepth: UInt64 = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> Generator<BST> {
         Gen.recursive(base: .leaf, depthRange: 0 ... Int(maxDepth)) { recurse, remaining in
             let nodeBranch = Gen.zip(recurse(), Gen.choose(in: valueRange), recurse()).map { left, value, right in
                 BST.node(left: left, value: value, right: right)
@@ -32,7 +28,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    func isValidBST() -> Bool {
+    package func isValidBST() -> Bool {
         isValidBST(min: nil, max: nil)
     }
 
@@ -48,7 +44,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    func isValidAVL() -> Bool {
+    package func isValidAVL() -> Bool {
         isValidBST() && isBalanced()
     }
 
@@ -62,7 +58,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    var nodeCount: Int {
+    package var nodeCount: Int {
         switch self {
         case .leaf: 0
         case let .node(left, _, right):
@@ -70,7 +66,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    var height: Int {
+    package var height: Int {
         switch self {
         case .leaf: 0
         case let .node(left, _, right):
@@ -78,7 +74,7 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    var description: String {
+    package var description: String {
         switch self {
         case .leaf: "."
         case let .node(left, value, right): "(\(left) \(value) \(right))"

@@ -6,6 +6,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Test("Test Xoshiro against reference implementation")
@@ -43,20 +44,7 @@ func reflectOnGetsize() throws {
     #expect(generated2 == replay)
 }
 
-// FIXME: The string generator now varies from N/10...N, not N...N
-// @Test("Reflect on resize")
-// func testReflectOnResize() throws {
-//    // Test stringGen()
-//    let gen = Gen.resize(50, stringGen())
-//    var iterator = GeneratorIterator(gen)
-//    let first = iterator.next()!
-//    let second = iterator.next()!
-//    #expect(first.count == second.count)
-//    let recipe = try Interpreters.reflect(gen, with: first)
-//    let replay = try Interpreters.replay(gen, using: recipe!)
-//    #expect(replay == first)
-//    print("String reflection succeeded!")
-// }
+// MARK: - Helpers
 
 private let reference: [UInt64] = [
     0, // 1-indexed

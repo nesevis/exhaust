@@ -27,17 +27,14 @@ struct LargeUnionListShrinkingChallenge {
 
     @Test("Large Union List, Single")
     func largeUnionListFull() {
-        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             .suppress(.issueReporting),
             .replay(2079),
-            .onReport { report = $0 },
             .budget(.extensive),
             .logging(.debug, .keyValue),
             property: Self.property
         )
-        if let report { print("[PROFILE] LargeUnionList: \(report.profilingSummary)") }
 
         // 460 invocations with legacy, 797 with bonsai
         #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
@@ -51,15 +48,12 @@ struct LargeUnionListShrinkingChallenge {
             [-92_071_603_954_950_552],
         ]
 
-        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             property: Self.property
         )
-        if let report { print("[PROFILE] LargeUnionListPath1: \(report.profilingSummary)") }
 
         // 738 invocations with legacy, 966 with bonsai
         // 658 invocations with Bonsai 2, 22ms
@@ -70,16 +64,13 @@ struct LargeUnionListShrinkingChallenge {
     func largeUnionListPathological2() {
         let value = [[-140_165_314_328_449, 79_003_739_596_584, -102_880_757_906_973, 59_059_092_428_908, 118_937_662_940_338, 110_119_751_840_770, 100_385_325_416_037, -118_755_354_749_898, 80_572_987_607_965, 76_424_960_810_766], [-28_023_762_322_669, 11_702_849_741_616, -132_960_251_314_433, 123_682_815_435_579, -10_343_261_662_018, -4_700_527_354_204, 10_032_215_627_723, -63_802_894_155_092, -103_439_992_132_983], [-31_190_610_291_605, -125_312_221_647_467, -67_770_770_878_048, 74_921_319_749_072, -34_565_939_758_906, -48_688_160_340_287, 18_293_331_003_577, 67_560_200_516_186], [-77_447_398_498_565, -126_080_081_874_646, -63_017_712_975_195, 86_926_291_646_097], [-89_717_625_244_173, -10_050_986_803_917, 10_364_103_939_241, -93_995_600_961_861, 31_194_551_855_121, -132_988_363_192_036, -96_151_068_047_749], [-22_614_648_784_524, -18_194_426_629_298, 123_098_101_697_801, 73_283_960_328_215, -24_300_919_081_696, -18_576_827_148_737, -71_742_940_518_794], [-6_813_118_022_644, 57_217_985_601_415, -6_180_874_521_902, -136_303_770_089_928]]
 
-        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             .logging(.debug),
             property: Self.property
         )
-        if let report { print("[PROFILE] LargeUnionListPath2: \(report.profilingSummary)") }
 
         // 619 invocations with legacy (20ms), 443 with bonsai (29ms)
         // 599 with bonsai 2 (21ms)
@@ -90,15 +81,12 @@ struct LargeUnionListShrinkingChallenge {
     func largeUnionListPathological3() {
         let value = [[76132], [-61180, -48610, 71763], [-25593]]
 
-        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .onReport { report = $0 },
             property: Self.property
         )
-        if let report { print("[PROFILE] LargeUnionListPath3: \(report.profilingSummary)") }
 
         // 507 invocation with legacy (17ms), 460 with bonsai (11ms)
         // 299 invocations with Bonsai 2 (12ms)
@@ -123,7 +111,7 @@ struct LargeUnionListShrinkingChallenge {
             // ~650–750 invocations with legacy in 1112ms
             // 846ms with Bonsai 2, same invocations
             // ~323-689 invocations with bonsai adaptive in ~960ms
-//            #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
+            #expect(output?.flatMap(\.self).sorted() == [-2, -1, 0, 1, 2])
         }
     }
 }

@@ -1,22 +1,17 @@
-//
-//  JSONValue.swift
-//  ExhaustTests
-//
-
 import ExhaustCore
 
 /// A simplified JSON-like recursive data type for testing `Gen.recursive`.
 ///
 /// Exercises recursion through a collection (`.array`) — a shape distinct from
 /// BST's binary recursion. Leaves are `.null` and `.int`.
-enum JSONValue: Equatable, Hashable, CustomStringConvertible {
+package enum JSONValue: Equatable, Hashable, CustomStringConvertible {
     case null
     case int(UInt)
     indirect case array([JSONValue])
 
     private static let valueRange: ClosedRange<UInt> = 0 ... 99
 
-    static func arbitraryRecursive(maxDepth: UInt64 = 5) -> Generator<JSONValue> {
+    package static func arbitraryRecursive(maxDepth: UInt64 = 5) -> Generator<JSONValue> {
         Gen.recursive(base: .null, depthRange: 0 ... Int(maxDepth)) { recurse, remaining in
             let intLeaf = Gen.choose(in: valueRange).map { JSONValue.int($0) }
             let arrayBranch = Gen.arrayOf(recurse(), within: 0 ... 3, scaling: .constant)
@@ -30,7 +25,7 @@ enum JSONValue: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    var depth: Int {
+    package var depth: Int {
         switch self {
         case .null, .int: 0
         case let .array(elements):
@@ -38,7 +33,7 @@ enum JSONValue: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    var nodeCount: Int {
+    package var nodeCount: Int {
         switch self {
         case .null, .int: 1
         case let .array(elements):
@@ -46,7 +41,7 @@ enum JSONValue: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    var description: String {
+    package var description: String {
         switch self {
         case .null: "null"
         case let .int(n): "\(n)"

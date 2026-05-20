@@ -66,7 +66,7 @@ struct AdvancedFeatureTests {
             }
 
             // Test round-trip
-            #examine(gen, samples: 10, seed: 42)
+            #expect(#examine(gen, samples: 10, seed: 42).passed)
         }
 
         @Test("Nested lensed properties")
@@ -97,7 +97,7 @@ struct AdvancedFeatureTests {
                     Outer(inners: inners, id: id)
                 }
 
-                #examine(outerGen, samples: 20, seed: 42)
+                #expect(#examine(outerGen, samples: 20, seed: 42).passed)
             }
         }
     }
@@ -114,7 +114,7 @@ struct AdvancedFeatureTests {
             ]
 
             for gen in extremeGenerators {
-                #examine(gen, samples: 10, seed: 42)
+                #expect(#examine(gen, samples: 10, seed: 42).passed)
             }
         }
 
@@ -127,7 +127,7 @@ struct AdvancedFeatureTests {
                 .array(length: 2 ... 2) // 2 outer arrays
 
             // Test round-trip (this tests memory efficiency of reflection/replay)
-            #examine(largeNestedGen, samples: 3, seed: 42)
+            #expect(#examine(largeNestedGen, samples: 3, seed: 42).passed)
         }
     }
 }

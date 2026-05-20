@@ -71,23 +71,6 @@ struct GraphLockstepEncoder: GraphEncoder {
         startLockstep(scope: tandemScope, graph: graph)
     }
 
-    mutating func refreshState(graph: ChoiceGraph, sequence newSequence: ChoiceSequence) {
-        valueState.reset(sequence: newSequence)
-        mode = .idle
-
-        let scopes = ExchangeQuery.build(graph: graph)
-        guard let tandem = scopes.firstNonNil({ scope -> TandemScope? in
-            if case let .tandem(inner) = scope { return inner }
-            return nil
-        }) else { return }
-        for group in tandem.groups {
-            for entry in group.leaves {
-                valueState.registerLeaf(nodeID: entry.nodeID, mayReshape: entry.mayReshapeOnAcceptance, graph: graph)
-            }
-        }
-        startLockstep(scope: tandem, graph: graph)
-    }
-
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard case var .active(state) = mode else { return nil }
 

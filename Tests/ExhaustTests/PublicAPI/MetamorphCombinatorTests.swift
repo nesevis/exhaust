@@ -70,10 +70,10 @@ struct MetamorphCombinatorTests {
     @Test("Metamorph generators cannot round-trip through reflection and replay")
     func roundTrip() {
         withKnownIssue {
-            #examine(#gen(.int(in: 1 ... 100)).metamorph(
+            #expect(#examine(#gen(.int(in: 1 ... 100)).metamorph(
                 { $0 * 2 },
                 { String($0) }
-            ))
+            )).passed)
         }
     }
 

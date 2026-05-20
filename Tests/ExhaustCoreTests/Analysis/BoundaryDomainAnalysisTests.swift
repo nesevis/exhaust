@@ -4,6 +4,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
 
@@ -777,11 +778,6 @@ struct CharacterBoundaryIndicesTests {
 }
 
 // MARK: - Helpers
-
-private func analyzeBoundary(_ gen: Generator<some Any>) -> BoundaryDomainProfile? {
-    guard case let .boundary(profile) = ChoiceTreeAnalysis.analyze(gen) else { return nil }
-    return profile
-}
 
 private func asciiStringGen(length: ClosedRange<Int>) -> Generator<String> {
     var rangeSet = ExhaustRangeSet<UInt32>()

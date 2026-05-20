@@ -11,6 +11,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
 
@@ -52,7 +53,7 @@ struct RoundtripPropertyTests {
             return replayed == value
         }
 
-        let charGen = characterGen(from: .decimalDigits)
+        let charGen = charGen(from: .decimalDigits)
         try exhaustCheck(charGen) { value in
             guard let tree = try? Interpreters.reflect(charGen, with: value),
                   let replayed = try? Interpreters.replay(charGen, using: tree)
@@ -471,65 +472,4 @@ struct ChoiceValueComparablePropertyTests {
             return va == vb
         }
     }
-}
-
-// MARK: - Helpers
-
-/// Replacement for `#exhaust` macro.
-private func exhaustCheck<T>(
-    _ gen: Generator<T>,
-    maxIterations: UInt64 = 100,
-    seed: UInt64 = 42,
-    property: (T) -> Bool
-) throws {
-    var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = try iter.next() {
-        #expect(property(value), "Property failed for value: \(value)")
-    }
-}
-
-/// Character generator from CharacterSet using ExhaustCore primitives.
-private func characterGen(from characterSet: CharacterSet) -> Generator<Character> {
-    let srs = characterSet.scalarRangeSet()
-    return Gen.contramap(
-        { (char: Character) throws -> Int in
-            guard let scalar = char.unicodeScalars.first else {
-                throw ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars"
-                )
-            }
-            return srs.index(of: scalar)
-        },
-        Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) }
-    )
-}
-
-/// ASCII string generator using ExhaustCore primitives.
-private func asciiStringGen(
-    length: ClosedRange<UInt64>? = nil
-) -> Generator<String> {
-    let srs = CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()
-    let charGen = Gen.contramap(
-        { (char: Character) throws -> Int in
-            guard let scalar = char.unicodeScalars.first else {
-                throw ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars"
-                )
-            }
-            return srs.index(of: scalar)
-        },
-        Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) }
-    )
-    if let length {
-        return Gen.contramap(
-            { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-            Gen.arrayOf(charGen, within: length).map { String($0) }
-        )
-    }
-    return Gen.contramap(
-        { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen).map { String($0) }
-    )
 }

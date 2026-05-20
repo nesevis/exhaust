@@ -6,26 +6,11 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("oneOf combinator")
 struct OneOfTests {
-    // MARK: - Helpers
-
-    private func roundTrip<Output: Equatable>(
-        _ gen: Generator<Output>,
-        seed: UInt64 = 42
-    ) throws -> (original: Output, materialized: Output) {
-        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
-        let (value, tree) = try #require(try interpreter.prefix(1).last)
-        let flattened = ChoiceSequence.flatten(tree)
-        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
-            Issue.record("Expected .success")
-            return (value, value)
-        }
-        return (value, materialized)
-    }
-
     // MARK: - Equal-weight oneOf
 
     @Test("Equal-weight oneOf produces values from all branches")

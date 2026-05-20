@@ -1,55 +1,7 @@
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
-
-private enum SweepBST: Equatable, Hashable {
-    case leaf
-    indirect case node(left: SweepBST, value: UInt, right: SweepBST)
-
-    static var arbitrary: Generator<SweepBST> {
-        bstGenerator(maxDepth: 5)
-    }
-
-    private static func bstGenerator(maxDepth: Int) -> Generator<SweepBST> {
-        if maxDepth <= 0 {
-            return Gen.just(.leaf)
-        }
-        let nodeBranch = Gen.zip(
-            bstGenerator(maxDepth: maxDepth - 1),
-            Gen.choose(in: 0 ... 9 as ClosedRange<UInt>),
-            bstGenerator(maxDepth: maxDepth - 1)
-        ).map { left, value, right in
-            SweepBST.node(left: left, value: value, right: right)
-        }
-        return Gen.pick(choices: [(1, Gen.just(.leaf)), (3, nodeBranch)])
-    }
-
-    func isValidBST() -> Bool {
-        isValidBST(min: nil, max: nil)
-    }
-
-    private func isValidBST(min: UInt?, max: UInt?) -> Bool {
-        switch self {
-        case .leaf:
-            return true
-        case let .node(left, value, right):
-            if let min, value <= min { return false }
-            if let max, value >= max { return false }
-            return left.isValidBST(min: min, max: value) &&
-                right.isValidBST(min: value, max: max)
-        }
-    }
-
-    var height: Int {
-        switch self {
-        case .leaf: 0
-        case let .node(left, _, right):
-            1 + Swift.max(left.height, right.height)
-        }
-    }
-}
-
-// MARK: - Test Suite
 
 @Suite("CGS Tuning Parameter Sweep", .disabled())
 struct CGSTuningParameterSweep {
@@ -281,5 +233,54 @@ struct CGSTuningParameterSweep {
 
     private func pad(_ value: String, width: Int) -> String {
         value.count >= width ? value : value + String(repeating: " ", count: width - value.count)
+    }
+}
+
+// MARK: - Types
+
+private enum SweepBST: Equatable, Hashable {
+    case leaf
+    indirect case node(left: SweepBST, value: UInt, right: SweepBST)
+
+    static var arbitrary: Generator<SweepBST> {
+        bstGenerator(maxDepth: 5)
+    }
+
+    private static func bstGenerator(maxDepth: Int) -> Generator<SweepBST> {
+        if maxDepth <= 0 {
+            return Gen.just(.leaf)
+        }
+        let nodeBranch = Gen.zip(
+            bstGenerator(maxDepth: maxDepth - 1),
+            Gen.choose(in: 0 ... 9 as ClosedRange<UInt>),
+            bstGenerator(maxDepth: maxDepth - 1)
+        ).map { left, value, right in
+            SweepBST.node(left: left, value: value, right: right)
+        }
+        return Gen.pick(choices: [(1, Gen.just(.leaf)), (3, nodeBranch)])
+    }
+
+    func isValidBST() -> Bool {
+        isValidBST(min: nil, max: nil)
+    }
+
+    private func isValidBST(min: UInt?, max: UInt?) -> Bool {
+        switch self {
+        case .leaf:
+            return true
+        case let .node(left, value, right):
+            if let min, value <= min { return false }
+            if let max, value >= max { return false }
+            return left.isValidBST(min: min, max: value) &&
+                right.isValidBST(min: value, max: max)
+        }
+    }
+
+    var height: Int {
+        switch self {
+        case .leaf: 0
+        case let .node(left, _, right):
+            1 + Swift.max(left.height, right.height)
+        }
     }
 }

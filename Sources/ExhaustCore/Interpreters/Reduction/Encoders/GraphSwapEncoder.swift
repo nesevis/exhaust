@@ -47,14 +47,6 @@ struct GraphSwapEncoder: GraphEncoder {
 
     // MARK: - GraphEncoder
 
-    mutating func refreshState(graph _: ChoiceGraph, sequence: ChoiceSequence) {
-        initialProbe = nil
-        initialProbeCandidate = nil
-        if var ext = extensionState {
-            ext.runningSequence = sequence
-            extensionState = ext
-        }
-    }
 
     mutating func start(scope: EncoderInput) {
         initialProbe = nil

@@ -6,6 +6,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Uniqueness Constraint")
@@ -53,7 +54,7 @@ struct UniquenessConstraintTests {
 
     @Test("Bool generator produces exactly 2 unique values")
     func boolProducesExactlyTwo() throws {
-        let gen = uniqueGen(boolGen())
+        let gen = uniqueGen(Gen.choose(from: [true, false]))
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
@@ -208,7 +209,7 @@ struct UniquenessConstraintTests {
 
     @Test("PropertyTest with unique combinator passes through")
     func propertyTestPassthrough() throws {
-        let gen = uniqueGen(boolGen())
+        let gen = uniqueGen(Gen.choose(from: [true, false]))
 
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 100)
         while let value = try iterator.next() {

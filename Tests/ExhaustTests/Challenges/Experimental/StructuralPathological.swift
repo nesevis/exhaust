@@ -35,16 +35,13 @@ struct StructuralPathologicalChallenge {
             #gen(.int(in: 0 ... n)).array(length: 3)
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337),
-            .onReport { report = $0 }
+            .replay(1337)
         ) { arr in
             (arr.max() ?? 0) < 5 || arr.reduce(0, +) < 10
         }
-        if let report { print("[PROFILE] FibreThreshold: \(report.profilingSummary)") }
 
         #expect(output == [0, 5, 5])
     }
@@ -62,16 +59,13 @@ struct StructuralPathologicalChallenge {
             #gen(.int(in: 0 ... n)).array(length: 3)
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337),
-            .onReport { report = $0 }
+            .replay(1337)
         ) { arr in
             arr[0] == 0 || arr[1] == 0 || arr[2] != arr[0] + arr[1]
         }
-        if let report { print("[PROFILE] CrossLevelSum: \(report.profilingSummary)") }
 
         #expect(output == [1, 1, 2])
     }
@@ -90,16 +84,13 @@ struct StructuralPathologicalChallenge {
             }
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337),
-            .onReport { report = $0 }
+            .replay(1337)
         ) { arr in
             arr.reduce(0, +) < 8
         }
-        if let report { print("[PROFILE] NestedBind2: \(report.profilingSummary)") }
 
         #expect(output == [4, 4])
     }
@@ -120,16 +111,13 @@ struct StructuralPathologicalChallenge {
             }
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337),
-            .onReport { report = $0 }
+            .replay(1337)
         ) { value in
             value < 6
         }
-        if let report { print("[PROFILE] NestedBind3: \(report.profilingSummary)") }
 
         #expect(output == 6)
     }
@@ -150,16 +138,13 @@ struct StructuralPathologicalChallenge {
             #gen(.int(in: 1 ... 8)).bind { b in #gen(.int(in: 0 ... b)) }
         )
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337),
-            .onReport { report = $0 }
+            .replay(1337)
         ) { x, y in
             x + y < 10
         }
-        if let report { print("[PROFILE] WideCDG: \(report.profilingSummary)") }
 
         #expect(output?.0 == 2)
         #expect(output?.1 == 8)
@@ -180,16 +165,13 @@ struct StructuralPathologicalChallenge {
             #gen(.int(in: 0 ... n)).array(length: 5)
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337),
-            .onReport { report = $0 }
+            .replay(1337)
         ) { arr in
             arr.reduce(0, +) < 12
         }
-        if let report { print("[PROFILE] MultiParamFibre: \(report.profilingSummary)") }
 
         #expect(output?.reduce(0, +) == 12)
     }
@@ -209,16 +191,13 @@ struct StructuralPathologicalChallenge {
             #gen(.int(in: 0 ... (n < 4 ? n * 3 : 12 - n))).array(length: 2)
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337),
-            .onReport { report = $0 }
+            .replay(1337)
         ) { arr in
             arr[0] + arr[1] < 8
         }
-        if let report { print("[PROFILE] NonMonotonicFibre: \(report.profilingSummary)") }
 
         #expect(output == [2, 6])
     }
@@ -239,16 +218,13 @@ struct StructuralPathologicalChallenge {
             #gen(.int(in: 1 ... 6)).bind { b in #gen(.int(in: 0 ... b)).array(length: 8) }
         )
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(42),
-            .onReport { report = $0 }
+            .replay(42)
         ) { small, large in
             small.reduce(0, +) + large.reduce(0, +) < 15
         }
-        if let report { print("[PROFILE] VaryingEdgeProductivity: \(report.profilingSummary)") }
 
         let total = (output?.0.reduce(0, +) ?? 0) + (output?.1.reduce(0, +) ?? 0)
         #expect(total >= 15)
@@ -269,16 +245,13 @@ struct StructuralPathologicalChallenge {
             #gen(.int(in: 0 ... n)).array(length: 2)
         }
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(42),
-            .onReport { report = $0 }
+            .replay(42)
         ) { arr in
             arr.max() != arr.count || arr.min() != arr.max()
         }
-        if let report { print("[PROFILE] ExhaustibleEdges: \(report.profilingSummary)") }
 
         // The minimum counterexample: both elements at the bind-inner value, and that
         // value is the smallest n where the property fails.
@@ -302,16 +275,13 @@ struct StructuralPathologicalChallenge {
             .int(in: 0 ... 20)
         )
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(42),
-            .onReport { report = $0 }
+            .replay(42)
         ) { a, b, c, d in
             a + b < 10 || c + d < 10
         }
-        if let report { print("[PROFILE] CoupledZeroing: \(report.profilingSummary)") }
 
         // Minimum: both pairs sum to exactly 10. Shortlex-smallest is (0, 10, 0, 10).
         if let output {
@@ -330,18 +300,14 @@ struct StructuralPathologicalChallenge {
         // saving Phase 2's re-confirmation probes (ZeroValue all-at-once + individual probes).
         let gen = #gen(.uint(in: 0 ... 100)).array(length: 10)
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-//            .randomOnly,
             .replay(12_791_394_592_254_154_946),
-            .budget(.standard),
-            .onReport { report = $0 }
+            .budget(.standard)
         ) { arr in
             arr.reduce(0, +) < 50
         }
-        if let report { print("[PROFILE] FibreDescentGate: \(report.profilingSummary)") }
 
         // Minimum: sum == 50 with smallest shortlex. All values at floor.
         #expect(output?.reduce(0, +) == 50)

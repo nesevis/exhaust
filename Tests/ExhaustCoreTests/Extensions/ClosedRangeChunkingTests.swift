@@ -4,6 +4,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("ClosedRange.split(into:)")
@@ -113,16 +114,4 @@ private var rangeAndChunksGen: Generator<(ClosedRange<UInt64>, Int)> {
     ).map { Swift.min($0.0, $0.1) ... Swift.max($0.0, $0.1) }
     let chunksGen: Generator<Int> = Gen.choose(in: 1 ... 50)
     return Gen.zip(rangeGen, chunksGen)
-}
-
-private func exhaustCheck<A, B>(
-    _ gen: Generator<(A, B)>,
-    maxIterations: UInt64 = 200,
-    seed: UInt64 = 42,
-    property: (A, B) -> Bool
-) throws {
-    var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = try iter.next() {
-        #expect(property(value.0, value.1), "Property failed for value: \(value)")
-    }
 }

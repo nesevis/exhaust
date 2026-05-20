@@ -35,57 +35,47 @@ struct CouplingShrinkingChallenge {
             }
             return true
         }
-        print("Arr: \(arr) (\(result))")
         return result
     }
 
     @Test("Coupling")
     func couplingChallenge() throws {
-        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 Self.gen,
                 .suppress(.issueReporting),
-                .onReport { report = $0 },
                 .logging(.debug, .keyValue),
                 .replay(1546),
                 property: Self.property
             )
         )
-        if let report { print("[PROFILE] Coupling: \(report.profilingSummary)") }
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }
 
     @Test("Coupling Pathological 1")
     func couplingPathlogical1() throws {
-        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 Self.gen,
                 .suppress(.issueReporting),
-                .onReport { report = $0 },
                 property: Self.property
             )
         )
-        if let report { print("[PROFILE] CouplingPath: \(report.profilingSummary)") }
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }
 
     @Test("Coupling Pathological 2")
     func couplingPathlogical2() throws {
-        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 Self.gen,
                 .suppress(.issueReporting),
-                .onReport { report = $0 },
                 .logging(.debug, .keyValue),
                 property: Self.property
             )
         )
-        if let report { print("[PROFILE] CouplingPath: \(report.profilingSummary)") }
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }

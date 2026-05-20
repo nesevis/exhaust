@@ -8,23 +8,9 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
-
-// MARK: - Helpers
-
-private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-
-/// Generate a value and its choice tree from a generator with a given seed.
-private func generate<Output>(
-    _ gen: Generator<Output>,
-    seed: UInt64 = 42
-) throws -> (value: Output, tree: ChoiceTree) {
-    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
-    return try #require(try iter.prefix(1).last)
-}
-
-// MARK: - ChoiceValue.reductionTarget
 
 @Suite("ChoiceValue.reductionTarget")
 struct ReductionTargetTests {
@@ -63,8 +49,6 @@ struct ReductionTargetTests {
         #expect(target != zeroBP)
     }
 }
-
-// MARK: - Reducer Pass 5 Tests
 
 @Suite("Reducer Pass 5: reduce values")
 struct ReducerReduceValuesTests {
@@ -268,3 +252,7 @@ struct ReducerReduceValuesTests {
     }
 
 }
+
+// MARK: - Helpers
+
+private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)

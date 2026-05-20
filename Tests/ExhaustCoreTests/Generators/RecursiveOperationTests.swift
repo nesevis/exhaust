@@ -4,6 +4,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Gen.recursive")
@@ -135,7 +136,6 @@ struct RecursiveOperationTests {
             let sequence = ChoiceSequence(tree)
             switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
             case let .success(materialized, _, _):
-                print("success")
                 #expect(materialized == value, "Materialized value should match original. Original: \(value), materialized: \(String(describing: materialized))")
             case .rejected, .failed:
                 Issue.record("Expected .success for value: \(value)")

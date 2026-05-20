@@ -23,17 +23,13 @@ struct ReducerStressTests {
         let gen = #gen(.int(in: 0 ... 10000).array(length: 0 ... 5000))
         let value = Array(0 ..< 5000)
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
-            .suppress(.issueReporting),
-//            .budget(.extensive),
-            .onReport { report = $0
-            }) { arr in
+            .suppress(.issueReporting)
+        ) { arr in
             arr.count < 10 || arr.reduce(0, +) < 100
         }
-        if let report { print("[PROFILE] WideFlatSequence: \(report.profilingSummary)") }
         #expect(output != nil)
         #expect((output?.count ?? 0) <= 15)
     }
@@ -49,12 +45,10 @@ struct ReducerStressTests {
             }
         }
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { outer in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { outer in
             let flat = outer.flatMap { $0 }.flatMap { $0 }
             return flat.count < 10 || flat.reduce(0, +) < 100
         }
-        if let report { print("[PROFILE] DeeplyNestedSequences: \(report.profilingSummary)") }
         #expect(output != nil)
     }
 
@@ -65,11 +59,9 @@ struct ReducerStressTests {
         let gen = #gen(.int(in: -10000 ... 10000).array(length: 5000 ... 5000))
         let value = (0 ..< 5000).map { $0 * 4 - 10000 }
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { arr in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { arr in
             arr.filter { $0 > 0 }.count < 3 || arr.reduce(0, +) == 0
         }
-        if let report { print("[PROFILE] FixedLengthWideArray: \(report.profilingSummary)") }
         #expect(output != nil)
     }
 
@@ -80,18 +72,15 @@ struct ReducerStressTests {
         let gen = #gen(.int(in: 0 ... 100).array(length: 0 ... 4).array(length: 100 ... 100))
         let value = Array(repeating: [10, 20, 30, 40], count: 100)
 
-        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             reflecting: value,
-            .suppress(.issueReporting),
-            .onReport { report = $0}
+            .suppress(.issueReporting)
         ) { arrays in
             let totalElements = arrays.reduce(0) { $0 + $1.count }
             let totalSum = arrays.flatMap { $0 }.reduce(0, +)
             return totalElements < 20 || totalSum < 200
         }
-        if let report { print("[PROFILE] ManySmallSequences: \(report.profilingSummary)") }
         #expect(output != nil)
     }
 
@@ -117,12 +106,10 @@ struct ReducerStressTests {
 
         let value = CoupledArrays(size: 25, arrays: Array(repeating: Array(0 ..< 25), count: 5))
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { coupled in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { coupled in
             let totalElements = coupled.arrays.reduce(0) { $0 + $1.count }
             return totalElements < 8 || coupled.arrays.allSatisfy { $0.max() ?? 0 < 3 }
         }
-        if let report { print("[PROFILE] WideCoupledArrays: \(report.profilingSummary)") }
         #expect(output != nil)
     }
 
@@ -148,11 +135,9 @@ struct ReducerStressTests {
 
         let value = BindCascadeOutput(outerLength: 35, innerArray: Array(repeating: 25, count: 35))
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { result in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { result in
             result.innerArray.count < 3 || result.innerArray.reduce(0, +) < 5
         }
-        if let report { print("[PROFILE] NestedBindCascade: \(report.profilingSummary)") }
         #expect(output != nil)
     }
 
@@ -164,11 +149,9 @@ struct ReducerStressTests {
         let gen = tripleGen.array(length: 0 ... 100)
         let value = (0 ..< 80).map { i in (i, i * 2, i * 3) }
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { arr in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { arr in
             arr.count < 5 || arr.reduce(0) { $0 + abs($1.0) + abs($1.1) + abs($1.2) } < 50
         }
-        if let report { print("[PROFILE] LargeCompoundSequence: \(report.profilingSummary)") }
         #expect(output != nil)
         #expect((output?.count ?? 0) <= 10)
     }
@@ -195,11 +178,9 @@ struct ReducerStressTests {
 
         let value = SizedSequence(size: 200, elements: Array(0 ..< 200))
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { result in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { result in
             result.elements.count < 15 || result.elements.reduce(0, +) < 50
         }
-        if let report { print("[PROFILE] SizeDependentSequence: \(report.profilingSummary)") }
         #expect(output != nil)
     }
 
@@ -217,15 +198,13 @@ struct ReducerStressTests {
         let gen = #gen(.int(in: 0 ... 500).array(length: 0 ... 300))
         let value = Array(0 ..< 300)
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { arr in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { arr in
             guard arr.count >= 10 else { return true }
             for index in arr.indices.dropLast() {
                 guard arr[index + 1] - arr[index] == 1 else { return true }
             }
             return false
         }
-        if let report { print("[PROFILE] OneAtATimeDeletion: \(report.profilingSummary)") }
         #expect(output != nil)
         #expect(output?.count == 10)
     }
@@ -235,15 +214,13 @@ struct ReducerStressTests {
         let gen = #gen(.int(in: 0 ... 10000).array(length: 0 ... 5000))
         let value = Array(0 ..< 5000)
 
-        var report: ExhaustReport?
-        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting), .onReport { report = $0 }) { arr in
+        let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { arr in
             guard arr.count >= 10 else { return true }
             for index in arr.indices.dropLast() {
                 guard arr[index + 1] - arr[index] == 1 else { return true }
             }
             return false
         }
-        if let report { print("[PROFILE] OneAtATimeDeletion5K: \(report.profilingSummary)") }
         #expect(output != nil)
         #expect(output?.count == 10)
     }

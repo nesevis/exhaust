@@ -7,6 +7,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Generator Composition Edge Cases")
@@ -54,15 +55,13 @@ struct GeneratorCompositionEdgeCaseTests {
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
             stringGen()
         )
-        let middleGen = Gen.zip(innerGen, boolGen())
+        let middleGen = Gen.zip(innerGen, Gen.choose(from: [true, false]))
         let outerGen = Gen.zip(middleGen, Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling))
 
         var iterator = ValueInterpreter(outerGen)
-        let nestedTuple = try iterator.next()!
-        // TOOD: write #expects
-
-        // All values should be generated successfully
-        // Type system ensures correctness
+        let value = try #require(try iterator.next())
+        let ((_, _), _) = value.0
+        _ = value.1
     }
 
     @Test("Empty array generator in composition")
@@ -103,7 +102,7 @@ struct GeneratorCompositionEdgeCaseTests {
         let gen = Gen.zip(
             Gen.choose(in: 1 ... 100) as Generator<Int>,
             stringGen(),
-            boolGen()
+            Gen.choose(from: [true, false])
         )
 
         var iterator = ValueInterpreter(gen)

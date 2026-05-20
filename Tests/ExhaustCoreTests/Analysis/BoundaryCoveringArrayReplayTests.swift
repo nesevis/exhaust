@@ -4,6 +4,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("BoundaryCoveringArrayReplay")
@@ -351,11 +352,4 @@ struct BoundaryCoveringArrayReplayUnitTests {
             #expect(replayedCount > 0)
         }
     }
-}
-
-// MARK: - Helpers
-
-private func analyzeBoundary(_ gen: Generator<some Any>) -> BoundaryDomainProfile? {
-    guard case let .boundary(profile) = ChoiceTreeAnalysis.analyze(gen) else { return nil }
-    return profile
 }
