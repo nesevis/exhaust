@@ -255,58 +255,6 @@ struct GraphValueEncoder: GraphEncoder {
         }
     }
 
-    mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
-        // Re-derive the encoder's working set from the live graph after a structural mutation. The cached leaf positions reference pre-mutation node IDs and sequence positions; without a refresh the next probe would write to a stale slot.
-        //
-        // Strategy: pull the canonical integer/float scope from the live graph (which automatically reflects the rebuilt node set), filter out leaves we have already converged in this pass via convergenceStore, and replace the per-mode state in place.
-        //
-        // Drop convergence records whose nodeID no longer has a position range.
-        for nodeID in convergenceStore.keys
-            where nodeID >= graph.nodes.count || graph.nodes[nodeID].positionRange == nil
-        {
-            convergenceStore.removeValue(forKey: nodeID)
-        }
-
-        switch mode {
-        case .idle:
-            return
-        case let .valueLeaves(state):
-            let scopes = MinimizationQuery.build(graph: graph)
-            let integerScope = scopes.firstNonNil { scope -> ValueMinimizationScope? in
-                if case let .valueLeaves(inner) = scope { return inner }
-                return nil
-            }
-            guard let integerScope else {
-                mode = .idle
-                return
-            }
-            startInteger(
-                scope: integerScope,
-                sequence: sequence,
-                graph: graph,
-                warmStarts: state.warmStartRecords,
-                preservingConvergence: convergenceStore,
-                armBatchZero: false
-            )
-        case .floatLeaves:
-            let scopes = MinimizationQuery.build(graph: graph)
-            let floatScope = scopes.firstNonNil { scope -> FloatMinimizationScope? in
-                if case let .floatLeaves(inner) = scope { return inner }
-                return nil
-            }
-            guard let floatScope else {
-                mode = .idle
-                return
-            }
-            startFloat(
-                scope: floatScope,
-                sequence: sequence,
-                graph: graph,
-                preservingConvergence: convergenceStore
-            )
-        }
-    }
-
     /// Writes a partial convergence record for the current in-progress leaf if the stepper has a best-accepted bound.
     ///
     /// Called by the probe loop before harvesting convergence records when the loop breaks early (for example, due to a graph rebuild). Without this, the stepper's progress is lost and binary search restarts from the warm-start bound on the next dispatch.

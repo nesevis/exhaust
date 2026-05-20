@@ -102,8 +102,10 @@ extension GraphEncoder {
         [:]
     }
 
-    /// Default no-op refresh for single-shot and self-resetting encoders.
+    /// Default: traps if called on an encoder that does not override.
     ///
-    /// Correct for encoders whose ``nextProbe(into:lastAccepted:)`` returns nil after one probe (single-shot pattern: ``GraphRemovalEncoder``, ``GraphPermutationEncoder``, ``GraphMigrationEncoder``) and for encoders that transition to ``Mode/idle`` on every accepted probe (``GraphReplacementEncoder``). Stateful encoders that cache leaf positions across multiple probes within one pass must override.
-    mutating func refreshState(graph _: ChoiceGraph, sequence _: ChoiceSequence) {}
+    /// Only encoders with ``requiresExactDecoder`` returning true are called at this site. If an encoder sets `requiresExactDecoder = true` it must provide its own `refreshState` implementation.
+    mutating func refreshState(graph _: ChoiceGraph, sequence _: ChoiceSequence) {
+        fatalError("\(Self.self) does not implement refreshState but was called — set requiresExactDecoder to true only if refreshState is implemented")
+    }
 }

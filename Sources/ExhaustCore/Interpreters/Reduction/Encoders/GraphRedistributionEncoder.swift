@@ -72,22 +72,6 @@ struct GraphRedistributionEncoder: GraphEncoder {
         startRedistribution(scope: redistScope, graph: graph)
     }
 
-    mutating func refreshState(graph: ChoiceGraph, sequence newSequence: ChoiceSequence) {
-        valueState.reset(sequence: newSequence)
-        mode = .idle
-
-        let scopes = ExchangeQuery.build(graph: graph)
-        guard let redistribution = scopes.firstNonNil({ scope -> RedistributionScope? in
-            if case let .redistribution(inner) = scope { return inner }
-            return nil
-        }) else { return }
-        for pair in redistribution.pairs {
-            valueState.registerLeaf(nodeID: pair.source.nodeID, mayReshape: pair.source.mayReshapeOnAcceptance, graph: graph)
-            valueState.registerLeaf(nodeID: pair.sink.nodeID, mayReshape: pair.sink.mayReshapeOnAcceptance, graph: graph)
-        }
-        startRedistribution(scope: redistribution, graph: graph)
-    }
-
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard case var .active(state) = mode else { return nil }
 
