@@ -8,6 +8,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
 
@@ -181,7 +182,7 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("character(from: .decimalDigits) generates only digits")
     func characterFromDecimalDigits() throws {
-        let gen = characterGen(from: .decimalDigits)
+        let gen = charGen(from: .decimalDigits)
         try exhaustCheck(gen) { char in
             char.unicodeScalars.allSatisfy { CharacterSet.decimalDigits.contains($0) }
         }
@@ -189,7 +190,7 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("character(from: .lowercaseLetters) generates only lowercase letters")
     func characterFromLowercaseLetters() throws {
-        let gen = characterGen(from: .lowercaseLetters)
+        let gen = charGen(from: .lowercaseLetters)
         try exhaustCheck(gen) { char in
             char.unicodeScalars.allSatisfy { CharacterSet.lowercaseLetters.contains($0) }
         }
@@ -197,7 +198,7 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("character(from:) round-trips through reflect and replay")
     func characterFromReflectionRoundTrip() throws {
-        let gen = characterGen(from: .decimalDigits)
+        let gen = charGen(from: .decimalDigits)
         try exhaustCheck(gen) { value in
             guard let tree = try? Interpreters.reflect(gen, with: value),
                   let replayed = try? Interpreters.replay(gen, using: tree)
@@ -208,7 +209,7 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("character(from: .decimalDigits) shrinks toward '0'")
     func characterFromShrinkingDirection() throws {
-        let gen = characterGen(from: .decimalDigits)
+        let gen = charGen(from: .decimalDigits)
         // Property that fails for digits >= '5' — shrinking should find '5'
         let property: (Character) -> Bool = { $0 < "5" }
 
@@ -235,8 +236,8 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("Variadic character(from:) is equivalent to union")
     func variadicCharacterFromEquivalence() throws {
-        let variadicGen: Generator<Character> = characterGen(from: .letters.union(.decimalDigits))
-        let unionGen: Generator<Character> = characterGen(from: .letters.union(.decimalDigits))
+        let variadicGen: Generator<Character> = charGen(from: .letters.union(.decimalDigits))
+        let unionGen: Generator<Character> = charGen(from: .letters.union(.decimalDigits))
 
         // Both should produce the same set of valid characters
         var variadicIterator = ValueAndChoiceTreeInterpreter(variadicGen, seed: 42, maxRuns: 200)
@@ -251,48 +252,6 @@ struct CharacterSetRangeExtractionTests {
 }
 
 // MARK: - Helpers
-
-/// Builds a character generator from a CharacterSet using ExhaustCore primitives.
-private func characterGen(from characterSet: CharacterSet) -> Generator<Character> {
-    let srs = characterSet.scalarRangeSet()
-    return Gen.contramap(
-        { (char: Character) throws -> Int in
-            guard let scalar = char.unicodeScalars.first else {
-                throw ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars"
-                )
-            }
-            return srs.index(of: scalar)
-        },
-        Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) }
-    )
-}
-
-/// Builds a string generator from a CharacterSet using ExhaustCore primitives.
-private func stringGen(
-    from characterSet: CharacterSet,
-    length: ClosedRange<UInt64>
-) -> Generator<String> {
-    let charGen = characterGen(from: characterSet)
-    return Gen.contramap(
-        { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen, within: length).map { String($0) }
-    )
-}
-
-/// Replacement for `#exhaust` macro.
-private func exhaustCheck<T>(
-    _ gen: Generator<T>,
-    maxIterations: UInt64 = 100,
-    seed: UInt64 = 42,
-    property: (T) -> Bool
-) throws {
-    var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = try iter.next() {
-        #expect(property(value), "Property failed for value: \(value)")
-    }
-}
 
 private func verifyRoundTrip(_ characterSet: CharacterSet, name: String) {
     let srs = characterSet.scalarRangeSet()

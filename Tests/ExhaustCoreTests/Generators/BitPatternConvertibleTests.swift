@@ -8,6 +8,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("BitPattern Conversion")
@@ -228,20 +229,5 @@ struct BitPatternConvertibleTests {
         try exhaustCheck(Gen.choose() as Generator<UInt>) { val in
             UInt(bitPattern64: val.bitPattern64) == val
         }
-    }
-}
-
-// MARK: - Helpers
-
-/// Replacement for `#exhaust` macro: generates values and checks a property holds for all of them.
-private func exhaustCheck<T>(
-    _ gen: Generator<T>,
-    maxIterations: UInt64 = 100,
-    seed: UInt64 = 42,
-    property: (T) -> Bool
-) throws {
-    var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = try iter.next() {
-        #expect(property(value), "Property failed for value: \(value)")
     }
 }

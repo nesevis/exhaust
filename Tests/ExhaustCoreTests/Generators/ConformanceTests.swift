@@ -4,6 +4,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Public API Conformances")
@@ -431,7 +432,7 @@ struct ConformanceTests {
     struct Miscellaneous {
         @Test("bool() produces both true and false")
         func boolBothValues() throws {
-            let gen: Generator<Bool> = boolGen()
+            let gen: Generator<Bool> = Gen.choose(from: [true, false])
             var sawTrue = false
             var sawFalse = false
 

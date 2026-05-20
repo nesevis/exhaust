@@ -6,6 +6,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Per-run seeding reproducibility")
@@ -64,20 +65,5 @@ struct ReproducibilityTests {
     func deriveSeedDistinctness() {
         let seeds = Set((0 as UInt64 ..< 1000).map { Xoshiro256.deriveSeed(from: 42, at: $0) })
         #expect(seeds.count == 1000)
-    }
-}
-
-// MARK: - Helpers
-
-/// Replacement for `#exhaust` macro.
-private func exhaustCheck<T>(
-    _ gen: Generator<T>,
-    maxIterations: UInt64 = 100,
-    seed: UInt64 = 42,
-    property: (T) -> Bool
-) throws {
-    var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = try iter.next() {
-        #expect(property(value), "Property failed for value: \(value)")
     }
 }

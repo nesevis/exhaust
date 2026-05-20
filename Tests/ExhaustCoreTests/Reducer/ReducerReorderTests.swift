@@ -8,20 +8,12 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Helpers
 
 private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-/// Generate a value and its choice tree from a generator with a given seed.
-private func generate<Output>(
-    _ gen: Generator<Output>,
-    seed: UInt64 = 42,
-    iteration: Int = 0
-) throws -> (value: Output, tree: ChoiceTree) {
-    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
-    return try #require(iter.prefix(iteration + 1).last)
-}
 
 // MARK: - Tests
 

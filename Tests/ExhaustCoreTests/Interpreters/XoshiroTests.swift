@@ -6,6 +6,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Test("Test Xoshiro against reference implementation")
