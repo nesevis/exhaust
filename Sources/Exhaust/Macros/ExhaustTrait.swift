@@ -84,7 +84,7 @@
 
         /// Registers Crockford Base32 encoded seeds to replay before the normal pipeline.
         ///
-        /// Each seed is replayed in order. If a regression now passes, a warning is reported suggesting removal.
+        /// Each seed is replayed in order. Seeds that now pass sit inert as silent regression guards — the test stays green until the property fails on that seed again.
         public static func regressions(_ seeds: String...) -> ExhaustTraitOption {
             ExhaustTraitOption(kind: .regressions(seeds))
         }
@@ -98,7 +98,6 @@
         /// ```swift
         /// @Test(.exhaust(.budget(.thorough)))
         /// @Test(.exhaust(.budget(.thorough), .regressions("3RT5GH8KM2", "9WXY1CV7")))
-        /// @Suite(.exhaust(.budget(.extensive)))
         /// ```
         ///
         /// - Parameter options: Configuration options for the property test.
@@ -114,6 +113,68 @@
                 }
             }
             return ExhaustTrait(budget: budget, regressions: regressions)
+        }
+    }
+
+    // MARK: - Suite Trait
+
+    /// A Swift Testing trait that sets a default iteration budget for all `#exhaust` tests in a suite.
+    ///
+    /// Apply to a `@Suite` to set a budget that propagates to every test in the suite. Individual tests can override with an inline `.budget(...)` setting or a test-level `.exhaust(...)` trait.
+    ///
+    /// ```swift
+    /// @Suite(.exhaust(.thorough))
+    /// struct MyPropertyTests {
+    ///     @Test func sortedArrays() {
+    ///         #exhaust(gen) { ... }  // inherits .thorough
+    ///     }
+    ///
+    ///     @Test(.exhaust(.budget(.quick)))
+    ///     func cheapCheck() {
+    ///         #exhaust(gen) { ... }  // overrides to .quick
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Regression seeds are per-test concerns and belong on `@Test(.exhaust(.regressions(...)))`.
+    public struct ExhaustSuiteTrait: SuiteTrait, TestScoping {
+        let budget: ExhaustBudget
+
+        public var isRecursive: Bool { true }
+
+        public var comments: [Comment] {
+            []
+        }
+
+        /// Sets the suite budget as a task-local for the duration of each test body.
+        ///
+        /// The default `scopeProvider` for recursive ``SuiteTrait`` returns `nil` at the suite level and `self` at the test level, so this fires once per test function.
+        public func provideScope(
+            for _: Test,
+            testCase _: Test.Case?,
+            performing function: @Sendable () async throws -> Void
+        ) async throws {
+            let config = ExhaustTraitConfiguration(
+                budget: budget,
+                regressions: []
+            )
+            try await ExhaustTraitConfiguration.$current.withValue(config) {
+                try await function()
+            }
+        }
+    }
+
+    public extension Trait where Self == ExhaustSuiteTrait {
+        /// Sets a default iteration budget for all `#exhaust` tests in a suite.
+        ///
+        /// ```swift
+        /// @Suite(.exhaust(.thorough))
+        /// struct MyPropertyTests { ... }
+        /// ```
+        ///
+        /// - Parameter budget: The iteration budget to apply to all property tests in the suite.
+        static func exhaust(_ budget: ExhaustBudget) -> ExhaustSuiteTrait {
+            ExhaustSuiteTrait(budget: budget)
         }
     }
 
