@@ -78,7 +78,7 @@ struct CharacterSetRangeExtractionTests {
         )
     }
 
-    @Test("Gap analysis across all predefined CharacterSets")
+    @Test("Gap analysis across all predefined CharacterSets", .disabled("Diagnostic — prints statistics, no assertions"))
     func gapAnalysis() {
         for (characterSet, name) in allSets {
             let ranges = closedRanges(from: characterSet)
@@ -99,7 +99,7 @@ struct CharacterSetRangeExtractionTests {
         }
     }
 
-    @Test("Coalescing nearby ranges at various thresholds")
+    @Test("Coalescing nearby ranges at various thresholds", .disabled("Diagnostic — prints statistics, no assertions"))
     func coalesceAnalysis() {
         let thresholds: [UInt64] = [2, 4, 8, 16, 32, 64, 128, 256]
 
@@ -161,7 +161,7 @@ struct CharacterSetRangeExtractionTests {
         #expect(srs.scalar(at: 25) == "z")
     }
 
-    @Test("ScalarRangeSet summary: ranges vs pick-space size")
+    @Test("ScalarRangeSet summary: ranges vs pick-space size", .disabled("Diagnostic — prints statistics, no assertions"))
     func scalarRangeSetSummary() {
         for (characterSet, name) in allSets {
             let srs = characterSet.scalarRangeSet()

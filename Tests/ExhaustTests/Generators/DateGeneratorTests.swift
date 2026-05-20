@@ -269,7 +269,7 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 365)
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
-            #examine(gen, samples: 20, seed: 42)
+            #expect(#examine(gen, samples: 20, seed: 42).passed)
         }
 
         @Test("Off-grid date reflection snaps to nearest earlier grid point")
