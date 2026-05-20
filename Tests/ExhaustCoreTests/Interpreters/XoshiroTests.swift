@@ -44,6 +44,8 @@ func reflectOnGetsize() throws {
     #expect(generated2 == replay)
 }
 
+// MARK: - Helpers
+
 private let reference: [UInt64] = [
     0, // 1-indexed
     12_966_619_160_104_079_557,

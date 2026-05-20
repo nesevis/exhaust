@@ -11,12 +11,6 @@ import ExhaustCore
 import ExhaustTestSupport
 import Testing
 
-// MARK: - Helpers
-
-private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-
-// MARK: - Tests
-
 @Suite("Reducer Pass 6: sibling value reordering")
 struct ReducerReorderTests {
     @Test("Unsorted array is reordered to sorted")
@@ -139,3 +133,7 @@ struct ReducerReorderTests {
         #expect(result.1 == rematerialized)
     }
 }
+
+// MARK: - Helpers
+
+private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)

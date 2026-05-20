@@ -12,12 +12,6 @@ import ExhaustTestSupport
 import Foundation
 import Testing
 
-// MARK: - Helpers
-
-private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-
-// MARK: - ChoiceValue.reductionTarget
-
 @Suite("ChoiceValue.reductionTarget")
 struct ReductionTargetTests {
     @Test("Unsigned target is 0 when 0 is in range")
@@ -55,8 +49,6 @@ struct ReductionTargetTests {
         #expect(target != zeroBP)
     }
 }
-
-// MARK: - Reducer Pass 5 Tests
 
 @Suite("Reducer Pass 5: reduce values")
 struct ReducerReduceValuesTests {
@@ -260,3 +252,7 @@ struct ReducerReduceValuesTests {
     }
 
 }
+
+// MARK: - Helpers
+
+private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)

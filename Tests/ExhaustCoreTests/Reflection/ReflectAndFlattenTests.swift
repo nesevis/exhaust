@@ -512,6 +512,8 @@ struct ReflectAndFlattenTests {
     }
 }
 
+// MARK: - Helpers
+
 extension ExhaustRangeSet where Bound == Int {
     mutating func insert(contentsOf closedRange: ClosedRange<Bound>) {
         insert(contentsOf: closedRange.lowerBound ..< (closedRange.upperBound + 1))

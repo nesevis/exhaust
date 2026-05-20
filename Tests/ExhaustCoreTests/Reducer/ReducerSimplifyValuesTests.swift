@@ -12,12 +12,6 @@ import ExhaustTestSupport
 import Foundation
 import Testing
 
-// MARK: - Helpers
-
-private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-
-// MARK: - ShortlexKey
-
 @Suite("ChoiceValue.shortlexKey")
 struct ShortlexKeyTests {
     @Test("Signed zero has smallest shortlexKey")
@@ -131,8 +125,6 @@ struct ShortlexKeyTests {
         #expect(inf.shortlexKey < nan.shortlexKey)
     }
 }
-
-// MARK: - Reducer Pass 3 Tests
 
 @Suite("Reducer Pass 3: simplify values")
 struct ReducerSimplifyValuesTests {
@@ -358,3 +350,7 @@ struct ReducerSimplifyValuesTests {
         #expect(result.1 == rematerialized)
     }
 }
+
+// MARK: - Helpers
+
+private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
