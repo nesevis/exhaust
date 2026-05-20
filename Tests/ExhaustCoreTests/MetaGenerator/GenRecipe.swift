@@ -96,9 +96,9 @@ enum KnownPredicate: String, Equatable, Hashable, CaseIterable {
     func evaluate(_ value: Any) -> Bool {
         switch self {
         case .always: true
-        case .isPositive: (value as! Int) > 0
-        case .isEven: (value as! Int) % 2 == 0
-        case .isNonEmpty: !(value as! [Any]).isEmpty
+        case .isPositive: (value as? Int).map { $0 > 0 } ?? false
+        case .isEven: (value as? Int).map { $0 % 2 == 0 } ?? false
+        case .isNonEmpty: (value as? [Any]).map { $0.isEmpty == false } ?? false
         }
     }
 
@@ -157,6 +157,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
         case optional(GenRecipe)
         case boundArray(element: GenRecipe, maxLength: UInt64)
         case boundRange(GenRecipe)
+        case recursive(base: GenRecipe, maxDepth: UInt64)
 
         var description: String {
             switch self {
@@ -178,6 +179,8 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                 "\(element).boundArray(maxLength: \(maxLength))"
             case let .boundRange(inner):
                 "\(inner).boundRange"
+            case let .recursive(base: base, maxDepth: maxDepth):
+                "recursive(\(base), maxDepth: \(maxDepth))"
             }
         }
     }
@@ -216,6 +219,8 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                 return .arrayOf(element.outputType)
             case .boundRange:
                 return .int
+            case let .recursive(base: base, maxDepth: _):
+                return base.outputType
             }
         }
     }
@@ -390,6 +395,12 @@ private func boundArrayGenerator(producing type: RecipeType, maxDepth: Int) -> G
     }
 }
 
+private func recursiveGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    leafGenerator(producing: type).map { base in
+        .combinator(.recursive(base: base, maxDepth: 2))
+    }
+}
+
 private func boundRangeGenerator(maxDepth: Int) -> Generator<GenRecipe> {
     leafGenerator(producing: .int).map { inner in
         .combinator(.boundRange(inner))
@@ -469,6 +480,15 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
             let lo = loAny as! Int
             let hi = lo + 50
             return Gen.choose(in: lo ... hi).map { $0 as Any }
+        }
+
+    case let .recursive(base: base, maxDepth: maxDepth):
+        let baseGen = buildGenerator(from: base)
+        return Gen.recursive(base: baseGen, depthRange: 0 ... Int(maxDepth)) { recurse, remaining in
+            Gen.pick(choices: [
+                (1, baseGen),
+                (Int(remaining), recurse().map { $0 }),
+            ])
         }
     }
 }

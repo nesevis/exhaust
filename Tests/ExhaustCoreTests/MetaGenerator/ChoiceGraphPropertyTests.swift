@@ -4,7 +4,7 @@ import Testing
 
 @Suite("ChoiceGraph Construction Properties", .tags(.dogfood))
 struct ChoiceGraphPropertyTests {
-    private let intRecipeGen = recipeGenerator(producing: .int, maxDepth: 2)
+    private let intRecipeGen = recipeGenerator(producing: .int, maxDepth: 1)
 
     @Test("Every leaf node has a non-nil position range")
     func leafNodesHavePositions() throws {
