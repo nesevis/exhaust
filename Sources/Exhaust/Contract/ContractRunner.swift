@@ -278,8 +278,11 @@ private func buildTrace<Spec: ContractSpec>(
     specType _: Spec.Type
 ) -> ([TraceStep], Spec) {
     var spec = Spec()
-    let (trace, failed) = buildSequentialTrace(commands, run: { try spec.run($0) }, checkInvariants: { try spec.checkInvariants() })
-    _ = failed
+    let (trace, _) = buildSequentialTrace(
+        commands,
+        run: { try spec.run($0) },
+        checkInvariants: { try spec.checkInvariants() }
+    )
     return (trace, spec)
 }
 

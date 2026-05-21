@@ -94,11 +94,11 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
             var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: 100)
             while let (commands, _) = try? smokeIterator.next() {
                 let spec = Spec()
-                let (trace, failed) = buildSequentialTrace(commands, run: { command in
-                    runCatchingObjC { try? spec.run(command) }
-                }, checkInvariants: {
-                    try spec.checkInvariants()
-                })
+                let (trace, failed) = buildSequentialTrace(
+                    commands,
+                    run: { try spec.run($0) },
+                    checkInvariants: { try spec.checkInvariants() }
+                )
                 if failed {
                     let result = ContractResult<Spec>(
                         commands: commands,
