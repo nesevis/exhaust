@@ -20,6 +20,43 @@ struct PreemptiveNonAtomicCounterTests {
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Failure report renders correctly")
+    func failureReportRendering() throws {
+        let result = try #require(
+            __runPreemptiveConcurrentContract(
+                PreemptiveCounterSpec.self,
+                settings: [
+                    .concurrency(2),
+                    .commandLimit(6),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.issueReporting)
+                ]
+            )
+        )
+        #expect(result.commands.isEmpty == false)
+        #expect(result.seed != nil)
+        #expect(result.discoveryMethod == .randomSampling)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Reduction shrinks the counterexample")
+    func reductionShrinks() throws {
+        let result = try #require(
+            __runPreemptiveConcurrentContract(
+                PreemptiveCounterSpec.self,
+                settings: [
+                    .concurrency(2),
+                    .commandLimit(8),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.issueReporting)
+                ]
+            )
+        )
+        #expect(result.commands.count <= 6, "Reducer should shrink from 8 commands")
+        #expect(result.commands.count >= 2, "Need at least 2 concurrent commands")
+    }
 }
 
 // MARK: - Spec

@@ -2,7 +2,6 @@
 import ExhaustCore
 
 /// Metadata accumulated during a concurrent contract run, passed to ``renderFailure(_:trace:context:)`` for final formatting.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct FailureContext {
     var specName: String = ""
     var discoveryMethod: ContractDiscoveryMethod = .randomSampling
@@ -11,6 +10,7 @@ struct FailureContext {
     var budget: UInt64 = 0
     var originalCount: Int = 0
     var sequencesTested: Int = 0
+    var reductionInvocations: Int = 0
     var timedOut: Bool = false
     var oracleDescription: String?
 }
@@ -18,7 +18,6 @@ struct FailureContext {
 /// Formats a concurrent contract failure for reporting.
 ///
 /// Delegates to ``renderTimeout(_:trace:)`` when `context.timedOut` is true. Otherwise renders the full failure report with command partition, execution trace, and replay seed.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func renderFailure(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     trace: [TraceStep],
@@ -54,7 +53,7 @@ func renderFailure(
     }
 
     lines.append("")
-    lines.append("Command sequences tested: \(context.sequencesTested)")
+    lines.append("Invocations: \(context.sequencesTested + context.reductionInvocations)")
 
     if let seed = context.seed {
         lines.append("")
@@ -65,7 +64,6 @@ func renderFailure(
 }
 
 /// Formats a timeout diagnostic when the drain loop stalls with no pending continuations.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func renderTimeout(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     trace: [TraceStep]
@@ -88,7 +86,6 @@ func renderTimeout(
 }
 
 /// Renders the command partition (prefix, lane A, lane B, ...) into the output lines.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func renderCommandPartition(
     _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
     into lines: inout [String]
