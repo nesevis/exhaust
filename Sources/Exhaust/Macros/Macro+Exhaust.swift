@@ -61,7 +61,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     reflecting: GeneratedValue? = nil,
     _ settings: ExhaustSettings...,
-    property: (GeneratedValue) throws -> PropertyResult
+    property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
 /// Runs a property test with an async property closure.
@@ -75,7 +75,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     reflecting: GeneratedValue? = nil,
     _ settings: ExhaustSettings...,
-    property: (GeneratedValue) async throws -> PropertyResult
+    property: @Sendable (GeneratedValue) async throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
 
 /// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts hold after every step.

@@ -23,7 +23,7 @@ struct LengthListShrinkingChallenge {
 
     static let gen: ReflectiveGenerator<[UInt]> = #gen(.uint(in: 0 ... 1000)).array(length: 1 ... 100)
 
-    static let property: ([UInt]) -> Bool = { arr in
+    static let property: @Sendable ([UInt]) -> Bool = { arr in
         arr.max() ?? 0 < 900
     }
 
