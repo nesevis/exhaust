@@ -53,7 +53,12 @@ func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
             openCommand[event.lane] = nil
             stepNumber += 1
             let phase = event.lane == "prefix" ? "(prefix)" : "(completed)"
-            steps.append((TraceStep(index: stepNumber, command: "\(event.label) \(phase)", outcome: .invariantFailed(name: message)), event.lane))
+            let step = TraceStep(
+                index: stepNumber,
+                command: "\(event.label) \(phase)",
+                outcome: .invariantFailed(name: message)
+            )
+            steps.append((step, event.lane))
         case .suspended:
             if let current = openCommand[event.lane] {
                 stepNumber += 1

@@ -207,11 +207,11 @@ package enum ReflectiveOperation {
 
     /// Attaches observational labels to generated values without affecting generation, reflection, or replay.
     ///
-    /// Classification is purely observational: it does not alter the choice sequence, steer sampling, or prune reflection paths. It exists so that ``ClassificationExploreRunner`` can track which `#explore` directions each generated value satisfies, and so that the test runner can report distribution statistics at the end of a run. Because it is transparent to all interpreter passes, adding or removing a classify wrapper never changes the values a generator produces.
+    /// During generation, ``ValueInterpreter``, ``ValueAndChoiceTreeInterpreter``, and ``OnlineCGSInterpreter`` evaluate each classifier against the produced value and record which labels matched into `GenerationContext.classifications`. When the run completes, accumulated counts and percentages are logged via `printClassifications()`. Reflection, replay, and materialization treat this operation as a passthrough — the inner generator's choices are the only choices.
     ///
     /// - Parameters:
     ///   - gen: The base generator to classify.
-    ///   - fingerprint: Unique identifier for this classification operation.
+    ///   - fingerprint: Per-site hash used to key the classification accumulator so multiple classify sites maintain independent counts.
     ///   - classifiers: Array of (label, predicate) pairs for categorizing values.
     case classify(
         gen: AnyGenerator,

@@ -137,11 +137,30 @@ func runConcurrentSCACoverage<Command>(
                 property: countingProperty
             ) {
                 if let (_, reduced) = reduceResult.reduced {
-                    return SCAFailureResult(finalInput: reduced, originalCount: value.count, iteration: iterations, timedOut: false, reductionStats: reduceResult.stats, reductionInvocations: reductionPropertyInvocations)
+                    return SCAFailureResult(
+                        finalInput: reduced,
+                        originalCount: value.count,
+                        iteration: iterations,
+                        timedOut: false,
+                        reductionStats: reduceResult.stats,
+                        reductionInvocations: reductionPropertyInvocations
+                    )
                 }
-                return SCAFailureResult(finalInput: reduceValue, originalCount: value.count, iteration: iterations, timedOut: false, reductionStats: reduceResult.stats, reductionInvocations: reductionPropertyInvocations)
+                return SCAFailureResult(
+                    finalInput: reduceValue,
+                    originalCount: value.count,
+                    iteration: iterations,
+                    timedOut: false,
+                    reductionStats: reduceResult.stats,
+                    reductionInvocations: reductionPropertyInvocations
+                )
             }
-            return SCAFailureResult(finalInput: reduceValue, originalCount: value.count, iteration: iterations, timedOut: false)
+            return SCAFailureResult(
+                finalInput: reduceValue,
+                originalCount: value.count,
+                iteration: iterations,
+                timedOut: false
+            )
         }
     }
 
