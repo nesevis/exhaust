@@ -48,10 +48,15 @@ let package = Package(
     targets: [
         coreTarget,
         .target(
+            name: "ExhaustObjCSupport",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "Exhaust",
             dependencies: [
                 "ExhaustCore",
                 "ExhaustMacros",
+                "ExhaustObjCSupport",
                 .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
             ],

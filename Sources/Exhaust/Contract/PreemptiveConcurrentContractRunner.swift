@@ -4,6 +4,7 @@
 //
 // The cooperative runner (CooperativeConcurrentContractRunner) implements the PULSE half — a TaskExecutor-based drain loop that makes interleavings deterministic and reducible. This runner targets bugs that require real thread-level preemption: races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
 import ExhaustCore
+import ExhaustObjCSupport
 import Foundation
 import IssueReporting
 
@@ -77,7 +78,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
     ) -> ContractResult<Spec> {
         let oracleSpec = Spec()
         for (_, command) in reduced {
-            try? oracleSpec.run(command)
+            runCatchingObjC { try? oracleSpec.run(command) }
         }
         return ContractResult<Spec>(
             commands: reduced.map(\.1),
@@ -214,6 +215,15 @@ private func buildPreemptiveTrace<Command: CustomStringConvertible>(
     }
 }
 
+// MARK: - ObjC Exception Helper
+
+/// Executes a closure inside the ObjC `@try`/`@catch` wrapper. Returns `true` if the closure completed normally, `false` if an `NSException` was caught. Discards the exception — use the lane-level `caughtException` box when the identity matters.
+@discardableResult
+private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
+    var exception: NSException?
+    return exhaust_runCatchingObjCException(body, &exception)
+}
+
 // MARK: - Checker
 
 /// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for a ``ConcurrentContractSpec``.
@@ -230,26 +240,37 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
         let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
 
         for (_, command) in prefixCommands {
-            try? concurrentSpec.run(command)
-            try? sequentialSpec.run(command)
+            runCatchingObjC { try? concurrentSpec.run(command) }
+            runCatchingObjC { try? sequentialSpec.run(command) }
         }
 
         for (_, command) in concurrentCommands {
-            try? sequentialSpec.run(command)
+            runCatchingObjC { try? sequentialSpec.run(command) }
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
+        let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
         for (_, laneCommands) in laneGroups {
             group.enter()
             DispatchQueue.global().async {
-                for (_, command) in laneCommands {
-                    try? concurrentSpec.run(command)
+                var exception: NSException?
+                let succeeded = exhaust_runCatchingObjCException({
+                    for (_, command) in laneCommands {
+                        try? concurrentSpec.run(command)
+                    }
+                }, &exception)
+                if succeeded == false {
+                    caughtException.value = exception
                 }
                 group.leave()
             }
         }
         group.wait()
+
+        if caughtException.value != nil {
+            return false
+        }
 
         do {
             try concurrentSpec.checkInvariants()
@@ -556,23 +577,34 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
+        let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
         for (_, laneCommands) in laneGroups {
             group.enter()
             DispatchQueue.global().async {
-                let semaphore = DispatchSemaphore(value: 0)
-                nonisolated(unsafe) let spec = concurrentSpec
-                Task { @Sendable in
-                    for (_, command) in laneCommands {
-                        try? await spec.run(command)
+                var exception: NSException?
+                let succeeded = exhaust_runCatchingObjCException({
+                    let semaphore = DispatchSemaphore(value: 0)
+                    nonisolated(unsafe) let spec = concurrentSpec
+                    Task { @Sendable in
+                        for (_, command) in laneCommands {
+                            try? await spec.run(command)
+                        }
+                        semaphore.signal()
                     }
-                    semaphore.signal()
+                    semaphore.wait()
+                }, &exception)
+                if succeeded == false {
+                    caughtException.value = exception
                 }
-                semaphore.wait()
                 group.leave()
             }
         }
         group.wait()
+
+        if caughtException.value != nil {
+            return false
+        }
 
         let invariantsPassed: Bool = {
             let semaphore = DispatchSemaphore(value: 0)
