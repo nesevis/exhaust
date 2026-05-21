@@ -162,6 +162,60 @@ public protocol AsyncConcurrentContractSpec: ContractSpecBase, AnyObject {
     func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool
 }
 
+extension ConcurrentContractSpec {
+    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
+    static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
+        { commands in
+            let spec = Self()
+            var skips: Set<Int> = []
+            for (index, command) in commands.enumerated() {
+                do {
+                    try spec.run(command)
+                    try spec.checkInvariants()
+                } catch is ContractSkip {
+                    skips.insert(index)
+                } catch {
+                    break
+                }
+            }
+            return skips
+        }
+    }
+}
+
+extension AsyncConcurrentContractSpec {
+    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
+    ///
+    /// Bridges async execution via `Task` + semaphore. The returned closure is safe to call from a GCD thread.
+    static func skipIdentifier(
+        specInit: @escaping () -> Self
+    ) -> @Sendable ([Command]) -> Set<Int> {
+        nonisolated(unsafe) let specInit = specInit
+        return { commands in
+            let box = SendableBox(specInit())
+            let resultBox = SendableBox(Set<Int>())
+            let semaphore = DispatchSemaphore(value: 0)
+
+            Task { @Sendable in
+                for (index, command) in commands.enumerated() {
+                    do {
+                        try await box.value.run(command)
+                        try await box.value.checkInvariants()
+                    } catch is ContractSkip {
+                        resultBox.value.insert(index)
+                    } catch {
+                        break
+                    }
+                }
+                semaphore.signal()
+            }
+
+            semaphore.wait()
+            return resultBox.value
+        }
+    }
+}
+
 extension AsyncContractSpec {
     /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
     ///

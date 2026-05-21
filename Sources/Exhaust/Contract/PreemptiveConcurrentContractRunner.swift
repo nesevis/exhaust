@@ -53,6 +53,85 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
     )
 
     let samplingBudget = config.budget.samplingBudget
+    let coverageBudget = config.budget.coverageBudget
+    let check = PreemptiveChecker<Spec>()
+    var coverageInvocations = 0
+    let invocationCounter = SendableBox(0)
+    let lastRunTimedOut = SendableBox(false)
+
+    let rawIdentifySkips = Spec.skipIdentifier
+    let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
+        rawIdentifySkips(taggedCommands.map(\.1))
+    }
+    let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+        invocationCounter.value += 1
+        return check.execute(taggedCommands)
+    }
+
+    func buildPreemptiveResult(
+        reduced: [(ScheduleMarker, Spec.Command)],
+        seed: UInt64?,
+        discoveryMethod: ContractDiscoveryMethod
+    ) -> ContractResult<Spec> {
+        let oracleSpec = Spec()
+        for (_, command) in reduced {
+            try? oracleSpec.run(command)
+        }
+        return ContractResult<Spec>(
+            commands: reduced.map(\.1),
+            trace: buildPreemptiveTrace(reduced),
+            systemUnderTest: oracleSpec.systemUnderTest,
+            seed: seed,
+            discoveryMethod: discoveryMethod
+        )
+    }
+
+    // --- Phase 1: SCA coverage ---
+    if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
+        if let scaResult = runConcurrentSCACoverage(
+            seqGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            coverageBudget: coverageBudget,
+            concurrencyLevel: config.concurrencyLevel,
+            idleTimeout: config.idleTimeout,
+            property: property,
+            identifySkips: identifySkips,
+            lastRunTimedOut: lastRunTimedOut
+        ) {
+            if let stats = scaResult.reductionStats {
+                report.applyReductionStats(stats)
+            }
+            report.reductionInvocations = scaResult.reductionInvocations
+
+            let result = buildPreemptiveResult(
+                reduced: scaResult.finalInput,
+                seed: nil,
+                discoveryMethod: .coverage
+            )
+            coverageInvocations = invocationCounter.value
+            report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: scaResult.reductionInvocations)
+
+            if config.suppressIssueReporting == false {
+                var failureContext = FailureContext()
+                failureContext.specName = "\(Spec.self)"
+                failureContext.discoveryMethod = .coverage
+                failureContext.iteration = Int(scaResult.iteration)
+                failureContext.budget = coverageBudget
+                failureContext.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
+                failureContext.reductionInvocations = scaResult.reductionInvocations
+                failureContext.originalCount = scaResult.originalCount
+                failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
+                let message = renderFailure(scaResult.finalInput, trace: result.trace, context: failureContext)
+                reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
+            }
+
+            return result
+        }
+    }
+    coverageInvocations = invocationCounter.value
+
+    // --- Phase 2: Random sampling ---
     var interpreter = ValueAndChoiceTreeInterpreter(
         sequenceGen,
         materializePicks: true,
@@ -61,11 +140,9 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
     )
     let actualSeed = interpreter.baseSeed
 
-    let check = PreemptiveChecker<Spec>()
-    var iteration = 0
-
+    var samplingIteration = 0
     while let (taggedCommands, tree) = try? interpreter.next() {
-        iteration += 1
+        samplingIteration += 1
         if check.execute(taggedCommands) == false {
             let reductionResult = check.reduce(
                 generator: sequenceGen,
@@ -73,45 +150,14 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                 output: taggedCommands,
                 repetitions: 10
             )
-            let reduced = reductionResult.output
 
-            let commands = reduced.map(\.1)
-
-            var laneCounts: [UInt8: Int] = [:]
-            let trace = reduced.enumerated().map { index, tagged in
-                let (marker, command) = tagged
-                if marker.isPrefix {
-                    return TraceStep(
-                        index: index + 1,
-                        command: "\(command) (prefix)",
-                        outcome: .ok
-                    )
-                } else {
-                    let laneLabel = marker.description.uppercased()
-                    laneCounts[marker.rawValue, default: 0] += 1
-                    let laneIndex = laneCounts[marker.rawValue]!
-                    return TraceStep(
-                        index: index + 1,
-                        command: "\(laneIndex)\(laneLabel) \(command) (completed)",
-                        outcome: .ok
-                    )
-                }
-            }
-
-            let oracleSpec = Spec()
-            for (_, command) in reduced {
-                try? oracleSpec.run(command)
-            }
-
-            let result = ContractResult<Spec>(
-                commands: commands,
-                trace: trace,
-                systemUnderTest: oracleSpec.systemUnderTest,
+            let result = buildPreemptiveResult(
+                reduced: reductionResult.output,
                 seed: actualSeed,
                 discoveryMethod: .randomSampling
             )
 
-            report.setInvocations(coverage: 0, randomSampling: iteration, reduction: reductionResult.propertyInvocations)
+            report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionResult.propertyInvocations)
             report.applyReductionStats(reductionResult.stats)
 
             if config.suppressIssueReporting == false {
@@ -119,13 +165,13 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                 failureContext.specName = "\(Spec.self)"
                 failureContext.discoveryMethod = .randomSampling
                 failureContext.seed = actualSeed
-                failureContext.iteration = iteration
+                failureContext.iteration = samplingIteration
                 failureContext.budget = samplingBudget
-                failureContext.sequencesTested = iteration
+                failureContext.sequencesTested = samplingIteration
                 failureContext.reductionInvocations = reductionResult.propertyInvocations
                 failureContext.originalCount = taggedCommands.count
-                failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(oracleSpec.sutDescription)"
-                let message = renderFailure(reduced, trace: trace, context: failureContext)
+                failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
+                let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
                 reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
             }
 
@@ -133,8 +179,36 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
         }
     }
 
-    report.setInvocations(coverage: 0, randomSampling: iteration, reduction: 0)
+    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
     return nil
+}
+
+// MARK: - Trace Building
+
+/// Builds a trace from a preemptive execution's reduced command sequence. No interleaving annotations — preemptive scheduling is non-deterministic, so the trace only records command completion order.
+private func buildPreemptiveTrace<Command: CustomStringConvertible>(
+    _ reduced: [(ScheduleMarker, Command)]
+) -> [TraceStep] {
+    var laneCounts: [UInt8: Int] = [:]
+    return reduced.enumerated().map { index, tagged in
+        let (marker, command) = tagged
+        if marker.isPrefix {
+            return TraceStep(
+                index: index + 1,
+                command: "\(command) (prefix)",
+                outcome: .ok
+            )
+        } else {
+            let laneLabel = marker.description.uppercased()
+            laneCounts[marker.rawValue, default: 0] += 1
+            let laneIndex = laneCounts[marker.rawValue]!
+            return TraceStep(
+                index: index + 1,
+                command: "\(laneIndex)\(laneLabel) \(command) (completed)",
+                outcome: .ok
+            )
+        }
+    }
 }
 
 // MARK: - Checker
@@ -317,6 +391,85 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
         )
 
         let samplingBudget = config.budget.samplingBudget
+        let coverageBudget = config.budget.coverageBudget
+        let check = AsyncPreemptiveChecker<Spec>()
+        var coverageInvocations = 0
+        let invocationCounter = SendableBox(0)
+        let lastRunTimedOut = SendableBox(false)
+
+        nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
+        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
+        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
+            rawIdentifySkips(taggedCommands.map(\.1))
+        }
+        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+            invocationCounter.value += 1
+            return check.execute(taggedCommands)
+        }
+
+        func buildAsyncPreemptiveResult(
+            reduced: [(ScheduleMarker, Spec.Command)],
+            seed: UInt64?,
+            discoveryMethod: ContractDiscoveryMethod
+        ) -> ContractResult<Spec> {
+            let oracleSpec = Spec()
+            check.runSequentially(reduced.map(\.1), on: oracleSpec)
+            return ContractResult<Spec>(
+                commands: reduced.map(\.1),
+                trace: buildPreemptiveTrace(reduced),
+                systemUnderTest: oracleSpec.systemUnderTest,
+                seed: seed,
+                discoveryMethod: discoveryMethod
+            )
+        }
+
+        // --- Phase 1: SCA coverage ---
+        if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
+            if let scaResult = runConcurrentSCACoverage(
+                seqGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: coverageBudget,
+                concurrencyLevel: config.concurrencyLevel,
+                idleTimeout: config.idleTimeout,
+                property: property,
+                identifySkips: identifySkips,
+                lastRunTimedOut: lastRunTimedOut
+            ) {
+                if let stats = scaResult.reductionStats {
+                    report.applyReductionStats(stats)
+                }
+                report.reductionInvocations = scaResult.reductionInvocations
+
+                let result = buildAsyncPreemptiveResult(
+                    reduced: scaResult.finalInput,
+                    seed: nil,
+                    discoveryMethod: .coverage
+                )
+                coverageInvocations = invocationCounter.value
+                report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: scaResult.reductionInvocations)
+
+                if config.suppressIssueReporting == false {
+                    var failureContext = FailureContext()
+                    failureContext.specName = "\(Spec.self)"
+                    failureContext.discoveryMethod = .coverage
+                    failureContext.iteration = Int(scaResult.iteration)
+                    failureContext.budget = coverageBudget
+                    failureContext.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
+                    failureContext.reductionInvocations = scaResult.reductionInvocations
+                    failureContext.originalCount = scaResult.originalCount
+                    failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
+                    let message = renderFailure(scaResult.finalInput, trace: result.trace, context: failureContext)
+                    deferredIssues.append(message)
+                }
+
+                finalizeReport()
+                return (result, deferredIssues, report)
+            }
+        }
+        coverageInvocations = invocationCounter.value
+
+        // --- Phase 2: Random sampling ---
         var interpreter = ValueAndChoiceTreeInterpreter(
             sequenceGen,
             materializePicks: true,
@@ -325,11 +478,9 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
         )
         let actualSeed = interpreter.baseSeed
 
-        let check = AsyncPreemptiveChecker<Spec>()
-        var iteration = 0
-
+        var samplingIteration = 0
         while let (taggedCommands, tree) = try? interpreter.next() {
-            iteration += 1
+            samplingIteration += 1
             if check.execute(taggedCommands) == false {
                 let reductionResult = check.reduce(
                     generator: sequenceGen,
@@ -337,43 +488,14 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                     output: taggedCommands,
                     repetitions: 10
                 )
-                let reduced = reductionResult.output
 
-                let commands = reduced.map(\.1)
-
-                var laneCounts: [UInt8: Int] = [:]
-                let trace = reduced.enumerated().map { index, tagged in
-                    let (marker, command) = tagged
-                    if marker.isPrefix {
-                        return TraceStep(
-                            index: index + 1,
-                            command: "\(command) (prefix)",
-                            outcome: .ok
-                        )
-                    } else {
-                        let laneLabel = marker.description.uppercased()
-                        laneCounts[marker.rawValue, default: 0] += 1
-                        let laneIndex = laneCounts[marker.rawValue]!
-                        return TraceStep(
-                            index: index + 1,
-                            command: "\(laneIndex)\(laneLabel) \(command) (completed)",
-                            outcome: .ok
-                        )
-                    }
-                }
-
-                let oracleSpec = Spec()
-                check.runSequentially(reduced.map(\.1), on: oracleSpec)
-
-                let result = ContractResult<Spec>(
-                    commands: commands,
-                    trace: trace,
-                    systemUnderTest: oracleSpec.systemUnderTest,
+                let result = buildAsyncPreemptiveResult(
+                    reduced: reductionResult.output,
                     seed: actualSeed,
                     discoveryMethod: .randomSampling
                 )
 
-                report.setInvocations(coverage: 0, randomSampling: iteration, reduction: reductionResult.propertyInvocations)
+                report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionResult.propertyInvocations)
                 report.applyReductionStats(reductionResult.stats)
 
                 if config.suppressIssueReporting == false {
@@ -381,13 +503,13 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                     failureContext.specName = "\(Spec.self)"
                     failureContext.discoveryMethod = .randomSampling
                     failureContext.seed = actualSeed
-                    failureContext.iteration = iteration
+                    failureContext.iteration = samplingIteration
                     failureContext.budget = samplingBudget
-                    failureContext.sequencesTested = iteration
+                    failureContext.sequencesTested = samplingIteration
                     failureContext.reductionInvocations = reductionResult.propertyInvocations
                     failureContext.originalCount = taggedCommands.count
-                    failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(oracleSpec.sutDescription)"
-                    let message = renderFailure(reduced, trace: trace, context: failureContext)
+                    failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
+                    let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
                     deferredIssues.append(message)
                 }
 
@@ -396,7 +518,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
             }
         }
 
-        report.setInvocations(coverage: 0, randomSampling: iteration, reduction: 0)
+        report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
         finalizeReport()
         return (nil, deferredIssues, report)
     }
