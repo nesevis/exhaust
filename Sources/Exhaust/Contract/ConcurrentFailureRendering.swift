@@ -12,6 +12,7 @@ struct FailureContext {
     var sequencesTested: Int = 0
     var reductionInvocations: Int = 0
     var timedOut: Bool = false
+    var isPreemptive: Bool = false
     var oracleDescription: String?
 }
 
@@ -63,6 +64,11 @@ func renderFailure(
     if let seed = context.seed {
         lines.append("")
         lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
+    }
+
+    if context.isPreemptive {
+        lines.append("")
+        lines.append("* Preemptive scheduling depends on OS thread timing and may not reproduce on every run. Run the test repeatedly to reproduce.")
     }
 
     return lines.joined(separator: "\n")
