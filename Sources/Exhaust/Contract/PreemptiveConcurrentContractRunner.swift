@@ -33,6 +33,8 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
         return nil
     }
 
+    let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
+    return ExhaustLog.withConfiguration(logConfiguration) {
     let runStartNanos = DispatchTime.now().uptimeNanoseconds
     var report = ExhaustReport()
     report.seed = config.seed
@@ -181,6 +183,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 
     report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
     return nil
+    } // withConfiguration
 }
 
 // MARK: - Trace Building
@@ -369,8 +372,9 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
         return nil
     }
 
+    let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
     let outcome: (ContractResult<Spec>?, [String], ExhaustReport) = await __ExhaustRuntime.dispatchToGCD {
-        () -> (ContractResult<Spec>?, [String], ExhaustReport) in
+        ExhaustLog.withConfiguration(logConfiguration) { () -> (ContractResult<Spec>?, [String], ExhaustReport) in
         let runStartNanos = DispatchTime.now().uptimeNanoseconds
         var report = ExhaustReport()
         report.seed = config.seed
@@ -521,6 +525,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
         report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
         finalizeReport()
         return (nil, deferredIssues, report)
+        } // withConfiguration
     }
     config.onReportClosure?(outcome.2)
     for issue in outcome.1 {
