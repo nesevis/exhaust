@@ -72,9 +72,9 @@ public enum SuppressOption: Sendable, Equatable {
 public enum ExhaustBudget: Sendable {
     /// Faster than default. Use when iteration speed matters more than coverage depth.
     case quick
-    /// Default for property tests. Sufficient for most generators during development.
+    /// Default for property tests and contract tests. Sufficient for most generators during development.
     case standard
-    /// Stronger coverage for complex generators. Default for contract tests.
+    /// Stronger coverage for complex generators.
     case thorough
     /// Broad coverage at 10x the cost of `.standard`.
     case extensive

@@ -23,7 +23,7 @@ public func __runContract<Spec: ContractSpec>(
     column: UInt = #column
 ) -> ContractResult<Spec>? {
     var commandLimit: Int?
-    var budget = ExhaustBudget.thorough
+    var budget = ExhaustBudget.standard
     var seed: UInt64?
     var suppressIssueReporting = false
     var suppressLogs = false
