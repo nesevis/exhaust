@@ -1,0 +1,77 @@
+import Foundation
+import Testing
+@testable import Exhaust
+
+@Suite("Preemptive concurrent contract: non-atomic counter")
+struct PreemptiveNonAtomicCounterTests {
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Detects lost-update bug via oracle comparison")
+    func detectsLostUpdate() throws {
+        let result = try #require(
+            __runPreemptiveConcurrentContract(
+                PreemptiveCounterSpec.self,
+                settings: [
+                    .concurrency(2),
+                    .commandLimit(6),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.issueReporting)
+                ]
+            )
+        )
+        #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
+    }
+}
+
+// MARK: - Spec
+
+@ConcurrentContract
+final class PreemptiveCounterSpec {
+    @SystemUnderTest
+    var counter: RacyCounter = .init()
+
+    @Oracle
+    func valuesMatch(other: RacyCounter) -> Bool {
+        counter.value == other.value
+    }
+
+    @Invariant
+    func isNonNegative() -> Bool {
+        counter.value >= 0
+    }
+
+    @Command(weight: 3)
+    func increment() throws {
+        counter.increment()
+    }
+
+    @Command(weight: 2)
+    func decrement() throws {
+        guard counter.value > 0 else { throw skip() }
+        counter.decrement()
+    }
+}
+
+// MARK: - SUT
+
+/// Deliberately unsynchronized counter. Concurrent increments lose updates because read-modify-write is not atomic.
+final class RacyCounter: @unchecked Sendable, CustomDebugStringConvertible {
+    private var _value: Int = 0
+
+    var value: Int { _value }
+
+    var debugDescription: String {
+        "RacyCounter(value: \(_value))"
+    }
+
+    func increment() {
+        let current = _value
+        Thread.sleep(forTimeInterval: 0.0001)
+        _value = current + 1
+    }
+
+    func decrement() {
+        let current = _value
+        Thread.sleep(forTimeInterval: 0.0001)
+        _value = current - 1
+    }
+}
