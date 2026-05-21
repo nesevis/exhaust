@@ -38,4 +38,7 @@ public enum EncoderName: String, Hashable, Sendable, CaseIterable {
 
     /// Probes each converged value one step below its floor to detect stale convergence. If a value that was previously stuck at some floor can now go lower (because other values changed around it), the floor was stale and reduction continues.
     case convergenceConfirmation
+
+    /// Drives ``TypeTag/laneControl`` chooseBits values toward zero (the sequential prefix). Each lane marker moved to zero removes one command from the concurrent interleaving space.
+    case laneCollapse
 }

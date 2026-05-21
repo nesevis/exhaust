@@ -22,6 +22,8 @@ extension CandidateSourceBuilder {
                 }
             case let .boundValue(bindScope):
                 bindScope.boundSubtreeSize
+            case .laneCollapse:
+                0
             }
 
             let estimatedCost: Int = switch scope {
@@ -33,6 +35,8 @@ extension CandidateSourceBuilder {
                 15 * (bindScope.downstreamNodeIDs.count == 1
                     ? 16
                     : min(64, bindScope.downstreamNodeIDs.count * 8))
+            case .laneCollapse:
+                0
             }
 
             results.append(GraphTransformation(
@@ -112,5 +116,18 @@ extension CandidateSourceBuilder {
         guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }
         let boundChildID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
         return graph.nodes[boundChildID].positionRange?.count ?? 0
+    }
+
+    static func buildLaneCollapseCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
+        guard let scope = LaneCollapseQuery.build(graph: graph) else { return [] }
+        return [GraphTransformation(
+            operation: .minimize(scope),
+            priority: DispatchPriority(
+                structuralBenefit: 1,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 1
+            )
+        )]
     }
 }

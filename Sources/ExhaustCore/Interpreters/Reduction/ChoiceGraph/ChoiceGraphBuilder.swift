@@ -69,6 +69,8 @@ struct ChoiceGraphBuilder {
         case let .choice(value, metadata):
             let isDepthControl: Bool
             if case .depthControl = value.tag { isDepthControl = true } else { isDepthControl = false }
+            let isLaneControl: Bool
+            if case .laneControl = value.tag { isLaneControl = true } else { isLaneControl = false }
             let nodeID = emitNode(
                 kind: .chooseBits(ChooseBitsMetadata(
                     typeTag: value.tag,
@@ -84,7 +86,8 @@ struct ChoiceGraphBuilder {
                     isBindInner: enclosingBindNodeID != nil,
                     controllingBindNodeID: enclosingBindNodeID,
                     controllingBindDepth: enclosingBindDepth,
-                    isDepthControl: isDepthControl
+                    isDepthControl: isDepthControl,
+                    isLaneControl: isLaneControl
                 )
             )
             if let parent {
@@ -103,7 +106,8 @@ struct ChoiceGraphBuilder {
                     isBindInner: enclosingBindNodeID != nil,
                     controllingBindNodeID: enclosingBindNodeID,
                     controllingBindDepth: enclosingBindDepth,
-                    isDepthControl: false
+                    isDepthControl: false,
+                    isLaneControl: false
                 )
             )
             if let parent {
@@ -243,7 +247,8 @@ struct ChoiceGraphBuilder {
                 isBindInner: enclosingBindNodeID != nil,
                 controllingBindNodeID: enclosingBindNodeID,
                 controllingBindDepth: enclosingBindDepth,
-                isDepthControl: false
+                isDepthControl: false,
+                isLaneControl: false
             )
         )
         return consumed

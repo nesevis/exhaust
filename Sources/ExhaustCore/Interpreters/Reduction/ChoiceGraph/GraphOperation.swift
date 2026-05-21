@@ -47,6 +47,7 @@ enum GraphOperation {
         case .minimize(.valueLeaves): .valueSearch
         case .minimize(.floatLeaves): .floatSearch
         case .minimize(.boundValue): .boundValueSearch
+        case .minimize(.laneCollapse): .laneCollapse
         case .exchange(.redistribution): .redistribution
         case .exchange(.tandem): .lockstep
         case .permute: .siblingSwap

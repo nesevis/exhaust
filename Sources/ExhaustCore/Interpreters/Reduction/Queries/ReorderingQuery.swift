@@ -49,7 +49,8 @@ enum ReorderingQuery {
 
             var byCategory: [SiblingGroupKey: [ClosedRange<Int>]] = [:]
             for (childID, (range, kind)) in Swift.zip(node.children, Swift.zip(childRanges, childKinds)) {
-                if graph.nodes[childID].scopeAnnotation.isDepthControl { continue }
+                let annotation = graph.nodes[childID].scopeAnnotation
+                if annotation.isDepthControl || annotation.isLaneControl { continue }
                 byCategory[siblingGroupKey(kind), default: []].append(range)
             }
 
