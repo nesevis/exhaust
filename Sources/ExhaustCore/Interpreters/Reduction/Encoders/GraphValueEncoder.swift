@@ -58,31 +58,37 @@ struct GraphValueEncoder: GraphEncoder {
 
     // MARK: - Integer State
 
-    /// Tracks the state of integer leaf reduction across its sub-phases, from batch zeroing through per-leaf interpolation search. Holds the working sequence, leaf metadata, the active stepper, and auxiliary state for cross-zero and linear scan recovery.
+    /// Tracks the state of integer leaf reduction across its sub-phases, from batch zeroing through per-leaf interpolation search. Holds the working sequence, leaf metadata, and the active phase with its per-phase state.
     struct IntegerState {
         var sequence: ChoiceSequence
         var leafPositions: [IntegerLeafPosition]
+        var warmStartRecords: [Int: ConvergedOrigin]
+        var lastEmittedCandidate: ChoiceSequence?
+        var batchRejected: Bool
         var phase: IntegerPhase
+    }
+
+    /// Per-leaf phase state: binary search, linear scan recovery, and cross-zero for each leaf in sequence.
+    struct PerLeafPhaseState {
         var leafIndex: Int
         var stepper: DirectionalStepper?
-        var warmStartRecords: [Int: ConvergedOrigin]
-        /// The last candidate emitted by nextProbe. When lastAccepted is true, this becomes the new baseline sequence.
-        var lastEmittedCandidate: ChoiceSequence?
-        /// Whether the batch-zero probe was rejected. When true and a leaf individually converges at its target, the convergence signal is `zeroingDependency` instead of `monotoneConvergence`.
-        var batchRejected: Bool
-        /// Linear scan values for non-monotone gap recovery, or nil when inactive.
         var scanValues: [UInt64]?
         var scanIndex: Int
-        /// Best accepted value during the linear scan phase.
         var scanBestAccepted: UInt64?
-        /// Cross-zero phase state for the current leaf, or nil when inactive. Set after binary search (and any linear scan recovery) converges on a signed-type leaf whose current shortlex key permits crossing zero.
         var crossZero: CrossZeroState?
-        /// Batch bisection state, active during the ``IntegerPhase/batchBisect`` phase.
-        var bisection: BisectionState?
-        /// Whether the reduction target has been probed directly for the current leaf. Reset when advancing to the next leaf.
-        var semanticSimplestProbed: Bool = false
-        /// Per-leaf-zero pre-round state, active during the ``IntegerPhase/perLeafZero`` phase.
-        var perLeafZero: PerLeafZeroState?
+        var semanticSimplestProbed: Bool
+        var bisectionConvergedIndices: Set<Int>
+
+        init(leafIndex: Int = 0, bisectionConvergedIndices: Set<Int> = []) {
+            self.leafIndex = leafIndex
+            self.stepper = nil
+            self.scanValues = nil
+            self.scanIndex = 0
+            self.scanBestAccepted = nil
+            self.crossZero = nil
+            self.semanticSimplestProbed = false
+            self.bisectionConvergedIndices = bisectionConvergedIndices
+        }
     }
 
     /// State for the cross-zero phase of per-leaf minimization.
@@ -106,12 +112,12 @@ struct GraphValueEncoder: GraphEncoder {
     /// Maximum remaining range size for which inline linear scan is emitted after binary search convergence.
     static let linearScanThreshold: UInt64 = 64
 
-    /// Sub-phases of integer reduction, ordered from cheapest to most granular: batch zero tries all leaves at once, per-leaf zero probes each individually, batch bisect does group interpolation search, and per-leaf runs individual interpolation or binary search.
+    /// Sub-phases of integer reduction, ordered from cheapest to most granular: batch zero tries all leaves at once, per-leaf zero probes each individually, batch bisect does group interpolation search, and per-leaf runs individual interpolation or binary search. Each case carries only the state relevant to that phase.
     enum IntegerPhase {
         case batchZero
-        case perLeafZero
-        case batchBisect
-        case perLeaf
+        case perLeafZero(PerLeafZeroState)
+        case batchBisect(BisectionState)
+        case perLeaf(PerLeafPhaseState)
     }
 
     /// State for the per-leaf-zero pre-round.
@@ -263,10 +269,11 @@ struct GraphValueEncoder: GraphEncoder {
     /// Called by the probe loop before harvesting convergence records when the loop breaks early (for example, due to a graph rebuild). Without this, the stepper's progress is lost and binary search restarts from the warm-start bound on the next dispatch.
     mutating func flushPartialConvergence() {
         guard case let .valueLeaves(state) = mode else { return }
-        guard state.leafIndex < state.leafPositions.count else { return }
-        let leaf = state.leafPositions[state.leafIndex]
+        guard case let .perLeaf(perLeaf) = state.phase else { return }
+        guard perLeaf.leafIndex < state.leafPositions.count else { return }
+        let leaf = state.leafPositions[perLeaf.leafIndex]
         guard convergenceStore[leaf.nodeID] == nil else { return }
-        guard let bestAccepted = state.stepper?.bestAccepted else { return }
+        guard let bestAccepted = perLeaf.stepper?.bestAccepted else { return }
         convergenceStore[leaf.nodeID] = ConvergedOrigin(
             bound: bestAccepted,
             signal: .monotoneConvergence,
