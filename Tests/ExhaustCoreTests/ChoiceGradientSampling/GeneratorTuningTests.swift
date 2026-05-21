@@ -38,7 +38,7 @@ struct GeneratorTuningTests {
 
         // The inner generator should now be a pick (from chooseBits subdivision)
         // rather than the original chooseBits, because CGS tuned it using the filter predicate
-        guard case let .impure(.pick(choices, _), _) = tunedInner else {
+        guard case let .impure(.pick(choices), _) = tunedInner else {
             Issue.record("Expected inner generator to be tuned into a pick, got \(tunedInner)")
             return
         }
@@ -70,7 +70,7 @@ struct GeneratorTuningTests {
         )
 
         // Inspect the tuned structure: should have 2 branches still
-        guard case let .impure(.pick(choices, _), _) = tuned else {
+        guard case let .impure(.pick(choices), _) = tuned else {
             Issue.record("Expected tuned generator to be a pick")
             return
         }
@@ -95,7 +95,7 @@ struct GeneratorTuningTests {
             predicate: predicate
         )
 
-        guard case let .impure(.pick(choices, _), _) = tuned else {
+        guard case let .impure(.pick(choices), _) = tuned else {
             Issue.record("Expected tuned generator to be a pick")
             return
         }
@@ -155,8 +155,8 @@ struct GeneratorTuningTests {
             gen, samples: 2000, seed: 42, predicate: predicate
         )
 
-        guard case let .impure(.pick(moderateChoices, _), _) = tunedModerate,
-              case let .impure(.pick(largeChoices, _), _) = tunedLarge
+        guard case let .impure(.pick(moderateChoices), _) = tunedModerate,
+              case let .impure(.pick(largeChoices), _) = tunedLarge
         else {
             Issue.record("Expected both tuned generators to be picks")
             return
@@ -200,7 +200,7 @@ struct GeneratorTuningTests {
         )
 
         // The top-level should be a pick (leaf vs node)
-        guard case let .impure(.pick(choices, _), _) = tuned else {
+        guard case let .impure(.pick(choices), _) = tuned else {
             Issue.record("Expected tuned generator to be a pick at top level")
             return
         }

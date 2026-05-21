@@ -457,7 +457,7 @@ package extension __ExhaustRuntime {
 
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
-            if !suppressIssueReporting {
+            if suppressIssueReporting == false {
                 reportIssue(
                     message,
                     fileID: fileID,
@@ -472,7 +472,7 @@ package extension __ExhaustRuntime {
 
         guard let tree = try Interpreters.reflect(gen, with: value) else {
             let message = "reflecting: could not reflect value into choice tree"
-            if !suppressIssueReporting {
+            if suppressIssueReporting == false {
                 reportIssue(
                     message,
                     fileID: fileID,
@@ -538,7 +538,7 @@ package extension __ExhaustRuntime {
                 randomSampling: 0,
                 reduction: 1 + propertyInvocationCount
             )
-            if !suppressIssueReporting {
+            if suppressIssueReporting == false {
                 reportIssue(
                     rendered,
                     fileID: fileID,
@@ -584,7 +584,7 @@ package extension __ExhaustRuntime {
             randomSampling: 0,
             reduction: 1 + propertyInvocationCount
         )
-        if !suppressIssueReporting {
+        if suppressIssueReporting == false {
             reportIssue(
                 rendered,
                 fileID: fileID,

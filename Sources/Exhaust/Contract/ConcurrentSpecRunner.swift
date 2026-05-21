@@ -115,11 +115,15 @@ func drainSchedule<Spec: AsyncContractSpec>(
                     if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: "prefix", label: label)) }
                 } catch let failure as ContractCheckFailure {
                     let message = failure.message ?? "check failed"
-                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: message), lane: "prefix", label: label)) }
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: message), lane: "prefix", label: label))
+                    }
                     failed.value = message
                     break
                 } catch {
-                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: "prefix", label: label)) }
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: "prefix", label: label))
+                    }
                     failed.value = "\(error)"
                     break
                 }
@@ -132,7 +136,11 @@ func drainSchedule<Spec: AsyncContractSpec>(
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
                 let elapsed = ContinuousClock.now - lastActivity
                 if elapsed > idleTimeout {
-                    return ConcurrentExecutionResult(passed: false, trace: recordTrace ? buildTrace(trace.value) : [], timedOut: true)
+                    return ConcurrentExecutionResult(
+                        passed: false,
+                        trace: recordTrace ? buildTrace(trace.value) : [],
+                        timedOut: true
+                    )
                 }
                 continue
             }
@@ -175,11 +183,15 @@ func drainSchedule<Spec: AsyncContractSpec>(
                     if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: laneLabel, label: label)) }
                 } catch let failure as ContractCheckFailure {
                     let message = failure.message ?? "check failed"
-                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: message), lane: laneLabel, label: label)) }
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: message), lane: laneLabel, label: label))
+                    }
                     failed.value = message
                     return
                 } catch {
-                    if recordTrace { trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: laneLabel, label: label)) }
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: laneLabel, label: label))
+                    }
                     failed.value = "\(error)"
                     return
                 }

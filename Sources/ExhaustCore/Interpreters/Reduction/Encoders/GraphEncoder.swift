@@ -31,11 +31,6 @@ protocol GraphEncoder {
     /// Descriptive name for logging and instrumentation.
     var name: EncoderName { get }
 
-    /// True when the encoder's probe candidates are post-lift sequences whose bound subtree differs from ``EncoderInput/tree``.
-    ///
-    /// The scheduler routes such probes through ``SequenceDecoder/exact(materializePicks:)`` instead of the bind-aware guided decoder, because guided decoding would substitute stale bound-subtree content from the parent tree's fallback path. Default `false` for all intra-skeleton encoders. Composed encoders that drive a generator lift internally (such as ``GraphComposedEncoder``) override this to `true`.
-    var requiresExactDecoder: Bool { get }
-
     /// Initialises internal state for a new encoding pass.
     ///
     /// Called once per scope dispatch. The encoder extracts candidates from the scope's operation metadata and prepares its probe state machine. The encoder reads warm-start data from ``EncoderInput/warmStartRecords`` — it never accesses the graph directly.
@@ -50,24 +45,6 @@ protocol GraphEncoder {
     ///   - lastAccepted: Whether the previous probe was accepted by the property. Ignored on the first call after ``start(scope:)``.
     /// - Returns: The projected mutation for this probe, or `nil` when converged.
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe?
-
-    /// Re-derives the encoder's scope state from the live graph after a structural mutation.
-    ///
-    /// The scheduler calls this between ``nextProbe(into:lastAccepted:)`` invocations whenever the most recent probe acceptance triggered a structural mutation (``ChangeApplication/requiresFullRebuild``). At that point the encoder's per-pass cached state — leaf positions, in-flight binary-search steppers, pair indices — may reference nodes that no longer exist or have different positions in the rebuilt graph.
-    ///
-    /// Implementations must:
-    ///
-    /// 1. Re-walk the live graph and rebuild every nodeID-keyed cache (leaf positions, pair plans, lookup tables) from the current state.
-    /// 2. Drop in-flight per-leaf iteration state (steppers, scan windows, cross-zero phases) — those refer to the old leaf set and are not meaningful after re-scoping.
-    /// 3. Preserve convergence records by nodeID. Records whose nodeID no longer has a position range should be dropped; surviving nodeIDs keep their records.
-    /// 4. Update the encoder's internal sequence reference (``IntegerState/sequence`` and similar) to match the live `sequence` parameter.
-    ///
-    /// The default implementation is a no-op, suitable for single-shot encoders that emit one probe per scope (for example, ``GraphStructuralEncoder``, ``GraphSwapEncoder``, ``GraphReorderEncoder``) and for encoders that already self-reset on every accepted probe. Stateful encoders that cache leaf positions across multiple probes within a pass (``GraphValueEncoder``, ``GraphRedistributionEncoder``) must override this method.
-    ///
-    /// - Parameters:
-    ///   - graph: The live graph after the structural mutation.
-    ///   - sequence: The live sequence after the structural mutation. Encoders that cache a baseline sequence in their state must replace it with this value, since their cached copy is from before the mutation.
-    mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence)
 
     /// Whether any replacement probe was rejected because the candidate was not shortlex-smaller than the original.
     ///
@@ -85,12 +62,28 @@ protocol GraphEncoder {
     mutating func flushPartialConvergence()
 }
 
-extension GraphEncoder {
-    /// Default: encoders use the scheduler's hasBind-aware decoder selection.
-    var requiresExactDecoder: Bool {
-        false
-    }
+/// An encoder whose probe candidates are post-lift sequences with a bound subtree that differs from ``EncoderInput/tree``.
+///
+/// The scheduler routes probes from stateful encoders through ``SequenceDecoder/exact(materializePicks:)`` instead of the bind-aware guided decoder, because guided decoding would substitute stale bound-subtree content from the parent tree's fallback path. After each accepted probe that triggers a structural mutation, the scheduler calls ``refreshState(graph:sequence:)`` so the encoder can re-derive its cached state from the live graph.
+protocol StatefulGraphEncoder: GraphEncoder {
+    /// Re-derives the encoder's scope state from the live graph after a structural mutation.
+    ///
+    /// The scheduler calls this between ``nextProbe(into:lastAccepted:)`` invocations whenever the most recent probe acceptance triggered a structural mutation. At that point the encoder's per-pass cached state — leaf positions, in-flight binary-search steppers, pair indices — may reference nodes that no longer exist or have different positions in the rebuilt graph.
+    ///
+    /// Implementations must:
+    ///
+    /// 1. Re-walk the live graph and rebuild every nodeID-keyed cache (leaf positions, pair plans, lookup tables) from the current state.
+    /// 2. Drop in-flight per-leaf iteration state (steppers, scan windows, cross-zero phases) — those refer to the old leaf set and are not meaningful after re-scoping.
+    /// 3. Preserve convergence records by nodeID. Records whose nodeID no longer has a position range should be dropped; surviving nodeIDs keep their records.
+    /// 4. Update the encoder's internal sequence reference (``IntegerState/sequence`` and similar) to match the live `sequence` parameter.
+    ///
+    /// - Parameters:
+    ///   - graph: The live graph after the structural mutation.
+    ///   - sequence: The live sequence after the structural mutation. Encoders that cache a baseline sequence in their state must replace it with this value, since their cached copy is from before the mutation.
+    mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence)
+}
 
+extension GraphEncoder {
     /// Default: no replacement shortlex rejections.
     var hadReplacementShortlexRejection: Bool { false }
 
@@ -100,12 +93,5 @@ extension GraphEncoder {
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
-    }
-
-    /// Default: traps if called on an encoder that does not override.
-    ///
-    /// Only encoders with ``requiresExactDecoder`` returning true are called at this site. If an encoder sets `requiresExactDecoder = true` it must provide its own `refreshState` implementation.
-    mutating func refreshState(graph _: ChoiceGraph, sequence _: ChoiceSequence) {
-        fatalError("\(Self.self) does not implement refreshState but was called — set requiresExactDecoder to true only if refreshState is implemented")
     }
 }

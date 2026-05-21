@@ -80,6 +80,64 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("drain loop stalled"))
     }
 
+    @Test("renderFailure includes scheduling caveat for preemptive random sampling")
+    func renderFailurePreemptiveCaveat() {
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        let tagged: [(ScheduleMarker, String)] = [
+            (ScheduleMarker(rawValue: 1), "increment()"),
+            (ScheduleMarker(rawValue: 2), "decrement()"),
+        ]
+        var context = FailureContext()
+        context.specName = "CounterSpec"
+        context.seed = 99
+        context.isPreemptive = true
+        context.discoveryMethod = .randomSampling
+        context.iteration = 1
+        context.budget = 200
+        context.sequencesTested = 10
+
+        let output = renderFailure(tagged, trace: [], context: context)
+        #expect(output.contains("Reproduce:"))
+        #expect(output.contains("Preemptive scheduling depends on OS thread timing"))
+    }
+
+    @Test("renderFailure includes scheduling caveat for preemptive coverage")
+    func renderFailurePreemptiveCoverageCaveat() {
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        let tagged: [(ScheduleMarker, String)] = [
+            (ScheduleMarker(rawValue: 1), "increment()"),
+        ]
+        var context = FailureContext()
+        context.specName = "CounterSpec"
+        context.isPreemptive = true
+        context.discoveryMethod = .coverage
+        context.iteration = 1
+        context.budget = 200
+        context.sequencesTested = 10
+
+        let output = renderFailure(tagged, trace: [], context: context)
+        #expect(output.contains("Preemptive scheduling depends on OS thread timing"))
+    }
+
+    @Test("renderFailure omits scheduling caveat for cooperative random sampling")
+    func renderFailureCooperativeNoCaveat() {
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        let tagged: [(ScheduleMarker, String)] = [
+            (ScheduleMarker(rawValue: 1), "increment()"),
+        ]
+        var context = FailureContext()
+        context.specName = "CounterSpec"
+        context.seed = 99
+        context.discoveryMethod = .randomSampling
+        context.iteration = 1
+        context.budget = 200
+        context.sequencesTested = 10
+
+        let output = renderFailure(tagged, trace: [], context: context)
+        #expect(output.contains("Reproduce:"))
+        #expect(output.contains("Preemptive") == false)
+    }
+
     @Test("renderTimeout with partial trace includes trace lines")
     func renderTimeoutWithTrace() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }

@@ -323,7 +323,7 @@ package enum SequenceCoveringArray {
         for value: UInt64,
         in slots: [SCADomainSlot]
     ) -> SCADomainSlot? {
-        guard !slots.isEmpty else { return nil }
+        guard slots.isEmpty == false else { return nil }
         guard value >= slots[0].flatOffset else { return nil }
 
         let lastIdx = slots.count - 1

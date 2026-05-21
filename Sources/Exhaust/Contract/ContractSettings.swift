@@ -6,7 +6,7 @@ public enum ContractSettings {
     /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 100.
     case commandLimit(Int)
 
-    /// Controls iteration budgets for coverage and random sampling. Defaults to `.thorough` (500 coverage rows, 500 random samplings).
+    /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard` (200 coverage rows, 200 random samplings).
     case budget(ExhaustBudget)
 
     /// Replays a specific test run using a fixed seed.

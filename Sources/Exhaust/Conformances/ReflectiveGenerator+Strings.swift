@@ -115,7 +115,11 @@ public extension ReflectiveGenerator {
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<String> {
         let bottom = resolveSimplest(simplest, in: characterSet)
-        return stringGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom), length: length, scaling: scaling)
+        return stringGenerator(
+            from: characterSet.scalarRangeSet(bottomCodepoint: bottom),
+            length: length,
+            scaling: scaling
+        )
     }
 
     /// Generates a random string whose characters are drawn from the given ``CharacterSet``.

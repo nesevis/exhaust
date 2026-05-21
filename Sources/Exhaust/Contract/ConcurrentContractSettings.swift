@@ -16,7 +16,7 @@ public enum ConcurrentContractSettings {
     /// With concurrency level 1, all commands run sequentially on a single lane — useful as a baseline to confirm that failures require concurrency.
     case concurrency(Int)
 
-    /// Controls iteration budgets for coverage and random sampling. Defaults to `.thorough`.
+    /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard`.
     case budget(ExhaustBudget)
 
     /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 40.

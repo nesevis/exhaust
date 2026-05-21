@@ -48,7 +48,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         }
 
         // Per-run seed derivation: each run gets an independent PRNG
-        if !context.isFixed {
+        if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
 
@@ -190,7 +190,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
         // MARK: pick
 
-        case let .impure(operation: .pick(choices, _), continuation):
+        case let .impure(operation: .pick(choices), continuation):
             guard let selectedChoice = WeightedPickSelection.draw(
                 from: choices, using: &context.prng
             ) else {

@@ -28,7 +28,7 @@ struct CouplingShrinkingChallenge {
         .filter { arr in arr.allSatisfy { arr.indices.contains($0) } }
 
     /// The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
-    static let property: ([Int]) -> Bool = { arr in
+    static let property: @Sendable ([Int]) -> Bool = { arr in
         arr.indices.allSatisfy { i in
             let j = arr[i]
             if j != i, arr[j] == i {

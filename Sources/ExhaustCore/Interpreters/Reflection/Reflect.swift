@@ -105,8 +105,8 @@ extension Interpreters {
         case let .prune(nextGen):
             return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput)
 
-        case let .pick(choices, branchCount):
-            return try reflectPickOperation(choices: choices, branchCount: branchCount, finalOutput: finalOutput)
+        case let .pick(choices):
+            return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
 
         case let .chooseBits(min, max, tag, isRangeExplicit, _):
             return try reflectChooseBitsOperation(
@@ -242,9 +242,9 @@ extension Interpreters {
 
     private static func reflectPickOperation(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branchCount: UInt64,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
+        let branchCount = UInt64(choices.count)
         let fingerprint = choices[0].fingerprint
         let results = try choices.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {

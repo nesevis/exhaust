@@ -239,7 +239,7 @@ private extension Generator where Operation == ReflectiveOperation {
             uniqueSequences.insert(generatedSequence)
 
             // -- Round-trip check --
-            if !forwardOnlyDetected, failures.count < maxFailures {
+            if forwardOnlyDetected == false, failures.count < maxFailures {
                 do {
                     let reflectedTree = try Interpreters.reflect(self, with: value)
                     let tree = reflectedTree ?? tree

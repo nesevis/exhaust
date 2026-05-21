@@ -113,7 +113,7 @@ extension GeneratorTuning {
             guard totalSampled >= effectiveMinSamples else { continue }
 
             // Unambiguous early exit: if one choice has ≥80% success rate and another has 0%, the signal is clear — stop without waiting for the second convergence check (which needs one more batch to see the shift stabilize).
-            if !isTrivial {
+            if isTrivial == false {
                 let hasZero = successCounts.contains(0)
                 let maxRate = Double(successCounts.max()!) / Double(totalSampled)
                 if hasZero, maxRate >= 0.8 {
@@ -157,7 +157,6 @@ extension GeneratorTuning {
     /// Branches with zero successes are assigned weight 0 (skipped) unless all branches scored zero, in which case uniform weights are restored. Surviving branches receive entropy-weighted fitness scores and a minimum weight floor to prevent exponential probability collapse across depth.
     static func measureAndTunePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branchCount: UInt64,
         continuation: @escaping (Any) throws -> Generator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
@@ -284,7 +283,7 @@ extension GeneratorTuning {
         }
 
         return .impure(
-            operation: .pick(choices: tunedChoices, branchCount: branchCount),
+            operation: .pick(choices: tunedChoices),
             continuation: continuation
         )
     }
@@ -307,7 +306,7 @@ extension GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        guard let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+        guard let choices = SharedInterpreterHelpers.subdivideChooseBits(
             lower: lower, upper: upper, tag: tag,
             isRangeExplicit: isRangeExplicit, scaling: scaling,
             makeFingerprint: { context.rng.next() }
@@ -319,7 +318,7 @@ extension GeneratorTuning {
         }
 
         let synthesisedPick: Generator<Output> = .impure(
-            operation: .pick(choices: choices, branchCount: branchCount),
+            operation: .pick(choices: choices),
             continuation: continuation
         )
 
@@ -345,7 +344,7 @@ extension GeneratorTuning {
         predicate: @escaping (Output) -> Bool
     ) throws -> Generator<Output> {
         // Try to subdivide the length generator if it's a chooseBits (only if we haven't already subdivided)
-        if !insideSubdividedChooseBits,
+        if insideSubdividedChooseBits == false,
            case let .impure(
                .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
                lengthContinuation
@@ -357,8 +356,6 @@ extension GeneratorTuning {
             let rangeSize = (lower ... upper).saturatingCount
             let subrangeCount = min(4, Int(min(rangeSize, UInt64(Int.max))))
             let subranges = (lower ... upper).split(into: subrangeCount)
-
-            let branchCount = UInt64(subranges.count)
 
             var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
             subrangeChoices.reserveCapacity(subranges.count)
@@ -391,7 +388,7 @@ extension GeneratorTuning {
             }
 
             let synthesisedPick: Generator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices, branchCount: branchCount),
+                operation: .pick(choices: subrangeChoices),
                 continuation: continuation
             )
 
@@ -404,7 +401,7 @@ extension GeneratorTuning {
         }
 
         // If the length generator uses getSize + bind (the common pattern), try to look one level deeper (only if we haven't already subdivided)
-        if !insideSubdividedChooseBits,
+        if insideSubdividedChooseBits == false,
            case let .impure(.getSize, getSizeContinuation) = lengthGen
         {
             // Adapt as getSize → pick of subranges, each producing a sequence
@@ -412,8 +409,6 @@ extension GeneratorTuning {
             defer { context.depth -= 1 }
 
             let subranges = (0 ... context.maxSize).split(into: min(4, Int(context.maxSize + 1)))
-
-            let branchCount = UInt64(subranges.count)
 
             var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
             subrangeChoices.reserveCapacity(subranges.count)
@@ -448,7 +443,7 @@ extension GeneratorTuning {
             }
 
             let synthesisedPick: Generator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices, branchCount: branchCount),
+                operation: .pick(choices: subrangeChoices),
                 continuation: continuation
             )
 
@@ -492,7 +487,7 @@ extension GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        guard let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+        guard let choices = SharedInterpreterHelpers.subdivideChooseBits(
             lower: 0, upper: context.maxSize, tag: .uint64,
             isRangeExplicit: false,
             makeFingerprint: { context.rng.next() }
@@ -504,7 +499,7 @@ extension GeneratorTuning {
         }
 
         let synthesisedPick: Generator<Output> = .impure(
-            operation: .pick(choices: choices, branchCount: branchCount),
+            operation: .pick(choices: choices),
             continuation: continuation
         )
 

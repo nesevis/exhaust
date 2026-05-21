@@ -5,7 +5,7 @@ import ExhaustCore
 struct ResolvedConcurrentConfig {
     var commandLimit: Int?
     var concurrencyLevel: Int = 2
-    var budget: ExhaustBudget = .thorough
+    var budget: ExhaustBudget = .standard
     var seed: UInt64?
     var idleTimeout: Int = 1000
     var suppressIssueReporting: Bool = false

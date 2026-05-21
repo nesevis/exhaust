@@ -159,6 +159,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 
                 if config.suppressIssueReporting == false {
                     var failureContext = FailureContext()
+                    failureContext.isPreemptive = true
                     failureContext.specName = "\(Spec.self)"
                     failureContext.discoveryMethod = .coverage
                     failureContext.iteration = Int(scaResult.iteration)
@@ -206,6 +207,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 
                 if config.suppressIssueReporting == false {
                     var failureContext = FailureContext()
+                    failureContext.isPreemptive = true
                     failureContext.specName = "\(Spec.self)"
                     failureContext.discoveryMethod = .randomSampling
                     failureContext.seed = actualSeed
@@ -558,6 +560,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
 
                     if config.suppressIssueReporting == false {
                         var failureContext = FailureContext()
+                        failureContext.isPreemptive = true
                         failureContext.specName = "\(Spec.self)"
                         failureContext.discoveryMethod = .coverage
                         failureContext.iteration = Int(scaResult.iteration)
@@ -606,6 +609,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
 
                     if config.suppressIssueReporting == false {
                         var failureContext = FailureContext()
+                        failureContext.isPreemptive = true
                         failureContext.specName = "\(Spec.self)"
                         failureContext.discoveryMethod = .randomSampling
                         failureContext.seed = actualSeed

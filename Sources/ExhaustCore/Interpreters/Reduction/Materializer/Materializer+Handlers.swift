@@ -156,13 +156,13 @@ extension Materializer {
     @inline(__always)
     static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branchCount: UInt64,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
+        let branchCount = UInt64(choices.count)
         // Always consume a jump seed from the PRNG stream (VACTI pattern).
         let jumpSeed = context.prng.next()
 

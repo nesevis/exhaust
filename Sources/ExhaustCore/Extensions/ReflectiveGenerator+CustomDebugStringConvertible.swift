@@ -65,7 +65,7 @@ extension Generator where Operation == ReflectiveOperation {
             }
             return "chooseBits(\(tag.description): \(range))\(suffix)"
 
-        case let .pick(choices, _):
+        case let .pick(choices):
             let fingerprint = choices.first?.fingerprint ?? 0
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
             let header = "pick(id: \(fingerprintShort), choices: \(choices.count))"

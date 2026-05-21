@@ -115,7 +115,10 @@ struct PreemptiveAtomicCounterParityTests {
     func atomicCounterPasses() async {
         let result = await __runPreemptiveConcurrentContractAsync(
             PreemptiveAtomicCounterParitySpec.self,
-            settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            settings: [
+                .commandLimit(4),
+//                .suppress(.issueReporting)
+            ]
         )
         #expect(result == nil, "Atomic counter should pass under any interleaving")
     }
@@ -124,21 +127,21 @@ struct PreemptiveAtomicCounterParityTests {
 @ConcurrentContract
 final class PreemptiveAtomicCounterParitySpec {
     @SystemUnderTest
-    var counter: AtomicCounter = .init()
+    var counter: ThreadSafeCounter = .init()
 
     @Oracle
-    func valuesMatch(other: AtomicCounter) -> Bool {
+    func valuesMatch(other: ThreadSafeCounter) -> Bool {
         counter.value == other.value
     }
 
     @Command(weight: 3)
     func increment() async throws {
-        await counter.increment()
+        counter.increment()
     }
 
     @Command(weight: 2)
     func decrement() async throws {
-        await counter.decrement()
+        counter.decrement()
     }
 }
 

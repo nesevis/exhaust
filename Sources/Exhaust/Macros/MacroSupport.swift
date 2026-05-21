@@ -146,7 +146,12 @@ public extension __ExhaustRuntime {
                     }
                 }
 
-                return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
+                let logConfiguration = ExhaustLog.Configuration(
+                    isEnabled: suppressLogs == false,
+                    minimumLevel: logLevel,
+                    format: logFormat
+                )
+                return ExhaustLog.withConfiguration(logConfiguration) {
                     #if canImport(Testing)
                         if let traitConfig = ExhaustTraitConfiguration.current {
                             let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
@@ -555,8 +560,14 @@ public extension __ExhaustRuntime {
                 #if canImport(Testing)
                     withKnownIssue(isIntermittent: true) {
                         if let regression = replayRegressionSeeds(
-                            gen: gen, settings: settings, fileID: fileID, filePath: filePath, line: line, column: column,
-                            function: function, property: syncDetection
+                            gen: gen,
+                            settings: settings,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            function: function,
+                            property: syncDetection
                         ) {
                             pipelineResult = regression.counterexample
                             capturedSeed = regression.seed

@@ -61,24 +61,82 @@ public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     reflecting: GeneratedValue? = nil,
     _ settings: ExhaustSettings...,
-    property: (GeneratedValue) throws -> PropertyResult
+    property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
-/// Runs a property test with an async property closure.
+/// Runs a property test with an async property closure, systematically exploring the generator's output space and reporting a reduced counterexample on failure.
 ///
-/// Identical to the synchronous `#exhaust` overload but for properties that require `await` — for example, properties that call actor-isolated methods. Must be called with `await` since the expanded function is `async`. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; the async property closure is bridged via `Task` + semaphore.
+/// Use this when the property needs to `await` — for example, calling actor-isolated methods or async APIs. The coverage, reduction, and PRNG core runs on a GCD thread; the async property closure is bridged via `Task` + semaphore.
+///
+/// ```swift
+/// let counterexample = await #exhaust(transactionGen, .budget(.thorough)) { txn in
+///     let result = try await ledger.process(txn)
+///     #expect(result.balance >= 0)
+/// }
+/// ```
+///
+/// Or with a function reference:
+/// ```swift
+/// let counterexample = await #exhaust(transactionGen, property: validateTransaction)
+/// ```
 ///
 /// - Returns: The reduced counterexample if the property fails, or `nil` if all test cases pass.
+///
+/// ## Property Signatures
+///
+/// The property closure can return `Bool` or `Void`:
+///
+/// **Boolean predicate** — returns `true` for passing values:
+/// ```swift
+/// await #exhaust(transactionGen) { txn in
+///     await ledger.process(txn).balance >= 0
+/// }
+/// ```
+///
+/// **Swift Testing assertions** — uses `#expect` or `#require`:
+/// ```swift
+/// await #exhaust(transactionGen) { txn in
+///     let result = try await ledger.process(txn)
+///     #expect(result.balance >= 0)
+///     #expect(result.currency == txn.currency)
+/// }
+/// ```
+///
+/// The `Void` path detects `#expect` failures automatically (including inside helper functions) using `withExpectedIssue`. After reduction, the property is re-run one final time without suppression so `#expect` failures record with the reduced values. The only Exhaust artifact is the replay seed.
+///
+/// ## Settings
+///
+/// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (500/500), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
+/// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
+/// - `.randomOnly`: disables structured coverage analysis.
+/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
+/// - `.suppress(.logs)`: silences all console output. Overrides `.logging(...)`.
+/// - `.suppress(.all)`: skips issue reporting and silences all console output.
+///
+/// ## How It Works
+///
+/// Three phases, executed in order:
+///
+/// **1. Structured coverage** (default budget: 200 test cases). Analyzes the generator to identify its independent parameters — numeric ranges, branch selections, and sequence lengths. If the generator is analyzable:
+/// - For small parameter domains (each having 256 or fewer values): constructs a t-way covering array using a greedy density algorithm (Bryce and Colbourn 2009). Rows are generated lazily and tested immediately — the macro stops as soon as a failure is found. If the entire combinatorial space fits the budget, every combination is tested exhaustively.
+/// - For large parameter domains: synthesizes boundary values (domain edges, plus/minus 1 neighbors, midpoint, zero, and type-specific values like NaN and DST transitions) and constructs a covering array over those representatives.
+/// - Each covering array row is replayed through the generator to produce a concrete test case. If the property fails on any row, the macro proceeds directly to test case reduction.
+///
+/// **2. Random sampling** (default: 200 iterations). Generates values using a seeded PRNG. Each value is tested against the property. Skipped entirely if structured coverage already tested every combination exhaustively.
+///
+/// **3. Test case reduction**. When a failing test case is found (in either phase), the macro reduces it to a simpler counterexample. The generator's choice tree is flattened to a linear choice sequence, then a series of simplification passes — structural deletion, value minimization, and reordering — are applied repeatedly until no pass can simplify further. The reduced counterexample is reported as a test failure with a replay seed for reproducibility.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     reflecting: GeneratedValue? = nil,
     _ settings: ExhaustSettings...,
-    property: (GeneratedValue) async throws -> PropertyResult
+    property: @Sendable (GeneratedValue) async throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
 
-/// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts hold after every step.
+/// Generates command sequences, executes them against a system under test, and verifies that all contracts hold after every step.
+///
+/// Define a spec with `@Contract`, marking the SUT with `@SystemUnderTest`, model state with `@Model`, transitions with `@Command`, and post-conditions with `@Invariant`. The macro generates sequences of commands, runs them against a fresh SUT instance, and checks invariants after each step. On failure, the sequence is reduced to a minimal counterexample.
 ///
 /// ```swift
 /// @Test func boundedQueueBehavior() {
@@ -86,29 +144,16 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
-///
-/// ## Parameters
-///
-/// - `commandLimit`: The maximum number of commands per generated sequence. The reducer can reduce below this value.
-///
 /// ## Settings
 ///
-/// - `.budget(_)`: controls iteration budgets. Defaults to `.thorough` (500/500).
+/// - `.commandLimit(_)`: maximum commands per generated sequence. The reducer can shrink below this.
+/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 ///
-/// ## How It Works
-///
-/// Three phases, executed in order:
-///
-/// **1. Structured coverage** (default budget: 2000 test cases). Builds a covering array over the command-type domain — each parameter is a position in the command sequence, each domain value is a command type. Rows are generated lazily using a greedy density algorithm and tested immediately, stopping as soon as a failure is found.
-///
-/// **2. Random sampling** (default: 100 iterations). Generates random command sequences with weighted command selection.
-///
-/// **3. Test case reduction**. When a failing sequence is found, the existing reducer strategies apply — deleting commands, simplifying arguments, reordering steps — until a minimal counterexample is found.
+/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: ContractSpec>(
@@ -116,13 +161,27 @@ public macro exhaust<Spec: ContractSpec>(
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
 
-/// Runs an async contract property test that generates command sequences, assigns them to concurrent execution lanes, and verifies that contracts hold under deterministic interleaving at every `await` boundary.
+/// Generates command sequences and executes them across concurrent lanes with deterministic interleaving at `await` boundaries.
 ///
-/// The cooperative scheduler controls interleaving deterministically — the same seed produces the same interleaving and the same counterexample. By default, commands are distributed across two concurrent lanes. Use `.concurrency(N)` to test with more lanes, or `.concurrency(1)` for a sequential baseline.
+/// Define a spec with `@Contract` and async `@Command` methods. The cooperative scheduler controls interleaving deterministically — the same seed produces the same interleaving and the same counterexample. Commands are distributed across two concurrent lanes by default. On failure, the command sequence and interleaving are reduced to a minimal counterexample.
 ///
 /// ```swift
-/// let result = await #exhaust(MySpec.self, .concurrency(3), .budget(.thorough))
+/// @Test func concurrentQueueBehavior() async {
+///     let result = await #exhaust(ConcurrentQueueSpec.self, .concurrency(3), .commandLimit(12))
+/// }
 /// ```
+///
+/// ## Settings
+///
+/// - `.concurrency(_)`: number of concurrent execution lanes (1 through 8, default 2). Higher values explore more complex interleavings but grow the search space combinatorially. Use `.concurrency(1)` as a sequential baseline to confirm that failures require concurrency.
+/// - `.commandLimit(_)`: maximum commands per generated sequence. The reducer can shrink below this.
+/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
+/// - `.replay(_)`: fixed seed for deterministic reproduction. The same seed with the same concurrency level produces the same interleaving.
+/// - `.randomOnly`: disables structured coverage analysis of command orderings.
+/// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout (default 1000). When the idle timeout fires, the current command sequence is reported as a failure without reduction.
+/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
+/// - `.suppress(.logs)`: silences all console output.
+/// - `.suppress(.all)`: skips issue reporting and silences all console output.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -133,13 +192,29 @@ public macro exhaust<Spec: AsyncContractSpec>(
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustConcurrentContractMacro")
 
-/// Runs a GCD-based concurrent contract test with oracle comparison.
+/// Generates command sequences and dispatches them across real GCD threads to detect races in synchronous primitives.
 ///
-/// Dispatches commands across real OS threads, then checks whether the concurrent execution produced a state consistent with sequential behavior via the spec's ``ConcurrentContractSpec/oracleCheck(_:)`` method.
+/// Define a spec with `@ConcurrentContract`, using `@Oracle` instead of `@Model` for correctness checking (model updates inside command bodies would race with each other on real threads). Commands run on real OS threads with non-deterministic scheduling — the same seed does not guarantee the same interleaving. Bug detection relies on repetition across the sampling budget. Use this to catch races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
 ///
 /// ```swift
-/// let result = #exhaust(MyGCDSpec.self, .concurrency(2))
+/// @Test func counterThreadSafety() {
+///     let result = #exhaust(CounterGCDSpec.self, .concurrency(2), .budget(.extensive))
+/// }
 /// ```
+///
+/// ## Settings
+///
+/// - `.concurrency(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread.
+/// - `.commandLimit(_)`: maximum commands per generated sequence. The reducer can shrink below this.
+/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
+/// - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run.* Run the test repeatedly to reproduce.
+
+/// - `.randomOnly`: disables structured coverage analysis of command orderings.
+/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
+/// - `.suppress(.logs)`: silences all console output.
+/// - `.suppress(.all)`: skips issue reporting and silences all console output.
+///
+/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: ConcurrentContractSpec>(
@@ -147,7 +222,29 @@ public macro exhaust<Spec: ConcurrentContractSpec>(
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustGCDContractMacro")
 
-/// Runs a GCD-based concurrent contract test with async commands and oracle comparison.
+/// Generates command sequences and dispatches them across real GCD threads, bridging async command execution via `Task` + semaphore.
+///
+/// Use this when the spec's `@Command` methods are `async` but the SUT uses synchronous primitives internally (locks, dispatch queues, atomics behind an async facade). Each lane gets a real OS thread; async commands are driven synchronously within that thread. Non-deterministic scheduling — bug detection relies on repetition across the sampling budget.
+///
+/// ```swift
+/// @Test func asyncCounterThreadSafety() async {
+///     let result = await #exhaust(AsyncCounterGCDSpec.self, .concurrency(2), .budget(.extensive))
+/// }
+/// ```
+///
+/// ## Settings
+///
+/// - `.concurrency(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread with async execution bridged via `Task` + semaphore.
+/// - `.commandLimit(_)`: maximum commands per generated sequence. The reducer can shrink below this.
+/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
+/// - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run.* Run the test repeatedly to reproduce.
+
+/// - `.randomOnly`: disables structured coverage analysis of command orderings.
+/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
+/// - `.suppress(.logs)`: silences all console output.
+/// - `.suppress(.all)`: skips issue reporting and silences all console output.
+///
+/// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: AsyncConcurrentContractSpec>(

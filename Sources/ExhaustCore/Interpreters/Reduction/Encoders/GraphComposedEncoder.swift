@@ -178,15 +178,12 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
 ///
 /// ## Decoder Hint
 ///
-/// Always sets ``requiresExactDecoder`` to `true` because lifted candidates carry a new bound subtree that conflicts with the parent tree's fallback content. The scheduler reads this flag and routes probes through ``SequenceDecoder/exact(materializePicks:)``.
-///
 /// ## Convergence
 ///
 /// Only the upstream encoder's convergence records are exposed to the scheduler. The downstream encoder cold-starts on each upstream probe via ``GraphEncoder/start(scope:)``, so any convergence it accumulates is downstream-local and not transferable to the live graph.
 ///
-struct GraphComposedEncoder: GraphEncoder {
+struct GraphComposedEncoder: StatefulGraphEncoder {
     let name: EncoderName
-    let requiresExactDecoder: Bool = true
 
     private var upstream: any GraphEncoder
     private var downstream: any GraphEncoder

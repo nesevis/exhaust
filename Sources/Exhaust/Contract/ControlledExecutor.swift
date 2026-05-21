@@ -51,36 +51,39 @@ final class LaneExecutor: TaskExecutor, @unchecked Sendable {
 /// Thread-safe: all mutable state is protected by `NSLock`. In the common case (single-threaded drain loop), the lock is uncontended. When a foreign executor re-enqueues a continuation from another thread, the lock serializes the access.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 final class RunQueue: @unchecked Sendable {
-    private var laneJobs: [[UnownedJob]]
-    private var laneCursors: [Int]
-    private var completedLanes: Set<LaneID> = []
-    private let laneCount: Int
+    private struct Lane {
+        var jobs: [UnownedJob] = []
+        var cursor: Int = 0
+        var isComplete: Bool = false
+
+        var hasPendingJob: Bool { cursor < jobs.count }
+    }
+
+    private var lanes: [Lane]
     private let lock = NSLock()
 
     init(laneCount: Int) {
-        self.laneCount = laneCount
-        laneJobs = Array(repeating: [], count: laneCount)
-        laneCursors = Array(repeating: 0, count: laneCount)
+        lanes = Array(repeating: Lane(), count: laneCount)
     }
 
     /// Appends a job to the specified lane's queue. May be called from any thread.
     func enqueue(lane: LaneID, job: UnownedJob) {
-        lock.withLocking { laneJobs[Int(lane.index)].append(job) }
+        lock.withLocking { lanes[Int(lane.index)].jobs.append(job) }
     }
 
     /// Records that a lane's task has finished executing all its commands.
     func markComplete(lane: LaneID) {
-        _ = lock.withLocking { completedLanes.insert(lane) }
+        lock.withLocking { lanes[Int(lane.index)].isComplete = true }
     }
 
     /// Returns true when all lanes have completed and no jobs remain.
     var isFinished: Bool {
-        lock.withLocking { completedLanes.count == laneCount && pendingJobExists == false }
+        lock.withLocking { lanes.allSatisfy(\.isComplete) && lanes.contains(where: \.hasPendingJob) == false }
     }
 
     /// Returns true when at least one lane has a pending job.
     var hasPendingJobs: Bool {
-        lock.withLocking { pendingJobExists }
+        lock.withLocking { lanes.contains(where: \.hasPendingJob) }
     }
 
     /// Removes and returns the next job, preferring the specified lane. O(1) for the preferred lane, O(K) fallback where K is the lane count.
@@ -89,14 +92,14 @@ final class RunQueue: @unchecked Sendable {
     func dequeue(preferring preferred: LaneID) -> (lane: LaneID, job: UnownedJob)? {
         lock.withLocking {
             let prefIndex = Int(preferred.index)
-            if laneCursors[prefIndex] < laneJobs[prefIndex].count {
-                let job = laneJobs[prefIndex][laneCursors[prefIndex]]
-                laneCursors[prefIndex] += 1
+            if lanes[prefIndex].hasPendingJob {
+                let job = lanes[prefIndex].jobs[lanes[prefIndex].cursor]
+                lanes[prefIndex].cursor += 1
                 return (preferred, job)
             }
-            for laneIndex in 0 ..< laneCount where laneCursors[laneIndex] < laneJobs[laneIndex].count {
-                let job = laneJobs[laneIndex][laneCursors[laneIndex]]
-                laneCursors[laneIndex] += 1
+            for laneIndex in lanes.indices where lanes[laneIndex].hasPendingJob {
+                let job = lanes[laneIndex].jobs[lanes[laneIndex].cursor]
+                lanes[laneIndex].cursor += 1
                 return (LaneID(index: UInt8(laneIndex)), job)
             }
             return nil
@@ -105,13 +108,6 @@ final class RunQueue: @unchecked Sendable {
 
     /// Returns true when the specified lane has at least one pending job.
     func hasPendingJob(for lane: LaneID) -> Bool {
-        lock.withLocking {
-            let index = Int(lane.index)
-            return laneCursors[index] < laneJobs[index].count
-        }
-    }
-
-    private var pendingJobExists: Bool {
-        (0 ..< laneCount).contains { laneCursors[$0] < laneJobs[$0].count }
+        lock.withLocking { lanes[Int(lane.index)].hasPendingJob }
     }
 }

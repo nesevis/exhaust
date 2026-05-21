@@ -91,7 +91,7 @@ package enum SharedInterpreterHelpers {
     ///
     /// Each subrange becomes a branch with its own `chooseBits` generator. The caller provides a fingerprint for each branch and chooses how to wire the continuation.
     ///
-    /// - Returns: The pick choices and branch count, or `nil` if the range is too small to subdivide (four values or fewer).
+    /// - Returns: The pick choices, or `nil` if the range is too small to subdivide (four values or fewer).
     static func subdivideChooseBits(
         lower: UInt64,
         upper: UInt64,
@@ -100,14 +100,12 @@ package enum SharedInterpreterHelpers {
         scaling: ChooseBitsScaling? = nil,
         makeFingerprint: () -> UInt64,
         innerContinuation: @escaping (Any) throws -> AnyGenerator = { .pure($0) }
-    ) -> (choices: ContiguousArray<ReflectiveOperation.PickTuple>, branchCount: UInt64)? {
+    ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
         let rangeSize = (lower ... upper).saturatingCount
         guard rangeSize > 4 else { return nil }
 
         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
         let subranges = (lower ... upper).split(into: subrangeCount)
-
-        let branchCount = UInt64(subranges.count)
 
         var choices = ContiguousArray<ReflectiveOperation.PickTuple>()
         choices.reserveCapacity(subranges.count)
@@ -131,6 +129,6 @@ package enum SharedInterpreterHelpers {
             ))
         }
 
-        return (choices, branchCount)
+        return choices
     }
 }

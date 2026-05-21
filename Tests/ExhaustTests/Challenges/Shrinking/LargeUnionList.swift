@@ -22,7 +22,7 @@ struct LargeUnionListShrinkingChallenge {
 
     static let gen = #gen(.int().array(length: 1 ... 10).array(length: 1 ... 10))
 
-    static let property: ([[Int]]) -> Bool = { arr in
+    static let property: @Sendable ([[Int]]) -> Bool = { arr in
         Set(arr.flatMap(\.self)).count <= 4
     }
 

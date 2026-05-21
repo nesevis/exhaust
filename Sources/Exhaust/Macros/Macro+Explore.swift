@@ -37,7 +37,7 @@ public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
     directions: [(String, (GeneratedValue) -> Bool)],
-    property: (GeneratedValue) throws -> PropertyResult
+    property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")
 
 /// Runs a classification-aware property test that steers sampling toward each declared direction via per-direction CGS tuning.
@@ -71,5 +71,5 @@ public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     _ settings: ExploreSettings...,
     directions: [(String, (GeneratedValue) -> Bool)],
-    property: (GeneratedValue) async throws -> PropertyResult
+    property: @Sendable (GeneratedValue) async throws -> PropertyResult
 ) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreAsyncMacro")

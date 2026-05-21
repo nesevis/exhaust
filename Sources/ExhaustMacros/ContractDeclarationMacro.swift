@@ -130,6 +130,7 @@ struct CommandInfo {
     let weight: String
     let generatorExprs: [String]
     let isAsync: Bool
+    let isThrows: Bool
     let syntax: FunctionDeclSyntax?
 }
 
@@ -215,6 +216,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
         }
 
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
+        let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
 
         return CommandInfo(
             methodName: methodName,
@@ -222,6 +224,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
             weight: weight,
             generatorExprs: generatorExprs,
             isAsync: isAsync,
+            isThrows: isThrows,
             syntax: funcDecl
         )
     }
@@ -335,13 +338,19 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl
     var cases: [String] = []
 
     for cmd in commands {
-        let tryKeyword = cmd.isAsync ? "try await" : "try"
+        let effectKeywords: String
+        switch (cmd.isThrows, cmd.isAsync) {
+        case (true, true): effectKeywords = "try await "
+        case (true, false): effectKeywords = "try "
+        case (false, true): effectKeywords = "await "
+        case (false, false): effectKeywords = ""
+        }
         if cmd.parameters.isEmpty {
-            cases.append("        case .\(cmd.methodName): \(tryKeyword) self.\(cmd.methodName)()")
+            cases.append("        case .\(cmd.methodName): \(effectKeywords)self.\(cmd.methodName)()")
         } else {
             let bindings = cmd.parameters.map(\.label).joined(separator: ", ")
             let args = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
-            cases.append("        case let .\(cmd.methodName)(\(bindings)): \(tryKeyword) self.\(cmd.methodName)(\(args))")
+            cases.append("        case let .\(cmd.methodName)(\(bindings)): \(effectKeywords)self.\(cmd.methodName)(\(args))")
         }
     }
 
