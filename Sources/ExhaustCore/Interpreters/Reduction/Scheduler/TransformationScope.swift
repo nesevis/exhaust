@@ -102,6 +102,9 @@ enum MinimizationScope {
 
     /// Joint upstream/downstream minimization along a bind dependency edge. Each upstream probe on the controlling value triggers a full downstream search on the dependent subtree. Modelled as a single scope because the upstream and downstream are tightly interleaved at the probe level.
     case boundValue(BoundValueScope)
+
+    /// Drive lane-control chooseBits values to zero (move commands into the sequential prefix). Leaves are ordered by sequence position so the prefix grows from the front. Each leaf is a binary decision — zero (prefix) or unchanged (concurrent lane). Dispatched under ``EncoderName/laneCollapse`` so the ``ReducerConfiguration/enabledEncoders`` filter can stage it as an isolated pass before structural or value reduction.
+    case laneCollapse(ValueMinimizationScope)
 }
 
 /// Per-leaf annotation in a value-only scope.

@@ -132,3 +132,25 @@ public macro exhaust<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustConcurrentContractMacro")
+
+/// Runs a GCD-based concurrent contract test with oracle comparison.
+///
+/// Dispatches commands across real OS threads, then checks whether the concurrent execution produced a state consistent with sequential behavior via the spec's ``ConcurrentContractSpec/oracleCheck(_:)`` method.
+///
+/// ```swift
+/// let result = #exhaust(MyGCDSpec.self, .concurrency(2))
+/// ```
+@freestanding(expression)
+@discardableResult
+public macro exhaust<Spec: ConcurrentContractSpec>(
+    _ specType: Spec.Type,
+    _ settings: ConcurrentContractSettings...
+) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustGCDContractMacro")
+
+/// Runs a GCD-based concurrent contract test with async commands and oracle comparison.
+@freestanding(expression)
+@discardableResult
+public macro exhaust<Spec: AsyncConcurrentContractSpec>(
+    _ specType: Spec.Type,
+    _ settings: ConcurrentContractSettings...
+) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncGCDContractMacro")

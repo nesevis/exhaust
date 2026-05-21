@@ -98,6 +98,7 @@ package struct ReductionMachine: ProbeSessionState {
     let gen: AnyGenerator
     let property: (Any) -> Bool
     let tuning: SchedulerTuning
+    let enabledEncoders: Set<EncoderName>?
     let collectStats: Bool
     let isInstrumented: Bool
 
@@ -196,6 +197,7 @@ package struct ReductionMachine: ProbeSessionState {
         self.gen = erasedGen
         self.property = wrappedProperty
         self.tuning = config.tuning
+        self.enabledEncoders = config.enabledEncoders
         self.collectStats = collectStats
         self.isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
         self.convergence = ConvergenceTracker(

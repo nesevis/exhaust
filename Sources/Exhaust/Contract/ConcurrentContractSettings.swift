@@ -8,7 +8,6 @@ import ExhaustCore
 /// ```swift
 /// #exhaust(MySpec.self, .concurrency(4), .budget(.thorough))
 /// ```
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public enum ConcurrentContractSettings {
     /// Sets the number of concurrent execution lanes (1...8). Default is 2.
     ///

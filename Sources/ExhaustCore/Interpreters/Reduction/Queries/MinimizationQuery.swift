@@ -53,7 +53,7 @@ enum MinimizationQuery {
             var independentEntries: [LeafEntry] = []
             for nodeID in integerLeafNodeIDs {
                 let annotation = graph.nodes[nodeID].scopeAnnotation
-                if annotation.isDepthControl { continue }
+                if annotation.isDepthControl || annotation.isLaneControl { continue }
                 let entry = LeafEntry(
                     nodeID: nodeID,
                     mayReshapeOnAcceptance: annotation.isBindInner,

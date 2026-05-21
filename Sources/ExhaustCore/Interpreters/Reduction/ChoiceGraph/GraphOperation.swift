@@ -38,6 +38,23 @@ enum GraphOperation {
     /// Only dispatched post-loop by ``ChoiceGraphScheduler`` after all other reduction is complete. Never emitted by any ``CandidateSource``.
     case reorder(ReorderingScope)
 
+    /// The encoder name that will handle this operation. Used by the ``ReducerConfiguration/enabledEncoders`` filter to skip operations targeting disabled encoders without instantiating the encoder.
+    var encoderName: EncoderName {
+        switch self {
+        case .remove: .deletion
+        case .replace: .substitution
+        case .migrate: .migration
+        case .minimize(.valueLeaves): .valueSearch
+        case .minimize(.floatLeaves): .floatSearch
+        case .minimize(.boundValue): .boundValueSearch
+        case .minimize(.laneCollapse): .laneCollapse
+        case .exchange(.redistribution): .redistribution
+        case .exchange(.tandem): .lockstep
+        case .permute: .siblingSwap
+        case .reorder: .numericReorder
+        }
+    }
+
     /// Whether this operation changes the generator's active execution path. Only replace is path-changing.
     var isPathChanging: Bool {
         if case .replace = self { return true }

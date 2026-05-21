@@ -144,6 +144,12 @@ enum CandidateSourceBuilder {
     static func buildValueSources(from graph: ChoiceGraph, deferBindInner: Bool = false) -> [AnyCandidateSource] {
         var sources: [AnyCandidateSource] = []
 
+        // Lane collapse.
+        let laneCollapseCandidates = buildLaneCollapseCandidates(graph: graph)
+        if laneCollapseCandidates.isEmpty == false {
+            sources.append(.sorted(SortedCandidateSource(laneCollapseCandidates)))
+        }
+
         // Minimization.
         let minimizationCandidates = buildMinimizationCandidates(graph: graph, deferBindInner: deferBindInner)
         if minimizationCandidates.isEmpty == false {

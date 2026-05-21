@@ -99,11 +99,15 @@ package struct ScopeAnnotation {
     /// True if this is a ``TypeTag/depthControl`` chooseBits leaf. Depth-control leaves are independent recursive depth markers excluded from lockstep, redistribution, swap, reorder, and composed downstream operations.
     package let isDepthControl: Bool
 
+    /// True if this is a ``TypeTag/laneControl`` chooseBits leaf. Lane-control leaves are concurrent scheduling markers excluded from the same operations as depth-control leaves. A dedicated lane-collapse encoder handles them separately.
+    package let isLaneControl: Bool
+
     static let `default` = ScopeAnnotation(
         isBindInner: false,
         controllingBindNodeID: nil,
         controllingBindDepth: nil,
-        isDepthControl: false
+        isDepthControl: false,
+        isLaneControl: false
     )
 }
 

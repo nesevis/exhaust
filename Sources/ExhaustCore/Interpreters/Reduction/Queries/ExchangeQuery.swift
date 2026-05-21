@@ -21,7 +21,9 @@ enum ExchangeQuery {
             guard annotationA.isBindInner == false,
                   annotationB.isBindInner == false,
                   annotationA.isDepthControl == false,
-                  annotationB.isDepthControl == false
+                  annotationB.isDepthControl == false,
+                  annotationA.isLaneControl == false,
+                  annotationB.isLaneControl == false
             else { continue }
 
             guard case let .chooseBits(metadataA) = graph.nodes[edge.nodeA].kind,
@@ -69,7 +71,7 @@ enum ExchangeQuery {
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind else { continue }
-            if node.scopeAnnotation.isDepthControl { continue }
+            if node.scopeAnnotation.isDepthControl || node.scopeAnnotation.isLaneControl { continue }
             leafGroups[metadata.typeTag, default: []].append(nodeID)
         }
         let tandemGroups = leafGroups.compactMap { tag, leafIDs -> TandemGroup? in
@@ -107,6 +109,7 @@ enum ExchangeQuery {
             guard case let .sequence(seqMetadata) = parentNode.kind else { continue }
             guard let tag = seqMetadata.elementTypeTag else { continue }
             if case .depthControl = tag { continue }
+            if case .laneControl = tag { continue }
 
             let intraPairs = pairsFromHomogeneousLeaves(
                 childIDs: parentNode.children,

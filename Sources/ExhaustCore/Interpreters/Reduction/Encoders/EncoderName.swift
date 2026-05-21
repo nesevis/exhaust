@@ -1,5 +1,5 @@
 /// Typed identifier for a sequence encoder.
-public enum EncoderName: String, Hashable, Sendable {
+public enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Removes elements from sequences. Tries batch removal (halving, quartering) first for large cuts, then falls back to per-element removal. Also handles cross-sequence aligned removal where corresponding elements in sibling sequences are deleted together.
     case deletion
 
@@ -38,4 +38,7 @@ public enum EncoderName: String, Hashable, Sendable {
 
     /// Probes each converged value one step below its floor to detect stale convergence. If a value that was previously stuck at some floor can now go lower (because other values changed around it), the floor was stale and reduction continues.
     case convergenceConfirmation
+
+    /// Drives ``TypeTag/laneControl`` chooseBits values toward zero (the sequential prefix). Each lane marker moved to zero removes one command from the concurrent interleaving space.
+    case laneCollapse
 }

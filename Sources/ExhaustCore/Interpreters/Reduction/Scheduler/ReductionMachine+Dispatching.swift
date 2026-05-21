@@ -33,6 +33,10 @@ extension ReductionMachine {
             return .dispatched(decision: .sourceExhausted)
         }
 
+        if let enabled = enabledEncoders, enabled.contains(transformation.operation.encoderName) == false {
+            return .dispatched(decision: .skipped)
+        }
+
         var decision = ChoiceGraphScheduler.evaluateDispatch(
             transformation: transformation,
             graph: graph,

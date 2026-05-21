@@ -70,9 +70,15 @@ Most PBT libraries implement filters by generating values until one passes the p
 
 ### Concurrent contract testing
 
-Generate random sequences of operations against a stateful system and verify invariants after every step. Async contracts run commands concurrently with deterministic interleaving at `await` suspension points, finding data races the sequential runner can't:
+Generate random sequences of operations against a stateful system and verify invariants after every step. Two runners cover different kinds of concurrency bugs:
+
+**Cooperative scheduler** (`@Contract` + `.concurrency(N)`) — deterministic interleaving at every `await` suspension point. Same seed, same interleaving, same counterexample. Finds lost updates, check-then-act races, and non-atomic read-modify-write patterns that straddle a suspension boundary.
+
+**Preemptive runner** (`@ConcurrentContract` + `.concurrency(N)`) — dispatches to real GCD threads. Catches races inside locks, dispatch queues, and atomics that are invisible at `await` boundaries. Uses an `@Oracle` method to compare concurrent state against a sequential replay.
 
 ```
+Reduced from 6 to 3 commands.
+
 Sequential prefix:
   1. increment
 
@@ -638,7 +644,7 @@ Reproduce: .replay("7MK2N9")
 The reducer drove the first `increment` into the sequential prefix (proving it doesn't need to be concurrent), leaving only two concurrent increments as the minimal race.
 
 > [!Note]
-> The cooperative scheduler interleaves at `await` suspension points only. A race between two statements with no `await` between them is invisible to this tool. Use Thread Sanitizer for purely synchronous races.
+> The cooperative scheduler interleaves at `await` suspension points only. A race between two statements with no `await` between them is invisible to this tool. Use `@ConcurrentContract` with the preemptive runner for races inside synchronous primitives.
 
 ### Settings
 
@@ -647,7 +653,7 @@ Sync contract tests accept `ContractSettings`; async contract tests accept `Conc
 | Setting | Default | Effect |
 |---|---|---|
 | `.commandLimit(N)` | auto-estimated | Maximum commands per sequence. Auto-estimated from the command domain when omitted (capped at 100 sync, 40 async). Reduce for specs with expensive command bodies. |
-| `.concurrency(N)` | 2 | Number of concurrent execution lanes (async only, 1...8). |
+| `.concurrency(N)` | 2 | Number of concurrent execution lanes (concurrent contracts only, 1...8). |
 | `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.idleTimeoutMs(ms)` | 1000 | Drain loop stall detection (async only). |
@@ -655,7 +661,7 @@ Sync contract tests accept `ContractSettings`; async contract tests accept `Conc
 | `.suppress(.issueReporting)` | — | Suppress issue reporting. |
 | `.includeDiff` | off | Includes a structural diff between the original and reduced counterexample (sync only). |
 | `.collectOpenPBTStats` | off | Records per-example stats in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. |
-| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing and invocation counts after the run (async only). |
+| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |
 | `.logging(.debug)` | `.error` | Log verbosity. |
 
 ## Directed Exploration
@@ -721,4 +727,5 @@ This repeats until neither makes progress. When both stall, the reducer tries to
 
 - Swift 6.2+ (Xcode 26+)
 - macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+
-- Concurrent contract testing requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
+- Cooperative concurrent contract testing (`@Contract` + `.concurrency`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
+- Preemptive concurrent contract testing (`@ConcurrentContract`) has no additional availability requirements

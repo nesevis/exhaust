@@ -2,6 +2,18 @@
 
 This guide covers testing stateful systems, things with mutable internal state where bugs emerge from sequences of operations rather than single calls. If you've read the [getting started guide](GETTING_STARTED.md), you're familiar with `#exhaust` for pure functions. `@Contract` is the equivalent for objects with memory.
 
+## Choosing a contract style
+
+| Your situation | Macro | Runner |
+|----------------|-------|--------|
+| Synchronous SUT, sequential commands | `@Contract` (struct) | Sequential |
+| Async SUT, sequential commands | `@Contract` (final class, async commands) | Sequential with async bridging |
+| Async SUT, bugs at `await` suspension points | `@Contract` (final class, async commands) + `.concurrency(N)` | Cooperative scheduler — deterministic interleaving, same seed = same result |
+| Async facade over locks, dispatch queues, or atomics | `@ConcurrentContract` (final class, async commands) + `.concurrency(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
+| Synchronous SUT, bugs need real thread preemption | `@ConcurrentContract` (final class, sync commands) + `.concurrency(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
+
+The first three rows use `@Contract` and differ only in whether commands are async and whether `.concurrency` is set. The last two rows use `@ConcurrentContract`, which adds an `@Oracle` method for comparing concurrent state against a sequential replay. The [cooperative scheduler](#cooperative-concurrent-testing) controls interleaving deterministically at `await` boundaries. The [preemptive runner](#preemptive-concurrent-testing) dispatches to real OS threads and catches races invisible to the cooperative scheduler.
+
 ## When to reach for `@Contract`
 
 A stack, a database connection pool, a bounded queue, an authentication session, an undo stack. These all share a trait: calling `push` alone can't find the bug. The bug lives in `push, push, pop, pop, push, pop`, a specific ordering that leaves the data structure in a state it shouldn't be reachable to.
@@ -161,9 +173,9 @@ Three differences from sync contracts: the spec is a `final class` (not a struct
 
 Exhaust detects async methods and generates the correct conformance automatically.
 
-## Concurrent contract testing
+## Cooperative concurrent testing
 
-The async contract runner runs commands concurrently across multiple execution lanes, deterministically interleaving at every `await` suspension point. This finds bugs that only manifest under concurrent access: lost updates, check-then-act races, non-atomic read-modify-write patterns.
+The cooperative runner executes commands concurrently across multiple execution lanes, deterministically interleaving at every `await` suspension point. This finds bugs that only manifest under concurrent access: lost updates, check-then-act races, non-atomic read-modify-write patterns that straddle a suspension boundary.
 
 ```swift
 @Test func counterIsSafeUnderConcurrency() async {
@@ -207,9 +219,9 @@ The trace shows exactly where the interleaving happened. The reducer drove the f
 
 ### What the scheduler can and cannot find
 
-The cooperative scheduler interleaves at `await` suspension points, wherever a command body suspends (via `Task.yield()`, an actor call, or any other suspension point). It cannot interleave within synchronous code. A race between two statements with no `await` between them is invisible to the scheduler and requires Thread Sanitizer or actual preemptive concurrency to detect.
+The cooperative scheduler interleaves at `await` suspension points, wherever a command body suspends (via `Task.yield()`, an actor call, or any other suspension point). It cannot interleave within synchronous code. A race between two statements with no `await` between them is invisible to the scheduler.
 
-For this reason, SUTs that have races at suspension points (the `let v = state; await Task.yield(); state = v + 1` pattern) are exactly what this tool finds well. SUTs whose races are purely synchronous (no suspension between read and write) need a different tool.
+SUTs that have races at suspension points (the `let v = state; await Task.yield(); state = v + 1` pattern) are exactly what this tool finds well. SUTs whose races are in synchronous code behind an async facade — locks, dispatch queues, atomics — need the [preemptive runner](#preemptive-concurrent-testing) instead.
 
 ### Concurrency level
 
@@ -221,22 +233,100 @@ For this reason, SUTs that have races at suspension points (the `let v = state; 
 
 If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeoutMs(ms)` setting (default 1000ms) detects this and reports the stalling command sequence without attempting reduction.
 
+## Preemptive concurrent testing
+
+The preemptive runner dispatches commands to real GCD threads, letting the OS scheduler create actual thread-level interleaving. This catches races that the cooperative scheduler cannot reach: bugs inside locks, dispatch queues, atomics, and other synchronous primitives hidden behind async facades.
+
+Preemptive contracts use `@ConcurrentContract` instead of `@Contract`. The difference is the `@Oracle` method, which defines what "equivalent" means when comparing concurrent state against a sequential replay.
+
+```swift
+@ConcurrentContract
+final class AsyncRacyCounterSpec {
+    @SystemUnderTest
+    var counter: AsyncRacyCounter = .init()
+
+    @Oracle
+    func valuesMatch(other: AsyncRacyCounter) -> Bool {
+        counter.value == other.value
+    }
+
+    @Invariant
+    func isNonNegative() -> Bool {
+        counter.value >= 0
+    }
+
+    @Command(weight: 3)
+    func increment() async throws {
+        await counter.increment()
+    }
+
+    @Command(weight: 2)
+    func decrement() async throws {
+        guard counter.value > 0 else { throw skip() }
+        await counter.decrement()
+    }
+}
+```
+
+The `@Oracle` method receives the SUT state from a sequential (race-free) replay of the same command sequence. If the concurrent execution produces a different result, the oracle returns `false` and Exhaust reports a failure. The oracle checks final state rather than intermediate states, which is the right tradeoff for non-deterministic scheduling — intermediate invariants would fail spuriously when the OS happens to interleave in a valid-but-unexpected order.
+
+Running the test:
+
+```swift
+@Test func counterIsSafeUnderConcurrency() async {
+    await #exhaust(
+        AsyncRacyCounterSpec.self,
+        .concurrency(2),
+        .commandLimit(6),
+        .budget(.custom(coverage: 0, sampling: 200))
+    )
+}
+```
+
+### Non-determinism and repetition
+
+The same seed does not guarantee the same interleaving. OS thread scheduling is unpredictable, so the preemptive runner compensates with repetition: it runs each candidate sequence multiple times during reduction to confirm that the failure is reproducible. A bug that manifests on one in ten runs will still be found and reduced, but reduction takes longer because each probe requires several executions.
+
+The cooperative runner is the better choice when both can find the bug. Deterministic interleaving means faster reduction and reproducible seeds. Reach for the preemptive runner when the race is inside synchronous primitives that the cooperative scheduler cannot see.
+
+### Synchronous commands
+
+`@ConcurrentContract` also works with synchronous commands. When all commands and invariants are synchronous, Exhaust generates `ConcurrentContractSpec` conformance and dispatches directly to GCD threads with no async bridging:
+
+```swift
+@ConcurrentContract
+final class SyncCounterSpec {
+    @SystemUnderTest
+    var counter: RacyCounter = .init()
+
+    @Oracle
+    func valuesMatch(other: RacyCounter) -> Bool {
+        counter.value == other.value
+    }
+
+    @Command(weight: 3)
+    func increment() throws {
+        counter.increment()
+    }
+}
+```
+
 ## Settings reference
 
-Both sync and async contracts accept settings as variadic arguments to `#exhaust`:
+All contract styles accept settings as variadic arguments to `#exhaust`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sync) or 40 (async). |
-| `.concurrency(N)` | 2 | Number of concurrent lanes (async only, 1...8). |
+| `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sync sequential) or 40 (concurrent). |
+| `.concurrency(N)` | 2 | Number of concurrent lanes (concurrent contracts only, 1...8). |
 | `.budget(.thorough)` | `.thorough` | Controls coverage rows and random sampling iterations. |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling. |
-| `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (async only). |
-| `.replay(.numeric(seed))` | — | Deterministic replay of a specific run. |
+| `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (cooperative runner only). |
+| `.replay("seed")` | — | Deterministic replay of a specific run. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
-| `.includeDiff` | off | Includes a structural diff between the original and reduced command sequences (sync only). |
+| `.includeDiff` | off | Includes a structural diff between the original and reduced command sequences (sequential only). |
 | `.collectOpenPBTStats` | off | Records per-example stats in OpenPBTStats JSON Lines format. |
-| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing and invocation counts after the run (async only). |
+| `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |
 | `.logging(.debug)` | `.error` | Log verbosity. |
 
 ## Designing good contracts

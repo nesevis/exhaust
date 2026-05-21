@@ -245,6 +245,8 @@ struct GraphValueEncoder: GraphEncoder {
         switch minimizationScope {
         case let .valueLeaves(integerScope):
             startInteger(scope: integerScope, sequence: sequence, graph: graph, warmStarts: scope.warmStartRecords)
+        case let .laneCollapse(laneScope):
+            startInteger(scope: laneScope, sequence: sequence, graph: graph, warmStarts: scope.warmStartRecords)
         case let .floatLeaves(floatScope):
             startFloat(scope: floatScope, sequence: sequence, graph: graph)
         case .boundValue:
