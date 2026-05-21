@@ -48,7 +48,7 @@ package extension Gen {
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators.
-    /// - Precondition: At least one choice must be provided
+    /// - Precondition: At least one choice must be provided.
     static func pick<Output>(
         choices: [(weight: Int, generator: Generator<Output>)],
         fileID: StaticString = #fileID,
