@@ -86,29 +86,41 @@ package enum ChoiceGraphNodeKind {
 /// Pre-computed scope properties derivable during the ``ChoiceGraphBuilder`` tree walk.
 ///
 /// These properties are consumed by scope query files (``MinimizationQuery``, ``ExchangeQuery``, ``ReorderingQuery``) to classify leaves without re-deriving the information via full-graph traversals. Each field replaces a specific ``QueryHelpers`` computation that previously required an O(N) walk of the assembled graph.
+///
+/// Two orthogonal axes: ``bindRole`` determines whether a node is inside a bind's inner subtree (and if so, which bind controls it), while ``controlKind`` classifies special-purpose leaves that are excluded from most encoder operations.
 package struct ScopeAnnotation {
-    /// True if this node is inside a bind's inner subtree. Any mutation of a bind-inner leaf triggers a bound subtree rebuild (not the value-only fast path), because the bound's shape, ranges, or content may depend on the inner value.
-    package let isBindInner: Bool
+    package let bindRole: BindRole
+    package let controlKind: ControlKind
 
-    /// The outermost enclosing bind's node ID when ``isBindInner`` is true; nil otherwise. Outermost-wins semantics: when binds are nested, descendant leaves are claimed by the outermost enclosing bind, matching the reshape cost that the scheduler must account for.
-    package let controllingBindNodeID: Int?
+    static let `default` = ScopeAnnotation(bindRole: .independent, controlKind: .standard)
 
-    /// The controlling bind's ``BindMetadata/bindDepth``, or nil for non-bind-inner nodes. Used by ``MinimizationQuery`` for top-down depth ordering of bind-inner value search.
-    package let controllingBindDepth: Int?
+    package var isBindInner: Bool { if case .bindInner = bindRole { true } else { false } }
 
-    /// True if this is a ``TypeTag/depthControl`` chooseBits leaf. Depth-control leaves are independent recursive depth markers excluded from lockstep, redistribution, swap, reorder, and composed downstream operations.
-    package let isDepthControl: Bool
+    package var controllingBindNodeID: Int? { if case let .bindInner(nodeID, _) = bindRole { nodeID } else { nil } }
 
-    /// True if this is a ``TypeTag/laneControl`` chooseBits leaf. Lane-control leaves are concurrent scheduling markers excluded from the same operations as depth-control leaves. A dedicated lane-collapse encoder handles them separately.
-    package let isLaneControl: Bool
+    package var controllingBindDepth: Int? { if case let .bindInner(_, depth) = bindRole { depth } else { nil } }
 
-    static let `default` = ScopeAnnotation(
-        isBindInner: false,
-        controllingBindNodeID: nil,
-        controllingBindDepth: nil,
-        isDepthControl: false,
-        isLaneControl: false
-    )
+    package var isDepthControl: Bool { if case .depthControl = controlKind { true } else { false } }
+
+    package var isLaneControl: Bool { if case .laneControl = controlKind { true } else { false } }
+}
+
+/// Whether a node is inside a bind's inner subtree.
+package enum BindRole {
+    /// Not inside any bind's inner subtree.
+    case independent
+    /// Inside a bind's inner subtree. Any mutation of this leaf triggers a bound subtree rebuild. Outermost-wins semantics: when binds are nested, descendant leaves are claimed by the outermost enclosing bind, matching the reshape cost that the scheduler must account for.
+    case bindInner(controllingNodeID: Int, depth: Int)
+}
+
+/// Special-purpose leaf classification for leaves excluded from most encoder operations.
+package enum ControlKind {
+    /// A regular leaf participating in all encoder operations.
+    case standard
+    /// A ``TypeTag/depthControl`` chooseBits leaf. Recursive depth markers excluded from lockstep, redistribution, swap, reorder, and composed downstream operations.
+    case depthControl
+    /// A ``TypeTag/laneControl`` chooseBits leaf. Concurrent scheduling markers excluded from the same operations as depth-control leaves. A dedicated lane-collapse encoder handles them separately.
+    case laneControl
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf node.

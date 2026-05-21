@@ -24,6 +24,14 @@ struct ChoiceGraphBuilder {
     /// The ``BindMetadata/bindDepth`` of the outermost enclosing bind, when inside a bind's inner subtree.
     var enclosingBindDepth: Int?
 
+    var currentBindRole: BindRole {
+        if let nodeID = enclosingBindNodeID, let depth = enclosingBindDepth {
+            .bindInner(controllingNodeID: nodeID, depth: depth)
+        } else {
+            .independent
+        }
+    }
+
     // MARK: - Entry Point
 
     /// Builds a ``ChoiceGraph`` from a choice tree.
@@ -67,10 +75,11 @@ struct ChoiceGraphBuilder {
     ) -> Int {
         switch tree {
         case let .choice(value, metadata):
-            let isDepthControl: Bool
-            if case .depthControl = value.tag { isDepthControl = true } else { isDepthControl = false }
-            let isLaneControl: Bool
-            if case .laneControl = value.tag { isLaneControl = true } else { isLaneControl = false }
+            let controlKind: ControlKind = switch value.tag {
+            case .depthControl: .depthControl
+            case .laneControl: .laneControl
+            default: .standard
+            }
             let nodeID = emitNode(
                 kind: .chooseBits(ChooseBitsMetadata(
                     typeTag: value.tag,
@@ -83,11 +92,8 @@ struct ChoiceGraphBuilder {
                 parent: parent,
                 choicePath: path,
                 scopeAnnotation: ScopeAnnotation(
-                    isBindInner: enclosingBindNodeID != nil,
-                    controllingBindNodeID: enclosingBindNodeID,
-                    controllingBindDepth: enclosingBindDepth,
-                    isDepthControl: isDepthControl,
-                    isLaneControl: isLaneControl
+                    bindRole: currentBindRole,
+                    controlKind: controlKind
                 )
             )
             if let parent {
@@ -103,11 +109,8 @@ struct ChoiceGraphBuilder {
                 parent: parent,
                 choicePath: path,
                 scopeAnnotation: ScopeAnnotation(
-                    isBindInner: enclosingBindNodeID != nil,
-                    controllingBindNodeID: enclosingBindNodeID,
-                    controllingBindDepth: enclosingBindDepth,
-                    isDepthControl: false,
-                    isLaneControl: false
+                    bindRole: currentBindRole,
+                    controlKind: .standard
                 )
             )
             if let parent {
@@ -244,11 +247,8 @@ struct ChoiceGraphBuilder {
             parent: parent,
             choicePath: path,
             scopeAnnotation: ScopeAnnotation(
-                isBindInner: enclosingBindNodeID != nil,
-                controllingBindNodeID: enclosingBindNodeID,
-                controllingBindDepth: enclosingBindDepth,
-                isDepthControl: false,
-                isLaneControl: false
+                bindRole: currentBindRole,
+                controlKind: .standard
             )
         )
         return consumed
