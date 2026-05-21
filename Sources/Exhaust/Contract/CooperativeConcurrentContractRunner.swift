@@ -173,7 +173,6 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 config.onReportClosure?(report)
             }
 
-            // --- Phase 0: Regression seeds from .exhaust(regressions:) trait ---
             #if canImport(Testing)
                 if regressionSeeds.isEmpty == false {
                     for encodedSeed in regressionSeeds {
@@ -216,7 +215,6 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 }
             #endif
 
-            // --- Phase 1: SCA coverage (command-type orderings with random lane assignments) ---
             let coverageStart = ContinuousClock.now
             if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
                 if let scaResult = runConcurrentSCACoverage(
@@ -262,7 +260,6 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             coverageInvocations = invocationCounter.value
             report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
 
-            // --- Phase 2: Random sampling ---
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
                 materializePicks: true,

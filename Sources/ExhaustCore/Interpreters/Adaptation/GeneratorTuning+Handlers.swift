@@ -168,8 +168,6 @@ extension GeneratorTuning {
 
         let choiceCount = choices.count
 
-        // --- Phase 1: Batched sampling of all choices with convergence ---
-
         let measurement = try measureFitness(
             choices: choices,
             continuation: continuation,
@@ -181,10 +179,7 @@ extension GeneratorTuning {
         let choiceRngStates = measurement.rngStates
         let continuationCaches = measurement.continuationCaches
 
-        // Advance context RNG once for deterministic Phase 2
         context.rng.jump()
-
-        // --- Phase 2: Recursive tuning per choice ---
 
         var tunedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         tunedChoices.reserveCapacity(choiceCount)

@@ -212,7 +212,6 @@ extension GraphStructuralEncoder {
         pickMetadata: PickMetadata,
         graph: ChoiceGraph
     ) -> [Int: LeafWrapping] {
-        // Phase 1: build per-branch masks from non-innermost picks across the entire self-similarity group.
         var branchMasks: [UInt64: Set<Int>] = [:]
         let allGroupPicks = graph.selfSimilarityGroups[fingerprint] ?? []
         for pickID in allGroupPicks {
@@ -225,7 +224,6 @@ extension GraphStructuralEncoder {
         var allPicks: [Int] = []
         collectSelfSimilarPicks(rootID: donorNodeID, fingerprint: fingerprint, graph: graph, into: &allPicks)
 
-        // Phase 2: walk innermost picks and determine wrapping kind for each base case.
         var expansions: [Int: LeafWrapping] = [:]
         for pickID in allPicks {
             guard case let .pick(pickMeta) = graph.nodes[pickID].kind else { continue }

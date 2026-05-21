@@ -115,7 +115,6 @@ public func __runContract<Spec: ContractSpec>(
             return true
         }
 
-        // --- Phase 0: Regression seeds from .exhaust(regressions:) trait ---
         #if canImport(Testing)
             if let traitConfig = ExhaustTraitConfiguration.current, traitConfig.regressions.isEmpty == false {
                 for encodedSeed in traitConfig.regressions {
@@ -169,9 +168,6 @@ public func __runContract<Spec: ContractSpec>(
             }
         #endif
 
-        // --- Phase 1: Sequence Covering Array (SCA) coverage ---
-        //
-        // If the command generator is a simple pick with parameter-free branches, build a covering array where each sequence position is a parameter and each command type is a domain value. This guarantees every t-way ordered permutation of command types is tested.
         var scaOutcome: SCAOutcome<Spec.Command> = .skipped
         if useRandomOnly {
             ExhaustLog.notice(
@@ -196,7 +192,6 @@ public func __runContract<Spec: ContractSpec>(
             )
         }
 
-        // --- Phase 2: Random sampling (full budget) ---
         let failingSequence: [Spec.Command]?
         let failureInfo: ContractFailureInfo<Spec.Command>
         switch scaOutcome {
@@ -283,6 +278,17 @@ private func buildTrace<Spec: ContractSpec>(
     specType _: Spec.Type
 ) -> ([TraceStep], Spec) {
     var spec = Spec()
+    let (trace, failed) = buildSequentialTrace(commands, run: { try spec.run($0) }, checkInvariants: { try spec.checkInvariants() })
+    _ = failed
+    return (trace, spec)
+}
+
+/// Builds a sequential execution trace from a command sequence, recording per-command outcomes with invariant failure names. Shared by the sequential contract runner and the preemptive runner's smoke test.
+func buildSequentialTrace<Command: CustomStringConvertible>(
+    _ commands: [Command],
+    run: (Command) throws -> Void,
+    checkInvariants: () throws -> Void
+) -> (trace: [TraceStep], failed: Bool) {
     var trace: [TraceStep] = []
     trace.reserveCapacity(commands.count)
 
@@ -291,49 +297,73 @@ private func buildTrace<Spec: ContractSpec>(
         let description = "\(command)"
 
         do {
-            try spec.run(command)
+            try run(command)
         } catch is ContractSkip {
             trace.append(TraceStep(index: step, command: description, outcome: .skipped))
             continue
         } catch let failure as ContractCheckFailure {
-            trace.append(TraceStep(
-                index: step,
-                command: description,
-                outcome: .checkFailed(message: failure.message)
-            ))
-            return (trace, spec)
+            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: failure.message)))
+            return (trace, true)
         } catch {
-            trace.append(TraceStep(
-                index: step,
-                command: description,
-                outcome: .checkFailed(message: "\(error)")
-            ))
-            return (trace, spec)
+            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: "\(error)")))
+            return (trace, true)
         }
 
         do {
-            try spec.checkInvariants()
+            try checkInvariants()
         } catch let failure as ContractCheckFailure {
-            let name = failure.message ?? "unknown"
-            trace.append(TraceStep(
-                index: step,
-                command: description,
-                outcome: .invariantFailed(name: name)
-            ))
-            return (trace, spec)
+            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: failure.message ?? "unknown")))
+            return (trace, true)
         } catch {
-            trace.append(TraceStep(
-                index: step,
-                command: description,
-                outcome: .invariantFailed(name: "\(error)")
-            ))
-            return (trace, spec)
+            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: "\(error)")))
+            return (trace, true)
         }
 
         trace.append(TraceStep(index: step, command: description, outcome: .ok))
     }
 
-    return (trace, spec)
+    return (trace, false)
+}
+
+/// Async variant of ``buildSequentialTrace``. Runs async commands sequentially on the provided spec.
+func buildAsyncSequentialTrace<Spec: AsyncConcurrentContractSpec>(
+    _ commands: [Spec.Command],
+    spec: Spec
+) async -> (trace: [TraceStep], failed: Bool) {
+    var trace: [TraceStep] = []
+    trace.reserveCapacity(commands.count)
+
+    for (index, command) in commands.enumerated() {
+        let step = index + 1
+        let description = "\(command)"
+
+        do {
+            try await spec.run(command)
+        } catch is ContractSkip {
+            trace.append(TraceStep(index: step, command: description, outcome: .skipped))
+            continue
+        } catch let failure as ContractCheckFailure {
+            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: failure.message)))
+            return (trace, true)
+        } catch {
+            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: "\(error)")))
+            return (trace, true)
+        }
+
+        do {
+            try await spec.checkInvariants()
+        } catch let failure as ContractCheckFailure {
+            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: failure.message ?? "unknown")))
+            return (trace, true)
+        } catch {
+            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: "\(error)")))
+            return (trace, true)
+        }
+
+        trace.append(TraceStep(index: step, command: description, outcome: .ok))
+    }
+
+    return (trace, false)
 }
 
 // MARK: - Failure rendering

@@ -71,7 +71,6 @@ package enum SequenceDecoder {
     ) -> ReductionResult<Any>? {
         let candidateForPhase2 = copy candidate
 
-        // Phase 1: value-only materialization (no tree construction).
         switch Materializer.materializeAny(
             gen, prefix: consume candidate,
             mode: .exact, fallbackTree: fallbackTree,
@@ -83,7 +82,6 @@ package enum SequenceDecoder {
             mergeFilterObservations(from: decodingReport, into: &filterObservations)
             guard property(output) == false else { return nil }
 
-            // Phase 2: re-materialise with full tree (acceptance only).
             switch Materializer.materializeAny(
                 gen, prefix: candidateForPhase2,
                 mode: .exact, fallbackTree: fallbackTree,
@@ -125,7 +123,6 @@ package enum SequenceDecoder {
         let seed = (precomputedHash ?? ZobristHash.hash(of: candidate)) &+ prngSalt
         let candidateForPhase2 = copy candidate
 
-        // Phase 1: value-only materialization (no tree construction).
         switch Materializer.materializeAny(
             gen,
             prefix: consume candidate,
@@ -148,7 +145,6 @@ package enum SequenceDecoder {
                 return nil
             }
 
-            // Phase 2: re-materialise with full tree (acceptance only).
             switch Materializer.materializeAny(
                 gen,
                 prefix: candidateForPhase2,
