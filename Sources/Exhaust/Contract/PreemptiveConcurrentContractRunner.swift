@@ -91,7 +91,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 
         if config.seed == nil {
             let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: 100)
+            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
             while let (commands, _) = try? smokeIterator.next() {
                 let spec = Spec()
                 let (trace, failed) = buildSequentialTrace(
@@ -229,8 +229,6 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 }
 
 // MARK: - Trace Building
-
-// MARK: - Preemptive Trace
 
 /// Builds a trace from a preemptive execution's reduced command sequence. No interleaving annotations — preemptive scheduling is non-deterministic, so the trace only records command completion order.
 private func buildPreemptiveTrace(
@@ -490,9 +488,11 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                 )
             }
 
+            // --- Phase 0: Sequential smoke test ---
+            // Safe to block here: dispatchToGCD already moved us off the cooperative pool.
             if config.seed == nil {
                 let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-                var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: 100)
+                var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
                 while let (commands, _) = try? smokeIterator.next() {
                     let spec = Spec()
                     nonisolated(unsafe) let unsafeSpec = spec
@@ -519,7 +519,11 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                             discoveryMethod: .smokeTest
                         )
                         let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
-                        let message = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
+                        let message = renderFailure(
+                            result,
+                            failureInfo: failureInfo,
+                            modelDescription: spec.modelDescription
+                        )
                         finalizeReport()
                         deferredIssues.append(message)
                         return (result, deferredIssues, report)
