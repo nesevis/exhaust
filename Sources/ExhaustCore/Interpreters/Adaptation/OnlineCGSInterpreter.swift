@@ -296,7 +296,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Pick (CGS Core)
 
-            case let .pick(choices, _):
+            case let .pick(choices):
                 return try handlePick(
                     choices,
                     continuation: continuation,
@@ -314,14 +314,14 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth,
                    max >= min,
                    (min ... max).saturatingCount >= cgsState.subdivisionThresholds.minimumRangeSize,
-                   let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+                   let choices = SharedInterpreterHelpers.subdivideChooseBits(
                        lower: min, upper: max, tag: tag,
                        isRangeExplicit: isRangeExplicit, scaling: scaling,
                        makeFingerprint: { 0 }
                    )
                 {
                     let synthesisedPick: Generator<Output> = .impure(
-                        operation: .pick(choices: choices, branchCount: branchCount),
+                        operation: .pick(choices: choices),
                         continuation: continuation
                     )
 

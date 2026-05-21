@@ -190,7 +190,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
         // MARK: pick
 
-        case let .impure(operation: .pick(choices, _), continuation):
+        case let .impure(operation: .pick(choices), continuation):
             guard let selectedChoice = WeightedPickSelection.draw(
                 from: choices, using: &context.prng
             ) else {

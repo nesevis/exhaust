@@ -287,9 +287,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // MARK: pick
 
-        case let .impure(operation: .pick(choices, branchCount), continuation):
+        case let .impure(operation: .pick(choices), continuation):
             return try handlePick(
-                choices, branchCount: branchCount,
+                choices,
                 continuation: continuation, inputValue: inputValue, context: &context
             )
 
@@ -444,11 +444,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     private static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branchCount: UInt64,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
+        let branchCount = UInt64(choices.count)
         guard let selectedChoice = WeightedPickSelection.draw(
             from: choices,
             using: &context.prng

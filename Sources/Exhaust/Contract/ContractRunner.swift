@@ -469,7 +469,7 @@ func extractPickChoices(
     from gen: Generator<some Any>
 ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
     guard case let .impure(operation, _) = gen,
-          case let .pick(choices, _) = operation
+          case let .pick(choices) = operation
     else { return nil }
     return choices
 }

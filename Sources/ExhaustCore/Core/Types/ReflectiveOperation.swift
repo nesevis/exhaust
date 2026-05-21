@@ -102,12 +102,10 @@ package enum ReflectiveOperation {
     ///
     /// Pick is a primitive because weighted discrete choice cannot be composed from ``chooseBits``: branches carry distinct sub-generators with different recursive structures, not just different bit patterns in a contiguous range. The ChoiceGraph builds a separate subtree per branch, and the reducer can swap, reorder, or eliminate branches independently — none of which is possible when the choice is encoded as a numeric range.
     ///
-    /// **Invariants:** Every ``PickTuple/generator`` is type-erased to `AnyGenerator` and must produce a value whose type matches the continuation attached to this operation. `branchCount` must equal `choices.count`; the two are stored separately because `branchCount` is needed at sites that do not inspect individual branches (for example, ChoiceTree construction).
+    /// **Invariants:** Every ``PickTuple/generator`` is type-erased to `AnyGenerator` and must produce a value whose type matches the continuation attached to this operation. Branch identifiers are `0 ..< choices.count`.
     ///
-    /// - Parameters:
-    ///   - choices: Array of weighted generator options with replay labels.
-    ///   - branchCount: The number of branches at this pick site. Branch identifiers are `0 ..< branchCount`.
-    case pick(choices: ContiguousArray<PickTuple>, branchCount: UInt64)
+    /// - Parameter choices: Array of weighted generator options with replay labels.
+    case pick(choices: ContiguousArray<PickTuple>)
 
     /// Eliminates a reflection branch when the preceding ``contramap`` returns `nil`.
     ///

@@ -157,10 +157,9 @@ package enum GeneratorTuning {
         case let .impure(op, continuation):
             switch op {
             // Tunable sites: operations that consume randomness and can be probed directly.
-            case let .pick(choices, branchCount):
+            case let .pick(choices):
                 return try measureAndTunePick(
                     choices: choices,
-                    branchCount: branchCount,
                     continuation: continuation,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,

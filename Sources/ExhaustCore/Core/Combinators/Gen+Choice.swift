@@ -30,8 +30,6 @@ package extension Gen {
 
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
-        let branchCount = UInt64(choices.count)
-
         for index in choices.indices {
             let choice = choices[index]
             array.append(.init(
@@ -41,7 +39,7 @@ package extension Gen {
                 generator: choice.generator.erase()
             ))
         }
-        return liftF(.pick(choices: array, branchCount: branchCount))
+        return liftF(.pick(choices: array))
     }
 
     /// Selects from multiple weighted generator options.

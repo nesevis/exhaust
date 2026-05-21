@@ -157,7 +157,6 @@ extension GeneratorTuning {
     /// Branches with zero successes are assigned weight 0 (skipped) unless all branches scored zero, in which case uniform weights are restored. Surviving branches receive entropy-weighted fitness scores and a minimum weight floor to prevent exponential probability collapse across depth.
     static func measureAndTunePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        branchCount: UInt64,
         continuation: @escaping (Any) throws -> Generator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
@@ -284,7 +283,7 @@ extension GeneratorTuning {
         }
 
         return .impure(
-            operation: .pick(choices: tunedChoices, branchCount: branchCount),
+            operation: .pick(choices: tunedChoices),
             continuation: continuation
         )
     }
@@ -307,7 +306,7 @@ extension GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        guard let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+        guard let choices = SharedInterpreterHelpers.subdivideChooseBits(
             lower: lower, upper: upper, tag: tag,
             isRangeExplicit: isRangeExplicit, scaling: scaling,
             makeFingerprint: { context.rng.next() }
@@ -319,7 +318,7 @@ extension GeneratorTuning {
         }
 
         let synthesisedPick: Generator<Output> = .impure(
-            operation: .pick(choices: choices, branchCount: branchCount),
+            operation: .pick(choices: choices),
             continuation: continuation
         )
 
@@ -358,8 +357,6 @@ extension GeneratorTuning {
             let subrangeCount = min(4, Int(min(rangeSize, UInt64(Int.max))))
             let subranges = (lower ... upper).split(into: subrangeCount)
 
-            let branchCount = UInt64(subranges.count)
-
             var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
             subrangeChoices.reserveCapacity(subranges.count)
 
@@ -391,7 +388,7 @@ extension GeneratorTuning {
             }
 
             let synthesisedPick: Generator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices, branchCount: branchCount),
+                operation: .pick(choices: subrangeChoices),
                 continuation: continuation
             )
 
@@ -412,8 +409,6 @@ extension GeneratorTuning {
             defer { context.depth -= 1 }
 
             let subranges = (0 ... context.maxSize).split(into: min(4, Int(context.maxSize + 1)))
-
-            let branchCount = UInt64(subranges.count)
 
             var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
             subrangeChoices.reserveCapacity(subranges.count)
@@ -448,7 +443,7 @@ extension GeneratorTuning {
             }
 
             let synthesisedPick: Generator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices, branchCount: branchCount),
+                operation: .pick(choices: subrangeChoices),
                 continuation: continuation
             )
 
@@ -492,7 +487,7 @@ extension GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        guard let (choices, branchCount) = SharedInterpreterHelpers.subdivideChooseBits(
+        guard let choices = SharedInterpreterHelpers.subdivideChooseBits(
             lower: 0, upper: context.maxSize, tag: .uint64,
             isRangeExplicit: false,
             makeFingerprint: { context.rng.next() }
@@ -504,7 +499,7 @@ extension GeneratorTuning {
         }
 
         let synthesisedPick: Generator<Output> = .impure(
-            operation: .pick(choices: choices, branchCount: branchCount),
+            operation: .pick(choices: choices),
             continuation: continuation
         )
 
