@@ -87,7 +87,7 @@ final class AsyncRacyCounterSpec {
 
 // MARK: - SUT
 
-/// Async facade over a deliberately racy counter. The dispatch queue is non-serial, so concurrent `async` barrier writes interleave with reads — the same lost-update pattern as the sync variant, but invisible to the cooperative scheduler because the race is inside `DispatchQueue`, not at an `await` boundary.
+/// Async facade over a deliberately racy counter. The dispatch queue is concurrent with no barriers, so read-modify-write sequences on different lanes interleave freely — the same lost-update pattern as the synchronous variant, but invisible to the cooperative scheduler because the race is inside `DispatchQueue`, not at an `await` boundary.
 final class AsyncRacyCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var _value: Int = 0
     private let queue = DispatchQueue(label: "racy-counter", attributes: .concurrent)

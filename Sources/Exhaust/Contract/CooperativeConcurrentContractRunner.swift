@@ -1,19 +1,23 @@
-// Generate / test / reduce loop for concurrent contract testing.
+// Cooperative concurrent contract runner.
 //
-// Inspired by Claessen, Palka, Smallbone, Hughes, Svensson, Arts, and Wiger, "Finding Race Conditions in Erlang with QuickCheck and PULSE" (ICFP 2009). That work combines QuickCheck's eqc_par_statem with a user-level scheduler (PULSE) that records and replays Erlang process schedules for deterministic concurrency testing.
+// Based on Claessen, Palka, Smallbone, Hughes, Svensson, Arts, and Wiger, "Finding Race Conditions in Erlang with QuickCheck and PULSE" (ICFP 2009). That work combines QuickCheck's eqc_par_statem with a user-level scheduler (PULSE) that records and replays Erlang process schedules for deterministic concurrency testing.
 //
 // This implementation adapts the approach to Swift Concurrency:
-// - Schedule markers encoded as reducible chooseBits replace PULSE's external schedule;
+// - Schedule markers encoded as reducible chooseBits replace PULSE's external schedule.
 // - A cooperative TaskExecutor-based drain loop replaces the Erlang VM instrumentation.
-// - The key architectural difference is that the schedule is part of the generated input (not an external random choice), so reduction operates on schedule and commands jointly; no separate ?ALWAYS(N, Prop) wrapper is needed for shrinking stability.
+// - The schedule is part of the generated input (not an external random choice), so reduction operates on schedule and commands jointly — no separate ?ALWAYS(N, Prop) wrapper is needed for shrinking stability.
 import ExhaustCore
 import IssueReporting
 
 // MARK: - Failure Result Assembly
 
+// reportIssue must be called from the Swift Testing async context, not the GCD thread where
+// this function executes — Swift Testing's task-locals are not available on GCD threads, so the
+// caller must collect the rendered message and report it after awaiting dispatchToGCD.
+
 /// Assembles the final ``ContractResult`` for a concurrent contract failure.
 ///
-/// Re-drains the failing schedule with trace recording enabled, runs a sequential oracle to capture the expected (race-free) SUT state, and renders the failure report. Returns both the result and the rendered failure message for the caller to report — `reportIssue` must be called from the Swift Testing async context, not the GCD thread where this function executes.
+/// Re-drains the failing schedule with trace recording enabled, runs a sequential oracle to capture the expected (race-free) SUT state, and renders the failure report. Returns both the result and the rendered failure message for the caller to report.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private func buildFailureResult<Spec: AsyncContractSpec>(
     finalInput: [(ScheduleMarker, Spec.Command)],

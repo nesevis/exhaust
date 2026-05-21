@@ -1,10 +1,15 @@
+// Preemptive concurrent contract runner.
+//
+// Based on eqc_par_statem from Claessen et al., "Finding Race Conditions in Erlang with QuickCheck and PULSE" (ICFP 2009). That work generates a sequential prefix followed by concurrent command groups, then compares the concurrent outcome against a sequential oracle. PULSE adds deterministic replay via a user-level scheduler; this runner omits replay and relies on OS thread scheduling for non-deterministic interleaving, compensating with repetition across the sampling budget.
+//
+// The cooperative runner (CooperativeConcurrentContractRunner) implements the PULSE half — a TaskExecutor-based drain loop that makes interleavings deterministic and reducible. This runner targets bugs that require real thread-level preemption: races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
 import ExhaustCore
 import Foundation
 import IssueReporting
 
 // MARK: - Runner Entry Point
 
-/// Runs a preemptive concurrent contract test for the given sync specification type.
+/// Runs a preemptive concurrent contract test for the given synchronous specification type.
 ///
 /// Dispatches commands across real GCD threads and uses the spec's ``ConcurrentContractSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving — bug detection is probabilistic, relying on repetition across the sampling budget.
 @discardableResult
@@ -137,7 +142,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 /// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for a ``ConcurrentContractSpec``.
 private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
 
-    /// Executes a tagged command sequence with real GCD concurrency and checks invariants + oracle.
+    /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Returns `true` if the execution passes. Returns `false` if invariants fail or the oracle detects divergence from sequential behavior.
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
@@ -409,7 +414,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
 /// Bridges async command execution to GCD threads via Task+semaphore. Each lane gets a real OS thread, and within that thread async commands are driven synchronously — the cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
 private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
 
-    /// Executes a tagged command sequence with real GCD concurrency and checks invariants + oracle.
+    /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
@@ -484,7 +489,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         let stats: ReductionStats
     }
 
-    /// Best-effort three-pass reduction, identical structure to the sync variant.
+    /// Best-effort three-pass reduction: lane collapse, structural deletion, then value minimization.
     func reduce(
         generator: Generator<[(ScheduleMarker, Spec.Command)]>,
         tree: ChoiceTree,
