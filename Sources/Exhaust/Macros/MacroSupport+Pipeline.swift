@@ -108,7 +108,7 @@ package extension __ExhaustRuntime {
                     "iterations": "\(iterations)",
                 ]
             )
-            var passMetadata = [
+            let passMetadata = [
                 "iterations": "\(iterations)",
                 "property_invocations": "\(iterations)",
             ]

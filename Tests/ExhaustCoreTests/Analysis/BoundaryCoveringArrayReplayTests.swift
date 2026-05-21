@@ -291,7 +291,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
         func zipRoundTrip() throws {
             let gen = Gen.zip(Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000))
             let profile = try #require(analyzeBoundary(gen))
-            var generator = PullBasedCoveringArrayGenerator(
+            let generator = PullBasedCoveringArrayGenerator(
                 domainSizes: profile.domainSizes,
                 strength: min(profile.parameterCount, 4)
             )
@@ -318,7 +318,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
 
             var replayedCount = 0
             if profile.parameterCount >= 2 {
-                var generator = PullBasedCoveringArrayGenerator(
+                let generator = PullBasedCoveringArrayGenerator(
                     domainSizes: profile.domainSizes,
                     strength: min(profile.parameterCount, 4)
                 )

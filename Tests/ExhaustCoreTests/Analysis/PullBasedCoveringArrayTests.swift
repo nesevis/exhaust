@@ -105,7 +105,7 @@ struct PullBasedCoveringArrayTests {
     @Test("Early stop produces valid partial coverage")
     func earlyStop() {
         let domains: [UInt64] = [3, 3, 3, 3, 3, 3]
-        var generator = PullBasedCoveringArrayGenerator(domainSizes: domains, strength: 2)
+        let generator = PullBasedCoveringArrayGenerator(domainSizes: domains, strength: 2)
 
         let pullCount = 5
         let totalTuples = totalTWayTuples(domains, strength: 2)
@@ -132,7 +132,7 @@ struct PullBasedCoveringArrayTests {
     @Test("Generator returns nil when fully covered")
     func exhaustionReturnsNil() {
         let domains: [UInt64] = [2, 2, 2]
-        var generator = PullBasedCoveringArrayGenerator(domainSizes: domains, strength: 2)
+        let generator = PullBasedCoveringArrayGenerator(domainSizes: domains, strength: 2)
 
         let totalTuples = totalTWayTuples(domains, strength: 2)
         var count = 0
@@ -173,7 +173,7 @@ struct PullBasedCoveringArrayTests {
 // MARK: - Helpers
 
 private func generateAll(domainSizes: [UInt64], strength: Int) -> [CoveringArrayRow] {
-    var generator = PullBasedCoveringArrayGenerator(domainSizes: domainSizes, strength: strength)
+    let generator = PullBasedCoveringArrayGenerator(domainSizes: domainSizes, strength: strength)
 
     let upperBound = totalTWayTuples(domainSizes, strength: strength)
     var rows: [CoveringArrayRow] = []

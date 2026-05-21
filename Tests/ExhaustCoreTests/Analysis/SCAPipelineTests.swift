@@ -61,7 +61,7 @@ struct SCADomainBuildTreeTests {
             strengthCap: 3
         )!
 
-        var generator = PullBasedCoveringArrayGenerator(
+        let generator = PullBasedCoveringArrayGenerator(
             domainSizes: domain.profile.domainSizes,
             strength: min(domain.maxStrength, domain.profile.parameterCount, 4)
         )
@@ -92,7 +92,7 @@ struct SCADomainBuildTreeTests {
         }
         #expect(domain.mapping != nil)
 
-        var generator = PullBasedCoveringArrayGenerator(
+        let generator = PullBasedCoveringArrayGenerator(
             domainSizes: domain.profile.domainSizes,
             strength: min(domain.maxStrength, domain.profile.parameterCount, 4)
         )
