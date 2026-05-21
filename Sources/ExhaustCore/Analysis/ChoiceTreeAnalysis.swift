@@ -95,7 +95,7 @@ package enum ChoiceTreeAnalysis {
             if hasIncompleteSequence == false { break }
         }
 
-        guard let parameters = bestParameters, !parameters.isEmpty else {
+        guard let parameters = bestParameters, parameters.isEmpty == false else {
             return nil
         }
         let allFinite = parameters.allSatisfy { param in
@@ -248,7 +248,7 @@ package enum ChoiceTreeAnalysis {
         let typeTag = value.tag
         if case .laneControl = typeTag { return true }
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
-        let isSmall = !overflow && domainSize < finiteDomainThreshold
+        let isSmall = overflow == false && domainSize < finiteDomainThreshold
 
         if isSmall {
             let count = domainSize + 1
@@ -300,7 +300,7 @@ package enum ChoiceTreeAnalysis {
     }
 
     static func isPick(_ children: [ChoiceTree]) -> Bool {
-        guard !children.isEmpty else { return false }
+        guard children.isEmpty == false else { return false }
         guard children.contains(where: \.isSelected) else { return false }
         return children.allSatisfy { child in
             child.isSelected || child.isBranch
@@ -487,7 +487,7 @@ package enum ChoiceTreeAnalysis {
 
         let typeTag = value.tag
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
-        let isSmall = !overflow && domainSize < finiteDomainThreshold
+        let isSmall = overflow == false && domainSize < finiteDomainThreshold
 
         if isSmall {
             let count = domainSize + 1

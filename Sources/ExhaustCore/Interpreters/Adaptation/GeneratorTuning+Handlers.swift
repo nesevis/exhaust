@@ -113,7 +113,7 @@ extension GeneratorTuning {
             guard totalSampled >= effectiveMinSamples else { continue }
 
             // Unambiguous early exit: if one choice has ≥80% success rate and another has 0%, the signal is clear — stop without waiting for the second convergence check (which needs one more batch to see the shift stabilize).
-            if !isTrivial {
+            if isTrivial == false {
                 let hasZero = successCounts.contains(0)
                 let maxRate = Double(successCounts.max()!) / Double(totalSampled)
                 if hasZero, maxRate >= 0.8 {
@@ -345,7 +345,7 @@ extension GeneratorTuning {
         predicate: @escaping (Output) -> Bool
     ) throws -> Generator<Output> {
         // Try to subdivide the length generator if it's a chooseBits (only if we haven't already subdivided)
-        if !insideSubdividedChooseBits,
+        if insideSubdividedChooseBits == false,
            case let .impure(
                .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
                lengthContinuation
@@ -404,7 +404,7 @@ extension GeneratorTuning {
         }
 
         // If the length generator uses getSize + bind (the common pattern), try to look one level deeper (only if we haven't already subdivided)
-        if !insideSubdividedChooseBits,
+        if insideSubdividedChooseBits == false,
            case let .impure(.getSize, getSizeContinuation) = lengthGen
         {
             // Adapt as getSize → pick of subranges, each producing a sequence

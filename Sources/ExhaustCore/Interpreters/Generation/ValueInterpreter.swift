@@ -48,7 +48,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         }
 
         // Per-run seed derivation: each run gets an independent PRNG
-        if !context.isFixed {
+        if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
 

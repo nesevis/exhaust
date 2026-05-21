@@ -69,7 +69,7 @@ package final class FitnessAccumulator {
         defer { previousSiteShares = currentShares }
 
         // First snapshot — can't compare yet
-        guard let previous = previousSiteShares, !currentShares.isEmpty else { return false }
+        guard let previous = previousSiteShares, currentShares.isEmpty == false else { return false }
 
         for (fingerprint, shares) in currentShares {
             guard let prevShares = previous[fingerprint] else { return false }

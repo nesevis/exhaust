@@ -66,7 +66,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             return nil
         }
 
-        if !context.isFixed {
+        if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
 
@@ -126,7 +126,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             return nil
         }
 
-        if !context.isFixed {
+        if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
 

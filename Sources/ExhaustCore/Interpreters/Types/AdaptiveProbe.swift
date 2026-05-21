@@ -37,7 +37,7 @@ package enum AdaptiveProbe {
             let (doubled, overflow) = high.multipliedReportingOverflow(by: 2)
             if overflow {
                 high = T.max
-                if !predicate(high) { break }
+                if predicate(high) == false { break }
                 return high
             }
             high = doubled

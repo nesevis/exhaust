@@ -644,19 +644,19 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     let isDuplicate: Bool
                     if let keyExtractor {
                         let key = keyExtractor(result)
-                        isDuplicate = !context.uniqueSeenKeys[
+                        isDuplicate = context.uniqueSeenKeys[
                             fingerprint, default: []
-                        ].insert(key).inserted
+                        ].insert(key).inserted == false
                     } else if let key = result as? AnyHashable {
-                        isDuplicate = !context.uniqueSeenKeys[
+                        isDuplicate = context.uniqueSeenKeys[
                             fingerprint, default: []
-                        ].insert(key).inserted
+                        ].insert(key).inserted == false
                     } else {
                         // Non-Hashable types cannot be deduplicated in CGS mode (no choice-sequence tracking). All samples are treated as unique.
                         isDuplicate = false
                     }
 
-                    if !isDuplicate {
+                    if isDuplicate == false {
                         return try runContinuation(
                             result: result,
                             continuation: continuation,
