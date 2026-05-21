@@ -96,7 +96,22 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                 let spec = Spec()
                 let (trace, failed) = buildSequentialTrace(
                     commands,
-                    run: { try spec.run($0) },
+                    run: { command in
+                        var caughtError: (any Error)?
+                        let objcSucceeded = runCatchingObjC {
+                            do {
+                                try spec.run(command)
+                            } catch {
+                                caughtError = error
+                            }
+                        }
+                        if let caughtError {
+                            throw caughtError
+                        }
+                        if objcSucceeded == false {
+                            throw ContractCheckFailure(message: "NSException during command execution")
+                        }
+                    },
                     checkInvariants: { try spec.checkInvariants() }
                 )
                 if failed {
@@ -105,10 +120,10 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                         trace: trace,
                         systemUnderTest: spec.systemUnderTest,
                         seed: nil,
-                        discoveryMethod: .coverage
+                        discoveryMethod: .smokeTest
                     )
                     if config.suppressIssueReporting == false {
-                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .coverage)
+                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
                         let message = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
                         reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
                     }
@@ -485,7 +500,11 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                     let failedBox = SendableBox(false)
                     let semaphore = DispatchSemaphore(value: 0)
                     Task { @Sendable in
-                        let (trace, failed) = await buildAsyncSequentialTrace(commands, spec: unsafeSpec)
+                        let (trace, failed) = await buildAsyncSequentialTrace(
+                            commands,
+                            run: { try await unsafeSpec.run($0) },
+                            checkInvariants: { try await unsafeSpec.checkInvariants() }
+                        )
                         traceBox.value = trace
                         failedBox.value = failed
                         semaphore.signal()
@@ -497,9 +516,9 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                             trace: traceBox.value,
                             systemUnderTest: spec.systemUnderTest,
                             seed: nil,
-                            discoveryMethod: .coverage
+                            discoveryMethod: .smokeTest
                         )
-                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .coverage)
+                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
                         let message = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
                         finalizeReport()
                         deferredIssues.append(message)

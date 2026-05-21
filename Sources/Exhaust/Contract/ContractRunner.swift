@@ -328,10 +328,11 @@ func buildSequentialTrace<Command: CustomStringConvertible>(
     return (trace, false)
 }
 
-/// Async variant of ``buildSequentialTrace``. Runs async commands sequentially on the provided spec.
-func buildAsyncSequentialTrace<Spec: AsyncConcurrentContractSpec>(
-    _ commands: [Spec.Command],
-    spec: Spec
+/// Async variant of ``buildSequentialTrace(_:run:checkInvariants:)``.
+func buildAsyncSequentialTrace<Command: CustomStringConvertible>(
+    _ commands: [Command],
+    run: (Command) async throws -> Void,
+    checkInvariants: () async throws -> Void
 ) async -> (trace: [TraceStep], failed: Bool) {
     var trace: [TraceStep] = []
     trace.reserveCapacity(commands.count)
@@ -341,7 +342,7 @@ func buildAsyncSequentialTrace<Spec: AsyncConcurrentContractSpec>(
         let description = "\(command)"
 
         do {
-            try await spec.run(command)
+            try await run(command)
         } catch is ContractSkip {
             trace.append(TraceStep(index: step, command: description, outcome: .skipped))
             continue
@@ -354,7 +355,7 @@ func buildAsyncSequentialTrace<Spec: AsyncConcurrentContractSpec>(
         }
 
         do {
-            try await spec.checkInvariants()
+            try await checkInvariants()
         } catch let failure as ContractCheckFailure {
             trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: failure.message ?? "unknown")))
             return (trace, true)

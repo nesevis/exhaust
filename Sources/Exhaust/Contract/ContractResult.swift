@@ -22,6 +22,8 @@ public struct ContractResult<Spec: ContractSpecBase> {
 
 /// Describes how a failing contract example was found.
 public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertible {
+    /// Found during the sequential smoke test that runs before concurrent phases.
+    case smokeTest
     /// Found during sequence covering array coverage.
     case coverage
     /// Found during random sampling.
@@ -31,9 +33,10 @@ public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertibl
 
     public var description: String {
         switch self {
-        case .coverage: "coverage"
-        case .randomSampling: "random sampling"
-        case .replay: "replay"
+            case .smokeTest: "smoke test"
+            case .coverage: "coverage"
+            case .randomSampling: "random sampling"
+            case .replay: "replay"
         }
     }
 }
