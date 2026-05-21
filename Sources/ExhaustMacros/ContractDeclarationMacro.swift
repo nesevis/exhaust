@@ -409,7 +409,7 @@ func synthesizeModelDescription(modelProps: [String]) -> DeclSyntax {
 
     let lines = modelProps.map { "\"  \($0): \\(\($0))\"" }.joined(separator: ",\n            ")
     return """
-    var modelDescription: String { [
+    var modelDescription: String { "\\n" + [
             \(raw: lines)
         ].joined(separator: "\\n") }
     """

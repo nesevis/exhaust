@@ -52,6 +52,11 @@ func renderFailure(
         lines.append(oracleDescription)
     }
 
+    if tagged.isEmpty == false, tagged.allSatisfy(\.0.isPrefix) {
+        lines.append("")
+        lines.append("Note: all commands were reduced to the sequential prefix. This failure reproduces without concurrency and is likely a sequential bug, not a race condition.")
+    }
+
     lines.append("")
     lines.append("Command sequences tested: \(context.sequencesTested + context.reductionInvocations)")
 

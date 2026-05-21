@@ -89,7 +89,49 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
             )
         }
 
-        // --- Phase 1: SCA coverage ---
+        if config.seed == nil {
+            let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
+            while let (commands, _) = try? smokeIterator.next() {
+                let spec = Spec()
+                let (trace, failed) = buildSequentialTrace(
+                    commands,
+                    run: { command in
+                        var caughtError: (any Error)?
+                        let objcSucceeded = runCatchingObjC {
+                            do {
+                                try spec.run(command)
+                            } catch {
+                                caughtError = error
+                            }
+                        }
+                        if let caughtError {
+                            throw caughtError
+                        }
+                        if objcSucceeded == false {
+                            throw ContractCheckFailure(message: "NSException during command execution")
+                        }
+                    },
+                    checkInvariants: { try spec.checkInvariants() }
+                )
+                if failed {
+                    let result = ContractResult<Spec>(
+                        commands: commands,
+                        trace: trace,
+                        systemUnderTest: spec.systemUnderTest,
+                        seed: nil,
+                        discoveryMethod: .smokeTest
+                    )
+                    if config.suppressIssueReporting == false {
+                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
+                        let message = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
+                        reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
+                    }
+                    return result
+                }
+            }
+        }
+
         if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
             if let scaResult = runConcurrentSCACoverage(
                 seqGen: sequenceGen,
@@ -134,7 +176,6 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
         }
         coverageInvocations = invocationCounter.value
 
-        // --- Phase 2: Random sampling ---
         var interpreter = ValueAndChoiceTreeInterpreter(
             sequenceGen,
             materializePicks: true,
@@ -447,7 +488,49 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                 )
             }
 
-            // --- Phase 1: SCA coverage ---
+            // --- Phase 0: Sequential smoke test ---
+            // Safe to block here: dispatchToGCD already moved us off the cooperative pool.
+            if config.seed == nil {
+                let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+                var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
+                while let (commands, _) = try? smokeIterator.next() {
+                    let spec = Spec()
+                    nonisolated(unsafe) let unsafeSpec = spec
+                    let traceBox = SendableBox<[TraceStep]>([])
+                    let failedBox = SendableBox(false)
+                    let semaphore = DispatchSemaphore(value: 0)
+                    Task { @Sendable in
+                        let (trace, failed) = await buildAsyncSequentialTrace(
+                            commands,
+                            run: { try await unsafeSpec.run($0) },
+                            checkInvariants: { try await unsafeSpec.checkInvariants() }
+                        )
+                        traceBox.value = trace
+                        failedBox.value = failed
+                        semaphore.signal()
+                    }
+                    semaphore.wait()
+                    if failedBox.value {
+                        let result = ContractResult<Spec>(
+                            commands: commands,
+                            trace: traceBox.value,
+                            systemUnderTest: spec.systemUnderTest,
+                            seed: nil,
+                            discoveryMethod: .smokeTest
+                        )
+                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
+                        let message = renderFailure(
+                            result,
+                            failureInfo: failureInfo,
+                            modelDescription: spec.modelDescription
+                        )
+                        finalizeReport()
+                        deferredIssues.append(message)
+                        return (result, deferredIssues, report)
+                    }
+                }
+            }
+
             if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
                 if let scaResult = runConcurrentSCACoverage(
                     seqGen: sequenceGen,
@@ -493,7 +576,6 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
             }
             coverageInvocations = invocationCounter.value
 
-            // --- Phase 2: Random sampling ---
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
                 materializePicks: true,

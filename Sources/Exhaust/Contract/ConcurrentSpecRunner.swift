@@ -100,7 +100,6 @@ func drainSchedule<Spec: AsyncContractSpec>(
     let trace = SendableBox<[TraceEvent]>([])
     let commandIndices: [SendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in SendableBox(0) }
 
-    // Phase 1: Prefix — run sequentially, drain fully before concurrent phase.
     if prefixCommands.isEmpty == false {
         let prefixDone = SendableBox(false)
         Task(executorPreference: executors[0]) { @Sendable [spec, failed, prefixDone, trace] in
@@ -145,7 +144,6 @@ func drainSchedule<Spec: AsyncContractSpec>(
         }
     }
 
-    // Phase 2: Concurrent — spawn one task per lane with interleaving.
     let hasAnyLaneCommands = laneCommands.contains { $0.isEmpty == false }
     if hasAnyLaneCommands == false {
         return ConcurrentExecutionResult(passed: true, trace: recordTrace ? buildTrace(trace.value) : [])
