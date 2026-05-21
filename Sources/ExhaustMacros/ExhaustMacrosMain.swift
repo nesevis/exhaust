@@ -14,9 +14,11 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         ExhaustContractMacro.self,
         ExhaustConcurrentContractMacro.self,
         ContractDeclarationMacro.self,
+        ConcurrentContractDeclarationMacro.self,
         ModelMacro.self,
         SUTMacro.self,
         CommandMacro.self,
         InvariantMacro.self,
+        OracleMacro.self,
     ]
 }

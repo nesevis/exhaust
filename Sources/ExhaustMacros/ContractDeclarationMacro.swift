@@ -124,7 +124,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
 
 // MARK: - Extraction
 
-private struct CommandInfo {
+struct CommandInfo {
     let methodName: String
     let parameters: [(label: String, type: String)]
     let weight: String
@@ -133,12 +133,12 @@ private struct CommandInfo {
     let syntax: FunctionDeclSyntax?
 }
 
-private struct InvariantInfo {
+struct InvariantInfo {
     let methodName: String
     let isAsync: Bool
 }
 
-private func extractModelProperties(from members: MemberBlockItemListSyntax) -> [String] {
+func extractModelProperties(from members: MemberBlockItemListSyntax) -> [String] {
     members.compactMap { member in
         guard let varDecl = member.decl.as(VariableDeclSyntax.self),
               hasAttribute("Model", on: varDecl)
@@ -147,12 +147,12 @@ private func extractModelProperties(from members: MemberBlockItemListSyntax) -> 
     }
 }
 
-private struct SUTProperty {
+struct SUTProperty {
     let name: String
     let type: String?
 }
 
-private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProperty] {
+func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProperty] {
     members.compactMap { member in
         guard let varDecl = member.decl.as(VariableDeclSyntax.self),
               hasAttribute("SystemUnderTest", on: varDecl),
@@ -178,7 +178,7 @@ private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [S
     }
 }
 
-private func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
+func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               let commandAttr = findAttribute("Command", on: funcDecl)
@@ -227,7 +227,7 @@ private func extractCommands(from members: MemberBlockItemListSyntax) -> [Comman
     }
 }
 
-private func extractInvariants(from members: MemberBlockItemListSyntax) -> [InvariantInfo] {
+func extractInvariants(from members: MemberBlockItemListSyntax) -> [InvariantInfo] {
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               hasAttribute("Invariant", on: funcDecl)
@@ -237,13 +237,13 @@ private func extractInvariants(from members: MemberBlockItemListSyntax) -> [Inva
     }
 }
 
-private func hasAttribute(_ name: String, on decl: some WithAttributesSyntax) -> Bool {
+func hasAttribute(_ name: String, on decl: some WithAttributesSyntax) -> Bool {
     decl.attributes.contains { attr in
         attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription == name
     }
 }
 
-private func findAttribute(_ name: String, on decl: some WithAttributesSyntax) -> AttributeSyntax? {
+func findAttribute(_ name: String, on decl: some WithAttributesSyntax) -> AttributeSyntax? {
     decl.attributes.compactMap { attr in
         attr.as(AttributeSyntax.self)
     }.first { $0.attributeName.trimmedDescription == name }
@@ -251,7 +251,7 @@ private func findAttribute(_ name: String, on decl: some WithAttributesSyntax) -
 
 // MARK: - Synthesis
 
-private func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
+func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
     var cases: [String] = []
     var descriptionCases: [String] = []
 
@@ -287,7 +287,7 @@ private func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-private func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpansionContext) -> DeclSyntax {
+func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpansionContext) -> DeclSyntax {
     var choices: [String] = []
 
     for cmd in commands {
@@ -331,7 +331,7 @@ private func synthesizeCommandGenerator(commands: [CommandInfo], context: some M
     """
 }
 
-private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl: Bool) -> DeclSyntax {
+func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl: Bool) -> DeclSyntax {
     var cases: [String] = []
 
     for cmd in commands {
@@ -360,7 +360,7 @@ private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isC
     """
 }
 
-private func synthesizeCheckInvariants(
+func synthesizeCheckInvariants(
     invariants: [InvariantInfo],
     hasAnyAsync: Bool
 ) -> DeclSyntax {
@@ -393,7 +393,7 @@ private func synthesizeCheckInvariants(
     """
 }
 
-private func synthesizeModelDescription(modelProps: [String]) -> DeclSyntax {
+func synthesizeModelDescription(modelProps: [String]) -> DeclSyntax {
     if modelProps.isEmpty {
         return """
         var modelDescription: String { "(no model properties)" }
@@ -415,7 +415,7 @@ private func synthesizeModelDescription(modelProps: [String]) -> DeclSyntax {
     """
 }
 
-private func synthesizeSUTDescription(sutProps: [SUTProperty]) -> DeclSyntax {
+func synthesizeSUTDescription(sutProps: [SUTProperty]) -> DeclSyntax {
     if sutProps.isEmpty {
         return """
         var sutDescription: String { "(no SUT)" }
@@ -432,7 +432,7 @@ private func synthesizeSUTDescription(sutProps: [SUTProperty]) -> DeclSyntax {
 /// Wraps a generator expression with a type cast to provide type context for implicit member syntax.
 ///
 /// User writes `@Command(weight: 3, .int(in: 0...9))` — the expression `.int(in: 0...9)` has no base type in the synthesized context. Casting to `ReflectiveGenerator<ParamType>` resolves the member lookup.
-private func qualifyGenExpression(_ expr: String, paramType: String) -> String {
+func qualifyGenExpression(_ expr: String, paramType: String) -> String {
     if expr.hasPrefix(".") {
         return "(\(expr) as ReflectiveGenerator<\(paramType)>)"
     }

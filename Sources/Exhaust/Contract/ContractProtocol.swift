@@ -114,6 +114,55 @@ public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
     func checkInvariants() async throws
 }
 
+// MARK: - Concurrent Contract Specs (GCD Backend)
+
+/// A synchronous contract specification with an explicit oracle for GCD-based concurrent testing.
+///
+/// Extends ``ContractSpec`` with an ``oracleCheck(_:)`` method that compares the concurrent SUT state against a sequentially-replayed reference. The `@ConcurrentContract` macro synthesizes this conformance when all commands are synchronous.
+///
+/// The oracle defines what "equivalent" means for the SUT — element equality for a queue, count equality for a counter, set membership for a cache. The GCD backend calls it after concurrent execution to determine whether the observed behavior is consistent with sequential behavior.
+public protocol ConcurrentContractSpec: ContractSpecBase, AnyObject {
+    /// Executes a command against the model and SUT.
+    ///
+    /// - Parameter command: The command to execute.
+    /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
+    func run(_ command: Command) throws
+
+    /// Checks all `@Invariant`-annotated methods. Called after every command execution.
+    ///
+    /// - Throws: ``ContractCheckFailure`` if any invariant returns `false`.
+    func checkInvariants() throws
+
+    /// Compares the concurrent SUT state against a sequentially-replayed reference SUT.
+    ///
+    /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
+    /// - Returns: `true` if the concurrent SUT state matches the expected sequential state.
+    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool
+}
+
+/// An asynchronous contract specification with an explicit oracle for GCD-based concurrent testing.
+///
+/// Extends ``AsyncContractSpec`` with an ``oracleCheck(_:)`` method. The `@ConcurrentContract` macro synthesizes this conformance when any command or invariant is `async`.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+public protocol AsyncConcurrentContractSpec: ContractSpecBase, AnyObject {
+    /// Executes a command against the model and SUT asynchronously.
+    ///
+    /// - Parameter command: The command to execute.
+    /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
+    func run(_ command: Command) async throws
+
+    /// Checks all `@Invariant`-annotated methods asynchronously. Called after every command execution.
+    ///
+    /// - Throws: ``ContractCheckFailure`` if any invariant returns `false`.
+    func checkInvariants() async throws
+
+    /// Compares the concurrent SUT state against a sequentially-replayed reference SUT.
+    ///
+    /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
+    /// - Returns: `true` if the concurrent SUT state matches the expected sequential state.
+    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool
+}
+
 extension AsyncContractSpec {
     /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
     ///
