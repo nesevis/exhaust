@@ -49,7 +49,7 @@ public extension __ExhaustRuntime {
     /// - Parameters:
     ///   - gen: The generator to produce test values from.
     ///   - settings: An array of `ExhaustSettings` controlling test behavior.
-
+    ///   - settings: An array of `ExhaustSettings` controlling test behavior.
     ///   - fileID: The file ID of the call site (injected by macro expansion).
     ///   - filePath: The file path of the call site (injected by macro expansion).
     ///   - line: The line number of the call site (injected by macro expansion).
@@ -225,7 +225,7 @@ public extension __ExhaustRuntime {
                                 visualize: visualize,
                                 suppressIssueReporting: suppressIssueReporting,
                                 includeDiff: includeDiff,
-        
+
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,
@@ -322,7 +322,7 @@ public extension __ExhaustRuntime {
         private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
             gen: Generator<Output>,
             settings: [ExhaustSettings],
-    
+
             fileID: StaticString,
             filePath: StaticString,
             line: UInt,
@@ -420,7 +420,7 @@ public extension __ExhaustRuntime {
                 withExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
-                            gen: gen, settings: settings,                            fileID: fileID, filePath: filePath, line: line, column: column,
+                            gen: gen, settings: settings, fileID: fileID, filePath: filePath, line: line, column: column,
                             function: function, property: boolProperty
                         ) {
                             pipelineResult = regression.counterexample
@@ -506,7 +506,7 @@ public extension __ExhaustRuntime {
                 refGen,
                 settings: settings,
                 reflecting: reflecting,
-                               fileID: fileID,
+                fileID: fileID,
                 filePath: filePath,
                 line: line,
                 column: column,
@@ -555,7 +555,7 @@ public extension __ExhaustRuntime {
                 #if canImport(Testing)
                     withKnownIssue(isIntermittent: true) {
                         if let regression = replayRegressionSeeds(
-                            gen: gen, settings: settings,                            fileID: fileID, filePath: filePath, line: line, column: column,
+                            gen: gen, settings: settings, fileID: fileID, filePath: filePath, line: line, column: column,
                             function: function, property: syncDetection
                         ) {
                             pipelineResult = regression.counterexample
@@ -573,7 +573,7 @@ public extension __ExhaustRuntime {
                             refGen,
                             settings: augmentedSettings,
                             reflecting: reflecting,
-    
+
                             fileID: fileID,
                             filePath: filePath,
                             line: line,

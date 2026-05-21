@@ -140,7 +140,9 @@
     public struct ExhaustSuiteTrait: SuiteTrait, TestScoping {
         let budget: ExhaustBudget
 
-        public var isRecursive: Bool { true }
+        public var isRecursive: Bool {
+            true
+        }
 
         public var comments: [Comment] {
             []

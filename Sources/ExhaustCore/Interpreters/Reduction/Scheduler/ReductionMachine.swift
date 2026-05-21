@@ -378,7 +378,8 @@ package struct ReductionMachine: ProbeSessionState {
     // MARK: - Reorder Pass
 
     private mutating func stepReorderPass() throws -> Transition {
-        let accepted = try runReorderPass()
+        let skipReorder = enabledEncoders.map { $0.contains(.numericReorder) == false } ?? false
+        let accepted = skipReorder ? false : try runReorderPass()
         phase = .done
         return .reorderCompleted(accepted: accepted)
     }

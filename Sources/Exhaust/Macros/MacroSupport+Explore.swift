@@ -289,7 +289,7 @@ public extension __ExhaustRuntime {
                             refGen,
                             settings: settings + [.suppress(.issueReporting)],
                             directions: directions,
-        
+
                             fileID: fileID,
                             filePath: filePath,
                             line: line,
@@ -302,7 +302,7 @@ public extension __ExhaustRuntime {
                         refGen,
                         settings: settings + [.suppress(.issueReporting)],
                         directions: directions,
-    
+
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
@@ -316,7 +316,7 @@ public extension __ExhaustRuntime {
                         refGen,
                         settings: settings,
                         directions: directions,
-    
+
                         property: { _ in true }
                     )
                     continuation.resume(returning: emptyReport)

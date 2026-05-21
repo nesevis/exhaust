@@ -10,11 +10,10 @@ import SwiftSyntaxMacros
 /// - Exactly one `@Oracle` method is required.
 /// - The macro synthesizes an `oracleCheck(_:)` method that delegates to the user's `@Oracle` method.
 public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
-
     // MARK: - ExtensionMacro
 
     public static func expansion(
-        of node: AttributeSyntax,
+        of _: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
         providingExtensionsOf type: some TypeSyntaxProtocol,
         conformingTo _: [TypeSyntax],
@@ -165,7 +164,9 @@ enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
     case multipleOracles = "@ConcurrentContract allows only one @Oracle method"
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
 
-    var message: String { rawValue }
+    var message: String {
+        rawValue
+    }
 
     var diagnosticID: MessageID {
         MessageID(domain: "ExhaustMacros", id: "\(self)")

@@ -25,7 +25,7 @@ struct LeakyBucketConcurrentTests {
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Reports issue through Swift Testing when suppression is off")
-    func reportsIssueThroughSwiftTesting() async throws {
+    func reportsIssueThroughSwiftTesting() async {
         await withKnownIssue {
             let result = try #require(
                 await __runContractConcurrent(

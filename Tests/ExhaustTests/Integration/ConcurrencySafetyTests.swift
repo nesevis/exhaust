@@ -7,7 +7,7 @@ import Testing
 struct GeneratorSharingTests {
     @Test("Shared generator interpreted concurrently via #example")
     func sharedGeneratorConcurrentExample() async {
-        let gen = #gen(.int(in: 0 ... 10_000).array(length: 5 ... 15))
+        let gen = #gen(.int(in: 0 ... 10000).array(length: 5 ... 15))
 
         await withTaskGroup(of: [Int].self) { group in
             for seed in 0 as UInt64 ..< 20 {
@@ -18,7 +18,7 @@ struct GeneratorSharingTests {
             for await values in group {
                 #expect(values.count >= 5 && values.count <= 15)
                 for value in values {
-                    #expect((0 ... 10_000).contains(value))
+                    #expect((0 ... 10000).contains(value))
                 }
             }
         }
@@ -115,7 +115,7 @@ struct GeneratorSharingTests {
     @Test("Shared bound generator interpreted concurrently")
     func sharedBoundGeneratorConcurrent() async {
         let gen = #gen(.int(in: 1 ... 10)).bound(
-            forward: { length in .string(length: 1...length) },
+            forward: { length in .string(length: 1 ... length) },
             backward: \.count
         )
 
@@ -242,7 +242,7 @@ struct ConcurrentContractDrainLoopTests {
                 settings: [
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 100)),
-                    .suppress(.issueReporting)
+                    .suppress(.issueReporting),
                 ]
             )
         )
@@ -260,7 +260,7 @@ struct ConcurrentContractDrainLoopTests {
                         settings: [
                             .commandLimit(4),
                             .budget(.custom(coverage: 0, sampling: 50)),
-                            .suppress(.all)
+                            .suppress(.all),
                         ]
                     )
                 }
@@ -277,7 +277,7 @@ struct ConcurrentContractDrainLoopTests {
                 .commandLimit(8),
                 .concurrency(3),
                 .budget(.custom(coverage: 0, sampling: 100)),
-                .suppress(.all)
+                .suppress(.all),
             ]
         )
     }
@@ -344,7 +344,9 @@ final class BundleDrawSpec {
 final class YieldingCounter: @unchecked Sendable {
     private var _value: Int = 0
 
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     func increment() async {
         let current = _value
@@ -363,7 +365,9 @@ final class YieldingCounter: @unchecked Sendable {
 final class TokenStore: @unchecked Sendable {
     private var _items: [Int] = []
 
-    var count: Int { _items.count }
+    var count: Int {
+        _items.count
+    }
 
     func deposit(_ value: Int) async {
         await Task.yield()

@@ -40,7 +40,7 @@ struct PreemptiveAsyncFacadeTests {
     }
 
     @Test("Reports issue through Swift Testing when suppression is off")
-    func reportsIssueThroughSwiftTesting() async throws {
+    func reportsIssueThroughSwiftTesting() async {
         await withKnownIssue {
             _ = try #require(
                 await __runPreemptiveConcurrentContractAsync(
@@ -92,7 +92,9 @@ final class AsyncRacyCounter: @unchecked Sendable, CustomDebugStringConvertible 
     private var _value: Int = 0
     private let queue = DispatchQueue(label: "racy-counter", attributes: .concurrent)
 
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     var debugDescription: String {
         "AsyncRacyCounter(value: \(_value))"

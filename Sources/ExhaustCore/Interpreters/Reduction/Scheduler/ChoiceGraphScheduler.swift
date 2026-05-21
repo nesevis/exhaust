@@ -197,6 +197,8 @@ enum ChoiceGraphScheduler {
             GraphStructuralEncoder()
         case .permute:
             GraphSwapEncoder()
+        case .minimize(.laneCollapse):
+            GraphLaneCollapseEncoder()
         case .minimize:
             GraphValueEncoder()
         case .exchange(.redistribution):

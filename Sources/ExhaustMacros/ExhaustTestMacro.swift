@@ -201,7 +201,7 @@ private func isIssueRecordCall(_ node: FunctionCallExprSyntax) -> Bool {
 /// single-statement control flow (for example, a switch expression whose
 /// branch values are silently discarded).
 func voidClosureLacksFailureMechanism(_ closure: ClosureExprSyntax) -> Bool {
-    return containsFailureMechanism(closure.statements) == false
+    containsFailureMechanism(closure.statements) == false
 }
 
 /// Recursively walks statements looking for any construct that can signal test failure.

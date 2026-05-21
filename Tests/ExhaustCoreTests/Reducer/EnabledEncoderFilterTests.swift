@@ -4,7 +4,6 @@ import Testing
 
 @Suite("Enabled encoder filter")
 struct EnabledEncoderFilterTests {
-
     @Test("Deletion-only pass shortens the array but does not simplify values")
     func deletionOnlyShortensButDoesNotSimplify() throws {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(50) ... 100), within: 0 ... 10)
@@ -62,7 +61,7 @@ struct EnabledEncoderFilterTests {
         #expect(result.1.count < 5, "Deletion should shorten the array")
         #expect(result.1.count >= 3, "Property requires count >= 3 to fail")
         #expect(result.1.contains { $0 > 0 }, "At least one value must be non-zero for property to fail")
-        #expect(result.1.filter({ $0 > 0 }).allSatisfy { $0 <= 2 }, "Non-zero values should be reduced close to zero")
+        #expect(result.1.filter { $0 > 0 }.allSatisfy { $0 <= 2 }, "Non-zero values should be reduced close to zero")
     }
 
     @Test("Empty enabledEncoders set produces no improvement")

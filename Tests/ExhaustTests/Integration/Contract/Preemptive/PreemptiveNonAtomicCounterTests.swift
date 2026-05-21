@@ -14,7 +14,7 @@ struct PreemptiveNonAtomicCounterTests {
                     .concurrency(2),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting)
+                    .suppress(.issueReporting),
                 ]
             )
         )
@@ -31,7 +31,7 @@ struct PreemptiveNonAtomicCounterTests {
                     .concurrency(2),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting)
+                    .suppress(.issueReporting),
                 ]
             )
         )
@@ -70,7 +70,7 @@ struct PreemptiveNonAtomicCounterTests {
                     .concurrency(2),
                     .commandLimit(8),
                     .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting)
+                    .suppress(.issueReporting),
                 ]
             )
         )
@@ -114,7 +114,9 @@ final class PreemptiveCounterSpec {
 final class RacyCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var _value: Int = 0
 
-    var value: Int { _value }
+    var value: Int {
+        _value
+    }
 
     var debugDescription: String {
         "RacyCounter(value: \(_value))"
