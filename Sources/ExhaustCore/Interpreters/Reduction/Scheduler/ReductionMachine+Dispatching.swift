@@ -167,6 +167,9 @@ extension ReductionMachine {
 
         case let .decoded(encoder, accepted):
             if isDeadlineExceeded() {
+                if session.anyRequiresRebuild {
+                    _ = rebuildAndUpdateGraph()
+                }
                 activeSession = nil
                 pendingReport = nil
                 stats.reductionWasCapped = true
