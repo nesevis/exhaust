@@ -143,7 +143,6 @@ public protocol ConcurrentContractSpec: ContractSpecBase, AnyObject {
 /// An asynchronous contract specification with an explicit oracle for GCD-based concurrent testing.
 ///
 /// Extends ``AsyncContractSpec`` with an ``oracleCheck(_:)`` method. The `@ConcurrentContract` macro synthesizes this conformance when any command or invariant is `async`.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public protocol AsyncConcurrentContractSpec: ContractSpecBase, AnyObject {
     /// Executes a command against the model and SUT asynchronously.
     ///

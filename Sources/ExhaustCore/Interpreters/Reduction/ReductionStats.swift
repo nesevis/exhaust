@@ -46,6 +46,30 @@ public struct ReductionStats: Sendable {
         cycles = 0
         graphStats = ChoiceGraphStats()
     }
+
+    /// Merges another stats value into this one by summing counters and taking the latest graph stats.
+    package mutating func merge(_ other: ReductionStats) {
+        for (key, value) in other.encoderProbes {
+            encoderProbes[key, default: 0] += value
+        }
+        for (key, value) in other.encoderProbesAccepted {
+            encoderProbesAccepted[key, default: 0] += value
+        }
+        for (key, value) in other.encoderProbesRejectedByCache {
+            encoderProbesRejectedByCache[key, default: 0] += value
+        }
+        for (key, value) in other.encoderProbesRejectedByDecoder {
+            encoderProbesRejectedByDecoder[key, default: 0] += value
+        }
+        totalMaterializations += other.totalMaterializations
+        cycles += other.cycles
+        reductionWasCapped = reductionWasCapped || other.reductionWasCapped
+        for (key, value) in other.filterObservations {
+            filterObservations[key, default: FilterObservation()].merge(value)
+        }
+        graphStats = other.graphStats
+        stepTimings.merge(other.stepTimings)
+    }
 }
 
 // MARK: - Step Timings
@@ -72,6 +96,24 @@ extension ReductionStats {
         public var rebuildSourceNanoseconds: UInt64 = 0
 
         package init() {}
+
+        /// Merges another timings value by summing all counters and durations.
+        package mutating func merge(_ other: StepTimings) {
+            dispatch += other.dispatch
+            buildSources += other.buildSources
+            encode += other.encode
+            decode += other.decode
+            rebuild += other.rebuild
+            convergenceConfirmation += other.convergenceConfirmation
+            relaxRound += other.relaxRound
+            reorder += other.reorder
+            dispatchCount += other.dispatchCount
+            encodeCount += other.encodeCount
+            decodeCount += other.decodeCount
+            rebuildCount += other.rebuildCount
+            rebuildGraphNanoseconds += other.rebuildGraphNanoseconds
+            rebuildSourceNanoseconds += other.rebuildSourceNanoseconds
+        }
 
         /// Records elapsed time for a step transition.
         package mutating func record(_ transition: ReductionMachine.Transition, elapsed: UInt64) {

@@ -41,6 +41,26 @@ struct PreemptiveNonAtomicCounterTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("onReport delivers profiling summary")
+    func onReportDelivers() throws {
+        var capturedReport: ExhaustReport?
+        _ = __runPreemptiveConcurrentContract(
+            PreemptiveCounterSpec.self,
+            settings: [
+                .concurrency(2),
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 200)),
+                .suppress(.issueReporting),
+                .onReport { capturedReport = $0 },
+            ]
+        )
+        let report = try #require(capturedReport)
+        #expect(report.totalMilliseconds > 0)
+        #expect(report.propertyInvocations > 0)
+        #expect(report.randomSamplingInvocations > 0)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Reduction shrinks the counterexample")
     func reductionShrinks() throws {
         let result = try #require(

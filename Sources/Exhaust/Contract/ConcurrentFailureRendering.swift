@@ -53,7 +53,7 @@ func renderFailure(
     }
 
     lines.append("")
-    lines.append("Invocations: \(context.sequencesTested + context.reductionInvocations)")
+    lines.append("Command sequences tested: \(context.sequencesTested + context.reductionInvocations)")
 
     if let seed = context.seed {
         lines.append("")

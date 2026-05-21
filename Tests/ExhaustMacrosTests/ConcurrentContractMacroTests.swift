@@ -12,6 +12,14 @@ private let concurrentMacros: [String: any Macro.Type] = [
     "Oracle": OracleMacro.self,
 ]
 
+private let gcdExhaustMacros: [String: any Macro.Type] = [
+    "exhaust": ExhaustGCDContractMacro.self,
+]
+
+private let asyncGCDExhaustMacros: [String: any Macro.Type] = [
+    "exhaust": ExhaustAsyncGCDContractMacro.self,
+]
+
 @Suite("@ConcurrentContract declaration macro tests")
 struct ConcurrentContractMacroTests {
     @Test("Synthesizes Command enum, SUT typealias, oracleCheck, and ConcurrentContractSpec conformance")
@@ -445,6 +453,91 @@ struct ConcurrentContractMacroTests {
             }
             """,
             macros: concurrentMacros
+        )
+    }
+}
+
+// MARK: - #exhaust expression macro tests for preemptive concurrent contracts
+
+@Suite("#exhaust GCD concurrent contract macro expansion tests")
+struct GCDContractExhaustMacroTests {
+    @Test("#exhaust sync concurrent contract expansion with no settings")
+    func syncNoSettings() {
+        assertMacroExpansion(
+            """
+            #exhaust(CounterSpec.self)
+            """,
+            expandedSource: """
+            __runPreemptiveConcurrentContract(
+                CounterSpec.self,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: gcdExhaustMacros
+        )
+    }
+
+    @Test("#exhaust sync concurrent contract with settings")
+    func syncWithSettings() {
+        assertMacroExpansion(
+            """
+            #exhaust(CounterSpec.self, .concurrency(2), .commandLimit(6))
+            """,
+            expandedSource: """
+            __runPreemptiveConcurrentContract(
+                CounterSpec.self,
+                settings: [.concurrency(2), .commandLimit(6)],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: gcdExhaustMacros
+        )
+    }
+
+    @Test("#exhaust async concurrent contract expansion with no settings")
+    func asyncNoSettings() {
+        assertMacroExpansion(
+            """
+            #exhaust(AsyncCounterSpec.self)
+            """,
+            expandedSource: """
+            __runPreemptiveConcurrentContractAsync(
+                AsyncCounterSpec.self,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: asyncGCDExhaustMacros
+        )
+    }
+
+    @Test("#exhaust async concurrent contract with settings")
+    func asyncWithSettings() {
+        assertMacroExpansion(
+            """
+            #exhaust(AsyncCounterSpec.self, .concurrency(2), .budget(.quick))
+            """,
+            expandedSource: """
+            __runPreemptiveConcurrentContractAsync(
+                AsyncCounterSpec.self,
+                settings: [.concurrency(2), .budget(.quick)],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: asyncGCDExhaustMacros
         )
     }
 }

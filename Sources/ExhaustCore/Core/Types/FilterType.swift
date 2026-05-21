@@ -93,4 +93,11 @@ public struct FilterObservation: Sendable {
         attempts += 1
         if passed { passes += 1 }
     }
+
+    /// Merges another observation into this one by summing counters.
+    public mutating func merge(_ other: FilterObservation) {
+        attempts += other.attempts
+        passes += other.passes
+        if sourceLocation == nil { sourceLocation = other.sourceLocation }
+    }
 }
