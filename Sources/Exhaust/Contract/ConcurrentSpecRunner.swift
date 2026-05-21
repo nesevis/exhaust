@@ -24,7 +24,6 @@ import ExhaustCore
 /// During generation, the marker generator produces values in 0...N (where N is the concurrency level). The reducer's value-minimization pass drives markers toward 0 (prefix), naturally discovering which commands must remain concurrent to reproduce the failure. Commands whose markers reach prefix move to the sequential phase, proving they are not part of the minimal concurrent counterexample.
 ///
 /// Value 0 is the sequential prefix. Values 1 through N map to lanes "a" through the Nth letter.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, CustomStringConvertible {
     public let rawValue: UInt8
 

@@ -140,7 +140,6 @@ public macro exhaust<Spec: AsyncContractSpec>(
 /// ```swift
 /// let result = #exhaust(MyGCDSpec.self, .concurrency(2))
 /// ```
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: ConcurrentContractSpec>(
