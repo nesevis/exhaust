@@ -12,7 +12,6 @@ struct LeakyBucketConcurrentTests {
             await __runContractConcurrent(
                 LeakyBucketSpec.self,
                 settings: [
-                    .onReport { print($0.profilingSummary) },
                     .suppress(.issueReporting),
                 ]
             )
@@ -22,6 +21,24 @@ struct LeakyBucketConcurrentTests {
             return false
         }
         #expect(hasFailure, "Should detect token over-drain from interleaved tryConsume")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Reports issue through Swift Testing when suppression is off")
+    func reportsIssueThroughSwiftTesting() async throws {
+        await withKnownIssue {
+            let result = try #require(
+                await __runContractConcurrent(
+                    LeakyBucketSpec.self,
+                    settings: []
+                )
+            )
+            let hasFailure = result.trace.contains { step in
+                if case .invariantFailed = step.outcome { return true }
+                return false
+            }
+            #expect(hasFailure)
+        }
     }
 }
 

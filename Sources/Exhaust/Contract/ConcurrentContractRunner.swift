@@ -13,7 +13,7 @@ import IssueReporting
 
 /// Assembles the final ``ContractResult`` for a concurrent contract failure.
 ///
-/// Re-drains the failing schedule with trace recording enabled, runs a sequential oracle to capture the expected (race-free) SUT state, and renders the failure report. Called from both the SCA coverage and random sampling phases when a counterexample is confirmed.
+/// Re-drains the failing schedule with trace recording enabled, runs a sequential oracle to capture the expected (race-free) SUT state, and renders the failure report. Returns both the result and the rendered failure message for the caller to report — `reportIssue` must be called from the Swift Testing async context, not the GCD thread where this function executes.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private func buildFailureResult<Spec: AsyncContractSpec>(
     finalInput: [(ScheduleMarker, Spec.Command)],
@@ -23,13 +23,8 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     seed: UInt64?,
     discoveryMethod: ContractDiscoveryMethod,
     timedOut: Bool,
-    failureContext: inout FailureContext,
-    suppressIssueReporting: Bool,
-    fileID: StaticString,
-    filePath: StaticString,
-    line: UInt,
-    column: UInt
-) -> ContractResult<Spec> {
+    failureContext: inout FailureContext
+) -> (result: ContractResult<Spec>, issueMessage: String) {
     let traceResult = drainSchedule(
         taggedCommands: finalInput,
         specInit: specInit,
@@ -50,20 +45,17 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
         discoveryMethod: discoveryMethod
     )
 
-    if suppressIssueReporting == false {
-        failureContext.discoveryMethod = discoveryMethod
-        failureContext.timedOut = timedOut
-        failureContext.oracleDescription = oracle.map { oracle in
-            let hasModel = oracle.modelDescription != "(no model properties)"
-            return hasModel
-                ? "Expected result (from sequential replay of @Model):\n  \(oracle.modelDescription)"
-                : "Expected result (from sequential replay of @SystemUnderTest):\n  \(oracle.sutDescription)"
-        }
-        let message = renderFailure(finalInput, trace: trace, context: failureContext)
-        reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
+    failureContext.discoveryMethod = discoveryMethod
+    failureContext.timedOut = timedOut
+    failureContext.oracleDescription = oracle.map { oracle in
+        let hasModel = oracle.modelDescription != "(no model properties)"
+        return hasModel
+            ? "Expected result (from sequential replay of @Model):\n  \(oracle.modelDescription)"
+            : "Expected result (from sequential replay of @SystemUnderTest):\n  \(oracle.sutDescription)"
     }
+    let message = renderFailure(finalInput, trace: trace, context: failureContext)
 
-    return result
+    return (result, message)
 }
 
 // MARK: - Runner Entry Point
@@ -114,11 +106,12 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 
     // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop — a deadlock under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
     let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
-    return await __ExhaustRuntime.dispatchToGCD {
-        ExhaustLog.withConfiguration(logConfiguration) {
+    let outcome: (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
+        ExhaustLog.withConfiguration(logConfiguration) { () -> (ContractResult<Spec>?, [String]) in
             let runStart = ContinuousClock.now
             nonisolated(unsafe) var report = ExhaustReport()
             nonisolated(unsafe) var coverageInvocations = 0
+            var deferredIssues: [String] = []
             let statsAccumulator: OpenPBTStatsAccumulator? = config.collectOpenPBTStats
                 ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
                 : nil
@@ -181,13 +174,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                 if regressionSeeds.isEmpty == false {
                     for encodedSeed in regressionSeeds {
                         guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
-                            reportIssue(
-                                "Invalid regression seed: \(encodedSeed)",
-                                fileID: fileID,
-                                filePath: filePath,
-                                line: line,
-                                column: column
-                            )
+                            deferredIssues.append("Invalid regression seed: \(encodedSeed)")
                             continue
                         }
                         var regressionInterpreter = ValueAndChoiceTreeInterpreter(
@@ -203,7 +190,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                                 ctx.seed = regressionSeed
                                 ctx.originalCount = input.count
                                 ctx.sequencesTested = 1
-                                return buildFailureResult(
+                                let failure = buildFailureResult(
                                     finalInput: input,
                                     specInit: specInit,
                                     concurrencyLevel: concurrencyLevel,
@@ -211,18 +198,14 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                                     seed: regressionSeed,
                                     discoveryMethod: .replay,
                                     timedOut: false,
-                                    failureContext: &ctx,
-                                    suppressIssueReporting: config.suppressIssueReporting,
-                                    fileID: fileID, filePath: filePath, line: line, column: column
+                                    failureContext: &ctx
                                 )
+                                if config.suppressIssueReporting == false {
+                                    deferredIssues.append(failure.issueMessage)
+                                }
+                                return (failure.result, deferredIssues)
                             } else if config.suppressIssueReporting == false {
-                                reportIssue(
-                                    "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
-                                    fileID: fileID,
-                                    filePath: filePath,
-                                    line: line,
-                                    column: column
-                                )
+                                deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
                             }
                         }
                     }
@@ -253,7 +236,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     ctx.iteration = Int(scaResult.iteration)
                     ctx.budget = coverageBudget
                     ctx.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
-                    let result: ContractResult<Spec> = buildFailureResult(
+                    let failure: (result: ContractResult<Spec>, issueMessage: String) = buildFailureResult(
                         finalInput: scaResult.finalInput,
                         specInit: specInit,
                         concurrencyLevel: concurrencyLevel,
@@ -261,14 +244,15 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                         seed: nil,
                         discoveryMethod: .coverage,
                         timedOut: scaResult.timedOut,
-                        failureContext: &ctx,
-                        suppressIssueReporting: config.suppressIssueReporting,
-                        fileID: fileID, filePath: filePath, line: line, column: column
+                        failureContext: &ctx
                     )
+                    if config.suppressIssueReporting == false {
+                        deferredIssues.append(failure.issueMessage)
+                    }
 
                     coverageInvocations = invocationCounter.value
                     report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
-                    return result
+                    return (failure.result, deferredIssues)
                 }
             }
             coverageInvocations = invocationCounter.value
@@ -375,7 +359,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                         ctx.iteration = samplingIteration
                         ctx.budget = samplingBudget
                         ctx.sequencesTested = invocationCounter.value + report.reductionInvocations
-                        return buildFailureResult(
+                        let failure = buildFailureResult(
                             finalInput: finalInput,
                             specInit: specInit,
                             concurrencyLevel: concurrencyLevel,
@@ -383,23 +367,23 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             seed: actualSeed,
                             discoveryMethod: discoveryMethod,
                             timedOut: lastRunTimedOut.value,
-                            failureContext: &ctx,
-                            suppressIssueReporting: config.suppressIssueReporting,
-                            fileID: fileID, filePath: filePath, line: line, column: column
+                            failureContext: &ctx
                         )
+                        if config.suppressIssueReporting == false {
+                            deferredIssues.append(failure.issueMessage)
+                        }
+                        return (failure.result, deferredIssues)
                     }
                 }
             } catch {
-                reportIssue(
-                    "Concurrent contract runner error: \(error)",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
+                deferredIssues.append("Concurrent contract runner error: \(error)")
             }
 
-            return nil
+            return (nil as ContractResult<Spec>?, deferredIssues)
         } // withConfiguration
     } // dispatchToGCD
+    for issue in outcome.1 {
+        reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+    }
+    return outcome.0
 }
