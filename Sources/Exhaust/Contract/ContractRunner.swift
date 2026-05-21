@@ -305,20 +305,36 @@ func buildSequentialTrace<Command: CustomStringConvertible>(
             trace.append(TraceStep(index: step, command: description, outcome: .skipped))
             continue
         } catch let failure as ContractCheckFailure {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: failure.message)))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: failure.message)
+            ))
             return (trace, true)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: "\(error)")
+            ))
             return (trace, true)
         }
 
         do {
             try checkInvariants()
         } catch let failure as ContractCheckFailure {
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: failure.message ?? "unknown")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: failure.message ?? "unknown")
+            ))
             return (trace, true)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: "\(error)")
+            ))
             return (trace, true)
         }
 
@@ -347,20 +363,36 @@ func buildAsyncSequentialTrace<Command: CustomStringConvertible>(
             trace.append(TraceStep(index: step, command: description, outcome: .skipped))
             continue
         } catch let failure as ContractCheckFailure {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: failure.message)))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: failure.message)
+            ))
             return (trace, true)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .checkFailed(message: "\(error)")
+            ))
             return (trace, true)
         }
 
         do {
             try await checkInvariants()
         } catch let failure as ContractCheckFailure {
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: failure.message ?? "unknown")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: failure.message ?? "unknown")
+            ))
             return (trace, true)
         } catch {
-            trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: "\(error)")))
+            trace.append(TraceStep(
+                index: step,
+                command: description,
+                outcome: .invariantFailed(name: "\(error)")
+            ))
             return (trace, true)
         }
 

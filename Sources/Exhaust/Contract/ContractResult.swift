@@ -33,10 +33,10 @@ public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertibl
 
     public var description: String {
         switch self {
-            case .smokeTest: "smoke test"
-            case .coverage: "coverage"
-            case .randomSampling: "random sampling"
-            case .replay: "replay"
+        case .smokeTest: "smoke test"
+        case .coverage: "coverage"
+        case .randomSampling: "random sampling"
+        case .replay: "replay"
         }
     }
 }
