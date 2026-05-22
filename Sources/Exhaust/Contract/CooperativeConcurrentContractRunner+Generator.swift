@@ -41,18 +41,10 @@ func zipScheduleMarker<Command>(
         fatalError("Command generator is in unexpected format")
     }
 
-    // The marker tag controls whether lane assignments appear as parameters in the covering array. At concurrencyLevel <= 3, the per-position domain grows by a factor of (lanes + 1):
-    //   2 lanes: x3 (prefix/A/B)   → 3 commands x 3 markers =  9, ~81 rows at t=2
-    //   3 lanes: x4 (prefix/A/B/C) → 3 commands x 4 markers = 12, ~144 rows at t=2
-    // This keeps the combinatorial growth bounded while including lane assignments in the covering array alongside command types and their arguments.
-    //
-    // At concurrencyLevel 4+, the multiplier grows to x5...x9 and rows scale quadratically with domain size: 3 commands x 5 markers = 15 → ~225 rows; x9 = 27 → ~729 rows. The .laneControl tag excludes the marker from coverage, keeping row count at commandTypes² and leaving lane exploration to random sampling.
+    // Lane markers are always tagged .laneControl so the lane-collapse encoder can target them during reduction. Random sampling with .constant scaling provides sufficient lane diversity without including markers in the covering array.
     let markerGen: Generator<ScheduleMarker> = switch concurrencyLevel {
     case 1:
         Gen.just(ScheduleMarker.prefix)
-    case 2 ... 3:
-        Gen.choose(in: UInt8(0) ... UInt8(concurrencyLevel))
-            .map { ScheduleMarker(rawValue: $0) }
     default:
         Gen.chooseLaneControl(in: 0 ... UInt8(concurrencyLevel))
             .map { ScheduleMarker(rawValue: $0) }

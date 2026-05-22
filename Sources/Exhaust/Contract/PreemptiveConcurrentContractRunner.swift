@@ -329,7 +329,15 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
         let stats: ReductionStats
     }
 
-    /// Best-effort three-pass reduction. Returns the best result found, which may be the original if reduction stalled.
+    /// Reduces a counterexample in three passes, each targeting a different encoder set.
+    ///
+    /// The three-pass structure is deliberate: PCCR evaluation is non-deterministic (GCD thread preemption), so each probe requires multiple repetitions to confirm. Phased reduction ensures the most impactful transformations run first before budget is spent on fine-tuning.
+    ///
+    /// **Pass 1 — Lane Collapse.** Drives lane markers to zero, moving commands into the sequential prefix. Prefix commands execute deterministically (no scheduling noise), so a longer prefix produces counterexamples that are easier to reproduce and reason about. Running lane collapse first also reduces the repetition cost of later passes — fewer concurrent commands means less non-deterministic scheduling per evaluation. (The cooperative runner skips this pre-pass because its schedule is choice-encoded and fully deterministic — the unified pass finds the minimal counterexample without prefix bias.)
+    ///
+    /// **Pass 2 — Structural.** Deletion, migration, and substitution. Removes unnecessary commands and simplifies arguments, operating on the already-collapsed trace so deletions target only commands genuinely needed for the failure.
+    ///
+    /// **Pass 3 — Value Minimization.** All remaining encoders (value minimization, reordering, and so on). Simplifies command arguments and values toward their semantic simplest form, improving counterexample readability. Runs with a tighter budget (1 stall, 5s) since the structural shape is already minimal.
     func reduce(
         generator: Generator<[(ScheduleMarker, Spec.Command)]>,
         tree: ChoiceTree,
@@ -348,7 +356,7 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
         }
 
         let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let cosmetic = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
+        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
 
         var currentOutput = output
         var currentTree = tree
@@ -394,7 +402,7 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
             gen: generator,
             tree: currentTree,
             output: currentOutput,
-            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: cosmetic),
+            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
             property: property
         ) {
             aggregateStats.merge(result.stats)
@@ -732,7 +740,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         let stats: ReductionStats
     }
 
-    /// Best-effort three-pass reduction: lane collapse, structural deletion, then value minimization.
+    /// Three-pass reduction (lane collapse, structural, value minimization). See the sync variant's documentation for rationale.
     func reduce(
         generator: Generator<[(ScheduleMarker, Spec.Command)]>,
         tree: ChoiceTree,
@@ -751,7 +759,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         }
 
         let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let cosmetic = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
+        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
 
         var currentOutput = output
         var currentTree = tree
@@ -797,7 +805,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
             gen: generator,
             tree: currentTree,
             output: currentOutput,
-            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: cosmetic),
+            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
             property: property
         ) {
             aggregateStats.merge(result.stats)

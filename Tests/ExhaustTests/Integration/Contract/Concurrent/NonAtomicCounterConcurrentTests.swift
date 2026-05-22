@@ -61,18 +61,24 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test(".onReport delivers invocation counts")
+    @Test(".onReport delivers invocation counts and materializations")
     func onReportDelivers() async {
         var deliveredReport: ExhaustReport?
         _ = await __runContractConcurrent(
             NonAtomicCounterSpec.self,
-            settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
+            settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
         )
-        #expect(deliveredReport != nil, "onReport closure should be called")
-        if let report = deliveredReport {
-            #expect(report.propertyInvocations > 0, "Should have recorded invocations")
-            #expect(report.totalMilliseconds > 0, "Should have recorded timing")
-        }
+        let report = try! #require(deliveredReport, "onReport closure should be called")
+        #expect(report.propertyInvocations == 28)
+        #expect(report.reductionInvocations == 13)
+        #expect(report.totalMilliseconds > 0)
+        #expect(report.totalMaterializations == 15)
+        #expect(report.cycles == 3)
+        #expect(report.encoderProbes[.laneCollapse] == 8)
+        #expect(report.encoderProbesAccepted[.laneCollapse] == 0)
+        #expect(report.encoderProbesAccepted[.deletion] == 2)
+        #expect(report.encoderProbes[.deletion] == 10)
+        #expect(report.encoderProbes[.substitution] == 6)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

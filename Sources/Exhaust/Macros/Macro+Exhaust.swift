@@ -150,6 +150,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.randomOnly`: disables structured coverage analysis.
+/// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` with per-phase timing, invocation counts, and reduction statistics after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 ///

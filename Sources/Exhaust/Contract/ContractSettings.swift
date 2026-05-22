@@ -30,6 +30,11 @@ public enum ContractSettings {
     /// Each test example produces one JSON line with status, a `customDump` representation, and complexity features derived from the choice tree. Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.
     case collectOpenPBTStats
 
+    /// Registers a closure that receives an ``ExhaustReport`` after the test completes.
+    ///
+    /// The report includes per-phase timing, invocation counts, and reduction statistics. Multiple `.onReport` closures are chained in order.
+    case onReport((ExhaustReport) -> Void)
+
     /// Controls log verbosity and format for this contract test run.
     ///
     /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.

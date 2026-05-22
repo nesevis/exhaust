@@ -30,6 +30,7 @@ public func __runContract<Spec: ContractSpec>(
     var useRandomOnly = false
     var collectOpenPBTStats = false
     var includeDiff = false
+    var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
     var logFormat: LogFormat = .keyValue
     for setting in settings {
@@ -66,6 +67,12 @@ public func __runContract<Spec: ContractSpec>(
             collectOpenPBTStats = true
         case .includeDiff:
             includeDiff = true
+        case let .onReport(closure):
+            let existing = onReportClosure
+            onReportClosure = { report in
+                existing?(report)
+                closure(report)
+            }
         case let .logging(level, format):
             logLevel = level
             logFormat = format
@@ -195,15 +202,36 @@ public func __runContract<Spec: ContractSpec>(
         let failingSequence: [Spec.Command]?
         let failureInfo: ContractFailureInfo<Spec.Command>
         switch scaOutcome {
-        case let .failure(commands, original):
+        case let .failure(commands, original, coverageInvocations, reductionStats):
             failingSequence = commands
             failureInfo = ContractFailureInfo(
                 originalCommands: original,
                 discoveryMethod: .coverage
             )
+            if let onReportClosure {
+                var report = ExhaustReport()
+                report.seed = seed
+                report.setInvocations(
+                    coverage: coverageInvocations,
+                    randomSampling: 0,
+                    reduction: reductionStats.map { $0.totalMaterializations } ?? 0
+                )
+                if let reductionStats {
+                    report.applyReductionStats(reductionStats)
+                }
+                onReportClosure(report)
+            }
         case .completed, .skipped:
-            // Only suppress generic coverage when SCA ran its covering array to completion.
-            // When SCA was skipped, generic coverage is still needed.
+            let scaCoverageInvocations: Int
+            if case let .completed(count) = scaOutcome {
+                scaCoverageInvocations = count
+            } else {
+                scaCoverageInvocations = 0
+            }
+            var innerReport: ExhaustReport?
+            let onInnerReport: ((ExhaustReport) -> Void)? = onReportClosure.map { outerClosure in
+                { report in innerReport = report }
+            }
             failingSequence = __ExhaustRuntime.__exhaust(
                 commandSequenceGenerator.wrapped,
                 settings: buildExhaustSettings(
@@ -213,6 +241,7 @@ public func __runContract<Spec: ContractSpec>(
                     suppressIssueReporting: true,
                     useRandomOnly: useRandomOnly || scaOutcome.isCompleted,
                     collectOpenPBTStats: collectOpenPBTStats,
+                    onReport: onInnerReport,
                     logLevel: logLevel,
                     logFormat: logFormat
                 ),
@@ -222,6 +251,13 @@ public func __runContract<Spec: ContractSpec>(
                 column: column,
                 property: property
             )
+            if let onReportClosure {
+                var report = innerReport ?? ExhaustReport()
+                report.seed = seed
+                report.coverageInvocations += scaCoverageInvocations
+                report.propertyInvocations += scaCoverageInvocations
+                onReportClosure(report)
+            }
             failureInfo = ContractFailureInfo(
                 originalCommands: nil,
                 discoveryMethod: seed != nil ? .replay : .randomSampling
@@ -544,9 +580,9 @@ func estimateCommandLimit(
 /// Outcome of an SCA coverage run.
 enum SCAOutcome<Command> {
     /// SCA found a counterexample.
-    case failure(commands: [Command], original: [Command])
+    case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?)
     /// SCA ran its covering array to completion without finding a failure.
-    case completed
+    case completed(coverageInvocations: Int)
     /// SCA was not applicable or was skipped before covering anything.
     case skipped
 
@@ -683,16 +719,19 @@ func runSCACoverage<Command>(
                 }
             }
 
-            if let (_, reducedValue) = try? Interpreters.choiceGraphReduce(
+            if let result = try? Interpreters.choiceGraphReduceCollectingStats(
                 gen: seqGen,
                 tree: reduceTree,
                 output: reduceValue,
                 config: .init(maxStalls: 2),
                 property: property
             ) {
-                return .failure(commands: reducedValue, original: value)
+                if let (_, reducedValue) = result.reduced {
+                    return .failure(commands: reducedValue, original: value, coverageInvocations: iterations, reductionStats: result.stats)
+                }
+                return .failure(commands: reduceValue, original: value, coverageInvocations: iterations, reductionStats: result.stats)
             }
-            return .failure(commands: reduceValue, original: value)
+            return .failure(commands: reduceValue, original: value, coverageInvocations: iterations, reductionStats: nil)
         }
     }
 
@@ -708,7 +747,7 @@ func runSCACoverage<Command>(
         ]
     )
 
-    return .completed
+    return .completed(coverageInvocations: iterations)
 }
 
 // MARK: - Skip-Aware Pruning
@@ -743,6 +782,7 @@ func buildExhaustSettings(
     suppressIssueReporting: Bool,
     useRandomOnly: Bool,
     collectOpenPBTStats: Bool = false,
+    onReport: ((ExhaustReport) -> Void)? = nil,
     logLevel: LogLevel = .error,
     logFormat: LogFormat = .keyValue
 ) -> [ExhaustSettings] {
@@ -763,6 +803,9 @@ func buildExhaustSettings(
     }
     if collectOpenPBTStats {
         settings.append(.collectOpenPBTStats)
+    }
+    if let onReport {
+        settings.append(.onReport(onReport))
     }
     settings.append(.logging(logLevel, logFormat))
     return settings
