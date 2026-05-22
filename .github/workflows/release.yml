@@ -24,7 +24,7 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
       - name: Run tests (source)
-        run: swift test
+        run: swift test --no-parallel
 
       - name: Resolve version
         id: version
@@ -59,7 +59,7 @@ jobs:
       - name: Run tests (binary xcframework)
         env:
           EXHAUST_RELEASE: "1"
-        run: swift test --skip ExhaustCoreTests
+        run: swift test --no-parallel --skip ExhaustCoreTests
 
       - name: Compute checksum
         id: checksum
