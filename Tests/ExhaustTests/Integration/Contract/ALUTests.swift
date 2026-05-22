@@ -1,9 +1,10 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("ALU state machine tests")
+@Suite("ALU state machine tests", .tags(.contract))
 struct ALUTests {
     @Test("SCA argument coverage finds narrow ALU multiply bug")
     func scaFindsNarrowMultiplyBug() throws {

@@ -1,5 +1,6 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
 // PCCR equivalents of the CCCR test specs. Same commands, same SUTs,
 // @ConcurrentContract instead of @Contract, @Oracle added for sequential comparison.
@@ -11,7 +12,7 @@ import Testing
 
 // MARK: - Non-Atomic Counter
 
-@Suite("PCCR parity: non-atomic counter")
+@Suite("PCCR parity: non-atomic counter", .tags(.contract))
 struct PreemptiveNonAtomicCounterParityTests {
     @Test("Detects lost-update bug in non-atomic counter")
     func detectsLostUpdate() async throws {
@@ -65,7 +66,7 @@ final class PreemptiveNonAtomicCounterParitySpec {
 
 // MARK: - Leaky Bucket
 
-@Suite("PCCR parity: leaky bucket")
+@Suite("PCCR parity: leaky bucket", .tags(.contract))
 struct PreemptiveLeakyBucketParityTests {
     @Test("Detects check-then-act bug that requires state buildup")
     func detectsLeakyBucket() async throws {
@@ -109,7 +110,7 @@ final class PreemptiveLeakyBucketParitySpec {
 
 // MARK: - Atomic Counter (should pass)
 
-@Suite("PCCR parity: atomic counter")
+@Suite("PCCR parity: atomic counter", .tags(.contract))
 struct PreemptiveAtomicCounterParityTests {
     @Test("Thread-safe counter passes under preemptive execution")
     func atomicCounterPasses() async {
@@ -147,7 +148,7 @@ final class PreemptiveAtomicCounterParitySpec {
 
 // MARK: - Detection Boundary
 
-@Suite("PCCR parity: detection boundary")
+@Suite("PCCR parity: detection boundary", .tags(.contract))
 struct PreemptiveDetectionBoundaryParityTests {
     @Test("Race with Task.yield() is detected by preemptive runner")
     func raceWithYieldDetected() async throws {
@@ -206,7 +207,7 @@ final class PreemptiveThreeWayRaceParitySpec {
 
 // MARK: - All-Skip
 
-@Suite("PCCR parity: all-skip")
+@Suite("PCCR parity: all-skip", .tags(.contract))
 struct PreemptiveAllSkipParityTests {
     @Test("100% skip rate does not hang or crash")
     func allCommandsSkip() async {

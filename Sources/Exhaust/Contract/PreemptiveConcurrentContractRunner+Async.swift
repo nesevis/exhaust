@@ -1,0 +1,420 @@
+// Async preemptive concurrent contract runner.
+//
+// Async variant of the preemptive runner for AsyncConcurrentContractSpec conformances.
+// Bridges async command execution to GCD threads via Task+semaphore to catch races in
+// synchronous primitives hidden behind async facades.
+import ExhaustCore
+import ExhaustObjCSupport
+import Foundation
+import IssueReporting
+
+// MARK: - Async Entry Point
+
+/// Runs a preemptive concurrent contract test for the given async specification type.
+///
+/// Dispatches commands across real GCD threads and bridges async command execution via Task+semaphore. This catches races in synchronous primitives (locks, dispatch queues, atomics) hidden behind async facades — the cooperative runner's deterministic interleaving only reaches `await` suspension points.
+///
+/// The outer loop runs on a GCD thread (via ``__ExhaustRuntime/dispatchToGCD(_:)``) to avoid starving the cooperative pool during parallel test runs. Issue reporting is deferred to the async return context where Swift Testing's task-locals are available.
+@discardableResult
+public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContractSpec>(
+    _: Spec.Type,
+    settings: [ConcurrentContractSettings],
+    fileID: StaticString = #fileID,
+    filePath: StaticString = #filePath,
+    line: UInt = #line,
+    column: UInt = #column
+) async -> ContractResult<Spec>? {
+    let config: ResolvedConcurrentConfig
+    switch ResolvedConcurrentConfig.parse(settings) {
+    case let .success(resolved):
+        config = resolved
+    case let .invalidReplaySeed(seed):
+        reportIssue(
+            "Invalid replay seed: \(seed)",
+            fileID: fileID, filePath: filePath, line: line, column: column
+        )
+        return nil
+    }
+
+    let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
+    let outcome: (ContractResult<Spec>?, [String], ExhaustReport) = await __ExhaustRuntime.dispatchToGCD {
+        ExhaustLog.withConfiguration(logConfiguration) { () -> (ContractResult<Spec>?, [String], ExhaustReport) in
+            let runStartNanos = DispatchTime.now().uptimeNanoseconds
+            var report = ExhaustReport()
+            report.seed = config.seed
+            var deferredIssues: [String] = []
+
+            func finalizeReport() {
+                let elapsedNanos = DispatchTime.now().uptimeNanoseconds - runStartNanos
+                report.totalMilliseconds = Double(elapsedNanos) / 1_000_000
+            }
+
+            let commandGen = Spec.commandGenerator.gen
+            let commandLimit = config.commandLimit ?? 8
+            let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel)
+            let sequenceGen = Gen.arrayOf(
+                taggedCommandGen,
+                within: 1 ... UInt64(commandLimit),
+                scaling: .constant
+            )
+
+            let samplingBudget = config.budget.samplingBudget
+            let coverageBudget = config.budget.coverageBudget
+            let check = AsyncPreemptiveChecker<Spec>()
+            var coverageInvocations = 0
+            let invocationCounter = UnsafeSendableBox(0)
+            let lastRunTimedOut = UnsafeSendableBox(false)
+
+            nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
+            let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
+            let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
+                rawIdentifySkips(taggedCommands.map(\.1))
+            }
+            let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+                invocationCounter.value += 1
+                return check.execute(taggedCommands)
+            }
+
+            func buildAsyncPreemptiveResult(
+                reduced: [(ScheduleMarker, Spec.Command)],
+                seed: UInt64?,
+                discoveryMethod: ContractDiscoveryMethod
+            ) -> ContractResult<Spec> {
+                let oracleSpec = Spec()
+                check.runSequentially(reduced.map(\.1), on: oracleSpec)
+                return ContractResult<Spec>(
+                    commands: reduced.map(\.1),
+                    trace: buildPreemptiveTrace(reduced),
+                    systemUnderTest: oracleSpec.systemUnderTest,
+                    seed: seed,
+                    discoveryMethod: discoveryMethod
+                )
+            }
+
+            // --- Phase 0: Sequential smoke test ---
+            // Safe to block here: dispatchToGCD already moved us off the cooperative pool.
+            if config.seed == nil {
+                let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+                var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
+                do { while let (commands, _) = try smokeIterator.next() {
+                    let spec = Spec()
+                    nonisolated(unsafe) let unsafeSpec = spec
+                    let traceBox = UnsafeSendableBox<[TraceStep]>([])
+                    let failedBox = UnsafeSendableBox(false)
+                    let semaphore = DispatchSemaphore(value: 0)
+                    Task { @Sendable in
+                        let (trace, failed) = await buildAsyncSequentialTrace(
+                            commands,
+                            run: { try await unsafeSpec.run($0) },
+                            checkInvariants: { try await unsafeSpec.checkInvariants() }
+                        )
+                        traceBox.value = trace
+                        failedBox.value = failed
+                        semaphore.signal()
+                    }
+                    semaphore.wait()
+                    if failedBox.value {
+                        let result = ContractResult<Spec>(
+                            commands: commands,
+                            trace: traceBox.value,
+                            systemUnderTest: spec.systemUnderTest,
+                            seed: nil,
+                            discoveryMethod: .smokeTest
+                        )
+                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
+                        let message = renderFailure(
+                            result,
+                            failureInfo: failureInfo,
+                            modelDescription: spec.modelDescription
+                        )
+                        finalizeReport()
+                        deferredIssues.append(message)
+                        return (result, deferredIssues, report)
+                    }
+                }
+                } catch {
+                    deferredIssues.append("Generator failed during smoke test: \(error)")
+                }
+            }
+
+            if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
+                if let scaResult = runConcurrentSCACoverage(
+                    seqGen: sequenceGen,
+                    commandGen: commandGen,
+                    commandLimit: commandLimit,
+                    coverageBudget: coverageBudget,
+                    concurrencyLevel: config.concurrencyLevel,
+                    idleTimeout: config.idleTimeout,
+                    property: property,
+                    identifySkips: identifySkips,
+                    lastRunTimedOut: lastRunTimedOut
+                ) {
+                    if let stats = scaResult.reductionStats {
+                        report.applyReductionStats(stats)
+                    }
+                    report.reductionInvocations = scaResult.reductionInvocations
+
+                    let result = buildAsyncPreemptiveResult(
+                        reduced: scaResult.finalInput,
+                        seed: nil,
+                        discoveryMethod: .coverage
+                    )
+                    coverageInvocations = invocationCounter.value
+                    report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: scaResult.reductionInvocations)
+
+                    if config.suppressIssueReporting == false {
+                        var failureContext = FailureContext()
+                        failureContext.isPreemptive = true
+                        failureContext.specName = "\(Spec.self)"
+                        failureContext.discoveryMethod = .coverage
+                        failureContext.iteration = Int(scaResult.iteration)
+                        failureContext.budget = coverageBudget
+                        failureContext.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
+                        failureContext.reductionInvocations = scaResult.reductionInvocations
+                        failureContext.originalCount = scaResult.originalCount
+                        failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
+                        let message = renderFailure(scaResult.finalInput, trace: result.trace, context: failureContext)
+                        deferredIssues.append(message)
+                    }
+
+                    finalizeReport()
+                    return (result, deferredIssues, report)
+                }
+            }
+            coverageInvocations = invocationCounter.value
+
+            var interpreter = ValueAndChoiceTreeInterpreter(
+                sequenceGen,
+                materializePicks: true,
+                seed: config.seed,
+                maxRuns: samplingBudget
+            )
+            let actualSeed = interpreter.baseSeed
+
+            var samplingIteration = 0
+            do { while let (taggedCommands, tree) = try interpreter.next() {
+                samplingIteration += 1
+                if check.execute(taggedCommands) == false {
+                    let reductionResult = check.reduce(
+                        generator: sequenceGen,
+                        tree: tree,
+                        output: taggedCommands,
+                        repetitions: 10
+                    )
+
+                    let result = buildAsyncPreemptiveResult(
+                        reduced: reductionResult.output,
+                        seed: actualSeed,
+                        discoveryMethod: .randomSampling
+                    )
+
+                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionResult.propertyInvocations)
+                    report.applyReductionStats(reductionResult.stats)
+
+                    if config.suppressIssueReporting == false {
+                        var failureContext = FailureContext()
+                        failureContext.isPreemptive = true
+                        failureContext.specName = "\(Spec.self)"
+                        failureContext.discoveryMethod = .randomSampling
+                        failureContext.seed = actualSeed
+                        failureContext.iteration = samplingIteration
+                        failureContext.budget = samplingBudget
+                        failureContext.sequencesTested = samplingIteration
+                        failureContext.reductionInvocations = reductionResult.propertyInvocations
+                        failureContext.originalCount = taggedCommands.count
+                        failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
+                        let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
+                        deferredIssues.append(message)
+                    }
+
+                    finalizeReport()
+                    return (result, deferredIssues, report)
+                }
+            } } catch {
+                deferredIssues.append("Generator failed during sampling: \(error)")
+            }
+
+            report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
+            finalizeReport()
+            return (nil, deferredIssues, report)
+        } // withConfiguration
+    }
+    config.onReportClosure?(outcome.2)
+    for issue in outcome.1 {
+        reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+    }
+    return outcome.0
+}
+
+// MARK: - Async Checker
+
+/// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for an ``AsyncConcurrentContractSpec``.
+///
+/// Bridges async command execution to GCD threads via Task+semaphore. Each lane gets a real OS thread, and within that thread async commands are driven synchronously — the cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
+private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
+    /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
+    ///
+    /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
+        let concurrentSpec = Spec()
+        let sequentialSpec = Spec()
+
+        let prefixCommands = taggedCommands.filter(\.0.isPrefix)
+        let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
+
+        runSequentially(prefixCommands.map(\.1), on: concurrentSpec)
+        runSequentially(prefixCommands.map(\.1), on: sequentialSpec)
+        runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
+
+        let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
+        let caughtException = SendableBox<NSException?>(nil)
+        let group = DispatchGroup()
+        for (_, laneCommands) in laneGroups {
+            group.enter()
+            DispatchQueue.global().async {
+                var exception: NSException?
+                let succeeded = exhaust_runCatchingObjCException({
+                    let semaphore = DispatchSemaphore(value: 0)
+                    nonisolated(unsafe) let spec = concurrentSpec
+                    Task { @Sendable in
+                        for (_, command) in laneCommands {
+                            try? await spec.run(command)
+                        }
+                        semaphore.signal()
+                    }
+                    semaphore.wait()
+                }, &exception)
+                if succeeded == false {
+                    caughtException.value = exception
+                }
+                group.leave()
+            }
+        }
+        group.wait()
+
+        if caughtException.value != nil {
+            return false
+        }
+
+        let invariantsPassed: Bool = {
+            let semaphore = DispatchSemaphore(value: 0)
+            let result = UnsafeSendableBox(true)
+            nonisolated(unsafe) let spec = concurrentSpec
+            Task { @Sendable in
+                do {
+                    try await spec.checkInvariants()
+                } catch {
+                    result.value = false
+                }
+                semaphore.signal()
+            }
+            semaphore.wait()
+            return result.value
+        }()
+
+        if invariantsPassed == false {
+            return false
+        }
+
+        return concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
+    }
+
+    /// Runs commands sequentially on a spec, bridging async execution via Task+semaphore. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.
+    func runSequentially(_ commands: [Spec.Command], on spec: Spec) {
+        var exception: NSException?
+        exhaust_runCatchingObjCException({
+            let semaphore = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) let spec = spec
+            Task { @Sendable in
+                for command in commands {
+                    try? await spec.run(command)
+                }
+                semaphore.signal()
+            }
+            semaphore.wait()
+        }, &exception)
+    }
+
+    struct ReductionResult {
+        let output: [(ScheduleMarker, Spec.Command)]
+        let propertyInvocations: Int
+        let stats: ReductionStats
+    }
+
+    /// Three-pass reduction (lane collapse, structural, value minimization). See ``PreemptiveChecker/reduce(generator:tree:output:repetitions:)`` for rationale.
+    func reduce(
+        generator: Generator<[(ScheduleMarker, Spec.Command)]>,
+        tree: ChoiceTree,
+        output: [(ScheduleMarker, Spec.Command)],
+        repetitions: Int
+    ) -> ReductionResult {
+        var propertyInvocations = 0
+        let property: ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+            for _ in 0 ..< repetitions {
+                propertyInvocations += 1
+                if execute(taggedCommands) == false {
+                    return false
+                }
+            }
+            return true
+        }
+
+        let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
+        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
+
+        var currentOutput = output
+        var currentTree = tree
+        var aggregateStats = ReductionStats()
+
+        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: currentTree,
+            output: currentOutput,
+            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 10_000_000_000, enabledEncoders: [.laneCollapse]),
+            property: property
+        ) {
+            aggregateStats.merge(result.stats)
+            if let (sequence, reduced) = result.reduced {
+                currentOutput = reduced
+                if case let .success(_, freshTree, _) = Materializer.materialize(
+                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
+                ) {
+                    currentTree = freshTree
+                }
+            }
+        }
+
+        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: currentTree,
+            output: currentOutput,
+            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 30_000_000_000, enabledEncoders: structural),
+            property: property
+        ) {
+            aggregateStats.merge(result.stats)
+            if let (sequence, reduced) = result.reduced {
+                currentOutput = reduced
+                if case let .success(_, freshTree, _) = Materializer.materialize(
+                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
+                ) {
+                    currentTree = freshTree
+                }
+            }
+        }
+
+        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: currentTree,
+            output: currentOutput,
+            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
+            property: property
+        ) {
+            aggregateStats.merge(result.stats)
+            if let (_, reduced) = result.reduced {
+                currentOutput = reduced
+            }
+        }
+
+        return ReductionResult(output: currentOutput, propertyInvocations: propertyInvocations, stats: aggregateStats)
+    }
+}

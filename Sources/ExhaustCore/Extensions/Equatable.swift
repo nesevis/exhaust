@@ -30,3 +30,42 @@ package extension Equatable {
         return isEqual(other)
     }
 }
+
+/// Unwraps an `Any` value that may contain a boxed `Optional`, returning the inner value or the original if it is not optional.
+private func unwrapOptional(_ value: Any) -> Any {
+    let mirror = Mirror(reflecting: value)
+    guard mirror.displayStyle == .optional else {
+        return value
+    }
+    guard let child = mirror.children.first else {
+        return value
+    }
+    return child.value
+}
+
+/// Recursive structural equality for values that may not conform to ``Equatable`` (for example, tuples). Uses ``Equatable/isEqualToAny(_:)`` at leaf nodes and ``Mirror`` to decompose compound values like tuples. Returns `true` when both values are structurally identical down to their ``Equatable`` leaves.
+package func structurallyEqual(_ lhs: Any, _ rhs: Any) -> Bool {
+    let lhsUnwrapped = unwrapOptional(lhs)
+    let rhsUnwrapped = unwrapOptional(rhs)
+
+    if let equatable = lhsUnwrapped as? any Equatable {
+        return equatable.isEqualToAny(rhsUnwrapped)
+    }
+
+    let lhsMirror = Mirror(reflecting: lhsUnwrapped)
+    let rhsMirror = Mirror(reflecting: rhsUnwrapped)
+
+    guard lhsMirror.displayStyle == rhsMirror.displayStyle,
+          lhsMirror.children.count == rhsMirror.children.count
+    else {
+        return false
+    }
+
+    for (lhsChild, rhsChild) in zip(lhsMirror.children, rhsMirror.children) {
+        if structurallyEqual(lhsChild.value, rhsChild.value) == false {
+            return false
+        }
+    }
+
+    return lhsMirror.children.isEmpty == false
+}

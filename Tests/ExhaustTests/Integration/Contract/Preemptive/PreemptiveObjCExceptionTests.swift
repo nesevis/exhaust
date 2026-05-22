@@ -1,8 +1,9 @@
 import Foundation
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("Preemptive concurrent contract: ObjC exception handling")
+@Suite("Preemptive concurrent contract: ObjC exception handling", .tags(.contract))
 struct PreemptiveObjCExceptionTests {
     @Test("Catches NSException from concurrent command without crashing")
     func catchesNSException() throws {

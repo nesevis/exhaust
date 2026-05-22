@@ -25,7 +25,7 @@ func runConcurrentSCACoverage<Command>(
     idleTimeout _: Int,
     property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
     identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
-    lastRunTimedOut: SendableBox<Bool>
+    lastRunTimedOut: UnsafeSendableBox<Bool>
 ) -> SCAFailureResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else {
         ExhaustLog.notice(

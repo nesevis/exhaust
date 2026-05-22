@@ -71,7 +71,7 @@ package extension ChoiceTree {
     /// The number of entries this tree produces when flattened to a ``ChoiceSequence``.
     ///
     /// Matches the count of `ChoiceSequence.flatten(self)` without allocating.
-    /// Used by ``GuidedMaterializer`` to scope cursor consumption per zip child.
+    /// Used by ``Materializer`` to scope cursor consumption per zip child.
     var flattenedEntryCount: Int {
         switch self {
         case .choice: 1

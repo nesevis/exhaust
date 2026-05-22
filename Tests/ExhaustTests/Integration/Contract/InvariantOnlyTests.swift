@@ -1,9 +1,10 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Invariant-only contract tests")
+@Suite("Invariant-only contract tests", .tags(.contract))
 struct InvariantOnlyTests {
     @Test("Circular buffer capacity invariant detects overflow")
     func circularBufferOverflow() throws {

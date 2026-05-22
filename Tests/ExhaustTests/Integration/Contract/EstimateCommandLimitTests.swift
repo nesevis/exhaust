@@ -1,7 +1,8 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("estimateCommandLimit")
+@Suite("estimateCommandLimit", .tags(.contract))
 struct EstimateCommandLimitTests {
     @Test("Parameter-free 2-command pick produces ceiling-capped result")
     func parameterFreeTwoCommands() {

@@ -1,9 +1,10 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Idle timeout concurrent tests")
+@Suite("Idle timeout concurrent tests", .tags(.contract))
 struct IdleTimeoutConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Idle timeout fires for SUT that escapes the cooperative executor")

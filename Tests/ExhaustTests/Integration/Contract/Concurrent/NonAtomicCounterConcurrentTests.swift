@@ -1,9 +1,10 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Non-atomic counter concurrent tests")
+@Suite("Non-atomic counter concurrent tests", .tags(.contract))
 struct NonAtomicCounterConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Detects lost-update bug in non-atomic counter")

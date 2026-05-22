@@ -16,11 +16,12 @@
 // that exercises bundle creation, drawing, and consumption.
 
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Heap merge contract tests (Bundle)")
+@Suite("Heap merge contract tests (Bundle)", .tags(.contract))
 struct HeapMergeTests {
     @Test("Detects dropped element during merge via invariant or postcondition")
     func heapMergeBug() throws {
@@ -46,7 +47,7 @@ struct HeapMergeTests {
     }
 }
 
-@Suite("Heap aliasing contract tests (self-merge)")
+@Suite("Heap aliasing contract tests (self-merge)", .tags(.contract))
 struct HeapAliasingTests {
     @Test("Sorted-splice merge violates heap property after repeated self-merges")
     func spliceMergeBug() throws {

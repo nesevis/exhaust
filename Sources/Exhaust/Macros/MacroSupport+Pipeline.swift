@@ -77,7 +77,14 @@ package extension __ExhaustRuntime {
                     "kind": kind,
                 ]
             )
-            let reductionTree = (try? Interpreters.reflect(context.gen, with: value)) ?? tree
+            let reductionTree = switch Materializer.materialize(
+                context.gen, prefix: ChoiceSequence.flatten(tree), mode: .exact, fallbackTree: tree, materializePicks: true
+            ) {
+            case let .success(_, rematerialized, _):
+                rematerialized
+            case .rejected, .failed:
+                tree
+            }
             let result = reduceAndReport(
                 context: context,
                 value: value,
@@ -620,8 +627,8 @@ package extension __ExhaustRuntime {
         _ property: @escaping @Sendable (Output) async throws -> Bool
     ) -> @Sendable (Output) -> Bool {
         { value in
-            let valueBox = SendableBox(value)
-            let resultBox = SendableBox(false)
+            let valueBox = UnsafeSendableBox(value)
+            let resultBox = UnsafeSendableBox(false)
             let semaphore = DispatchSemaphore(value: 0)
             Task { @Sendable in
                 do {
@@ -645,8 +652,8 @@ package extension __ExhaustRuntime {
         _ detection: @escaping @Sendable (Output) async throws -> Void
     ) -> @Sendable (Output) -> Bool {
         { value in
-            let valueBox = SendableBox(value)
-            let resultBox = SendableBox(true)
+            let valueBox = UnsafeSendableBox(value)
+            let resultBox = UnsafeSendableBox(true)
             let semaphore = DispatchSemaphore(value: 0)
             Task { @Sendable in
                 do {

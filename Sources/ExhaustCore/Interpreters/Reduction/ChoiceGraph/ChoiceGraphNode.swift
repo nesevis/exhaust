@@ -152,7 +152,7 @@ package struct PickMetadata {
     /// Index into the parent node's ``ChoiceGraphNode/children`` identifying the active branch child.
     package let selectedChildIndex: Int
 
-    /// Per-branch tree elements at this pick site, in the same order as the parent ``ChoiceGraphNode/children``. Each entry is the original `.branch(...)` element (with `isSelected: true` for the active branch) as it existed in the tree at graph construction time. The graph stores these so that ``GraphReplacementEncoder`` can enumerate branch alternatives without reading from the live tree, which may have been stripped by ``Materializer`` calls with `materializePicks: false`.
+    /// Per-branch tree elements at this pick site, in the same order as the parent ``ChoiceGraphNode/children``. Each entry is the original `.branch(...)` element (with `isSelected: true` for the active branch) as it existed in the tree at graph construction time. The graph stores these so that ``GraphStructuralEncoder`` can enumerate branch alternatives without reading from the live tree, which may have been stripped by ``Materializer`` calls with `materializePicks: false`.
     package let branchElements: [ChoiceTree]
 }
 
@@ -225,6 +225,6 @@ package struct SequenceMetadata {
     /// - Direct: all children are ``ChoiceGraphNodeKind/chooseBits(_:)`` with the same tag.
     /// - Nested: all children are ``ChoiceGraphNodeKind/sequence(_:)`` with the same non-nil ``elementTypeTag``, implying subsequence homogeneity.
     ///
-    /// When non-nil, any two leaves within the sequence are type-compatible for redistribution without materializing pairwise edges. The exchange scope builder uses this to construct ``RedistributionGroup`` descriptors in O(1) per sequence instead of O(C^2) per sequence.
+    /// When non-nil, any two leaves within the sequence are type-compatible for redistribution without materializing pairwise edges. The exchange scope builder uses this to construct ``RedistributionPair`` descriptors in O(1) per sequence instead of O(C^2) per sequence.
     package let elementTypeTag: TypeTag?
 }

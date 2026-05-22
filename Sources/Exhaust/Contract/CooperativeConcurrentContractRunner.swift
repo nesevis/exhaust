@@ -150,8 +150,8 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             }
             let concurrencyLevel = config.concurrencyLevel
             let idleTimeout = config.idleTimeout
-            let lastRunTimedOut = SendableBox(false)
-            let invocationCounter = SendableBox(0)
+            let lastRunTimedOut = UnsafeSendableBox(false)
+            let invocationCounter = UnsafeSendableBox(0)
             let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
                 invocationCounter.value += 1
                 let result = drainSchedule(taggedCommands: taggedCommands, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: false, idleTimeoutMilliseconds: idleTimeout)
@@ -186,30 +186,34 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             seed: regressionSeed,
                             maxRuns: 1
                         )
-                        if let (input, _) = try? regressionInterpreter.next() {
-                            let passed = property(input)
-                            if passed == false {
-                                var ctx = failureContext
-                                ctx.seed = regressionSeed
-                                ctx.originalCount = input.count
-                                ctx.sequencesTested = 1
-                                let failure = buildFailureResult(
-                                    finalInput: input,
-                                    specInit: specInit,
-                                    concurrencyLevel: concurrencyLevel,
-                                    idleTimeout: idleTimeout,
-                                    seed: regressionSeed,
-                                    discoveryMethod: .replay,
-                                    timedOut: false,
-                                    failureContext: &ctx
-                                )
-                                if config.suppressIssueReporting == false {
-                                    deferredIssues.append(failure.issueMessage)
+                        do {
+                            if let (input, _) = try regressionInterpreter.next() {
+                                let passed = property(input)
+                                if passed == false {
+                                    var ctx = failureContext
+                                    ctx.seed = regressionSeed
+                                    ctx.originalCount = input.count
+                                    ctx.sequencesTested = 1
+                                    let failure = buildFailureResult(
+                                        finalInput: input,
+                                        specInit: specInit,
+                                        concurrencyLevel: concurrencyLevel,
+                                        idleTimeout: idleTimeout,
+                                        seed: regressionSeed,
+                                        discoveryMethod: .replay,
+                                        timedOut: false,
+                                        failureContext: &ctx
+                                    )
+                                    if config.suppressIssueReporting == false {
+                                        deferredIssues.append(failure.issueMessage)
+                                    }
+                                    return (failure.result, deferredIssues)
+                                } else if config.suppressIssueReporting == false {
+                                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
                                 }
-                                return (failure.result, deferredIssues)
-                            } else if config.suppressIssueReporting == false {
-                                deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
                             }
+                        } catch {
+                            deferredIssues.append("Generator failed during regression replay (seed \(encodedSeed)): \(error)")
                         }
                     }
                 }

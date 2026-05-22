@@ -1,9 +1,10 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Async contract tests")
+@Suite("Async contract tests", .tags(.contract))
 struct AsyncContractTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Passing async spec produces no counterexample")

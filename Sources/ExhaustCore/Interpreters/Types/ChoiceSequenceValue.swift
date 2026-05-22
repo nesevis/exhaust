@@ -21,7 +21,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// Bind scope markers (`true` = open, `false` = close).
     /// The first child is the inner subtree; the second is the bound subtree.
     case bind(Bool)
-    /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``GuidedMaterializer``).
+    /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``Materializer``).
     case just
 
     /// Extracts the numeric ``Value`` payload from a ``value`` entry, returning `nil` for structural markers.

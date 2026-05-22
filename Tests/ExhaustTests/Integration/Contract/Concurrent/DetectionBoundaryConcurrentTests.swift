@@ -1,9 +1,10 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Detection boundary and multi-lane behavior")
+@Suite("Detection boundary and multi-lane behavior", .tags(.contract))
 struct DetectionBoundaryTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")

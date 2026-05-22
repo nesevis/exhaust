@@ -9,7 +9,7 @@
 ///
 /// A single recursive walk of the tree produces nodes and containment/dependency edges. ``assembleGraph()`` then computes self-similarity groups, live node IDs, leaf nodes, dependency adjacency, and topological order — all stored eagerly on the resulting struct.
 ///
-/// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)`` to maintain position-to-node correspondence.
+/// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` to maintain position-to-node correspondence.
 ///
 /// Active branches carry position ranges and offset arithmetic. Inactive branches (unselected pick alternatives) are walked with `isActive: false`, which emits nodes with nil position ranges and skips offset tracking.
 struct ChoiceGraphBuilder {
@@ -582,7 +582,7 @@ struct ChoiceGraphBuilder {
 
     /// Detects whether a group's children form a pick site.
     ///
-    /// A pick site is a group where all children are `.branch`, with exactly one having `isSelected: true`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount`` and ``ChoiceDependencyGraph/collectBindTreeNodes(from:offset:into:)``.
+    /// A pick site is a group where all children are `.branch`, with exactly one having `isSelected: true`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount``.
     func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
         guard array.allSatisfy({ $0.isBranch }) else {
             return nil

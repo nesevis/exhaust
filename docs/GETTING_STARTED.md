@@ -269,7 +269,7 @@ The catalogue encodes the kinds of bugs each type is known for — the sort of t
 
 Generators with very small domains get enumerated exhaustively as a special case.
 
-**Random sampling.** Once coverage is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Coverage and sampling have separate budgets. At the default `.expedient` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.expensive`, `.exorbitant`) scale both numbers in lockstep.
+**Random sampling.** Once coverage is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.thorough`, `.extensive`) scale both numbers in lockstep.
 
 **Reduction.** The moment any phase produces a failing input, `#exhaust` switches from searching for failures to making the failure it found useful to you. Reduction works across every dimension of the input at once: it deletes elements from sequences, collapses recursive structure, swaps between branches, drives numeric values toward their simplest form, redistributes magnitude between coupled parameters, and reorders siblings into a natural reading order. 
 
@@ -426,7 +426,7 @@ Instead, it uses *choice gradient sampling*: the generator is really a sequence 
 
 Each direction gets its own tuning pass and its own biased generator.
 
-At the default `.expedient` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator — because some constraint in the generator rules it out — the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
+At the default `.standard` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator — because some constraint in the generator rules it out — the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
 
 The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s.
 

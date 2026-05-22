@@ -1,8 +1,9 @@
 import Foundation
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("Preemptive concurrent contract: smoke test")
+@Suite("Preemptive concurrent contract: smoke test", .tags(.contract))
 struct PreemptiveSmokeTestTests {
     @Test("Smoke test catches sequential bug before concurrent phase")
     func catchesSequentialBug() throws {

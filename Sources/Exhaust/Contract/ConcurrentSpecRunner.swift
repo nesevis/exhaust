@@ -94,14 +94,14 @@ func drainSchedule<Spec: AsyncContractSpec>(
     let executors: [LaneExecutor] = (0 ..< concurrencyLevel).map { index in
         LaneExecutor(lane: LaneID(index: UInt8(index)), runQueue: runQueue)
     }
-    // Shared mutable state accessed from Task closures and the drain loop. Thread safety relies on the cooperative single-threaded execution model: all Task closures execute via runSynchronously on the drain loop thread, and LaneExecutor.enqueue (the only re-entry point) is called synchronously within runSynchronously's suspension machinery. No concurrent access is possible as long as all continuations flow through LaneExecutor. If a continuation arrives from a foreign executor (custom-executor actor, Task.sleep), RunQueue itself would race first — the SendableBox invariant is the same as RunQueue's.
-    let spec = SendableBox(specInit())
-    let failed = SendableBox<String?>(nil)
-    let trace = SendableBox<[TraceEvent]>([])
-    let commandIndices: [SendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in SendableBox(0) }
+    // Shared mutable state accessed from Task closures and the drain loop. Thread safety relies on the cooperative single-threaded execution model: all Task closures execute via runSynchronously on the drain loop thread, and LaneExecutor.enqueue (the only re-entry point) is called synchronously within runSynchronously's suspension machinery. No concurrent access is possible as long as all continuations flow through LaneExecutor. If a continuation arrives from a foreign executor (custom-executor actor, Task.sleep), RunQueue itself would race first — the UnsafeSendableBox invariant is the same as RunQueue's.
+    let spec = UnsafeSendableBox(specInit())
+    let failed = UnsafeSendableBox<String?>(nil)
+    let trace = UnsafeSendableBox<[TraceEvent]>([])
+    let commandIndices: [UnsafeSendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in UnsafeSendableBox(0) }
 
     if prefixCommands.isEmpty == false {
-        let prefixDone = SendableBox(false)
+        let prefixDone = UnsafeSendableBox(false)
         Task(executorPreference: executors[0]) { @Sendable [spec, failed, prefixDone, trace] in
             for command in prefixCommands {
                 guard failed.value == nil else { break }

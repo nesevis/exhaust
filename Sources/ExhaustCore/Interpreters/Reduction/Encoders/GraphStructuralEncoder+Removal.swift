@@ -98,7 +98,7 @@ extension GraphStructuralEncoder {
 
     /// Pulls the next row from the covering array generator and decodes it into a deletion probe.
     ///
-    /// Each row is an array of `UInt64` values, one per sibling parameter. A value equal to the sibling's skip value (= element count) means "do not delete from this sibling." Any other value is an element index within that sibling's `elementNodeIDs`. Rows where fewer than two siblings participate are skipped — single-sequence deletion is already covered by ``PerElementRemovalSource``.
+    /// Each row is an array of `UInt64` values, one per sibling parameter. A value equal to the sibling's skip value (= element count) means "do not delete from this sibling." Any other value is an element index within that sibling's `elementNodeIDs`. Rows where fewer than two siblings participate are skipped — single-sequence deletion is already covered by ``BatchRemovalSource``.
     mutating func nextCoveringAlignedProbe(into candidate: inout ChoiceSequence) -> EncoderProbe? {
         guard let state = coveringAlignedState else { return nil }
 

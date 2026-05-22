@@ -1,9 +1,10 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Buggy counter state machine tests")
+@Suite("Buggy counter state machine tests", .tags(.contract))
 struct BuggyCounterTests {
     @Test("Detects model/SUT divergence in buggy counter")
     func detectsBuggyCounter() throws {

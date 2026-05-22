@@ -1,8 +1,9 @@
 import Foundation
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("Preemptive concurrent contract: async facade over racy dispatch queue")
+@Suite("Preemptive concurrent contract: async facade over racy dispatch queue", .tags(.contract))
 struct PreemptiveAsyncFacadeTests {
     @Test("Detects lost-update bug behind async facade")
     func detectsLostUpdate() async throws {

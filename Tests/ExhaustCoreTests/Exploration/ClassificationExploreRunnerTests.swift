@@ -4,7 +4,7 @@ import Testing
 @Suite("ClassificationExploreRunner")
 struct ClassificationExploreRunnerTests {
     @Test("Covers all directions for a simple generator with common directions")
-    func coversCommonDirections() {
+    func coversCommonDirections() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -17,7 +17,7 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 200,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         #expect(result.termination == .coverageAchieved)
         #expect(result.counterexample == nil)
         for entry in result.directionCoverage {
@@ -27,7 +27,7 @@ struct ClassificationExploreRunnerTests {
     }
 
     @Test("Finds failure during warm-up and reduces")
-    func findsFailureDuringWarmup() {
+    func findsFailureDuringWarmup() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -39,7 +39,7 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 500,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         #expect(result.termination == .propertyFailed)
         #expect(result.counterexample != nil)
         if let counterexample = result.counterexample {
@@ -48,7 +48,7 @@ struct ClassificationExploreRunnerTests {
     }
 
     @Test("Finds failure during tuning pass with direction-preserving reduction")
-    func findsFailureDuringTuningPass() {
+    func findsFailureDuringTuningPass() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 1000)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -60,7 +60,7 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 2000,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         #expect(result.termination == .propertyFailed)
         if let counterexample = result.counterexample {
             #expect(counterexample >= 950)
@@ -68,7 +68,7 @@ struct ClassificationExploreRunnerTests {
     }
 
     @Test("Co-occurrence matrix records cross-direction overlap")
-    func coOccurrenceTracksOverlap() {
+    func coOccurrenceTracksOverlap() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -81,13 +81,13 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 200,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         let overlap = result.coOccurrence.count(direction: 0, direction: 1)
         #expect(overlap > 0)
     }
 
     @Test("Unmatched samples are tracked")
-    func unmatchedSamplesTracked() {
+    func unmatchedSamplesTracked() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -99,12 +99,12 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 500,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         #expect(result.coOccurrence.unmatchedCount > 0)
     }
 
     @Test("Deterministic with same seed")
-    func deterministicWithSameSeed() {
+    func deterministicWithSameSeed() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
 
         var runner1 = ClassificationExploreRunner(
@@ -132,15 +132,15 @@ struct ClassificationExploreRunnerTests {
             seed: 99
         )
 
-        let result1 = runner1.run()
-        let result2 = runner2.run()
+        let result1 = try runner1.run()
+        let result2 = try runner2.run()
 
         #expect(result1.propertyInvocations == result2.propertyInvocations)
         #expect(result1.counterexample == result2.counterexample)
     }
 
     @Test("Budget exhaustion reported for unreachable direction")
-    func budgetExhaustionForUnreachableDirection() {
+    func budgetExhaustionForUnreachableDirection() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 10)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -153,14 +153,14 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 50,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         #expect(result.directionCoverage[0].isCovered)
         #expect(result.directionCoverage[1].isCovered == false)
         #expect(result.directionCoverage[1].hits == 0)
     }
 
     @Test("Warm-up hits count toward direction coverage")
-    func warmupHitsCountTowardCoverage() {
+    func warmupHitsCountTowardCoverage() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 1)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -172,14 +172,14 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 200,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         #expect(result.directionCoverage[0].warmupHits >= 10)
         #expect(result.directionCoverage[0].tuningPassSamples == 0)
         #expect(result.termination == .coverageAchieved)
     }
 
     @Test("Incidental coverage from other direction's tuning pass")
-    func incidentalCoverage() {
+    func incidentalCoverage() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -192,7 +192,7 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 500,
             seed: 42
         )
-        let result = runner.run()
+        let result = try runner.run()
         #expect(result.termination == .coverageAchieved)
         for entry in result.directionCoverage {
             #expect(entry.isCovered)

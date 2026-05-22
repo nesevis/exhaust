@@ -52,7 +52,7 @@ enum PermutationQuery {
 
     /// Lightweight shape discriminant for grouping siblings by structural kind.
     ///
-    /// Derived from graph node metadata rather than the ``ChoiceTree``. Matches the grouping logic in ``GraphSiblingSwapEncoder``.
+    /// Derived from graph node metadata rather than the ``ChoiceTree``. Matches the grouping logic in ``GraphSwapEncoder``.
     private enum NodeShapeKey: Hashable {
         case value
         case sequence(elementCount: Int)

@@ -1,7 +1,8 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("Concurrent trace parsing")
+@Suite("Concurrent trace parsing", .tags(.contract))
 struct ConcurrentTraceTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Collapses no-op suspend/resume pairs with no interleaving between them")

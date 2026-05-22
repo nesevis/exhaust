@@ -82,8 +82,27 @@ public extension __ExhaustRuntime {
                 maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
                 seed: seed
             )
-            let result = Gen.$isInterpreting.withValue(true) {
-                runner.run()
+            let result: ClassificationExploreResult<Output>
+            do {
+                result = try Gen.$isInterpreting.withValue(true) { () throws -> ClassificationExploreResult<Output> in
+                    try runner.run()
+                }
+            } catch {
+                reportIssue(
+                    "Generator failed during exploration: \(error)",
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
+                return ExploreReport(
+                    result: nil,
+                    seed: seed ?? 0,
+                    directionCoverage: [],
+                    coOccurrence: CoOccurrenceMatrix(directionCount: 0),
+                    counterexampleDirections: [],
+                    propertyInvocations: 0,
+                    warmupSamples: 0,
+                    totalMilliseconds: 0,
+                    termination: .budgetExhausted
+                )
             }
 
             let directionCoverage = result.directionCoverage.map { entry in
@@ -329,7 +348,7 @@ public extension __ExhaustRuntime {
                         return false
                     }
                     if suppressIssueReporting == false {
-                        let valueBox = SendableBox(counterexample)
+                        let valueBox = UnsafeSendableBox(counterexample)
                         let semaphore = DispatchSemaphore(value: 0)
                         Task { @Sendable in
                             try? await property(valueBox.value)
