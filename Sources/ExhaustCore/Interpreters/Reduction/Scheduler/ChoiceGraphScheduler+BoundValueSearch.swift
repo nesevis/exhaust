@@ -101,7 +101,7 @@ extension ChoiceGraphScheduler {
 
         // 1. Materialise through the generator to get the new bound subtree. Use guided mode so that downstream coordinates outside the new range get re-resolved from the fallback tree (or PRNG when the fallback has no info) instead of being rejected. The upstream candidate carries the *previous* downstream values, which are typically out-of-range for the new upstream value (Coupling: dropping `n` from 2 to 1 makes the array element value `2`
         //    out-of-range for the new `int(in: 0...1)` element generator). Mirrors
-        //    ``ReductionState/compositionDescriptors``'s lift configuration.
+        //    the bound-value composition's lift configuration.
         guard case let .success(_, freshTree, _) = Materializer.materializeAny(
             gen,
             prefix: upstreamCandidate,

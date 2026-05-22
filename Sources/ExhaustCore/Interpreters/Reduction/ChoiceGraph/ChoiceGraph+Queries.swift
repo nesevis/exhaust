@@ -9,8 +9,6 @@ package extension ChoiceGraph {
     /// Dependency edges where bound value composition is meaningful.
     ///
     /// Each edge connects a bind-inner node (controlling position) to its scope (controlled subtree). Ordered by topological sort (roots first).
-    ///
-    /// - SeeAlso: ``ChoiceDependencyGraph/reductionEdges()``
     var reductionEdges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] {
         var edges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] = []
         for nodeID in liveNodeIDs {

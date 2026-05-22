@@ -7,7 +7,7 @@
 
 /// Moves magnitude between type-compatible leaf pairs to enable future structural operations.
 ///
-/// For each source-receiver pair, binary-searches on delta magnitude via ``MaxBinarySearchStepper`` to find the largest accepted transfer. The graph determines which pairs; the encoder determines how much. Up to ``maxPasses`` replay passes re-evaluate accepted pairs for further convergence.
+/// For each source-receiver pair, binary-searches on delta magnitude via ``BinarySearchStepper`` to find the largest accepted transfer. The graph determines which pairs; the encoder determines how much. Up to ``maxPasses`` replay passes re-evaluate accepted pairs for further convergence.
 ///
 /// This is a value encoder: the delta magnitude is above the opacity boundary and requires predicate feedback to find.
 ///
