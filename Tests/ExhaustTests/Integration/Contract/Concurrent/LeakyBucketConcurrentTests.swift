@@ -24,6 +24,25 @@ struct LeakyBucketConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Lane collapse encoder accepts probes when prefix is required")
+    func laneCollapseAccepts() async throws {
+        var deliveredReport: ExhaustReport?
+        _ = await __runContractConcurrent(
+            LeakyBucketSpec.self,
+            settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
+        )
+        let report = try #require(deliveredReport)
+        #expect(report.propertyInvocations == 36)
+        #expect(report.reductionInvocations == 17)
+        #expect(report.totalMaterializations == 23)
+        #expect(report.cycles == 3)
+        #expect(report.encoderProbes[.laneCollapse] == 9)
+        #expect(report.encoderProbesAccepted[.laneCollapse] == 1)
+        #expect(report.encoderProbes[.deletion] == 12)
+        #expect(report.encoderProbes[.substitution] == 6)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Reports issue through Swift Testing when suppression is off")
     func reportsIssueThroughSwiftTesting() async {
         await withKnownIssue {
