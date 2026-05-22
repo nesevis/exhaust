@@ -62,8 +62,8 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
             let coverageBudget = config.budget.coverageBudget
             let check = AsyncPreemptiveChecker<Spec>()
             var coverageInvocations = 0
-            let invocationCounter = SendableBox(0)
-            let lastRunTimedOut = SendableBox(false)
+            let invocationCounter = UnsafeSendableBox(0)
+            let lastRunTimedOut = UnsafeSendableBox(false)
 
             nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
             let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
@@ -99,8 +99,8 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                 while let (commands, _) = try? smokeIterator.next() {
                     let spec = Spec()
                     nonisolated(unsafe) let unsafeSpec = spec
-                    let traceBox = SendableBox<[TraceStep]>([])
-                    let failedBox = SendableBox(false)
+                    let traceBox = UnsafeSendableBox<[TraceStep]>([])
+                    let failedBox = UnsafeSendableBox(false)
                     let semaphore = DispatchSemaphore(value: 0)
                     Task { @Sendable in
                         let (trace, failed) = await buildAsyncSequentialTrace(
@@ -293,7 +293,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
 
         let invariantsPassed: Bool = {
             let semaphore = DispatchSemaphore(value: 0)
-            let result = SendableBox(true)
+            let result = UnsafeSendableBox(true)
             nonisolated(unsafe) let spec = concurrentSpec
             Task { @Sendable in
                 do {

@@ -150,8 +150,8 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             }
             let concurrencyLevel = config.concurrencyLevel
             let idleTimeout = config.idleTimeout
-            let lastRunTimedOut = SendableBox(false)
-            let invocationCounter = SendableBox(0)
+            let lastRunTimedOut = UnsafeSendableBox(false)
+            let invocationCounter = UnsafeSendableBox(0)
             let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
                 invocationCounter.value += 1
                 let result = drainSchedule(taggedCommands: taggedCommands, specInit: specInit, concurrencyLevel: concurrencyLevel, recordTrace: false, idleTimeoutMilliseconds: idleTimeout)

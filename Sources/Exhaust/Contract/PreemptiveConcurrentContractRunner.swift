@@ -59,8 +59,8 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
         let coverageBudget = config.budget.coverageBudget
         let check = PreemptiveChecker<Spec>()
         var coverageInvocations = 0
-        let invocationCounter = SendableBox(0)
-        let lastRunTimedOut = SendableBox(false)
+        let invocationCounter = UnsafeSendableBox(0)
+        let lastRunTimedOut = UnsafeSendableBox(false)
 
         let rawIdentifySkips = Spec.skipIdentifier
         let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in

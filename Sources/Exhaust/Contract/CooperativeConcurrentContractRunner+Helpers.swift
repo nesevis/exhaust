@@ -20,11 +20,11 @@ func sequentialOracle<Spec: AsyncContractSpec>(
     specInit: () -> Spec,
     idleTimeoutMilliseconds: Int = 1000
 ) -> SequentialOracleResult<Spec>? {
-    let spec = SendableBox(specInit())
+    let spec = UnsafeSendableBox(specInit())
     let runQueue = RunQueue(laneCount: 1)
     let executor = LaneExecutor(lane: LaneID(index: 0), runQueue: runQueue)
-    let passed = SendableBox(true)
-    let done = SendableBox(false)
+    let passed = UnsafeSendableBox(true)
+    let done = UnsafeSendableBox(false)
     let idleTimeout: Duration = .milliseconds(idleTimeoutMilliseconds)
 
     Task(executorPreference: executor) { @Sendable [spec] in

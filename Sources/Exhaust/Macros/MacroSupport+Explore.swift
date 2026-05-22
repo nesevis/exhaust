@@ -329,7 +329,7 @@ public extension __ExhaustRuntime {
                         return false
                     }
                     if suppressIssueReporting == false {
-                        let valueBox = SendableBox(counterexample)
+                        let valueBox = UnsafeSendableBox(counterexample)
                         let semaphore = DispatchSemaphore(value: 0)
                         Task { @Sendable in
                             try? await property(valueBox.value)

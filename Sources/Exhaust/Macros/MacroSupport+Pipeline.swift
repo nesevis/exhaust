@@ -620,8 +620,8 @@ package extension __ExhaustRuntime {
         _ property: @escaping @Sendable (Output) async throws -> Bool
     ) -> @Sendable (Output) -> Bool {
         { value in
-            let valueBox = SendableBox(value)
-            let resultBox = SendableBox(false)
+            let valueBox = UnsafeSendableBox(value)
+            let resultBox = UnsafeSendableBox(false)
             let semaphore = DispatchSemaphore(value: 0)
             Task { @Sendable in
                 do {
@@ -645,8 +645,8 @@ package extension __ExhaustRuntime {
         _ detection: @escaping @Sendable (Output) async throws -> Void
     ) -> @Sendable (Output) -> Bool {
         { value in
-            let valueBox = SendableBox(value)
-            let resultBox = SendableBox(true)
+            let valueBox = UnsafeSendableBox(value)
+            let resultBox = UnsafeSendableBox(true)
             let semaphore = DispatchSemaphore(value: 0)
             Task { @Sendable in
                 do {

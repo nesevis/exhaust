@@ -192,8 +192,8 @@ extension AsyncConcurrentContractSpec {
     ) -> @Sendable ([Command]) -> Set<Int> {
         nonisolated(unsafe) let specInit = specInit
         return { commands in
-            let box = SendableBox(specInit())
-            let resultBox = SendableBox(Set<Int>())
+            let box = UnsafeSendableBox(specInit())
+            let resultBox = UnsafeSendableBox(Set<Int>())
             let semaphore = DispatchSemaphore(value: 0)
 
             Task { @Sendable in
@@ -227,8 +227,8 @@ extension AsyncContractSpec {
     ) -> @Sendable ([Command]) -> Set<Int> {
         nonisolated(unsafe) let specInit = specInit
         return { commands in
-            let box = SendableBox(specInit())
-            let resultBox = SendableBox(Set<Int>())
+            let box = UnsafeSendableBox(specInit())
+            let resultBox = UnsafeSendableBox(Set<Int>())
             let semaphore = DispatchSemaphore(value: 0)
 
             Task { @Sendable in

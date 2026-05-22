@@ -1,9 +1,40 @@
-/// Mutable box for passing a value across a Task/thread boundary.
+import Foundation
+
+/// Mutable box for passing a value across a sendability boundary without synchronization.
 ///
-/// Intentionally `@unchecked Sendable` — the caller ensures that reads and writes do not race (for example, by gating access with a `DispatchSemaphore`).
-final class SendableBox<Value>: @unchecked Sendable {
+/// Intentionally `@unchecked Sendable` — the caller must ensure that reads and writes do not race. Typical safe patterns: a single writer followed by a `DispatchSemaphore` barrier before the reader, or a sequential closure captured by a `@Sendable`-requiring API.
+///
+/// For state that is genuinely written from multiple threads concurrently, use ``SendableBox`` instead, which protects access with an `NSLock`.
+final class UnsafeSendableBox<Value>: @unchecked Sendable {
     var value: Value
     init(_ value: Value) {
         self.value = value
+    }
+}
+
+/// Thread-safe mutable box for sharing a value across concurrent threads.
+///
+/// All reads and writes are serialized by an internal lock. Use this when multiple threads may read or write the value concurrently (for example, multiple GCD lanes writing an exception and a main thread reading after `DispatchGroup.wait()`).
+///
+/// For sendability bridging where external synchronization already prevents races, use ``UnsafeSendableBox`` to avoid the lock overhead.
+final class SendableBox<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Value
+
+    init(_ value: Value) {
+        self.storage = value
+    }
+
+    var value: Value {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            storage = newValue
+        }
     }
 }
