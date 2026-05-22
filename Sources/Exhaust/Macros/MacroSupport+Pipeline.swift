@@ -77,7 +77,14 @@ package extension __ExhaustRuntime {
                     "kind": kind,
                 ]
             )
-            let reductionTree = (try? Interpreters.reflect(context.gen, with: value)) ?? tree
+            let reductionTree = switch Materializer.materialize(
+                context.gen, prefix: ChoiceSequence.flatten(tree), mode: .exact, fallbackTree: tree, materializePicks: true
+            ) {
+            case let .success(_, rematerialized, _):
+                rematerialized
+            case .rejected, .failed:
+                tree
+            }
             let result = reduceAndReport(
                 context: context,
                 value: value,

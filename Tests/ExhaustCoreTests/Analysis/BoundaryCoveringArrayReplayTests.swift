@@ -177,22 +177,23 @@ struct BoundaryCoveringArrayReplayUnitTests {
             )
             let profile = try #require(analyzeBoundary(gen))
 
+            let expectedCount = profile.parameters[0].values.count
             var replayedCount = 0
-            for pickIndex in 0 ..< UInt64(profile.parameters[0].values.count) {
+            for pickIndex in 0 ..< UInt64(expectedCount) {
                 var values: [UInt64] = [pickIndex]
                 for _ in 1 ..< profile.parameters.count {
                     values.append(0)
                 }
                 let row = CoveringArrayRow(values: values)
-                guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                    continue
-                }
+                let tree = try #require(
+                    BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    "buildTree failed for pick index \(pickIndex)"
+                )
                 let value: (Bool, Int)? = try Interpreters.replay(gen, using: tree)
-                if value != nil {
-                    replayedCount += 1
-                }
+                try #require(value != nil, "Replay failed for pick index \(pickIndex)")
+                replayedCount += 1
             }
-            #expect(replayedCount > 0)
+            #expect(replayedCount == expectedCount)
         }
     }
 
@@ -273,18 +274,22 @@ struct BoundaryCoveringArrayReplayUnitTests {
             let gen = Gen.choose(in: 0 ... 10000)
             let profile = try #require(analyzeBoundary(gen))
 
+            let expectedCount = profile.parameters[0].values.count
             var replayedCount = 0
-            for i in 0 ..< UInt64(profile.parameters[0].values.count) {
+            for i in 0 ..< UInt64(expectedCount) {
                 let row = CoveringArrayRow(values: [i])
-                guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                    continue
-                }
-                let value: Int? = try Interpreters.replay(gen, using: tree)
-                if value != nil {
-                    replayedCount += 1
-                }
+                let tree = try #require(
+                    BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    "buildTree failed for value index \(i)"
+                )
+                let value = try #require(
+                    Interpreters.replay(gen, using: tree) as Int?,
+                    "Replay failed for value index \(i)"
+                )
+                #expect(0 ... 10000 ~= value)
+                replayedCount += 1
             }
-            #expect(replayedCount > 0)
+            #expect(replayedCount == expectedCount)
         }
 
         @Test("Zip of two ints round-trips")
@@ -297,18 +302,22 @@ struct BoundaryCoveringArrayReplayUnitTests {
             )
 
             var replayedCount = 0
+            var rowCount = 0
             while let row = generator.next() {
-                guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                    continue
-                }
-                let value: (Int, Int)? = try Interpreters.replay(gen, using: tree)
-                if let (a, b) = value {
-                    #expect(0 ... 10000 ~= a)
-                    #expect(0 ... 10000 ~= b)
-                    replayedCount += 1
-                }
+                rowCount += 1
+                let tree = try #require(
+                    BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    "buildTree failed for row \(rowCount)"
+                )
+                let (a, b) = try #require(
+                    Interpreters.replay(gen, using: tree) as (Int, Int)?,
+                    "Replay failed for row \(rowCount)"
+                )
+                #expect(0 ... 10000 ~= a)
+                #expect(0 ... 10000 ~= b)
+                replayedCount += 1
             }
-            #expect(replayedCount > 0)
+            #expect(replayedCount == rowCount)
         }
 
         @Test("Array with constant scaling round-trips")
@@ -317,39 +326,46 @@ struct BoundaryCoveringArrayReplayUnitTests {
             let profile = try #require(analyzeBoundary(gen))
 
             var replayedCount = 0
+            var rowCount = 0
             if profile.parameterCount >= 2 {
                 let generator = PullBasedCoveringArrayGenerator(
                     domainSizes: profile.domainSizes,
                     strength: min(profile.parameterCount, 4)
                 )
                 while let row = generator.next() {
-                    guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                        continue
+                    rowCount += 1
+                    let tree = try #require(
+                        BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile),
+                        "buildTree failed for row \(rowCount)"
+                    )
+                    let array = try #require(
+                        Interpreters.replay(gen, using: tree) as [Int]?,
+                        "Replay failed for row \(rowCount)"
+                    )
+                    for element in array {
+                        #expect(0 ... 10000 ~= element)
                     }
-                    let value: [Int]? = try Interpreters.replay(gen, using: tree)
-                    if let array = value {
-                        for element in array {
-                            #expect(0 ... 10000 ~= element)
-                        }
-                        replayedCount += 1
-                    }
+                    replayedCount += 1
                 }
             } else {
+                rowCount = Int(profile.domainSizes[0])
                 for valueIndex in 0 ..< profile.domainSizes[0] {
                     let row = CoveringArrayRow(values: [valueIndex])
-                    guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                        continue
+                    let tree = try #require(
+                        BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile),
+                        "buildTree failed for value index \(valueIndex)"
+                    )
+                    let array = try #require(
+                        Interpreters.replay(gen, using: tree) as [Int]?,
+                        "Replay failed for value index \(valueIndex)"
+                    )
+                    for element in array {
+                        #expect(0 ... 10000 ~= element)
                     }
-                    let value: [Int]? = try Interpreters.replay(gen, using: tree)
-                    if let array = value {
-                        for element in array {
-                            #expect(0 ... 10000 ~= element)
-                        }
-                        replayedCount += 1
-                    }
+                    replayedCount += 1
                 }
             }
-            #expect(replayedCount > 0)
+            #expect(replayedCount == rowCount)
         }
     }
 }

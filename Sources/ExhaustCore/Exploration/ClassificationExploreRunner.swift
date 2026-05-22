@@ -201,7 +201,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
         while passSamplesDrawn < passBudget,
               state.hits[targetDirection] < hitsPerDirection,
-              let (value, _) = try? passInterpreter.next()
+              let (value, tunedTree) = try? passInterpreter.next()
         {
             passSamplesDrawn += 1
             state.remainingPool -= 1
@@ -225,8 +225,20 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
 
             if propertyHolds == false {
-                let untunedTree = try? Interpreters.reflect(gen, with: value)
-                let reduced = reduce(value: value, tree: untunedTree, matchingDirections: matching)
+                let fullTree = Materializer.materialize(
+                    gen,
+                    prefix: ChoiceSequence.flatten(tunedTree),
+                    mode: .exact,
+                    fallbackTree: tunedTree,
+                    materializePicks: true
+                )
+                let reductionTree = switch fullTree {
+                    case let .success(_, rematerialized, _):
+                        rematerialized as ChoiceTree?
+                    case .rejected, .failed:
+                        ChoiceTree?.none
+                }
+                let reduced = reduce(value: value, tree: reductionTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
                 state.remainingPool += passBudget - passSamplesDrawn
                 return assembleResult(
@@ -255,7 +267,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         tree: ChoiceTree?,
         matchingDirections: [Int]
     ) -> ReducedFailure<Output> {
-        guard let reduceTree = tree ?? (try? Interpreters.reflect(gen, with: value)) else {
+        guard let reduceTree = tree else {
             return ReducedFailure(counterexample: value, original: value, reducedSequence: nil)
         }
 
