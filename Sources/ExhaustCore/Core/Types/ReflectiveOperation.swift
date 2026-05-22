@@ -16,6 +16,7 @@
 // The remaining seven cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`, `transform`.
 
 // MARK: - Why One Enum
+
 //
 // Thirteen cases in one enum rather than separate "structural" and "modifier" enums.
 //
@@ -241,7 +242,7 @@ package enum ReflectiveOperation {
     ///
     /// Structural dual of ``contramap``: contramap transforms the backward (input) side; transform transforms the forward (output) side. Because the transform function is not invertible, reflection through a `.transform` fails with a diagnostic error. For bidirectional transforms, use `mapped(forward:backward:)`, which pairs a contramap with an invisible `map` — no `.transform` operation is created.
     ///
-    /// Forward-only transforms do not degrade reduction. The reducer operates on choice sequences, not on reflected values, so a non-invertible output transform has no effect on shrinking quality.
+    /// Forward-only transforms do not degrade reduction. The reducer operates on choice sequences, not on reflected values, so a non-invertible output transform has no effect on reduction quality.
     ///
     /// - Parameters:
     ///   - kind: Whether this is a `map` (pure function) or `bind` (dependent generator).

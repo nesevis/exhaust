@@ -4,7 +4,7 @@ import Testing
 /// Searches for the minimal counterexample to a property using generation and graph-based reduction.
 ///
 /// Generates values from `gen`, checks each against `property`, and when a failure is found,
-/// shrinks it via `choiceGraphReduce` to find the smallest failing input. This is the
+/// reduces it via `choiceGraphReduce` to find the smallest failing input. This is the
 /// ExhaustCore-level equivalent of `#exhaust` — no macros or `ReflectiveGenerator` needed.
 ///
 /// - Returns: The minimal counterexample, or nil if the property holds for all generated values.
@@ -18,10 +18,10 @@ package func findMinimalCounterexample<Value>(
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: maxIterations)
     while let (value, tree) = try iter.next() {
         guard property(value) == false else { continue }
-        if let (_, shrunk) = try Interpreters.choiceGraphReduce(
+        if let (_, reduced) = try Interpreters.choiceGraphReduce(
             gen: gen, tree: tree, config: .init(maxStalls: maxStalls), property: property
         ) {
-            return shrunk
+            return reduced
         }
         return value
     }

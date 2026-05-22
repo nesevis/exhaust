@@ -66,7 +66,7 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
 
 /// Runs a concurrent contract property test for the given async specification type.
 ///
-/// Generates random tagged command sequences where each command carries a schedule marker assigning it to one of N concurrent lanes or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer shrinks both the command sequence and the lane assignments.
+/// Generates random tagged command sequences where each command carries a schedule marker assigning it to one of N concurrent lanes or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer reduces both the command sequence and the lane assignments.
 ///
 /// The same seed always produces the same interleaving and the same counterexample.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

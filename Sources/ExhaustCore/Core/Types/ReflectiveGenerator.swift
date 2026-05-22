@@ -127,7 +127,7 @@ package extension Generator where Operation == ReflectiveOperation {
 /// }
 /// ```
 ///
-/// When a property fails, Exhaust automatically reduces (shrinks) the counterexample to a minimal failing case. Generators that support bidirectional transforms — ``mapped(forward:backward:)`` and ``bound(forward:backward:)`` — also enable ``#examine`` to decompose a concrete value back into its generator inputs.
+/// When a property fails, Exhaust automatically reduces the counterexample to a minimal failing case. Generators that support bidirectional transforms — ``mapped(forward:backward:)`` and ``bound(forward:backward:)`` — also enable ``#examine`` to decompose a concrete value back into its generator inputs.
 ///
 /// - Note: `@unchecked Sendable` is safe because the underlying indirect enum stores only `@Sendable` closures and `Sendable` value types. The compiler cannot verify sendability through the indirection automatically.
 public struct ReflectiveGenerator<Output>: @unchecked Sendable {

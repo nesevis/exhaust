@@ -89,7 +89,7 @@ package extension Gen {
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
     /// - Returns: A generator that produces dictionaries with random key-value pairs.
-    /// - Note: Reflection decomposes the dictionary into key/value arrays via ``Dictionary/keys`` and ``Dictionary/values``. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may reduce shrinking quality.
+    /// - Note: Reflection decomposes the dictionary into key/value arrays via ``Dictionary/keys`` and ``Dictionary/values``. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may degrade reduction quality.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: Generator<KeyOutput>,
         _ valueGenerator: Generator<ValueOutput>

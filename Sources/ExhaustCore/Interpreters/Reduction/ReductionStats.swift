@@ -5,7 +5,7 @@ public struct ReductionStats: Sendable {
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
     package var encoderProbes: [EncoderName: Int]
 
-    /// Per-encoder probe counts that were accepted (the decoder produced a valid shrink).
+    /// Per-encoder probe counts that were accepted (the decoder produced a valid reduction).
     package var encoderProbesAccepted: [EncoderName: Int]
 
     /// Per-encoder probe counts that hit the reject cache before decoding (no materialization).
@@ -74,11 +74,11 @@ public struct ReductionStats: Sendable {
 
 // MARK: - Step Timings
 
-extension ReductionStats {
+public extension ReductionStats {
     /// Aggregate wall-time spent in each ``ReductionMachine`` step category.
     ///
     /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
-    public struct StepTimings: Sendable {
+    struct StepTimings: Sendable {
         public var dispatch: UInt64 = 0
         public var buildSources: UInt64 = 0
         public var encode: UInt64 = 0

@@ -3,7 +3,7 @@ import Testing
 
 /// Runs a generator repeatedly and asserts that every generated value satisfies the property.
 ///
-/// This is a generate-only check — no shrinking or reduction. Use it to validate
+/// This is a generate-only check — no reduction. Use it to validate
 /// invariants of generators or utility functions across many random inputs.
 package func exhaustCheck<Value>(
     _ gen: Generator<Value>,
