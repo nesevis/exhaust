@@ -261,6 +261,7 @@ extension Interpreters {
                         .contains(convertible.bitPattern64) ?? false
                 } else {
                     isPicked = reflectionPaths.isEmpty == false
+                        && structurallyEqual(value as Any, finalOutput)
                 }
 
                 var results: [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []

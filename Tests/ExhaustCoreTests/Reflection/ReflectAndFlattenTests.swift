@@ -17,29 +17,14 @@ struct ReflectAndFlattenTests {
         let gen = Gen.choose(in: UInt64(0) ... 100)
         let value: UInt64 = 42
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Should have one value representing the choice of 42
-        #expect(flattened.count >= 1)
-
-        // Find the actual value choice (skipping group markers)
-        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        #expect(valueChoices.count >= 1)
-        // The reflected tree contains the value - verify via bit pattern since it could be signed or unsigned
-        #expect(valueChoices[0].choice == ChoiceValue(42 as UInt64, tag: .uint64))
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten array")
@@ -47,36 +32,14 @@ struct ReflectAndFlattenTests {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 3)
         let value: [UInt64] = [1, 5, 9]
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        // Should have values for: length + elements
-        // The exact structure depends on how arrayOf is implemented
-        #expect(valueChoices.count >= 3) // At least the 3 elements
-
-        // Verify the array elements are present
-        let elementValues = valueChoices.compactMap { choice -> UInt64? in
-            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
-            return choice.choice.bitPattern64
-        }
-
-        #expect(elementValues.contains(1))
-        #expect(elementValues.contains(5))
-        #expect(elementValues.contains(9))
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten tuple")
@@ -84,33 +47,15 @@ struct ReflectAndFlattenTests {
         let gen = Gen.zip(Gen.choose(in: UInt64(0) ... 100), Gen.choose(in: UInt64(0) ... 100))
         let value: (UInt64, UInt64) = (42, 99)
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        // Should have 2 values for the tuple elements
-        #expect(valueChoices.count >= 2)
-
-        let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
-            return choice.choice.bitPattern64
-        }
-
-        #expect(unsignedValues.contains(42))
-        #expect(unsignedValues.contains(99))
+        #expect(materialized.0 == value.0)
+        #expect(materialized.1 == value.1)
     }
 
     @Test("Reflect and flatten tuple of arrays")
@@ -149,26 +94,14 @@ struct ReflectAndFlattenTests {
 
         let value = "second"
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // With branches, all children are flattened
-        // Should have group markers wrapping the branches
-        let groupMarkers = flattened.compactMap { element -> Bool? in
-            if case let .group(isOpen) = element {
-                return isOpen
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        // Should have balanced group markers
-        #expect(groupMarkers.count(where: { $0 }) == groupMarkers.count(where: { !$0 }))
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten nested structure")
@@ -180,34 +113,15 @@ struct ReflectAndFlattenTests {
 
         let value: (UInt64, [UInt64]) = (5, [20, 80])
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        // Should have values for: first element + array length + array elements
-        #expect(valueChoices.count >= 3)
-
-        let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
-            return choice.choice.bitPattern64
-        }
-
-        #expect(unsignedValues.contains(5))
-        #expect(unsignedValues.contains(20))
-        #expect(unsignedValues.contains(80))
+        #expect(materialized.0 == value.0)
+        #expect(materialized.1 == value.1)
     }
 
     @Test("Reflect and flatten with mapped")
@@ -216,34 +130,16 @@ struct ReflectAndFlattenTests {
             { (value: UInt64) -> UInt64 in value / 2 },
             Gen.choose(in: UInt64(0) ... 100).map { $0 * 2 }
         )
-        let value: UInt64 = 84 // 42 * 2
+        let value: UInt64 = 84
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        #expect(valueChoices.count >= 1)
-
-        // The reflected tree should contain 42 (the original choice before mapping)
-        let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            guard choice.choice.tag.isSigned == false, choice.choice.tag.isFloatingPoint == false else { return nil }
-            return choice.choice.bitPattern64
-        }
-
-        #expect(unsignedValues.contains(42))
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten Bool")
@@ -251,17 +147,14 @@ struct ReflectAndFlattenTests {
         let gen = Gen.choose(from: [true, false])
         let value = true
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Bool.arbitrary uses pick, so we should have branch/group structure
-        #expect(flattened.isEmpty == false)
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
+        }
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten String")
@@ -269,25 +162,14 @@ struct ReflectAndFlattenTests {
         let gen = Gen.resize(3, stringGen())
         let value = "abc"
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        // Should have values for the characters (now as Int indices via .signed)
-        #expect(valueChoices.count >= 3)
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten preserves metadata")
@@ -295,32 +177,22 @@ struct ReflectAndFlattenTests {
         let gen = Gen.choose(in: UInt64(10) ... 50)
         let value: UInt64 = 25
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Extract value choices
         let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
+            if case let .value(v) = element { return v }
             return nil
         }
+        let firstChoice = try #require(valueChoices.first)
+        let validRange = try #require(firstChoice.validRange)
+        #expect(validRange.contains(firstChoice.choice.bitPattern64))
 
-        #expect(valueChoices.count >= 1)
-
-        // Check that valid ranges are preserved
-        let firstChoice = valueChoices[0]
-        #expect(firstChoice.validRange != nil)
-
-        // The value should fit in its valid range
-        let fits = firstChoice.validRange?.contains(firstChoice.choice.bitPattern64) ?? false
-        #expect(fits)
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
+        }
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten empty array")
@@ -328,17 +200,14 @@ struct ReflectAndFlattenTests {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 0)
         let value: [UInt64] = []
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Should have at least group markers, possibly a length choice
-        #expect(flattened.isEmpty == false)
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
+        }
+        #expect(materialized == value)
     }
 
     @Test("Reflect and flatten complex nested pick")
@@ -351,32 +220,14 @@ struct ReflectAndFlattenTests {
 
         let value = (2, "b")
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
-
-        // Should have group markers and nested structure
-        #expect(flattened.isEmpty == false)
-
-        // Verify balanced group markers
-        var openCount = 0
-        var closeCount = 0
-        for element in flattened {
-            if case let .group(isOpen) = element {
-                if isOpen {
-                    openCount += 1
-                } else {
-                    closeCount += 1
-                }
-            }
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        #expect(openCount == closeCount)
+        #expect(materialized.0 == value.0)
+        #expect(materialized.1 == value.1)
     }
 
     @Test("Reflect and flatten with different types")
@@ -385,42 +236,16 @@ struct ReflectAndFlattenTests {
 
         let value: (UInt64, Int64, Double) = (42, -10, 0.5)
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element {
-                return v
-            }
-            return nil
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
         }
-
-        // Should have at least 3 values for the tuple elements
-        #expect(valueChoices.count >= 3)
-
-        // Check we have different types
-        let hasUnsigned = valueChoices.contains { choice in
-            choice.choice.tag.isSigned == false && choice.choice.tag.isFloatingPoint == false
-        }
-
-        let hasSigned = valueChoices.contains { choice in
-            choice.choice.tag.isSigned
-        }
-
-        let hasFloating = valueChoices.contains { choice in
-            choice.choice.tag.isFloatingPoint
-        }
-
-        #expect(hasUnsigned)
-        #expect(hasSigned)
-        #expect(hasFloating)
+        #expect(materialized.0 == value.0)
+        #expect(materialized.1 == value.1)
+        #expect(materialized.2 == value.2)
     }
 
     @Test("Flatten count matches reflection complexity")
@@ -428,31 +253,20 @@ struct ReflectAndFlattenTests {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 5)
         let value: [UInt64] = [1, 2, 3, 4, 5]
 
-        // Reflect the generator with the value
-        let tree = try Interpreters.reflect(gen, with: value)
-
-        #expect(tree != nil)
-        guard let tree else { return }
-
-        // Flatten the reflected tree
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
-
-        // Extract value choices and group markers
-        let valueCount = flattened.count(where: { element in
-            if case .value = element { return true }
-            return false
-        })
 
         let groupCount = flattened.count(where: { element in
             if case .group = element { return true }
             return false
         })
-
-        // Should have at least 5 values for the array elements
-        #expect(valueCount >= 5)
-
-        // Group markers should be balanced (even count)
         #expect(groupCount % 2 == 0)
+
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Materialize failed for reflected tree")
+            return
+        }
+        #expect(materialized == value)
     }
 
     @Test("Materialising works for sequences")
