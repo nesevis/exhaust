@@ -1,7 +1,8 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("Concurrent failure rendering")
+@Suite("Concurrent failure rendering", .tags(.contract))
 struct ConcurrentFailureRenderingTests {
     @Test("renderFailure produces full report with seed")
     func renderFailureWithSeed() {

@@ -1,7 +1,8 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("Cooperative scheduler behavior")
+@Suite("Cooperative scheduler behavior", .tags(.contract))
 struct CooperativeSchedulerTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Sequential prefix passes without triggering concurrency bugs")

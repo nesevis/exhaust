@@ -1,7 +1,8 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("All-skip concurrent contract tests")
+@Suite("All-skip concurrent contract tests", .tags(.contract))
 struct AllSkipConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("100% skip rate does not hang or crash")

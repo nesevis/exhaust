@@ -20,11 +20,12 @@
 // The dependent-data challenge from the original blog post surfaces naturally here: the `submitAnswers` command intentionally *does not* constrain its answer count to the current exam's key length, which is what allows the invariant to detect the missing validation. A correct system would enforce the constraint internally.
 
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Exam grader contract tests")
+@Suite("Exam grader contract tests", .tags(.contract))
 struct ExamGraderTests {
     /// Runs the contract and verifies that Exhaust detects at least one of the two embedded bugs. With sequence lengths of 3 to 8 commands, the contract reliably triggers either the invariant failure (mismatched answer length) or the postcondition failure (grading penalizes blanks). The test passes when the trace contains a failure — meaning the contract successfully caught the bug.
     @Test("Detects answer length mismatch or grading bug")

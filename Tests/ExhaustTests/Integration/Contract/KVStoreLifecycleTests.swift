@@ -17,11 +17,12 @@
 // runner correctly handles high skip rates without false positives.
 
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Key-value store lifecycle contract tests")
+@Suite("Key-value store lifecycle contract tests", .tags(.contract))
 struct KVStoreLifecycleTests {
     @Test("Stale data after close/reopen detected via invariant or postcondition")
     func staleDataAfterReopen() throws {

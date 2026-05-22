@@ -16,11 +16,12 @@
 // `put` first, in order. The model is a simple FIFO array.
 
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Circular queue contract tests")
+@Suite("Circular queue contract tests", .tags(.contract))
 struct CircularQueueTests {
     // The model is a plain `[Int]` tracking FIFO order. Three commands exercise
     // the ring buffer:

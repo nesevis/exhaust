@@ -13,11 +13,12 @@
 // 2. BuggyBudgetAffordabilitySpec — demonstrates that a greedy assignment strategy (most-constrained-first, highest-capacity-category) disagrees with the brute-force reference. The framework finds and shrinks a minimal counterexample.
 
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Budget affordability contract tests")
+@Suite("Budget affordability contract tests", .tags(.contract))
 struct BudgetAffordabilityTests {
     @Test("canAfford agrees with brute-force reference for all generated bills")
     func correctImplementation() {

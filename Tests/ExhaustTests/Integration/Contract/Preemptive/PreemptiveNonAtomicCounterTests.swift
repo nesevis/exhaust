@@ -1,8 +1,9 @@
 import Foundation
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
-@Suite("Preemptive concurrent contract: non-atomic counter")
+@Suite("Preemptive concurrent contract: non-atomic counter", .tags(.contract))
 struct PreemptiveNonAtomicCounterTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Detects lost-update bug via oracle comparison")

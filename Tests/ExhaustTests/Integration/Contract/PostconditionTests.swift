@@ -1,9 +1,10 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Postcondition-only contract tests")
+@Suite("Postcondition-only contract tests", .tags(.contract))
 struct PostconditionTests {
     @Test("Set uniqueness postcondition detects duplicate add")
     func setDuplicateDetection() throws {

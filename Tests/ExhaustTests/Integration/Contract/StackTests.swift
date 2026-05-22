@@ -1,9 +1,10 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Tests
 
-@Suite("Stack state machine tests")
+@Suite("Stack state machine tests", .tags(.contract))
 struct StackTests {
     @Test("Passing spec produces no counterexample")
     func passingStack() {

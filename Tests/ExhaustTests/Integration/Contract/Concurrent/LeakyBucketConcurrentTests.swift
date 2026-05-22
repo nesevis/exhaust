@@ -1,9 +1,10 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Leaky bucket concurrent tests")
+@Suite("Leaky bucket concurrent tests", .tags(.contract))
 struct LeakyBucketConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Detects check-then-act bug that requires state buildup")

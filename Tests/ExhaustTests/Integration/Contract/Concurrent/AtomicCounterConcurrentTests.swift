@@ -1,9 +1,10 @@
 import Testing
 @testable import Exhaust
+import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Atomic counter concurrent tests")
+@Suite("Atomic counter concurrent tests", .tags(.contract))
 struct AtomicCounterConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Thread-safe counter passes under all interleavings")

@@ -1,8 +1,9 @@
 import Exhaust
+import ExhaustTestSupport
 import Foundation
 import Testing
 
-@Suite("SCA sequence length benchmark", .serialized)
+@Suite("SCA sequence length benchmark", .serialized, .tags(.contract))
 struct SCABenchmark {
     @Test("Sequence length timing", arguments: [5, 8, 10, 15, 20, 25, 30])
     func sequenceLengthTiming(length: Int) {

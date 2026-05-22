@@ -1,7 +1,8 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
-@Suite("Multiple @Invariant methods")
+@Suite("Multiple @Invariant methods", .tags(.contract))
 struct MultiInvariantTests {
     @Test("First failing invariant is reported in trace")
     func firstFailingInvariantReported() {

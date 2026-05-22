@@ -1,7 +1,8 @@
 import Exhaust
+import ExhaustTestSupport
 import Testing
 
-@Suite("Multiple @Model properties")
+@Suite("Multiple @Model properties", .tags(.contract))
 struct MultiModelTests {
     @Test("Spec with three @Model properties detects divergence")
     func threeModelProperties() {
