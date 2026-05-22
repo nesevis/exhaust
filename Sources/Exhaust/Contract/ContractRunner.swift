@@ -141,35 +141,42 @@ public func __runContract<Spec: ContractSpec>(
                         seed: regressionSeed,
                         maxRuns: 1
                     )
-                    if let (input, _) = try? regressionInterpreter.next() {
-                        if property(input) == false {
-                            let (trace, spec) = buildTrace(input, specType: specType)
-                            let result = ContractResult<Spec>(
-                                commands: input,
-                                trace: trace,
-                                systemUnderTest: spec.systemUnderTest,
-                                seed: regressionSeed,
-                                discoveryMethod: .replay
-                            )
-                            if suppressIssueReporting == false {
-                                let rendered = renderFailure(
-                                    result,
-                                    failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
-                                    modelDescription: spec.modelDescription,
-                                    includeDiff: includeDiff
+                    do {
+                        if let (input, _) = try regressionInterpreter.next() {
+                            if property(input) == false {
+                                let (trace, spec) = buildTrace(input, specType: specType)
+                                let result = ContractResult<Spec>(
+                                    commands: input,
+                                    trace: trace,
+                                    systemUnderTest: spec.systemUnderTest,
+                                    seed: regressionSeed,
+                                    discoveryMethod: .replay
                                 )
-                                reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
+                                if suppressIssueReporting == false {
+                                    let rendered = renderFailure(
+                                        result,
+                                        failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
+                                        modelDescription: spec.modelDescription,
+                                        includeDiff: includeDiff
+                                    )
+                                    reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
+                                }
+                                return result
+                            } else if suppressIssueReporting == false {
+                                reportIssue(
+                                    "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                                    fileID: fileID,
+                                    filePath: filePath,
+                                    line: line,
+                                    column: column
+                                )
                             }
-                            return result
-                        } else if suppressIssueReporting == false {
-                            reportIssue(
-                                "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
-                                fileID: fileID,
-                                filePath: filePath,
-                                line: line,
-                                column: column
-                            )
                         }
+                    } catch {
+                        reportIssue(
+                            "Generator failed during regression replay (seed \(encodedSeed)): \(error)",
+                            fileID: fileID, filePath: filePath, line: line, column: column
+                        )
                     }
                 }
             }

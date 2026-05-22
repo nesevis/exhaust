@@ -75,7 +75,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
     // MARK: - Run
 
     /// Runs the classification-aware exploration and returns a result describing per-direction coverage, co-occurrence, and any counterexample.
-    package mutating func run() -> ClassificationExploreResult<Output> {
+    package mutating func run() throws -> ClassificationExploreResult<Output> {
         let directionCount = directions.count
         let startTime = DispatchTime.now()
         let totalPool = directionCount * maxAttemptsPerDirection
@@ -92,7 +92,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             maxRuns: UInt64(warmupBudget)
         )
 
-        while let (value, tree) = try? interpreter.next() {
+        while let (value, tree) = try interpreter.next() {
             state.warmupSamplesDrawn += 1
             state.remainingPool -= 1
             state.propertyInvocations += 1
@@ -132,7 +132,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             let passBudget = min(maxAttemptsPerDirection, state.remainingPool)
             guard passBudget > 0 else { break }
 
-            if let failureResult = runTuningPass(
+            if let failureResult = try runTuningPass(
                 targetDirection: targetDirection,
                 passBudget: passBudget,
                 directionCount: directionCount,
@@ -170,7 +170,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         directionCount: Int,
         state: inout RunState,
         startTime: DispatchTime
-    ) -> ClassificationExploreResult<Output>? {
+    ) throws -> ClassificationExploreResult<Output>? {
         let tunedGen: Generator<Output>
         do {
             tunedGen = try ChoiceGradientTuner.tune(
@@ -201,7 +201,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
         while passSamplesDrawn < passBudget,
               state.hits[targetDirection] < hitsPerDirection,
-              let (value, tunedTree) = try? passInterpreter.next()
+              let (value, tunedTree) = try passInterpreter.next()
         {
             passSamplesDrawn += 1
             state.remainingPool -= 1

@@ -92,7 +92,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
         if config.seed == nil {
             let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
             var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
-            while let (commands, _) = try? smokeIterator.next() {
+            do { while let (commands, _) = try smokeIterator.next() {
                 let spec = Spec()
                 let (trace, failed) = buildSequentialTrace(
                     commands,
@@ -129,6 +129,11 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                     }
                     return result
                 }
+            } } catch {
+                reportIssue(
+                    "Generator failed during smoke test: \(error)",
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
             }
         }
 
@@ -186,7 +191,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
         let actualSeed = interpreter.baseSeed
 
         var samplingIteration = 0
-        while let (taggedCommands, tree) = try? interpreter.next() {
+        do { while let (taggedCommands, tree) = try interpreter.next() {
             samplingIteration += 1
             if check.execute(taggedCommands) == false {
                 let reductionResult = check.reduce(
@@ -223,6 +228,11 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 
                 return result
             }
+        } } catch {
+            reportIssue(
+                "Generator failed during sampling: \(error)",
+                fileID: fileID, filePath: filePath, line: line, column: column
+            )
         }
 
         report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)

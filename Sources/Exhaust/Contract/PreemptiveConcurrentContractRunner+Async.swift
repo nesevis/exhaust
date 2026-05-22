@@ -96,7 +96,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
             if config.seed == nil {
                 let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
                 var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
-                while let (commands, _) = try? smokeIterator.next() {
+                do { while let (commands, _) = try smokeIterator.next() {
                     let spec = Spec()
                     nonisolated(unsafe) let unsafeSpec = spec
                     let traceBox = UnsafeSendableBox<[TraceStep]>([])
@@ -131,6 +131,9 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                         deferredIssues.append(message)
                         return (result, deferredIssues, report)
                     }
+                }
+                } catch {
+                    deferredIssues.append("Generator failed during smoke test: \(error)")
                 }
             }
 
@@ -189,7 +192,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
             let actualSeed = interpreter.baseSeed
 
             var samplingIteration = 0
-            while let (taggedCommands, tree) = try? interpreter.next() {
+            do { while let (taggedCommands, tree) = try interpreter.next() {
                 samplingIteration += 1
                 if check.execute(taggedCommands) == false {
                     let reductionResult = check.reduce(
@@ -227,6 +230,8 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                     finalizeReport()
                     return (result, deferredIssues, report)
                 }
+            } } catch {
+                deferredIssues.append("Generator failed during sampling: \(error)")
             }
 
             report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
