@@ -2,10 +2,10 @@ import Exhaust
 import ExhaustTestSupport
 import Testing
 
-@Suite("Multiple @Model properties", .tags(.contract))
+@Suite("Multiple @Model properties", .serialized, .tags(.contract))
 struct MultiModelTests {
-    @Test("Spec with three @Model properties detects divergence")
-    func threeModelProperties() {
+    @Test
+    func `Spec with three @Model properties detects divergence`() {
         let result = #exhaust(
             MultiModelSpec.self,
             .commandLimit(8),

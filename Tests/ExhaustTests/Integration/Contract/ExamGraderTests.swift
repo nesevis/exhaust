@@ -25,11 +25,11 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Exam grader contract tests", .tags(.contract))
+@Suite("Exam grader contract tests", .serialized, .tags(.contract))
 struct ExamGraderTests {
     /// Runs the contract and verifies that Exhaust detects at least one of the two embedded bugs. With sequence lengths of 3 to 8 commands, the contract reliably triggers either the invariant failure (mismatched answer length) or the postcondition failure (grading penalizes blanks). The test passes when the trace contains a failure — meaning the contract successfully caught the bug.
-    @Test("Detects answer length mismatch or grading bug")
-    func examGraderBugs() throws {
+    @Test
+    func `Detects answer length mismatch or grading bug`() throws {
         // Note: Bonsai doesn't produce as minimal a counterexample
         let result = try #require(
             #exhaust(
@@ -49,8 +49,8 @@ struct ExamGraderTests {
     /// Uses a dependent generator (the Exhaust equivalent of Hypothesis's `@composite`) to isolate the grading bug. The generator binds the answer key length into the answers generator, so lengths always match — bug 1 is structurally impossible. The property then checks that when every non-blank answer is correct, the grade is 1.0. The buggy grader counts blanks in the denominator, deflating the score, so this property fails.
     ///
     /// This is written as a standalone property test rather than a `@Contract` because dependent generation requires `bind` — monadic chaining where one generated value determines the shape of the next generator. `@Command` attribute arguments are resolved at macro expansion time, so they cannot express inter-parameter dependencies. Hypothesis solves this with `@composite`, which provides an imperative `draw()` function that executes generators within the current choice-recording context. Without equivalent syntax sugar, the `bind`-based generator cannot be embedded in a `@Command` declaration, so a standalone `#exhaust` property test is the natural home for it.
-    @Test("Dependent generator isolates grading bug via @composite pattern")
-    func gradingBugWithDependentGenerator() {
+    @Test
+    func `Dependent generator isolates grading bug via @composite pattern`() {
         let grader = BuggyExamGrader()
         let gen = examWithMatchingAnswers()
 

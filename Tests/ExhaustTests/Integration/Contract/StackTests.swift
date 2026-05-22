@@ -4,10 +4,10 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Stack state machine tests", .tags(.contract))
+@Suite("Stack state machine tests", .serialized, .tags(.contract))
 struct StackTests {
-    @Test("Passing spec produces no counterexample")
-    func passingStack() {
+    @Test
+    func `Passing spec produces no counterexample`() {
         let result = #exhaust(
             StackSpec.self,
             .commandLimit(15),

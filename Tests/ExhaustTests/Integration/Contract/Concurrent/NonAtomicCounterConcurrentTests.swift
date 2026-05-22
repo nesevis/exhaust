@@ -1,14 +1,14 @@
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Non-atomic counter concurrent tests", .tags(.contract))
+@Suite("Non-atomic counter concurrent tests", .serialized, .tags(.contract))
 struct NonAtomicCounterConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Detects lost-update bug in non-atomic counter")
-    func detectsLostUpdate() async throws {
+    @Test
+    func `Detects lost-update bug in non-atomic counter`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
@@ -24,8 +24,8 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Reduced counterexample is smaller than original")
-    func reductionShrinks() async throws {
+    @Test
+    func `Reduced counterexample is smaller than original`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
@@ -36,8 +36,8 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Coverage phase reports discoveryMethod .coverage with no seed")
-    func coverageDiscoveryMethod() async throws {
+    @Test
+    func `Coverage phase reports discoveryMethod .coverage with no seed`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
@@ -49,8 +49,8 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Random sampling reports discoveryMethod .randomSampling with a seed")
-    func randomSamplingDiscoveryMethod() async throws {
+    @Test
+    func `Random sampling reports discoveryMethod .randomSampling with a seed`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
@@ -62,14 +62,14 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test(".onReport delivers invocation counts and materializations")
-    func onReportDelivers() async {
+    @Test
+    func `.onReport delivers invocation counts and materializations`() async throws {
         var deliveredReport: ExhaustReport?
         _ = await __runContractConcurrent(
             NonAtomicCounterSpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
         )
-        let report = try! #require(deliveredReport, "onReport closure should be called")
+        let report = try #require(deliveredReport, "onReport closure should be called")
         #expect(report.propertyInvocations == 28)
         #expect(report.reductionInvocations == 13)
         #expect(report.totalMilliseconds > 0)
@@ -83,8 +83,8 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Deterministic replay produces same result")
-    func deterministicReplay() async throws {
+    @Test
+    func `Deterministic replay produces same result`() async throws {
         let result1 = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
@@ -101,8 +101,8 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Reduction drives schedule markers toward prefix")
-    func reductionDrivesMarkersTowardPrefix() async throws {
+    @Test
+    func `Reduction drives schedule markers toward prefix`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,

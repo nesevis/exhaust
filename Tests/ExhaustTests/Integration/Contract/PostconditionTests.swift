@@ -4,10 +4,10 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Postcondition-only contract tests", .tags(.contract))
+@Suite("Postcondition-only contract tests", .serialized, .tags(.contract))
 struct PostconditionTests {
-    @Test("Set uniqueness postcondition detects duplicate add")
-    func setDuplicateDetection() throws {
+    @Test
+    func `Set uniqueness postcondition detects duplicate add`() throws {
         let result = try #require(
             #exhaust(
                 SetUniquenessContract.self,
@@ -22,8 +22,8 @@ struct PostconditionTests {
         })
     }
 
-    @Test("Stack LIFO postcondition detects wrong peek")
-    func stackLIFOViolation() throws {
+    @Test
+    func `Stack LIFO postcondition detects wrong peek`() throws {
         let result = try #require(
             #exhaust(
                 StackLIFOContract.self,
@@ -38,8 +38,8 @@ struct PostconditionTests {
         })
     }
 
-    @Test("Dictionary consistency detects count drift")
-    func dictionaryCountDrift() throws {
+    @Test
+    func `Dictionary consistency detects count drift`() throws {
         let result = try #require(
             #exhaust(
                 DictionaryConsistencyContract.self,

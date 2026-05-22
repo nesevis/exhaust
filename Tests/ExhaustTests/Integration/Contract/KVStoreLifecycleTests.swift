@@ -22,10 +22,10 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Key-value store lifecycle contract tests", .tags(.contract))
+@Suite("Key-value store lifecycle contract tests", .serialized, .tags(.contract))
 struct KVStoreLifecycleTests {
-    @Test("Stale data after close/reopen detected via invariant or postcondition")
-    func staleDataAfterReopen() throws {
+    @Test
+    func `Stale data after close/reopen detected via invariant or postcondition`() throws {
         // Bonsai is more or less equivalent here
         let result = try #require(
             #exhaust(

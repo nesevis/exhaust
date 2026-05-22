@@ -2,10 +2,10 @@ import Exhaust
 import ExhaustTestSupport
 import Testing
 
-@Suite("Multiple @Invariant methods", .tags(.contract))
+@Suite("Multiple @Invariant methods", .serialized, .tags(.contract))
 struct MultiInvariantTests {
-    @Test("First failing invariant is reported in trace")
-    func firstFailingInvariantReported() {
+    @Test
+    func `First failing invariant is reported in trace`() {
         let result = #exhaust(
             FiveInvariantSpec.self,
             .commandLimit(4),
@@ -22,8 +22,8 @@ struct MultiInvariantTests {
         }
     }
 
-    @Test("Passing spec with five invariants produces no counterexample")
-    func fiveInvariantsAllPass() {
+    @Test
+    func `Passing spec with five invariants produces no counterexample`() {
         let result = #exhaust(
             PassingFiveInvariantSpec.self,
             .commandLimit(6),

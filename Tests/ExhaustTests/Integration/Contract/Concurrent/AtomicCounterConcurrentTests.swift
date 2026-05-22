@@ -1,14 +1,14 @@
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Atomic counter concurrent tests", .tags(.contract))
+@Suite("Atomic counter concurrent tests", .serialized, .tags(.contract))
 struct AtomicCounterConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Thread-safe counter passes under all interleavings")
-    func atomicCounterPasses() async {
+    @Test
+    func `Thread-safe counter passes under all interleavings`() async {
         let result = await __runContractConcurrent(
             AtomicCounterSpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
@@ -17,8 +17,8 @@ struct AtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Narrow race in non-suspending counter is invisible to cooperative scheduler")
-    func narrowRaceInvisibleToCCCR() async {
+    @Test
+    func `Narrow race in non-suspending counter is invisible to cooperative scheduler`() async {
         let result = await __runContractConcurrent(
             NarrowRaceCounterSpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]

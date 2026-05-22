@@ -1,12 +1,12 @@
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
-@Suite("All-skip concurrent contract tests", .tags(.contract))
+@Suite("All-skip concurrent contract tests", .serialized, .tags(.contract))
 struct AllSkipConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("100% skip rate does not hang or crash")
-    func allCommandsSkip() async {
+    @Test
+    func `100% skip rate does not hang or crash`() async {
         let result = await __runContractConcurrent(
             AlwaysSkipSpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting)]
@@ -15,8 +15,8 @@ struct AllSkipConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("100% skip rate with coverage phase")
-    func allCommandsSkipWithCoverage() async {
+    @Test
+    func `100% skip rate with coverage phase`() async {
         let result = await __runContractConcurrent(
             AlwaysSkipSpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 100, sampling: 50)), .suppress(.issueReporting)]

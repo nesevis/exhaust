@@ -4,10 +4,10 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Invariant-only contract tests", .tags(.contract))
+@Suite("Invariant-only contract tests", .serialized, .tags(.contract))
 struct InvariantOnlyTests {
-    @Test("Circular buffer capacity invariant detects overflow")
-    func circularBufferOverflow() throws {
+    @Test
+    func `Circular buffer capacity invariant detects overflow`() throws {
         let result = try #require(
             #exhaust(
                 CircularBufferContract.self,
@@ -22,8 +22,8 @@ struct InvariantOnlyTests {
         })
     }
 
-    @Test("Sorted backing invariant detects unsorted insert")
-    func sortedBackingViolation() throws {
+    @Test
+    func `Sorted backing invariant detects unsorted insert`() throws {
         let result = try #require(
             #exhaust(
                 SortedBackingContract.self,

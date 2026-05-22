@@ -21,7 +21,7 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Circular queue contract tests", .tags(.contract))
+@Suite("Circular queue contract tests", .serialized, .tags(.contract))
 struct CircularQueueTests {
     // The model is a plain `[Int]` tracking FIFO order. Three commands exercise
     // the ring buffer:
@@ -33,8 +33,8 @@ struct CircularQueueTests {
     //
     // An invariant ensures the SUT count stays within bounds.
 
-    @Test("Position-dependent corruption detected via FIFO postcondition")
-    func circularQueueCorruption() throws {
+    @Test
+    func `Position-dependent corruption detected via FIFO postcondition`() throws {
         let result = try #require(
             #exhaust(
                 CircularQueueContract.self,

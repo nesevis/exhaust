@@ -1,12 +1,12 @@
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
-@Suite("Preemptive concurrent contract: async facade over racy dispatch queue", .tags(.contract))
+@Suite("Preemptive concurrent contract: async facade over racy dispatch queue", .serialized, .tags(.contract))
 struct PreemptiveAsyncFacadeTests {
-    @Test("Detects lost-update bug behind async facade")
-    func detectsLostUpdate() async throws {
+    @Test
+    func `Detects lost-update bug behind async facade`() async throws {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 AsyncRacyCounterSpec.self,
@@ -21,8 +21,8 @@ struct PreemptiveAsyncFacadeTests {
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }
 
-    @Test("onReport delivers profiling summary")
-    func onReportDelivers() async throws {
+    @Test
+    func `onReport delivers profiling summary`() async throws {
         var capturedReport: ExhaustReport?
         _ = await __runPreemptiveConcurrentContractAsync(
             AsyncRacyCounterSpec.self,
@@ -40,8 +40,8 @@ struct PreemptiveAsyncFacadeTests {
         #expect(report.randomSamplingInvocations > 0)
     }
 
-    @Test("Reports issue through Swift Testing when suppression is off")
-    func reportsIssueThroughSwiftTesting() async {
+    @Test
+    func `Reports issue through Swift Testing when suppression is off`() async {
         await withKnownIssue {
             _ = try #require(
                 await __runPreemptiveConcurrentContractAsync(

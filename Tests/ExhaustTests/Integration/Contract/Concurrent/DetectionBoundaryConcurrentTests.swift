@@ -1,14 +1,14 @@
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Detection boundary and multi-lane behavior", .tags(.contract))
+@Suite("Detection boundary and multi-lane behavior", .serialized, .tags(.contract))
 struct DetectionBoundaryTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")
-    func raceWithoutYieldNotDetected() async {
+    @Test
+    func `Race without suspension point is NOT detected (demonstrates tool limitation)`() async {
         let result = await __runContractConcurrent(
             SilentRaceSpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
@@ -17,8 +17,8 @@ struct DetectionBoundaryTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Same race WITH suspension point IS detected")
-    func raceWithYieldDetected() async throws {
+    @Test
+    func `Same race WITH suspension point IS detected`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 ExposedRaceSpec.self,
@@ -33,8 +33,8 @@ struct DetectionBoundaryTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Three-way race detected with concurrencyLevel 3")
-    func threeWayRaceDetected() async throws {
+    @Test
+    func `Three-way race detected with concurrencyLevel 3`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 ThreeWayRaceSpec.self,
@@ -49,8 +49,8 @@ struct DetectionBoundaryTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Four-way race detected with concurrencyLevel 4 (exercises chooseLaneControl)")
-    func fourWayRaceDetected() async throws {
+    @Test
+    func `Four-way race detected with concurrencyLevel 4 (exercises chooseLaneControl)`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 ThreeWayRaceSpec.self,

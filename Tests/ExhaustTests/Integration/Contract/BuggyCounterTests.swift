@@ -4,10 +4,10 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Buggy counter state machine tests", .tags(.contract))
+@Suite("Buggy counter state machine tests", .serialized, .tags(.contract))
 struct BuggyCounterTests {
-    @Test("Detects model/SUT divergence in buggy counter")
-    func detectsBuggyCounter() throws {
+    @Test
+    func `Detects model/SUT divergence in buggy counter`() throws {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,
@@ -25,8 +25,8 @@ struct BuggyCounterTests {
         #expect(result.systemUnderTest.capacity == 3)
     }
 
-    @Test("Trace steps have correct structure")
-    func traceSteps() throws {
+    @Test
+    func `Trace steps have correct structure`() throws {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,

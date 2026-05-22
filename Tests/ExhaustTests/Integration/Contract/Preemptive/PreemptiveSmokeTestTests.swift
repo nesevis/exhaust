@@ -1,12 +1,12 @@
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
-@Suite("Preemptive concurrent contract: smoke test", .tags(.contract))
+@Suite("Preemptive concurrent contract: smoke test", .serialized, .tags(.contract))
 struct PreemptiveSmokeTestTests {
-    @Test("Smoke test catches sequential bug before concurrent phase")
-    func catchesSequentialBug() throws {
+    @Test
+    func `Smoke test catches sequential bug before concurrent phase`() throws {
         let result = try #require(
             __runPreemptiveConcurrentContract(
                 SequentiallyBrokenSpec.self,

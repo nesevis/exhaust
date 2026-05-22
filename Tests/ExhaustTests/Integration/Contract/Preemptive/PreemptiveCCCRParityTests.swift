@@ -1,6 +1,6 @@
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
 // PCCR equivalents of the CCCR test specs. Same commands, same SUTs,
 // @ConcurrentContract instead of @Contract, @Oracle added for sequential comparison.
@@ -12,10 +12,10 @@ import ExhaustTestSupport
 
 // MARK: - Non-Atomic Counter
 
-@Suite("PCCR parity: non-atomic counter", .tags(.contract))
+@Suite("PCCR parity: non-atomic counter", .serialized, .tags(.contract))
 struct PreemptiveNonAtomicCounterParityTests {
-    @Test("Detects lost-update bug in non-atomic counter")
-    func detectsLostUpdate() async throws {
+    @Test
+    func `Detects lost-update bug in non-atomic counter`() async throws {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 PreemptiveNonAtomicCounterParitySpec.self,
@@ -25,8 +25,8 @@ struct PreemptiveNonAtomicCounterParityTests {
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }
 
-    @Test("Reduced counterexample is smaller than original")
-    func reductionShrinks() async throws {
+    @Test
+    func `Reduced counterexample is smaller than original`() async throws {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 PreemptiveNonAtomicCounterParitySpec.self,
@@ -66,10 +66,10 @@ final class PreemptiveNonAtomicCounterParitySpec {
 
 // MARK: - Leaky Bucket
 
-@Suite("PCCR parity: leaky bucket", .tags(.contract))
+@Suite("PCCR parity: leaky bucket", .serialized, .tags(.contract))
 struct PreemptiveLeakyBucketParityTests {
-    @Test("Detects check-then-act bug that requires state buildup")
-    func detectsLeakyBucket() async throws {
+    @Test
+    func `Detects check-then-act bug that requires state buildup`() async throws {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 PreemptiveLeakyBucketParitySpec.self,
@@ -110,10 +110,10 @@ final class PreemptiveLeakyBucketParitySpec {
 
 // MARK: - Atomic Counter (should pass)
 
-@Suite("PCCR parity: atomic counter", .tags(.contract))
+@Suite("PCCR parity: atomic counter", .serialized, .tags(.contract))
 struct PreemptiveAtomicCounterParityTests {
-    @Test("Thread-safe counter passes under preemptive execution")
-    func atomicCounterPasses() async {
+    @Test
+    func `Thread-safe counter passes under preemptive execution`() async {
         let result = await __runPreemptiveConcurrentContractAsync(
             PreemptiveAtomicCounterParitySpec.self,
             settings: [
@@ -148,10 +148,10 @@ final class PreemptiveAtomicCounterParitySpec {
 
 // MARK: - Detection Boundary
 
-@Suite("PCCR parity: detection boundary", .tags(.contract))
+@Suite("PCCR parity: detection boundary", .serialized, .tags(.contract))
 struct PreemptiveDetectionBoundaryParityTests {
-    @Test("Race with Task.yield() is detected by preemptive runner")
-    func raceWithYieldDetected() async throws {
+    @Test
+    func `Race with Task.yield() is detected by preemptive runner`() async throws {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 PreemptiveExposedRaceParitySpec.self,
@@ -161,8 +161,8 @@ struct PreemptiveDetectionBoundaryParityTests {
         #expect(result.commands.count >= 2)
     }
 
-    @Test("Three-way race detected with concurrencyLevel 3")
-    func threeWayRaceDetected() async throws {
+    @Test
+    func `Three-way race detected with concurrencyLevel 3`() async throws {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 PreemptiveThreeWayRaceParitySpec.self,
@@ -207,10 +207,10 @@ final class PreemptiveThreeWayRaceParitySpec {
 
 // MARK: - All-Skip
 
-@Suite("PCCR parity: all-skip", .tags(.contract))
+@Suite("PCCR parity: all-skip", .serialized, .tags(.contract))
 struct PreemptiveAllSkipParityTests {
-    @Test("100% skip rate does not hang or crash")
-    func allCommandsSkip() async {
+    @Test
+    func `100% skip rate does not hang or crash`() async {
         let result = await __runPreemptiveConcurrentContractAsync(
             PreemptiveAlwaysSkipParitySpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting)]
@@ -218,8 +218,8 @@ struct PreemptiveAllSkipParityTests {
         #expect(result == nil, "A spec where every command skips should produce no failure")
     }
 
-    @Test("100% skip rate with coverage phase")
-    func allCommandsSkipWithCoverage() async {
+    @Test
+    func `100% skip rate with coverage phase`() async {
         let result = await __runPreemptiveConcurrentContractAsync(
             PreemptiveAlwaysSkipParitySpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 100, sampling: 50)), .suppress(.issueReporting)]

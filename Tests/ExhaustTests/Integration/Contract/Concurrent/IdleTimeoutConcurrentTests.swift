@@ -1,14 +1,14 @@
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
-import ExhaustTestSupport
 
 // MARK: - Tests
 
-@Suite("Idle timeout concurrent tests", .tags(.contract))
+@Suite("Idle timeout concurrent tests", .serialized, .tags(.contract))
 struct IdleTimeoutConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Idle timeout fires for SUT that escapes the cooperative executor")
-    func idleTimeoutFires() async throws {
+    @Test
+    func `Idle timeout fires for SUT that escapes the cooperative executor`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 SleepingSpec.self,
