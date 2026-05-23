@@ -15,4 +15,33 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
       - name: Run tests
-        run: swift test --parallel
+        run: swift test --parallel --xunit-output .build/tests.xml
+
+      - name: Test report
+        if: always()
+        run: |
+          python3 - .build/tests.xml <<'SCRIPT'
+          import xml.etree.ElementTree as ET, sys, os, glob
+          paths = [p for a in sys.argv[1:] for p in glob.glob(a) if os.path.exists(p)]
+          if not paths:
+              sys.exit(0)
+          total_tests = total_failures = 0
+          failures = []
+          for path in paths:
+              tree = ET.parse(path)
+              for suite in tree.iter('testsuite'):
+                  total_tests += int(suite.get('tests', 0))
+                  total_failures += int(suite.get('failures', 0))
+              for case in tree.iter('testcase'):
+                  for fail in case.iter('failure'):
+                      msg = (fail.get('message') or fail.text or '').split('\n')[0]
+                      failures.append((case.get('classname',''), case.get('name',''), msg))
+          with open(os.environ.get('GITHUB_STEP_SUMMARY', '/dev/null'), 'a') as f:
+              if total_failures == 0:
+                  f.write(f"### All {total_tests} tests passed\n")
+              else:
+                  f.write(f"### {total_failures} of {total_tests} tests failed\n\n")
+                  f.write("| Suite | Test | Message |\n|-------|------|---------|\n")
+                  for suite, name, msg in failures:
+                      f.write(f"| `{suite}` | `{name}` | {msg} |\n")
+          SCRIPT
