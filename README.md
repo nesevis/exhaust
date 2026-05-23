@@ -266,7 +266,7 @@ Configure behaviour with settings:
 |---|---|---|
 | `.budget(.quick)` | — | 100 coverage rows, 100 random samples. |
 | `.budget(.standard)` | default | 200 coverage rows, 200 random samples. |
-| `.budget(.thorough)` | — | 500 coverage rows, 500 random samples. |
+| `.budget(.thorough)` | — | 600 coverage rows, 600 random samples. |
 | `.budget(.extensive)` | — | 2000 coverage rows, 2000 random samples. |
 | `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
 | `.budget(.thorough * 3)` | — | Scale any preset with `*` or `/`. |
@@ -279,6 +279,7 @@ Configure behaviour with settings:
 | `.includeDiff` | off | Includes a structural diff between the original failing value and the reduced counterexample in the failure output. |
 | `.suppress(.issueReporting)` | — | Silences issue reporting. Use when asserting on the return value directly. `.suppress(.logs)` silences console output. `.suppress(.all)` for a completely silent run. |
 | `.logging(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. Use `.logging(.debug, .jsonl)` for structured JSON output. |
+| `.parallelize(N)` | off | Splits the random sampling phase across N parallel GCD lanes. Same seed, same counterexample regardless of lane count. Recommended for slow generators or expensive property checks. Has no effect with `.replay`. |
 
 ### Using `#expect` and `#require`
 

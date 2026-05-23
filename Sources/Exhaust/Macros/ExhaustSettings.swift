@@ -63,12 +63,12 @@ public enum SuppressOption: Sendable, Equatable {
 /// |---|---|---|
 /// | `.quick` | 100 | 100 |
 /// | `.standard` | 200 | 200 |
-/// | `.thorough` | 500 | 500 |
+/// | `.thorough` | 600 | 600 |
 /// | `.extensive` | 2000 | 2000 |
 ///
 /// Use `.standard` (the default) for development — sufficient for generators with fewer than 50 independent parameters. Use `.quick` when iteration speed matters more than coverage depth. Use `.thorough` when the generator has high combinatorial complexity (many picks, nested sequences) and you want stronger coverage guarantees. Use `.extensive` when counterexamples are rare or you want broad coverage; expect roughly 10x the runtime of `.standard`.
 ///
-/// Scale any preset with arithmetic: `.thorough * 3` produces a custom budget of 1500/1500, and `.standard / 2` produces 100/100.
+/// Scale any preset with arithmetic: `.thorough * 3` produces a custom budget of 1800/1800, and `.standard / 2` produces 100/100.
 public enum ExhaustBudget: Sendable {
     /// Faster than default. Use when iteration speed matters more than coverage depth.
     case quick
@@ -86,7 +86,7 @@ public enum ExhaustBudget: Sendable {
         switch self {
         case .quick: 100
         case .standard: 200
-        case .thorough: 500
+        case .thorough: 600
         case .extensive: 2000
         case let .custom(coverage, _): coverage
         }
@@ -97,7 +97,7 @@ public enum ExhaustBudget: Sendable {
         switch self {
         case .quick: 100
         case .standard: 200
-        case .thorough: 500
+        case .thorough: 600
         case .extensive: 2000
         case let .custom(_, sampling):
             sampling
@@ -181,4 +181,21 @@ public enum ExhaustSettings {
     /// #exhaust(gen, .logging(.debug)) { value in ... }
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
+
+    /// Splits the random sampling phase across the given number of parallel GCD lanes.
+    ///
+    /// On fast generators there is very little benefit in going above two.
+    ///
+    /// Each lane runs an equal share of the sampling budget with an independently derived PRNG, so the same seed produces the same counterexample regardless of thread scheduling. The last lane absorbs any remainder from uneven division.
+    ///
+    /// Has no effect when combined with `.replay`.
+    ///
+    /// Uniqueness deduplication (`.unique`) is enforced per-lane, not across lanes.
+    ///
+    /// ```swift
+    /// #exhaust(gen, .budget(.extensive), .parallelize(2)) { value in
+    ///     expensiveCheck(value)
+    /// }
+    /// ```
+    case parallelize(UInt8)
 }

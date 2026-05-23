@@ -31,6 +31,7 @@ public extension __ExhaustRuntime {
         var suppressLogs = false
         var logLevel: LogLevel = .error
         var logFormat: LogFormat = .keyValue
+        var shouldParallelize = false
         for setting in settings {
             switch setting {
             case let .budget(exploreBudget):
@@ -70,22 +71,37 @@ public extension __ExhaustRuntime {
             case let .logging(level, format):
                 logLevel = level
                 logFormat = format
+            case .parallelize:
+                shouldParallelize = true
             }
         }
 
+        let namedDirections = directions.map { direction in
+            (name: direction.0, predicate: { (value: Output) in direction.1(value) })
+        }
+
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
-            var runner = ClassificationExploreRunner(
-                gen: gen,
-                property: property,
-                directions: directions.map { (name: $0.0, predicate: $0.1) },
-                hitsPerDirection: budget.hitsPerDirection,
-                maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
-                seed: seed
-            )
             let result: ClassificationExploreResult<Output>
             do {
                 result = try Gen.$isInterpreting.withValue(true) { () throws -> ClassificationExploreResult<Output> in
-                    try runner.run()
+                    if shouldParallelize, seed == nil, namedDirections.count > 1 {
+                        return try runParallelExplore(
+                            gen: gen,
+                            property: property,
+                            directions: namedDirections,
+                            hitsPerDirection: budget.hitsPerDirection,
+                            maxAttemptsPerDirection: budget.maxAttemptsPerDirection
+                        )
+                    }
+                    var runner = ClassificationExploreRunner(
+                        gen: gen,
+                        property: property,
+                        directions: namedDirections,
+                        hitsPerDirection: budget.hitsPerDirection,
+                        maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
+                        seed: seed
+                    )
+                    return try runner.run()
                 }
             } catch {
                 reportIssue(

@@ -69,6 +69,52 @@ The model's job is to make invariants trivial to write. Without a model, invaria
 
 You don't have to use a model. Contracts that only need structural invariants (count within bounds, no duplicates, LIFO ordering) work fine without one.
 
+### Certifying a fake
+
+The model doesn't have to be a bare value. When `@Model` holds a standalone type that conforms to the same protocol as the SUT, the contract validates it as a faithful stand-in. After the contract passes, other tests can inject the fake instead of the real implementation — fast, deterministic, and backed by every command sequence the contract exercised.
+
+```swift
+protocol Queue<Element> {
+    associatedtype Element
+    mutating func enqueue(_ value: Element)
+    mutating func dequeue() -> Element?
+    var count: Int { get }
+    var elements: [Element] { get }
+}
+
+@Contract
+struct QueueContractSpec {
+    @Model var fake = ListQueue<Int>()
+    @SystemUnderTest var queue = CircularBufferQueue<Int>(capacity: 8)
+
+    @Invariant
+    func agree() -> Bool {
+        fake.elements == queue.elements
+    }
+
+    @Command(weight: 3, .int(in: 0...99))
+    mutating func enqueue(value: Int) throws {
+        guard fake.count < 8 else { throw skip() }
+        fake.enqueue(value)
+        queue.enqueue(value)
+    }
+
+    @Command(weight: 2)
+    mutating func dequeue() throws {
+        guard fake.count > 0 else { throw skip() }
+        let expected = fake.dequeue()
+        let actual = queue.dequeue()
+        try check(expected == actual, "dequeue must return same value")
+    }
+}
+```
+
+`ListQueue` is a real type with its own methods. The contract proves it agrees with `CircularBufferQueue` across hundreds of random command sequences. Any test that depends on `Queue` can now use `ListQueue` with confidence — the plumbing to inject it is ordinary dependency injection, not something Exhaust needs to provide.
+
+This pattern is most useful when the real implementation is expensive (databases, network services, file systems) and multiple test suites need a cheap substitute. For components where the real implementation is trivial to instantiate, the contract still finds bugs, but extracting a fake adds nothing — just use the real thing.
+
+The idea of using contract-tested fakes for compositional integration testing comes from Stevan Andjelkovic's [The Sad State of Property-Based Testing Libraries](https://stevana.github.io/the_sad_state_of_property-based_testing_libraries.html), which demonstrates the pattern across queues, file systems, and multi-layer component hierarchies.
+
 ## Commands, skip, and check
 
 Commands come in three flavours.

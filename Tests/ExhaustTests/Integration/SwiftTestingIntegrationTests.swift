@@ -1,10 +1,10 @@
 import Testing
 @testable import Exhaust
 
-@Suite struct SwiftTestingIntegrationTests {
+struct SwiftTestingIntegrationTests {
     // MARK: - Void property with #expect
 
-    @Test func voidPropertyReducesToMinimalCounterexample() {
+    @Test func `void property reduces to minimal counterexample`() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -16,7 +16,7 @@ import Testing
         #expect(result == 50, "Minimal counterexample for value < 50 on 0...100 should be 50")
     }
 
-    @Test func voidPropertyWithRequire() {
+    @Test func `void property with require`() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -31,7 +31,7 @@ import Testing
         }
     }
 
-    @Test func voidPropertyPassesWhenNoFailure() {
+    @Test func `void property passes when no failure`() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -44,7 +44,7 @@ import Testing
         #expect(result == nil, "All values in 0...100 should pass")
     }
 
-    @Test func voidPropertyWithMultipleExpectFailures() {
+    @Test func `void property with multiple expect failures`() {
         let result = #exhaust(
             #gen(.int(in: -10 ... 10)),
             .suppress(.issueReporting),
@@ -57,7 +57,7 @@ import Testing
         #expect(result != nil, "Should find a counterexample")
     }
 
-    @Test func voidPropertyWithThrownError() {
+    @Test func `void property with thrown error`() {
         struct TestError: Error {}
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -73,7 +73,7 @@ import Testing
 
     // MARK: - Bool property unchanged
 
-    @Test func boolPropertyStillWorks() {
+    @Test func `bool property still works`() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -86,7 +86,7 @@ import Testing
 
     // MARK: - Overload resolution
 
-    @Test func boolClosureResolvesToBoolOverload() {
+    @Test func `bool closure resolves to bool overload`() {
         // { value in value < 50 } returns Bool — uses #exhaust.
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -98,7 +98,7 @@ import Testing
         #expect(result == 50)
     }
 
-    @Test func expectClosureResolvesToVoidOverload() {
+    @Test func `expect closure resolves to void overload`() {
         // { value in #expect(value < 50) } returns Void — should resolve to Void overload.
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -112,7 +112,7 @@ import Testing
 
     // MARK: - Replay with numeric seed
 
-    @Test func replayWithNumericSeed() {
+    @Test func `replay with numeric seed`() {
         let result1 = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -136,12 +136,12 @@ import Testing
 
     // MARK: - ReplaySeed literals
 
-    @Test func replaySeedIntegerLiteral() {
+    @Test func `replay seed integer literal`() {
         let seed: ReplaySeed = 42
         #expect(seed.resolve() == 42)
     }
 
-    @Test func replaySeedInvalidStringReturnsNil() {
+    @Test func `replay seed invalid string returns nil`() {
         let seed = ReplaySeed.encoded("INVALID!!!")
         #expect(seed.resolve() == nil)
     }
@@ -149,8 +149,8 @@ import Testing
     // MARK: - Configuration Trait
 
     @Test(.exhaust(.budget(.thorough)))
-    func traitSetsBudget() {
-        // The trait sets .thorough (sampling: 500). Verify the trait budget is applied
+    func `trait sets budget`() {
+        // The trait sets .thorough (sampling: 600). Verify the trait budget is applied
         // instead of the default .standard (200) by checking the iteration count.
         var capturedReport: ExhaustReport?
         let result = #exhaust(
@@ -164,12 +164,12 @@ import Testing
             true // always passes — runs the full sampling budget
         }
         #expect(result == nil)
-        // .thorough sampling budget is 500; .standard would be 200.
-        #expect(capturedReport?.randomSamplingInvocations == 500, "Trait should set .thorough budget (500), not default .standard (200)")
+        // .thorough sampling budget is 600; .standard would be 200.
+        #expect(capturedReport?.randomSamplingInvocations == 600, "Trait should set .thorough budget (600), not default .standard (200)")
     }
 
     @Test(.exhaust(.budget(.standard)))
-    func traitBudgetOverriddenByInline() {
+    func `trait budget overridden by inline`() {
         // Trait sets .standard, inline sets a custom budget. Inline should win.
         var capturedReport: ExhaustReport?
         let result = #exhaust(
@@ -189,7 +189,7 @@ import Testing
     }
 
     @Test(.exhaust(.regressions("1A")))
-    func traitWithRegressionSeedThatFails() {
+    func `trait with regression seed that fails`() {
         // Seed "1A" (= 42) should reproduce a counterexample for value < 50 on 0...100.
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -201,7 +201,7 @@ import Testing
     }
 
     @Test(.exhaust(.budget(.standard), .regressions("0")))
-    func traitWithPassingRegressionSeed() {
+    func `trait with passing regression seed`() {
         // Seed "0" should produce a value that passes value >= 0 on 0...100.
         // The regression "now passes" warning should be emitted as an issue.
         // Since suppressing, we just verify the pipeline continues to the normal run.

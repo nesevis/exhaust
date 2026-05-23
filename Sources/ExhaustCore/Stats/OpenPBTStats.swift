@@ -6,7 +6,7 @@
 import Foundation
 
 /// Generation phase that produced an example.
-package enum OpenPBTStatsPhase: String, Codable, Sendable {
+package enum OpenPBTStatsPhase: String, Codable {
     /// Indicates the example was produced during structured covering-array enumeration, which runs first to achieve combinatorial coverage of the generator's parameter space.
     case coverage
     /// Indicates the example was produced during standard PRNG-based sampling, which runs after the coverage phase completes.
@@ -14,7 +14,7 @@ package enum OpenPBTStatsPhase: String, Codable, Sendable {
 }
 
 /// Per-example features attached to each OpenPBTStats line.
-package struct OpenPBTStatsFeatures: Codable, Sendable {
+package struct OpenPBTStatsFeatures: Codable {
     /// Generation phase that produced this example.
     package let phase: OpenPBTStatsPhase
     /// Number of choice points in the generated value's choice tree.
@@ -73,6 +73,8 @@ public struct OpenPBTStatsLine: Sendable {
     package let howGenerated: String?
     /// Per-phase timing in seconds, keyed by phase name.
     package let timing: [String: Double]?
+    /// Parallel batch index that produced this example, or `nil` for sequential runs.
+    package let lane: Int?
 
     /// Creates a stats line with all required and optional fields.
     package init(
@@ -84,7 +86,8 @@ public struct OpenPBTStatsLine: Sendable {
         representation: String,
         features: OpenPBTStatsFeatures,
         howGenerated: String? = nil,
-        timing: [String: Double]? = nil
+        timing: [String: Double]? = nil,
+        lane: Int? = nil
     ) {
         self.type = type
         self.runStart = runStart
@@ -95,12 +98,13 @@ public struct OpenPBTStatsLine: Sendable {
         self.features = features
         self.howGenerated = howGenerated
         self.timing = timing
+        self.lane = lane
     }
 }
 
 extension OpenPBTStatsLine: Codable {
     private enum CodingKeys: String, CodingKey {
-        case type, runStart, property, status, statusReason, representation, features, howGenerated, timing, coverage, metadata
+        case type, runStart, property, status, statusReason, representation, features, howGenerated, timing, coverage, metadata, lane
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -116,6 +120,7 @@ extension OpenPBTStatsLine: Codable {
         try container.encodeIfPresent(timing, forKey: .timing)
         try container.encodeNil(forKey: .coverage)
         try container.encodeNil(forKey: .metadata)
+        try container.encodeIfPresent(lane, forKey: .lane)
     }
 
     public init(from decoder: Decoder) throws {
@@ -129,7 +134,8 @@ extension OpenPBTStatsLine: Codable {
             representation: container.decode(String.self, forKey: .representation),
             features: container.decode(OpenPBTStatsFeatures.self, forKey: .features),
             howGenerated: container.decodeIfPresent(String.self, forKey: .howGenerated),
-            timing: container.decodeIfPresent([String: Double].self, forKey: .timing)
+            timing: container.decodeIfPresent([String: Double].self, forKey: .timing),
+            lane: container.decodeIfPresent(Int.self, forKey: .lane)
         )
     }
 }
@@ -151,16 +157,19 @@ package extension Sequence<OpenPBTStatsLine> {
 
 /// Accumulates OpenPBTStats records during a test run.
 ///
-/// Stores records as typed ``OpenPBTStatsLine`` values. JSON encoding happens once, on ``finalize()``.
+/// Stores records as typed ``OpenPBTStatsLine`` values. JSON encoding happens once, on ``finalize()``. When parallel generation is active, each lane creates its own accumulator and the results are merged via ``appendLines(_:)`` after all lanes complete.
 ///
 /// Not `Sendable` — used from a single thread within the generation loop.
 package final class OpenPBTStatsAccumulator {
     private let runStart: Double
     private let propertyName: String
+    private let lane: Int?
     private var lines: [OpenPBTStatsLine] = []
 
-    package init(propertyName: String) {
+    /// - Parameter lane: Parallel batch index stamped onto every recorded line, or `nil` for sequential runs.
+    package init(propertyName: String, lane: Int? = nil) {
         self.propertyName = propertyName
+        self.lane = lane
         runStart = Date().timeIntervalSince1970
     }
 
@@ -204,7 +213,8 @@ package final class OpenPBTStatsAccumulator {
             representation: representation,
             features: features,
             howGenerated: nil,
-            timing: timing
+            timing: timing,
+            lane: lane
         ))
     }
 
@@ -235,7 +245,8 @@ package final class OpenPBTStatsAccumulator {
             representation: representation,
             features: features,
             howGenerated: "reduced",
-            timing: ["reduce": reductionSeconds]
+            timing: ["reduce": reductionSeconds],
+            lane: lane
         ))
     }
 
@@ -261,12 +272,18 @@ package final class OpenPBTStatsAccumulator {
             representation: "",
             features: features,
             howGenerated: nil,
-            timing: nil
+            timing: nil,
+            lane: lane
         )
 
         for _ in 0 ..< count {
             lines.append(template)
         }
+    }
+
+    /// Appends lines from another accumulator (for example, merging parallel batch results).
+    package func appendLines(_ newLines: [OpenPBTStatsLine]) {
+        lines.append(contentsOf: newLines)
     }
 
     /// Returns the accumulated records as typed values in append order.
