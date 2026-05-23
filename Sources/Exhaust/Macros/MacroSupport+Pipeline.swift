@@ -315,46 +315,25 @@ package extension __ExhaustRuntime {
         let cancelled = SendableBox(false)
         nonisolated(unsafe) let unsafeContext = context
 
-        var batchResults: [BatchResult<Output>]
-        if laneCount > 1 {
-            let resultStorage = SendableBox<[BatchResult<Output>?]>(
-                Array(repeating: nil, count: laneCount)
-            )
-            let group = DispatchGroup()
-            for laneIndex in 0 ..< laneCount {
-                let startIndex = UInt64(laneIndex) * baseIterationsPerLane
-                let iterationsForLane = baseIterationsPerLane + (laneIndex == laneCount - 1 ? remainder : 0)
-                group.enter()
-                DispatchQueue.global().async {
-                    let batchResult = runSamplingBatch(
-                        gen: unsafeContext.gen,
-                        property: unsafeContext.property,
-                        baseSeed: baseSeed,
-                        startIndex: startIndex,
-                        count: iterationsForLane,
-                        lane: laneIndex,
-                        statsPropertyName: statsPropertyName,
-                        cancelled: cancelled
-                    )
-                    resultStorage.withValue { $0[laneIndex] = batchResult }
-                    group.leave()
-                }
-            }
-            group.wait()
-            batchResults = resultStorage.value.compactMap(\.self)
-        } else {
-            let single = runSamplingBatch(
-                gen: context.gen,
-                property: context.property,
+        let resultStorage = SendableBox<[BatchResult<Output>?]>(
+            Array(repeating: nil, count: laneCount)
+        )
+        DispatchQueue.concurrentPerform(iterations: laneCount) { laneIndex in
+            let startIndex = UInt64(laneIndex) * baseIterationsPerLane
+            let iterationsForLane = baseIterationsPerLane + (laneIndex == laneCount - 1 ? remainder : 0)
+            let batchResult = runSamplingBatch(
+                gen: unsafeContext.gen,
+                property: unsafeContext.property,
                 baseSeed: baseSeed,
-                startIndex: 0,
-                count: context.samplingBudget,
-                lane: nil,
+                startIndex: startIndex,
+                count: iterationsForLane,
+                lane: laneCount > 1 ? laneIndex : nil,
                 statsPropertyName: statsPropertyName,
                 cancelled: cancelled
             )
-            batchResults = [single]
+            resultStorage.withValue { $0[laneIndex] = batchResult }
         }
+        let batchResults = resultStorage.value.compactMap(\.self)
 
         // Merge filter observations and emit warnings.
         var mergedFilterObservations: [UInt64: FilterObservation] = [:]
