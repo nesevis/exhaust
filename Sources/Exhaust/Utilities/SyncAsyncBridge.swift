@@ -3,12 +3,18 @@ import Foundation
 extension __ExhaustRuntime {
     /// Blocks the calling thread until an async closure completes and returns its result.
     ///
-    /// Internally creates an unstructured ``Task`` and sleeps the calling thread on a
-    /// ``DispatchSemaphore`` until the task signals completion. The semaphore provides
-    /// the happens-before guarantee that makes the unsynchronized result hand-off safe.
+    /// On macOS 15+ / iOS 18+, the async work runs directly on the calling thread
+    /// via a ``TaskExecutor``-based drain loop. This avoids the cooperative thread
+    /// pool entirely, preventing starvation when many tests run in parallel on
+    /// machines with few cores.
     ///
-    /// - Important: Call from a GCD thread only. Blocking a cooperative-pool thread
-    ///   while the ``Task`` needs pool threads to schedule its continuations will deadlock.
+    /// On older platforms (no ``TaskExecutor`` API), falls back to a
+    /// ``DispatchSemaphore`` that sleeps the calling thread while a cooperative-pool
+    /// ``Task`` executes the work.
+    ///
+    /// - Important: Call from a GCD thread only. On the semaphore path, blocking a
+    ///   cooperative-pool thread risks deadlock. On the drain-loop path, the calling
+    ///   thread is occupied by ``runSynchronously`` and cannot service other work.
     ///   Callers reach a GCD thread via ``dispatchToGCD(_:)`` or
     ///   `DispatchQueue.global().async`.
     ///
@@ -20,6 +26,44 @@ extension __ExhaustRuntime {
     /// }
     /// ```
     static func blockingAwait<Result>(
+        _ work: @Sendable @escaping () async -> Result
+    ) -> Result {
+        if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
+            return _blockingAwaitDrainLoop(work)
+        } else {
+            return _blockingAwaitSemaphore(work)
+        }
+    }
+
+    /// Drain-loop implementation: runs the Task's continuations on the calling
+    /// thread via a single-lane ``RunQueue`` and ``LaneExecutor``. No cooperative
+    /// pool threads are consumed.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    private static func _blockingAwaitDrainLoop<Result>(
+        _ work: @Sendable @escaping () async -> Result
+    ) -> Result {
+        let lane = LaneID(index: 0)
+        let runQueue = RunQueue(laneCount: 1)
+        let executor = LaneExecutor(lane: lane, runQueue: runQueue)
+        let box = UnsafeSendableBox<Result?>(nil)
+        let done = UnsafeSendableBox(false)
+
+        Task(executorPreference: executor) { @Sendable in
+            box.value = await work()
+            done.value = true
+        }
+
+        while done.value == false {
+            if let (_, job) = runQueue.dequeue(preferring: lane) {
+                job.runSynchronously(on: executor.asUnownedTaskExecutor())
+            }
+        }
+        return box.value!
+    }
+
+    /// Semaphore implementation: creates a cooperative-pool Task and sleeps the
+    /// calling thread until it completes. Used on platforms without TaskExecutor.
+    private static func _blockingAwaitSemaphore<Result>(
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         let box = UnsafeSendableBox<Result?>(nil)
