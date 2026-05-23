@@ -67,6 +67,16 @@ public struct CoOccurrenceMatrix: Sendable {
         sampleCount
     }
 
+    /// Merges another matrix into this one by summing all cells, unmatched counts, and sample counts. Both matrices must have the same direction count.
+    public mutating func merge(_ other: CoOccurrenceMatrix) {
+        precondition(directionCount == other.directionCount)
+        for index in cells.indices {
+            cells[index] += other.cells[index]
+        }
+        unmatchedCount += other.unmatchedCount
+        sampleCount += other.sampleCount
+    }
+
     // MARK: - Diagnostics
 
     /// Computes pairwise mutual information normalized by the entropy of direction A. Returns pairs where `MI(A, B) / H(A) >= threshold`, sorted by descending normalized MI.

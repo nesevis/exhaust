@@ -1,0 +1,187 @@
+import Testing
+@testable import Exhaust
+
+@Suite("Parallel explore", .serialized)
+struct ParallelExploreTests {
+    private static let budget = ExploreBudget.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)
+
+    @Test
+    func `Passing property with .parallelize reaches coverage for all directions`() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(Self.budget),
+            .parallelize,
+            .suppress(.all),
+            directions: [
+                ("low", { (value: Int) in value < 30 }),
+                ("mid", { (value: Int) in value >= 30 && value <= 70 }),
+                ("high", { (value: Int) in value > 70 }),
+            ]
+        ) { value in
+            value >= 0
+        }
+        #expect(report.result == nil)
+        #expect(report.termination == .coverageAchieved)
+        for coverage in report.directionCoverage {
+            #expect(coverage.isCovered, "Direction '\(coverage.name)' should be covered")
+        }
+    }
+
+    @Test
+    func `Failing property finds and reduces a counterexample`() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(Self.budget),
+            .parallelize,
+            .suppress(.all),
+            directions: [
+                ("low", { (value: Int) in value < 30 }),
+                ("high", { (value: Int) in value > 70 }),
+            ]
+        ) { value in
+            value < 50
+        }
+        #expect(report.result != nil)
+        #expect(report.termination == .propertyFailed)
+    }
+
+    @Test
+    func `Cancellation stops other lanes early when a failure is found`() {
+        let gen = #gen(.int(in: 0 ... 10000))
+        let report = #explore(
+            gen,
+            .budget(.custom(hitsPerDirection: 100, maxAttemptsPerDirection: 2000)),
+            .parallelize,
+            .suppress(.all),
+            directions: [
+                ("small", { (value: Int) in value < 100 }),
+                ("medium", { (value: Int) in value >= 100 && value < 5000 }),
+                ("large", { (value: Int) in value >= 5000 }),
+            ]
+        ) { value in
+            value < 5
+        }
+        #expect(report.result != nil)
+        let maxPossible = 3 * 2000
+        #expect(report.propertyInvocations < maxPossible, "Should stop early, not exhaust all budgets")
+    }
+
+    @Test
+    func `Direction coverage stats are populated for each direction`() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(Self.budget),
+            .parallelize,
+            .suppress(.all),
+            directions: [
+                ("low", { (value: Int) in value < 50 }),
+                ("high", { (value: Int) in value >= 50 }),
+            ]
+        ) { value in
+            value >= 0
+        }
+        #expect(report.directionCoverage.count == 2)
+        for coverage in report.directionCoverage {
+            #expect(coverage.hits >= Self.budget.hitsPerDirection)
+            #expect(coverage.tuningPassSamples > 0)
+            #expect(coverage.warmupHits == 0)
+            #expect(coverage.warmupRuleOfThreeBound == nil)
+        }
+    }
+
+    @Test
+    func `Co-occurrence matrix is populated across directions`() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(Self.budget),
+            .parallelize,
+            .suppress(.all),
+            directions: [
+                ("low", { (value: Int) in value < 50 }),
+                ("high", { (value: Int) in value >= 50 }),
+            ]
+        ) { value in
+            value >= 0
+        }
+        #expect(report.coOccurrence.totalSampleCount > 0)
+        #expect(report.coOccurrence.count(direction: 0, direction: 0) > 0)
+        #expect(report.coOccurrence.count(direction: 1, direction: 1) > 0)
+    }
+
+    @Test
+    func `Single direction falls back to sequential`() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(Self.budget),
+            .parallelize,
+            .suppress(.all),
+            directions: [("any", { (_: Int) in true })]
+        ) { value in
+            value >= 0
+        }
+        #expect(report.result == nil)
+        #expect(report.termination == .coverageAchieved)
+        #expect(report.warmupSamples > 0, "Sequential path runs warm-up")
+    }
+
+    @Test
+    func `Property invocations do not exceed the total budget`() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(Self.budget),
+            .parallelize,
+            .suppress(.all),
+            directions: [
+                ("low", { (value: Int) in value < 50 }),
+                ("high", { (value: Int) in value >= 50 }),
+            ]
+        ) { value in
+            value >= 0
+        }
+        let maxBudget = report.directionCoverage.count * Self.budget.maxAttemptsPerDirection
+        #expect(report.propertyInvocations <= maxBudget)
+    }
+
+    @Test
+    func `Cross-direction hits from other lanes are merged into the total`() {
+        let gen = #gen(.int(in: 0 ... 100))
+        let report = #explore(
+            gen,
+            .budget(.custom(hitsPerDirection: 20, maxAttemptsPerDirection: 400)),
+            .parallelize,
+            .suppress(.all),
+            directions: [
+                ("even", { (value: Int) in value % 2 == 0 }),
+                ("small", { (value: Int) in value < 30 }),
+            ]
+        ) { value in
+            value >= 0
+        }
+
+        let evenCoverage = report.directionCoverage[0]
+        let smallCoverage = report.directionCoverage[1]
+
+        // Each lane targets one direction, but classifies every sample against
+        // all directions. The "even" lane (tuned for even numbers) will
+        // incidentally produce values < 30, contributing hits to "small", and
+        // vice versa. For a passing property, tuningPassPasses equals the lane's
+        // own hits for its target direction (every matching sample passes).
+        // If cross-lane hits weren't merged, total hits would equal
+        // tuningPassPasses — strictly less than the merged total when the
+        // predicates overlap.
+        #expect(
+            evenCoverage.hits > evenCoverage.tuningPassPasses,
+            "Even direction should have hits from the small lane too (got \(evenCoverage.hits) total vs \(evenCoverage.tuningPassPasses) own-lane hits)"
+        )
+        #expect(
+            smallCoverage.hits > smallCoverage.tuningPassPasses,
+            "Small direction should have hits from the even lane too (got \(smallCoverage.hits) total vs \(smallCoverage.tuningPassPasses) own-lane hits)"
+        )
+    }
+}

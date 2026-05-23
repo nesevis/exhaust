@@ -78,4 +78,11 @@ public enum ExploreSettings: Sendable {
     ///
     /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
     case logging(LogLevel, LogFormat = .keyValue)
+
+    /// Runs per-direction tuning passes in parallel, one GCD lane per direction.
+    ///
+    /// Skips the warm-up phase (each direction's CGS tuning provides its own online warm-up) and gives each direction a fixed allocation of `maxAttemptsPerDirection` samples. Disabled when combined with `.replay` (replay forces sequential execution for deterministic reproduction).
+    ///
+    /// When parallelised, different runs with the same seed may surface different counterexamples because GCD thread scheduling is non-deterministic. Replay of a specific seed is always deterministic.
+    case parallelize
 }

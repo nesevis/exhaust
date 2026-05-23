@@ -233,10 +233,10 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                     materializePicks: true
                 )
                 let reductionTree = switch fullTree {
-                    case let .success(_, rematerialized, _):
-                        rematerialized as ChoiceTree?
-                    case .rejected, .failed:
-                        ChoiceTree?.none
+                case let .success(_, rematerialized, _):
+                    rematerialized as ChoiceTree?
+                case .rejected, .failed:
+                    ChoiceTree?.none
                 }
                 let reduced = reduce(value: value, tree: reductionTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
@@ -375,6 +375,32 @@ package struct ClassificationExploreResult<Output> {
     package let termination: ClassificationExploreTermination
     package let seed: UInt64
 
+    package init(
+        counterexample: Output?,
+        original: Output?,
+        reducedSequence: ChoiceSequence?,
+        counterexampleDirections: [Int],
+        directionCoverage: [DirectionCoverageEntry],
+        coOccurrence: CoOccurrenceMatrix,
+        propertyInvocations: Int,
+        warmupSamples: Int,
+        totalMilliseconds: Double,
+        termination: ClassificationExploreTermination,
+        seed: UInt64
+    ) {
+        self.counterexample = counterexample
+        self.original = original
+        self.reducedSequence = reducedSequence
+        self.counterexampleDirections = counterexampleDirections
+        self.directionCoverage = directionCoverage
+        self.coOccurrence = coOccurrence
+        self.propertyInvocations = propertyInvocations
+        self.warmupSamples = warmupSamples
+        self.totalMilliseconds = totalMilliseconds
+        self.termination = termination
+        self.seed = seed
+    }
+
     /// Records the coverage outcome for a single direction: hit count, sample count, and rule-of-three upper bounds for both the warm-up and tuning phases.
     package struct DirectionCoverageEntry {
         package let name: String
@@ -386,11 +412,33 @@ package struct ClassificationExploreResult<Output> {
         package let isCovered: Bool
         package let warmupRuleOfThreeBound: Double?
         package let tuningPassRuleOfThreeBound: Double?
+
+        package init(
+            name: String,
+            hits: Int,
+            tuningPassSamples: Int,
+            tuningPassPasses: Int,
+            tuningPassFailures: Int,
+            warmupHits: Int,
+            isCovered: Bool,
+            warmupRuleOfThreeBound: Double?,
+            tuningPassRuleOfThreeBound: Double?
+        ) {
+            self.name = name
+            self.hits = hits
+            self.tuningPassSamples = tuningPassSamples
+            self.tuningPassPasses = tuningPassPasses
+            self.tuningPassFailures = tuningPassFailures
+            self.warmupHits = warmupHits
+            self.isCovered = isCovered
+            self.warmupRuleOfThreeBound = warmupRuleOfThreeBound
+            self.tuningPassRuleOfThreeBound = tuningPassRuleOfThreeBound
+        }
     }
 }
 
 /// How a classification-aware exploration run terminated.
-package enum ClassificationExploreTermination: Sendable {
+package enum ClassificationExploreTermination {
     /// Terminated because a property violation was found and reduced.
     case propertyFailed
     /// Terminated because all requested directions were hit at least once.
