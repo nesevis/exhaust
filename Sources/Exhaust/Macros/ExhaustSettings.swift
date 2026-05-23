@@ -104,35 +104,6 @@ public enum ExhaustBudget: Sendable {
         }
     }
 
-    /// Number of parallel GCD lanes when `.parallelize` is active.
-    ///
-    /// Returns 1 (sequential) for budgets under 200. For preset budgets, returns a tuned lane count that divides the sampling budget evenly. For custom budgets, uses at most 5 lanes — the last lane absorbs any remainder from uneven division.
-    public var parallelLanes: Int {
-        switch self {
-        case .quick:
-            1
-        case .standard:
-            2
-        case .thorough:
-            3
-        case .extensive:
-            5
-        case let .custom(_, sampling):
-            switch sampling {
-            case 0 ..< 200:
-                1
-            case 200 ..< 400:
-                2
-            case 400 ..< 1000:
-                3
-            case 1000 ..< 2000:
-                4
-            default:
-                5
-            }
-        }
-    }
-
     /// Scales both coverage and sampling budgets by a multiplier.
     public static func * (lhs: ExhaustBudget, rhs: UInt64) -> ExhaustBudget {
         precondition(rhs > 0, "Multiplier must be positive")
@@ -211,12 +182,18 @@ public enum ExhaustSettings {
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
 
-    /// Splits the random sampling phase into parallel batches of 100 iterations, each running on a separate GCD thread.
+    /// Splits the random sampling phase across the given number of parallel GCD lanes.
     ///
-    /// Recommended for generators with expensive property checks or complex generator structure. Each batch derives its PRNG independently from the base seed, so the same seed produces the same counterexample regardless of thread scheduling.
+    /// Each lane runs an equal share of the sampling budget with an independently derived PRNG, so the same seed produces the same counterexample regardless of thread scheduling. The last lane absorbs any remainder from uneven division.
     ///
-    /// Has no effect when combined with `.replay` (replay runs sequentially). Budgets under 200 fall through to the sequential path.
+    /// Has no effect when combined with `.replay`.
     ///
-    /// Uniqueness deduplication (`.unique`) is enforced per-batch, not across batches.
-    case parallelize
+    /// Uniqueness deduplication (`.unique`) is enforced per-lane, not across lanes.
+    ///
+    /// ```swift
+    /// #exhaust(gen, .budget(.extensive), .parallelize(4)) { value in
+    ///     expensiveCheck(value)
+    /// }
+    /// ```
+    case parallelize(UInt8)
 }

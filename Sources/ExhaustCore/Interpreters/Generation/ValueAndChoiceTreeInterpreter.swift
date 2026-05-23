@@ -20,7 +20,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     private var erasedGenerator: AnyGenerator?
     private(set) var context: GenerationContext
 
-    /// Creates an interpreter for the given generator with optional pick materialization, seed, run cap, and size override.
+    /// Creates an interpreter for the given generator with optional pick materialization, seed, run cap, starting run index, and size override.
     ///
     /// - Parameter initialRunIndex: The absolute run index to start from. Defaults to 0. Use a non-zero value to partition generation into independent batches — each batch covers a disjoint run-index range with independently derived PRNG states.
     public init(

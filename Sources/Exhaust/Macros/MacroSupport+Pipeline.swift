@@ -21,8 +21,7 @@ package extension __ExhaustRuntime {
         let visualize: Bool
         let suppressIssueReporting: Bool
         let includeDiff: Bool
-        let parallelize: Bool
-        let parallelLanes: Int
+        let parallelLanes: UInt8
         let logFormat: LogFormat
         let fileID: StaticString
         let filePath: StaticString
@@ -173,6 +172,16 @@ package extension __ExhaustRuntime {
     /// Runs a contiguous range of sampling iterations, returning the first failure (if any).
     ///
     /// Used by both the sequential and parallel sampling paths. Each call creates its own ``ValueAndChoiceTreeInterpreter`` covering indices `startIndex ..< startIndex + count`, with an independent PRNG derived from `baseSeed`.
+    ///
+    /// - Parameters:
+    ///   - gen: The generator to sample from.
+    ///   - property: The property to check each generated value against.
+    ///   - baseSeed: Root seed for per-run PRNG derivation. All lanes share the same base seed.
+    ///   - startIndex: Absolute run index for the first iteration in this batch.
+    ///   - count: Number of iterations to run in this batch.
+    ///   - lane: Batch index for stats attribution, or `nil` for sequential runs.
+    ///   - statsPropertyName: Property name passed to the per-batch ``OpenPBTStatsAccumulator``, or `nil` to skip stats collection.
+    ///   - cancelled: Shared flag checked before each iteration. Set to `true` by the first lane to find a failure.
     private static func runSamplingBatch<Output>( // swiftlint:disable:this function_body_length
         gen: Generator<Output>,
         property: @Sendable (Output) -> Bool,
@@ -279,7 +288,7 @@ package extension __ExhaustRuntime {
 
     /// Runs the random sampling phase after coverage completes.
     ///
-    /// When `context.parallelize` is true, splits the budget across multiple GCD threads (one per lane). Otherwise runs a single sequential batch.
+    /// When `context.parallelLanes` is greater than one, splits the budget across multiple GCD threads (one per lane). Otherwise runs sequentially.
     static func runSamplingPhase<Output>( // swiftlint:disable:this function_body_length
         context: PipelineContext<Output>,
         seed: UInt64?,
@@ -296,11 +305,7 @@ package extension __ExhaustRuntime {
         }
         report.seed = baseSeed
 
-        let useParallel = context.parallelize
-            && seed == nil
-            && context.parallelLanes > 1
-
-        let laneCount = useParallel ? context.parallelLanes : 1
+        let laneCount = seed == nil ? max(1, Int(context.parallelLanes)) : 1
         let baseIterationsPerLane = context.samplingBudget / UInt64(laneCount)
         let remainder = context.samplingBudget - baseIterationsPerLane * UInt64(laneCount)
         let statsPropertyName: String? = context.statsAccumulator != nil

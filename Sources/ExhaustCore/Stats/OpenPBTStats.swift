@@ -157,7 +157,7 @@ package extension Sequence<OpenPBTStatsLine> {
 
 /// Accumulates OpenPBTStats records during a test run.
 ///
-/// Stores records as typed ``OpenPBTStatsLine`` values. JSON encoding happens once, on ``finalize()``.
+/// Stores records as typed ``OpenPBTStatsLine`` values. JSON encoding happens once, on ``finalize()``. When parallel generation is active, each lane creates its own accumulator and the results are merged via ``appendLines(_:)`` after all lanes complete.
 ///
 /// Not `Sendable` — used from a single thread within the generation loop.
 package final class OpenPBTStatsAccumulator {
@@ -166,6 +166,7 @@ package final class OpenPBTStatsAccumulator {
     private let lane: Int?
     private var lines: [OpenPBTStatsLine] = []
 
+    /// - Parameter lane: Parallel batch index stamped onto every recorded line, or `nil` for sequential runs.
     package init(propertyName: String, lane: Int? = nil) {
         self.propertyName = propertyName
         self.lane = lane

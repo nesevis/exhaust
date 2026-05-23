@@ -93,7 +93,7 @@ public extension __ExhaustRuntime {
                 var includeDiff = false
                 var onReportClosure: ((ExhaustReport) -> Void)?
                 var collectOpenPBTStats = false
-                var parallelize = false
+                var parallelLanes: UInt8 = 0
                 var logLevel: LogLevel = .error
                 var logFormat: LogFormat = .keyValue
 
@@ -141,8 +141,8 @@ public extension __ExhaustRuntime {
                         collectOpenPBTStats = true
                     case .includeDiff:
                         includeDiff = true
-                    case .parallelize:
-                        parallelize = true
+                    case let .parallelize(lanes):
+                        parallelLanes = UInt8(clamping: max(1, lanes))
                     case let .logging(level, format):
                         logLevel = level
                         logFormat = format
@@ -215,8 +215,7 @@ public extension __ExhaustRuntime {
                         visualize: visualize,
                         suppressIssueReporting: suppressIssueReporting,
                         includeDiff: includeDiff,
-                        parallelize: parallelize,
-                        parallelLanes: budget.parallelLanes,
+                        parallelLanes: parallelLanes,
 
                         logFormat: logFormat,
                         fileID: fileID,

@@ -10,8 +10,8 @@ let benchmarkSeedsToRun = 1000
 let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
 
 // registerShrinkingChallengeBenchmarks()
-registerECOOPBenchmarks()
+// registerECOOPBenchmarks()
 // registerComplexGrammarBenchmarks()
 // registerGenerationBenchmarks()
-// registerParallelGenerationBenchmarks()
+registerParallelGenerationBenchmarks()
 Benchmark.main()
