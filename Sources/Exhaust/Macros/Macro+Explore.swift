@@ -28,7 +28,7 @@
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned report.
 /// - `.suppress(.logs)`: silences all console output.
-/// - `.logging(_)`: controls log verbosity.
+/// - `.log(_)`: controls log verbosity.
 ///
 /// - Returns: An ``ExploreReport`` containing the counterexample (if any), per-direction coverage, and cross-direction diagnostics.
 @freestanding(expression)
@@ -62,7 +62,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned report.
 /// - `.suppress(.logs)`: silences all console output.
-/// - `.logging(_)`: controls log verbosity.
+/// - `.log(_)`: controls log verbosity.
 ///
 /// - Returns: An ``ExploreReport`` containing the counterexample (if any), per-direction coverage, and cross-direction diagnostics.
 @freestanding(expression)

@@ -3,8 +3,8 @@ import Testing
 
 @Suite("ExhaustReport")
 struct ExhaustReportTests {
-    @Test("Report fires on passing property with timing and invocation counts")
-    func reportOnPass() throws {
+    @Test
+    func `Report fires on passing property with timing and invocation counts`() throws {
         var capturedReport: ExhaustReport?
         #exhaust(
             #gen(.int(in: 0 ... 10)),
@@ -20,14 +20,14 @@ struct ExhaustReportTests {
         #expect(report.totalMaterializations == 0)
     }
 
-    @Test("Report fires on failing property with encoder breakdown")
-    func reportOnFailure() throws {
+    @Test
+    func `Report fires on failing property with encoder breakdown`() throws {
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 1000)),
             .onReport { capturedReport = $0 },
             .suppress(.issueReporting),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -40,8 +40,8 @@ struct ExhaustReportTests {
         #expect(report.totalMaterializations > 0)
     }
 
-    @Test("Report fires on reflecting path with reflection timing")
-    func reportOnReflecting() throws {
+    @Test
+    func `Report fires on reflecting path with reflection timing`() throws {
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -59,8 +59,8 @@ struct ExhaustReportTests {
         #expect(report.propertyInvocations > 0)
     }
 
-    @Test("Report property invocations include coverage and random phases")
-    func reportIncludesBothPhases() throws {
+    @Test
+    func `Report property invocations include coverage and random phases`() throws {
         var capturedReport: ExhaustReport?
         #exhaust(
             #gen(.int(in: 0 ... 10)),
@@ -78,8 +78,8 @@ struct ExhaustReportTests {
 
     // MARK: - onReport fires for all closure shapes
 
-    @Test("Report fires for sync Void/#expect closure (failing)")
-    func reportOnSyncExpectFailing() throws {
+    @Test
+    func `Report fires for sync Void/#expect closure (failing)`() throws {
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 1000)),
@@ -93,8 +93,8 @@ struct ExhaustReportTests {
         #expect(report.propertyInvocations > 0)
     }
 
-    @Test("Report fires for sync Void/#expect closure (passing)")
-    func reportOnSyncExpectPassing() throws {
+    @Test
+    func `Report fires for sync Void/#expect closure (passing)`() throws {
         var capturedReport: ExhaustReport?
         #exhaust(
             #gen(.int(in: 0 ... 10)),
@@ -107,8 +107,8 @@ struct ExhaustReportTests {
         #expect(report.propertyInvocations > 0)
     }
 
-    @Test("Report fires for async Bool closure (failing)")
-    func reportOnAsyncBoolFailing() async throws {
+    @Test
+    func `Report fires for async Bool closure (failing)`() async throws {
         var capturedReport: ExhaustReport?
         let result = await #exhaust(
             #gen(.int(in: 0 ... 1000)),
@@ -122,8 +122,8 @@ struct ExhaustReportTests {
         #expect(report.propertyInvocations > 0)
     }
 
-    @Test("Report fires for async Void/#expect closure (failing)")
-    func reportOnAsyncExpectFailing() async throws {
+    @Test
+    func `Report fires for async Void/#expect closure (failing)`() async throws {
         var capturedReport: ExhaustReport?
         let result = await #exhaust(
             #gen(.int(in: 0 ... 1000)),

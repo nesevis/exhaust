@@ -16,8 +16,8 @@ import Testing
 struct Bound5ScalingVariant {
     typealias Bound5 = Bound5Fixture.Tuple
 
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
-    func bound5(variant: ScalingVariant) {
+    @Test(arguments: ScalingVariant.allCases)
+    func `Scaling variant`(variant: ScalingVariant) {
         let int16Scaling: SizeScaling<Int16> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
 
@@ -57,8 +57,8 @@ struct Bound5ScalingVariant {
 struct BinaryHeapScalingVariant {
     typealias Heap = BinaryHeapFixture.Heap<Int>
 
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
-    func binaryHeap(variant: ScalingVariant) throws {
+    @Test(arguments: ScalingVariant.allCases)
+    func `binary heap`(variant: ScalingVariant) throws {
         let scaling: SizeScaling<Int> = variant.scaling()
         let gen = Self.heapGen(depth: 6, scaling: scaling)
         let property: @Sendable (Heap) -> Bool = { heap in
@@ -119,7 +119,7 @@ struct BinaryHeapScalingVariant {
 struct CalculatorScalingVariant {
     typealias Expr = CalculatorFixture.Expr
 
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
+    @Test(arguments: ScalingVariant.allCases)
     func calculator(variant: ScalingVariant) {
         let scaling: SizeScaling<Int> = variant.scaling()
         let gen = #gen(Self.expression(depth: 4, scaling: scaling))
@@ -187,7 +187,7 @@ struct CalculatorScalingVariant {
 
 @Suite("Coupling Scaling Variants", .tags(.challenge, .slow))
 struct CouplingScalingVariant {
-    @Test("Scaling variant", arguments: [ScalingVariant.constant])
+    @Test(arguments: [ScalingVariant.constant])
     func coupling(variant: ScalingVariant) throws {
         let intScaling: SizeScaling<Int> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
@@ -223,7 +223,7 @@ struct CouplingScalingVariant {
 
 @Suite("Deletion Scaling Variants", .tags(.challenge, .slow))
 struct DeletionScalingVariant {
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
+    @Test(arguments: ScalingVariant.allCases)
     func deletion(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
@@ -257,7 +257,7 @@ struct DeletionScalingVariant {
 
 @Suite("Difference Scaling Variants", .tags(.challenge, .slow))
 struct DifferenceScalingVariant {
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
+    @Test(arguments: ScalingVariant.allCases)
     func difference(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
         let gen = #gen(.int(in: 1 ... 1000, scaling: intScaling)).array(length: 2)
@@ -278,7 +278,7 @@ struct DifferenceScalingVariant {
 
 @Suite("Distinct Scaling Variants", .tags(.challenge, .slow))
 struct DistinctScalingVariant {
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
+    @Test(arguments: ScalingVariant.allCases)
     func distinct(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
@@ -301,8 +301,8 @@ struct DistinctScalingVariant {
 
 @Suite("Large Union List Scaling Variants", .tags(.challenge, .slow))
 struct LargeUnionListScalingVariant {
-    @Test("Scaling variant", arguments: [ScalingVariant.constant])
-    func largeUnionList(variant: ScalingVariant) {
+    @Test(arguments: [ScalingVariant.constant])
+    func `large union list`(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
 
@@ -314,7 +314,7 @@ struct LargeUnionListScalingVariant {
             gen,
             reflecting: value,
             .suppress(.issueReporting),
-            .logging(.debug, .keyValue)
+            .log(.debug)
         ) { arr in
             return Set(arr.flatMap(\.self)).count <= 4
         }
@@ -327,8 +327,8 @@ struct LargeUnionListScalingVariant {
 
 @Suite("Nested Lists Scaling Variants", .tags(.challenge, .slow))
 struct NestedListsScalingVariant {
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
-    func nestedLists(variant: ScalingVariant) {
+    @Test(arguments: ScalingVariant.allCases)
+    func `nested lists`(variant: ScalingVariant) {
         let uintScaling: SizeScaling<UInt> = variant.scaling()
 
         let gen = #gen(.uint(scaling: uintScaling).array().array())
@@ -351,7 +351,7 @@ struct NestedListsScalingVariant {
 
 @Suite("Reverse Scaling Variants", .tags(.challenge, .slow))
 struct ReverseScalingVariant {
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
+    @Test(arguments: ScalingVariant.allCases)
     func reverse(variant: ScalingVariant) {
         let uintScaling: SizeScaling<UInt> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
@@ -376,8 +376,8 @@ struct ReverseScalingVariant {
 
 @Suite("Length List Scaling Variants", .tags(.challenge, .slow))
 struct LengthListScalingVariant {
-    @Test("Scaling variant", arguments: ScalingVariant.allCases)
-    func lengthList(variant: ScalingVariant) {
+    @Test(arguments: ScalingVariant.allCases)
+    func `length list`(variant: ScalingVariant) {
         let uintScaling: SizeScaling<UInt> = variant.scaling()
         let arrayScaling: SizeScaling<UInt64> = variant.scaling()
 

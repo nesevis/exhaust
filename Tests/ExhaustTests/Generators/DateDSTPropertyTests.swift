@@ -34,8 +34,8 @@ struct DateDSTPropertyTests {
 
     // MARK: - Bug: "Every day has 24 hours"
 
-    @Test("Buggy daysBetween disagrees with Calendar around DST spring forward")
-    func daysBetweenDSTBug() {
+    @Test
+    func `Buggy daysBetween disagrees with Calendar around DST spring forward`() {
         let gen = #gen(.date(between: Self.springRange, interval: .hours(1), timeZone: Self.usEastern))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
@@ -53,8 +53,8 @@ struct DateDSTPropertyTests {
 
     // MARK: - Bug: "Midnight to midnight is always 86400 seconds"
 
-    @Test("Buggy secondsInDay disagrees with Calendar on DST transition day")
-    func secondsInDayDSTBug() {
+    @Test
+    func `Buggy secondsInDay disagrees with Calendar on DST transition day`() {
         let gen = #gen(.date(between: Self.springRange, interval: .hours(1), timeZone: Self.usEastern))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
@@ -75,8 +75,8 @@ struct DateDSTPropertyTests {
 
     // MARK: - Bug: "Adding N * 3600 seconds advances by N hours"
 
-    @Test("Buggy hourOfDay disagrees with Calendar after spring forward")
-    func hourOfDayDSTBug() {
+    @Test
+    func `Buggy hourOfDay disagrees with Calendar after spring forward`() {
         let gen = #gen(.date(between: Self.springRange, interval: .minutes(30), timeZone: Self.usEastern))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
@@ -103,8 +103,8 @@ struct DateDSTPropertyTests {
     // (>24h from midnight but still the same calendar day) is wrongly labeled
     // "tomorrow". The bug only manifests during the ~1 hour repeated window.
 
-    @Test("Google Closure Library relative day label bug on DST fall-back")
-    func closureLibraryDSTBug() {
+    @Test
+    func `Google Closure Library relative day label bug on DST fall-back`() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
@@ -129,8 +129,8 @@ struct DateDSTPropertyTests {
         #expect(counterExample != nil, "Expected boundary analysis to find the 1-hour-per-year DST bug")
     }
 
-    @Test("Random testing alone misses the same-day misclassification")
-    func closureLibraryDSTBugRandomOnly() {
+    @Test
+    func `Random testing alone misses the same-day misclassification`() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
@@ -141,9 +141,9 @@ struct DateDSTPropertyTests {
         // (dayDiff=0). This only happens on a fall-back day when target is in the
         // 25th hour (>24h from midnight but still the same calendar day).
         //
-        // With .randomOnly, hitting this requires BOTH dates to land on the
+        // Without coverage, hitting this requires BOTH dates to land on the
         // fall-back day's ~1h window — roughly (1/672)^2 ≈ 0.0002% per sample.
-        let counterExample = #exhaust(gen, .suppress(.issueReporting), .randomOnly) { now, target in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(coverage: 0, sampling: 100))) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 
@@ -186,8 +186,8 @@ struct DateDSTPropertyTests {
     static let auSpringForwardRange = auSpringForward2024.addingTimeInterval(-14 * 86400)
         ... auSpringForward2024.addingTimeInterval(14 * 86400)
 
-    @Test("iOS recurring alarm fires at wrong hour across AU spring-forward DST")
-    func iOSAlarmBugSpringForward() {
+    @Test
+    func `iOS recurring alarm fires at wrong hour across AU spring-forward DST`() {
         let gen = #gen(.date(between: Self.auSpringForwardRange, interval: .hours(1), timeZone: Self.auSydney))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { alarmTime in
@@ -211,8 +211,8 @@ struct DateDSTPropertyTests {
         #expect(counterExample != nil, "Expected boundary analysis to find the iOS alarm DST bug (spring forward)")
     }
 
-    @Test("iOS recurring alarm fires at wrong hour across AU fall-back DST")
-    func iOSAlarmBugFallBack() {
+    @Test
+    func `iOS recurring alarm fires at wrong hour across AU fall-back DST`() {
         let gen = #gen(.date(between: Self.auFallBackRange, interval: .hours(1), timeZone: Self.auSydney))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { alarmTime in
@@ -258,8 +258,8 @@ struct DateDSTPropertyTests {
     static let yearRange2024 = Date(timeIntervalSinceReferenceDate: 725_760_000) // 2024-01-01
         ... Date(timeIntervalSinceReferenceDate: 725_760_000 + 86400 * 366) // 2025-01-01
 
-    @Test("DateFormatter returns nil for valid calendar dates where midnight doesn't exist")
-    func dateFormatterMidnightBug() {
+    @Test
+    func `DateFormatter returns nil for valid calendar dates where midnight doesn't exist`() {
         let havana = TimeZone(identifier: "America/Havana")!
         let gen = #gen(.date(between: Self.yearRange2024, interval: .hours(1), timeZone: havana))
 
@@ -268,7 +268,7 @@ struct DateDSTPropertyTests {
         buggyFormatter.timeZone = TimeZone(identifier: "America/Havana")!
         buggyFormatter.isLenient = false
 
-        let counterExample = #exhaust(gen, .suppress(.issueReporting), .logging(.debug)) { date in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting), .log(.debug)) { date in
             // Format as date-only string, then parse back — the round-trip
             let dateString = buggyFormatter.string(from: date)
             let parsed = buggyFormatter.date(from: dateString)

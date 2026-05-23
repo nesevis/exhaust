@@ -4,8 +4,8 @@ import Testing
 
 @Suite("Unfold Combinator")
 struct UnfoldTests {
-    @Test("Immediate done produces the seed-derived value")
-    func immediateDone() {
+    @Test
+    func `Immediate done produces the seed-derived value`() {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 1 ... 10),
             depthRange: 1 ... 5
@@ -18,8 +18,8 @@ struct UnfoldTests {
         #expect(values.allSatisfy { $0 >= 2 && $0 <= 20 })
     }
 
-    @Test("Countdown accumulates state across iterations")
-    func countdownAccumulation() {
+    @Test
+    func `Countdown accumulates state across iterations`() {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just((list: [Int](), counter: 0)),
             depthRange: 1 ... 3
@@ -37,8 +37,8 @@ struct UnfoldTests {
         #expect(value == [0, 1, 2])
     }
 
-    @Test("Step can terminate early")
-    func earlyTermination() {
+    @Test
+    func `Step can terminate early`() {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .just(0),
             depthRange: 1 ... 100
@@ -53,8 +53,8 @@ struct UnfoldTests {
         #expect(value == 3)
     }
 
-    @Test("Random decisions within step produce varied output")
-    func randomStepDecisions() {
+    @Test
+    func `Random decisions within step produce varied output`() {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 5
@@ -72,8 +72,8 @@ struct UnfoldTests {
         #expect(lengths.count > 1, "Expected varied list lengths, got \(lengths)")
     }
 
-    @Test("Unfold works with #exhaust for property testing")
-    func propertyTestIntegration() {
+    @Test
+    func `Unfold works with #exhaust for property testing`() {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 5
@@ -89,16 +89,15 @@ struct UnfoldTests {
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 50))
         ) { list in
             list.count <= 5
         }
         #expect(result == nil, "Lists are capped at maxDepth=5, so count <= 5 always holds")
     }
 
-    @Test("Failing property finds and reduces counterexample")
-    func reductionThroughUnfold() {
+    @Test
+    func `Failing property finds and reduces counterexample`() {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 10
@@ -114,8 +113,7 @@ struct UnfoldTests {
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 100)),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 100))
         ) { list in
             list.count < 3
         }
@@ -125,8 +123,8 @@ struct UnfoldTests {
         }
     }
 
-    @Test("Deterministic replay with seed")
-    func deterministicReplay() {
+    @Test
+    func `Deterministic replay with seed`() {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 0 ... 100),
             depthRange: 1 ... 3

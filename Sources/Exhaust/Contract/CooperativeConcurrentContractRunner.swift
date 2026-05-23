@@ -220,7 +220,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             #endif
 
             let coverageStart = ContinuousClock.now
-            if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
+            if config.seed == nil, coverageBudget > 0 {
                 if let scaResult = runConcurrentSCACoverage(
                     seqGen: sequenceGen,
                     commandGen: commandGen,

@@ -12,8 +12,8 @@ import Testing
 @Suite("Experimental Challenge: Dependent String", .tags(.challenge))
 struct DependentStringChallenge {
     /// The generator returned from `bound` is irrelevant to the property, which only tests for length.
-    @Test("Bound string dependency")
-    func boundStringDependency() {
+    @Test
+    func `Bound string dependency`() {
         let gen = #gen(.int(in: 0 ... 10)).bound(
             forward: { .string(length: UInt64($0) ... UInt64($0)) },
             backward: \.count
@@ -22,7 +22,7 @@ struct DependentStringChallenge {
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .logging(.debug)
+            .log(.debug)
         ) { value in
             !(4 ... 5 ~= value.count)
         }

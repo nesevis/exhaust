@@ -11,7 +11,7 @@ struct AsyncContractTests {
     func `Passing async spec produces no counterexample`() async {
         let result = await #exhaust(
             AsyncCounterSpec.self,
-            .concurrency(1),
+            .concurrent(1),
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)
@@ -44,7 +44,7 @@ struct AsyncContractTests {
     func `Async contract with skip() works correctly`() async {
         let result = await #exhaust(
             AsyncSkipSpec.self,
-            .concurrency(1),
+            .concurrent(1),
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)
@@ -57,7 +57,7 @@ struct AsyncContractTests {
     func `Mixed sync+async commands produce AsyncContractSpec conformance`() async {
         let result = await #exhaust(
             MixedAsyncSpec.self,
-            .concurrency(1),
+            .concurrent(1),
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)
@@ -96,7 +96,7 @@ struct AsyncContractTests {
             .commandLimit(20),
             .budget(.custom(coverage: 0, sampling: 200)),
             .suppress(.issueReporting),
-            .logging(.debug)
+            .log(.debug)
         )
         #expect(result != nil, "Should find a failure")
         if let result {

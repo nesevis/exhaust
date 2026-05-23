@@ -30,7 +30,7 @@ public extension __ExhaustRuntime {
         var suppressIssueReporting = false
         var suppressLogs = false
         var logLevel: LogLevel = .error
-        var logFormat: LogFormat = .keyValue
+        let logFormat: LogFormat = .keyValue
         var shouldParallelize = false
         for setting in settings {
             switch setting {
@@ -68,10 +68,9 @@ public extension __ExhaustRuntime {
                     suppressIssueReporting = true
                     suppressLogs = true
                 }
-            case let .logging(level, format):
+            case let .log(level):
                 logLevel = level
-                logFormat = format
-            case .parallelize:
+            case .parallel:
                 shouldParallelize = true
             }
         }

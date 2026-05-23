@@ -27,12 +27,11 @@ public func __runContract<Spec: ContractSpec>(
     var seed: UInt64?
     var suppressIssueReporting = false
     var suppressLogs = false
-    var useRandomOnly = false
     var collectOpenPBTStats = false
     var includeDiff = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
-    var logFormat: LogFormat = .keyValue
+    let logFormat: LogFormat = .keyValue
     for setting in settings {
         switch setting {
         case let .commandLimit(limit):
@@ -61,8 +60,6 @@ public func __runContract<Spec: ContractSpec>(
                 suppressIssueReporting = true
                 suppressLogs = true
             }
-        case .randomOnly:
-            useRandomOnly = true
         case .collectOpenPBTStats:
             collectOpenPBTStats = true
         case .includeDiff:
@@ -73,9 +70,8 @@ public func __runContract<Spec: ContractSpec>(
                 existing?(report)
                 closure(report)
             }
-        case let .logging(level, format):
+        case let .log(level):
             logLevel = level
-            logFormat = format
         }
     }
 
@@ -183,11 +179,11 @@ public func __runContract<Spec: ContractSpec>(
         #endif
 
         var scaOutcome: SCAOutcome<Spec.Command> = .skipped
-        if useRandomOnly {
+        if coverageBudget == 0 {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "sca_coverage_skipped",
-                "SCA coverage skipped (randomOnly mode)"
+                "SCA coverage skipped (zero coverage budget)"
             )
         } else if seed != nil {
             ExhaustLog.notice(
@@ -221,7 +217,7 @@ public func __runContract<Spec: ContractSpec>(
                 report.setInvocations(
                     coverage: coverageInvocations,
                     randomSampling: 0,
-                    reduction: reductionStats.map { $0.totalMaterializations } ?? 0
+                    reduction: reductionStats.map(\.totalMaterializations) ?? 0
                 )
                 if let reductionStats {
                     report.applyReductionStats(reductionStats)
@@ -236,21 +232,19 @@ public func __runContract<Spec: ContractSpec>(
                 scaCoverageInvocations = 0
             }
             var innerReport: ExhaustReport?
-            let onInnerReport: ((ExhaustReport) -> Void)? = onReportClosure.map { outerClosure in
+            let onInnerReport: ((ExhaustReport) -> Void)? = onReportClosure.map { _ in
                 { report in innerReport = report }
             }
             failingSequence = __ExhaustRuntime.__exhaust(
                 commandSequenceGenerator.wrapped,
-                settings: buildExhaustSettings(
+                settings: buildPropertySettings(
                     samplingBudget: samplingBudget,
-                    coverageBudget: coverageBudget,
+                    coverageBudget: scaOutcome.isCompleted ? UInt64(0) : coverageBudget,
                     seed: seed,
                     suppressIssueReporting: true,
-                    useRandomOnly: useRandomOnly || scaOutcome.isCompleted,
                     collectOpenPBTStats: collectOpenPBTStats,
                     onReport: onInnerReport,
-                    logLevel: logLevel,
-                    logFormat: logFormat
+                    logLevel: logLevel
                 ),
                 fileID: fileID,
                 filePath: filePath,
@@ -505,19 +499,17 @@ struct ContractFailureInfo<Command> {
     var discoveryMethod: ContractDiscoveryMethod
 }
 
-/// Builds an ``ExhaustSettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
-func buildExhaustSettings(
+/// Builds a ``PropertySettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
+func buildPropertySettings(
     samplingBudget: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
     suppressIssueReporting: Bool,
-    useRandomOnly: Bool,
     collectOpenPBTStats: Bool = false,
     onReport: ((ExhaustReport) -> Void)? = nil,
-    logLevel: LogLevel = .error,
-    logFormat: LogFormat = .keyValue
-) -> [ExhaustSettings] {
-    var settings: [ExhaustSettings] = [
+    logLevel: LogLevel = .error
+) -> [PropertySettings] {
+    var settings: [PropertySettings] = [
         .budget(.custom(
             coverage: coverageBudget,
             sampling: samplingBudget
@@ -529,15 +521,12 @@ func buildExhaustSettings(
     if suppressIssueReporting {
         settings.append(.suppress(.issueReporting))
     }
-    if useRandomOnly {
-        settings.append(.randomOnly)
-    }
     if collectOpenPBTStats {
         settings.append(.collectOpenPBTStats)
     }
     if let onReport {
         settings.append(.onReport(onReport))
     }
-    settings.append(.logging(logLevel, logFormat))
+    settings.append(.log(logLevel))
     return settings
 }

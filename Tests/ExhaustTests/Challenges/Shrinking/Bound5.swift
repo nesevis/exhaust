@@ -21,14 +21,14 @@ struct Bound5ShrinkingChallenge {
      The interesting thing about this example is the interdependence between separate parts of the sample data. A single list in the tuple will never break the invariant, but you need at least two lists together. This prevents most of trivial shrinking algorithms from getting close to a minimum example, which would look something like ([-32768], [-1], [], [], []).
      */
 
-    @Test("Bound5, Single")
-    func bound5Single() {
+    @Test
+    func `Bound5, Single`() {
         let output = #exhaust(
             Bound5Fixture.gen,
-            .randomOnly,
+            .budget(.custom(coverage: 0, sampling: 200)),
             .suppress(.issueReporting),
             .replay(16_799_307_796_119_368_455),
-            .logging(.debug),
+            .log(.debug),
             property: Bound5Fixture.property
         )
 
@@ -36,8 +36,8 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, Pathological 1")
-    func bound5Pathological() {
+    @Test
+    func `Bound5, Pathological 1`() {
         let value = Bound5Fixture.Tuple(
             a: [-18914, -2906, 9816],
             b: [7672, 16087, 24512],
@@ -57,8 +57,8 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, Pathological 2")
-    func bound5Pathological2() {
+    @Test
+    func `Bound5, Pathological 2`() {
         let value = Bound5Fixture.Tuple(
             a: [-10709],
             b: [29251, 31661],
@@ -78,8 +78,8 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, Pathological 3")
-    func bound5Pathological3() throws {
+    @Test
+    func `Bound5, Pathological 3`() throws {
         let value = Bound5Fixture.Tuple(
             a: [-11954, 25609, -21279],
             b: [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491],
@@ -93,7 +93,7 @@ struct Bound5ShrinkingChallenge {
             reflecting: value,
             .suppress(.issueReporting),
             .onReport { report = $0 },
-            .logging(.debug, .keyValue),
+            .log(.debug),
             property: Bound5Fixture.property
         )
 
@@ -105,8 +105,8 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, Pathological 4")
-    func bound5Pathological4() {
+    @Test
+    func `Bound5, Pathological 4`() {
         let value = Bound5Fixture.Tuple(
             a: [10607, 11752, -7272, -15733],
             b: [],
@@ -125,13 +125,13 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, pathological 5")
-    func bound5Pathological5() {
+    @Test
+    func `Bound5, pathological 5`() {
         let output = #exhaust(
             Bound5Fixture.gen,
             .suppress(.issueReporting),
             .replay(12_394_678_611_125_950_626),
-            .logging(.debug, .jsonl),
+            .log(.debug),
             property: Bound5Fixture.property
         )
 
@@ -139,8 +139,8 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, covering array time")
-    func bound5CoveringArray() {
+    @Test
+    func `Bound5, covering array time`() {
         let output = #exhaust(
             Bound5Fixture.gen,
             .suppress(.issueReporting),
@@ -151,8 +151,8 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, 52")
-    func bound5Many() {
+    @Test
+    func `Bound5, 52`() {
         let bound5s = #example(Bound5Fixture.gen, count: 100, seed: 1337)
             .filter { Bound5Fixture.property($0) == false }
         for bound5 in bound5s {
@@ -160,7 +160,7 @@ struct Bound5ShrinkingChallenge {
                 Bound5Fixture.gen,
                 reflecting: bound5,
                 .suppress(.issueReporting),
-                .randomOnly,
+                .budget(.custom(coverage: 0, sampling: 200)),
                 property: Bound5Fixture.property
             )
 
@@ -172,8 +172,8 @@ struct Bound5ShrinkingChallenge {
     // MARK: Bound25
 
     /// This isn't exactly bound25 in that the property doesn't want all of them to be minimal, just that one is. It's here to test the BatchCrossSequenceRemovalSource
-    @Test("Bound25!")
-    func bound25() throws {
+    @Test
+    func `Bound25!`() throws {
         let gen = #gen(Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen)
         let property: @Sendable (Bound5Fixture.Tuple) -> Bool = { tuple in
             if tuple.arr.isEmpty { return true }
@@ -185,7 +185,7 @@ struct Bound5ShrinkingChallenge {
             .suppress(.issueReporting),
             .replay("B0ZF4ZX2NK312"),
             .onReport { report = $0 },
-            .logging(.debug)
+            .log(.debug)
         ) { b25 in
             property(b25.0) &&
                 property(b25.1) &&

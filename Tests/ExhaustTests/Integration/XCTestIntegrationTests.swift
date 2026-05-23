@@ -7,8 +7,7 @@ final class XCTestIntegrationTests: XCTestCase {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 10)),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 10))
         ) { _ in
             throw XCTSkip("Skipping everything")
         }

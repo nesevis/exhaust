@@ -13,7 +13,7 @@ struct PreemptiveNonAtomicCounterTests {
                 __runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
-                        .concurrency(2),
+                        .concurrent(2),
                         .commandLimit(6),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.issueReporting),
@@ -32,7 +32,7 @@ struct PreemptiveNonAtomicCounterTests {
                 __runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
-                        .concurrency(2),
+                        .concurrent(2),
                         .commandLimit(6),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.issueReporting),
@@ -53,7 +53,7 @@ struct PreemptiveNonAtomicCounterTests {
             __runPreemptiveConcurrentContract(
                 PreemptiveCounterSpec.self,
                 settings: [
-                    .concurrency(2),
+                    .concurrent(2),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.issueReporting),
@@ -75,7 +75,7 @@ struct PreemptiveNonAtomicCounterTests {
                 __runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
-                        .concurrency(2),
+                        .concurrent(2),
                         .commandLimit(8),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.issueReporting),

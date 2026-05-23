@@ -6,7 +6,7 @@ import ExhaustCore
 /// Concurrent contracts test interleaving at `await` boundaries using a cooperative scheduler. These settings control the concurrency level, idle timeout, sampling budget, and other test parameters.
 ///
 /// ```swift
-/// #exhaust(MySpec.self, .concurrency(4), .budget(.thorough))
+/// #exhaust(MySpec.self, .concurrent(4), .budget(.thorough))
 /// ```
 public enum ConcurrentContractSettings {
     /// Sets the number of concurrent execution lanes (1...8). Default is 2.
@@ -14,7 +14,7 @@ public enum ConcurrentContractSettings {
     /// Each lane runs its assigned commands in a separate Task. The cooperative scheduler interleaves their continuations at every `await` boundary. Higher values explore more complex interleavings but grow the search space combinatorially.
     ///
     /// With concurrency level 1, all commands run sequentially on a single lane — useful as a baseline to confirm that failures require concurrency.
-    case concurrency(Int)
+    case concurrent(Int)
 
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard`.
     case budget(ExhaustBudget)
@@ -32,11 +32,6 @@ public enum ConcurrentContractSettings {
     /// Use `.suppress(.issueReporting)` when the run is expected to find a failing command sequence and the test asserts on the returned value. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     case suppress(SuppressOption)
 
-    /// Disables structured coverage analysis of command orderings, using only random sampling.
-    ///
-    /// Use this when coverage is too slow for a particular spec (many commands with large argument domains) or when you want to isolate random sampling behavior.
-    case randomOnly
-
     /// Sets the maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 1000.
     ///
     /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also timeout). The diagnostic indicates which command body likely suspended to a foreign executor.
@@ -52,8 +47,8 @@ public enum ConcurrentContractSettings {
     /// The report includes per-phase timing, invocation counts, and reduction statistics. Multiple `.onReport` closures are chained in order.
     case onReport((ExhaustReport) -> Void)
 
-    /// Controls log verbosity and format for this contract test run.
+    /// Controls log verbosity for this contract test run.
     ///
-    /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
-    case logging(LogLevel, LogFormat = .keyValue)
+    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
+    case log(LogLevel)
 }

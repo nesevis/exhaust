@@ -19,9 +19,6 @@ public enum ContractSettings {
     /// Use `.suppress(.issueReporting)` when the run is expected to find a failing command sequence and the test asserts on the returned value. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     case suppress(SuppressOption)
 
-    /// Disables structured coverage analysis of command orderings.
-    case randomOnly
-
     /// Includes a structural diff between the original and reduced command sequences in the failure report.
     case includeDiff
 
@@ -35,8 +32,8 @@ public enum ContractSettings {
     /// The report includes per-phase timing, invocation counts, and reduction statistics. Multiple `.onReport` closures are chained in order.
     case onReport((ExhaustReport) -> Void)
 
-    /// Controls log verbosity and format for this contract test run.
+    /// Controls log verbosity for this contract test run.
     ///
-    /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
-    case logging(LogLevel, LogFormat = .keyValue)
+    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
+    case log(LogLevel)
 }

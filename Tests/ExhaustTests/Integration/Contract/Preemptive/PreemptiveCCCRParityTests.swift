@@ -166,7 +166,7 @@ struct PreemptiveDetectionBoundaryParityTests {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 PreemptiveThreeWayRaceParitySpec.self,
-                settings: [.concurrency(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                settings: [.concurrent(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")

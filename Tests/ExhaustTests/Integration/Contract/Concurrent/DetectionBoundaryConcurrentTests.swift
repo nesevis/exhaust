@@ -38,7 +38,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await __runContractConcurrent(
                 ThreeWayRaceSpec.self,
-                settings: [.concurrency(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                settings: [.concurrent(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
         )
         let hasFailure = result.trace.contains { step in
@@ -54,7 +54,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await __runContractConcurrent(
                 ThreeWayRaceSpec.self,
-                settings: [.concurrency(4), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                settings: [.concurrent(4), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
         )
         let hasFailure = result.trace.contains { step in

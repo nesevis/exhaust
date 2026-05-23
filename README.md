@@ -73,9 +73,9 @@ Most PBT libraries implement filters by generating values until one passes the p
 
 Generate random sequences of operations against a stateful system and verify invariants after every step. Two runners cover different kinds of concurrency bugs:
 
-**Cooperative scheduler** (`@Contract` + `.concurrency(N)`) — deterministic interleaving at every `await` suspension point. Same seed, same interleaving, same counterexample. Finds lost updates, check-then-act races, and non-atomic read-modify-write patterns that straddle a suspension boundary.
+**Cooperative scheduler** (`@Contract` + `.concurrent(N)`) — deterministic interleaving at every `await` suspension point. Same seed, same interleaving, same counterexample. Finds lost updates, check-then-act races, and non-atomic read-modify-write patterns that straddle a suspension boundary.
 
-**Preemptive runner** (`@ConcurrentContract` + `.concurrency(N)`) — dispatches to real GCD threads. Catches races inside locks, dispatch queues, and atomics that are invisible at `await` boundaries. Uses an `@Oracle` method to compare concurrent state against a sequential replay.
+**Preemptive runner** (`@ConcurrentContract` + `.concurrent(N)`) — dispatches to real GCD threads. Catches races inside locks, dispatch queues, and atomics that are invisible at `await` boundaries. Uses an `@Oracle` method to compare concurrent state against a sequential replay.
 
 ```
 Reduced from 6 to 3 commands.
@@ -270,7 +270,6 @@ Configure behaviour with settings:
 | `.budget(.extensive)` | — | 2000 coverage rows, 2000 random samples. |
 | `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
 | `.budget(.thorough * 3)` | — | Scale any preset with `*` or `/`. |
-| `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
 | `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). Passed as a named parameter, not a setting. |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualisation — useful for understanding how Exhaust represents and reduces your generator. |
@@ -278,8 +277,8 @@ Configure behaviour with settings:
 | `.collectOpenPBTStats` | off | Collects per-example statistics and attaches them to the test run in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. See [Test Observability](#test-observability). |
 | `.includeDiff` | off | Includes a structural diff between the original failing value and the reduced counterexample in the failure output. |
 | `.suppress(.issueReporting)` | — | Silences issue reporting. Use when asserting on the return value directly. `.suppress(.logs)` silences console output. `.suppress(.all)` for a completely silent run. |
-| `.logging(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. Use `.logging(.debug, .jsonl)` for structured JSON output. |
-| `.parallelize(N)` | off | Splits the random sampling phase across N parallel GCD lanes. Same seed, same counterexample regardless of lane count. Recommended for slow generators or expensive property checks. Has no effect with `.replay`. |
+| `.log(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. |
+| `.parallel(N)` | off | Splits the random sampling phase across N parallel GCD lanes. Same seed, same counterexample regardless of lane count. Recommended for slow generators or expensive property checks. Has no effect with `.replay`. |
 
 ### Using `#expect` and `#require`
 
@@ -612,7 +611,7 @@ Run it with `await` and configure the concurrency level:
 @Test func counterIsSafeUnderConcurrency() async {
     await #exhaust(
         NonAtomicCounterSpec.self,
-        .concurrency(2),
+        .concurrent(2),
         .commandLimit(6)
     )
 }
@@ -655,16 +654,15 @@ Sync contract tests accept `ContractSettings`; async contract tests accept `Conc
 | Setting | Default | Effect |
 |---|---|---|
 | `.commandLimit(N)` | auto-estimated | Maximum commands per sequence. Auto-estimated from the command domain when omitted (capped at 100 sync, 40 async). Reduce for specs with expensive command bodies. |
-| `.concurrency(N)` | 2 | Number of concurrent execution lanes (concurrent contracts only, 1...8). |
+| `.concurrent(N)` | 2 | Number of concurrent execution lanes (concurrent contracts only, 1...8). |
 | `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
-| `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.idleTimeoutMs(ms)` | 1000 | Drain loop stall detection (async only). |
 | `.replay(.numeric(seed))` | — | Deterministic reproduction. |
 | `.suppress(.issueReporting)` | — | Suppress issue reporting. |
 | `.includeDiff` | off | Includes a structural diff between the original and reduced counterexample (sync only). |
 | `.collectOpenPBTStats` | off | Records per-example stats in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. |
 | `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |
-| `.logging(.debug)` | `.error` | Log verbosity. |
+| `.log(.debug)` | `.error` | Log verbosity. |
 
 ## Directed Exploration
 
@@ -729,5 +727,5 @@ This repeats until neither makes progress. When both stall, the reducer tries to
 
 - Swift 6.2+ (Xcode 26+)
 - macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+
-- Cooperative concurrent contract testing (`@Contract` + `.concurrency`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
+- Cooperative concurrent contract testing (`@Contract` + `.concurrent`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
 - Preemptive concurrent contract testing (`@ConcurrentContract`) has no additional availability requirements

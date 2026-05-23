@@ -3,16 +3,15 @@ import Testing
 
 @Suite("Dedupe property tests")
 struct DedupePropertyTests {
-    @Test("Dedupe preserves all distinct elements")
-    func dedupePreservesDistinctElements() {
+    @Test
+    func `Dedupe preserves all distinct elements`() {
         let generator = #gen(.int().array(length: 0 ... 20))
 
         #exhaust(
             generator,
             reflecting: [3, 7, 7, 0, 7, 1, 1, 4],
-            .logging(.debug),
+            .log(.debug),
             .suppress(.issueReporting),
-//            .randomOnly,
             .budget(.extensive)
         ) { xs in
             #expect(Set(dedupe(xs)) == Set(xs))

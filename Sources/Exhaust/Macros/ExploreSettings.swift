@@ -74,15 +74,15 @@ public enum ExploreSettings: Sendable {
     /// Use `.suppress(.issueReporting)` when the explore run is expected to find a counterexample and the test asserts on the returned value. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     case suppress(SuppressOption)
 
-    /// Controls log verbosity and format for this explore run.
+    /// Controls log verbosity for this explore run.
     ///
-    /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
-    case logging(LogLevel, LogFormat = .keyValue)
+    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
+    case log(LogLevel)
 
     /// Runs per-direction tuning passes in parallel, one GCD lane per direction.
     ///
     /// Skips the warm-up phase (each direction's CGS tuning provides its own online warm-up) and gives each direction a fixed allocation of `maxAttemptsPerDirection` samples. Disabled when combined with `.replay` (replay forces sequential execution for deterministic reproduction).
     ///
     /// When parallelized, different runs with the same seed may surface different counterexamples because GCD thread scheduling is non-deterministic. Replay of a specific seed is always deterministic.
-    case parallelize
+    case parallel
 }

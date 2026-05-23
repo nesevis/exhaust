@@ -2,7 +2,7 @@ import ExhaustCore
 
 /// Captures run statistics from a single `#exhaust` invocation.
 ///
-/// Delivered via the ``ExhaustSettings/onReport(_:)`` setting. Contains phase timing, invocation counts, per-encoder probe breakdown, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree.
+/// Delivered via the ``PropertySettings/onReport(_:)`` setting. Contains phase timing, invocation counts, per-encoder probe breakdown, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree.
 public struct ExhaustReport: Sendable {
     /// The PRNG seed used for random sampling, if any.
     public var seed: UInt64?
@@ -85,7 +85,7 @@ public struct ExhaustReport: Sendable {
 
     /// OpenPBTStats records captured during the run.
     ///
-    /// Empty when ``ExhaustSettings/collectOpenPBTStats`` is disabled or the run produced no records. Populated whenever stats collection is enabled, independent of whether the host exposes Swift Testing or XCTest. When a test framework is available, the same records — encoded as JSONL via ``Swift/Sequence/jsonlString()`` — are also attached to the running test. For failing runs, the second-to-last element is the failing example and the last element is the reduced counterexample.
+    /// Empty when ``PropertySettings/collectOpenPBTStats`` is disabled or the run produced no records. For failing runs, the second-to-last element is the failing example and the last element is the reduced counterexample.
     package var openPBTStatsLines: [OpenPBTStatsLine] = []
 
     /// Summarizes profiling data as a single line.

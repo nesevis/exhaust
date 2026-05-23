@@ -37,8 +37,8 @@ struct StringAnagramChallenge {
      Two arrays of the two smallest values in the range, in swapped order.
      */
 
-    @Test("String anagram")
-    func stringAnagram() throws {
+    @Test
+    func `String anagram`() throws {
         let charGen = #gen(.asciiString())
             .filter { $0.count >= 2 }
         let gen = #gen(charGen, charGen)
@@ -65,15 +65,15 @@ struct StringAnagramChallenge {
         #expect(output.1 == "! ")
     }
 
-    @Test("Long string reduction")
-    func longStringReduction() {
+    @Test
+    func `Long string reduction`() {
         let needle = "syzygy"
         let result = #exhaust(
             .string(),
             reflecting: Self.haystack,
             .budget(.extensive),
             .suppress(.issueReporting)
-//            .logging(.debug)
+//            .log(.debug)
         ) {
             $0.contains(needle) == false
         }

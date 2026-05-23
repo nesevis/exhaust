@@ -21,8 +21,8 @@ struct BinaryHeapShrinkingChallenge {
      This is essentially because small examples are "too sparse", so it's very hard to find one by luck.
      */
 
-    @Test("Binary heap, Full")
-    func binaryHeapFull() throws {
+    @Test
+    func `Binary heap, Full`() throws {
         let boundGen = #gen(.uint64(in: 0 ... 20)).bind { BinaryHeapFixture.heapGen(depth: $0) }
         let output = try #require(
             #exhaust(
@@ -30,7 +30,7 @@ struct BinaryHeapShrinkingChallenge {
                 .suppress(.issueReporting),
                 .budget(.extensive),
                 .replay(2250),
-                .logging(.debug),
+                .log(.debug),
                 property: BinaryHeapFixture.property
             )
         )
@@ -40,15 +40,15 @@ struct BinaryHeapShrinkingChallenge {
         #expect(outputValues.sorted() == [0, 0, 0, 1])
     }
 
-    @Test("Binary heap, Recursive combinator")
-    func binaryHeapRecursive() throws {
+    @Test
+    func `Binary heap, Recursive combinator`() throws {
         let recursiveGen = BinaryHeapFixture.heapGenRecursive()
         let output = try #require(
             #exhaust(
                 recursiveGen,
                 .suppress(.issueReporting),
                 .replay(.numeric(10_358_026_062_479_193_394)),
-                .logging(.debug),
+                .log(.debug),
                 property: BinaryHeapFixture.property
             )
         )

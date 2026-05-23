@@ -48,8 +48,8 @@ public extension __ExhaustRuntime {
     ///
     /// - Parameters:
     ///   - gen: The generator to produce test values from.
-    ///   - settings: An array of `ExhaustSettings` controlling test behavior.
-    ///   - settings: An array of `ExhaustSettings` controlling test behavior.
+    ///   - settings: An array of `PropertySettings` controlling test behavior.
+    ///   - settings: An array of `PropertySettings` controlling test behavior.
     ///   - fileID: The file ID of the call site (injected by macro expansion).
     ///   - filePath: The file path of the call site (injected by macro expansion).
     ///   - line: The line number of the call site (injected by macro expansion).
@@ -60,7 +60,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exhaust<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings],
+        settings: [PropertySettings],
         reflecting: Output? = nil,
 
         fileID: StaticString = #fileID,
@@ -88,14 +88,13 @@ public extension __ExhaustRuntime {
                 var seed: UInt64?
                 var suppressIssueReporting = false
                 var suppressLogs = false
-                var useRandomOnly = false
                 var visualize = false
                 var includeDiff = false
                 var onReportClosure: ((ExhaustReport) -> Void)?
                 var collectOpenPBTStats = false
                 var parallelLanes: UInt8 = 0
                 var logLevel: LogLevel = .error
-                var logFormat: LogFormat = .keyValue
+                let logFormat: LogFormat = .keyValue
 
                 for setting in settings {
                     switch setting {
@@ -123,8 +122,6 @@ public extension __ExhaustRuntime {
                             suppressIssueReporting = true
                             suppressLogs = true
                         }
-                    case .randomOnly:
-                        useRandomOnly = true
                     case .visualize:
                         visualize = true
                     case let .onReport(closure):
@@ -141,11 +138,10 @@ public extension __ExhaustRuntime {
                         collectOpenPBTStats = true
                     case .includeDiff:
                         includeDiff = true
-                    case let .parallelize(lanes):
+                    case let .parallel(lanes):
                         parallelLanes = UInt8(clamping: max(1, lanes))
-                    case let .logging(level, format):
+                    case let .log(level):
                         logLevel = level
-                        logFormat = format
                     }
                 }
 
@@ -250,7 +246,7 @@ public extension __ExhaustRuntime {
 
                     let phaseTimingStart = monotonicNanoseconds()
                     var coverageIterations = 0
-                    if useRandomOnly {
+                    if coverageBudget == 0 {
                         ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
                     } else if seed != nil {
                         ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped (deterministic replay)")
@@ -330,7 +326,7 @@ public extension __ExhaustRuntime {
     #if canImport(Testing)
         private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
             gen: Generator<Output>,
-            settings: [ExhaustSettings],
+            settings: [PropertySettings],
 
             fileID: StaticString,
             filePath: StaticString,
@@ -385,7 +381,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings],
+        settings: [PropertySettings],
         reflecting: Output? = nil,
 
         fileID: StaticString = #fileID,
@@ -398,13 +394,11 @@ public extension __ExhaustRuntime {
     ) -> Output? {
         let gen = refGen.gen
         var logLevel: LogLevel = .error
-        var logFormat: LogFormat = .keyValue
         var suppressLogs = false
         for setting in settings {
             switch setting {
-            case let .logging(level, format):
+            case let .log(level):
                 logLevel = level
-                logFormat = format
             case let .suppress(option):
                 switch option {
                 case .logs, .all:
@@ -417,7 +411,7 @@ public extension __ExhaustRuntime {
             }
         }
 
-        return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
+        return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: .keyValue)) {
             withoutActuallyEscaping(detection) { detection in
                 let boolProperty = wrapDetectionProperty(detection)
 
@@ -499,7 +493,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exhaustAsync<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings],
+        settings: [PropertySettings],
         reflecting: Output? = nil,
 
         fileID: StaticString = #fileID,
@@ -531,7 +525,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exhaustExpectAsync<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings],
+        settings: [PropertySettings],
         reflecting: Output? = nil,
 
         fileID: StaticString = #fileID,
@@ -544,15 +538,13 @@ public extension __ExhaustRuntime {
     ) async -> Output? {
         let gen = refGen.gen
         var logLevel: LogLevel = .error
-        var logFormat: LogFormat = .keyValue
         for setting in settings {
-            if case let .logging(level, format) = setting {
+            if case let .log(level) = setting {
                 logLevel = level
-                logFormat = format
             }
         }
 
-        return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: logFormat)) {
+        return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: .keyValue)) {
             let syncDetection = bridgeAsyncDetection(detection)
 
             nonisolated(unsafe) var pipelineResult: Output?

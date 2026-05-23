@@ -38,13 +38,13 @@ struct CouplingShrinkingChallenge {
         }
     }
 
-    @Test("Coupling")
-    func couplingChallenge() throws {
+    @Test
+    func coupling() throws {
         let value = try #require(
             #exhaust(
                 Self.gen,
                 .suppress(.issueReporting),
-                .logging(.debug, .keyValue),
+                .log(.debug),
                 .replay(1546),
                 property: Self.property
             )
@@ -53,8 +53,8 @@ struct CouplingShrinkingChallenge {
         #expect(value == [1, 0])
     }
 
-    @Test("Coupling Pathological 1")
-    func couplingPathlogical1() throws {
+    @Test
+    func `Coupling Pathological 1`() throws {
         let value = try #require(
             #exhaust(
                 Self.gen,
@@ -66,13 +66,13 @@ struct CouplingShrinkingChallenge {
         #expect(value == [1, 0])
     }
 
-    @Test("Coupling Pathological 2")
-    func couplingPathlogical2() throws {
+    @Test
+    func `Coupling Pathological 2`() throws {
         let value = try #require(
             #exhaust(
                 Self.gen,
                 .suppress(.issueReporting),
-                .logging(.debug, .keyValue),
+                .log(.debug),
                 property: Self.property
             )
         )

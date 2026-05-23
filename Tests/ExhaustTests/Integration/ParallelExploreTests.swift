@@ -6,12 +6,12 @@ struct ParallelExploreTests {
     private static let budget = ExploreBudget.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)
 
     @Test
-    func `Passing property with .parallelize reaches coverage for all directions`() {
+    func `Passing property with .parallel reaches coverage for all directions`() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
             .budget(Self.budget),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 30 }),
@@ -34,7 +34,7 @@ struct ParallelExploreTests {
         let report = #explore(
             gen,
             .budget(Self.budget),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 30 }),
@@ -53,7 +53,7 @@ struct ParallelExploreTests {
         let report = #explore(
             gen,
             .budget(.custom(hitsPerDirection: 100, maxAttemptsPerDirection: 2000)),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [
                 ("small", { (value: Int) in value < 100 }),
@@ -74,7 +74,7 @@ struct ParallelExploreTests {
         let report = #explore(
             gen,
             .budget(Self.budget),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 50 }),
@@ -98,7 +98,7 @@ struct ParallelExploreTests {
         let report = #explore(
             gen,
             .budget(Self.budget),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 50 }),
@@ -118,7 +118,7 @@ struct ParallelExploreTests {
         let report = #explore(
             gen,
             .budget(Self.budget),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value in
@@ -135,7 +135,7 @@ struct ParallelExploreTests {
         let report = #explore(
             gen,
             .budget(Self.budget),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 50 }),
@@ -154,7 +154,7 @@ struct ParallelExploreTests {
         let report = #explore(
             gen,
             .budget(.custom(hitsPerDirection: 20, maxAttemptsPerDirection: 400)),
-            .parallelize,
+            .parallel,
             .suppress(.all),
             directions: [
                 ("even", { (value: Int) in value % 2 == 0 }),

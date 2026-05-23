@@ -465,7 +465,7 @@ For async SUTs, the contract becomes a `final class` and the runner tests concur
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {
-    await #exhaust(AsyncSpec.self, .concurrency(2))
+    await #exhaust(AsyncSpec.self, .concurrent(2))
 }
 ```
 

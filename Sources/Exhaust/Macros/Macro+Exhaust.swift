@@ -38,9 +38,8 @@ import ExhaustCore
 ///
 /// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (500/500), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
-/// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
-/// - `.suppress(.logs)`: silences all console output. Overrides `.logging(...)`.
+/// - `.suppress(.logs)`: silences all console output. Overrides `.log(...)`.
 /// - `.suppress(.all)`: skips issue reporting and silences all console output.
 ///
 /// ## How It Works
@@ -60,7 +59,7 @@ import ExhaustCore
 public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     reflecting: GeneratedValue? = nil,
-    _ settings: ExhaustSettings...,
+    _ settings: PropertySettings...,
     property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
@@ -108,9 +107,8 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 ///
 /// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (500/500), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
-/// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
-/// - `.suppress(.logs)`: silences all console output. Overrides `.logging(...)`.
+/// - `.suppress(.logs)`: silences all console output. Overrides `.log(...)`.
 /// - `.suppress(.all)`: skips issue reporting and silences all console output.
 ///
 /// ## How It Works
@@ -130,7 +128,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
     reflecting: GeneratedValue? = nil,
-    _ settings: ExhaustSettings...,
+    _ settings: PropertySettings...,
     property: @Sendable (GeneratedValue) async throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
 
@@ -149,7 +147,6 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 /// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.randomOnly`: disables structured coverage analysis.
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` with per-phase timing, invocation counts, and reduction statistics after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
@@ -168,17 +165,16 @@ public macro exhaust<Spec: ContractSpec>(
 ///
 /// ```swift
 /// @Test func concurrentQueueBehavior() async {
-///     let result = await #exhaust(ConcurrentQueueSpec.self, .concurrency(3), .commandLimit(12))
+///     let result = await #exhaust(ConcurrentQueueSpec.self, .concurrent(3), .commandLimit(12))
 /// }
 /// ```
 ///
 /// ## Settings
 ///
-/// - `.concurrency(_)`: number of concurrent execution lanes (1 through 8, default 2). Higher values explore more complex interleavings but grow the search space combinatorially. Use `.concurrency(1)` as a sequential baseline to confirm that failures require concurrency.
+/// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Higher values explore more complex interleavings but grow the search space combinatorially. Use `.concurrent(1)` as a sequential baseline to confirm that failures require concurrency.
 /// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. The same seed with the same concurrency level produces the same interleaving.
-/// - `.randomOnly`: disables structured coverage analysis of command orderings.
 /// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout (default 1000). When the idle timeout fires, the current command sequence is reported as a failure without reduction.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
@@ -199,18 +195,17 @@ public macro exhaust<Spec: AsyncContractSpec>(
 //
 // ```swift
 // @Test func counterThreadSafety() {
-//     let result = #exhaust(CounterGCDSpec.self, .concurrency(2), .budget(.extensive))
+//     let result = #exhaust(CounterGCDSpec.self, .concurrent(2), .budget(.extensive))
 // }
 // ```
 //
 // ## Settings
 //
-// - `.concurrency(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread.
+// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread.
 // - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 // - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
 // - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run.* Run the test repeatedly to reproduce.
 
-/// - `.randomOnly`: disables structured coverage analysis of command orderings.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 /// - `.suppress(.all)`: skips issue reporting and silences all console output.
@@ -229,18 +224,17 @@ public macro exhaust<Spec: ConcurrentContractSpec>(
 //
 // ```swift
 // @Test func asyncCounterThreadSafety() async {
-//     let result = await #exhaust(AsyncCounterGCDSpec.self, .concurrency(2), .budget(.extensive))
+//     let result = await #exhaust(AsyncCounterGCDSpec.self, .concurrent(2), .budget(.extensive))
 // }
 // ```
 //
 // ## Settings
 //
-// - `.concurrency(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread with async execution bridged via `Task` + semaphore.
+// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread with async execution bridged via `Task` + semaphore.
 // - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 // - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
 // - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run.* Run the test repeatedly to reproduce.
 
-/// - `.randomOnly`: disables structured coverage analysis of command orderings.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 /// - `.suppress(.all)`: skips issue reporting and silences all console output.

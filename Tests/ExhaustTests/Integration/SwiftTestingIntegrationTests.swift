@@ -8,8 +8,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 50))
         ) { value in
             #expect(value < 50)
         }
@@ -20,8 +19,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 50))
         ) { value in
             try #require(value < 50)
         }
@@ -35,8 +33,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 20)),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 20))
         ) { value in
             #expect(value >= 0)
             #expect(value <= 100)
@@ -48,8 +45,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: -10 ... 10)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50)),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 50))
         ) { value in
             #expect(value >= 0)
             #expect(value <= 5)
@@ -62,7 +58,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 200))
         ) { value in
             if value >= 50 {
                 throw TestError()
@@ -77,7 +73,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -91,7 +87,7 @@ struct SwiftTestingIntegrationTests {
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -103,7 +99,7 @@ struct SwiftTestingIntegrationTests {
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 200))
         ) { value in
             #expect(value < 50)
         }
@@ -117,7 +113,7 @@ struct SwiftTestingIntegrationTests {
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
             .replay(42),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -126,7 +122,7 @@ struct SwiftTestingIntegrationTests {
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
             .replay(42),
-            .randomOnly
+            .budget(.custom(coverage: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -156,7 +152,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: Int.min ... Int.max)),
             .suppress(.issueReporting),
-            .randomOnly,
+            .budget(.custom(coverage: 0, sampling: 600)),
             .onReport { report in
                 capturedReport = report
             }
@@ -176,7 +172,6 @@ struct SwiftTestingIntegrationTests {
             #gen(.int(in: 0 ... 10)),
             .suppress(.issueReporting),
             .budget(.custom(coverage: 0, sampling: 5)),
-            .randomOnly,
             .onReport { report in
                 capturedReport = report
             }

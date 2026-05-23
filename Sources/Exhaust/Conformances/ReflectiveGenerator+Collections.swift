@@ -159,6 +159,8 @@ public extension ReflectiveGenerator {
     ///
     /// Array length (and thus dictionary size) is size-scaled. Keys are deduplicated by hash — if the key generator produces duplicates, the first value is kept.
     ///
+    /// There is no instance-method counterpart (unlike ``array()`` and ``set()``). A chaining `.dictionary()` on a tuple generator would silently drop entries on key collision, with no way to control or detect how many entries survive. The static form keeps pair generation internal so the collision semantics stay hidden from the call site.
+    ///
     /// ```swift
     /// let gen = #gen(.dictionary(.asciiString(), .int(in: 0...100)))
     /// ```

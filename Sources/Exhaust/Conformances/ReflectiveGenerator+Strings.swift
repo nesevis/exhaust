@@ -13,7 +13,7 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.character(in: "a"..."z"))
     /// ```
     ///
-    /// - Parameter simplest: The character that the reducer substitutes for any character not essential to the property failure. Defaults to space if the range contains it, otherwise the range's lower bound. Must be within the range.
+    /// - Parameter simplest: The character that the reducer substitutes for any character not essential to the property failure. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be within the range.
     static func character(
         in range: ClosedRange<Character>? = nil,
         simplest: Unicode.Scalar? = nil
@@ -82,7 +82,7 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.character(from: .letters))
     /// ```
     ///
-    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
+    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
     static func character(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil
@@ -107,7 +107,7 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.string(from: .letters, length: 1...10))
     /// ```
     ///
-    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
+    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
     static func string(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil,
@@ -128,7 +128,7 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.string(from: .letters, length: 1...10))
     /// ```
     ///
-    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Any character not essential to the property failure will be replaced by this one. Defaults to space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0). Must be in the set if provided.
+    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
     static func string(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil,

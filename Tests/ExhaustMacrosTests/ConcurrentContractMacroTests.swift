@@ -487,13 +487,13 @@ struct GCDContractExhaustMacroTests {
     func `#exhaust sync concurrent contract with settings`() {
         assertMacroExpansion(
             """
-            #exhaust(CounterSpec.self, .concurrency(2), .commandLimit(6))
+            #exhaust(CounterSpec.self, .concurrent(2), .commandLimit(6))
             """,
             expandedSource: """
             await __ExhaustRuntime.dispatchToGCD {
                 __runPreemptiveConcurrentContract(
                     CounterSpec.self,
-                    settings: [.concurrency(2), .commandLimit(6)],
+                    settings: [.concurrent(2), .commandLimit(6)],
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,
@@ -529,12 +529,12 @@ struct GCDContractExhaustMacroTests {
     func `#exhaust async concurrent contract with settings`() {
         assertMacroExpansion(
             """
-            #exhaust(AsyncCounterSpec.self, .concurrency(2), .budget(.quick))
+            #exhaust(AsyncCounterSpec.self, .concurrent(2), .budget(.quick))
             """,
             expandedSource: """
             __runPreemptiveConcurrentContractAsync(
                 AsyncCounterSpec.self,
-                settings: [.concurrency(2), .budget(.quick)],
+                settings: [.concurrent(2), .budget(.quick)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,

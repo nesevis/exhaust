@@ -8,11 +8,11 @@ This guide covers testing stateful systems, things with mutable internal state w
 |----------------|-------|--------|
 | Synchronous SUT, sequential commands | `@Contract` (struct) | Sequential |
 | Async SUT, sequential commands | `@Contract` (final class, async commands) | Sequential with async bridging |
-| Async SUT, bugs at `await` suspension points | `@Contract` (final class, async commands) + `.concurrency(N)` | Cooperative scheduler — deterministic interleaving, same seed = same result |
-| Async facade over locks, dispatch queues, or atomics | `@ConcurrentContract` (final class, async commands) + `.concurrency(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
-| Synchronous SUT, bugs need real thread preemption | `@ConcurrentContract` (final class, sync commands) + `.concurrency(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
+| Async SUT, bugs at `await` suspension points | `@Contract` (final class, async commands) + `.concurrent(N)` | Cooperative scheduler — deterministic interleaving, same seed = same result |
+| Async facade over locks, dispatch queues, or atomics | `@ConcurrentContract` (final class, async commands) + `.concurrent(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
+| Synchronous SUT, bugs need real thread preemption | `@ConcurrentContract` (final class, sync commands) + `.concurrent(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
 
-The first three rows use `@Contract` and differ only in whether commands are async and whether `.concurrency` is set. The last two rows use `@ConcurrentContract`, which adds an `@Oracle` method for comparing concurrent state against a sequential replay. The [cooperative scheduler](#cooperative-concurrent-testing) controls interleaving deterministically at `await` boundaries. The [preemptive runner](#preemptive-concurrent-testing) dispatches to real OS threads and catches races invisible to the cooperative scheduler.
+The first three rows use `@Contract` and differ only in whether commands are async and whether `.concurrent` is set. The last two rows use `@ConcurrentContract`, which adds an `@Oracle` method for comparing concurrent state against a sequential replay. The [cooperative scheduler](#cooperative-concurrent-testing) controls interleaving deterministically at `await` boundaries. The [preemptive runner](#preemptive-concurrent-testing) dispatches to real OS threads and catches races invisible to the cooperative scheduler.
 
 ## When to reach for `@Contract`
 
@@ -227,14 +227,14 @@ The cooperative runner executes commands concurrently across multiple execution 
 @Test func counterIsSafeUnderConcurrency() async {
     await #exhaust(
         NonAtomicCounterSpec.self,
-        .concurrency(2),
+        .concurrent(2),
         .commandLimit(6),
         .budget(.thorough)
     )
 }
 ```
 
-`.concurrency(2)` means commands are distributed across two concurrent lanes. The cooperative scheduler controls interleaving deterministically. The same seed always produces the same interleaving. When a failure is found, the reducer reduces both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug.
+`.concurrent(2)` means commands are distributed across two concurrent lanes. The cooperative scheduler controls interleaving deterministically. The same seed always produces the same interleaving. When a failure is found, the reducer reduces both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug.
 
 A typical failure report:
 
@@ -271,9 +271,9 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 ### Concurrency level
 
-`.concurrency(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. Use 3 or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
+`.concurrent(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. Use 3 or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
 
-`.concurrency(1)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
+`.concurrent(1)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
 
 ### Idle timeout
 
@@ -322,7 +322,7 @@ Running the test:
 @Test func counterIsSafeUnderConcurrency() async {
     await #exhaust(
         AsyncRacyCounterSpec.self,
-        .concurrency(2),
+        .concurrent(2),
         .commandLimit(6),
         .budget(.custom(coverage: 0, sampling: 200))
     )
@@ -364,16 +364,15 @@ All contract styles accept settings as variadic arguments to `#exhaust`:
 | Setting | Default | Effect |
 |---------|---------|--------|
 | `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sync sequential) or 40 (concurrent). |
-| `.concurrency(N)` | 2 | Number of concurrent lanes (concurrent contracts only, 1...8). |
+| `.concurrent(N)` | 2 | Number of concurrent lanes (concurrent contracts only, 1...8). |
 | `.budget(.thorough)` | `.thorough` | Controls coverage rows and random sampling iterations. |
-| `.randomOnly` | off | Skip structured coverage, use only random sampling. |
 | `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (cooperative runner only). |
 | `.replay("seed")` | — | Deterministic replay of a specific run. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
 | `.includeDiff` | off | Includes a structural diff between the original and reduced command sequences (sequential only). |
 | `.collectOpenPBTStats` | off | Records per-example stats in OpenPBTStats JSON Lines format. |
 | `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |
-| `.logging(.debug)` | `.error` | Log verbosity. |
+| `.log(.debug)` | `.error` | Log verbosity. |
 
 ## Designing good contracts
 

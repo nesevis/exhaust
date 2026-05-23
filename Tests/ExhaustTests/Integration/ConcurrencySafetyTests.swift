@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Concurrency safety — generator sharing")
 struct GeneratorSharingTests {
-    @Test("Shared generator interpreted concurrently via #example")
-    func sharedGeneratorConcurrentExample() async {
+    @Test
+    func `Shared generator interpreted concurrently via #example`() async {
         let gen = #gen(.int(in: 0 ... 10000).array(length: 5 ... 15))
 
         await withTaskGroup(of: [Int].self) { group in
@@ -24,8 +24,8 @@ struct GeneratorSharingTests {
         }
     }
 
-    @Test("Shared composed generator with mapped/bound closures interpreted concurrently")
-    func sharedComposedGeneratorConcurrent() async {
+    @Test
+    func `Shared composed generator with mapped/bound closures interpreted concurrently`() async {
         let gen = #gen(.int(in: 1 ... 100))
             .mapped(forward: { "\($0)" }, backward: { Int($0) ?? 0 })
             .array(length: 3 ... 10)
@@ -45,8 +45,8 @@ struct GeneratorSharingTests {
         }
     }
 
-    @Test("Shared generator with filter interpreted concurrently")
-    func sharedFilteredGeneratorConcurrent() async {
+    @Test
+    func `Shared generator with filter interpreted concurrently`() async {
         let gen = #gen(.int(in: 0 ... 1000)).filter { $0 % 2 == 0 }.array(length: 5)
 
         await withTaskGroup(of: [[Int]].self) { group in
@@ -66,8 +66,8 @@ struct GeneratorSharingTests {
         }
     }
 
-    @Test("Shared oneOf generator with @Sendable closures interpreted concurrently")
-    func sharedOneOfGeneratorConcurrent() async {
+    @Test
+    func `Shared oneOf generator with @Sendable closures interpreted concurrently`() async {
         let gen = #gen(.oneOf(
             .int(in: 0 ... 100).mapped(forward: { "\($0)" }, backward: { Int($0) ?? 0 }),
             .string(length: 1 ... 5)
@@ -87,8 +87,8 @@ struct GeneratorSharingTests {
         }
     }
 
-    @Test("Shared recursive generator interpreted concurrently")
-    func sharedRecursiveGeneratorConcurrent() async {
+    @Test
+    func `Shared recursive generator interpreted concurrently`() async {
         let gen = ReflectiveGenerator<[Any]>.recursive(
             base: #gen(.int(in: 0 ... 10)).mapped(
                 forward: { [$0 as Any] },
@@ -112,8 +112,8 @@ struct GeneratorSharingTests {
         }
     }
 
-    @Test("Shared bound generator interpreted concurrently")
-    func sharedBoundGeneratorConcurrent() async {
+    @Test
+    func `Shared bound generator interpreted concurrently`() async {
         let gen = #gen(.int(in: 1 ... 10)).bound(
             forward: { length in .string(length: 1 ... length) },
             backward: \.count
@@ -139,8 +139,8 @@ struct GeneratorSharingTests {
 
 @Suite("Concurrency safety — concurrent #exhaust")
 struct ConcurrentExhaustTests {
-    @Test("Same generator used in concurrent #exhaust calls")
-    func concurrentExhaustCalls() async {
+    @Test
+    func `Same generator used in concurrent #exhaust calls`() async {
         let gen = #gen(.int(in: 0 ... 100))
 
         await withTaskGroup(of: Int?.self) { group in
@@ -159,8 +159,8 @@ struct ConcurrentExhaustTests {
         }
     }
 
-    @Test("Composed generator with closures used in concurrent #exhaust calls")
-    func concurrentExhaustWithClosures() async {
+    @Test
+    func `Composed generator with closures used in concurrent #exhaust calls`() async {
         let gen = #gen(.int(in: 0 ... 1000))
             .mapped(forward: { $0 * 2 }, backward: { $0 / 2 })
             .filter { $0 < 1500 }
@@ -186,8 +186,8 @@ struct ConcurrentExhaustTests {
 
 @Suite("Concurrency safety — async property bridge")
 struct AsyncPropertyBridgeTests {
-    @Test("Async property with suspension point under concurrent exhaust")
-    func asyncPropertyWithSuspension() async {
+    @Test
+    func `Async property with suspension point under concurrent exhaust`() async {
         let gen = #gen(.int(in: 0 ... 100))
 
         await withTaskGroup(of: Int?.self) { group in
@@ -207,8 +207,8 @@ struct AsyncPropertyBridgeTests {
         }
     }
 
-    @Test("Async Void/#expect property with suspension point under concurrent exhaust")
-    func asyncExpectWithSuspension() async {
+    @Test
+    func `Async Void/#expect property with suspension point under concurrent exhaust`() async {
         let gen = #gen(.int(in: 0 ... 100))
 
         await withTaskGroup(of: Int?.self) { group in
@@ -234,8 +234,8 @@ struct AsyncPropertyBridgeTests {
 @Suite("Concurrency safety — concurrent contract drain loop")
 struct ConcurrentContractDrainLoopTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Concurrent contract with Task.yield suspension points")
-    func contractWithYieldSuspensions() async throws {
+    @Test
+    func `Concurrent contract with Task.yield suspension points`() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 YieldingCounterSpec.self,
@@ -250,8 +250,8 @@ struct ConcurrentContractDrainLoopTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Multiple concurrent contract runs in parallel")
-    func parallelContractRuns() async {
+    @Test
+    func `Multiple concurrent contract runs in parallel`() async {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0 ..< 5 {
                 group.addTask {
@@ -269,13 +269,13 @@ struct ConcurrentContractDrainLoopTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Concurrent contract with bundle draws across lanes")
-    func contractWithBundleAcrossLanes() async {
+    @Test
+    func `Concurrent contract with bundle draws across lanes`() async {
         _ = await __runContractConcurrent(
             BundleDrawSpec.self,
             settings: [
                 .commandLimit(8),
-                .concurrency(3),
+                .concurrent(3),
                 .budget(.custom(coverage: 0, sampling: 100)),
                 .suppress(.all),
             ]

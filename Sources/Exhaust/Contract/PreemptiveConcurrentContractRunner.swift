@@ -138,7 +138,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                 }
             }
 
-            if config.seed == nil, coverageBudget > 0, config.useRandomOnly == false {
+            if config.seed == nil, coverageBudget > 0 {
                 if let scaResult = runConcurrentSCACoverage(
                     seqGen: sequenceGen,
                     commandGen: commandGen,

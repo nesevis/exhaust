@@ -10,11 +10,10 @@ struct ResolvedConcurrentConfig {
     var idleTimeout: Int = 1000
     var suppressIssueReporting: Bool = false
     var suppressLogs: Bool = false
-    var useRandomOnly: Bool = false
     var collectOpenPBTStats: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
-    var logFormat: LogFormat = .keyValue
+    let logFormat: LogFormat = .keyValue
 
     enum ParseResult {
         case success(ResolvedConcurrentConfig)
@@ -25,7 +24,7 @@ struct ResolvedConcurrentConfig {
         var config = ResolvedConcurrentConfig()
         for setting in settings {
             switch setting {
-            case let .concurrency(level):
+            case let .concurrent(level):
                 config.concurrencyLevel = level
             case let .budget(b):
                 config.budget = b
@@ -46,8 +45,6 @@ struct ResolvedConcurrentConfig {
                     config.suppressIssueReporting = true
                     config.suppressLogs = true
                 }
-            case .randomOnly:
-                config.useRandomOnly = true
             case .collectOpenPBTStats:
                 config.collectOpenPBTStats = true
             case let .onReport(closure):
@@ -62,9 +59,8 @@ struct ResolvedConcurrentConfig {
                 }
             case let .idleTimeoutMs(ms):
                 config.idleTimeout = ms
-            case let .logging(level, format):
+            case let .log(level):
                 config.logLevel = level
-                config.logFormat = format
             }
         }
         return .success(config)

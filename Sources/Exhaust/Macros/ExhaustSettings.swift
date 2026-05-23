@@ -47,11 +47,11 @@ extension ReplaySeed: ExpressibleByStringLiteral {
 
 /// Controls which outputs a test run silences.
 ///
-/// Pass a single option to ``ExhaustSettings/suppress(_:)`` to disable issue reporting, log output, or both.
+/// Pass a single option to ``PropertySettings/suppress(_:)`` to disable issue reporting, log output, or both.
 public enum SuppressOption: Sendable, Equatable {
     /// Suppresses `reportIssue()` calls on failure. The test does not fail via the framework; the caller asserts on the returned value instead.
     case issueReporting
-    /// Suppresses all log output to the console. Overrides any `.logging(level:format:)` setting.
+    /// Suppresses all log output to the console. Overrides any `.log(_:)` setting.
     case logs
     /// Suppresses both issue reporting and log output. The test run is completely silent.
     case all
@@ -129,7 +129,7 @@ public enum ExhaustBudget: Sendable {
 }
 
 /// Controls test behavior for `#exhaust` property tests, passed as variadic arguments.
-public enum ExhaustSettings {
+public enum PropertySettings {
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard` (200 coverage rows, 200 random samplings).
     case budget(ExhaustBudget)
 
@@ -146,14 +146,6 @@ public enum ExhaustSettings {
     ///
     /// Use `.suppress(.issueReporting)` when the property test is expected to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     case suppress(SuppressOption)
-
-    /// Disables automatic structured coverage analysis.
-    ///
-    /// By default, `#exhaust` analyzes the generator's structure and selects a systematic coverage strategy: exhaustive enumeration for small finite domains, or greedy pairwise covering via the density method (Bryce & Colbourn 2009) for larger domains. This runs before random sampling and uses its own budget (see ``ExhaustBudget``).
-    ///
-    /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds directly to random sampling. Useful for benchmarking, comparing coverage strategies, or when the analysis overhead is unwanted.
-    case randomOnly
-
     /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
     case visualize
 
@@ -174,13 +166,13 @@ public enum ExhaustSettings {
     /// Off by default because the diff computation is expensive for large values. Enable when diagnosing what the reducer changed.
     case includeDiff
 
-    /// Controls log verbosity and format for this test run.
+    /// Controls log verbosity for this test run.
     ///
-    /// Defaults to `.logging(.error, .keyValue)` when omitted — only error-level messages appear.
+    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
     /// ```swift
-    /// #exhaust(gen, .logging(.debug)) { value in ... }
+    /// #exhaust(gen, .log(.debug)) { value in ... }
     /// ```
-    case logging(LogLevel, LogFormat = .keyValue)
+    case log(LogLevel)
 
     /// Splits the random sampling phase across the given number of parallel GCD lanes.
     ///
@@ -193,9 +185,9 @@ public enum ExhaustSettings {
     /// Uniqueness deduplication (`.unique`) is enforced per-lane, not across lanes.
     ///
     /// ```swift
-    /// #exhaust(gen, .budget(.extensive), .parallelize(2)) { value in
+    /// #exhaust(gen, .budget(.extensive), .parallel(2)) { value in
     ///     expensiveCheck(value)
     /// }
     /// ```
-    case parallelize(UInt8)
+    case parallel(UInt8)
 }

@@ -27,14 +27,13 @@ struct ParserShrinkingChallenge {
      Even equal operands trigger bug 2 since it changes the constructor.
      */
 
-    @Test("Parser, Full")
-    func parserFull() throws {
+    @Test
+    func `Parser, Full`() throws {
         let output = try #require(
             #exhaust(
                 ParserFixture.langGen,
-                .randomOnly, // coverage takes a long time
-                .budget(.extensive),
-                .logging(.debug, .keyValue),
+                .budget(.custom(coverage: 0, sampling: 2000)), // coverage takes a long time
+                .log(.debug),
                 .suppress(.issueReporting),
                 property: ParserFixture.property
             )
