@@ -99,24 +99,17 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                 do { while let (commands, _) = try smokeIterator.next() {
                     let spec = Spec()
                     nonisolated(unsafe) let unsafeSpec = spec
-                    let traceBox = UnsafeSendableBox<[TraceStep]>([])
-                    let failedBox = UnsafeSendableBox(false)
-                    let semaphore = DispatchSemaphore(value: 0)
-                    Task { @Sendable in
-                        let (trace, failed) = await buildAsyncSequentialTrace(
+                    let (trace, failed) = __ExhaustRuntime.blockingAwait {
+                        await buildAsyncSequentialTrace(
                             commands,
                             run: { try await unsafeSpec.run($0) },
                             checkInvariants: { try await unsafeSpec.checkInvariants() }
                         )
-                        traceBox.value = trace
-                        failedBox.value = failed
-                        semaphore.signal()
                     }
-                    semaphore.wait()
-                    if failedBox.value {
+                    if failed {
                         let result = ContractResult<Spec>(
                             commands: commands,
-                            trace: traceBox.value,
+                            trace: trace,
                             systemUnderTest: spec.systemUnderTest,
                             seed: nil,
                             discoveryMethod: .smokeTest
@@ -273,16 +266,13 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
             group.enter()
             DispatchQueue.global().async {
                 var exception: NSException?
+                nonisolated(unsafe) let spec = concurrentSpec
                 let succeeded = exhaust_runCatchingObjCException({
-                    let semaphore = DispatchSemaphore(value: 0)
-                    nonisolated(unsafe) let spec = concurrentSpec
-                    Task { @Sendable in
+                    __ExhaustRuntime.blockingAwait {
                         for (_, command) in laneCommands {
                             try? await spec.run(command)
                         }
-                        semaphore.signal()
                     }
-                    semaphore.wait()
                 }, &exception)
                 if succeeded == false {
                     caughtException.value = exception
@@ -296,21 +286,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
             return false
         }
 
-        let invariantsPassed: Bool = {
-            let semaphore = DispatchSemaphore(value: 0)
-            let result = UnsafeSendableBox(true)
-            nonisolated(unsafe) let spec = concurrentSpec
-            Task { @Sendable in
-                do {
-                    try await spec.checkInvariants()
-                } catch {
-                    result.value = false
-                }
-                semaphore.signal()
+        nonisolated(unsafe) let invariantSpec = concurrentSpec
+        let invariantsPassed = __ExhaustRuntime.blockingAwait {
+            do {
+                try await invariantSpec.checkInvariants()
+                return true
+            } catch {
+                return false
             }
-            semaphore.wait()
-            return result.value
-        }()
+        }
 
         if invariantsPassed == false {
             return false
@@ -319,19 +303,16 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         return concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
     }
 
-    /// Runs commands sequentially on a spec, bridging async execution via Task+semaphore. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.
+    /// Runs commands sequentially on a spec, bridging async execution via ``__ExhaustRuntime/blockingAwait(_:)``. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.
     func runSequentially(_ commands: [Spec.Command], on spec: Spec) {
         var exception: NSException?
+        nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
-            let semaphore = DispatchSemaphore(value: 0)
-            nonisolated(unsafe) let spec = spec
-            Task { @Sendable in
+            __ExhaustRuntime.blockingAwait {
                 for command in commands {
                     try? await spec.run(command)
                 }
-                semaphore.signal()
             }
-            semaphore.wait()
         }, &exception)
     }
 

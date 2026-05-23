@@ -186,32 +186,27 @@ extension ConcurrentContractSpec {
 extension AsyncConcurrentContractSpec {
     /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
     ///
-    /// Bridges async execution via `Task` + semaphore. The returned closure is safe to call from a GCD thread.
+    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(_:)``. The returned closure is safe to call from a GCD thread.
     static func skipIdentifier(
         specInit: @escaping () -> Self
     ) -> @Sendable ([Command]) -> Set<Int> {
         nonisolated(unsafe) let specInit = specInit
         return { commands in
             let box = UnsafeSendableBox(specInit())
-            let resultBox = UnsafeSendableBox(Set<Int>())
-            let semaphore = DispatchSemaphore(value: 0)
-
-            Task { @Sendable in
+            return __ExhaustRuntime.blockingAwait {
+                var skips = Set<Int>()
                 for (index, command) in commands.enumerated() {
                     do {
                         try await box.value.run(command)
                         try await box.value.checkInvariants()
                     } catch is ContractSkip {
-                        resultBox.value.insert(index)
+                        skips.insert(index)
                     } catch {
                         break
                     }
                 }
-                semaphore.signal()
+                return skips
             }
-
-            semaphore.wait()
-            return resultBox.value
         }
     }
 }
@@ -219,7 +214,7 @@ extension AsyncConcurrentContractSpec {
 extension AsyncContractSpec {
     /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
     ///
-    /// Bridges async execution via `Task` + semaphore. The returned closure is safe to call from a GCD thread.
+    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(_:)``. The returned closure is safe to call from a GCD thread.
     ///
     /// - Parameter specInit: A factory that creates a fresh spec instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.
     static func skipIdentifier(
@@ -228,25 +223,20 @@ extension AsyncContractSpec {
         nonisolated(unsafe) let specInit = specInit
         return { commands in
             let box = UnsafeSendableBox(specInit())
-            let resultBox = UnsafeSendableBox(Set<Int>())
-            let semaphore = DispatchSemaphore(value: 0)
-
-            Task { @Sendable in
+            return __ExhaustRuntime.blockingAwait {
+                var skips = Set<Int>()
                 for (index, command) in commands.enumerated() {
                     do {
                         try await box.value.run(command)
                         try await box.value.checkInvariants()
                     } catch is ContractSkip {
-                        resultBox.value.insert(index)
+                        skips.insert(index)
                     } catch {
                         break
                     }
                 }
-                semaphore.signal()
+                return skips
             }
-
-            semaphore.wait()
-            return resultBox.value
         }
     }
 }

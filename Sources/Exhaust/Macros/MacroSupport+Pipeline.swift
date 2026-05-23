@@ -622,68 +622,42 @@ package extension __ExhaustRuntime {
         }
     }
 
-    /// Bridges an async Bool-returning property to a synchronous one via `Task` + `DispatchSemaphore`.
+    /// Bridges an async Bool-returning property to a synchronous one via ``blockingAwait(_:)``.
     static func bridgeAsyncProperty<Output>(
         _ property: @escaping @Sendable (Output) async throws -> Bool
     ) -> @Sendable (Output) -> Bool {
         { value in
             let valueBox = UnsafeSendableBox(value)
-            let resultBox = UnsafeSendableBox(false)
-            let semaphore = DispatchSemaphore(value: 0)
-            Task { @Sendable in
+            return blockingAwait {
                 do {
-                    resultBox.value = try await property(valueBox.value)
+                    return try await property(valueBox.value)
                 } catch {
                     #if canImport(XCTest)
-                        if error is XCTSkip {
-                            resultBox.value = true
-                        }
+                        if error is XCTSkip { return true }
                     #endif
+                    return false
                 }
-                semaphore.signal()
             }
-            semaphore.wait()
-            return resultBox.value
         }
     }
 
-    /// Bridges an async Void-returning detection closure to a synchronous Bool via `Task` + `DispatchSemaphore`.
+    /// Bridges an async Void-returning detection closure to a synchronous Bool via ``blockingAwait(_:)``.
     static func bridgeAsyncDetection<Output>(
         _ detection: @escaping @Sendable (Output) async throws -> Void
     ) -> @Sendable (Output) -> Bool {
         { value in
             let valueBox = UnsafeSendableBox(value)
-            let resultBox = UnsafeSendableBox(true)
-            let semaphore = DispatchSemaphore(value: 0)
-            Task { @Sendable in
+            return blockingAwait {
                 do {
                     try await detection(valueBox.value)
                 } catch {
                     #if canImport(XCTest)
-                        if (error is XCTSkip) == false {
-                            resultBox.value = false
-                        }
+                        if (error is XCTSkip) == false { return false }
                     #else
-                        resultBox.value = false
+                        return false
                     #endif
                 }
-                semaphore.signal()
-            }
-            semaphore.wait()
-            return resultBox.value
-        }
-    }
-
-    /// Dispatches a synchronous closure onto a GCD thread and returns the result asynchronously.
-    static func dispatchToGCD<Result>(
-        _ work: @escaping () -> Result
-    ) async -> Result {
-        nonisolated(unsafe) let unsafeWork = work
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Result, Never>) in
-            DispatchQueue.global().async {
-                let result = unsafeWork()
-                nonisolated(unsafe) let unsafeResult = result
-                continuation.resume(returning: unsafeResult)
+                return true
             }
         }
     }

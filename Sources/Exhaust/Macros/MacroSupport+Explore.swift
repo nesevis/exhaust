@@ -349,12 +349,9 @@ public extension __ExhaustRuntime {
                     }
                     if suppressIssueReporting == false {
                         let valueBox = UnsafeSendableBox(counterexample)
-                        let semaphore = DispatchSemaphore(value: 0)
-                        Task { @Sendable in
+                        __ExhaustRuntime.blockingAwait {
                             try? await property(valueBox.value)
-                            semaphore.signal()
                         }
-                        semaphore.wait()
 
                         let encoded = CrockfordBase32.encode(report.seed)
                         reportIssue(
