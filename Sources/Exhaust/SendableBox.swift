@@ -22,7 +22,7 @@ final class SendableBox<Value>: @unchecked Sendable {
     private var storage: Value
 
     init(_ value: Value) {
-        self.storage = value
+        storage = value
     }
 
     var value: Value {
@@ -36,5 +36,20 @@ final class SendableBox<Value>: @unchecked Sendable {
             defer { lock.unlock() }
             storage = newValue
         }
+    }
+
+    /// Provides atomic access to the stored value for compound operations.
+    ///
+    /// The lock is held for the duration of `body`, so read-modify-write
+    /// sequences execute as a single atomic unit. The `@Sendable` annotation
+    /// prevents the caller from capturing unsynchronized external state into
+    /// the critical section.
+    @discardableResult
+    func withValue<Result>(
+        _ body: @Sendable (inout Value) throws -> Result
+    ) rethrows -> Result {
+        lock.lock()
+        defer { lock.unlock() }
+        return try body(&storage)
     }
 }
