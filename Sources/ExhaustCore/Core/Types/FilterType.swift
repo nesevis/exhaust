@@ -83,6 +83,7 @@ public struct FilterObservation: Sendable {
     /// Source location of the `.filter(...)` call that created this observation.
     public var sourceLocation: FilterSourceLocation?
 
+    /// Creates a filter observation with the given attempt and pass counts.
     public init(attempts: Int = 0, passes: Int = 0, sourceLocation: FilterSourceLocation? = nil) {
         self.attempts = attempts
         self.passes = passes

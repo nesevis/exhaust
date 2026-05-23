@@ -83,6 +83,6 @@ public enum ExploreSettings: Sendable {
     ///
     /// Skips the warm-up phase (each direction's CGS tuning provides its own online warm-up) and gives each direction a fixed allocation of `maxAttemptsPerDirection` samples. Disabled when combined with `.replay` (replay forces sequential execution for deterministic reproduction).
     ///
-    /// When parallelised, different runs with the same seed may surface different counterexamples because GCD thread scheduling is non-deterministic. Replay of a specific seed is always deterministic.
+    /// When parallelized, different runs with the same seed may surface different counterexamples because GCD thread scheduling is non-deterministic. Replay of a specific seed is always deterministic.
     case parallelize
 }

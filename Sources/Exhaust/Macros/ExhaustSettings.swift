@@ -182,7 +182,9 @@ public enum ExhaustSettings {
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
 
-    /// Splits the random sampling phase across the given number of parallel GCD lanes. On fast generators there is very little benefit in going above 2.
+    /// Splits the random sampling phase across the given number of parallel GCD lanes.
+    ///
+    /// On fast generators there is very little benefit in going above two.
     ///
     /// Each lane runs an equal share of the sampling budget with an independently derived PRNG, so the same seed produces the same counterexample regardless of thread scheduling. The last lane absorbs any remainder from uneven division.
     ///
