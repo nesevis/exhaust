@@ -182,7 +182,7 @@ public enum ExhaustSettings {
     /// ```
     case logging(LogLevel, LogFormat = .keyValue)
 
-    /// Splits the random sampling phase across the given number of parallel GCD lanes.
+    /// Splits the random sampling phase across the given number of parallel GCD lanes. On fast generators there is very little benefit in going above 2.
     ///
     /// Each lane runs an equal share of the sampling budget with an independently derived PRNG, so the same seed produces the same counterexample regardless of thread scheduling. The last lane absorbs any remainder from uneven division.
     ///
@@ -191,7 +191,7 @@ public enum ExhaustSettings {
     /// Uniqueness deduplication (`.unique`) is enforced per-lane, not across lanes.
     ///
     /// ```swift
-    /// #exhaust(gen, .budget(.extensive), .parallelize(4)) { value in
+    /// #exhaust(gen, .budget(.extensive), .parallelize(2)) { value in
     ///     expensiveCheck(value)
     /// }
     /// ```

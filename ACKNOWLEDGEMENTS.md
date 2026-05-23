@@ -60,9 +60,16 @@ Links:
 
 Hillel’s primary area of focus is formal methods (he’s got a book out!) but he has written extensively about testing and PBT in particular for a long time. [Blog](https://www.hillelwayne.com)
 
+### Stevan Andjelkovic
+
+Stevan's writing about the PBT ecosystem and parallel stateful testing has been very influential, and the concept of "contract-tested fakes" for integration testing is brilliant.
+
+1. [The Sad State of Property-Based Testing Libraries](https://stevana.github.io/the_sad_state_of_property-based_testing_libraries.html) (2024)
+2. [Parallel Property-Based Testing with a Deterministic Thread Scheduler](https://stevana.github.io/parallel_property-based_testing_with_a_deterministic_thread_scheduler.html) (2024)
+
 ### Johannes Link
 
-Johannes Link’s [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust’s test case reducer.
+jqwik maintainer Johannes Link’s [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust’s test case reducer.
 
 ### Swift Testing
 
