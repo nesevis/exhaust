@@ -6,17 +6,19 @@ import Testing
 @Suite("Preemptive concurrent contract: smoke test", .serialized, .tags(.contract))
 struct PreemptiveSmokeTestTests {
     @Test
-    func `Smoke test catches sequential bug before concurrent phase`() throws {
+    func `Smoke test catches sequential bug before concurrent phase`() async throws {
         let result = try #require(
-            __runPreemptiveConcurrentContract(
-                SequentiallyBrokenSpec.self,
-                settings: [
-                    .concurrency(2),
-                    .commandLimit(4),
-                    .budget(.custom(coverage: 0, sampling: 50)),
-                    .suppress(.issueReporting),
-                ]
-            )
+            await __ExhaustRuntime.dispatchToGCD {
+                __runPreemptiveConcurrentContract(
+                    SequentiallyBrokenSpec.self,
+                    settings: [
+                        .concurrency(2),
+                        .commandLimit(4),
+                        .budget(.custom(coverage: 0, sampling: 50)),
+                        .suppress(.issueReporting),
+                    ]
+                )
+            }
         )
         #expect(result.commands.isEmpty == false)
     }

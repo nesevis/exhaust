@@ -57,14 +57,16 @@ public struct ExhaustGCDContractMacro: ExpressionMacro {
         let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
         return """
-        __runPreemptiveConcurrentContract(
-            \(raw: specExpr),
-            settings: \(raw: settingsArray),
-            fileID: #fileID,
-            filePath: #filePath,
-            line: #line,
-            column: #column
-        )
+        await __ExhaustRuntime.dispatchToGCD {
+            __runPreemptiveConcurrentContract(
+                \(raw: specExpr),
+                settings: \(raw: settingsArray),
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        }
         """
     }
 }

@@ -7,34 +7,38 @@ import Testing
 struct PreemptiveNonAtomicCounterTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test
-    func `Detects lost-update bug via oracle comparison`() throws {
+    func `Detects lost-update bug via oracle comparison`() async throws {
         let result = try #require(
-            __runPreemptiveConcurrentContract(
-                PreemptiveCounterSpec.self,
-                settings: [
-                    .concurrency(2),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting),
-                ]
-            )
+            await __ExhaustRuntime.dispatchToGCD {
+                __runPreemptiveConcurrentContract(
+                    PreemptiveCounterSpec.self,
+                    settings: [
+                        .concurrency(2),
+                        .commandLimit(6),
+                        .budget(.custom(coverage: 0, sampling: 200)),
+                        .suppress(.issueReporting),
+                    ]
+                )
+            }
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test
-    func `Failure report renders correctly`() throws {
+    func `Failure report renders correctly`() async throws {
         let result = try #require(
-            __runPreemptiveConcurrentContract(
-                PreemptiveCounterSpec.self,
-                settings: [
-                    .concurrency(2),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting),
-                ]
-            )
+            await __ExhaustRuntime.dispatchToGCD {
+                __runPreemptiveConcurrentContract(
+                    PreemptiveCounterSpec.self,
+                    settings: [
+                        .concurrency(2),
+                        .commandLimit(6),
+                        .budget(.custom(coverage: 0, sampling: 200)),
+                        .suppress(.issueReporting),
+                    ]
+                )
+            }
         )
         #expect(result.commands.isEmpty == false)
         #expect(result.seed != nil)
@@ -43,18 +47,20 @@ struct PreemptiveNonAtomicCounterTests {
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test
-    func `onReport delivers profiling summary`() throws {
+    func `onReport delivers profiling summary`() async throws {
         var capturedReport: ExhaustReport?
-        _ = __runPreemptiveConcurrentContract(
-            PreemptiveCounterSpec.self,
-            settings: [
-                .concurrency(2),
-                .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
-                .suppress(.issueReporting),
-                .onReport { capturedReport = $0 },
-            ]
-        )
+        _ = await __ExhaustRuntime.dispatchToGCD {
+            __runPreemptiveConcurrentContract(
+                PreemptiveCounterSpec.self,
+                settings: [
+                    .concurrency(2),
+                    .commandLimit(6),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.issueReporting),
+                    .onReport { capturedReport = $0 },
+                ]
+            )
+        }
         let report = try #require(capturedReport)
         #expect(report.totalMilliseconds > 0)
         #expect(report.propertyInvocations > 0)
@@ -63,17 +69,19 @@ struct PreemptiveNonAtomicCounterTests {
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test
-    func `Reduction shrinks the counterexample`() throws {
+    func `Reduction shrinks the counterexample`() async throws {
         let result = try #require(
-            __runPreemptiveConcurrentContract(
-                PreemptiveCounterSpec.self,
-                settings: [
-                    .concurrency(2),
-                    .commandLimit(8),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting),
-                ]
-            )
+            await __ExhaustRuntime.dispatchToGCD {
+                __runPreemptiveConcurrentContract(
+                    PreemptiveCounterSpec.self,
+                    settings: [
+                        .concurrency(2),
+                        .commandLimit(8),
+                        .budget(.custom(coverage: 0, sampling: 200)),
+                        .suppress(.issueReporting),
+                    ]
+                )
+            }
         )
         #expect(result.commands.count <= 6, "Reducer should shrink from 8 commands")
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands")
