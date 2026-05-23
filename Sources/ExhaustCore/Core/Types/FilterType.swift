@@ -83,6 +83,13 @@ public struct FilterObservation: Sendable {
     /// Source location of the `.filter(...)` call that created this observation.
     public var sourceLocation: FilterSourceLocation?
 
+    /// Creates an observation with the given counters and source location.
+    public init(attempts: Int = 0, passes: Int = 0, sourceLocation: FilterSourceLocation? = nil) {
+        self.attempts = attempts
+        self.passes = passes
+        self.sourceLocation = sourceLocation
+    }
+
     /// Fraction of attempts that passed, or zero if no attempts were recorded.
     public var validityRate: Double {
         attempts > 0 ? Double(passes) / Double(attempts) : 0.0

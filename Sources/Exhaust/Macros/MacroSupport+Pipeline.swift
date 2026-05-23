@@ -21,6 +21,8 @@ package extension __ExhaustRuntime {
         let visualize: Bool
         let suppressIssueReporting: Bool
         let includeDiff: Bool
+        let parallelize: Bool
+        let parallelLanes: Int
         let logFormat: LogFormat
         let fileID: StaticString
         let filePath: StaticString
@@ -157,9 +159,127 @@ package extension __ExhaustRuntime {
         }
     }
 
+    // MARK: - Sampling Batch
+
+    /// Outcome of a single sampling batch (sequential or one lane of a parallel run).
+    struct BatchResult<Output> {
+        var failure: (value: Output, tree: ChoiceTree, absoluteIteration: Int)?
+        var iterations: Int = 0
+        var filterObservations: [UInt64: FilterObservation] = [:]
+        var statsLines: [OpenPBTStatsLine] = []
+        var error: (any Error)?
+    }
+
+    /// Runs a contiguous range of sampling iterations, returning the first failure (if any).
+    ///
+    /// Used by both the sequential and parallel sampling paths. Each call creates its own ``ValueAndChoiceTreeInterpreter`` covering indices `startIndex ..< startIndex + count`, with an independent PRNG derived from `baseSeed`.
+    private static func runSamplingBatch<Output>( // swiftlint:disable:this function_body_length
+        gen: Generator<Output>,
+        property: @Sendable (Output) -> Bool,
+        baseSeed: UInt64,
+        startIndex: UInt64,
+        count: UInt64,
+        lane: Int?,
+        statsPropertyName: String?,
+        cancelled: SendableBox<Bool>
+    ) -> BatchResult<Output> {
+        var result = BatchResult<Output>()
+        let statsAccumulator: OpenPBTStatsAccumulator? = statsPropertyName.map {
+            OpenPBTStatsAccumulator(propertyName: $0, lane: lane)
+        }
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            gen,
+            materializePicks: statsAccumulator != nil,
+            seed: baseSeed,
+            maxRuns: startIndex + count,
+            initialRunIndex: startIndex
+        )
+        var previousFilterObservations: [UInt64: FilterObservation] = [:]
+
+        do {
+            if let statsAccumulator {
+                while cancelled.value == false {
+                    previousFilterObservations = interpreter.filterObservations
+                    let generateStart = monotonicNanoseconds()
+                    guard let (next, tree) = try interpreter.next() else { break }
+                    let generateEnd = monotonicNanoseconds()
+                    result.iterations += 1
+
+                    let currentObservations = interpreter.filterObservations
+                    var totalAttempts = 0
+                    var totalPasses = 0
+                    for (fingerprint, observation) in currentObservations {
+                        let previous = previousFilterObservations[fingerprint]
+                        totalAttempts += observation.attempts - (previous?.attempts ?? 0)
+                        totalPasses += observation.passes - (previous?.passes ?? 0)
+                    }
+                    var filterAttempts: Int?
+                    var filterRejections: Int?
+                    if totalAttempts > 0 {
+                        filterAttempts = totalAttempts
+                        filterRejections = totalAttempts - totalPasses
+                    }
+
+                    let testStart = monotonicNanoseconds()
+                    let passed = property(next)
+                    let testEnd = monotonicNanoseconds()
+
+                    let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
+                    let testSeconds = Double(testEnd - testStart) / 1_000_000_000
+                    var representation = ""
+                    customDump(next, to: &representation)
+                    if let rejections = filterRejections, rejections > 0 {
+                        statsAccumulator.recordDiscards(count: rejections, phase: .random)
+                    }
+                    statsAccumulator.record(
+                        representation: representation,
+                        passed: passed,
+                        tree: tree,
+                        phase: .random,
+                        generateSeconds: generateSeconds,
+                        testSeconds: testSeconds,
+                        filterAttempts: filterAttempts,
+                        filterRejections: filterRejections
+                    )
+
+                    if passed == false {
+                        let absoluteIteration = Int(startIndex) + result.iterations
+                        result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
+                        cancelled.value = true
+                        break
+                    }
+                }
+                result.statsLines = statsAccumulator.finalize()
+            } else {
+                while cancelled.value == false {
+                    guard let next = try interpreter.nextValueOnly() else { break }
+                    result.iterations += 1
+
+                    if property(next) == false {
+                        let absoluteIteration = Int(startIndex) + result.iterations
+                        if let (_, tree) = try interpreter.reproduceWithTree() {
+                            result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
+                        } else {
+                            result.failure = (value: next, tree: .just, absoluteIteration: absoluteIteration)
+                        }
+                        cancelled.value = true
+                        break
+                    }
+                }
+            }
+        } catch {
+            result.error = error
+        }
+
+        result.filterObservations = interpreter.filterObservations
+        return result
+    }
+
     // MARK: - Sampling Phase
 
     /// Runs the random sampling phase after coverage completes.
+    ///
+    /// When `context.parallelize` is true, splits the budget across multiple GCD threads (one per lane). Otherwise runs a single sequential batch.
     static func runSamplingPhase<Output>( // swiftlint:disable:this function_body_length
         context: PipelineContext<Output>,
         seed: UInt64?,
@@ -167,153 +287,149 @@ package extension __ExhaustRuntime {
         report: inout ExhaustReport
     ) -> Output? {
         let generationPhaseStart = monotonicNanoseconds()
-        var iterations = 0
-        var interpreter = ValueAndChoiceTreeInterpreter(
-            context.gen,
-            materializePicks: true,
-            seed: seed,
-            maxRuns: context.samplingBudget
-        )
-        let actualSeed = interpreter.baseSeed
-        report.seed = actualSeed
 
-        var previousFilterObservations: [UInt64: FilterObservation] = [:]
+        let baseSeed: UInt64
+        if let seed {
+            baseSeed = seed
+        } else {
+            baseSeed = Xoshiro256().seed
+        }
+        report.seed = baseSeed
 
-        defer {
-            if context.suppressIssueReporting == false {
-                for (_, observation) in interpreter.filterObservations where observation.attempts >= 20 {
-                    if observation.validityRate < 0.02, let location = observation.sourceLocation {
-                        reportIssue(
-                            "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
-                            severity: .warning,
-                            fileID: location.fileID,
-                            filePath: location.filePath,
-                            line: location.line,
-                            column: location.column
-                        )
-                    }
+        let useParallel = context.parallelize
+            && seed == nil
+            && context.parallelLanes > 1
+
+        let laneCount = useParallel ? context.parallelLanes : 1
+        let baseIterationsPerLane = context.samplingBudget / UInt64(laneCount)
+        let remainder = context.samplingBudget - baseIterationsPerLane * UInt64(laneCount)
+        let statsPropertyName: String? = context.statsAccumulator != nil
+            ? "\(context.fileID)"
+            : nil
+
+        let cancelled = SendableBox(false)
+        nonisolated(unsafe) let unsafeContext = context
+
+        var batchResults: [BatchResult<Output>]
+        if laneCount > 1 {
+            let resultStorage = SendableBox<[BatchResult<Output>?]>(
+                Array(repeating: nil, count: laneCount)
+            )
+            let group = DispatchGroup()
+            for laneIndex in 0 ..< laneCount {
+                let startIndex = UInt64(laneIndex) * baseIterationsPerLane
+                let iterationsForLane = baseIterationsPerLane + (laneIndex == laneCount - 1 ? remainder : 0)
+                group.enter()
+                DispatchQueue.global().async {
+                    let batchResult = runSamplingBatch(
+                        gen: unsafeContext.gen,
+                        property: unsafeContext.property,
+                        baseSeed: baseSeed,
+                        startIndex: startIndex,
+                        count: iterationsForLane,
+                        lane: laneIndex,
+                        statsPropertyName: statsPropertyName,
+                        cancelled: cancelled
+                    )
+                    resultStorage.withValue { $0[laneIndex] = batchResult }
+                    group.leave()
+                }
+            }
+            group.wait()
+            batchResults = resultStorage.value.compactMap(\.self)
+        } else {
+            let single = runSamplingBatch(
+                gen: context.gen,
+                property: context.property,
+                baseSeed: baseSeed,
+                startIndex: 0,
+                count: context.samplingBudget,
+                lane: nil,
+                statsPropertyName: statsPropertyName,
+                cancelled: cancelled
+            )
+            batchResults = [single]
+        }
+
+        // Merge filter observations and emit warnings.
+        var mergedFilterObservations: [UInt64: FilterObservation] = [:]
+        for batch in batchResults {
+            for (fingerprint, observation) in batch.filterObservations {
+                mergedFilterObservations[fingerprint, default: FilterObservation()].merge(observation)
+            }
+        }
+        if context.suppressIssueReporting == false {
+            for (_, observation) in mergedFilterObservations where observation.attempts >= 20 {
+                if observation.validityRate < 0.02, let location = observation.sourceLocation {
+                    reportIssue(
+                        "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
+                        severity: .warning,
+                        fileID: location.fileID,
+                        filePath: location.filePath,
+                        line: location.line,
+                        column: location.column
+                    )
                 }
             }
         }
 
-        do { while true {
-            if let statsAccumulator = context.statsAccumulator {
-                previousFilterObservations = interpreter.filterObservations
-                let generateStart = monotonicNanoseconds()
-                guard let (next, tree) = try interpreter.next() else { break }
-                let generateEnd = monotonicNanoseconds()
-                iterations += 1
+        // Merge stats lines into the parent accumulator.
+        if let statsAccumulator = context.statsAccumulator {
+            for batch in batchResults {
+                statsAccumulator.appendLines(batch.statsLines)
+            }
+        }
 
-                let currentObservations = interpreter.filterObservations
-                var totalAttempts = 0
-                var totalPasses = 0
-                for (fingerprint, observation) in currentObservations {
-                    let previous = previousFilterObservations[fingerprint]
-                    totalAttempts += observation.attempts - (previous?.attempts ?? 0)
-                    totalPasses += observation.passes - (previous?.passes ?? 0)
-                }
-                var filterAttempts: Int?
-                var filterRejections: Int?
-                if totalAttempts > 0 {
-                    filterAttempts = totalAttempts
-                    filterRejections = totalAttempts - totalPasses
-                }
-
-                let testStart = monotonicNanoseconds()
-                let passed = context.property(next)
-                let testEnd = monotonicNanoseconds()
-
-                let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
-                let testSeconds = Double(testEnd - testStart) / 1_000_000_000
-                var representation = ""
-                customDump(next, to: &representation)
-                if let rejections = filterRejections, rejections > 0 {
-                    statsAccumulator.recordDiscards(count: rejections, phase: .random)
-                }
-                statsAccumulator.record(
-                    representation: representation,
-                    passed: passed,
-                    tree: tree,
-                    phase: .random,
-                    generateSeconds: generateSeconds,
-                    testSeconds: testSeconds,
-                    filterAttempts: filterAttempts,
-                    filterRejections: filterRejections
+        // Report first error from any batch.
+        for batch in batchResults {
+            if let error = batch.error {
+                reportIssue(
+                    localizedErrorMessage(error),
+                    fileID: context.fileID,
+                    filePath: context.filePath,
+                    line: context.line,
+                    column: context.column
                 )
-
-                if passed == false {
-                    report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
-                    let result = reduceAndReport(
-                        context: context,
-                        value: next,
-                        tree: tree,
-                        seed: actualSeed,
-                        iteration: iterations,
-                        phaseBudget: context.samplingBudget,
-                        coverageIterations: coverageIterations,
-                        randomSamplingIterations: iterations,
-                        replayHint: nil,
-                        report: &report
-                    )
-                    switch result {
-                    case let .reduced(counterexample):
-                        return counterexample
-                    case let .unreduced(counterexample):
-                        return counterexample
-                    case .reductionError:
-                        return next
-                    }
-                }
-            } else {
-                guard let next = try interpreter.nextValueOnly() else { break }
-                iterations += 1
-
-                let passed = context.property(next)
-                if passed == false {
-                    report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
-                    guard let (_, tree) = try interpreter.reproduceWithTree() else {
-                        return next
-                    }
-                    let result = reduceAndReport(
-                        context: context,
-                        value: next,
-                        tree: tree,
-                        seed: actualSeed,
-                        iteration: iterations,
-                        phaseBudget: context.samplingBudget,
-                        coverageIterations: coverageIterations,
-                        randomSamplingIterations: iterations,
-                        replayHint: nil,
-                        report: &report
-                    )
-                    switch result {
-                    case let .reduced(counterexample):
-                        return counterexample
-                    case let .unreduced(counterexample):
-                        return counterexample
-                    case .reductionError:
-                        return next
-                    }
-                }
             }
         }
-        } catch {
-            reportIssue(
-                localizedErrorMessage(error),
-                fileID: context.fileID,
-                filePath: context.filePath,
-                line: context.line,
-                column: context.column
+
+        // Find the failure with the lowest absolute iteration (deterministic winner).
+        let totalIterations = batchResults.reduce(0) { $0 + $1.iterations }
+        let winningFailure = batchResults
+            .compactMap(\.failure)
+            .min(by: { $0.absoluteIteration < $1.absoluteIteration })
+
+        guard let failure = winningFailure else {
+            report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+            report.setInvocations(
+                coverage: coverageIterations,
+                randomSampling: totalIterations,
+                reduction: 0
             )
             return nil
         }
 
-        report.setInvocations(
-            coverage: coverageIterations,
-            randomSampling: iterations,
-            reduction: 0
+        report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+        let result = reduceAndReport(
+            context: context,
+            value: failure.value,
+            tree: failure.tree,
+            seed: baseSeed,
+            iteration: failure.absoluteIteration,
+            phaseBudget: context.samplingBudget,
+            coverageIterations: coverageIterations,
+            randomSamplingIterations: failure.absoluteIteration,
+            replayHint: nil,
+            report: &report
         )
-        return nil
+        switch result {
+        case let .reduced(counterexample):
+            return counterexample
+        case let .unreduced(counterexample):
+            return counterexample
+        case .reductionError:
+            return failure.value
+        }
     }
 
     // MARK: - Shared Reduction

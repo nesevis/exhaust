@@ -93,6 +93,7 @@ public extension __ExhaustRuntime {
                 var includeDiff = false
                 var onReportClosure: ((ExhaustReport) -> Void)?
                 var collectOpenPBTStats = false
+                var parallelize = false
                 var logLevel: LogLevel = .error
                 var logFormat: LogFormat = .keyValue
 
@@ -140,6 +141,8 @@ public extension __ExhaustRuntime {
                         collectOpenPBTStats = true
                     case .includeDiff:
                         includeDiff = true
+                    case .parallelize:
+                        parallelize = true
                     case let .logging(level, format):
                         logLevel = level
                         logFormat = format
@@ -212,6 +215,8 @@ public extension __ExhaustRuntime {
                         visualize: visualize,
                         suppressIssueReporting: suppressIssueReporting,
                         includeDiff: includeDiff,
+                        parallelize: parallelize,
+                        parallelLanes: budget.parallelLanes,
 
                         logFormat: logFormat,
                         fileID: fileID,
