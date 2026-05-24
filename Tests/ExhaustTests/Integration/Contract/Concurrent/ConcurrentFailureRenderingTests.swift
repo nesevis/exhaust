@@ -6,7 +6,9 @@ import Testing
 struct ConcurrentFailureRenderingTests {
     @Test("renderFailure produces full report with seed")
     func renderFailureProducesFullReportWithSeed() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (.prefix, "setup()"),
             (ScheduleMarker(rawValue: 1), "deposit(10)"),
@@ -34,7 +36,9 @@ struct ConcurrentFailureRenderingTests {
 
     @Test("renderFailure without seed omits replay line")
     func renderFailureWithoutSeedOmitsReplayLine() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "push(1)"),
         ]
@@ -52,7 +56,9 @@ struct ConcurrentFailureRenderingTests {
 
     @Test("renderFailure with oracleDescription includes it")
     func renderFailureWithOracleDescriptionIncludesIt() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
         ]
@@ -69,7 +75,9 @@ struct ConcurrentFailureRenderingTests {
 
     @Test("renderFailure delegates to renderTimeout when timedOut")
     func renderFailureDelegatesToRenderTimeoutWhenTimedOut() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "slowOp()"),
         ]
@@ -83,7 +91,9 @@ struct ConcurrentFailureRenderingTests {
 
     @Test("renderFailure includes scheduling caveat for preemptive random sampling")
     func renderFailureIncludesSchedulingCaveatForPreemptiveRandomSampling() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
             (ScheduleMarker(rawValue: 2), "decrement()"),
@@ -104,7 +114,9 @@ struct ConcurrentFailureRenderingTests {
 
     @Test("renderFailure includes scheduling caveat for preemptive coverage")
     func renderFailureIncludesSchedulingCaveatForPreemptiveCoverage() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
         ]
@@ -122,7 +134,9 @@ struct ConcurrentFailureRenderingTests {
 
     @Test("renderFailure omits scheduling caveat for cooperative random sampling")
     func renderFailureOmitsSchedulingCaveatForCooperativeRandomSampling() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
         ]
@@ -141,7 +155,9 @@ struct ConcurrentFailureRenderingTests {
 
     @Test("renderTimeout with partial trace includes trace lines")
     func renderTimeoutWithPartialTraceIncludesTraceLines() {
-        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
         let tagged: [(ScheduleMarker, String)] = [
             (.prefix, "init()"),
             (ScheduleMarker(rawValue: 1), "block()"),

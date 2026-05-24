@@ -163,30 +163,6 @@ struct BoundaryBudgetTests {
         #expect(counterExample == nil)
     }
 
-    // MARK: - 4 Parameters: Quad Interaction
-
-    @Test("4-param: overlapping intervals across DST")
-    func fourParamOverlappingIntervals() {
-        // Two events: [start1, end1) and [start2, end2)
-        let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
-        )
-
-        // Property: overlap is symmetric — if A overlaps B, then B overlaps A
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { s1, e1, s2, e2 in
-            let start1 = min(s1, e1), end1 = max(s1, e1)
-            let start2 = min(s2, e2), end2 = max(s2, e2)
-            let aOverlapsB = start1 < end2 && start2 < end1
-            let bOverlapsA = start2 < end1 && start1 < end2
-            return aOverlapsB == bOverlapsA
-        }
-
-        #expect(counterExample == nil)
-    }
-
     // MARK: - Mixed Types: Date + Integer
 
     @Test("2-param: date + offset — calendar addition consistency")

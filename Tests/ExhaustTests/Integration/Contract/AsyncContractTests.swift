@@ -111,9 +111,9 @@ struct AsyncContractTests {
         let result1 = #exhaust(
             BuggyCounterSpec.self,
             .commandLimit(20),
+            .replay(42),
             .suppress(.issueReporting)
         )
-        print()
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")
     }
 }

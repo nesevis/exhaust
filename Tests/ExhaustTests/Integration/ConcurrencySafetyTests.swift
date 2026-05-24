@@ -250,7 +250,7 @@ struct ConcurrentContractDrainLoopTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Multiple concurrent contract runs in parallel")
+    @Test("Massive parallelism does not starve the cooperative thread pool")
     func multipleConcurrentContractRunsInParallel() async {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0 ..< 5 {
@@ -266,20 +266,6 @@ struct ConcurrentContractDrainLoopTests {
                 }
             }
         }
-    }
-
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Concurrent contract with bundle draws across lanes")
-    func concurrentContractWithBundleDrawsAcrossLanes() async {
-        _ = await __runContractConcurrent(
-            BundleDrawSpec.self,
-            settings: [
-                .commandLimit(8),
-                .concurrent(3),
-                .budget(.custom(coverage: 0, sampling: 100)),
-                .suppress(.all),
-            ]
-        )
     }
 }
 

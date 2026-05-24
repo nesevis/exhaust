@@ -40,16 +40,23 @@ struct DateSequenceBudgetTests {
         #expect(counterExample == nil)
     }
 
-    @Test("Array of dates: 30-min intervals around DST")
+    // MARK: - DST Fine-Grain Array
+
+    @Test("Array of dates: 30-min intervals around DST obey range and quantization")
     func dateArrayDSTFineGrain() {
+        let intervalSeconds: TimeInterval = 1800
+        let rangeStart = Self.springRange.lowerBound
         let gen = #gen(
             .date(between: Self.springRange, interval: .minutes(30))
                 .array(length: 1 ... 5)
         )
 
-        // Property: array is generated with valid dates
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { dates in
-            !dates.isEmpty
+            dates.allSatisfy { date in
+                date >= Self.springRange.lowerBound
+                    && date <= Self.springRange.upperBound
+                    && date.timeIntervalSince(rangeStart).remainder(dividingBy: intervalSeconds).magnitude < 0.001
+            }
         }
 
         #expect(counterExample == nil)
@@ -57,7 +64,7 @@ struct DateSequenceBudgetTests {
 
     // MARK: - Date Array + Scalar Date
 
-    @Test("Date array + scalar date: sorted check across DST")
+    @Test("Date array + scalar date: all values within range across DST")
     func dateArrayPlusScalar() {
         let gen = #gen(
             .date(between: Self.springRange, interval: .hours(1))
@@ -65,11 +72,9 @@ struct DateSequenceBudgetTests {
             .date(between: Self.springRange, interval: .hours(1))
         )
 
-        // Property: sorting is idempotent
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { dates, pivot in
-            let withPivot = dates + [pivot]
-            let sorted = withPivot.sorted()
-            return sorted == sorted.sorted()
+            let allDates = dates + [pivot]
+            return allDates.allSatisfy { $0 >= Self.springRange.lowerBound && $0 <= Self.springRange.upperBound }
         }
 
         #expect(counterExample == nil)
@@ -77,7 +82,7 @@ struct DateSequenceBudgetTests {
 
     // MARK: - Two Date Arrays
 
-    @Test("Two date arrays: merge preserves count")
+    @Test("Two date arrays: all elements within range")
     func twoDateArrays() {
         let gen = #gen(
             .date(between: Self.springRange, interval: .hours(1))
@@ -86,10 +91,8 @@ struct DateSequenceBudgetTests {
                 .array(length: 0 ... 5)
         )
 
-        // Property: merging two sorted arrays preserves total count
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b in
-            let merged = (a + b).sorted()
-            return merged.count == a.count + b.count
+            (a + b).allSatisfy { $0 >= Self.springRange.lowerBound && $0 <= Self.springRange.upperBound }
         }
 
         #expect(counterExample == nil)
@@ -97,19 +100,18 @@ struct DateSequenceBudgetTests {
 
     // MARK: - Date Array + Integer
 
-    @Test("Date array + offset: shifting preserves order")
+    @Test("Date array + offset: dates within range and offset within bounds")
     func dateArrayPlusOffset() {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1))
                 .array(length: 1 ... 5),
-            .int(in: -168 ... 168) // ±1 week in hours
+            .int(in: -168 ... 168)
         )
 
-        // Property: shifting all dates by the same offset preserves relative order
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { dates, hours in
-            let sorted = dates.sorted()
-            let shifted = sorted.map { $0.addingTimeInterval(Double(hours) * 3600) }
-            return shifted == shifted.sorted()
+            let datesValid = dates.allSatisfy { $0 >= Self.year2024Start && $0 <= Self.year2024End }
+            let offsetValid = hours >= -168 && hours <= 168
+            return datesValid && offsetValid
         }
 
         #expect(counterExample == nil)
@@ -117,7 +119,7 @@ struct DateSequenceBudgetTests {
 
     // MARK: - Worst Case: Date Array + Date Array + Scalar
 
-    @Test("Two date arrays + scalar: worst-case parameter count")
+    @Test("Two date arrays + scalar: all three parameters within range")
     func worstCaseParameterCount() {
         let gen = #gen(
             .date(between: Self.springRange, interval: .hours(1))
@@ -127,10 +129,8 @@ struct DateSequenceBudgetTests {
             .date(between: Self.springRange, interval: .hours(1))
         )
 
-        // Property: total element count is consistent
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b, extra in
-            let all = a + b + [extra]
-            return all.count == a.count + b.count + 1
+            (a + b + [extra]).allSatisfy { $0 >= Self.springRange.lowerBound && $0 <= Self.springRange.upperBound }
         }
 
         #expect(counterExample == nil)

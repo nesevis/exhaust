@@ -85,12 +85,13 @@ struct CGFloatGeneratorTests {
 
 @Suite("Data Generator")
 struct DataGeneratorTests {
-    @Test("Size-scaled generation produces non-empty data")
+    @Test("Size-scaled generation produces data of varying lengths")
     func sizeScaledGeneration() {
         let gen = #gen(.data())
         let values = #example(gen, count: 20, seed: 42)
 
-        #expect(values.isEmpty == false)
+        let lengths = Set(values.map(\.count))
+        #expect(lengths.count > 1, "Size-scaled data should produce varying lengths, got: \(lengths)")
     }
 
     @Test("Fixed-length generation produces correct size")

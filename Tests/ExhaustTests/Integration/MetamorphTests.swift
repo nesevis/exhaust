@@ -59,6 +59,7 @@ struct MetamorphTests {
     func valueInterpreterHandlesMultipleTransforms() throws {
         let gen = intDoubleAndNegateGen()
         var iterator = ValueInterpreter(gen, seed: 7, maxRuns: 30)
+        var count = 0
         while let results = try iterator.next() {
             #expect(results.count == 3)
             let original = results[0] as! Int
@@ -66,7 +67,9 @@ struct MetamorphTests {
             let negated = results[2] as! Int
             #expect(doubled == original * 2)
             #expect(negated == -original)
+            count += 1
         }
+        #expect(count > 0)
     }
 
     // MARK: - ValueAndChoiceTreeInterpreter (Generation + Tree)
@@ -154,38 +157,37 @@ struct MetamorphTests {
         )
 
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 20)
+        var count = 0
         while let results = try iterator.next() {
             #expect(results.count == 3)
             let original = results[0] as! [Int]
             let mutated = results[1] as! [Int]
             let reversed = results[2] as! [Int]
 
-            // The mutated copy should have 999 at index 0 but share the rest
             #expect(mutated[0] == 999)
             #expect(mutated[1] == original[1])
             #expect(mutated[2] == original[2])
 
-            // The reversed copy should be the original reversed, NOT affected by the mutation
             #expect(reversed == original.reversed())
+            count += 1
         }
+        #expect(count > 0)
     }
 
     // MARK: - Reflection
 
     @Test("Reflection passes through to inner generator")
     func reflectionPassesThroughToInnerGenerator() throws {
-        // Build a metamorphic gen via mapped (the public API pattern):
-        // contramap(backward) + _map(forward) wrapping the metamorphic operation.
-        // For this test, we use the raw operation and verify reflection directly.
         let innerGen = Gen.choose(in: 1 ... 50 as ClosedRange<Int>)
         var iterator = ValueInterpreter(innerGen, seed: 42, maxRuns: 20)
+        var count = 0
 
         while let value = try iterator.next() {
-            // Reflect the inner generator on the value — this is what the
-            // contramap backward extracts before passing to the metamorphic reflector.
             let tree = try Interpreters.reflect(innerGen, with: value)
             #expect(tree != nil, "Reflection should succeed for Int value \(value)")
+            count += 1
         }
+        #expect(count > 0)
     }
 
     // MARK: - Reduction / Bonsai
