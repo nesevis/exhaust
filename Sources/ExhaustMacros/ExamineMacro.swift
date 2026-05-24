@@ -2,7 +2,7 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#examine(gen)` or `#examine(gen, samples: N, seed: S)` into a call to `__ExhaustRuntime.__examine(...)`.
+/// Expression macro that expands `#examine(gen, .settings...)` into a call to `__ExhaustRuntime.__examine(...)`.
 public struct ExamineMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -10,7 +10,7 @@ public struct ExamineMacro: ExpressionMacro {
     ) throws -> ExprSyntax {
         let args = node.arguments.map(\.self)
 
-        guard !args.isEmpty else {
+        guard args.isEmpty == false else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: ExhaustMacroDiagnostic.examineMissingGenerator
@@ -20,17 +20,18 @@ public struct ExamineMacro: ExpressionMacro {
 
         let generatorExpr = args[0].expression.trimmedDescription
 
-        let samplesArg = args.first { $0.label?.text == "samples" }
-        let seedArg = args.first { $0.label?.text == "seed" }
-
-        let samplesExpr = samplesArg?.expression.trimmedDescription ?? "200"
-        let seedExpr = seedArg?.expression.trimmedDescription ?? "nil"
+        var settingsExprs: [String] = []
+        for arg in args.dropFirst() {
+            settingsExprs.append(arg.expression.trimmedDescription)
+        }
+        let settingsArray = settingsExprs.isEmpty
+            ? "[]"
+            : "[\(settingsExprs.joined(separator: ", "))]"
 
         return """
         __ExhaustRuntime.__examine(
             \(raw: generatorExpr),
-            samples: \(raw: samplesExpr),
-            seed: \(raw: seedExpr),
+            settings: \(raw: settingsArray),
             fileID: #fileID,
             filePath: #filePath,
             line: #line,

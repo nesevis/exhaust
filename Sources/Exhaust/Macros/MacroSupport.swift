@@ -695,22 +695,48 @@ public extension __ExhaustRuntime {
 
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     ///
-    /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
+    /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example, `oneOf` where multiple branches can produce the same value).
     @discardableResult
     static func __examine(
         _ refGen: ReflectiveGenerator<some Equatable>,
-        samples: Int,
-        seed: UInt64?,
+        settings: [ExamineSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt
     ) -> ValidationReport {
+        let config = ExamineReportingConfiguration(from: settings)
+
+        var seed: UInt64?
+        if let replaySeed = config.replaySeed {
+            guard let resolved = replaySeed.resolve() else {
+                reportIssue(
+                    "Invalid replay seed: \(replaySeed)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return ValidationReport(
+                    sampleCount: 0,
+                    valuesGenerated: 0,
+                    reflectionRoundTripSuccesses: 0,
+                    replayDeterminismSuccesses: 0,
+                    uniqueChoiceSequences: 0,
+                    failures: [],
+                    elapsedTime: 0,
+                    filterObservations: [:]
+                )
+            }
+            seed = resolved
+        }
+
         let gen = refGen.gen
         return __ExhaustRuntime.withIsInterpreting(true) {
             gen.validate(
-                samples: samples,
+                samples: config.samples,
                 seed: seed,
+                reporting: config,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -725,18 +751,44 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __examine(
         _ refGen: ReflectiveGenerator<some Any>,
-        samples: Int,
-        seed: UInt64?,
+        settings: [ExamineSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt
     ) -> ValidationReport {
+        let config = ExamineReportingConfiguration(from: settings)
+
+        var seed: UInt64?
+        if let replaySeed = config.replaySeed {
+            guard let resolved = replaySeed.resolve() else {
+                reportIssue(
+                    "Invalid replay seed: \(replaySeed)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return ValidationReport(
+                    sampleCount: 0,
+                    valuesGenerated: 0,
+                    reflectionRoundTripSuccesses: 0,
+                    replayDeterminismSuccesses: 0,
+                    uniqueChoiceSequences: 0,
+                    failures: [],
+                    elapsedTime: 0,
+                    filterObservations: [:]
+                )
+            }
+            seed = resolved
+        }
+
         let gen = refGen.gen
         return __ExhaustRuntime.withIsInterpreting(true) {
             gen.validate(
-                samples: samples,
+                samples: config.samples,
                 seed: seed,
+                reporting: config,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,

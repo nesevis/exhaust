@@ -5,22 +5,22 @@ import Testing
 struct ExamineTests {
     @Test("Examine passes for a simple Equatable generator")
     func simpleEquatable() {
-        let report = #examine(.int(in: 0 ... 100), samples: 50)
+        let report = #examine(.int(in: 0 ... 100), .samples(50))
         #expect(report.passed)
         #expect(report.valuesGenerated == 50)
     }
 
     @Test("Examine passes for a non-Equatable generator")
     func nonEquatable() {
-        let report = #examine(.int(in: 0 ... 100).array(), samples: 50)
+        let report = #examine(.int(in: 0 ... 100).array(), .samples(50))
         #expect(report.passed)
         #expect(report.valuesGenerated > 0)
     }
 
     @Test("Examine is deterministic with a seed")
     func deterministicWithSeed() {
-        let a = #examine(.int(in: 0 ... 1_000_000), samples: 30, seed: 42)
-        let b = #examine(.int(in: 0 ... 1_000_000), samples: 30, seed: 42)
+        let a = #examine(.int(in: 0 ... 1_000_000), .samples(30), .replay(42))
+        let b = #examine(.int(in: 0 ... 1_000_000), .samples(30), .replay(42))
         #expect(a.valuesGenerated == b.valuesGenerated)
         #expect(a.reflectionRoundTripSuccesses == b.reflectionRoundTripSuccesses)
         #expect(a.replayDeterminismSuccesses == b.replayDeterminismSuccesses)
@@ -28,7 +28,7 @@ struct ExamineTests {
 
     @Test("Examine reports reflection and replay stats")
     func reportsStats() {
-        let report = #examine(.bool(), samples: 20)
+        let report = #examine(.bool(), .samples(20))
         #expect(report.passed)
         #expect(report.reflectionRoundTripSuccesses == report.valuesGenerated)
         #expect(report.replayDeterminismSuccesses == report.valuesGenerated)
@@ -82,5 +82,52 @@ struct ExamineTests {
         // ~50% validity — well above the 2% threshold
         let gen = #gen(.int(in: 0 ... 100, scaling: .constant)).filter(.rejectionSampling) { $0 >= 50 }
         #exhaust(gen, .budget(.custom(coverage: 0, sampling: 30))) { _ in true }
+    }
+
+    // MARK: - Severity tests
+
+    @Test("Silent severity produces no test failures")
+    func silentSeverityNoFailures() {
+        let gen = #gen(.int(in: 1 ... 100)).mapped(
+            forward: { $0 * 2 },
+            backward: { $0 } // wrong inverse
+        )
+        let report = gen.gen.validate(
+            samples: 10,
+            seed: 42,
+            reporting: ExamineReportingConfiguration(from: [.severity(.silent)])
+        )
+        #expect(report.passed == false)
+    }
+
+    @Test("Per-check severity overrides global severity")
+    func perCheckOverridesGlobal() {
+        let config = ExamineReportingConfiguration(from: [
+            .severity(.silent),
+            .reflection(.warning),
+        ])
+        #expect(config.reflectionSeverity == .warning)
+        #expect(config.determinismSeverity == .silent)
+        #expect(config.filterHealthSeverity == .silent)
+    }
+
+    @Test("Default configuration uses error severity for all checks")
+    func defaultSeverityIsError() {
+        let config = ExamineReportingConfiguration(from: [])
+        #expect(config.reflectionSeverity == .error)
+        #expect(config.determinismSeverity == .error)
+        #expect(config.filterHealthSeverity == .error)
+        #expect(config.samples == 200)
+        #expect(config.replaySeed == nil)
+    }
+
+    @Test("Samples and replay seed are resolved from settings")
+    func samplesAndSeedResolution() {
+        let config = ExamineReportingConfiguration(from: [
+            .samples(500),
+            .replay(42),
+        ])
+        #expect(config.samples == 500)
+        #expect(config.replaySeed != nil)
     }
 }

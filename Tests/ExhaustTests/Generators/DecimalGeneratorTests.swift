@@ -156,7 +156,7 @@ struct DecimalGeneratorTests {
         @Test("In-range on-precision decimal reflection round-trips exactly")
         func onPrecisionRoundTrip() {
             let gen = #gen(.decimal(in: Decimal(10) ... Decimal(20), precision: 2))
-            #expect(#examine(gen, samples: 20, seed: 42).passed)
+            #expect(#examine(gen, .samples(20), .replay(42)).passed)
         }
     }
 }

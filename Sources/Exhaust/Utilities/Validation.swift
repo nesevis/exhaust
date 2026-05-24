@@ -131,11 +131,13 @@ package extension Generator where Operation == ReflectiveOperation {
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
+    ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: A ``ValidationReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
+        reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -145,6 +147,7 @@ package extension Generator where Operation == ReflectiveOperation {
             samples: samples,
             seed: seed,
             differ: nil,
+            reporting: reporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -163,11 +166,13 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
+    ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: A ``ValidationReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
+        reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -183,6 +188,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
                 if l == r { return .equal }
                 return .notEqual(detail: diff(l, r) ?? "\(l) != \(r)")
             },
+            reporting: reporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -211,6 +217,7 @@ private extension Generator where Operation == ReflectiveOperation {
         samples: Int,
         seed: UInt64?,
         differ: ((Any, Any) -> DiffResult)?,
+        reporting: ExamineReportingConfiguration?,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -364,11 +371,25 @@ private extension Generator where Operation == ReflectiveOperation {
         )
 
         for failure in report.failures {
+            let examineSeverity: ExamineSeverity = switch failure {
+                case .reflectionRoundTripMismatch, .reflectionFailed, .forwardOnlyTransform:
+                    reporting?.reflectionSeverity ?? .error
+                case .replayFailed, .replayNonDeterministic:
+                    reporting?.determinismSeverity ?? .error
+                case .lowFilterValidityRate:
+                    reporting?.filterHealthSeverity ?? .error
+                case .noValuesGenerated:
+                    .error
+            }
+
+            guard let issueSeverity = examineSeverity.issueSeverity else { continue }
+
             switch failure {
                 case let .lowFilterValidityRate(fingerprint, _, _):
                     if let location = report.filterObservations[fingerprint]?.sourceLocation {
                         reportIssue(
                             "\(failure)",
+                            severity: issueSeverity,
                             fileID: location.fileID,
                             filePath: location.filePath,
                             line: location.line,
@@ -377,6 +398,7 @@ private extension Generator where Operation == ReflectiveOperation {
                     } else {
                         reportIssue(
                             "\(failure)",
+                            severity: issueSeverity,
                             fileID: fileID,
                             filePath: filePath,
                             line: line,
@@ -386,6 +408,7 @@ private extension Generator where Operation == ReflectiveOperation {
                 default:
                     reportIssue(
                         "\(failure)",
+                        severity: issueSeverity,
                         fileID: fileID,
                         filePath: filePath,
                         line: line,

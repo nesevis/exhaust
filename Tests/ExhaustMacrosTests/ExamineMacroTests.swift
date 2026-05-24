@@ -9,7 +9,7 @@ private let testMacros: [String: any Macro.Type] = [
 
 @Suite("#examine macro expansion tests")
 struct ExamineMacroTests {
-    @Test("Basic examine expands with default samples and nil seed")
+    @Test("Basic examine expands with empty settings")
     func basicExamine() {
         assertMacroExpansion(
             """
@@ -18,8 +18,7 @@ struct ExamineMacroTests {
             expandedSource: """
             __ExhaustRuntime.__examine(
                 intGen,
-                samples: 200,
-                seed: nil,
+                settings: [],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -34,13 +33,12 @@ struct ExamineMacroTests {
     func customSamples() {
         assertMacroExpansion(
             """
-            #examine(intGen, samples: 500)
+            #examine(intGen, .samples(500))
             """,
             expandedSource: """
             __ExhaustRuntime.__examine(
                 intGen,
-                samples: 500,
-                seed: nil,
+                settings: [.samples(500)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -51,17 +49,16 @@ struct ExamineMacroTests {
         )
     }
 
-    @Test("Examine with seed passes seed through")
-    func withSeed() {
+    @Test("Examine with replay seed")
+    func withReplaySeed() {
         assertMacroExpansion(
             """
-            #examine(intGen, seed: 42)
+            #examine(intGen, .replay(42))
             """,
             expandedSource: """
             __ExhaustRuntime.__examine(
                 intGen,
-                samples: 200,
-                seed: 42,
+                settings: [.replay(42)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -72,17 +69,16 @@ struct ExamineMacroTests {
         )
     }
 
-    @Test("Examine with both samples and seed")
-    func samplesAndSeed() {
+    @Test("Examine with samples and replay seed")
+    func samplesAndReplaySeed() {
         assertMacroExpansion(
             """
-            #examine(intGen, samples: 100, seed: 99)
+            #examine(intGen, .samples(100), .replay(99))
             """,
             expandedSource: """
             __ExhaustRuntime.__examine(
                 intGen,
-                samples: 100,
-                seed: 99,
+                settings: [.samples(100), .replay(99)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -123,8 +119,47 @@ struct ExamineMacroTests {
             expandedSource: """
             __ExhaustRuntime.__examine(
                 .int(in: 1...100).array(length: 3...5),
-                samples: 200,
-                seed: nil,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Severity settings are preserved in expansion")
+    func severitySettings() {
+        assertMacroExpansion(
+            """
+            #examine(gen, .reflection(.warning), .determinism(.error))
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__examine(
+                gen,
+                settings: [.reflection(.warning), .determinism(.error)],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Global severity with per-check override")
+    func globalSeverityWithOverride() {
+        assertMacroExpansion(
+            """
+            #examine(gen, .severity(.silent), .reflection(.warning))
+            """,
+            expandedSource: """
+            __ExhaustRuntime.__examine(
+                gen,
+                settings: [.severity(.silent), .reflection(.warning)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
