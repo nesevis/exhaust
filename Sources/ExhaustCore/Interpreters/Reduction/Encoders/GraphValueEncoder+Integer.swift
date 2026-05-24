@@ -39,17 +39,22 @@ extension GraphValueEncoder {
         }
 
         // Phase selection. armBatchZero is true for the initial start(scope:) call (the trivial all-targets shortcut is worth one probe at pass start) and false for refresh calls from refreshState(graph:sequence:). Re-arming batch-zero on every refresh wastes one full materialisation per structural acceptance: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the rebuilt graph's leaves rarely change that.
-        let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible)
-            ? .batchZero
-            : .perLeaf(PerLeafPhaseState())
+        let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible) ? .batchZero : .perLeaf
 
         mode = .valueLeaves(IntegerState(
             sequence: sequence,
             leafPositions: leafPositions,
+            phase: initialPhase,
+            leafIndex: 0,
+            stepper: nil,
             warmStartRecords: warmStarts,
             lastEmittedCandidate: nil,
             batchRejected: false,
-            phase: initialPhase
+            scanValues: nil,
+            scanIndex: 0,
+            scanBestAccepted: nil,
+            crossZero: nil,
+            bisection: nil
         ))
     }
 
@@ -74,13 +79,14 @@ extension GraphValueEncoder {
                 }
                 if candidate.shortLexPrecedes(state.sequence) {
                     // Emit the batch-zero probe. If accepted, perLeafZero will see lastAccepted=true and converge all leaves. If rejected, perLeafZero tries each leaf individually at its target before per-leaf binary search.
-                    state.phase = .perLeafZero(PerLeafZeroState())
+                    state.phase = .perLeafZero
+                    state.perLeafZero = PerLeafZeroState()
                     state.lastEmittedCandidate = candidate
                     return candidate
                 }
                 // Batch zero not shortlex-smaller — skip to per-leaf.
                 state.batchRejected = true
-                state.phase = .perLeaf(PerLeafPhaseState())
+                state.phase = .perLeaf
                 return nextIntegerProbe(state: &state, lastAccepted: false)
 
             case .perLeafZero:
@@ -104,8 +110,8 @@ extension GraphValueEncoder {
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        guard case var .perLeafZero(plz) = state.phase else {
-            state.phase = .perLeaf(PerLeafPhaseState())
+        guard var plz = state.perLeafZero else {
+            state.phase = .perLeaf
             return nextIntegerProbe(state: &state, lastAccepted: lastAccepted)
         }
 
@@ -120,7 +126,8 @@ extension GraphValueEncoder {
             }
         } else if plz.leafCursor == 0, lastAccepted {
             // Batch-zero accepted — all leaves converge.
-            state.phase = .perLeaf(PerLeafPhaseState())
+            state.perLeafZero = nil
+            state.phase = .perLeaf
             return nil
         }
         state.lastEmittedCandidate = nil
@@ -141,27 +148,29 @@ extension GraphValueEncoder {
 
             guard candidate.shortLexPrecedes(state.sequence) else { continue }
 
-            state.phase = .perLeafZero(plz)
+            state.perLeafZero = plz
             state.lastEmittedCandidate = candidate
             return candidate
         }
 
         // All leaves tried. Transition to batch bisection with only the survivors.
         let unconvergedCount = state.leafPositions.count - plz.convergedIndices.count
+        state.perLeafZero = nil
         state.batchRejected = true
 
         if unconvergedCount >= 4 {
-            state.phase = .batchBisect(BisectionState(
+            state.phase = .batchBisect
+            state.bisection = BisectionState(
                 pendingGroups: [],
                 activeGroup: (start: 0, end: state.leafPositions.count),
                 divisor: BisectionState.initialDivisor,
                 awaitingFeedback: false,
                 convergedIndices: plz.convergedIndices
-            ))
+            )
             return nextIntegerProbe(state: &state, lastAccepted: false)
         }
 
-        state.phase = .perLeaf(PerLeafPhaseState())
+        state.phase = .perLeaf
         return nextIntegerProbe(state: &state, lastAccepted: false)
     }
 
@@ -174,8 +183,8 @@ extension GraphValueEncoder {
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        guard case var .batchBisect(bisection) = state.phase else {
-            state.phase = .perLeaf(PerLeafPhaseState())
+        guard var bisection = state.bisection else {
+            state.phase = .perLeaf
             return nextPerLeafProbe(state: &state, lastAccepted: false)
         }
 
@@ -282,22 +291,20 @@ extension GraphValueEncoder {
             }
 
             bisection.awaitingFeedback = true
-            state.phase = .batchBisect(bisection)
+            state.bisection = bisection
             state.lastEmittedCandidate = candidate
             return candidate
         }
 
         // All groups exhausted — transition to per-leaf phase, skipping converged leaves.
-        var startLeafIndex = 0
-        while startLeafIndex < state.leafPositions.count,
-              bisection.convergedIndices.contains(startLeafIndex)
+        state.bisection = bisection
+        state.phase = .perLeaf
+        while state.leafIndex < state.leafPositions.count,
+              bisection.convergedIndices.contains(state.leafIndex)
         {
-            startLeafIndex += 1
+            state.leafIndex += 1
+            state.semanticSimplestProbed = false
         }
-        state.phase = .perLeaf(PerLeafPhaseState(
-            leafIndex: startLeafIndex,
-            bisectionConvergedIndices: bisection.convergedIndices
-        ))
         return nextPerLeafProbe(state: &state, lastAccepted: false)
     }
 
@@ -308,56 +315,54 @@ extension GraphValueEncoder {
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        guard case var .perLeaf(perLeaf) = state.phase else { return nil }
-        let result = nextPerLeafProbeImpl(state: &state, perLeaf: &perLeaf, lastAccepted: lastAccepted)
-        state.phase = .perLeaf(perLeaf)
-        return result
-    }
-
-    private mutating func nextPerLeafProbeImpl(
-        state: inout IntegerState,
-        perLeaf: inout PerLeafPhaseState,
-        lastAccepted: Bool
-    ) -> ChoiceSequence? {
-        while perLeaf.leafIndex < state.leafPositions.count {
-            if perLeaf.bisectionConvergedIndices.contains(perLeaf.leafIndex) {
-                perLeaf.leafIndex += 1
-                perLeaf.semanticSimplestProbed = false
+        while state.leafIndex < state.leafPositions.count {
+            // Skip leaves already converged by the batch bisection phase.
+            if let bisection = state.bisection,
+               bisection.convergedIndices.contains(state.leafIndex)
+            {
+                state.leafIndex += 1
+                state.semanticSimplestProbed = false
                 continue
             }
 
-            if perLeaf.crossZero != nil {
+            // Cross-zero phase takes priority when active — it was armed by a prior iteration of this loop after binary search converged, and the current `lastAccepted` is feedback for the last cross-zero probe (if any).
+            if state.crossZero != nil {
                 if let candidate = nextCrossZeroProbe(
-                    state: &state, perLeaf: &perLeaf,
+                    state: &state,
                     lastAccepted: lastAccepted
                 ) {
                     return candidate
                 }
-                perLeaf.crossZero = nil
-                perLeaf.leafIndex += 1
-                perLeaf.semanticSimplestProbed = false
+                // Cross-zero exhausted or accepted — move to the next leaf.
+                state.crossZero = nil
+                state.leafIndex += 1
+                state.semanticSimplestProbed = false
                 continue
             }
 
-            if perLeaf.scanValues != nil {
+            // Linear scan phase (set up by binary search on non-monotone gap).
+            if state.scanValues != nil {
                 if let candidate = nextLinearScanProbe(
-                    state: &state, perLeaf: &perLeaf,
+                    state: &state,
                     lastAccepted: lastAccepted
                 ) {
                     return candidate
                 }
-                finishLinearScan(state: &state, perLeaf: &perLeaf)
-                if tryEnterCrossZero(state: &state, perLeaf: &perLeaf) {
+                // Scan exhausted — record convergence, then try cross-zero before advancing to the next leaf. Linear scan probes only
+                // `[targetBitPattern, bestAccepted)` which for signed types is one side of zero; cross-zero walks shortlex keys from 0 upward and reaches values on the opposite side that linear scan cannot. They are complementary.
+                finishLinearScan(state: &state)
+                if tryEnterCrossZero(state: &state) {
                     continue
                 }
-                perLeaf.leafIndex += 1
-                perLeaf.semanticSimplestProbed = false
+                state.leafIndex += 1
+                state.semanticSimplestProbed = false
                 continue
             }
 
-            if perLeaf.stepper == nil, perLeaf.semanticSimplestProbed == false {
-                perLeaf.semanticSimplestProbed = true
-                let leaf = state.leafPositions[perLeaf.leafIndex]
+            // Direct shot at the reduction target before binary search. When the property-satisfying subset is sparse in the index space, binary search can settle at a local minimum because non-satisfying gaps cause it to stop early. A single probe at the target guarantees the reduction target is always attempted. One extra materialization per leaf, amortized by the fact that acceptance skips the entire binary search.
+            if state.stepper == nil, state.semanticSimplestProbed == false {
+                state.semanticSimplestProbed = true
+                let leaf = state.leafPositions[state.leafIndex]
                 let currentEntry = state.sequence[leaf.sequenceIndex]
                 if let currentChoice = currentEntry.value?.choice {
                     let targetBitPattern = leaf.targetBitPattern
@@ -382,23 +387,26 @@ extension GraphValueEncoder {
                 }
             }
 
+            // Binary search phase.
             if let candidate = nextBitPatternSearchProbe(
-                state: &state, perLeaf: &perLeaf,
+                state: &state,
                 lastAccepted: lastAccepted
             ) {
                 return candidate
             }
 
-            if perLeaf.scanValues != nil {
+            // Binary search converged. If scan was set up, loop back to drain it.
+            if state.scanValues != nil {
                 continue
             }
 
-            if tryEnterCrossZero(state: &state, perLeaf: &perLeaf) {
+            // Try to enter the cross-zero phase for signed types. If successful, the next iteration of this loop will emit the first cross-zero probe with fresh state (no stale feedback).
+            if tryEnterCrossZero(state: &state) {
                 continue
             }
 
-            perLeaf.leafIndex += 1
-            perLeaf.semanticSimplestProbed = false
+            state.leafIndex += 1
+            state.semanticSimplestProbed = false
         }
 
         return nil
@@ -411,13 +419,12 @@ extension GraphValueEncoder {
     /// Returns the next candidate, or nil when the stepper converges. On convergence, records the convergence signal and enters the cross-zero phase for signed types.
     mutating func nextBitPatternSearchProbe(
         state: inout IntegerState,
-        perLeaf: inout PerLeafPhaseState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        let leaf = state.leafPositions[perLeaf.leafIndex]
+        let leaf = state.leafPositions[state.leafIndex]
         let currentEntry = state.sequence[leaf.sequenceIndex]
 
-        if perLeaf.stepper == nil {
+        if state.stepper == nil {
             // Initialize directional stepper in bit-pattern space.
             guard let currentChoice = currentEntry.value?.choice else {
                 return nil
@@ -446,11 +453,11 @@ extension GraphValueEncoder {
                 let effectiveLo = validWarmStart?.bound ?? targetBitPattern
                 let range = currentBitPattern - effectiveLo
                 if range < InterpolationSearchStepper.binaryThreshold {
-                    perLeaf.stepper = .binary(
+                    state.stepper = .binary(
                         BinarySearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 } else {
-                    perLeaf.stepper = .interpolation(
+                    state.stepper = .interpolation(
                         InterpolationSearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
                 }
@@ -458,18 +465,18 @@ extension GraphValueEncoder {
                 let effectiveHi = validWarmStart?.bound ?? targetBitPattern
                 let range = effectiveHi - currentBitPattern
                 if range < InterpolationSearchStepper.binaryThreshold {
-                    perLeaf.stepper = .binary(
+                    state.stepper = .binary(
                         BinarySearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
                     )
                 } else {
-                    perLeaf.stepper = .interpolation(
+                    state.stepper = .interpolation(
                         InterpolationSearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
                     )
                 }
             }
 
-            guard let firstBitPattern = perLeaf.stepper?.start() else {
-                perLeaf.stepper = nil
+            guard let firstBitPattern = state.stepper?.start() else {
+                state.stepper = nil
                 return nil
             }
 
@@ -483,7 +490,7 @@ extension GraphValueEncoder {
         }
 
         var accepted = lastAccepted
-        while let nextBitPattern = perLeaf.stepper?.advance(lastAccepted: accepted) {
+        while let nextBitPattern = state.stepper?.advance(lastAccepted: accepted) {
             let newEntry = currentEntry.withBitPattern(nextBitPattern)
             if newEntry.shortLexCompare(currentEntry) == .lt {
                 var candidate = state.sequence
@@ -495,12 +502,13 @@ extension GraphValueEncoder {
         }
 
         // Stepper converged — check for non-monotone gap.
-        if let bestAccepted = perLeaf.stepper?.bestAccepted {
+        if let bestAccepted = state.stepper?.bestAccepted {
             let remaining: UInt64 = bestAccepted > leaf.targetBitPattern
                 ? bestAccepted - leaf.targetBitPattern
                 : leaf.targetBitPattern - bestAccepted
 
             if state.batchRejected, bestAccepted == leaf.targetBitPattern {
+                // Leaf converged at target but batch-zero failed — zeroing dependency.
                 convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .zeroingDependency,
@@ -508,12 +516,14 @@ extension GraphValueEncoder {
                     cycle: 0
                 )
             } else if remaining > 0, remaining <= Self.linearScanThreshold {
+                // Non-monotone gap: binary search couldn't reach the target but the gap is small enough to scan exhaustively.
                 convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .nonMonotoneGap(remainingRange: Int(remaining)),
                     configuration: .binarySearchSemanticSimplest,
                     cycle: 0
                 )
+                // Set up inline linear scan of [targetBitPattern, bestAccepted).
                 let scanLo = min(leaf.targetBitPattern, bestAccepted)
                 let scanHi = max(leaf.targetBitPattern, bestAccepted)
                 var values: [UInt64] = []
@@ -523,9 +533,9 @@ extension GraphValueEncoder {
                     values.append(current)
                     current += 1
                 }
-                perLeaf.scanValues = values
-                perLeaf.scanIndex = 0
-                perLeaf.scanBestAccepted = nil
+                state.scanValues = values
+                state.scanIndex = 0
+                state.scanBestAccepted = nil
             } else {
                 convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
@@ -535,7 +545,7 @@ extension GraphValueEncoder {
                 )
             }
         }
-        perLeaf.stepper = nil
+        state.stepper = nil
         return nil
     }
 
@@ -544,29 +554,29 @@ extension GraphValueEncoder {
     /// Scans values in the non-monotone gap to find a lower floor than binary search achieved.
     mutating func nextLinearScanProbe(
         state: inout IntegerState,
-        perLeaf: inout PerLeafPhaseState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        let leaf = state.leafPositions[perLeaf.leafIndex]
+        let leaf = state.leafPositions[state.leafIndex]
 
-        if lastAccepted, perLeaf.scanIndex > 0 {
-            let acceptedValue = perLeaf.scanValues![perLeaf.scanIndex - 1]
-            if perLeaf.scanBestAccepted == nil || acceptedValue < perLeaf.scanBestAccepted! {
-                perLeaf.scanBestAccepted = acceptedValue
+        // Track acceptance of previous scan probe.
+        if lastAccepted, state.scanIndex > 0 {
+            let acceptedValue = state.scanValues![state.scanIndex - 1]
+            if state.scanBestAccepted == nil || acceptedValue < state.scanBestAccepted! {
+                state.scanBestAccepted = acceptedValue
             }
         }
 
-        guard let scanValues = perLeaf.scanValues else { return nil }
-        guard perLeaf.scanIndex < scanValues.count else { return nil }
+        guard let scanValues = state.scanValues else { return nil }
+        guard state.scanIndex < scanValues.count else { return nil }
 
-        let probeValue = scanValues[perLeaf.scanIndex]
-        perLeaf.scanIndex += 1
+        let probeValue = scanValues[state.scanIndex]
+        state.scanIndex += 1
 
         let currentEntry = state.sequence[leaf.sequenceIndex]
         let newEntry = currentEntry.withBitPattern(probeValue)
 
         guard newEntry.shortLexCompare(currentEntry) == .lt else {
-            return nextLinearScanProbe(state: &state, perLeaf: &perLeaf, lastAccepted: false)
+            return nextLinearScanProbe(state: &state, lastAccepted: false)
         }
 
         var candidate = state.sequence
@@ -575,10 +585,11 @@ extension GraphValueEncoder {
         return candidate
     }
 
-    mutating func finishLinearScan(state: inout IntegerState, perLeaf: inout PerLeafPhaseState) {
-        let leaf = state.leafPositions[perLeaf.leafIndex]
-        let foundLowerFloor = perLeaf.scanBestAccepted != nil
-        let bound = perLeaf.scanBestAccepted
+    /// Records the final convergence from a completed linear scan.
+    mutating func finishLinearScan(state: inout IntegerState) {
+        let leaf = state.leafPositions[state.leafIndex]
+        let foundLowerFloor = state.scanBestAccepted != nil
+        let bound = state.scanBestAccepted
             ?? convergenceStore[leaf.nodeID]?.bound
             ?? leaf.targetBitPattern
         convergenceStore[leaf.nodeID] = ConvergedOrigin(
@@ -587,9 +598,9 @@ extension GraphValueEncoder {
             configuration: .linearScan,
             cycle: 0
         )
-        perLeaf.scanValues = nil
-        perLeaf.scanIndex = 0
-        perLeaf.scanBestAccepted = nil
+        state.scanValues = nil
+        state.scanIndex = 0
+        state.scanBestAccepted = nil
     }
 
     // MARK: - Cross-Zero Phase
@@ -599,8 +610,8 @@ extension GraphValueEncoder {
     /// Returns `true` when the leaf is a signed type with a current shortlex key > 0 (there is at least one strictly simpler value to try). On success, ``IntegerState/crossZero`` is set and the per-leaf dispatch loop will emit the first probe on its next iteration.
     ///
     /// The probe budget adapts to the current shortlex key: roughly `log₂(key) + 4`, clamped to `[4, 16]`. Rationale: bit-pattern binary search has already covered the large-magnitude neighborhood by the time cross-zero runs, so cross-zero's contribution is bounded to the last few shortlex keys near zero. Small-magnitude leaves get full coverage of every key below their current one; large-magnitude leaves get the simplest 16 keys. A fixed 16-probe cap is a special case of this at the upper end of the range.
-    mutating func tryEnterCrossZero(state: inout IntegerState, perLeaf: inout PerLeafPhaseState) -> Bool {
-        let leaf = state.leafPositions[perLeaf.leafIndex]
+    mutating func tryEnterCrossZero(state: inout IntegerState) -> Bool {
+        let leaf = state.leafPositions[state.leafIndex]
         guard leaf.typeTag.isSigned else { return false }
         guard let currentEntry = state.sequence[leaf.sequenceIndex].value else {
             return false
@@ -630,7 +641,7 @@ extension GraphValueEncoder {
         let budget = min(bitLength + 4, 16)
         let endKey = min(currentKey, budget)
 
-        perLeaf.crossZero = CrossZeroState(
+        state.crossZero = CrossZeroState(
             seqIdx: leaf.sequenceIndex,
             tag: leaf.typeTag,
             validRange: currentEntry.validRange,
@@ -649,17 +660,16 @@ extension GraphValueEncoder {
     /// Returns `nil` when the walk is exhausted (all probes rejected or budget reached) or when the caller should advance to the next leaf (acceptance happened on the prior call). The caller clears ``IntegerState/crossZero`` and advances `leafIndex` when `nil` is returned.
     mutating func nextCrossZeroProbe(
         state: inout IntegerState,
-        perLeaf: inout PerLeafPhaseState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        guard var crossZero = perLeaf.crossZero else { return nil }
+        guard var crossZero = state.crossZero else { return nil }
 
         // Consume feedback for the previous probe, if any.
         if let acceptedKey = crossZero.lastEmittedKey {
             crossZero.lastEmittedKey = nil
             if lastAccepted {
                 // Acceptance — nextIntegerProbe has already advanced state.sequence to the accepted candidate. Record the convergence at the new bit pattern so the next cycle's binary search can warm-start from here, then exit.
-                let leaf = state.leafPositions[perLeaf.leafIndex]
+                let leaf = state.leafPositions[state.leafIndex]
                 let acceptedChoice = ChoiceValue.fromShortlexKey(
                     acceptedKey,
                     tag: crossZero.tag
@@ -670,7 +680,7 @@ extension GraphValueEncoder {
                     configuration: .binarySearchSemanticSimplest,
                     cycle: 0
                 )
-                perLeaf.crossZero = crossZero
+                state.crossZero = crossZero
                 return nil
             }
             // Rejection — fall through and emit the next probe.
@@ -692,7 +702,7 @@ extension GraphValueEncoder {
             }
 
             crossZero.lastEmittedKey = probeKey
-            perLeaf.crossZero = crossZero
+            state.crossZero = crossZero
 
             var candidate = state.sequence
             candidate[crossZero.seqIdx] = .value(.init(
@@ -705,7 +715,7 @@ extension GraphValueEncoder {
         }
 
         // Exhausted — no further probes to try.
-        perLeaf.crossZero = crossZero
+        state.crossZero = crossZero
         return nil
     }
 }
