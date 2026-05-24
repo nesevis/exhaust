@@ -160,23 +160,6 @@ struct CoreGeneratorTests {
         }
     }
 
-    @Suite("Performance Tests")
-    struct PerformanceTests {
-        @Test("High-frequency generation performance")
-        func highFrequencyGeneration() throws {
-            let gen = Gen.choose(in: 1 ... 1000) as Generator<Int>
-            var iterator = ValueInterpreter(gen, maxRuns: 10000)
-
-            // Should be able to generate many values quickly
-            for _ in 0 ..< 10000 {
-                _ = try iterator.next()!
-            }
-
-            // If we get here without timeout, performance is acceptable
-            #expect(true)
-        }
-    }
-
     @Suite("ChoiceTreeGeneratorTests")
     struct ChoiceTreeGeneratorTests {
         @Test("Simple integer test for RNG consistency")

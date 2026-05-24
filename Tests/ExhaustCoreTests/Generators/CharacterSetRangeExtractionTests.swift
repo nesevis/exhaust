@@ -233,22 +233,6 @@ struct CharacterSetRangeExtractionTests {
             string.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) }
         }
     }
-
-    @Test("Variadic character(from:) is equivalent to union")
-    func variadicCharacterFromEquivalence() throws {
-        let variadicGen: Generator<Character> = charGen(from: .letters.union(.decimalDigits))
-        let unionGen: Generator<Character> = charGen(from: .letters.union(.decimalDigits))
-
-        // Both should produce the same set of valid characters
-        var variadicIterator = ValueAndChoiceTreeInterpreter(variadicGen, seed: 42, maxRuns: 200)
-        var unionIterator = ValueAndChoiceTreeInterpreter(unionGen, seed: 42, maxRuns: 200)
-
-        while let (variadicValue, _) = try variadicIterator.next(),
-              let (unionValue, _) = try unionIterator.next()
-        {
-            #expect(variadicValue == unionValue, "Variadic and union generators should produce identical values with same seed")
-        }
-    }
 }
 
 // MARK: - Helpers

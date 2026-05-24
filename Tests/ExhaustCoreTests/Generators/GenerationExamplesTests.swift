@@ -13,18 +13,6 @@ import Testing
 struct GenerationExamplesTests {
     @Suite("Basic Examples")
     struct BasicExampleTests {
-        @Test("Profile memory allocations")
-        func profileMemAlloc() throws {
-            let generator = stringGen()
-            var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-            while let (value, tree) = try iterator.next() {
-                let value = value
-                let tree = tree
-            }
-//            for n in 1...200 {
-//            }
-        }
-
         @Test("Test Gen filtering")
         func genFiltering() throws {
             let innerGen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling)
@@ -76,19 +64,6 @@ struct GenerationExamplesTests {
                 // This is a subset
                 // This is a continuous subset, not a sampling
                 #expect(collection.contains(value))
-            }
-        }
-
-        @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
-        func vACTGdoesntswallomaps() throws {
-            let gen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling).map(\.self).map { second in
-                second.description
-            }
-//            let filtered = Gen.filter(gen, { $0.contains("@") })
-            var iterator = ValueAndChoiceTreeInterpreter(gen, maxRuns: 2)
-            while let (value, tree) = try iterator.next() {
-                let value = value
-                let tree = tree
             }
         }
 
