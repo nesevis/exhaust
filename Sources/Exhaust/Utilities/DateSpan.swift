@@ -5,12 +5,12 @@
 //  Created by Chris Kolbu on 13/5/2026.
 //
 
-// MARK: - DateSpan
+// MARK: - DateStride
 
 /// A fixed-second approximation of a calendar interval, for specifying date generator step sizes.
 ///
 /// Each case converts to a fixed number of seconds: `.months` uses 30 days and `.years` uses 365 days. ``Comparable`` and ``Equatable`` conformances compare by this fixed-second value, so `.months(1)` is less than `.days(31)`.
-public enum DateSpan: Sendable, Comparable, Equatable {
+public enum DateStride: Sendable, Comparable, Equatable {
     /// Specifies an interval measured in seconds.
     case seconds(Int)
     /// Specifies an interval measured in minutes.
@@ -41,11 +41,11 @@ public enum DateSpan: Sendable, Comparable, Equatable {
         }
     }
 
-    public static func == (lhs: DateSpan, rhs: DateSpan) -> Bool {
+    public static func == (lhs: DateStride, rhs: DateStride) -> Bool {
         lhs.fixedSeconds == rhs.fixedSeconds
     }
 
-    public static func < (lhs: DateSpan, rhs: DateSpan) -> Bool {
+    public static func < (lhs: DateStride, rhs: DateStride) -> Bool {
         lhs.fixedSeconds < rhs.fixedSeconds
     }
 }

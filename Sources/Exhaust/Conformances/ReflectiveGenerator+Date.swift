@@ -24,7 +24,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func date(
         between range: ClosedRange<Date>,
-        interval: DateSpan,
+        interval: DateStride,
         timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
@@ -68,9 +68,9 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.date(within: .years(1), of: referenceDate, interval: .days(1)))
     /// ```
     static func date(
-        within span: DateSpan,
+        within span: DateStride,
         of anchor: Date,
-        interval: DateSpan,
+        interval: DateStride,
         timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
         let offsetSeconds = TimeInterval(span.fixedSeconds)
@@ -88,9 +88,9 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.date(within: .days(-7) ... .days(30), of: anchor, interval: .hours(1)))
     /// ```
     static func date(
-        within span: ClosedRange<DateSpan>,
+        within span: ClosedRange<DateStride>,
         of anchor: Date,
-        interval: DateSpan,
+        interval: DateStride,
         timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
         let lower = anchor.addingTimeInterval(TimeInterval(span.lowerBound.fixedSeconds))
