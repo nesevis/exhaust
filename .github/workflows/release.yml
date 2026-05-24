@@ -24,7 +24,11 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
       - name: Run tests (source)
-        run: swift test --no-parallel --xunit-output .build/tests-source.xml
+        run: |
+          mkdir -p .build
+          set +o pipefail
+          swift test --no-parallel 2>&1 | tee .build/test-output-source.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Resolve version
         id: version
@@ -59,35 +63,67 @@ jobs:
       - name: Run tests (binary xcframework)
         env:
           EXHAUST_RELEASE: "1"
-        run: swift test --no-parallel --skip ExhaustCoreTests --xunit-output .build/tests-xcframework.xml
+        run: |
+          set +o pipefail
+          swift test --no-parallel --skip ExhaustCoreTests 2>&1 | tee .build/test-output-xcframework.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Test report
         if: always()
         run: |
-          python3 - .build/tests-source.xml .build/tests-xcframework.xml <<'SCRIPT'
-          import xml.etree.ElementTree as ET, sys, os, glob
-          paths = [p for a in sys.argv[1:] for p in glob.glob(a) if os.path.exists(p)]
-          if not paths:
+          python3 - .build/test-output-source.txt .build/test-output-xcframework.txt <<'SCRIPT'
+          import sys, os, re
+
+          requested = sys.argv[1:]
+          summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '')
+
+          if not summary_path:
+              print("GITHUB_STEP_SUMMARY not set, skipping report")
               sys.exit(0)
-          total_tests = total_failures = 0
+
+          found = [p for p in requested if os.path.exists(p)]
+          missing = [p for p in requested if not os.path.exists(p)]
+
+          if missing:
+              print(f"Missing test output files: {missing}")
+          if not found:
+              msg = f"No test output files found. Looked for: {requested}"
+              print(msg)
+              with open(summary_path, 'a') as f:
+                  f.write(f"### Test report unavailable\n\n{msg}\n")
+              sys.exit(0)
+
           failures = []
-          for path in paths:
-              tree = ET.parse(path)
-              for suite in tree.iter('testsuite'):
-                  total_tests += int(suite.get('tests', 0))
-                  total_failures += int(suite.get('failures', 0))
-              for case in tree.iter('testcase'):
-                  for fail in case.iter('failure'):
-                      msg = (fail.get('message') or fail.text or '').split('\n')[0]
-                      failures.append((case.get('classname',''), case.get('name',''), msg))
-          with open(os.environ.get('GITHUB_STEP_SUMMARY', '/dev/null'), 'a') as f:
-              if total_failures == 0:
-                  f.write(f"### All {total_tests} tests passed\n")
+          total = '?'
+          all_lines = []
+          for path in found:
+              with open(path) as f:
+                  lines = f.readlines()
+              all_lines.extend(lines)
+              for line in lines:
+                  m = re.search(r'Test "(.+?)" failed after .+ with (\d+) issue', line)
+                  if m:
+                      failures.append((m.group(1), int(m.group(2))))
+              for line in reversed(lines):
+                  m = re.search(r'Test run with (\d+) tests? in (\d+) suites? (passed|failed)', line)
+                  if m:
+                      total = m.group(1)
+                      break
+
+          with open(summary_path, 'a') as f:
+              if total == '?':
+                  f.write("### Test report unavailable\n\nCould not find test summary line in output.\n")
+                  f.write(f"\nLast 20 lines of output:\n```\n")
+                  for line in all_lines[-20:]:
+                      f.write(line)
+                  f.write("```\n")
+              elif not failures:
+                  f.write(f"### All {total} tests passed\n")
               else:
-                  f.write(f"### {total_failures} of {total_tests} tests failed\n\n")
-                  f.write("| Suite | Test | Message |\n|-------|------|---------|\n")
-                  for suite, name, msg in failures:
-                      f.write(f"| `{suite}` | `{name}` | {msg} |\n")
+                  f.write(f"### {len(failures)} of {total} tests failed\n\n")
+                  f.write("| Test | Issues |\n|------|--------|\n")
+                  for name, count in failures:
+                      f.write(f"| {name} | {count} |\n")
           SCRIPT
 
       - name: Compute checksum
