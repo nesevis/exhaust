@@ -14,7 +14,9 @@ package struct GenerationContext: ~Copyable {
     /// Seed used to derive per-run PRNG states.
     package let baseSeed: UInt64
     /// Maximum number of filter retry attempts before giving up on a single value.
-    package static let maxFilterRuns: UInt64 = 500
+    package static var maxFilterRuns: UInt64 {
+        __ExhaustRuntime.maxFilterRuns
+    }
 
     // MARK: - Mutable generation state
 

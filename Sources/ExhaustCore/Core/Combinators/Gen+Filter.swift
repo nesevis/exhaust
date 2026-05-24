@@ -23,7 +23,7 @@ package extension Gen {
             column: sourceLocation.column
         )
 
-        let isInterpreting = Gen.isInterpreting
+        let isInterpreting = __ExhaustRuntime.isInterpreting
         let tuned: AnyGenerator?
         switch (type, isInterpreting) {
         case (.rejectionSampling, _),
