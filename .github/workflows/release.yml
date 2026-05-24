@@ -60,6 +60,9 @@ jobs:
       - name: Build XCFramework
         run: bash Scripts/build-xcframework.sh
 
+      - name: Clean debug artifacts
+        run: swift package clean
+
       - name: Run tests (binary xcframework)
         env:
           EXHAUST_RELEASE: "1"
