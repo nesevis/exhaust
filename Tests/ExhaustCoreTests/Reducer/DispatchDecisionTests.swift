@@ -7,7 +7,7 @@ struct DispatchDecisionTests {
 
     // MARK: - Fixtures
 
-    private static let sequenceTree = ChoiceTree.sequence(
+    private nonisolated(unsafe) static let sequenceTree = ChoiceTree.sequence(
         length: 2,
         elements: [
             .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
@@ -16,8 +16,8 @@ struct DispatchDecisionTests {
         .init(validRange: nil, isRangeExplicit: false)
     )
 
-    private static let fixtureGraph = ChoiceGraph.build(from: sequenceTree)
-    private static let fixtureSequence = ChoiceSequence.flatten(sequenceTree)
+    private nonisolated(unsafe) static let fixtureGraph = ChoiceGraph.build(from: sequenceTree)
+    private nonisolated(unsafe) static let fixtureSequence = ChoiceSequence.flatten(sequenceTree)
 
     private static let defaultPriority = DispatchPriority(
         structuralBenefit: 1,
