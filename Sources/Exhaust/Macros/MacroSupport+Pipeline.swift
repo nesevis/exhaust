@@ -284,6 +284,102 @@ package extension __ExhaustRuntime {
         return result
     }
 
+    // MARK: - Single-Lane Fast Path
+
+    /// Tight generation loop for single-lane, no-stats runs.
+    ///
+    /// Bypasses the ``BatchResult`` / ``runSamplingBatch`` / merge machinery to avoid heap allocations and per-iteration indirection that are only needed for parallel or stats-collecting runs.
+    private static func runSingleLaneSampling<Output>(
+        context: PipelineContext<Output>,
+        baseSeed: UInt64,
+        generationPhaseStart: UInt64,
+        coverageIterations: Int,
+        report: inout ExhaustReport
+    ) -> Output? {
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            context.gen,
+            materializePicks: false,
+            seed: baseSeed,
+            maxRuns: context.samplingBudget,
+            initialRunIndex: 0
+        )
+        var iterations = 0
+
+        do {
+            while let next = try interpreter.nextValueOnly() {
+                iterations += 1
+                if context.property(next) == false {
+                    let tree: ChoiceTree
+                    if let (_, reproduced) = try interpreter.reproduceWithTree() {
+                        tree = reproduced
+                    } else {
+                        tree = .just
+                    }
+                    report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+                    emitFilterWarnings(interpreter.filterObservations, context: context)
+
+                    let result = reduceAndReport(
+                        context: context,
+                        value: next,
+                        tree: tree,
+                        seed: baseSeed,
+                        iteration: iterations,
+                        phaseBudget: context.samplingBudget,
+                        coverageIterations: coverageIterations,
+                        randomSamplingIterations: iterations,
+                        replayHint: nil,
+                        report: &report
+                    )
+                    switch result {
+                        case let .reduced(counterexample):
+                            return counterexample
+                        case let .unreduced(counterexample):
+                            return counterexample
+                        case .reductionError:
+                            return next
+                    }
+                }
+            }
+        } catch {
+            reportIssue(
+                localizedErrorMessage(error),
+                fileID: context.fileID,
+                filePath: context.filePath,
+                line: context.line,
+                column: context.column
+            )
+        }
+
+        report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+        emitFilterWarnings(interpreter.filterObservations, context: context)
+        report.setInvocations(
+            coverage: coverageIterations,
+            randomSampling: iterations,
+            reduction: 0
+        )
+        return nil
+    }
+
+    /// Emits filter validity warnings when rejection rates are dangerously high.
+    private static func emitFilterWarnings(
+        _ observations: [UInt64: FilterObservation],
+        context: PipelineContext<some Any>
+    ) {
+        guard context.suppressIssueReporting == false else { return }
+        for (_, observation) in observations where observation.attempts >= 20 {
+            if observation.validityRate < 0.02, let location = observation.sourceLocation {
+                reportIssue(
+                    "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
+                    severity: .warning,
+                    fileID: location.fileID,
+                    filePath: location.filePath,
+                    line: location.line,
+                    column: location.column
+                )
+            }
+        }
+    }
+
     // MARK: - Sampling Phase
 
     /// Runs the random sampling phase after coverage completes.
@@ -306,6 +402,17 @@ package extension __ExhaustRuntime {
         report.seed = baseSeed
 
         let laneCount = seed == nil ? max(1, Int(context.parallelLanes)) : 1
+
+        if laneCount <= 1, context.statsAccumulator == nil {
+            return runSingleLaneSampling(
+                context: context,
+                baseSeed: baseSeed,
+                generationPhaseStart: generationPhaseStart,
+                coverageIterations: coverageIterations,
+                report: &report
+            )
+        }
+
         let baseIterationsPerLane = context.samplingBudget / UInt64(laneCount)
         let remainder = context.samplingBudget - baseIterationsPerLane * UInt64(laneCount)
         let statsPropertyName: String? = context.statsAccumulator != nil
