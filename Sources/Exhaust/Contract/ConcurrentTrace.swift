@@ -4,8 +4,8 @@ import Foundation
 
 /// A raw event emitted by the cooperative drain loop during command execution. These are intermediate records that ``buildTrace(_:)`` post-processes into presentable ``TraceStep`` values — collapsing no-op suspend/resume pairs and merging adjacent started+completed events for the same command.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-struct TraceEvent: Sendable {
-    enum Kind: Sendable {
+struct TraceEvent {
+    enum Kind {
         case started
         case completed
         case failed(message: String)
@@ -29,46 +29,46 @@ func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
 
     for event in events {
         switch event.kind {
-        case .started:
-            if event.lane != "prefix" {
-                openCommand[event.lane] = event.label
-            }
-            stepNumber += 1
-            let phase = event.lane == "prefix" ? "(prefix)" : "(started)"
-            steps.append((TraceStep(index: stepNumber, command: "\(event.label) \(phase)", outcome: .ok), event.lane))
-        case .completed:
-            openCommand[event.lane] = nil
-            if event.lane == "prefix" {
-                if let lastIndex = steps.lastIndex(where: { $0.step.command == "\(event.label) (prefix)" }) {
-                    steps.remove(at: lastIndex)
-                    stepNumber -= 1
+            case .started:
+                if event.lane != "prefix" {
+                    openCommand[event.lane] = event.label
                 }
                 stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(event.label) (prefix)", outcome: .ok), event.lane))
-            } else {
+                let phase = event.lane == "prefix" ? "(prefix)" : "(started)"
+                steps.append((TraceStep(index: stepNumber, command: "\(event.label) \(phase)", outcome: .ok), event.lane))
+            case .completed:
+                openCommand[event.lane] = nil
+                if event.lane == "prefix" {
+                    if let lastIndex = steps.lastIndex(where: { $0.step.command == "\(event.label) (prefix)" }) {
+                        steps.remove(at: lastIndex)
+                        stepNumber -= 1
+                    }
+                    stepNumber += 1
+                    steps.append((TraceStep(index: stepNumber, command: "\(event.label) (prefix)", outcome: .ok), event.lane))
+                } else {
+                    stepNumber += 1
+                    steps.append((TraceStep(index: stepNumber, command: "\(event.label) (completed)", outcome: .ok), event.lane))
+                }
+            case let .failed(message):
+                openCommand[event.lane] = nil
                 stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(event.label) (completed)", outcome: .ok), event.lane))
-            }
-        case let .failed(message):
-            openCommand[event.lane] = nil
-            stepNumber += 1
-            let phase = event.lane == "prefix" ? "(prefix)" : "(completed)"
-            let step = TraceStep(
-                index: stepNumber,
-                command: "\(event.label) \(phase)",
-                outcome: .invariantFailed(name: message)
-            )
-            steps.append((step, event.lane))
-        case .suspended:
-            if let current = openCommand[event.lane] {
-                stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(current) (suspended)", outcome: .ok), event.lane))
-            }
-        case .resumed:
-            if let current = openCommand[event.lane] {
-                stepNumber += 1
-                steps.append((TraceStep(index: stepNumber, command: "\(current) (resumed)", outcome: .ok), event.lane))
-            }
+                let phase = event.lane == "prefix" ? "(prefix)" : "(completed)"
+                let step = TraceStep(
+                    index: stepNumber,
+                    command: "\(event.label) \(phase)",
+                    outcome: .invariantFailed(name: message)
+                )
+                steps.append((step, event.lane))
+            case .suspended:
+                if let current = openCommand[event.lane] {
+                    stepNumber += 1
+                    steps.append((TraceStep(index: stepNumber, command: "\(current) (suspended)", outcome: .ok), event.lane))
+                }
+            case .resumed:
+                if let current = openCommand[event.lane] {
+                    stepNumber += 1
+                    steps.append((TraceStep(index: stepNumber, command: "\(current) (resumed)", outcome: .ok), event.lane))
+                }
         }
     }
 

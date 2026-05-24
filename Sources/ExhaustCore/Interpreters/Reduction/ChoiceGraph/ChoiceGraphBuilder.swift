@@ -74,83 +74,82 @@ struct ChoiceGraphBuilder {
         isActive: Bool = true
     ) -> Int {
         switch tree {
-        case let .choice(value, metadata):
-            let controlKind: ControlKind = switch value.tag {
-            case .depthControl: .depthControl
-            case .laneControl: .laneControl
-            default: .standard
-            }
-            let nodeID = emitNode(
-                kind: .chooseBits(ChooseBitsMetadata(
-                    typeTag: value.tag,
-                    validRange: metadata.validRange,
-                    isRangeExplicit: metadata.isRangeExplicit,
-                    value: value
-                )),
-                positionRange: isActive ? (offset ... offset) : nil,
-                children: [],
-                parent: parent,
-                choicePath: path,
-                scopeAnnotation: ScopeAnnotation(
-                    bindRole: currentBindRole,
-                    controlKind: controlKind
+            case let .choice(value, metadata):
+                let controlKind: ControlKind = switch value.tag {
+                    case .depthControl: .depthControl
+                    case .laneControl: .laneControl
+                    default: .standard
+                }
+                let nodeID = emitNode(
+                    kind: .chooseBits(ChooseBitsMetadata(
+                        typeTag: value.tag,
+                        validRange: metadata.validRange,
+                        isRangeExplicit: metadata.isRangeExplicit,
+                        value: value
+                    )),
+                    positionRange: isActive ? (offset ... offset) : nil,
+                    children: [],
+                    parent: parent,
+                    choicePath: path,
+                    scopeAnnotation: ScopeAnnotation(
+                        bindRole: currentBindRole,
+                        controlKind: controlKind
+                    )
                 )
-            )
-            if let parent {
-                containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-            }
-            return isActive ? 1 : 0
+                if let parent {
+                    containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
+                }
+                return isActive ? 1 : 0
 
-        case .just:
-            let nodeID = emitNode(
-                kind: .just,
-                positionRange: isActive ? (offset ... offset) : nil,
-                children: [],
-                parent: parent,
-                choicePath: path,
-                scopeAnnotation: ScopeAnnotation(
-                    bindRole: currentBindRole,
-                    controlKind: .standard
+            case .just:
+                let nodeID = emitNode(
+                    kind: .just,
+                    positionRange: isActive ? (offset ... offset) : nil,
+                    children: [],
+                    parent: parent,
+                    choicePath: path,
+                    scopeAnnotation: ScopeAnnotation(
+                        bindRole: currentBindRole,
+                        controlKind: .standard
+                    )
                 )
-            )
-            if let parent {
-                containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
-            }
-            return isActive ? 1 : 0
+                if let parent {
+                    containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
+                }
+                return isActive ? 1 : 0
 
-        case .getSize:
-            return 0
+            case .getSize:
+                return 0
 
-        case let .sequence(_, elements, metadata):
-            return walkSequence(
-                elements: elements, metadata: metadata, offset: offset,
-                parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
-            )
+            case let .sequence(_, elements, metadata):
+                return walkSequence(
+                    elements: elements, metadata: metadata, offset: offset,
+                    parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
+                )
 
-        case let .branch(b):
-            return walk(b.choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
+            case let .branch(b):
+                return walk(b.choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
 
-        case let .group(array, isOpaque):
-            return walkGroup(
-                children: array, isOpaque: isOpaque, offset: offset,
-                parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
-            )
+            case let .group(array, isOpaque):
+                return walkGroup(
+                    children: array, isOpaque: isOpaque, offset: offset,
+                    parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
+                )
 
-        case let .bind(fingerprint, inner, bound):
-            return walkBind(
-                fingerprint: fingerprint, inner: inner, bound: bound, offset: offset,
-                parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
-            )
+            case let .bind(fingerprint, inner, bound):
+                return walkBind(
+                    fingerprint: fingerprint, inner: inner, bound: bound, offset: offset,
+                    parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
+                )
 
-        case let .resize(_, choices):
-            if isActive {
-                return walkGroupChildren(choices, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
-            }
-            for choice in choices {
-                walk(choice, offset: 0, parent: parent, bindDepth: bindDepth, path: [], isActive: false)
-            }
-            return 0
-
+            case let .resize(_, choices):
+                if isActive {
+                    return walkGroupChildren(choices, offset: offset, parent: parent, bindDepth: bindDepth, path: path)
+                }
+                for choice in choices {
+                    walk(choice, offset: 0, parent: parent, bindDepth: bindDepth, path: [], isActive: false)
+                }
+                return 0
         }
     }
 
@@ -562,12 +561,12 @@ struct ChoiceGraphBuilder {
     private func leafTypeTag(of nodeID: Int) -> TypeTag? {
         let node = nodes[nodeID]
         switch node.kind {
-        case let .chooseBits(metadata):
-            return metadata.typeTag
-        case let .sequence(metadata):
-            return metadata.elementTypeTag
-        default:
-            return nil
+            case let .chooseBits(metadata):
+                return metadata.typeTag
+            case let .sequence(metadata):
+                return metadata.elementTypeTag
+            default:
+                return nil
         }
     }
 
@@ -584,7 +583,7 @@ struct ChoiceGraphBuilder {
     ///
     /// A pick site is a group where all children are `.branch`, with exactly one having `isSelected: true`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount``.
     func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
-        guard array.allSatisfy({ $0.isBranch }) else {
+        guard array.allSatisfy(\.isBranch) else {
             return nil
         }
         guard case let .branch(b) = array.first(where: \.isSelected), b.isSelected else {
@@ -615,12 +614,12 @@ struct ChoiceGraphBuilder {
                 guard current < nodes.count else { continue }
                 let target = nodes[current]
                 switch target.kind {
-                case .bind, .pick:
-                    if current != boundChildID {
-                        allDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
-                    }
-                case .chooseBits, .zip, .sequence, .just:
-                    break
+                    case .bind, .pick:
+                        if current != boundChildID {
+                            allDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
+                        }
+                    case .chooseBits, .zip, .sequence, .just:
+                        break
                 }
                 for child in target.children {
                     stack.append(child)

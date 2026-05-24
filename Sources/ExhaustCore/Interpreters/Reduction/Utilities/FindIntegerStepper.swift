@@ -43,61 +43,61 @@ struct FindIntegerStepper {
         }
 
         switch phase {
-        case let .linear(next):
-            if lastAccepted {
-                if next < 4 {
-                    let probe = next + 1
-                    phase = .linear(next: probe)
-                    lastProbe = probe
-                    return probe
+            case let .linear(next):
+                if lastAccepted {
+                    if next < 4 {
+                        let probe = next + 1
+                        phase = .linear(next: probe)
+                        lastProbe = probe
+                        return probe
+                    }
+                    // Transition to exponential. low = 4 (last accepted), high = 8.
+                    phase = .exponential(low: 4, high: 8)
+                    lastProbe = 8
+                    return 8
                 }
-                // Transition to exponential. low = 4 (last accepted), high = 8.
-                phase = .exponential(low: 4, high: 8)
-                lastProbe = 8
-                return 8
-            }
-            // Rejection during linear scan — converged at bestAccepted.
-            phase = .done
-            return nil
+                // Rejection during linear scan — converged at bestAccepted.
+                phase = .done
+                return nil
 
-        case let .exponential(_, high):
-            if lastAccepted {
-                let newLow = high
-                let (doubled, overflow) = high.multipliedReportingOverflow(by: 2)
-                if overflow {
-                    // Can't go higher — converged.
+            case let .exponential(_, high):
+                if lastAccepted {
+                    let newLow = high
+                    let (doubled, overflow) = high.multipliedReportingOverflow(by: 2)
+                    if overflow {
+                        // Can't go higher — converged.
+                        phase = .done
+                        return nil
+                    }
+                    phase = .exponential(low: newLow, high: doubled)
+                    lastProbe = doubled
+                    return doubled
+                }
+                // Rejection — answer is in (low, high). Binary search.
+                let low = bestAccepted
+                if low + 1 >= high {
                     phase = .done
                     return nil
                 }
-                phase = .exponential(low: newLow, high: doubled)
-                lastProbe = doubled
-                return doubled
-            }
-            // Rejection — answer is in (low, high). Binary search.
-            let low = bestAccepted
-            if low + 1 >= high {
-                phase = .done
-                return nil
-            }
-            let mid = low + (high - low) / 2
-            phase = .binary(low: low, high: high)
-            lastProbe = mid
-            return mid
+                let mid = low + (high - low) / 2
+                phase = .binary(low: low, high: high)
+                lastProbe = mid
+                return mid
 
-        case let .binary(low, high):
-            let newLow = lastAccepted ? lastProbe : low
-            let newHigh = lastAccepted ? high : lastProbe
-            if newLow + 1 >= newHigh {
-                phase = .done
-                return nil
-            }
-            let mid = newLow + (newHigh - newLow) / 2
-            phase = .binary(low: newLow, high: newHigh)
-            lastProbe = mid
-            return mid
+            case let .binary(low, high):
+                let newLow = lastAccepted ? lastProbe : low
+                let newHigh = lastAccepted ? high : lastProbe
+                if newLow + 1 >= newHigh {
+                    phase = .done
+                    return nil
+                }
+                let mid = newLow + (newHigh - newLow) / 2
+                phase = .binary(low: newLow, high: newHigh)
+                lastProbe = mid
+                return mid
 
-        case .done:
-            return nil
+            case .done:
+                return nil
         }
     }
 }

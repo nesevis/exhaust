@@ -9,7 +9,7 @@
 ///
 /// Stores only the raw `UInt64` bit pattern and a ``TypeTag``. Decoded values (signed integers, floating-point numbers) are computed on demand from these two fields, trading a per-access decode (single-instruction bitwise reinterpretation) for smaller size and branch-free field access.
 @usableFromInline
-package struct ChoiceValue: Comparable, Hashable, Sendable {
+package struct ChoiceValue: Comparable, Hashable {
     /// All numeric types are stored in this single `UInt64` regardless of original width. Signed integers use sign-bit XOR for order-preserving shortlex reduction; floats use a Hedgehog-style sign-preserving transform. Decoding is controlled by ``tag``.
     package let bitPattern64: UInt64
     /// Controls how ``bitPattern64`` is decoded (signed vs unsigned vs float), which reduction strategies apply (shortlex for integers, mantissa-first for floats), and what the semantically simplest value is (zero for all types, but at different bit patterns).
@@ -32,32 +32,32 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
     /// The decoded signed integer value. Only valid when ``tag`` is a signed integer type.
     package var decodedSignedValue: Int64 {
         switch tag {
-        case .int:
-            Int64(Int(bitPattern64: bitPattern64))
-        case .int64, .date:
-            Int64(bitPattern64: bitPattern64)
-        case .int32:
-            Int64(Int32(bitPattern64: bitPattern64))
-        case .int16:
-            Int64(Int16(bitPattern64: bitPattern64))
-        case .int8:
-            Int64(Int8(bitPattern64: bitPattern64))
-        default:
-            0
+            case .int:
+                Int64(Int(bitPattern64: bitPattern64))
+            case .int64, .date:
+                Int64(bitPattern64: bitPattern64)
+            case .int32:
+                Int64(Int32(bitPattern64: bitPattern64))
+            case .int16:
+                Int64(Int16(bitPattern64: bitPattern64))
+            case .int8:
+                Int64(Int8(bitPattern64: bitPattern64))
+            default:
+                0
         }
     }
 
     /// The decoded floating-point value as `Double`. Only valid when ``tag`` is a floating-point type.
     package var decodedDoubleValue: Double {
         switch tag {
-        case .double:
-            Double(bitPattern64: bitPattern64)
-        case .float:
-            Double(Float(bitPattern64: bitPattern64))
-        case .float16:
-            Float16Emulation.doubleValue(fromEncoded: bitPattern64)
-        default:
-            0.0
+            case .double:
+                Double(bitPattern64: bitPattern64)
+            case .float:
+                Double(Float(bitPattern64: bitPattern64))
+            case .float16:
+                Float16Emulation.doubleValue(fromEncoded: bitPattern64)
+            default:
+                0.0
         }
     }
 

@@ -16,7 +16,7 @@ import Foundation
 ///
 /// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, reduce, or analyze generated values.
 @usableFromInline
-indirect package enum ChoiceTree: Hashable, Equatable, Sendable { // NOTE: The entire enum is marked as `indirect` for performance reasons
+package indirect enum ChoiceTree: Hashable, Equatable { // NOTE: The entire enum is marked as `indirect` for performance reasons
     /// A single randomness decision. Produces one entry in the ``ChoiceSequence`` whose ``ChoiceValue`` the reducer can minimize toward semantic simplest. The ``ChoiceMetadata`` records the valid range so the reducer never proposes an out-of-bounds value.
     case choice(ChoiceValue, ChoiceMetadata)
 
@@ -74,29 +74,29 @@ package extension ChoiceTree {
     /// Used by ``Materializer`` to scope cursor consumption per zip child.
     var flattenedEntryCount: Int {
         switch self {
-        case .choice: 1
-        case .just: 1
-        case .getSize: 0
-        case let .sequence(_, elements, _):
-            2 + elements.reduce(0) { $0 + $1.flattenedEntryCount } // open + elements + close
-        case let .branch(b):
-            b.choice.flattenedEntryCount
-        case let .group(array, _):
-            if array.allSatisfy({ $0.isBranch }),
-               case let .branch(b) = array.first(where: \.isSelected), b.isSelected
-            {
-                // group open + branch entry + choice + group close
-                2 + 1 + b.choice.flattenedEntryCount
-            } else {
-                // group open + children + group close
-                2 + array.reduce(0) { $0 + $1.flattenedEntryCount }
-            }
-        case let .bind(_, inner, bound):
-            // bind open + inner + bound + bind close
-            2 + inner.flattenedEntryCount + bound.flattenedEntryCount
-        case let .resize(_, choices):
-            // group open + choices + group close
-            2 + choices.reduce(0) { $0 + $1.flattenedEntryCount }
+            case .choice: 1
+            case .just: 1
+            case .getSize: 0
+            case let .sequence(_, elements, _):
+                2 + elements.reduce(0) { $0 + $1.flattenedEntryCount } // open + elements + close
+            case let .branch(b):
+                b.choice.flattenedEntryCount
+            case let .group(array, _):
+                if array.allSatisfy(\.isBranch),
+                   case let .branch(b) = array.first(where: \.isSelected), b.isSelected
+                {
+                    // group open + branch entry + choice + group close
+                    2 + 1 + b.choice.flattenedEntryCount
+                } else {
+                    // group open + children + group close
+                    2 + array.reduce(0) { $0 + $1.flattenedEntryCount }
+                }
+            case let .bind(_, inner, bound):
+                // bind open + inner + bound + bind close
+                2 + inner.flattenedEntryCount + bound.flattenedEntryCount
+            case let .resize(_, choices):
+                // group open + choices + group close
+                2 + choices.reduce(0) { $0 + $1.flattenedEntryCount }
         }
     }
 
@@ -154,21 +154,21 @@ package extension ChoiceTree {
     /// Binds whose inner tree is `.getSize` are structurally stable (the size parameter is fixed during reduction) and are excluded.
     var containsBind: Bool {
         switch self {
-        case let .bind(_, inner, bound):
-            if inner.isGetSize {
-                return bound.containsBind
-            }
-            return true
-        case .choice, .just, .getSize:
-            return false
-        case let .branch(b):
-            return b.choice.containsBind
-        case let .sequence(_, elements, _):
-            return elements.contains(where: \.containsBind)
-        case let .group(array, _):
-            return array.contains(where: \.containsBind)
-        case let .resize(_, choices):
-            return choices.contains(where: \.containsBind)
+            case let .bind(_, inner, bound):
+                if inner.isGetSize {
+                    return bound.containsBind
+                }
+                return true
+            case .choice, .just, .getSize:
+                return false
+            case let .branch(b):
+                return b.choice.containsBind
+            case let .sequence(_, elements, _):
+                return elements.contains(where: \.containsBind)
+            case let .group(array, _):
+                return array.contains(where: \.containsBind)
+            case let .resize(_, choices):
+                return choices.contains(where: \.containsBind)
         }
     }
 
@@ -184,18 +184,18 @@ package extension ChoiceTree {
     /// Short-circuits on the first pick found.
     var containsPicks: Bool {
         switch self {
-        case .branch:
-            true
-        case .choice, .just, .getSize:
-            false
-        case let .sequence(_, elements, _):
-            elements.contains(where: \.containsPicks)
-        case let .group(array, _):
-            array.contains(where: \.containsPicks)
-        case let .bind(_, inner, bound):
-            inner.containsPicks || bound.containsPicks
-        case let .resize(_, choices):
-            choices.contains(where: \.containsPicks)
+            case .branch:
+                true
+            case .choice, .just, .getSize:
+                false
+            case let .sequence(_, elements, _):
+                elements.contains(where: \.containsPicks)
+            case let .group(array, _):
+                array.contains(where: \.containsPicks)
+            case let .bind(_, inner, bound):
+                inner.containsPicks || bound.containsPicks
+            case let .resize(_, choices):
+                choices.contains(where: \.containsPicks)
         }
     }
 
@@ -206,25 +206,25 @@ package extension ChoiceTree {
 
     private func pickComplexityHelper(pickDepth: Int) -> UInt64 {
         switch self {
-        case .choice, .just, .getSize:
-            return 0
-        case let .branch(b):
-            let depthFactor: UInt64 = pickDepth >= 64 ? .max : 1 << pickDepth
-            let (here, overflow) = b.branchCount.multipliedReportingOverflow(by: depthFactor)
-            let deeper = b.choice.pickComplexityHelper(pickDepth: pickDepth + 1)
-            if overflow { return .max }
-            return max(here, deeper)
-        case let .sequence(_, elements, _):
-            return elements.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
-        case let .group(array, _):
-            return array.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
-        case let .bind(_, inner, bound):
-            return Swift.max(
-                inner.pickComplexityHelper(pickDepth: pickDepth),
-                bound.pickComplexityHelper(pickDepth: pickDepth)
-            )
-        case let .resize(_, choices):
-            return choices.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
+            case .choice, .just, .getSize:
+                return 0
+            case let .branch(b):
+                let depthFactor: UInt64 = pickDepth >= 64 ? .max : 1 << pickDepth
+                let (here, overflow) = b.branchCount.multipliedReportingOverflow(by: depthFactor)
+                let deeper = b.choice.pickComplexityHelper(pickDepth: pickDepth + 1)
+                if overflow { return .max }
+                return max(here, deeper)
+            case let .sequence(_, elements, _):
+                return elements.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
+            case let .group(array, _):
+                return array.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
+            case let .bind(_, inner, bound):
+                return Swift.max(
+                    inner.pickComplexityHelper(pickDepth: pickDepth),
+                    bound.pickComplexityHelper(pickDepth: pickDepth)
+                )
+            case let .resize(_, choices):
+                return choices.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
         }
     }
 }
@@ -238,34 +238,34 @@ package extension ChoiceTree {
         let transformedNode = try transform(self)
 
         switch transformedNode {
-        case .choice, .just, .getSize:
-            // For leaf nodes, return the transformed node directly.
-            return transformedNode
-        case let .sequence(length, elements, metadata):
-            // For a sequence, recursively map over its elements.
-            let mapped = try elements.map { try $0.map(transform) }
-            return try .sequence(
-                length: length,
-                elements: mapped,
-                metadata
-            )
-        case let .branch(b):
-            return try .branch(
-                fingerprint: b.fingerprint,
-                weight: b.weight,
-                id: b.id,
-                branchCount: b.branchCount,
-                choice: b.choice.map(transform),
-                isSelected: b.isSelected
-            )
-        case let .group(children, isOpaque: isOpaque):
-            // For a group, recursively map over its children.
-            return try .group(children.map { try $0.map(transform) }, isOpaque: isOpaque)
-        case let .bind(fingerprint, inner, bound):
-            return try .bind(fingerprint: fingerprint, inner: inner.map(transform), bound: bound.map(transform))
-        case let .resize(newSize, choices):
-            // For a resize node, recursively map over its choices.
-            return try .resize(newSize: newSize, choices: choices.map { try $0.map(transform) })
+            case .choice, .just, .getSize:
+                // For leaf nodes, return the transformed node directly.
+                return transformedNode
+            case let .sequence(length, elements, metadata):
+                // For a sequence, recursively map over its elements.
+                let mapped = try elements.map { try $0.map(transform) }
+                return try .sequence(
+                    length: length,
+                    elements: mapped,
+                    metadata
+                )
+            case let .branch(b):
+                return try .branch(
+                    fingerprint: b.fingerprint,
+                    weight: b.weight,
+                    id: b.id,
+                    branchCount: b.branchCount,
+                    choice: b.choice.map(transform),
+                    isSelected: b.isSelected
+                )
+            case let .group(children, isOpaque: isOpaque):
+                // For a group, recursively map over its children.
+                return try .group(children.map { try $0.map(transform) }, isOpaque: isOpaque)
+            case let .bind(fingerprint, inner, bound):
+                return try .bind(fingerprint: fingerprint, inner: inner.map(transform), bound: bound.map(transform))
+            case let .resize(newSize, choices):
+                // For a resize node, recursively map over its choices.
+                return try .resize(newSize: newSize, choices: choices.map { try $0.map(transform) })
         }
     }
 
@@ -287,7 +287,6 @@ package extension ChoiceTree {
             )
         }
     }
-
 }
 
 extension ChoiceTree: CustomDebugStringConvertible {
@@ -305,87 +304,87 @@ extension ChoiceTree: CustomDebugStringConvertible {
         let childPrefix = prefix + (isLast ? "    " : "│   ")
 
         switch self {
-        case let .choice(value, meta):
-            let displayRange = meta.validRange.map { value.displayRange($0) } ?? ""
-            if value.tag.isFloatingPoint {
-                return prefix + connector + "choice(float: \(value.decodedDoubleValue)) \(displayRange)"
-            } else if value.tag.isSigned {
-                return prefix + connector + "choice(signed: \(value.decodedSignedValue)) \(displayRange)"
-            } else {
-                return prefix + connector + "choice(unsigned:\(value.bitPattern64)) \(displayRange)"
-            }
+            case let .choice(value, meta):
+                let displayRange = meta.validRange.map { value.displayRange($0) } ?? ""
+                if value.tag.isFloatingPoint {
+                    return prefix + connector + "choice(float: \(value.decodedDoubleValue)) \(displayRange)"
+                } else if value.tag.isSigned {
+                    return prefix + connector + "choice(signed: \(value.decodedSignedValue)) \(displayRange)"
+                } else {
+                    return prefix + connector + "choice(unsigned:\(value.bitPattern64)) \(displayRange)"
+                }
 
-        case .just:
-            return prefix + connector + "just"
+            case .just:
+                return prefix + connector + "just"
 
-        case let .sequence(length, elements, meta):
-            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange.map { "\($0)" } ?? "nil")"
-            for (index, element) in elements.enumerated() {
-                let isLastElement = index == elements.count - 1
-                result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)
-            }
-            return result
+            case let .sequence(length, elements, meta):
+                var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange.map { "\($0)" } ?? "nil")"
+                for (index, element) in elements.enumerated() {
+                    let isLastElement = index == elements.count - 1
+                    result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)
+                }
+                return result
 
-        case let .branch(b):
-            let index = b.id + 1
-            let fingerprintShort = String(format: "%08X", b.fingerprint & 0xFFFF_FFFF)
-            let effectiveSelected = b.isSelected ? "✅" : ""
-            var result = prefix + connector + "\(effectiveSelected)branch(fingerprint: \(fingerprintShort), id: \(b.id), index: \(index), weight: \(b.weight), count: \(b.branchCount))"
-            result += "\n" + b.choice.treeDescription(prefix: childPrefix, isLast: true)
-            return result
+            case let .branch(b):
+                let index = b.id + 1
+                let fingerprintShort = String(format: "%08X", b.fingerprint & 0xFFFF_FFFF)
+                let effectiveSelected = b.isSelected ? "✅" : ""
+                var result = prefix + connector + "\(effectiveSelected)branch(fingerprint: \(fingerprintShort), id: \(b.id), index: \(index), weight: \(b.weight), count: \(b.branchCount))"
+                result += "\n" + b.choice.treeDescription(prefix: childPrefix, isLast: true)
+                return result
 
-        case let .group(children, _):
-            var result = prefix + connector + "group"
-            for (index, child) in children.enumerated() {
-                let isLastChild = index == children.count - 1
-                result += "\n" + child.treeDescription(prefix: childPrefix, isLast: isLastChild)
-            }
-            return result
+            case let .group(children, _):
+                var result = prefix + connector + "group"
+                for (index, child) in children.enumerated() {
+                    let isLastChild = index == children.count - 1
+                    result += "\n" + child.treeDescription(prefix: childPrefix, isLast: isLastChild)
+                }
+                return result
 
-        case let .bind(_, inner, bound):
-            var result = prefix + connector + "bind"
-            result += "\n" + inner.treeDescription(prefix: childPrefix, isLast: false)
-            result += "\n" + bound.treeDescription(prefix: childPrefix, isLast: true)
-            return result
+            case let .bind(_, inner, bound):
+                var result = prefix + connector + "bind"
+                result += "\n" + inner.treeDescription(prefix: childPrefix, isLast: false)
+                result += "\n" + bound.treeDescription(prefix: childPrefix, isLast: true)
+                return result
 
-        case .getSize:
-            return prefix + connector + "getSize(?)"
+            case .getSize:
+                return prefix + connector + "getSize(?)"
 
-        case let .resize(newSize, choices):
-            var result = prefix + connector + "resize(\(newSize))"
-            for (index, choice) in choices.enumerated() {
-                let isLastChoice = index == choices.count - 1
-                result += "\n" + choice.treeDescription(prefix: childPrefix, isLast: isLastChoice)
-            }
-            return result
+            case let .resize(newSize, choices):
+                var result = prefix + connector + "resize(\(newSize))"
+                for (index, choice) in choices.enumerated() {
+                    let isLastChoice = index == choices.count - 1
+                    result += "\n" + choice.treeDescription(prefix: childPrefix, isLast: isLastChoice)
+                }
+                return result
         }
     }
 
     /// Returns a compact inline representation of this node's content for diagnostic output.
     public var elementDescription: String {
         switch self {
-        case let .choice(choiceValue, _):
-            if choiceValue.tag.isFloatingPoint {
-                choiceValue.decodedDoubleValue.description
-            } else if choiceValue.tag.isSigned {
-                choiceValue.decodedSignedValue.description
-            } else {
-                choiceValue.bitPattern64.description
-            }
-        case .just:
-            "just"
-        case let .sequence(_, elements, _):
-            "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
-        case let .branch(b):
-            "\(b.weight),\(b.id): \(b.choice.elementDescription)"
-        case let .group(array, _):
-            "{" + array.map(\.elementDescription).joined() + "}"
-        case let .bind(_, inner, bound):
-            "{" + inner.elementDescription + bound.elementDescription + "}"
-        case let .getSize(size):
-            "getSize(\(size))"
-        case let .resize(newSize, choices):
-            "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
+            case let .choice(choiceValue, _):
+                if choiceValue.tag.isFloatingPoint {
+                    choiceValue.decodedDoubleValue.description
+                } else if choiceValue.tag.isSigned {
+                    choiceValue.decodedSignedValue.description
+                } else {
+                    choiceValue.bitPattern64.description
+                }
+            case .just:
+                "just"
+            case let .sequence(_, elements, _):
+                "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
+            case let .branch(b):
+                "\(b.weight),\(b.id): \(b.choice.elementDescription)"
+            case let .group(array, _):
+                "{" + array.map(\.elementDescription).joined() + "}"
+            case let .bind(_, inner, bound):
+                "{" + inner.elementDescription + bound.elementDescription + "}"
+            case let .getSize(size):
+                "getSize(\(size))"
+            case let .resize(newSize, choices):
+                "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
         }
     }
 
@@ -401,7 +400,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
 // MARK: - Normalized Complexity Scores
 
 /// Summary statistics derived from per-choice-point normalized scores.
-package struct ComplexityFeatures: Sendable {
+package struct ComplexityFeatures {
     /// Number of choice points in the tree.
     public let choiceCount: Int
     /// Minimum normalized score across all choice points.
@@ -445,40 +444,40 @@ package extension ChoiceTree {
 
     private func collectNormalizedScores(into scores: inout [Double]) {
         switch self {
-        case let .choice(value, metadata):
-            if let range = metadata.validRange, range.upperBound > range.lowerBound {
-                let position = Double(value.bitPattern64 - range.lowerBound) / Double(range.upperBound - range.lowerBound)
-                scores.append(Swift.min(position, 1.0))
-            }
+            case let .choice(value, metadata):
+                if let range = metadata.validRange, range.upperBound > range.lowerBound {
+                    let position = Double(value.bitPattern64 - range.lowerBound) / Double(range.upperBound - range.lowerBound)
+                    scores.append(Swift.min(position, 1.0))
+                }
 
-        case let .sequence(length, elements, metadata):
-            if let range = metadata.validRange, range.upperBound > range.lowerBound {
-                let position = Double(length - range.lowerBound) / Double(range.upperBound - range.lowerBound)
-                scores.append(Swift.min(position, 1.0))
-            }
-            for element in elements {
-                element.collectNormalizedScores(into: &scores)
-            }
+            case let .sequence(length, elements, metadata):
+                if let range = metadata.validRange, range.upperBound > range.lowerBound {
+                    let position = Double(length - range.lowerBound) / Double(range.upperBound - range.lowerBound)
+                    scores.append(Swift.min(position, 1.0))
+                }
+                for element in elements {
+                    element.collectNormalizedScores(into: &scores)
+                }
 
-        case let .branch(b):
-            b.choice.collectNormalizedScores(into: &scores)
+            case let .branch(b):
+                b.choice.collectNormalizedScores(into: &scores)
 
-        case let .group(children, _):
-            for child in children {
-                child.collectNormalizedScores(into: &scores)
-            }
+            case let .group(children, _):
+                for child in children {
+                    child.collectNormalizedScores(into: &scores)
+                }
 
-        case let .bind(_, inner, bound):
-            inner.collectNormalizedScores(into: &scores)
-            bound.collectNormalizedScores(into: &scores)
+            case let .bind(_, inner, bound):
+                inner.collectNormalizedScores(into: &scores)
+                bound.collectNormalizedScores(into: &scores)
 
-        case let .resize(_, choices):
-            for child in choices {
-                child.collectNormalizedScores(into: &scores)
-            }
+            case let .resize(_, choices):
+                for child in choices {
+                    child.collectNormalizedScores(into: &scores)
+                }
 
-        case .just, .getSize:
-            break
+            case .just, .getSize:
+                break
         }
     }
 }

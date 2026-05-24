@@ -127,288 +127,288 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context: inout GenerationContext
     ) throws -> Any? {
         switch gen {
-        case let .pure(value):
-            return value
+            case let .pure(value):
+                return value
 
         // MARK: chooseBits
 
-        case let .impure(operation: .chooseBits(min, max, tag, _, scaling), continuation):
-            let effectiveRange: ClosedRange<UInt64>
-            if let scaling {
-                let size = consumeSize(&context)
-                effectiveRange = Gen.applyScaling(
-                    min: min, max: max, tag: tag, scaling: scaling, size: size
-                )
-            } else {
-                effectiveRange = min ... max
-            }
-            let rawBits = context.prng.next(in: effectiveRange)
-            let randomBits: Any = tag.isFloatingPoint
-                ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
-                : rawBits
-            let nextGen = try continuation(randomBits)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case let .impure(operation: .chooseBits(min, max, tag, _, scaling), continuation):
+                let effectiveRange: ClosedRange<UInt64>
+                if let scaling {
+                    let size = consumeSize(&context)
+                    effectiveRange = Gen.applyScaling(
+                        min: min, max: max, tag: tag, scaling: scaling, size: size
+                    )
+                } else {
+                    effectiveRange = min ... max
+                }
+                let rawBits = context.prng.next(in: effectiveRange)
+                let randomBits: Any = tag.isFloatingPoint
+                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    : rawBits
+                let nextGen = try continuation(randomBits)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: just
 
-        case let .impure(operation: .just(value), continuation):
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case let .impure(operation: .just(value), continuation):
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: getSize
 
-        case .impure(operation: .getSize, let continuation):
-            let size = consumeSize(&context)
-            let nextGen = try continuation(size)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case .impure(operation: .getSize, let continuation):
+                let size = consumeSize(&context)
+                let nextGen = try continuation(size)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: contramap
 
-        case let .impure(operation: .contramap(_, innerGen), continuation):
-            guard let value = try generateRecursiveAny(innerGen, with: inputValue, context: &context) else {
-                return nil
-            }
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case let .impure(operation: .contramap(_, innerGen), continuation):
+                guard let value = try generateRecursiveAny(innerGen, with: inputValue, context: &context) else {
+                    return nil
+                }
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: prune
 
-        case let .impure(operation: .prune(innerGen), continuation):
-            guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
-                return nil
-            }
-            guard let value = try generateRecursiveAny(innerGen, with: wrappedValue, context: &context) else {
-                return nil
-            }
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case let .impure(operation: .prune(innerGen), continuation):
+                guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
+                    return nil
+                }
+                guard let value = try generateRecursiveAny(innerGen, with: wrappedValue, context: &context) else {
+                    return nil
+                }
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: pick
 
-        case let .impure(operation: .pick(choices), continuation):
-            guard let selectedChoice = WeightedPickSelection.draw(
-                from: choices, using: &context.prng
-            ) else {
-                return nil
-            }
-            _ = context.prng.next()
-            guard let value = try generateRecursiveAny(selectedChoice.generator, with: inputValue, context: &context) else {
-                return nil
-            }
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case let .impure(operation: .pick(choices), continuation):
+                guard let selectedChoice = WeightedPickSelection.draw(
+                    from: choices, using: &context.prng
+                ) else {
+                    return nil
+                }
+                _ = context.prng.next()
+                guard let value = try generateRecursiveAny(selectedChoice.generator, with: inputValue, context: &context) else {
+                    return nil
+                }
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: sequence
 
-        case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
-            guard let length = try interpretLength(lengthGen, context: &context) else {
-                return nil
-            }
-            var elements: [Any] = []
-            elements.reserveCapacity(Int(length))
-            for _ in 0 ..< length {
-                guard let element = try generateRecursiveAny(
-                    elementGen, with: inputValue, context: &context
-                ) else {
+            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+                guard let length = try interpretLength(lengthGen, context: &context) else {
                     return nil
                 }
-                elements.append(element)
-            }
-            let nextGen = try continuation(elements)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                var elements: [Any] = []
+                elements.reserveCapacity(Int(length))
+                for _ in 0 ..< length {
+                    guard let element = try generateRecursiveAny(
+                        elementGen, with: inputValue, context: &context
+                    ) else {
+                        return nil
+                    }
+                    elements.append(element)
+                }
+                let nextGen = try continuation(elements)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: zip
 
-        case let .impure(operation: .zip(generators, _), continuation):
-            var results = [Any]()
-            results.reserveCapacity(generators.count)
-            for childGen in generators {
-                guard let value = try generateRecursiveAny(
-                    childGen, with: inputValue, context: &context
-                ) else {
-                    throw GeneratorError.choiceTreeConstructionFailed
+            case let .impure(operation: .zip(generators, _), continuation):
+                var results = [Any]()
+                results.reserveCapacity(generators.count)
+                for childGen in generators {
+                    guard let value = try generateRecursiveAny(
+                        childGen, with: inputValue, context: &context
+                    ) else {
+                        throw GeneratorError.choiceTreeConstructionFailed
+                    }
+                    results.append(value)
                 }
-                results.append(value)
-            }
-            let nextGen = try continuation(results)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                let nextGen = try continuation(results)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: resize
 
-        case let .impure(operation: .resize(newSize, innerGen), continuation):
-            context.sizeOverride = newSize
-            defer { context.sizeOverride = nil }
-            guard let value = try generateRecursiveAny(innerGen, with: inputValue, context: &context) else {
-                return nil
-            }
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case let .impure(operation: .resize(newSize, innerGen), continuation):
+                context.sizeOverride = newSize
+                defer { context.sizeOverride = nil }
+                guard let value = try generateRecursiveAny(innerGen, with: inputValue, context: &context) else {
+                    return nil
+                }
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: filter
 
-        case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, tuned, sourceLocation), continuation):
-            let tunedGen: AnyGenerator
-            if let tuned {
-                tunedGen = tuned
-            } else if filterType == .rejectionSampling {
-                tunedGen = filterGen
-            } else if let cached = context.tunedFilterCache[fingerprint] {
-                tunedGen = cached
-            } else {
-                let resolved = (try? ChoiceGradientTuner<Any>.tune(filterGen, predicate: predicate)) ?? filterGen
-                context.tunedFilterCache[fingerprint] = resolved
-                tunedGen = resolved
-            }
-            var attempts = 0 as UInt64
-            var accepted: Any?
-            while attempts < GenerationContext.maxFilterRuns {
-                guard let candidate = try generateRecursiveAny(
-                    tunedGen, with: inputValue, context: &context
-                ) else {
-                    return nil
+            case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, tuned, sourceLocation), continuation):
+                let tunedGen: AnyGenerator
+                if let tuned {
+                    tunedGen = tuned
+                } else if filterType == .rejectionSampling {
+                    tunedGen = filterGen
+                } else if let cached = context.tunedFilterCache[fingerprint] {
+                    tunedGen = cached
+                } else {
+                    let resolved = (try? ChoiceGradientTuner<Any>.tune(filterGen, predicate: predicate)) ?? filterGen
+                    context.tunedFilterCache[fingerprint] = resolved
+                    tunedGen = resolved
                 }
-                let passed = predicate(candidate)
-                if context.filterObservations[fingerprint] == nil {
-                    context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
+                var attempts = 0 as UInt64
+                var accepted: Any?
+                while attempts < GenerationContext.maxFilterRuns {
+                    guard let candidate = try generateRecursiveAny(
+                        tunedGen, with: inputValue, context: &context
+                    ) else {
+                        return nil
+                    }
+                    let passed = predicate(candidate)
+                    if context.filterObservations[fingerprint] == nil {
+                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
+                    }
+                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
+                    if passed {
+                        accepted = candidate
+                        break
+                    }
+                    attempts += 1
                 }
-                context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
-                if passed {
-                    accepted = candidate
-                    break
+                guard let value = accepted else {
+                    sourceLocation.onBudgetExhausted?()
+                    throw GeneratorError.sparseValidityCondition
                 }
-                attempts += 1
-            }
-            guard let value = accepted else {
-                sourceLocation.onBudgetExhausted?()
-                throw GeneratorError.sparseValidityCondition
-            }
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: classify
 
-        case let .impure(operation: .classify(classifyGen, fingerprint, classifiers), continuation):
-            guard let value = try generateRecursiveAny(
-                classifyGen, with: inputValue, context: &context
-            ) else {
-                return nil
-            }
-            var bucket = context.classifications[fingerprint, default: [:]]
-            for (label, classifier) in classifiers where classifier(value) {
-                bucket[label, default: []].insert(context.runs)
-            }
-            context.classifications[fingerprint] = bucket
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+            case let .impure(operation: .classify(classifyGen, fingerprint, classifiers), continuation):
+                guard let value = try generateRecursiveAny(
+                    classifyGen, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                var bucket = context.classifications[fingerprint, default: [:]]
+                for (label, classifier) in classifiers where classifier(value) {
+                    bucket[label, default: []].insert(context.runs)
+                }
+                context.classifications[fingerprint] = bucket
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: transform
 
-        case let .impure(operation: .transform(kind, inner), continuation):
-            let transformedValue: Any
-            switch kind {
-            case let .map(forward, _, _):
-                guard let innerValue = try generateRecursiveAny(
-                    inner, with: inputValue, context: &context
-                ) else {
-                    return nil
+            case let .impure(operation: .transform(kind, inner), continuation):
+                let transformedValue: Any
+                switch kind {
+                    case let .map(forward, _, _):
+                        guard let innerValue = try generateRecursiveAny(
+                            inner, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        transformedValue = try forward(innerValue)
+                    case let .bind(_, forward, _, _, _):
+                        guard let innerValue = try generateRecursiveAny(
+                            inner, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        let boundGen = try forward(innerValue)
+                        guard let boundValue = try generateRecursiveAny(
+                            boundGen, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        transformedValue = boundValue
+                    case let .metamorphic(transforms, _):
+                        let savedState = (context.prng.seed, context.prng.currentState)
+                        guard let original = try generateRecursiveAny(
+                            inner, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        var copies: [Any] = [original]
+                        copies.reserveCapacity(transforms.count + 1)
+                        for transform in transforms {
+                            context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                            guard let copy = try generateRecursiveAny(
+                                inner, with: inputValue, context: &context
+                            ) else {
+                                return nil
+                            }
+                            try copies.append(transform(copy))
+                        }
+                        transformedValue = copies
                 }
-                transformedValue = try forward(innerValue)
-            case let .bind(_, forward, _, _, _):
-                guard let innerValue = try generateRecursiveAny(
-                    inner, with: inputValue, context: &context
-                ) else {
-                    return nil
-                }
-                let boundGen = try forward(innerValue)
-                guard let boundValue = try generateRecursiveAny(
-                    boundGen, with: inputValue, context: &context
-                ) else {
-                    return nil
-                }
-                transformedValue = boundValue
-            case let .metamorphic(transforms, _):
-                let savedState = (context.prng.seed, context.prng.currentState)
-                guard let original = try generateRecursiveAny(
-                    inner, with: inputValue, context: &context
-                ) else {
-                    return nil
-                }
-                var copies: [Any] = [original]
-                copies.reserveCapacity(transforms.count + 1)
-                for transform in transforms {
-                    context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
-                    guard let copy = try generateRecursiveAny(
-                        inner, with: inputValue, context: &context
-                    ) else {
-                        return nil
-                    }
-                    try copies.append(transform(copy))
-                }
-                transformedValue = copies
-            }
-            let nextGen = try continuation(transformedValue)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                let nextGen = try continuation(transformedValue)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
 
         // MARK: unique
 
-        case let .impure(operation: .unique(uniqueGen, fingerprint, keyExtractor), continuation):
-            var attempts = 0 as UInt64
-            var accepted: Any?
-            while attempts < GenerationContext.maxFilterRuns {
-                if let keyExtractor {
-                    guard let candidate = try generateRecursiveAny(
-                        uniqueGen, with: inputValue, context: &context
-                    ) else {
-                        return nil
-                    }
-                    let key = keyExtractor(candidate)
-                    if context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted {
-                        accepted = candidate
-                        break
-                    }
-                } else {
-                    var vactiContext = GenerationContext(
-                        maxRuns: context.maxRuns,
-                        baseSeed: context.baseSeed,
-                        isFixed: context.isFixed,
-                        size: context.size,
-                        prng: Xoshiro256(seed: 0),
-                        runs: context.runs
-                    )
-                    swap(&context.prng, &vactiContext.prng)
-                    let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
-                        .generateRecursiveAny(uniqueGen, with: inputValue, context: &vactiContext)
-                    guard let (candidate, tree) = vactiResult else {
+            case let .impure(operation: .unique(uniqueGen, fingerprint, keyExtractor), continuation):
+                var attempts = 0 as UInt64
+                var accepted: Any?
+                while attempts < GenerationContext.maxFilterRuns {
+                    if let keyExtractor {
+                        guard let candidate = try generateRecursiveAny(
+                            uniqueGen, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        let key = keyExtractor(candidate)
+                        if context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted {
+                            accepted = candidate
+                            break
+                        }
+                    } else {
+                        var vactiContext = GenerationContext(
+                            maxRuns: context.maxRuns,
+                            baseSeed: context.baseSeed,
+                            isFixed: context.isFixed,
+                            size: context.size,
+                            prng: Xoshiro256(seed: 0),
+                            runs: context.runs
+                        )
                         swap(&context.prng, &vactiContext.prng)
-                        return nil
+                        let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
+                            .generateRecursiveAny(uniqueGen, with: inputValue, context: &vactiContext)
+                        guard let (candidate, tree) = vactiResult else {
+                            swap(&context.prng, &vactiContext.prng)
+                            return nil
+                        }
+                        swap(&context.prng, &vactiContext.prng)
+                        let sequence = ChoiceSequence.flatten(tree)
+                        if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted {
+                            accepted = candidate
+                            break
+                        }
                     }
-                    swap(&context.prng, &vactiContext.prng)
-                    let sequence = ChoiceSequence.flatten(tree)
-                    if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted {
-                        accepted = candidate
-                        break
-                    }
+                    attempts += 1
                 }
-                attempts += 1
-            }
-            guard let value = accepted else {
-                throw GeneratorError.uniqueBudgetExhausted
-            }
-            let nextGen = try continuation(value)
-            if case let .pure(final) = nextGen { return final }
-            return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                guard let value = accepted else {
+                    throw GeneratorError.uniqueBudgetExhausted
+                }
+                let nextGen = try continuation(value)
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
         }
     }
 

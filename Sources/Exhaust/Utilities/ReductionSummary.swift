@@ -133,12 +133,12 @@ private struct ReductionChangeCollector {
         let reducedValue = reducedMirror.children.first?.value
 
         switch (originalValue, reducedValue) {
-        case let (.some(original), .some(reduced)):
-            walk(original, reduced, path: path, depth: depth)
-        case (.some, .none):
-            removed.append(path)
-        default:
-            break
+            case let (.some(original), .some(reduced)):
+                walk(original, reduced, path: path, depth: depth)
+            case (.some, .none):
+                removed.append(path)
+            default:
+                break
         }
     }
 
@@ -387,10 +387,10 @@ private struct ReductionChangeCollector {
 
     private func naturalList(_ items: [String]) -> String {
         switch items.count {
-        case 0: return ""
-        case 1: return items[0]
-        case 2: return "\(items[0]) and \(items[1])"
-        default: return items.dropLast().joined(separator: ", ") + ", and \(items.last!)"
+            case 0: return ""
+            case 1: return items[0]
+            case 2: return "\(items[0]) and \(items[1])"
+            default: return items.dropLast().joined(separator: ", ") + ", and \(items.last!)"
         }
     }
 

@@ -57,72 +57,72 @@ package enum CrockfordBase32 {
     /// Maps a single character to its 5-bit value, or `nil` if invalid.
     private static func decodeCharacter(_ character: Character) -> Int? {
         switch character {
-        case "0", "o", "O":
-            0
-        case "1", "i", "I", "l", "L":
-            1
-        case "2":
-            2
-        case "3":
-            3
-        case "4":
-            4
-        case "5":
-            5
-        case "6":
-            6
-        case "7":
-            7
-        case "8":
-            8
-        case "9":
-            9
-        case "a", "A":
-            10
-        case "b", "B":
-            11
-        case "c", "C":
-            12
-        case "d", "D":
-            13
-        case "e", "E":
-            14
-        case "f", "F":
-            15
-        case "g", "G":
-            16
-        case "h", "H":
-            17
-        case "j", "J":
-            18
-        case "k", "K":
-            19
-        case "m", "M":
-            20
-        case "n", "N":
-            21
-        case "p", "P":
-            22
-        case "q", "Q":
-            23
-        case "r", "R":
-            24
-        case "s", "S":
-            25
-        case "t", "T":
-            26
-        case "v", "V":
-            27
-        case "w", "W":
-            28
-        case "x", "X":
-            29
-        case "y", "Y":
-            30
-        case "z", "Z":
-            31
-        default:
-            nil
+            case "0", "o", "O":
+                0
+            case "1", "i", "I", "l", "L":
+                1
+            case "2":
+                2
+            case "3":
+                3
+            case "4":
+                4
+            case "5":
+                5
+            case "6":
+                6
+            case "7":
+                7
+            case "8":
+                8
+            case "9":
+                9
+            case "a", "A":
+                10
+            case "b", "B":
+                11
+            case "c", "C":
+                12
+            case "d", "D":
+                13
+            case "e", "E":
+                14
+            case "f", "F":
+                15
+            case "g", "G":
+                16
+            case "h", "H":
+                17
+            case "j", "J":
+                18
+            case "k", "K":
+                19
+            case "m", "M":
+                20
+            case "n", "N":
+                21
+            case "p", "P":
+                22
+            case "q", "Q":
+                23
+            case "r", "R":
+                24
+            case "s", "S":
+                25
+            case "t", "T":
+                26
+            case "v", "V":
+                27
+            case "w", "W":
+                28
+            case "x", "X":
+                29
+            case "y", "Y":
+                30
+            case "z", "Z":
+                31
+            default:
+                nil
         }
     }
 }

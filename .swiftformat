@@ -18,7 +18,7 @@
 --hexliteralcase uppercase
 --ifdef indent
 --indent 4
---indentcase false
+--indentcase true
 --importgrouping testable-bottom
 --linebreaks lf
 --maxwidth none

@@ -12,28 +12,28 @@ extension GraphStructuralEncoder {
         graph: ChoiceGraph
     ) -> ProjectedMutation? {
         switch scope {
-        case let .selfSimilar(targetNodeID, donorNodeID, _):
-            guard let built = buildSelfSimilarCandidate(targetNodeID: targetNodeID, donorNodeID: donorNodeID, sequence: sequence, graph: graph) else {
-                return nil
-            }
-            candidate = built
-            return .selfSimilarReplaced(
-                targetNodeID: targetNodeID,
-                donorNodeID: donorNodeID
-            )
+            case let .selfSimilar(targetNodeID, donorNodeID, _):
+                guard let built = buildSelfSimilarCandidate(targetNodeID: targetNodeID, donorNodeID: donorNodeID, sequence: sequence, graph: graph) else {
+                    return nil
+                }
+                candidate = built
+                return .selfSimilarReplaced(
+                    targetNodeID: targetNodeID,
+                    donorNodeID: donorNodeID
+                )
 
-        case let .branchPivot(pickNodeID, targetBranchID):
-            return buildBranchPivotCandidate(into: &candidate, pickNodeID: pickNodeID, targetBranchID: targetBranchID, sequence: sequence, graph: graph)
+            case let .branchPivot(pickNodeID, targetBranchID):
+                return buildBranchPivotCandidate(into: &candidate, pickNodeID: pickNodeID, targetBranchID: targetBranchID, sequence: sequence, graph: graph)
 
-        case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
-            guard let built = buildDescendantPromotionCandidate(ancestorPickNodeID: ancestorPickNodeID, descendantPickNodeID: descendantPickNodeID, sequence: sequence, graph: graph) else {
-                return nil
-            }
-            candidate = built
-            return .descendantPromoted(
-                ancestorPickNodeID: ancestorPickNodeID,
-                descendantPickNodeID: descendantPickNodeID
-            )
+            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
+                guard let built = buildDescendantPromotionCandidate(ancestorPickNodeID: ancestorPickNodeID, descendantPickNodeID: descendantPickNodeID, sequence: sequence, graph: graph) else {
+                    return nil
+                }
+                candidate = built
+                return .descendantPromoted(
+                    ancestorPickNodeID: ancestorPickNodeID,
+                    descendantPickNodeID: descendantPickNodeID
+                )
         }
     }
 
@@ -85,10 +85,10 @@ extension GraphStructuralEncoder {
 
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
-            case let .branch(b):
-                b.id == targetBranchID
-            default:
-                false
+                case let .branch(b):
+                    b.id == targetBranchID
+                default:
+                    false
             }
         }) else { return nil }
 
@@ -184,16 +184,16 @@ extension GraphStructuralEncoder {
             let absolutePosition = donorRangeStart + index
             if let wrapping = leafExpansions[absolutePosition] {
                 switch wrapping {
-                case let .pick(branchID, branchCount, fingerprint):
-                    result.append(.group(true))
-                    result.append(.branch(.init(id: branchID, branchCount: branchCount, fingerprint: fingerprint)))
-                    result.append(entry)
-                    result.append(.group(false))
-                case let .bind(depthSelectorEntry):
-                    result.append(.bind(true))
-                    result.append(depthSelectorEntry)
-                    result.append(entry)
-                    result.append(.bind(false))
+                    case let .pick(branchID, branchCount, fingerprint):
+                        result.append(.group(true))
+                        result.append(.branch(.init(id: branchID, branchCount: branchCount, fingerprint: fingerprint)))
+                        result.append(entry)
+                        result.append(.group(false))
+                    case let .bind(depthSelectorEntry):
+                        result.append(.bind(true))
+                        result.append(depthSelectorEntry)
+                        result.append(entry)
+                        result.append(.bind(false))
                 }
             } else {
                 result.append(entry)
@@ -374,10 +374,10 @@ extension GraphStructuralEncoder {
             guard index < Int(metadata.branchCount) else { break }
             if case let .branch(b) = element {
                 switch b.choice {
-                case .just, .choice:
-                    return UInt64(index)
-                default:
-                    continue
+                    case .just, .choice:
+                        return UInt64(index)
+                    default:
+                        continue
                 }
             }
         }

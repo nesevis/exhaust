@@ -2,7 +2,7 @@
 
 package extension Interpreters {
     /// Controls the ChoiceGraph reducer's pass pipeline: stall budget, scope scheduling, and visualization.
-    struct ReducerConfiguration: Sendable {
+    struct ReducerConfiguration {
         /// Maximum number of outer cycles with no improvement before terminating.
         package let maxStalls: Int
 
@@ -36,7 +36,7 @@ package extension Interpreters {
 /// Empirically-tuned constants that control the scheduler's internal heuristics.
 ///
 /// Grouped here so that performance-sensitive values have a single location rather than being scattered across scheduler, gate, and classification files. Tests can override individual values to verify budget-sensitive behavior.
-package struct SchedulerTuning: Sendable {
+package struct SchedulerTuning {
     /// Maximum upstream probes per bind site before exponential decay kicks in.
     public var boundValueBaseBudget: Int = 15
 

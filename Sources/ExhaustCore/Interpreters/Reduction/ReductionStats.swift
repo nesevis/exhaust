@@ -118,28 +118,28 @@ public extension ReductionStats {
         /// Records elapsed time for a step transition.
         package mutating func record(_ transition: ReductionMachine.Transition, elapsed: UInt64) {
             switch transition {
-            case .dispatched:
-                dispatch += elapsed
-                dispatchCount += 1
-            case .encoded:
-                encode += elapsed
-                encodeCount += 1
-            case .decoded:
-                decode += elapsed
-                decodeCount += 1
-            case .rebuilt:
-                rebuild += elapsed
-                rebuildCount += 1
-            case .convergenceConfirmed:
-                convergenceConfirmation += elapsed
-            case .relaxRoundCompleted:
-                relaxRound += elapsed
-            case .reorderCompleted:
-                reorder += elapsed
-            case .sourcesBuilt:
-                buildSources += elapsed
-            case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
-                break
+                case .dispatched:
+                    dispatch += elapsed
+                    dispatchCount += 1
+                case .encoded:
+                    encode += elapsed
+                    encodeCount += 1
+                case .decoded:
+                    decode += elapsed
+                    decodeCount += 1
+                case .rebuilt:
+                    rebuild += elapsed
+                    rebuildCount += 1
+                case .convergenceConfirmed:
+                    convergenceConfirmation += elapsed
+                case .relaxRoundCompleted:
+                    relaxRound += elapsed
+                case .reorderCompleted:
+                    reorder += elapsed
+                case .sourcesBuilt:
+                    buildSources += elapsed
+                case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
+                    break
             }
         }
     }

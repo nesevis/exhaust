@@ -43,28 +43,28 @@ package enum FloatReduction {
     /// Returns the cutoff above which `x + 1 == x` for a given float tag, used to decide when ratio-based reduction can losslessly represent the value as an integer pair.
     package static func maxPreciseInteger(for tag: TypeTag) -> Double {
         switch tag {
-        case .double:
-            maxPreciseIntegerDouble
-        case .float:
-            maxPreciseIntegerFloat
-        case .float16:
-            maxPreciseIntegerFloat16
-        default:
-            0
+            case .double:
+                maxPreciseIntegerDouble
+            case .float:
+                maxPreciseIntegerFloat
+            case .float16:
+                maxPreciseIntegerFloat16
+            default:
+                0
         }
     }
 
     /// Returns the Hypothesis-style special-value shortlist, in probe order.
     package static func specialValues(for tag: TypeTag) -> [Double] {
         switch tag {
-        case .double:
-            [Double.greatestFiniteMagnitude, Double.infinity, Double.nan]
-        case .float:
-            [Double(Float.greatestFiniteMagnitude), Double(Float.infinity), Double(Float.nan)]
-        case .float16:
-            Float16Emulation.specialValues
-        default:
-            []
+            case .double:
+                [Double.greatestFiniteMagnitude, Double.infinity, Double.nan]
+            case .float:
+                [Double(Float.greatestFiniteMagnitude), Double(Float.infinity), Double(Float.nan)]
+            case .float16:
+                Float16Emulation.specialValues
+            default:
+                []
         }
     }
 
@@ -74,14 +74,14 @@ package enum FloatReduction {
         tag: TypeTag
     ) -> (numerator: Int64, denominator: UInt64)? {
         switch tag {
-        case .double:
-            return integerRatio(value)
-        case .float, .float16:
-            let narrowed = Float(value)
-            guard narrowed.isFinite else { return nil }
-            return integerRatio(narrowed)
-        default:
-            return nil
+            case .double:
+                return integerRatio(value)
+            case .float, .float16:
+                let narrowed = Float(value)
+                guard narrowed.isFinite else { return nil }
+                return integerRatio(narrowed)
+            default:
+                return nil
         }
     }
 

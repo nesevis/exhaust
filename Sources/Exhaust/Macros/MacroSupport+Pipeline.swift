@@ -65,96 +65,96 @@ package extension __ExhaustRuntime {
             }
         )
         switch coverageResult {
-        case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "coverage_failure",
-                metadata: [
-                    "iteration": "\(iteration)",
-                    "strength": "\(strength)",
-                    "covering_rows": "\(rows)",
-                    "parameters": "\(parameters)",
-                    "total_space": "\(totalSpace)",
-                    "kind": kind,
-                ]
-            )
-            let reductionTree = switch Materializer.materialize(
-                context.gen, prefix: ChoiceSequence.flatten(tree), mode: .exact, fallbackTree: tree, materializePicks: true
-            ) {
-            case let .success(_, rematerialized, _):
-                rematerialized
-            case .rejected, .failed:
-                tree
-            }
-            let result = reduceAndReport(
-                context: context,
-                value: value,
-                tree: reductionTree,
-                seed: nil,
-                iteration: iteration,
-                phaseBudget: coverageBudget,
-                coverageIterations: iteration,
-                randomSamplingIterations: 0,
-                replayHint: "No replay seed — found via systematic combinatorial coverage.",
-                report: &report
-            )
-            switch result {
-            case let .reduced(counterexample):
-                return .counterexample(counterexample)
-            case let .unreduced(counterexample):
-                return .counterexample(counterexample)
-            case .reductionError:
-                return .proceed(coverageIterations: iteration)
-            }
+            case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "coverage_failure",
+                    metadata: [
+                        "iteration": "\(iteration)",
+                        "strength": "\(strength)",
+                        "covering_rows": "\(rows)",
+                        "parameters": "\(parameters)",
+                        "total_space": "\(totalSpace)",
+                        "kind": kind,
+                    ]
+                )
+                let reductionTree = switch Materializer.materialize(
+                    context.gen, prefix: ChoiceSequence.flatten(tree), mode: .exact, fallbackTree: tree, materializePicks: true
+                ) {
+                    case let .success(_, rematerialized, _):
+                        rematerialized
+                    case .rejected, .failed:
+                        tree
+                }
+                let result = reduceAndReport(
+                    context: context,
+                    value: value,
+                    tree: reductionTree,
+                    seed: nil,
+                    iteration: iteration,
+                    phaseBudget: coverageBudget,
+                    coverageIterations: iteration,
+                    randomSamplingIterations: 0,
+                    replayHint: "No replay seed — found via systematic combinatorial coverage.",
+                    report: &report
+                )
+                switch result {
+                    case let .reduced(counterexample):
+                        return .counterexample(counterexample)
+                    case let .unreduced(counterexample):
+                        return .counterexample(counterexample)
+                    case .reductionError:
+                        return .proceed(coverageIterations: iteration)
+                }
 
-        case let .exhaustive(iterations):
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "tway_coverage",
-                metadata: [
-                    "exhaustive": "true",
+            case let .exhaustive(iterations):
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "tway_coverage",
+                    metadata: [
+                        "exhaustive": "true",
+                        "iterations": "\(iterations)",
+                    ]
+                )
+                let passMetadata = [
                     "iterations": "\(iterations)",
+                    "property_invocations": "\(iterations)",
                 ]
-            )
-            let passMetadata = [
-                "iterations": "\(iterations)",
-                "property_invocations": "\(iterations)",
-            ]
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "property_passed",
-                metadata: passMetadata
-            )
-            report.setInvocations(
-                coverage: iterations,
-                randomSampling: 0,
-                reduction: 0
-            )
-            return .exhaustivePass(iterations: iterations)
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "property_passed",
+                    metadata: passMetadata
+                )
+                report.setInvocations(
+                    coverage: iterations,
+                    randomSampling: 0,
+                    reduction: 0
+                )
+                return .exhaustivePass(iterations: iterations)
 
-        case let .partial(iterations, strength, rows, parameters, totalSpace, kind):
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "tway_coverage",
-                metadata: [
-                    "strength": "\(strength)",
-                    "covering_rows": "\(rows)",
-                    "iterations": "\(iterations)",
-                    "total_space": "\(totalSpace)",
-                    "parameters": "\(parameters)",
-                    "exhaustive": "false",
-                    "kind": kind,
-                ]
-            )
-            return .proceed(coverageIterations: iterations)
+            case let .partial(iterations, strength, rows, parameters, totalSpace, kind):
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "tway_coverage",
+                    metadata: [
+                        "strength": "\(strength)",
+                        "covering_rows": "\(rows)",
+                        "iterations": "\(iterations)",
+                        "total_space": "\(totalSpace)",
+                        "parameters": "\(parameters)",
+                        "exhaustive": "false",
+                        "kind": kind,
+                    ]
+                )
+                return .proceed(coverageIterations: iterations)
 
-        case .notApplicable:
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "coverage_not_applicable",
-                "Generator not analyzable for structured coverage"
-            )
-            return .proceed(coverageIterations: 0)
+            case .notApplicable:
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "coverage_not_applicable",
+                    "Generator not analyzable for structured coverage"
+                )
+                return .proceed(coverageIterations: 0)
         }
     }
 
@@ -407,12 +407,12 @@ package extension __ExhaustRuntime {
             report: &report
         )
         switch result {
-        case let .reduced(counterexample):
-            return counterexample
-        case let .unreduced(counterexample):
-            return counterexample
-        case .reductionError:
-            return failure.value
+            case let .reduced(counterexample):
+                return counterexample
+            case let .unreduced(counterexample):
+                return counterexample
+            case .reductionError:
+                return failure.value
         }
     }
 

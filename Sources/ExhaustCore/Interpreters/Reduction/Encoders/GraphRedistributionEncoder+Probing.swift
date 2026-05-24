@@ -85,14 +85,14 @@ extension GraphRedistributionEncoder {
         }
         let sortedIndices = pairs.indices.sorted { lhs, rhs in
             switch (fullDeltaCandidates[lhs], fullDeltaCandidates[rhs]) {
-            case let (.some(lhsCandidate), .some(rhsCandidate)):
-                lhsCandidate.shortLexPrecedes(rhsCandidate)
-            case (.some, .none):
-                true
-            case (.none, .some):
-                false
-            case (.none, .none):
-                pairs[lhs].maxDelta > pairs[rhs].maxDelta
+                case let (.some(lhsCandidate), .some(rhsCandidate)):
+                    lhsCandidate.shortLexPrecedes(rhsCandidate)
+                case (.some, .none):
+                    true
+                case (.none, .some):
+                    false
+                case (.none, .none):
+                    pairs[lhs].maxDelta > pairs[rhs].maxDelta
             }
         }
         pairs = sortedIndices.map { pairs[$0] }

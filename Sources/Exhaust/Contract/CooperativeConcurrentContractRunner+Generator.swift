@@ -43,11 +43,11 @@ func zipScheduleMarker<Command>(
 
     // Lane markers are always tagged .laneControl so the lane-collapse encoder can target them during reduction. Random sampling with .constant scaling provides sufficient lane diversity without including markers in the covering array.
     let markerGen: Generator<ScheduleMarker> = switch concurrencyLevel {
-    case 1:
-        Gen.just(ScheduleMarker.prefix)
-    default:
-        Gen.chooseLaneControl(in: 0 ... UInt8(concurrencyLevel))
-            .map { ScheduleMarker(rawValue: $0) }
+        case 1:
+            Gen.just(ScheduleMarker.prefix)
+        default:
+            Gen.chooseLaneControl(in: 0 ... UInt8(concurrencyLevel))
+                .map { ScheduleMarker(rawValue: $0) }
     }
     let taggedChoices = choices.map { choice in
         let branchGen: Generator<Command> = choice.generator.map { $0 as! Command }

@@ -61,11 +61,11 @@ private enum TreeVisualization {
 
         var symbol: Character {
             switch self {
-            case .minimal: "·" // U+00B7
-            case .low: "∘" // U+2218
-            case .moderate: "✦" // U+2726
-            case .high: "✳" // U+2733
-            case .extreme: "❋" // U+274B
+                case .minimal: "·" // U+00B7
+                case .low: "∘" // U+2218
+                case .moderate: "✦" // U+2726
+                case .high: "✳" // U+2733
+                case .extreme: "❋" // U+274B
             }
         }
 
@@ -97,20 +97,20 @@ private enum TreeVisualization {
 
             let fraction = Double(key) / Double(maxKey)
             return switch fraction {
-            case ..<0.05: .low
-            case ..<0.25: .moderate
-            case ..<0.75: .high
-            default: .extreme
+                case ..<0.05: .low
+                case ..<0.25: .moderate
+                case ..<0.75: .high
+                default: .extreme
             }
         }
 
         private static func absoluteTier(_ key: UInt64) -> ComplexityTier {
             switch key {
-            case 0: .minimal
-            case 1 ... 10: .low
-            case 11 ... 100: .moderate
-            case 101 ... 10000: .high
-            default: .extreme
+                case 0: .minimal
+                case 1 ... 10: .low
+                case 11 ... 100: .moderate
+                case 101 ... 10000: .high
+                default: .extreme
             }
         }
     }
@@ -132,41 +132,41 @@ private enum TreeVisualization {
 
     private static func buildRenderNode(from tree: ChoiceTree) -> RenderTree {
         switch tree {
-        case let .choice(value, metadata):
-            let tier = ComplexityTier.forChoice(value, metadata: metadata)
-            return RenderTree(symbol: tier.symbol, children: [])
+            case let .choice(value, metadata):
+                let tier = ComplexityTier.forChoice(value, metadata: metadata)
+                return RenderTree(symbol: tier.symbol, children: [])
 
-        case .just:
-            return RenderTree(symbol: "✿", children: []) // U+273F
+            case .just:
+                return RenderTree(symbol: "✿", children: []) // U+273F
 
-        case .getSize:
-            return RenderTree(symbol: nil, children: [])
+            case .getSize:
+                return RenderTree(symbol: nil, children: [])
 
-        case let .branch(b):
-            return collapseChain(
-                RenderTree(symbol: nil, children: [buildRenderNode(from: b.choice)])
-            )
+            case let .branch(b):
+                return collapseChain(
+                    RenderTree(symbol: nil, children: [buildRenderNode(from: b.choice)])
+                )
 
-        case let .group(array, _):
-            let children = array.filter(\.hasVisibleContent).map(buildRenderNode)
-            return collapseChain(RenderTree(symbol: nil, children: children))
+            case let .group(array, _):
+                let children = array.filter(\.hasVisibleContent).map(buildRenderNode)
+                return collapseChain(RenderTree(symbol: nil, children: children))
 
-        case let .sequence(_, elements, _):
-            let children = elements.filter(\.hasVisibleContent).map(buildRenderNode)
-            if children.isEmpty {
-                return RenderTree(symbol: "·", children: [])
-            }
-            return collapseChain(RenderTree(symbol: nil, children: children))
+            case let .sequence(_, elements, _):
+                let children = elements.filter(\.hasVisibleContent).map(buildRenderNode)
+                if children.isEmpty {
+                    return RenderTree(symbol: "·", children: [])
+                }
+                return collapseChain(RenderTree(symbol: nil, children: children))
 
-        case let .bind(_, inner, bound):
-            let children = [inner, bound]
-                .filter(\.hasVisibleContent)
-                .map(buildRenderNode)
-            return collapseChain(RenderTree(symbol: nil, children: children))
+            case let .bind(_, inner, bound):
+                let children = [inner, bound]
+                    .filter(\.hasVisibleContent)
+                    .map(buildRenderNode)
+                return collapseChain(RenderTree(symbol: nil, children: children))
 
-        case let .resize(_, choices):
-            let children = choices.filter(\.hasVisibleContent).map(buildRenderNode)
-            return collapseChain(RenderTree(symbol: nil, children: children))
+            case let .resize(_, choices):
+                let children = choices.filter(\.hasVisibleContent).map(buildRenderNode)
+                return collapseChain(RenderTree(symbol: nil, children: children))
         }
     }
 
@@ -418,12 +418,12 @@ private enum TreeVisualization {
             let isRightmost = col == rightmost
 
             let char: Character = switch (isChild, isParent, isLeftmost, isRightmost) {
-            case (true, true, _, _): "┼"
-            case (true, _, true, _): "╰"
-            case (true, _, _, true): "╯"
-            case (true, _, _, _): "┴"
-            case (_, true, _, _): "┬"
-            default: "─"
+                case (true, true, _, _): "┼"
+                case (true, _, true, _): "╰"
+                case (true, _, _, true): "╯"
+                case (true, _, _, _): "┴"
+                case (_, true, _, _): "┬"
+                default: "─"
             }
 
             placeChar(&grid, row: barRow, col: col, char: char, width: spec.width)
@@ -495,20 +495,20 @@ private enum TreeVisualization {
 private extension ChoiceTree {
     var hasVisibleContent: Bool {
         switch self {
-        case .choice, .just:
-            true
-        case .getSize:
-            false
-        case let .branch(b):
-            b.choice.hasVisibleContent
-        case let .group(children, _):
-            children.contains(where: \.hasVisibleContent)
-        case let .sequence(_, elements, _):
-            elements.isEmpty || elements.contains(where: \.hasVisibleContent)
-        case let .bind(_, inner, bound):
-            inner.hasVisibleContent || bound.hasVisibleContent
-        case let .resize(_, choices):
-            choices.contains(where: \.hasVisibleContent)
+            case .choice, .just:
+                true
+            case .getSize:
+                false
+            case let .branch(b):
+                b.choice.hasVisibleContent
+            case let .group(children, _):
+                children.contains(where: \.hasVisibleContent)
+            case let .sequence(_, elements, _):
+                elements.isEmpty || elements.contains(where: \.hasVisibleContent)
+            case let .bind(_, inner, bound):
+                inner.hasVisibleContent || bound.hasVisibleContent
+            case let .resize(_, choices):
+                choices.contains(where: \.hasVisibleContent)
         }
     }
 }

@@ -55,12 +55,12 @@ enum ParserFixture {
 
         var debugDescription: String {
             switch self {
-            case let .assign(variable, expression):
-                "Assign(\(variable), \(expression))"
-            case let .alloc(variable, expression):
-                "Alloc(\(variable), \(expression))"
-            case let .ret(expression):
-                "Return(\(expression))"
+                case let .assign(variable, expression):
+                    "Assign(\(variable), \(expression))"
+                case let .alloc(variable, expression):
+                    "Alloc(\(variable), \(expression))"
+                case let .ret(expression):
+                    "Return(\(expression))"
             }
         }
     }
@@ -78,15 +78,15 @@ enum ParserFixture {
 
         var debugDescription: String {
             switch self {
-            case let .int(value): "Int(\(value))"
-            case let .bool(value): "Bool(\(value))"
-            case let .add(lhs, rhs): "Add(\(lhs), \(rhs))"
-            case let .sub(lhs, rhs): "Sub(\(lhs), \(rhs))"
-            case let .mul(lhs, rhs): "Mul(\(lhs), \(rhs))"
-            case let .div(lhs, rhs): "Div(\(lhs), \(rhs))"
-            case let .not(inner): "Not(\(inner))"
-            case let .and(lhs, rhs): "And(\(lhs), \(rhs))"
-            case let .or(lhs, rhs): "Or(\(lhs), \(rhs))"
+                case let .int(value): "Int(\(value))"
+                case let .bool(value): "Bool(\(value))"
+                case let .add(lhs, rhs): "Add(\(lhs), \(rhs))"
+                case let .sub(lhs, rhs): "Sub(\(lhs), \(rhs))"
+                case let .mul(lhs, rhs): "Mul(\(lhs), \(rhs))"
+                case let .div(lhs, rhs): "Div(\(lhs), \(rhs))"
+                case let .not(inner): "Not(\(inner))"
+                case let .and(lhs, rhs): "And(\(lhs), \(rhs))"
+                case let .or(lhs, rhs): "Or(\(lhs), \(rhs))"
             }
         }
 
@@ -111,74 +111,74 @@ enum ParserFixture {
                 throw DecodingError.typeMismatch(Exp.self, DecodingError.Context(codingPath: container.codingPath, debugDescription: "Invalid number of keys found, expected one.", underlyingError: nil))
             }
             switch onlyKey {
-            case .int:
-                let nested = try container.nestedContainer(keyedBy: IntCodingKeys.self, forKey: .int)
-                self = try .int(nested.decode(Int.self, forKey: ._0))
-            case .bool:
-                let nested = try container.nestedContainer(keyedBy: BoolCodingKeys.self, forKey: .bool)
-                self = try .bool(nested.decode(Bool.self, forKey: ._0))
-            case .add:
-                let nested = try container.nestedContainer(keyedBy: AddCodingKeys.self, forKey: .add)
-                self = try .add(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
-            case .sub:
-                let nested = try container.nestedContainer(keyedBy: SubCodingKeys.self, forKey: .sub)
-                self = try .sub(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
-            case .mul:
-                let nested = try container.nestedContainer(keyedBy: MulCodingKeys.self, forKey: .mul)
-                self = try .mul(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
-            case .div:
-                let nested = try container.nestedContainer(keyedBy: DivCodingKeys.self, forKey: .div)
-                self = try .div(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
-            case .not:
-                let nested = try container.nestedContainer(keyedBy: NotCodingKeys.self, forKey: .not)
-                self = try .not(nested.decode(Exp.self, forKey: ._0))
-            case .and:
-                let nested = try container.nestedContainer(keyedBy: AndCodingKeys.self, forKey: .and)
-                self = try .and(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
-            case .or:
-                let nested = try container.nestedContainer(keyedBy: OrCodingKeys.self, forKey: .or)
-                self = try .or(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
+                case .int:
+                    let nested = try container.nestedContainer(keyedBy: IntCodingKeys.self, forKey: .int)
+                    self = try .int(nested.decode(Int.self, forKey: ._0))
+                case .bool:
+                    let nested = try container.nestedContainer(keyedBy: BoolCodingKeys.self, forKey: .bool)
+                    self = try .bool(nested.decode(Bool.self, forKey: ._0))
+                case .add:
+                    let nested = try container.nestedContainer(keyedBy: AddCodingKeys.self, forKey: .add)
+                    self = try .add(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
+                case .sub:
+                    let nested = try container.nestedContainer(keyedBy: SubCodingKeys.self, forKey: .sub)
+                    self = try .sub(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
+                case .mul:
+                    let nested = try container.nestedContainer(keyedBy: MulCodingKeys.self, forKey: .mul)
+                    self = try .mul(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
+                case .div:
+                    let nested = try container.nestedContainer(keyedBy: DivCodingKeys.self, forKey: .div)
+                    self = try .div(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
+                case .not:
+                    let nested = try container.nestedContainer(keyedBy: NotCodingKeys.self, forKey: .not)
+                    self = try .not(nested.decode(Exp.self, forKey: ._0))
+                case .and:
+                    let nested = try container.nestedContainer(keyedBy: AndCodingKeys.self, forKey: .and)
+                    self = try .and(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
+                case .or:
+                    let nested = try container.nestedContainer(keyedBy: OrCodingKeys.self, forKey: .or)
+                    self = try .or(nested.decode(Exp.self, forKey: ._0), nested.decode(Exp.self, forKey: ._1))
             }
         }
 
         func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             switch self {
-            case let .int(value):
-                var nested = container.nestedContainer(keyedBy: IntCodingKeys.self, forKey: .int)
-                try nested.encode(value, forKey: ._0)
-            case let .bool(value):
-                var nested = container.nestedContainer(keyedBy: BoolCodingKeys.self, forKey: .bool)
-                try nested.encode(value, forKey: ._0)
-            case let .add(lhs, rhs):
-                var nested = container.nestedContainer(keyedBy: AddCodingKeys.self, forKey: .add)
-                try nested.encode(lhs, forKey: ._0)
-                try nested.encode(rhs, forKey: ._1)
-            case let .sub(lhs, rhs):
-                var nested = container.nestedContainer(keyedBy: SubCodingKeys.self, forKey: .sub)
-                try nested.encode(lhs, forKey: ._0)
-                try nested.encode(rhs, forKey: ._1)
-            case let .mul(lhs, rhs):
-                var nested = container.nestedContainer(keyedBy: MulCodingKeys.self, forKey: .mul)
-                try nested.encode(lhs, forKey: ._0)
-                try nested.encode(rhs, forKey: ._1)
-            case let .div(lhs, rhs):
-                var nested = container.nestedContainer(keyedBy: DivCodingKeys.self, forKey: .div)
-                try nested.encode(lhs, forKey: ._0)
-                try nested.encode(rhs, forKey: ._1)
-            case let .not(inner):
-                var nested = container.nestedContainer(keyedBy: NotCodingKeys.self, forKey: .not)
-                try nested.encode(inner, forKey: ._0)
-            case let .and(rhs, lhs):
-                // BUG 1: operands are swapped on encode.
-                var nested = container.nestedContainer(keyedBy: AndCodingKeys.self, forKey: .and)
-                try nested.encode(lhs, forKey: ._0)
-                try nested.encode(rhs, forKey: ._1)
-            case let .or(rhs, lhs):
-                // BUG 2: encoded under the And key with operands swapped.
-                var nested = container.nestedContainer(keyedBy: AndCodingKeys.self, forKey: .and)
-                try nested.encode(lhs, forKey: ._0)
-                try nested.encode(rhs, forKey: ._1)
+                case let .int(value):
+                    var nested = container.nestedContainer(keyedBy: IntCodingKeys.self, forKey: .int)
+                    try nested.encode(value, forKey: ._0)
+                case let .bool(value):
+                    var nested = container.nestedContainer(keyedBy: BoolCodingKeys.self, forKey: .bool)
+                    try nested.encode(value, forKey: ._0)
+                case let .add(lhs, rhs):
+                    var nested = container.nestedContainer(keyedBy: AddCodingKeys.self, forKey: .add)
+                    try nested.encode(lhs, forKey: ._0)
+                    try nested.encode(rhs, forKey: ._1)
+                case let .sub(lhs, rhs):
+                    var nested = container.nestedContainer(keyedBy: SubCodingKeys.self, forKey: .sub)
+                    try nested.encode(lhs, forKey: ._0)
+                    try nested.encode(rhs, forKey: ._1)
+                case let .mul(lhs, rhs):
+                    var nested = container.nestedContainer(keyedBy: MulCodingKeys.self, forKey: .mul)
+                    try nested.encode(lhs, forKey: ._0)
+                    try nested.encode(rhs, forKey: ._1)
+                case let .div(lhs, rhs):
+                    var nested = container.nestedContainer(keyedBy: DivCodingKeys.self, forKey: .div)
+                    try nested.encode(lhs, forKey: ._0)
+                    try nested.encode(rhs, forKey: ._1)
+                case let .not(inner):
+                    var nested = container.nestedContainer(keyedBy: NotCodingKeys.self, forKey: .not)
+                    try nested.encode(inner, forKey: ._0)
+                case let .and(rhs, lhs):
+                    // BUG 1: operands are swapped on encode.
+                    var nested = container.nestedContainer(keyedBy: AndCodingKeys.self, forKey: .and)
+                    try nested.encode(lhs, forKey: ._0)
+                    try nested.encode(rhs, forKey: ._1)
+                case let .or(rhs, lhs):
+                    // BUG 2: encoded under the And key with operands swapped.
+                    var nested = container.nestedContainer(keyedBy: AndCodingKeys.self, forKey: .and)
+                    try nested.encode(lhs, forKey: ._0)
+                    try nested.encode(rhs, forKey: ._1)
             }
         }
     }
@@ -371,25 +371,25 @@ enum ParserFixture {
 
     static func size(_ stmt: Stmt) -> Int {
         switch stmt {
-        case let .assign(_, expression):
-            1 + size(expression)
-        case let .alloc(_, expression):
-            1 + size(expression)
-        case let .ret(expression):
-            1 + size(expression)
+            case let .assign(_, expression):
+                1 + size(expression)
+            case let .alloc(_, expression):
+                1 + size(expression)
+            case let .ret(expression):
+                1 + size(expression)
         }
     }
 
     static func size(_ expression: Exp) -> Int {
         switch expression {
-        case .int, .bool:
-            1
-        case let .not(inner):
-            1 + size(inner)
-        case let .add(lhs, rhs), let .sub(lhs, rhs),
-             let .mul(lhs, rhs), let .div(lhs, rhs),
-             let .and(lhs, rhs), let .or(lhs, rhs):
-            1 + size(lhs) + size(rhs)
+            case .int, .bool:
+                1
+            case let .not(inner):
+                1 + size(inner)
+            case let .add(lhs, rhs), let .sub(lhs, rhs),
+                 let .mul(lhs, rhs), let .div(lhs, rhs),
+                 let .and(lhs, rhs), let .or(lhs, rhs):
+                1 + size(lhs) + size(rhs)
         }
     }
 }

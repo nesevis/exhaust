@@ -47,16 +47,16 @@ package enum AdaptiveSmoothing {
         maxTemperature: Double
     ) -> Generator<Output> {
         switch gen {
-        case .pure:
-            return gen
-        case let .impure(operation, continuation):
-            let smoothed = smoothOperation(
-                operation,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .impure(operation: smoothed, continuation: continuation)
+            case .pure:
+                return gen
+            case let .impure(operation, continuation):
+                let smoothed = smoothOperation(
+                    operation,
+                    epsilon: epsilon,
+                    baseTemperature: baseTemperature,
+                    maxTemperature: maxTemperature
+                )
+                return .impure(operation: smoothed, continuation: continuation)
         }
     }
 
@@ -67,76 +67,76 @@ package enum AdaptiveSmoothing {
         maxTemperature: Double
     ) -> ReflectiveOperation {
         switch op {
-        case let .pick(choices):
-            // Compute Shannon entropy to measure how uniform the weight distribution is
-            let totalWeight = choices.reduce(into: UInt64(0)) { $0 += $1.weight }
-            let entropy: Double
-            if totalWeight > 0 {
-                let total = Double(totalWeight)
-                entropy = -choices.reduce(into: 0.0) { sum, choice in
-                    let p = Double(choice.weight) / total
-                    if p > 0 { sum += p * log2(p) }
+            case let .pick(choices):
+                // Compute Shannon entropy to measure how uniform the weight distribution is
+                let totalWeight = choices.reduce(into: UInt64(0)) { $0 += $1.weight }
+                let entropy: Double
+                if totalWeight > 0 {
+                    let total = Double(totalWeight)
+                    entropy = -choices.reduce(into: 0.0) { sum, choice in
+                        let p = Double(choice.weight) / total
+                        if p > 0 { sum += p * log2(p) }
+                    }
+                } else {
+                    entropy = log2(Double(choices.count))
                 }
-            } else {
-                entropy = log2(Double(choices.count))
-            }
-            let maxEntropy = log2(Double(choices.count))
-            let entropyRatio = maxEntropy > 0 ? entropy / maxEntropy : 1.0
+                let maxEntropy = log2(Double(choices.count))
+                let entropyRatio = maxEntropy > 0 ? entropy / maxEntropy : 1.0
 
-            // Bottleneck sites (low entropy) get high temperature; uniform sites stay cool
-            let siteTemp = baseTemperature
-                + (maxTemperature - baseTemperature) * (1.0 - entropyRatio)
+                // Bottleneck sites (low entropy) get high temperature; uniform sites stay cool
+                let siteTemp = baseTemperature
+                    + (maxTemperature - baseTemperature) * (1.0 - entropyRatio)
 
-            // Apply Laplace smoothing with site-specific temperature: w' = (w + ε)^(1/T)
-            let raw = choices.map { pow(Double($0.weight) + epsilon, 1.0 / siteTemp) }
-            let rawTotal = raw.reduce(0, +)
+                // Apply Laplace smoothing with site-specific temperature: w' = (w + ε)^(1/T)
+                let raw = choices.map { pow(Double($0.weight) + epsilon, 1.0 / siteTemp) }
+                let rawTotal = raw.reduce(0, +)
 
-            let smoothed = ContiguousArray(choices.enumerated().map { i, choice in
-                ReflectiveOperation.PickTuple(
-                    fingerprint: choice.fingerprint,
-                    id: choice.id,
-                    weight: max(1, UInt64(raw[i] / rawTotal * 10000)),
-                    generator: smoothGenerator(
-                        choice.generator,
+                let smoothed = ContiguousArray(choices.enumerated().map { i, choice in
+                    ReflectiveOperation.PickTuple(
+                        fingerprint: choice.fingerprint,
+                        id: choice.id,
+                        weight: max(1, UInt64(raw[i] / rawTotal * 10000)),
+                        generator: smoothGenerator(
+                            choice.generator,
+                            epsilon: epsilon,
+                            baseTemperature: baseTemperature,
+                            maxTemperature: maxTemperature
+                        )
+                    )
+                })
+
+                return .pick(choices: smoothed)
+
+            case let .zip(generators, _):
+                return .zip(ContiguousArray(generators.map {
+                    smoothGenerator(
+                        $0,
                         epsilon: epsilon,
                         baseTemperature: baseTemperature,
                         maxTemperature: maxTemperature
                     )
-                )
-            })
+                }))
 
-            return .pick(choices: smoothed)
-
-        case let .zip(generators, _):
-            return .zip(ContiguousArray(generators.map {
-                smoothGenerator(
-                    $0,
+            case let .sequence(length, gen):
+                let smoothedLength = smoothGenerator(
+                    length,
                     epsilon: epsilon,
                     baseTemperature: baseTemperature,
                     maxTemperature: maxTemperature
                 )
-            }))
+                let smoothedGen = smoothGenerator(
+                    gen,
+                    epsilon: epsilon,
+                    baseTemperature: baseTemperature,
+                    maxTemperature: maxTemperature
+                )
+                return .sequence(length: smoothedLength, gen: smoothedGen)
 
-        case let .sequence(length, gen):
-            let smoothedLength = smoothGenerator(
-                length,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            let smoothedGen = smoothGenerator(
-                gen,
-                epsilon: epsilon,
-                baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
-            )
-            return .sequence(length: smoothedLength, gen: smoothedGen)
-
-        default:
-            if let mapped = op.mapInnerGenerator({ smoothGenerator($0, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature) }) {
-                return mapped
-            }
-            return op
+            default:
+                if let mapped = op.mapInnerGenerator({ smoothGenerator($0, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature) }) {
+                    return mapped
+                }
+                return op
         }
     }
 }

@@ -39,22 +39,22 @@ public enum ExploreBudget: Sendable {
     /// The number of matching samples each direction must accumulate before it is considered covered.
     public var hitsPerDirection: Int {
         switch self {
-        case .quick: 10
-        case .standard: 30
-        case .thorough: 100
-        case .extensive: 300
-        case let .custom(hitsPerDirection, _): hitsPerDirection
+            case .quick: 10
+            case .standard: 30
+            case .thorough: 100
+            case .extensive: 300
+            case let .custom(hitsPerDirection, _): hitsPerDirection
         }
     }
 
     /// The per-direction contribution to the shared attempt pool.
     public var maxAttemptsPerDirection: Int {
         switch self {
-        case .quick: 100
-        case .standard: 300
-        case .thorough: 1000
-        case .extensive: 3000
-        case let .custom(_, maxAttemptsPerDirection): maxAttemptsPerDirection
+            case .quick: 100
+            case .standard: 300
+            case .thorough: 1000
+            case .extensive: 3000
+            case let .custom(_, maxAttemptsPerDirection): maxAttemptsPerDirection
         }
     }
 }

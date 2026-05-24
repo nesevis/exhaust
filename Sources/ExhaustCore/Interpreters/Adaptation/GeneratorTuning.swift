@@ -151,146 +151,146 @@ package enum GeneratorTuning {
         predicate: @escaping (Output) -> Bool
     ) throws -> Generator<Output> {
         switch gen {
-        case .pure:
-            return gen
-
-        case let .impure(op, continuation):
-            switch op {
-            // Tunable sites: operations that consume randomness and can be probed directly.
-            case let .pick(choices):
-                return try measureAndTunePick(
-                    choices: choices,
-                    continuation: continuation,
-                    context: context,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
-                )
-
-            case let .chooseBits(lower, upper, tag, isRangeExplicit, scaling):
-                if insideSubdividedChooseBits {
-                    return gen
-                }
-                return try tuneChooseBits(
-                    lower: lower,
-                    upper: upper,
-                    tag: tag,
-                    isRangeExplicit: isRangeExplicit,
-                    scaling: scaling,
-                    continuation: continuation,
-                    context: context,
-                    predicate: predicate
-                )
-
-            case let .sequence(lengthGen, elementGen):
-                return try tuneSequence(
-                    lengthGen: lengthGen,
-                    elementGen: elementGen,
-                    continuation: continuation,
-                    context: context,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
-                )
-
-            case .getSize:
-                return try tuneGetSize(
-                    continuation: continuation,
-                    context: context,
-                    predicate: predicate
-                )
-
-            case let .zip(generators, _):
-                return try tuneZip(
-                    generators: generators,
-                    continuation: continuation,
-                    context: context,
-                    predicate: predicate
-                )
-
-            case let .filter(subGen, fingerprint, filterType, filterPredicate, tuned, sourceLocation):
-                return try tuneFilter(
-                    subGen: subGen,
-                    fingerprint: fingerprint,
-                    filterType: filterType,
-                    filterPredicate: filterPredicate,
-                    sourceLocation: sourceLocation,
-                    tuned: tuned,
-                    continuation: continuation,
-                    context: context
-                )
-
-            // Value-transparent wrappers: the inner value passes through unchanged to the continuation, so the outer predicate can be bridged by composing through the continuation.
-            case let .contramap(transform, next):
-                return try tuneContramap(
-                    transform: transform,
-                    next: next,
-                    continuation: continuation,
-                    context: context,
-                    predicate: predicate
-                )
-
-            case let .resize(newSize, next):
-                return try tuneResize(
-                    newSize: newSize,
-                    next: next,
-                    continuation: continuation,
-                    context: context,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
-                )
-
-            case let .prune(next):
-                return try tunePrune(
-                    next: next,
-                    continuation: continuation,
-                    context: context,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
-                )
-
-            case let .classify(subGen, fingerprint, classifiers):
-                return try tuneClassify(
-                    subGen: subGen,
-                    fingerprint: fingerprint,
-                    classifiers: classifiers,
-                    continuation: continuation,
-                    context: context,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
-                )
-
-            // Transforming wrappers: the inner value is altered by an arbitrary function before reaching the continuation, so the outer predicate cannot apply to the inner type. Recurse with a trivial predicate.
-            case let .unique(subGen, fingerprint, keyExtractor):
-                let tunedInner = try tuneRecursive(
-                    subGen,
-                    context: context,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: { _ in true }
-                )
-                return .impure(
-                    operation: .unique(
-                        gen: tunedInner,
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor
-                    ),
-                    continuation: continuation
-                )
-
-            case let .transform(kind, inner):
-                let tunedInner = try tuneRecursive(
-                    inner,
-                    context: context,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: { _ in true }
-                )
-                return .impure(
-                    operation: .transform(kind: kind, inner: tunedInner),
-                    continuation: continuation
-                )
-
-            // Leaf: no sub-generators to recurse into.
-            case .just:
+            case .pure:
                 return gen
-            }
+
+            case let .impure(op, continuation):
+                switch op {
+                    // Tunable sites: operations that consume randomness and can be probed directly.
+                    case let .pick(choices):
+                        return try measureAndTunePick(
+                            choices: choices,
+                            continuation: continuation,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: predicate
+                        )
+
+                    case let .chooseBits(lower, upper, tag, isRangeExplicit, scaling):
+                        if insideSubdividedChooseBits {
+                            return gen
+                        }
+                        return try tuneChooseBits(
+                            lower: lower,
+                            upper: upper,
+                            tag: tag,
+                            isRangeExplicit: isRangeExplicit,
+                            scaling: scaling,
+                            continuation: continuation,
+                            context: context,
+                            predicate: predicate
+                        )
+
+                    case let .sequence(lengthGen, elementGen):
+                        return try tuneSequence(
+                            lengthGen: lengthGen,
+                            elementGen: elementGen,
+                            continuation: continuation,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: predicate
+                        )
+
+                    case .getSize:
+                        return try tuneGetSize(
+                            continuation: continuation,
+                            context: context,
+                            predicate: predicate
+                        )
+
+                    case let .zip(generators, _):
+                        return try tuneZip(
+                            generators: generators,
+                            continuation: continuation,
+                            context: context,
+                            predicate: predicate
+                        )
+
+                    case let .filter(subGen, fingerprint, filterType, filterPredicate, tuned, sourceLocation):
+                        return try tuneFilter(
+                            subGen: subGen,
+                            fingerprint: fingerprint,
+                            filterType: filterType,
+                            filterPredicate: filterPredicate,
+                            sourceLocation: sourceLocation,
+                            tuned: tuned,
+                            continuation: continuation,
+                            context: context
+                        )
+
+                    // Value-transparent wrappers: the inner value passes through unchanged to the continuation, so the outer predicate can be bridged by composing through the continuation.
+                    case let .contramap(transform, next):
+                        return try tuneContramap(
+                            transform: transform,
+                            next: next,
+                            continuation: continuation,
+                            context: context,
+                            predicate: predicate
+                        )
+
+                    case let .resize(newSize, next):
+                        return try tuneResize(
+                            newSize: newSize,
+                            next: next,
+                            continuation: continuation,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: predicate
+                        )
+
+                    case let .prune(next):
+                        return try tunePrune(
+                            next: next,
+                            continuation: continuation,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: predicate
+                        )
+
+                    case let .classify(subGen, fingerprint, classifiers):
+                        return try tuneClassify(
+                            subGen: subGen,
+                            fingerprint: fingerprint,
+                            classifiers: classifiers,
+                            continuation: continuation,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: predicate
+                        )
+
+                    // Transforming wrappers: the inner value is altered by an arbitrary function before reaching the continuation, so the outer predicate cannot apply to the inner type. Recurse with a trivial predicate.
+                    case let .unique(subGen, fingerprint, keyExtractor):
+                        let tunedInner = try tuneRecursive(
+                            subGen,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: { _ in true }
+                        )
+                        return .impure(
+                            operation: .unique(
+                                gen: tunedInner,
+                                fingerprint: fingerprint,
+                                keyExtractor: keyExtractor
+                            ),
+                            continuation: continuation
+                        )
+
+                    case let .transform(kind, inner):
+                        let tunedInner = try tuneRecursive(
+                            inner,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: { _ in true }
+                        )
+                        return .impure(
+                            operation: .transform(kind: kind, inner: tunedInner),
+                            continuation: continuation
+                        )
+
+                    // Leaf: no sub-generators to recurse into.
+                    case .just:
+                        return gen
+                }
         }
     }
 

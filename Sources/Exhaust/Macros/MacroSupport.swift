@@ -98,50 +98,50 @@ public extension __ExhaustRuntime {
 
                 for setting in settings {
                     switch setting {
-                    case let .budget(b):
-                        budget = b
-                    case let .replay(replaySeed):
-                        seed = replaySeed.resolve()
-                        if seed == nil {
-                            reportIssue(
-                                "Invalid replay seed: \(replaySeed)",
-                                fileID: fileID,
-                                filePath: filePath,
-                                line: line,
-                                column: column
-                            )
-                            return nil as Output?
-                        }
-                    case let .suppress(option):
-                        switch option {
-                        case .issueReporting:
-                            suppressIssueReporting = true
-                        case .logs:
-                            suppressLogs = true
-                        case .all:
-                            suppressIssueReporting = true
-                            suppressLogs = true
-                        }
-                    case .visualize:
-                        visualize = true
-                    case let .onReport(closure):
-                        if let existing = onReportClosure {
-                            let chained = existing
-                            onReportClosure = { report in
-                                chained(report)
-                                closure(report)
+                        case let .budget(b):
+                            budget = b
+                        case let .replay(replaySeed):
+                            seed = replaySeed.resolve()
+                            if seed == nil {
+                                reportIssue(
+                                    "Invalid replay seed: \(replaySeed)",
+                                    fileID: fileID,
+                                    filePath: filePath,
+                                    line: line,
+                                    column: column
+                                )
+                                return nil as Output?
                             }
-                        } else {
-                            onReportClosure = closure
-                        }
-                    case .collectOpenPBTStats:
-                        collectOpenPBTStats = true
-                    case .includeDiff:
-                        includeDiff = true
-                    case let .parallel(lanes):
-                        parallelLanes = UInt8(clamping: max(1, lanes))
-                    case let .log(level):
-                        logLevel = level
+                        case let .suppress(option):
+                            switch option {
+                                case .issueReporting:
+                                    suppressIssueReporting = true
+                                case .logs:
+                                    suppressLogs = true
+                                case .all:
+                                    suppressIssueReporting = true
+                                    suppressLogs = true
+                            }
+                        case .visualize:
+                            visualize = true
+                        case let .onReport(closure):
+                            if let existing = onReportClosure {
+                                let chained = existing
+                                onReportClosure = { report in
+                                    chained(report)
+                                    closure(report)
+                                }
+                            } else {
+                                onReportClosure = closure
+                            }
+                        case .collectOpenPBTStats:
+                            collectOpenPBTStats = true
+                        case .includeDiff:
+                            includeDiff = true
+                        case let .parallel(lanes):
+                            parallelLanes = UInt8(clamping: max(1, lanes))
+                        case let .log(level):
+                            logLevel = level
                     }
                 }
 
@@ -182,22 +182,22 @@ public extension __ExhaustRuntime {
                                 report.openPBTStatsLines = lines
                                 let attachmentName = "\(function)-openpbtstats.jsonl"
                                 switch TestContext.current {
-                                #if canImport(Testing)
-                                    case .swiftTesting:
-                                        Attachment.record(lines.jsonlString(), named: attachmentName)
-                                #endif
-                                #if canImport(ObjectiveC)
-                                    case .xcTest:
-                                        let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
-                                        xctAttachment.name = attachmentName
-                                        MainActor.assumeIsolated {
-                                            XCTContext.runActivity(named: "OpenPBTStats") { activity in
-                                                activity.add(xctAttachment)
+                                    #if canImport(Testing)
+                                        case .swiftTesting:
+                                            Attachment.record(lines.jsonlString(), named: attachmentName)
+                                    #endif
+                                    #if canImport(ObjectiveC)
+                                        case .xcTest:
+                                            let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
+                                            xctAttachment.name = attachmentName
+                                            MainActor.assumeIsolated {
+                                                XCTContext.runActivity(named: "OpenPBTStats") { activity in
+                                                    activity.add(xctAttachment)
+                                                }
                                             }
-                                        }
-                                #endif
-                                default:
-                                    break
+                                    #endif
+                                    default:
+                                        break
                                 }
                             }
                         }
@@ -257,19 +257,19 @@ public extension __ExhaustRuntime {
                             report: &report
                         )
                         switch outcome {
-                        case let .counterexample(value):
-                            let coverageEnd = monotonicNanoseconds()
-                            report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                            report.totalMilliseconds = report.coverageMilliseconds
-                            return value
-                        case let .exhaustivePass(iterations):
-                            let coverageEnd = monotonicNanoseconds()
-                            report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                            report.totalMilliseconds = report.coverageMilliseconds
-                            report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
-                            return nil
-                        case let .proceed(iterations):
-                            coverageIterations = iterations
+                            case let .counterexample(value):
+                                let coverageEnd = monotonicNanoseconds()
+                                report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
+                                report.totalMilliseconds = report.coverageMilliseconds
+                                return value
+                            case let .exhaustivePass(iterations):
+                                let coverageEnd = monotonicNanoseconds()
+                                report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
+                                report.totalMilliseconds = report.coverageMilliseconds
+                                report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
+                                return nil
+                            case let .proceed(iterations):
+                                coverageIterations = iterations
                         }
                     }
                     let coveragePhaseEndTime = monotonicNanoseconds()
@@ -397,17 +397,17 @@ public extension __ExhaustRuntime {
         var suppressLogs = false
         for setting in settings {
             switch setting {
-            case let .log(level):
-                logLevel = level
-            case let .suppress(option):
-                switch option {
-                case .logs, .all:
-                    suppressLogs = true
+                case let .log(level):
+                    logLevel = level
+                case let .suppress(option):
+                    switch option {
+                        case .logs, .all:
+                            suppressLogs = true
+                        default:
+                            break
+                    }
                 default:
                     break
-                }
-            default:
-                break
             }
         }
 

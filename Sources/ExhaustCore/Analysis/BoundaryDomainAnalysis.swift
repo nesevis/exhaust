@@ -49,7 +49,7 @@ package enum BoundaryParameterKind: @unchecked Sendable {
 }
 
 /// Maps a range of flat composite indices to a specific sequence length and its element parameters.
-package struct SequenceLengthSlot: Sendable {
+package struct SequenceLengthSlot {
     /// The sequence length this slot represents.
     package let length: UInt64
     /// Starting offset of this slot in the composite domain.
@@ -123,23 +123,23 @@ package enum BoundaryDomainAnalysis {
     /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
     package static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
-        case _ where tag.isFloatingPoint:
-            computeFloatBoundaryValues(min: min, max: max, tag: tag)
-        case let .date(lowerSeconds, intervalSeconds, timeZoneID):
-            computeDateBoundaryValues(
-                min: min,
-                max: max,
-                lowerSeconds: lowerSeconds,
-                intervalSeconds: intervalSeconds,
-                timeZoneID: timeZoneID
-            )
-        case .bits:
-            [min, max]
-        case let .character(boundaryIndices):
-            // The boundary indices correspond to `interestingCharacterScalars`, but in flat array index space. They are clamped to min/max during construction
-            boundaryIndices
-        default:
-            computeIntegerBoundaryValues(min: min, max: max, tag: tag)
+            case _ where tag.isFloatingPoint:
+                computeFloatBoundaryValues(min: min, max: max, tag: tag)
+            case let .date(lowerSeconds, intervalSeconds, timeZoneID):
+                computeDateBoundaryValues(
+                    min: min,
+                    max: max,
+                    lowerSeconds: lowerSeconds,
+                    intervalSeconds: intervalSeconds,
+                    timeZoneID: timeZoneID
+                )
+            case .bits:
+                [min, max]
+            case let .character(boundaryIndices):
+                // The boundary indices correspond to `interestingCharacterScalars`, but in flat array index space. They are clamped to min/max during construction
+                boundaryIndices
+            default:
+                computeIntegerBoundaryValues(min: min, max: max, tag: tag)
         }
     }
 
@@ -167,14 +167,14 @@ package enum BoundaryDomainAnalysis {
     ) -> [UInt64] {
         // For float types, check if range is the full type range
         let isFullRange: Bool = switch tag {
-        case .double:
-            min == UInt64.min && max == UInt64.max
-        case .float:
-            min == UInt64(UInt32.min) && max == UInt64(UInt32.max)
-        case .float16:
-            min == UInt64(UInt16.min) && max == UInt64(UInt16.max)
-        default:
-            false
+            case .double:
+                min == UInt64.min && max == UInt64.max
+            case .float:
+                min == UInt64(UInt32.min) && max == UInt64(UInt32.max)
+            case .float16:
+                min == UInt64(UInt16.min) && max == UInt64(UInt16.max)
+            default:
+                false
         }
 
         if isFullRange {
@@ -187,69 +187,69 @@ package enum BoundaryDomainAnalysis {
     private static func fullRangeFloatBoundaryValues(tag: TypeTag) -> [UInt64] {
         var values = Set<UInt64>()
         switch tag {
-        case .double:
-            let doubles = [
-                -Double.greatestFiniteMagnitude,
-                -1.0,
-                -Double.leastNormalMagnitude,
-                -Double.leastNonzeroMagnitude,
-                -0.0,
-                0.0,
-                Double.leastNonzeroMagnitude,
-                Double.leastNormalMagnitude,
-                Double.ulpOfOne,
-                1.0,
-                1.0.nextUp,
-                Double.greatestFiniteMagnitude,
-                Double.nan,
-                Double.infinity,
-                -Double.infinity,
-            ]
-            values.formUnion(doubles.map(\.bitPattern64))
-        case .float:
-            let floats = [
-                -Float.greatestFiniteMagnitude,
-                -1.0,
-                -Float.leastNormalMagnitude,
-                -Float.leastNonzeroMagnitude,
-                -0.0,
-                0.0,
-                Float.leastNonzeroMagnitude,
-                Float.leastNormalMagnitude,
-                Float.ulpOfOne,
-                1.0,
-                Float(1.0).nextUp,
-                Float.greatestFiniteMagnitude,
-                Float.nan,
-                Float.infinity,
-                -Float.infinity,
-            ]
-            values.formUnion(floats.map(\.bitPattern64))
-        case .float16:
-            #if arch(arm64) || arch(arm64_32)
-                if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
-                    let floats = [
-                        -Float16.greatestFiniteMagnitude,
-                        -Float16(1.0),
-                        -Float16.leastNormalMagnitude,
-                        -Float16.leastNonzeroMagnitude,
-                        -Float16(0.0),
-                        Float16(0.0),
-                        Float16.leastNonzeroMagnitude,
-                        Float16.leastNormalMagnitude,
-                        Float16.ulpOfOne,
-                        Float16(1.0),
-                        Float16(1.0).nextUp,
-                        Float16.greatestFiniteMagnitude,
-                        Float16.nan,
-                        Float16.infinity,
-                        -Float16.infinity,
-                    ]
-                    values.formUnion(floats.map(\.bitPattern64))
-                }
-            #endif
-        default:
-            break
+            case .double:
+                let doubles = [
+                    -Double.greatestFiniteMagnitude,
+                    -1.0,
+                    -Double.leastNormalMagnitude,
+                    -Double.leastNonzeroMagnitude,
+                    -0.0,
+                    0.0,
+                    Double.leastNonzeroMagnitude,
+                    Double.leastNormalMagnitude,
+                    Double.ulpOfOne,
+                    1.0,
+                    1.0.nextUp,
+                    Double.greatestFiniteMagnitude,
+                    Double.nan,
+                    Double.infinity,
+                    -Double.infinity,
+                ]
+                values.formUnion(doubles.map(\.bitPattern64))
+            case .float:
+                let floats = [
+                    -Float.greatestFiniteMagnitude,
+                    -1.0,
+                    -Float.leastNormalMagnitude,
+                    -Float.leastNonzeroMagnitude,
+                    -0.0,
+                    0.0,
+                    Float.leastNonzeroMagnitude,
+                    Float.leastNormalMagnitude,
+                    Float.ulpOfOne,
+                    1.0,
+                    Float(1.0).nextUp,
+                    Float.greatestFiniteMagnitude,
+                    Float.nan,
+                    Float.infinity,
+                    -Float.infinity,
+                ]
+                values.formUnion(floats.map(\.bitPattern64))
+            case .float16:
+                #if arch(arm64) || arch(arm64_32)
+                    if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
+                        let floats = [
+                            -Float16.greatestFiniteMagnitude,
+                            -Float16(1.0),
+                            -Float16.leastNormalMagnitude,
+                            -Float16.leastNonzeroMagnitude,
+                            -Float16(0.0),
+                            Float16(0.0),
+                            Float16.leastNonzeroMagnitude,
+                            Float16.leastNormalMagnitude,
+                            Float16.ulpOfOne,
+                            Float16(1.0),
+                            Float16(1.0).nextUp,
+                            Float16.greatestFiniteMagnitude,
+                            Float16.nan,
+                            Float16.infinity,
+                            -Float16.infinity,
+                        ]
+                        values.formUnion(floats.map(\.bitPattern64))
+                    }
+                #endif
+            default:
+                break
         }
         return values.sorted()
     }
@@ -257,34 +257,34 @@ package enum BoundaryDomainAnalysis {
     /// Returns the bit pattern for zero for the given type, if zero is a meaningful value.
     private static func zeroBitPatternFor(tag: TypeTag) -> UInt64? {
         switch tag {
-        case .uint, .uint64, .uint32, .uint16, .uint8:
-            0
-        case .int:
-            Int(0).bitPattern64
-        case .int64:
-            Int64(0).bitPattern64
-        case .int32:
-            Int32(0).bitPattern64
-        case .int16:
-            Int16(0).bitPattern64
-        case .int8:
-            Int8(0).bitPattern64
-        case .double:
-            Double(0.0).bitPattern64
-        case .float:
-            Float(0.0).bitPattern64
-        case .float16:
-            Float16Emulation.encodedBitPattern(from: 0.0)
-        case .date:
-            0 // Step index 0 = lowerSeconds
-        case .bits:
-            0
-        case .character:
-            0 // Index 0 = first scalar in the ScalarRangeSet
-        case .depthControl:
-            0 // Depth 0 = shallowest (base case)
-        case .laneControl:
-            0 // Marker 0 = prefix (sequential)
+            case .uint, .uint64, .uint32, .uint16, .uint8:
+                0
+            case .int:
+                Int(0).bitPattern64
+            case .int64:
+                Int64(0).bitPattern64
+            case .int32:
+                Int32(0).bitPattern64
+            case .int16:
+                Int16(0).bitPattern64
+            case .int8:
+                Int8(0).bitPattern64
+            case .double:
+                Double(0.0).bitPattern64
+            case .float:
+                Float(0.0).bitPattern64
+            case .float16:
+                Float16Emulation.encodedBitPattern(from: 0.0)
+            case .date:
+                0 // Step index 0 = lowerSeconds
+            case .bits:
+                0
+            case .character:
+                0 // Index 0 = first scalar in the ScalarRangeSet
+            case .depthControl:
+                0 // Depth 0 = shallowest (base case)
+            case .laneControl:
+                0 // Marker 0 = prefix (sequential)
         }
     }
 

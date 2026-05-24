@@ -37,8 +37,8 @@ struct KVStoreLifecycleTests {
 
         #expect(result.trace.contains { step in
             switch step.outcome {
-            case .invariantFailed, .checkFailed: true
-            default: false
+                case .invariantFailed, .checkFailed: true
+                default: false
             }
         })
     }

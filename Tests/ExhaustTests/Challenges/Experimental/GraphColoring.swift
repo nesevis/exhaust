@@ -198,18 +198,18 @@ struct GraphColoringChallenge {
         let n = graph.distinctVertices.count
         let e = graph.edges.count
         switch (n, e) {
-        case (3, 3): return .triangleExact
-        case (5, 5): return .pentagonExact
-        case (4, 6): return .k4Exact
-        default:
-            switch n {
-            case 3, 4: return .triangleSuperGraph
-            case 5: return .pentagonSuperGraph
-            case 6: return .size6
-            case 7: return .size7
-            case 8: return .size8
-            default: return .sizeLarge
-            }
+            case (3, 3): return .triangleExact
+            case (5, 5): return .pentagonExact
+            case (4, 6): return .k4Exact
+            default:
+                switch n {
+                    case 3, 4: return .triangleSuperGraph
+                    case 5: return .pentagonSuperGraph
+                    case 6: return .size6
+                    case 7: return .size7
+                    case 8: return .size8
+                    default: return .sizeLarge
+                }
         }
     }
 
@@ -366,10 +366,10 @@ struct GraphColoringChallenge {
         let n = value.distinctVertices.count
         let e = value.edges.count
         let category = switch (n, e) {
-        case (3, 3): "K_3 (triangle)"
-        case (5, 5): "C_5 (5-cycle)"
-        case (4, 6): "K_4"
-        default: "non-canonical (n=\(n), e=\(e))"
+            case (3, 3): "K_3 (triangle)"
+            case (5, 5): "C_5 (5-cycle)"
+            case (4, 6): "K_4"
+            default: "non-canonical (n=\(n), e=\(e))"
         }
 //        print("[CE class] \(category)")
 

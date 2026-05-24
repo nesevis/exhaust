@@ -13,6 +13,7 @@ import Foundation
 // Implements the `parse` interpretation P⟦·⟧ (Goldstein §3.3.3) from a hierarchical ChoiceTree. The dissertation parses from flat choice sequences; Exhaust adds tree-structured replay for precise structural matching.
 
 // MARK: - Why This Exists
+
 //
 // Replay handles both VACTI-produced and Reflect-produced ChoiceTrees. The two formats differ at pick sites: VACTI wraps
 // callee and continuation in a two-element group (children[0] = callee, children[1] = continuation), while Reflect produces
@@ -55,16 +56,16 @@ extension Interpreters {
         choices: inout [ChoiceTree]
     ) throws -> Output? {
         switch gen {
-        case let .pure(value):
-            // Base case: return the value
-            value
+            case let .pure(value):
+                // Base case: return the value
+                value
 
-        case let .impure(operation, continuation):
-            try replayWithChoicesOperation(
-                operation,
-                continuation: continuation,
-                choices: &choices
-            )
+            case let .impure(operation, continuation):
+                try replayWithChoicesOperation(
+                    operation,
+                    continuation: continuation,
+                    choices: &choices
+                )
         }
     }
 
@@ -74,128 +75,128 @@ extension Interpreters {
         choices: inout [ChoiceTree]
     ) throws -> Output? {
         switch operation {
-        case .chooseBits:
-            return try replayWithChoicesChooseBits(continuation: continuation, choices: &choices)
-        case let .pick(pickChoices):
-            return try replayWithChoicesPick(
-                pickChoices: pickChoices,
-                continuation: continuation,
-                choices: &choices
-            )
-        case let .sequence(_, elementGenerator):
-            return try replayWithChoicesSequence(
-                elementGenerator: elementGenerator,
-                continuation: continuation,
-                choices: &choices
-            )
-        case let .zip(generators, _):
-            return try replayWithChoicesZip(
-                generators: generators,
-                continuation: continuation,
-                choices: &choices
-            )
-        case let .contramap(_, subGenerator), let .prune(subGenerator):
-            return try replayWithChoicesWrapped(
-                subGenerator: subGenerator,
-                continuation: continuation,
-                choices: &choices
-            )
-        case let .just(value):
-            return try replayWithChoicesJust(
-                value: value,
-                continuation: continuation,
-                choices: &choices
-            )
-        case .getSize:
-            return try replayWithChoicesGetSize(continuation: continuation, choices: &choices)
-        case let .resize(_, subGenerator):
-            return try replayWithChoicesResize(
-                subGenerator: subGenerator,
-                continuation: continuation,
-                choices: &choices
-            )
-        case let .filter(gen, _, _, predicate, _, _):
-            // Invariant: .filter's continuation is always .pure($0). The inner value is the output; the predicate is the only gate.
-            guard let inner = try replayWithChoicesHelper(gen, choices: &choices),
-                  predicate(inner)
-            else {
-                return nil
-            }
-            return inner as? Output
-        case let .classify(gen, _, _), let .unique(gen, _, _):
-            // Invariant: .classify and .unique are transparent annotations whose continuation is always .pure($0). Their choices are entirely determined by the inner generator.
-            return try replayWithChoicesHelper(gen, choices: &choices) as? Output
-        case let .transform(kind, inner):
-            let result: Any
-            switch kind {
-            case let .map(forward, _, _):
-                guard let innerValue = try replayWithChoicesHelper(
-                    inner,
+            case .chooseBits:
+                return try replayWithChoicesChooseBits(continuation: continuation, choices: &choices)
+            case let .pick(pickChoices):
+                return try replayWithChoicesPick(
+                    pickChoices: pickChoices,
+                    continuation: continuation,
                     choices: &choices
-                ) else {
+                )
+            case let .sequence(_, elementGenerator):
+                return try replayWithChoicesSequence(
+                    elementGenerator: elementGenerator,
+                    continuation: continuation,
+                    choices: &choices
+                )
+            case let .zip(generators, _):
+                return try replayWithChoicesZip(
+                    generators: generators,
+                    continuation: continuation,
+                    choices: &choices
+                )
+            case let .contramap(_, subGenerator), let .prune(subGenerator):
+                return try replayWithChoicesWrapped(
+                    subGenerator: subGenerator,
+                    continuation: continuation,
+                    choices: &choices
+                )
+            case let .just(value):
+                return try replayWithChoicesJust(
+                    value: value,
+                    continuation: continuation,
+                    choices: &choices
+                )
+            case .getSize:
+                return try replayWithChoicesGetSize(continuation: continuation, choices: &choices)
+            case let .resize(_, subGenerator):
+                return try replayWithChoicesResize(
+                    subGenerator: subGenerator,
+                    continuation: continuation,
+                    choices: &choices
+                )
+            case let .filter(gen, _, _, predicate, _, _):
+                // Invariant: .filter's continuation is always .pure($0). The inner value is the output; the predicate is the only gate.
+                guard let inner = try replayWithChoicesHelper(gen, choices: &choices),
+                      predicate(inner)
+                else {
                     return nil
                 }
-                result = try forward(innerValue)
-            case let .bind(_, forward, _, _, _):
-                // VACTI produces .bind(inner:bound:) for bind.
-                // Scope inner replay to innerTree so its zip doesn't consume boundTree's choices.
-                if case let .bind(_, innerTree, boundTree) = choices.first {
-                    choices.removeFirst()
-                    var scopedChoices = [innerTree]
-                    guard let innerValue = try replayWithChoicesHelper(
-                        inner,
-                        choices: &scopedChoices
-                    ) else {
-                        return nil
-                    }
-                    let boundGen = try forward(innerValue)
-                    var boundChoices = [boundTree]
-                    guard let boundValue = try replayWithChoicesHelper(
-                        boundGen,
-                        choices: &boundChoices
-                    ) else {
-                        return nil
-                    }
-                    result = boundValue
-                } else {
-                    guard let innerValue = try replayWithChoicesHelper(
-                        inner,
-                        choices: &choices
-                    ) else {
-                        return nil
-                    }
-                    let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayWithChoicesHelper(
-                        boundGen,
-                        choices: &choices
-                    ) else {
-                        return nil
-                    }
-                    result = boundValue
+                return inner as? Output
+            case let .classify(gen, _, _), let .unique(gen, _, _):
+                // Invariant: .classify and .unique are transparent annotations whose continuation is always .pure($0). Their choices are entirely determined by the inner generator.
+                return try replayWithChoicesHelper(gen, choices: &choices) as? Output
+            case let .transform(kind, inner):
+                let result: Any
+                switch kind {
+                    case let .map(forward, _, _):
+                        guard let innerValue = try replayWithChoicesHelper(
+                            inner,
+                            choices: &choices
+                        ) else {
+                            return nil
+                        }
+                        result = try forward(innerValue)
+                    case let .bind(_, forward, _, _, _):
+                        // VACTI produces .bind(inner:bound:) for bind.
+                        // Scope inner replay to innerTree so its zip doesn't consume boundTree's choices.
+                        if case let .bind(_, innerTree, boundTree) = choices.first {
+                            choices.removeFirst()
+                            var scopedChoices = [innerTree]
+                            guard let innerValue = try replayWithChoicesHelper(
+                                inner,
+                                choices: &scopedChoices
+                            ) else {
+                                return nil
+                            }
+                            let boundGen = try forward(innerValue)
+                            var boundChoices = [boundTree]
+                            guard let boundValue = try replayWithChoicesHelper(
+                                boundGen,
+                                choices: &boundChoices
+                            ) else {
+                                return nil
+                            }
+                            result = boundValue
+                        } else {
+                            guard let innerValue = try replayWithChoicesHelper(
+                                inner,
+                                choices: &choices
+                            ) else {
+                                return nil
+                            }
+                            let boundGen = try forward(innerValue)
+                            guard let boundValue = try replayWithChoicesHelper(
+                                boundGen,
+                                choices: &choices
+                            ) else {
+                                return nil
+                            }
+                            result = boundValue
+                        }
+                    case let .metamorphic(transforms, _):
+                        // Tree is transparent — save choices, replay inner N+1 times from the same snapshot.
+                        let savedChoices = choices
+                        guard let original = try replayWithChoicesHelper(
+                            inner, choices: &choices
+                        ) else {
+                            return nil
+                        }
+                        var results: [Any] = [original]
+                        results.reserveCapacity(transforms.count + 1)
+                        for transform in transforms {
+                            var replayChoices = savedChoices
+                            guard let copy = try replayWithChoicesHelper(
+                                inner, choices: &replayChoices
+                            ) else {
+                                return nil
+                            }
+                            try results.append(transform(copy))
+                        }
+                        result = results
                 }
-            case let .metamorphic(transforms, _):
-                // Tree is transparent — save choices, replay inner N+1 times from the same snapshot.
-                let savedChoices = choices
-                guard let original = try replayWithChoicesHelper(
-                    inner, choices: &choices
-                ) else {
-                    return nil
-                }
-                var results: [Any] = [original]
-                results.reserveCapacity(transforms.count + 1)
-                for transform in transforms {
-                    var replayChoices = savedChoices
-                    guard let copy = try replayWithChoicesHelper(
-                        inner, choices: &replayChoices
-                    ) else {
-                        return nil
-                    }
-                    try results.append(transform(copy))
-                }
-                result = results
-            }
-            let nextGen = try continuation(result)
-            return try replayWithChoicesHelper(nextGen, choices: &choices)
+                let nextGen = try continuation(result)
+                return try replayWithChoicesHelper(nextGen, choices: &choices)
         }
     }
 
@@ -406,27 +407,27 @@ extension Interpreters {
         }
 
         switch gen {
-        case let .pure(value):
-            // Base case: The generator is done. Return the final value.
-            // Any remaining script would indicate a mismatch, but the logic for the calling operation handles passing the correct sub-tree.
-            return value
+            case let .pure(value):
+                // Base case: The generator is done. Return the final value.
+                // Any remaining script would indicate a mismatch, but the logic for the calling operation handles passing the correct sub-tree.
+                return value
 
-        case let .impure(operation, continuation):
-            // This helper simplifies calling the continuation with a result.
-            let runContinuation = { (result: Any) -> Output? in
-                // The crucial difference: we are NOT passing the script down.
-                // The continuation represents the rest of the generator, which will be handled by the next level of the .impure case.
-                let nextGen = try continuation(result)
-                // We replay the rest of the generator with the *same* script, as the operation itself doesn't consume the whole tree.
-                return try self.replayRecursive(nextGen, with: script)
-            }
+            case let .impure(operation, continuation):
+                // This helper simplifies calling the continuation with a result.
+                let runContinuation = { (result: Any) -> Output? in
+                    // The crucial difference: we are NOT passing the script down.
+                    // The continuation represents the rest of the generator, which will be handled by the next level of the .impure case.
+                    let nextGen = try continuation(result)
+                    // We replay the rest of the generator with the *same* script, as the operation itself doesn't consume the whole tree.
+                    return try self.replayRecursive(nextGen, with: script)
+                }
 
-            return try replayRecursiveOperation(
-                operation,
-                script: script,
-                continuation: continuation,
-                runContinuation: runContinuation
-            )
+                return try replayRecursiveOperation(
+                    operation,
+                    script: script,
+                    continuation: continuation,
+                    runContinuation: runContinuation
+                )
         }
     }
 
@@ -437,113 +438,113 @@ extension Interpreters {
         runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         switch operation {
-        case let .zip(generators, _):
-            return try replayRecursiveZip(
-                generators: generators,
-                script: script,
-                runContinuation: runContinuation
-            )
-        case .chooseBits:
-            return try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
-        case let .just(value):
-            return try replayRecursiveJust(
-                value: value,
-                script: script,
-                runContinuation: runContinuation
-            )
-        case .getSize:
-            return try replayRecursiveGetSize(script: script, runContinuation: runContinuation)
-        case let .resize(_, nextGen):
-            return try replayRecursiveResize(
-                nextGen: nextGen,
-                script: script,
-                runContinuation: runContinuation
-            )
-        case let .pick(choices):
-            return try replayRecursivePick(choices: choices, script: script)
-        case let .sequence(lengthGen, elementGenerator):
-            return try replayRecursiveSequence(
-                lengthGen: lengthGen,
-                elementGenerator: elementGenerator,
-                script: script,
-                runContinuation: runContinuation
-            )
-        case let .contramap(_, subGenerator):
-            return try replayRecursiveContramap(
-                subGenerator: subGenerator,
-                script: script,
-                continuation: continuation
-            )
-        case let .prune(subGenerator):
-            return try replayRecursive(subGenerator, with: script) as? Output
-        case let .filter(gen, _, _, predicate, _, _):
-            guard let inner = try replayRecursive(gen, with: script),
-                  predicate(inner)
-            else { return nil }
-            return inner as? Output
-        case let .classify(gen, _, _), let .unique(gen, _, _):
-            return try replayRecursive(gen, with: script) as? Output
-        case let .transform(kind, inner):
-            let result: Any
-            switch kind {
-            case let .map(forward, _, _):
-                guard let innerValue = try replayRecursive(
-                    inner,
-                    with: script
-                ) else {
-                    return nil
+            case let .zip(generators, _):
+                return try replayRecursiveZip(
+                    generators: generators,
+                    script: script,
+                    runContinuation: runContinuation
+                )
+            case .chooseBits:
+                return try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
+            case let .just(value):
+                return try replayRecursiveJust(
+                    value: value,
+                    script: script,
+                    runContinuation: runContinuation
+                )
+            case .getSize:
+                return try replayRecursiveGetSize(script: script, runContinuation: runContinuation)
+            case let .resize(_, nextGen):
+                return try replayRecursiveResize(
+                    nextGen: nextGen,
+                    script: script,
+                    runContinuation: runContinuation
+                )
+            case let .pick(choices):
+                return try replayRecursivePick(choices: choices, script: script)
+            case let .sequence(lengthGen, elementGenerator):
+                return try replayRecursiveSequence(
+                    lengthGen: lengthGen,
+                    elementGenerator: elementGenerator,
+                    script: script,
+                    runContinuation: runContinuation
+                )
+            case let .contramap(_, subGenerator):
+                return try replayRecursiveContramap(
+                    subGenerator: subGenerator,
+                    script: script,
+                    continuation: continuation
+                )
+            case let .prune(subGenerator):
+                return try replayRecursive(subGenerator, with: script) as? Output
+            case let .filter(gen, _, _, predicate, _, _):
+                guard let inner = try replayRecursive(gen, with: script),
+                      predicate(inner)
+                else { return nil }
+                return inner as? Output
+            case let .classify(gen, _, _), let .unique(gen, _, _):
+                return try replayRecursive(gen, with: script) as? Output
+            case let .transform(kind, inner):
+                let result: Any
+                switch kind {
+                    case let .map(forward, _, _):
+                        guard let innerValue = try replayRecursive(
+                            inner,
+                            with: script
+                        ) else {
+                            return nil
+                        }
+                        result = try forward(innerValue)
+                    case let .bind(_, forward, _, _, _):
+                        // VACTI produces .bind(inner:bound:) for bind.
+                        // Split the script so inner and bound each get their own tree.
+                        if case let .bind(_, innerTree, boundTree) = script {
+                            guard let innerValue = try replayRecursive(
+                                inner,
+                                with: innerTree
+                            ) else {
+                                return nil
+                            }
+                            let boundGen = try forward(innerValue)
+                            guard let boundValue = try replayRecursive(
+                                boundGen,
+                                with: boundTree
+                            ) else {
+                                return nil
+                            }
+                            result = boundValue
+                        } else {
+                            guard let innerValue = try replayRecursive(
+                                inner,
+                                with: script
+                            ) else {
+                                return nil
+                            }
+                            let boundGen = try forward(innerValue)
+                            guard let boundValue = try replayRecursive(
+                                boundGen,
+                                with: script
+                            ) else {
+                                return nil
+                            }
+                            result = boundValue
+                        }
+                    case let .metamorphic(transforms, _):
+                        // Tree is transparent — replay inner N+1 times from the same script.
+                        guard let original = try replayRecursive(inner, with: script) else {
+                            return nil
+                        }
+                        var results: [Any] = [original]
+                        results.reserveCapacity(transforms.count + 1)
+                        for transform in transforms {
+                            guard let copy = try replayRecursive(inner, with: script) else {
+                                return nil
+                            }
+                            try results.append(transform(copy))
+                        }
+                        result = results
                 }
-                result = try forward(innerValue)
-            case let .bind(_, forward, _, _, _):
-                // VACTI produces .bind(inner:bound:) for bind.
-                // Split the script so inner and bound each get their own tree.
-                if case let .bind(_, innerTree, boundTree) = script {
-                    guard let innerValue = try replayRecursive(
-                        inner,
-                        with: innerTree
-                    ) else {
-                        return nil
-                    }
-                    let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayRecursive(
-                        boundGen,
-                        with: boundTree
-                    ) else {
-                        return nil
-                    }
-                    result = boundValue
-                } else {
-                    guard let innerValue = try replayRecursive(
-                        inner,
-                        with: script
-                    ) else {
-                        return nil
-                    }
-                    let boundGen = try forward(innerValue)
-                    guard let boundValue = try replayRecursive(
-                        boundGen,
-                        with: script
-                    ) else {
-                        return nil
-                    }
-                    result = boundValue
-                }
-            case let .metamorphic(transforms, _):
-                // Tree is transparent — replay inner N+1 times from the same script.
-                guard let original = try replayRecursive(inner, with: script) else {
-                    return nil
-                }
-                var results: [Any] = [original]
-                results.reserveCapacity(transforms.count + 1)
-                for transform in transforms {
-                    guard let copy = try replayRecursive(inner, with: script) else {
-                        return nil
-                    }
-                    try results.append(transform(copy))
-                }
-                result = results
-            }
-            return try runContinuation(result)
+                return try runContinuation(result)
         }
     }
 
@@ -576,12 +577,12 @@ extension Interpreters {
         runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         switch script {
-        case let .choice(choiceValue, _):
-            try runContinuation(choiceValue.bitPattern64)
-        case let .getSize(value):
-            try runContinuation(value)
-        default:
-            nil
+            case let .choice(choiceValue, _):
+                try runContinuation(choiceValue.bitPattern64)
+            case let .getSize(value):
+                try runContinuation(value)
+            default:
+                nil
         }
     }
 
@@ -712,19 +713,19 @@ extension Interpreters {
 
         var errorDescription: String? {
             switch self {
-            case .wrongInputChoice:
-                "Replay encountered a choice tree node that does not match the generator's expected operation at this position."
-            case .noSuccessfulBranch:
-                "Replay could not find a valid value among the pick branches for the stored choice."
+                case .wrongInputChoice:
+                    "Replay encountered a choice tree node that does not match the generator's expected operation at this position."
+                case .noSuccessfulBranch:
+                    "Replay could not find a valid value among the pick branches for the stored choice."
             }
         }
 
         var recoverySuggestion: String? {
             switch self {
-            case .wrongInputChoice:
-                "This usually means the generator structure changed after the choice sequence was recorded. Re-run the property to generate a fresh counterexample."
-            case .noSuccessfulBranch:
-                "This can happen when a filter predicate or pick branch set changed since the choice sequence was recorded. Re-run the property to generate a fresh counterexample."
+                case .wrongInputChoice:
+                    "This usually means the generator structure changed after the choice sequence was recorded. Re-run the property to generate a fresh counterexample."
+                case .noSuccessfulBranch:
+                    "This can happen when a filter predicate or pick branch set changed since the choice sequence was recorded. Re-run the property to generate a fresh counterexample."
             }
         }
     }

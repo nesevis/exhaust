@@ -154,34 +154,34 @@ struct GraphValueEncoder: GraphEncoder {
 
         var bestAccepted: UInt64 {
             switch self {
-            case let .binary(stepper): stepper.bestAccepted
-            case let .interpolation(stepper): stepper.bestAccepted
+                case let .binary(stepper): stepper.bestAccepted
+                case let .interpolation(stepper): stepper.bestAccepted
             }
         }
 
         mutating func start() -> UInt64? {
             switch self {
-            case var .binary(stepper):
-                let value = stepper.start()
-                self = .binary(stepper)
-                return value
-            case var .interpolation(stepper):
-                let value = stepper.start()
-                self = .interpolation(stepper)
-                return value
+                case var .binary(stepper):
+                    let value = stepper.start()
+                    self = .binary(stepper)
+                    return value
+                case var .interpolation(stepper):
+                    let value = stepper.start()
+                    self = .interpolation(stepper)
+                    return value
             }
         }
 
         mutating func advance(lastAccepted: Bool) -> UInt64? {
             switch self {
-            case var .binary(stepper):
-                let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .binary(stepper)
-                return value
-            case var .interpolation(stepper):
-                let value = stepper.advance(lastAccepted: lastAccepted)
-                self = .interpolation(stepper)
-                return value
+                case var .binary(stepper):
+                    let value = stepper.advance(lastAccepted: lastAccepted)
+                    self = .binary(stepper)
+                    return value
+                case var .interpolation(stepper):
+                    let value = stepper.advance(lastAccepted: lastAccepted)
+                    self = .interpolation(stepper)
+                    return value
             }
         }
     }
@@ -249,18 +249,18 @@ struct GraphValueEncoder: GraphEncoder {
         let graph = scope.graph
 
         switch minimizationScope {
-        case let .valueLeaves(integerScope):
-            startInteger(scope: integerScope, sequence: sequence, graph: graph, warmStarts: scope.warmStartRecords)
-        case .laneCollapse:
-            assertionFailure("laneCollapse scopes must route through GraphLaneCollapseEncoder, not GraphValueEncoder")
-            mode = .idle
-        case let .floatLeaves(floatScope):
-            startFloat(scope: floatScope, sequence: sequence, graph: graph)
-        case .boundValue:
-            // bound value scopes are dispatched via ``GraphComposedEncoder``
-            // constructed at the scheduler call site, never through this encoder.
-            assertionFailure("boundValue scopes must route through GraphComposedEncoder, not GraphValueEncoder")
-            mode = .idle
+            case let .valueLeaves(integerScope):
+                startInteger(scope: integerScope, sequence: sequence, graph: graph, warmStarts: scope.warmStartRecords)
+            case .laneCollapse:
+                assertionFailure("laneCollapse scopes must route through GraphLaneCollapseEncoder, not GraphValueEncoder")
+                mode = .idle
+            case let .floatLeaves(floatScope):
+                startFloat(scope: floatScope, sequence: sequence, graph: graph)
+            case .boundValue:
+                // bound value scopes are dispatched via ``GraphComposedEncoder``
+                // constructed at the scheduler call site, never through this encoder.
+                assertionFailure("boundValue scopes must route through GraphComposedEncoder, not GraphValueEncoder")
+                mode = .idle
         }
     }
 
@@ -284,26 +284,26 @@ struct GraphValueEncoder: GraphEncoder {
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         switch mode {
-        case .idle:
-            return nil
-        case var .valueLeaves(state):
-            guard let built = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {
+            case .idle:
+                return nil
+            case var .valueLeaves(state):
+                guard let built = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {
+                    mode = .valueLeaves(state)
+                    return nil
+                }
+                candidate = built
+                let mutation = buildIntegerLeafValuesMutation(candidate: candidate, state: state)
                 mode = .valueLeaves(state)
-                return nil
-            }
-            candidate = built
-            let mutation = buildIntegerLeafValuesMutation(candidate: candidate, state: state)
-            mode = .valueLeaves(state)
-            return mutation
-        case var .floatLeaves(state):
-            guard let built = nextFloatProbe(state: &state, lastAccepted: lastAccepted) else {
+                return mutation
+            case var .floatLeaves(state):
+                guard let built = nextFloatProbe(state: &state, lastAccepted: lastAccepted) else {
+                    mode = .floatLeaves(state)
+                    return nil
+                }
+                candidate = built
+                let mutation = buildFloatLeafValuesMutation(candidate: candidate, state: state)
                 mode = .floatLeaves(state)
-                return nil
-            }
-            candidate = built
-            let mutation = buildFloatLeafValuesMutation(candidate: candidate, state: state)
-            mode = .floatLeaves(state)
-            return mutation
+                return mutation
         }
     }
 
@@ -358,18 +358,18 @@ extension ChoiceSequenceValue {
     /// - Precondition: The entry must be a `.value` case. Calling on structural markers (`.group`, `.sequence`, `.bind`, `.branch`, `.just`) triggers a precondition failure.
     func withBitPattern(_ bitPattern: UInt64) -> ChoiceSequenceValue {
         switch self {
-        case let .value(value):
-            let newChoice = ChoiceValue(
-                bitPattern,
-                tag: value.choice.tag
-            )
-            return .value(.init(
-                choice: newChoice,
-                validRange: value.validRange,
-                isRangeExplicit: value.isRangeExplicit
-            ))
-        default:
-            preconditionFailure("withBitPattern called on non-value entry: \(self)")
+            case let .value(value):
+                let newChoice = ChoiceValue(
+                    bitPattern,
+                    tag: value.choice.tag
+                )
+                return .value(.init(
+                    choice: newChoice,
+                    validRange: value.validRange,
+                    isRangeExplicit: value.isRangeExplicit
+                ))
+            default:
+                preconditionFailure("withBitPattern called on non-value entry: \(self)")
         }
     }
 }

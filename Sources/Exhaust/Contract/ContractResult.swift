@@ -33,10 +33,10 @@ public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertibl
 
     public var description: String {
         switch self {
-        case .smokeTest: "smoke test"
-        case .coverage: "coverage"
-        case .randomSampling: "random sampling"
-        case .replay: "replay"
+            case .smokeTest: "smoke test"
+            case .coverage: "coverage"
+            case .randomSampling: "random sampling"
+            case .replay: "replay"
         }
     }
 }
@@ -66,18 +66,18 @@ public struct TraceStep: CustomStringConvertible, Sendable {
 
     public var description: String {
         switch outcome {
-        case .ok:
-            "\(index). \(command)"
-        case .skipped:
-            "\(index). \(command) [skipped]"
-        case let .checkFailed(message):
-            if let message {
-                "\(index). \(command) \u{2717} \(message)"
-            } else {
-                "\(index). \(command) \u{2717}"
-            }
-        case let .invariantFailed(name):
-            "\(index). \(command) \u{2717} invariant '\(name)'"
+            case .ok:
+                "\(index). \(command)"
+            case .skipped:
+                "\(index). \(command) [skipped]"
+            case let .checkFailed(message):
+                if let message {
+                    "\(index). \(command) \u{2717} \(message)"
+                } else {
+                    "\(index). \(command) \u{2717}"
+                }
+            case let .invariantFailed(name):
+                "\(index). \(command) \u{2717} invariant '\(name)'"
         }
     }
 }

@@ -340,10 +340,10 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl
     for cmd in commands {
         let effectKeywords: String
         switch (cmd.isThrows, cmd.isAsync) {
-        case (true, true): effectKeywords = "try await "
-        case (true, false): effectKeywords = "try "
-        case (false, true): effectKeywords = "await "
-        case (false, false): effectKeywords = ""
+            case (true, true): effectKeywords = "try await "
+            case (true, false): effectKeywords = "try "
+            case (false, true): effectKeywords = "await "
+            case (false, false): effectKeywords = ""
         }
         if cmd.parameters.isEmpty {
             cases.append("        case .\(cmd.methodName): \(effectKeywords)self.\(cmd.methodName)()")
@@ -467,8 +467,8 @@ enum ContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-        case .noCommands, .noSUT, .commandMissingGenerators, .asyncRequiresClass: .error
-        case .sutTypeNotInferred: .warning
+            case .noCommands, .noSUT, .commandMissingGenerators, .asyncRequiresClass: .error
+            case .sutTypeNotInferred: .warning
         }
     }
 }

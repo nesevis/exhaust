@@ -27,26 +27,26 @@ package enum JSONValue: Equatable, Hashable, CustomStringConvertible {
 
     package var depth: Int {
         switch self {
-        case .null, .int: 0
-        case let .array(elements):
-            1 + (elements.map(\.depth).max() ?? 0)
+            case .null, .int: 0
+            case let .array(elements):
+                1 + (elements.map(\.depth).max() ?? 0)
         }
     }
 
     package var nodeCount: Int {
         switch self {
-        case .null, .int: 1
-        case let .array(elements):
-            1 + elements.map(\.nodeCount).reduce(0, +)
+            case .null, .int: 1
+            case let .array(elements):
+                1 + elements.map(\.nodeCount).reduce(0, +)
         }
     }
 
     package var description: String {
         switch self {
-        case .null: "null"
-        case let .int(n): "\(n)"
-        case let .array(elements):
-            "[\(elements.map(\.description).joined(separator: ", "))]"
+            case .null: "null"
+            case let .int(n): "\(n)"
+            case let .array(elements):
+                "[\(elements.map(\.description).joined(separator: ", "))]"
         }
     }
 }

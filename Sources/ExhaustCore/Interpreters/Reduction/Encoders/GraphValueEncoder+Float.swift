@@ -99,14 +99,14 @@ extension GraphValueEncoder {
         state.batchIndex = 0
 
         switch state.stage {
-        case .specialValues:
-            prepareFloatSpecialValues(state: &state, target: target)
-        case .truncation:
-            prepareFloatTruncation(state: &state, target: target)
-        case .integralBinarySearch:
-            prepareFloatIntegralBinarySearch(state: &state, target: target)
-        case .ratioBinarySearch:
-            prepareFloatRatioBinarySearch(state: &state, target: target)
+            case .specialValues:
+                prepareFloatSpecialValues(state: &state, target: target)
+            case .truncation:
+                prepareFloatTruncation(state: &state, target: target)
+            case .integralBinarySearch:
+                prepareFloatIntegralBinarySearch(state: &state, target: target)
+            case .ratioBinarySearch:
+                prepareFloatRatioBinarySearch(state: &state, target: target)
         }
     }
 
@@ -187,12 +187,12 @@ extension GraphValueEncoder {
         guard distance > 1 else { return }
 
         let currentULP: Double = switch target.typeTag {
-        case .double:
-            target.currentValue.ulp
-        case .float, .float16:
-            Double(Float(target.currentValue).ulp)
-        default:
-            1.0
+            case .double:
+                target.currentValue.ulp
+            case .float, .float16:
+                Double(Float(target.currentValue).ulp)
+            default:
+                1.0
         }
         guard currentULP.isFinite else { return }
         let minDelta = UInt64(max(1.0, currentULP.rounded(.up)))
@@ -239,12 +239,12 @@ extension GraphValueEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         switch state.stage {
-        case .specialValues, .truncation:
-            nextFloatBatchCandidate(state: &state)
-        case .integralBinarySearch:
-            nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
-        case .ratioBinarySearch:
-            nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
+            case .specialValues, .truncation:
+                nextFloatBatchCandidate(state: &state)
+            case .integralBinarySearch:
+                nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
+            case .ratioBinarySearch:
+                nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
         }
     }
 
@@ -496,28 +496,28 @@ extension GraphValueEncoder {
     mutating func handleFloatAcceptance(state: inout FloatState) {
         let target = state.targets[state.currentTargetIndex]
         switch state.stage {
-        case .specialValues, .truncation:
-            // Batch stages: the last emitted candidate was accepted.
-            // Update target and restart from stage 0 on the next target.
-            let bp = state.batchCandidates[state.batchIndex - 1]
-            if let choice = makeFloatChoice(bitPattern: bp, tag: target.typeTag) {
-                let entry = ChoiceSequenceValue.value(.init(
-                    choice: choice,
-                    validRange: target.validRange,
-                    isRangeExplicit: target.isRangeExplicit
-                ))
-                state.sequence[target.sequenceIndex] = entry
-                if choice.tag.isFloatingPoint {
-                    state.targets[state.currentTargetIndex].currentValue = choice.decodedDoubleValue
+            case .specialValues, .truncation:
+                // Batch stages: the last emitted candidate was accepted.
+                // Update target and restart from stage 0 on the next target.
+                let bp = state.batchCandidates[state.batchIndex - 1]
+                if let choice = makeFloatChoice(bitPattern: bp, tag: target.typeTag) {
+                    let entry = ChoiceSequenceValue.value(.init(
+                        choice: choice,
+                        validRange: target.validRange,
+                        isRangeExplicit: target.isRangeExplicit
+                    ))
+                    state.sequence[target.sequenceIndex] = entry
+                    if choice.tag.isFloatingPoint {
+                        state.targets[state.currentTargetIndex].currentValue = choice.decodedDoubleValue
+                    }
+                    state.targets[state.currentTargetIndex].currentBitPattern = bp
                 }
-                state.targets[state.currentTargetIndex].currentBitPattern = bp
-            }
-            state.currentTargetIndex += 1
-            state.stage = .specialValues
-            state.needsFirstProbe = true
-        case .integralBinarySearch, .ratioBinarySearch:
-            // Stepper handles acceptance via advance(lastAccepted:).
-            break
+                state.currentTargetIndex += 1
+                state.stage = .specialValues
+                state.needsFirstProbe = true
+            case .integralBinarySearch, .ratioBinarySearch:
+                // Stepper handles acceptance via advance(lastAccepted:).
+                break
         }
     }
 
@@ -525,10 +525,10 @@ extension GraphValueEncoder {
     @discardableResult
     mutating func advanceFloatStageOrTarget(state: inout FloatState) -> Bool {
         let nextStage: FloatStage? = switch state.stage {
-        case .specialValues: .truncation
-        case .truncation: .integralBinarySearch
-        case .integralBinarySearch: .ratioBinarySearch
-        case .ratioBinarySearch: nil
+            case .specialValues: .truncation
+            case .truncation: .integralBinarySearch
+            case .integralBinarySearch: .ratioBinarySearch
+            case .ratioBinarySearch: nil
         }
 
         if let next = nextStage {

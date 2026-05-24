@@ -219,199 +219,199 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
         switch gen {
-        case let .pure(value):
-            return (value, .just)
+            case let .pure(value):
+                return (value, .just)
 
         // MARK: chooseBits
 
-        case let .impure(operation: .chooseBits(min, max, tag, isRangeExplicit, scaling), continuation):
-            let effectiveRange: ClosedRange<UInt64>
-            if let scaling {
-                let size = consumeSize(&context)
-                effectiveRange = Gen.applyScaling(
-                    min: min, max: max, tag: tag, scaling: scaling, size: size
+            case let .impure(operation: .chooseBits(min, max, tag, isRangeExplicit, scaling), continuation):
+                let effectiveRange: ClosedRange<UInt64>
+                if let scaling {
+                    let size = consumeSize(&context)
+                    effectiveRange = Gen.applyScaling(
+                        min: min, max: max, tag: tag, scaling: scaling, size: size
+                    )
+                } else {
+                    effectiveRange = min ... max
+                }
+                let rawBits = context.prng.next(in: effectiveRange)
+                let randomBits = tag.isFloatingPoint
+                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    : rawBits
+                let calleeTree = ChoiceTree.choice(
+                    ChoiceValue(randomBits, tag: tag),
+                    .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
                 )
-            } else {
-                effectiveRange = min ... max
-            }
-            let rawBits = context.prng.next(in: effectiveRange)
-            let randomBits = tag.isFloatingPoint
-                ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
-                : rawBits
-            let calleeTree = ChoiceTree.choice(
-                ChoiceValue(randomBits, tag: tag),
-                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
-            )
-            return try runContinuation(
-                result: randomBits, calleeChoiceTree: calleeTree,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+                return try runContinuation(
+                    result: randomBits, calleeChoiceTree: calleeTree,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: just
 
-        case let .impure(operation: .just(value), continuation):
-            return try runContinuation(
-                result: value, calleeChoiceTree: .just,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .just(value), continuation):
+                return try runContinuation(
+                    result: value, calleeChoiceTree: .just,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: getSize
 
-        case .impure(operation: .getSize, let continuation):
-            let size = Self.consumeSize(&context)
-            return try runContinuation(
-                result: size, calleeChoiceTree: .getSize(size),
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case .impure(operation: .getSize, let continuation):
+                let size = Self.consumeSize(&context)
+                return try runContinuation(
+                    result: size, calleeChoiceTree: .getSize(size),
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: contramap
 
-        case let .impure(operation: .contramap(_, innerGen), continuation):
-            guard let (result, tree) = try generateRecursiveAny(
-                innerGen, with: inputValue, context: &context
-            ) else { return nil }
-            return try runContinuation(
-                result: result, calleeChoiceTree: tree,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .contramap(_, innerGen), continuation):
+                guard let (result, tree) = try generateRecursiveAny(
+                    innerGen, with: inputValue, context: &context
+                ) else { return nil }
+                return try runContinuation(
+                    result: result, calleeChoiceTree: tree,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: prune
 
-        case let .impure(operation: .prune(innerGen), continuation):
-            guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
-                return nil
-            }
-            guard let (result, tree) = try generateRecursiveAny(
-                innerGen, with: wrappedValue, context: &context
-            ) else { return nil }
-            return try runContinuation(
-                result: result, calleeChoiceTree: tree,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .prune(innerGen), continuation):
+                guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
+                    return nil
+                }
+                guard let (result, tree) = try generateRecursiveAny(
+                    innerGen, with: wrappedValue, context: &context
+                ) else { return nil }
+                return try runContinuation(
+                    result: result, calleeChoiceTree: tree,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: pick
 
-        case let .impure(operation: .pick(choices), continuation):
-            return try handlePick(
-                choices,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .pick(choices), continuation):
+                return try handlePick(
+                    choices,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: sequence
 
-        case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
-            return try handleSequence(
-                lengthGen: lengthGen, elementGen: elementGen,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+                return try handleSequence(
+                    lengthGen: lengthGen, elementGen: elementGen,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: zip
 
-        case let .impure(operation: .zip(generators, isOpaque), continuation):
-            return try handleZip(
-                generators, isOpaque: isOpaque,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .zip(generators, isOpaque), continuation):
+                return try handleZip(
+                    generators, isOpaque: isOpaque,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: resize
 
-        case let .impure(operation: .resize(newSize, resizeGen), continuation):
-            context.sizeOverride = newSize
-            defer { context.sizeOverride = nil }
-            guard let result = try generateRecursiveAny(
-                resizeGen, with: inputValue, context: &context
-            ) else { return nil }
-            let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [result.1])
-            return try runContinuation(
-                result: result.0, calleeChoiceTree: calleeTree,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .resize(newSize, resizeGen), continuation):
+                context.sizeOverride = newSize
+                defer { context.sizeOverride = nil }
+                guard let result = try generateRecursiveAny(
+                    resizeGen, with: inputValue, context: &context
+                ) else { return nil }
+                let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [result.1])
+                return try runContinuation(
+                    result: result.0, calleeChoiceTree: calleeTree,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: filter
 
-        case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, tuned, sourceLocation), continuation):
-            let filteredGen: AnyGenerator
-            if let tuned {
-                filteredGen = tuned
-            } else if filterType == .rejectionSampling {
-                filteredGen = filterGen
-            } else if let cached = context.tunedFilterCache[fingerprint] {
-                filteredGen = cached
-            } else {
-                let resolved = (try? ChoiceGradientTuner<Any>.tune(filterGen, predicate: predicate)) ?? filterGen
-                context.tunedFilterCache[fingerprint] = resolved
-                filteredGen = resolved
-            }
-            var attempts = 0 as UInt64
-            while attempts < GenerationContext.maxFilterRuns {
-                guard let (result, tree) = try Self.generateRecursiveAny(
-                    filteredGen, with: inputValue, context: &context
-                ) else { return nil }
-                let passed = predicate(result)
-                if context.filterObservations[fingerprint] == nil {
-                    context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
+            case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, tuned, sourceLocation), continuation):
+                let filteredGen: AnyGenerator
+                if let tuned {
+                    filteredGen = tuned
+                } else if filterType == .rejectionSampling {
+                    filteredGen = filterGen
+                } else if let cached = context.tunedFilterCache[fingerprint] {
+                    filteredGen = cached
+                } else {
+                    let resolved = (try? ChoiceGradientTuner<Any>.tune(filterGen, predicate: predicate)) ?? filterGen
+                    context.tunedFilterCache[fingerprint] = resolved
+                    filteredGen = resolved
                 }
-                context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
-                if passed {
-                    return try runContinuation(
-                        result: result, calleeChoiceTree: tree,
-                        continuation: continuation, inputValue: inputValue, context: &context
-                    )
+                var attempts = 0 as UInt64
+                while attempts < GenerationContext.maxFilterRuns {
+                    guard let (result, tree) = try Self.generateRecursiveAny(
+                        filteredGen, with: inputValue, context: &context
+                    ) else { return nil }
+                    let passed = predicate(result)
+                    if context.filterObservations[fingerprint] == nil {
+                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
+                    }
+                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
+                    if passed {
+                        return try runContinuation(
+                            result: result, calleeChoiceTree: tree,
+                            continuation: continuation, inputValue: inputValue, context: &context
+                        )
+                    }
+                    attempts += 1
                 }
-                attempts += 1
-            }
-            sourceLocation.onBudgetExhausted?()
-            throw GeneratorError.sparseValidityCondition
+                sourceLocation.onBudgetExhausted?()
+                throw GeneratorError.sparseValidityCondition
 
         // MARK: classify
 
-        case let .impure(operation: .classify(classifyGen, fingerprint, classifiers), continuation):
-            guard let (result, tree) = try generateRecursiveAny(
-                classifyGen, with: inputValue, context: &context
-            ) else { return nil }
-            var bucket = context.classifications[fingerprint, default: [:]]
-            for (label, classifier) in classifiers where classifier(result) {
-                bucket[label, default: []].insert(context.runs)
-            }
-            context.classifications[fingerprint] = bucket
-            return try runContinuation(
-                result: result, calleeChoiceTree: tree,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .classify(classifyGen, fingerprint, classifiers), continuation):
+                guard let (result, tree) = try generateRecursiveAny(
+                    classifyGen, with: inputValue, context: &context
+                ) else { return nil }
+                var bucket = context.classifications[fingerprint, default: [:]]
+                for (label, classifier) in classifiers where classifier(result) {
+                    bucket[label, default: []].insert(context.runs)
+                }
+                context.classifications[fingerprint] = bucket
+                return try runContinuation(
+                    result: result, calleeChoiceTree: tree,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: transform
 
-        case let .impure(operation: .transform(kind, inner), continuation):
-            return try handleTransform(
-                kind: kind, inner: inner,
-                continuation: continuation, inputValue: inputValue, context: &context
-            )
+            case let .impure(operation: .transform(kind, inner), continuation):
+                return try handleTransform(
+                    kind: kind, inner: inner,
+                    continuation: continuation, inputValue: inputValue, context: &context
+                )
 
         // MARK: unique
 
-        case let .impure(operation: .unique(uniqueGen, fingerprint, keyExtractor), continuation):
-            var attempts = 0 as UInt64
-            while attempts < GenerationContext.maxFilterRuns {
-                guard let (result, tree) = try Self.generateRecursiveAny(
-                    uniqueGen, with: inputValue, context: &context
-                ) else { return nil }
-                let isDuplicate: Bool
-                if let keyExtractor {
-                    let key = keyExtractor(result)
-                    isDuplicate = context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted == false
-                } else {
-                    let sequence = ChoiceSequence.flatten(tree)
-                    isDuplicate = context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted == false
+            case let .impure(operation: .unique(uniqueGen, fingerprint, keyExtractor), continuation):
+                var attempts = 0 as UInt64
+                while attempts < GenerationContext.maxFilterRuns {
+                    guard let (result, tree) = try Self.generateRecursiveAny(
+                        uniqueGen, with: inputValue, context: &context
+                    ) else { return nil }
+                    let isDuplicate: Bool
+                    if let keyExtractor {
+                        let key = keyExtractor(result)
+                        isDuplicate = context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted == false
+                    } else {
+                        let sequence = ChoiceSequence.flatten(tree)
+                        isDuplicate = context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted == false
+                    }
+                    if isDuplicate == false {
+                        return try runContinuation(
+                            result: result, calleeChoiceTree: tree,
+                            continuation: continuation, inputValue: inputValue, context: &context
+                        )
+                    }
+                    attempts += 1
                 }
-                if isDuplicate == false {
-                    return try runContinuation(
-                        result: result, calleeChoiceTree: tree,
-                        continuation: continuation, inputValue: inputValue, context: &context
-                    )
-                }
-                attempts += 1
-            }
-            throw GeneratorError.uniqueBudgetExhausted
+                throw GeneratorError.uniqueBudgetExhausted
         }
     }
 
@@ -659,51 +659,51 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let result: Any
         let resultTree: ChoiceTree
         switch kind {
-        case let .map(forward, _, _):
-            guard let (innerValue, innerTree) = try generateRecursiveAny(
-                inner, with: inputValue, context: &context
-            ) else {
-                return nil
-            }
-            result = try forward(innerValue)
-            resultTree = innerTree
-        case let .bind(fingerprint, forward, _, _, _):
-            guard let (innerValue, innerTree) = try generateRecursiveAny(
-                inner, with: inputValue, context: &context
-            ) else {
-                return nil
-            }
-            let boundGen = try forward(innerValue)
-            let savedMaterializePicks = context.materializePicks
-            context.materializePicks = false
-            defer { context.materializePicks = savedMaterializePicks }
-            guard let (boundValue, boundTree) = try generateRecursiveAny(
-                boundGen, with: inputValue, context: &context
-            ) else {
-                return nil
-            }
-            result = boundValue
-            resultTree = .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
-        case let .metamorphic(transforms, _):
-            let savedState = (context.prng.seed, context.prng.currentState)
-            guard let (original, innerTree) = try generateRecursiveAny(
-                inner, with: inputValue, context: &context
-            ) else {
-                return nil
-            }
-            var results: [Any] = [original]
-            results.reserveCapacity(transforms.count + 1)
-            for transform in transforms {
-                context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
-                guard let (copy, _) = try generateRecursiveAny(
+            case let .map(forward, _, _):
+                guard let (innerValue, innerTree) = try generateRecursiveAny(
                     inner, with: inputValue, context: &context
                 ) else {
                     return nil
                 }
-                try results.append(transform(copy))
-            }
-            result = results
-            resultTree = innerTree
+                result = try forward(innerValue)
+                resultTree = innerTree
+            case let .bind(fingerprint, forward, _, _, _):
+                guard let (innerValue, innerTree) = try generateRecursiveAny(
+                    inner, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                let boundGen = try forward(innerValue)
+                let savedMaterializePicks = context.materializePicks
+                context.materializePicks = false
+                defer { context.materializePicks = savedMaterializePicks }
+                guard let (boundValue, boundTree) = try generateRecursiveAny(
+                    boundGen, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                result = boundValue
+                resultTree = .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
+            case let .metamorphic(transforms, _):
+                let savedState = (context.prng.seed, context.prng.currentState)
+                guard let (original, innerTree) = try generateRecursiveAny(
+                    inner, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                var results: [Any] = [original]
+                results.reserveCapacity(transforms.count + 1)
+                for transform in transforms {
+                    context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                    guard let (copy, _) = try generateRecursiveAny(
+                        inner, with: inputValue, context: &context
+                    ) else {
+                        return nil
+                    }
+                    try results.append(transform(copy))
+                }
+                result = results
+                resultTree = innerTree
         }
         return try runContinuation(
             result: result,

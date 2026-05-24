@@ -85,7 +85,9 @@ protocol StatefulGraphEncoder: GraphEncoder {
 
 extension GraphEncoder {
     /// Default: no replacement shortlex rejections.
-    var hadReplacementShortlexRejection: Bool { false }
+    var hadReplacementShortlexRejection: Bool {
+        false
+    }
 
     /// Default: no partial convergence to flush.
     mutating func flushPartialConvergence() {}

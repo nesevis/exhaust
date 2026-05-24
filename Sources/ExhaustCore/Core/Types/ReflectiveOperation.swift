@@ -302,44 +302,44 @@ package extension ReflectiveOperation {
         _ transform: (AnyGenerator) throws -> AnyGenerator
     ) rethrows -> ReflectiveOperation? {
         switch self {
-        case let .contramap(contramapTransform, next):
-            return try .contramap(transform: contramapTransform, next: transform(next))
+            case let .contramap(contramapTransform, next):
+                return try .contramap(transform: contramapTransform, next: transform(next))
 
-        case let .prune(next):
-            return try .prune(next: transform(next))
+            case let .prune(next):
+                return try .prune(next: transform(next))
 
-        case let .resize(newSize, next):
-            return try .resize(newSize: newSize, next: transform(next))
+            case let .resize(newSize, next):
+                return try .resize(newSize: newSize, next: transform(next))
 
-        case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
-            return try .filter(
-                gen: transform(gen),
-                fingerprint: fingerprint,
-                filterType: filterType,
-                predicate: predicate,
-                tuned: tuned.map(transform),
-                sourceLocation: sourceLocation
-            )
+            case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
+                return try .filter(
+                    gen: transform(gen),
+                    fingerprint: fingerprint,
+                    filterType: filterType,
+                    predicate: predicate,
+                    tuned: tuned.map(transform),
+                    sourceLocation: sourceLocation
+                )
 
-        case let .classify(gen, fingerprint, classifiers):
-            return try .classify(
-                gen: transform(gen),
-                fingerprint: fingerprint,
-                classifiers: classifiers
-            )
+            case let .classify(gen, fingerprint, classifiers):
+                return try .classify(
+                    gen: transform(gen),
+                    fingerprint: fingerprint,
+                    classifiers: classifiers
+                )
 
-        case let .unique(gen, fingerprint, keyExtractor):
-            return try .unique(
-                gen: transform(gen),
-                fingerprint: fingerprint,
-                keyExtractor: keyExtractor
-            )
+            case let .unique(gen, fingerprint, keyExtractor):
+                return try .unique(
+                    gen: transform(gen),
+                    fingerprint: fingerprint,
+                    keyExtractor: keyExtractor
+                )
 
-        case let .transform(kind, inner):
-            return try .transform(kind: kind, inner: transform(inner))
+            case let .transform(kind, inner):
+                return try .transform(kind: kind, inner: transform(inner))
 
-        case .chooseBits, .just, .getSize, .pick, .zip, .sequence:
-            return nil
+            case .chooseBits, .just, .getSize, .pick, .zip, .sequence:
+                return nil
         }
     }
 }

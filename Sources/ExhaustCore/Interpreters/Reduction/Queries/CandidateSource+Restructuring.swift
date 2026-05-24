@@ -20,12 +20,12 @@ extension CandidateSourceBuilder {
 
         for scope in ReplacementQuery.build(graph: graph, previousGraph: previousGraph) {
             let structuralYield: Int = switch scope {
-            case let .selfSimilar(_, _, sizeDelta):
-                max(0, sizeDelta)
-            case let .branchPivot(pickNodeID, _):
-                graph.nodes[pickNodeID].positionRange?.count ?? 0
-            case let .descendantPromotion(_, _, sizeDelta):
-                sizeDelta
+                case let .selfSimilar(_, _, sizeDelta):
+                    max(0, sizeDelta)
+                case let .branchPivot(pickNodeID, _):
+                    graph.nodes[pickNodeID].positionRange?.count ?? 0
+                case let .descendantPromotion(_, _, sizeDelta):
+                    sizeDelta
             }
             results.append(GraphTransformation(
                 operation: .replace(scope),

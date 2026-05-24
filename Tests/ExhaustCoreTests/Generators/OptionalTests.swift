@@ -90,12 +90,12 @@ struct OptionalTests {
             var iterator = ValueInterpreter(gen)
             guard let value = try iterator.next() else { break }
             switch value {
-            case .none:
-                sawNone = true
-            case .some(.none):
-                sawSomeNone = true
-            case .some(.some):
-                sawSomeSome = true
+                case .none:
+                    sawNone = true
+                case .some(.none):
+                    sawSomeNone = true
+                case .some(.some):
+                    sawSomeSome = true
             }
             if sawNone, sawSomeNone, sawSomeSome { break }
         }

@@ -9,7 +9,7 @@
 ///
 /// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` carries the actual numeric choices.
 @usableFromInline
-package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
+package enum ChoiceSequenceValue: Hashable, Equatable {
     /// The elements within the `true`--`false` range are logically grouped.
     case group(Bool)
     /// The elements within the `true`--`false` range are elements of a sequence.
@@ -28,10 +28,10 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     @inline(__always)
     public var value: Value? {
         switch self {
-        case let .value(value):
-            value
-        default:
-            nil
+            case let .value(value):
+                value
+            default:
+                nil
         }
     }
 
@@ -40,46 +40,46 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// Compares two entries in shortlex order, where structural markers sort by open/close and values sort by ``Value/shortLexCompare(_:)``.
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
-        case (.group(false), .group(true)),
-             (.sequence(false, validRange: _, isLengthExplicit: _), .sequence(true, validRange: _, isLengthExplicit: _)),
-             (.bind(false), .bind(true)):
-            .lt
-        case (.group(true), .group(false)),
-             (.sequence(true, validRange: _, isLengthExplicit: _), .sequence(false, validRange: _, isLengthExplicit: _)),
-             (.bind(true), .bind(false)):
-            .gt
-        case (.just, .value):
-            .lt
-        case (.value, .just):
-            .gt
-        case let (.value(a), .value(b)):
-            a.shortLexCompare(b)
-        default:
-            .eq
+            case (.group(false), .group(true)),
+                 (.sequence(false, validRange: _, isLengthExplicit: _), .sequence(true, validRange: _, isLengthExplicit: _)),
+                 (.bind(false), .bind(true)):
+                .lt
+            case (.group(true), .group(false)),
+                 (.sequence(true, validRange: _, isLengthExplicit: _), .sequence(false, validRange: _, isLengthExplicit: _)),
+                 (.bind(true), .bind(false)):
+                .gt
+            case (.just, .value):
+                .lt
+            case (.value, .just):
+                .gt
+            case let (.value(a), .value(b)):
+                a.shortLexCompare(b)
+            default:
+                .eq
         }
     }
 
     /// Returns a single-character abbreviation for compact sequence printing.
     public var shortString: String {
         switch self {
-        case .just:
-            return "J"
-        case .group(true):
-            return "("
-        case .group(false):
-            return ")"
-        case .bind(true):
-            return "{"
-        case .bind(false):
-            return "}"
-        case .sequence(true, validRange: _, isLengthExplicit: _):
-            return "["
-        case .sequence(false, validRange: _, isLengthExplicit: _):
-            return "]"
-        case .value:
-            return "V"
-        case let .branch(value):
-            return "B\(value.id):"
+            case .just:
+                return "J"
+            case .group(true):
+                return "("
+            case .group(false):
+                return ")"
+            case .bind(true):
+                return "{"
+            case .bind(false):
+                return "}"
+            case .sequence(true, validRange: _, isLengthExplicit: _):
+                return "["
+            case .sequence(false, validRange: _, isLengthExplicit: _):
+                return "]"
+            case .value:
+                return "V"
+            case let .branch(value):
+                return "B\(value.id):"
         }
     }
 

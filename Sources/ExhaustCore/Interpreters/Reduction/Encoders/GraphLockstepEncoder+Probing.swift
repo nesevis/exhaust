@@ -111,56 +111,56 @@ extension GraphLockstepEncoder {
     ) -> ChoiceSequence? {
         while state.planIndex < state.plans.count {
             switch state.probePhase {
-            case .directShot:
-                let plan = state.plans[state.planIndex]
-                if let candidate = makeLockstepCandidate(plan: plan, delta: plan.distance) {
-                    state.lastEmittedCandidate = candidate
-                    state.lastWasDirectShot = true
+                case .directShot:
+                    let plan = state.plans[state.planIndex]
+                    if let candidate = makeLockstepCandidate(plan: plan, delta: plan.distance) {
+                        state.lastEmittedCandidate = candidate
+                        state.lastWasDirectShot = true
+                        state.probePhase = .binarySearchStart
+                        return candidate
+                    }
+                    // No valid direct shot — fall through to binary search.
                     state.probePhase = .binarySearchStart
-                    return candidate
-                }
-                // No valid direct shot — fall through to binary search.
-                state.probePhase = .binarySearchStart
-                continue
+                    continue
 
-            case .binarySearchStart:
-                // If the direct shot was accepted, the plan is done.
-                if lastAccepted, state.lastWasDirectShot {
+                case .binarySearchStart:
+                    // If the direct shot was accepted, the plan is done.
+                    if lastAccepted, state.lastWasDirectShot {
+                        state.lastWasDirectShot = false
+                        state.planIndex += 1
+                        state.probePhase = .directShot
+                        continue
+                    }
                     state.lastWasDirectShot = false
-                    state.planIndex += 1
-                    state.probePhase = .directShot
-                    continue
-                }
-                state.lastWasDirectShot = false
 
-                let plan = state.plans[state.planIndex]
-                state.stepper = BinarySearchStepper(lo: 0, hi: plan.distance, direction: .findLargest)
-                guard let firstDelta = state.stepper.start() else {
-                    state.planIndex += 1
-                    state.probePhase = .directShot
+                    let plan = state.plans[state.planIndex]
+                    state.stepper = BinarySearchStepper(lo: 0, hi: plan.distance, direction: .findLargest)
+                    guard let firstDelta = state.stepper.start() else {
+                        state.planIndex += 1
+                        state.probePhase = .directShot
+                        continue
+                    }
+                    state.probePhase = .binarySearch
+                    if let candidate = makeLockstepCandidate(plan: plan, delta: firstDelta) {
+                        state.lastEmittedCandidate = candidate
+                        return candidate
+                    }
+                    // First probe didn't yield a candidate — advance stepper.
                     continue
-                }
-                state.probePhase = .binarySearch
-                if let candidate = makeLockstepCandidate(plan: plan, delta: firstDelta) {
-                    state.lastEmittedCandidate = candidate
-                    return candidate
-                }
-                // First probe didn't yield a candidate — advance stepper.
-                continue
 
-            case .binarySearch:
-                let plan = state.plans[state.planIndex]
-                guard let nextDelta = state.stepper.advance(lastAccepted: lastAccepted) else {
-                    // Converged — move to next plan.
-                    state.planIndex += 1
-                    state.probePhase = .directShot
+                case .binarySearch:
+                    let plan = state.plans[state.planIndex]
+                    guard let nextDelta = state.stepper.advance(lastAccepted: lastAccepted) else {
+                        // Converged — move to next plan.
+                        state.planIndex += 1
+                        state.probePhase = .directShot
+                        continue
+                    }
+                    if let candidate = makeLockstepCandidate(plan: plan, delta: nextDelta) {
+                        state.lastEmittedCandidate = candidate
+                        return candidate
+                    }
                     continue
-                }
-                if let candidate = makeLockstepCandidate(plan: plan, delta: nextDelta) {
-                    state.lastEmittedCandidate = candidate
-                    return candidate
-                }
-                continue
             }
         }
         return nil

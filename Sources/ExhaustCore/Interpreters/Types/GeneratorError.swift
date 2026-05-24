@@ -20,27 +20,27 @@ public enum GeneratorError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .choiceTreeConstructionFailed:
-            "Generation produced a value but failed to construct the corresponding choice tree."
-        case let .typeMismatch(expected, actual):
-            "Type mismatch during interpretation: expected '\(expected)', got '\(actual)'."
-        case .sparseValidityCondition:
-            "The filter predicate rejected too many candidates within the retry budget."
-        case .uniqueBudgetExhausted:
-            "The unique combinator could not find a new distinct value within its retry budget."
+            case .choiceTreeConstructionFailed:
+                "Generation produced a value but failed to construct the corresponding choice tree."
+            case let .typeMismatch(expected, actual):
+                "Type mismatch during interpretation: expected '\(expected)', got '\(actual)'."
+            case .sparseValidityCondition:
+                "The filter predicate rejected too many candidates within the retry budget."
+            case .uniqueBudgetExhausted:
+                "The unique combinator could not find a new distinct value within its retry budget."
         }
     }
 
     public var recoverySuggestion: String? {
         switch self {
-        case .choiceTreeConstructionFailed:
-            "This likely indicates a generator composition issue. Check that sub-generators return non-nil values for the current choice sequence."
-        case .typeMismatch:
-            "This likely indicates a generator composition issue. Verify that map, bind, and contramap closures produce values of the declared type."
-        case .sparseValidityCondition:
-            "Widen the input generator's range, relax the filter predicate, or increase the filter budget."
-        case .uniqueBudgetExhausted:
-            "Reduce the number of unique values requested, widen the generator's domain, or increase the retry budget."
+            case .choiceTreeConstructionFailed:
+                "This likely indicates a generator composition issue. Check that sub-generators return non-nil values for the current choice sequence."
+            case .typeMismatch:
+                "This likely indicates a generator composition issue. Verify that map, bind, and contramap closures produce values of the declared type."
+            case .sparseValidityCondition:
+                "Widen the input generator's range, relax the filter predicate, or increase the filter budget."
+            case .uniqueBudgetExhausted:
+                "Reduce the number of unique values requested, widen the generator's domain, or increase the retry budget."
         }
     }
 }

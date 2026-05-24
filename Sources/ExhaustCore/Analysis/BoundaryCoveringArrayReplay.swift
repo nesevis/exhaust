@@ -36,133 +36,133 @@ package enum BoundaryCoveringArrayReplay {
         paramIndex: inout Int
     ) -> ChoiceTree? {
         switch tree {
-        case let .choice(_, metadata):
-            guard paramIndex < profile.parameters.count else { return nil }
-            let param = profile.parameters[paramIndex]
-            let valueIndex = row.values[paramIndex]
-            paramIndex += 1
-
-            guard let range = metadata.validRange else { return nil }
-            let tag = param.tag
-            return buildChooseBitsTree(param: param, valueIndex: valueIndex, range: range, tag: tag)
-
-        case .just, .getSize, .resize:
-            return tree
-
-        case .group(_, isOpaque: true):
-            return tree
-
-        case let .group(children, _):
-            if ChoiceTreeAnalysis.isPick(children) {
+            case let .choice(_, metadata):
                 guard paramIndex < profile.parameters.count else { return nil }
                 let param = profile.parameters[paramIndex]
                 let valueIndex = row.values[paramIndex]
                 paramIndex += 1
-                if case let .pick(choices) = param.kind {
-                    return buildPickTree(param: param, valueIndex: valueIndex, choices: choices)
-                }
-                return nil
-            }
-            var newChildren: [ChoiceTree] = []
-            for child in children {
-                guard let newChild = substituteParameters(
-                    in: child,
-                    row: row,
-                    profile: profile,
-                    paramIndex: &paramIndex
-                ) else {
-                    return nil
-                }
-                newChildren.append(newChild)
-            }
-            return .group(newChildren)
 
-        case let .bind(fingerprint, inner, bound):
-            guard let newInner = substituteParameters(
-                in: inner,
-                row: row,
-                profile: profile,
-                paramIndex: &paramIndex
-            ) else {
-                return nil
-            }
-            return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
+                guard let range = metadata.validRange else { return nil }
+                let tag = param.tag
+                return buildChooseBitsTree(param: param, valueIndex: valueIndex, range: range, tag: tag)
 
-        case let .sequence(_, elements, metadata):
-            guard paramIndex < profile.parameters.count else { return nil }
-            let param = profile.parameters[paramIndex]
-            let compositeIndex = row.values[paramIndex]
-            paramIndex += 1
+            case .just, .getSize, .resize:
+                return tree
 
-            if case let .compositeSequence(_, elementSlotParams, lengthSlots) = param.kind {
-                guard let slot = findLengthSlot(for: compositeIndex, in: lengthSlots) else {
-                    return nil
-                }
-                let elementValues = decomposeCompositeIndex(
-                    compositeIndex - slot.flatOffset,
-                    activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
-                )
-                var newElements: [ChoiceTree] = []
-                var flatIdx = 0
-                for (elementIndex, element) in elements.enumerated() {
-                    guard UInt64(elementIndex) < slot.length else { break }
-                    if elementIndex < slot.activeElementCount {
-                        let slotParams = elementSlotParams[elementIndex]
-                        let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
-                        let subProfile = BoundaryDomainProfile(parameters: slotParams)
-                        guard let newElement = Self.buildTree(row: subRow, profile: subProfile) else {
-                            return nil
-                        }
-                        newElements.append(newElement)
-                        flatIdx += slotParams.count
-                    } else {
-                        newElements.append(element)
+            case .group(_, isOpaque: true):
+                return tree
+
+            case let .group(children, _):
+                if ChoiceTreeAnalysis.isPick(children) {
+                    guard paramIndex < profile.parameters.count else { return nil }
+                    let param = profile.parameters[paramIndex]
+                    let valueIndex = row.values[paramIndex]
+                    paramIndex += 1
+                    if case let .pick(choices) = param.kind {
+                        return buildPickTree(param: param, valueIndex: valueIndex, choices: choices)
                     }
+                    return nil
                 }
-                return .sequence(length: slot.length, elements: newElements, metadata)
-            }
-
-            // Legacy: separate length + element parameters
-            guard Int(compositeIndex) < param.values.count else { return nil }
-            let newLength = param.values[Int(compositeIndex)]
-            let lengthRange = metadata.validRange ?? (0 ... UInt64.max)
-            let analyzedSlots = min(2, Int(lengthRange.upperBound), elements.count)
-            var newElements: [ChoiceTree] = []
-            for (elementIndex, element) in elements.enumerated() {
-                guard UInt64(elementIndex) < newLength else { break }
-                if elementIndex < analyzedSlots {
-                    guard let newElement = substituteParameters(
-                        in: element,
+                var newChildren: [ChoiceTree] = []
+                for child in children {
+                    guard let newChild = substituteParameters(
+                        in: child,
                         row: row,
                         profile: profile,
                         paramIndex: &paramIndex
                     ) else {
                         return nil
                     }
-                    newElements.append(newElement)
-                } else {
-                    newElements.append(element)
+                    newChildren.append(newChild)
                 }
-            }
-            return .sequence(length: newLength, elements: newElements, metadata)
+                return .group(newChildren)
 
-        case let .branch(b):
-            guard let newChoice = substituteParameters(
-                in: b.choice,
-                row: row,
-                profile: profile,
-                paramIndex: &paramIndex
-            ) else {
-                return nil
-            }
-            return .branch(
-                fingerprint: b.fingerprint,
-                weight: b.weight,
-                id: b.id,
-                branchCount: b.branchCount,
-                choice: newChoice,
-                isSelected: b.isSelected
-            )
+            case let .bind(fingerprint, inner, bound):
+                guard let newInner = substituteParameters(
+                    in: inner,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
+                    return nil
+                }
+                return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
+
+            case let .sequence(_, elements, metadata):
+                guard paramIndex < profile.parameters.count else { return nil }
+                let param = profile.parameters[paramIndex]
+                let compositeIndex = row.values[paramIndex]
+                paramIndex += 1
+
+                if case let .compositeSequence(_, elementSlotParams, lengthSlots) = param.kind {
+                    guard let slot = findLengthSlot(for: compositeIndex, in: lengthSlots) else {
+                        return nil
+                    }
+                    let elementValues = decomposeCompositeIndex(
+                        compositeIndex - slot.flatOffset,
+                        activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
+                    )
+                    var newElements: [ChoiceTree] = []
+                    var flatIdx = 0
+                    for (elementIndex, element) in elements.enumerated() {
+                        guard UInt64(elementIndex) < slot.length else { break }
+                        if elementIndex < slot.activeElementCount {
+                            let slotParams = elementSlotParams[elementIndex]
+                            let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
+                            let subProfile = BoundaryDomainProfile(parameters: slotParams)
+                            guard let newElement = Self.buildTree(row: subRow, profile: subProfile) else {
+                                return nil
+                            }
+                            newElements.append(newElement)
+                            flatIdx += slotParams.count
+                        } else {
+                            newElements.append(element)
+                        }
+                    }
+                    return .sequence(length: slot.length, elements: newElements, metadata)
+                }
+
+                // Legacy: separate length + element parameters
+                guard Int(compositeIndex) < param.values.count else { return nil }
+                let newLength = param.values[Int(compositeIndex)]
+                let lengthRange = metadata.validRange ?? (0 ... UInt64.max)
+                let analyzedSlots = min(2, Int(lengthRange.upperBound), elements.count)
+                var newElements: [ChoiceTree] = []
+                for (elementIndex, element) in elements.enumerated() {
+                    guard UInt64(elementIndex) < newLength else { break }
+                    if elementIndex < analyzedSlots {
+                        guard let newElement = substituteParameters(
+                            in: element,
+                            row: row,
+                            profile: profile,
+                            paramIndex: &paramIndex
+                        ) else {
+                            return nil
+                        }
+                        newElements.append(newElement)
+                    } else {
+                        newElements.append(element)
+                    }
+                }
+                return .sequence(length: newLength, elements: newElements, metadata)
+
+            case let .branch(b):
+                guard let newChoice = substituteParameters(
+                    in: b.choice,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
+                    return nil
+                }
+                return .branch(
+                    fingerprint: b.fingerprint,
+                    weight: b.weight,
+                    id: b.id,
+                    branchCount: b.branchCount,
+                    choice: newChoice,
+                    isSelected: b.isSelected
+                )
         }
     }
 
@@ -180,65 +180,65 @@ package enum BoundaryCoveringArrayReplay {
             let valueIndex = row.values[i]
 
             switch param.kind {
-            case let .chooseBits(range, tag),
-                 let .finiteChooseBits(range, tag),
-                 let .sequenceElement(_, range, tag):
-                guard let tree = buildChooseBitsTree(
-                    param: param,
-                    valueIndex: valueIndex,
-                    range: range,
-                    tag: tag
-                ) else { return nil }
-                trees.append(tree)
-                i += 1
+                case let .chooseBits(range, tag),
+                     let .finiteChooseBits(range, tag),
+                     let .sequenceElement(_, range, tag):
+                    guard let tree = buildChooseBitsTree(
+                        param: param,
+                        valueIndex: valueIndex,
+                        range: range,
+                        tag: tag
+                    ) else { return nil }
+                    trees.append(tree)
+                    i += 1
 
-            case let .sequenceLength(lengthRange):
-                guard let (tree, consumed) = buildSequenceTree(
-                    lengthParam: param,
-                    lengthValueIndex: valueIndex,
-                    lengthRange: lengthRange,
-                    remainingParams: Array(profile.parameters.dropFirst(i + 1)),
-                    remainingValues: Array(row.values.dropFirst(i + 1))
-                ) else { return nil }
-                trees.append(tree)
-                i += 1 + consumed
+                case let .sequenceLength(lengthRange):
+                    guard let (tree, consumed) = buildSequenceTree(
+                        lengthParam: param,
+                        lengthValueIndex: valueIndex,
+                        lengthRange: lengthRange,
+                        remainingParams: Array(profile.parameters.dropFirst(i + 1)),
+                        remainingValues: Array(row.values.dropFirst(i + 1))
+                    ) else { return nil }
+                    trees.append(tree)
+                    i += 1 + consumed
 
-            case let .compositeSequence(lengthRange, elementSlotParams, lengthSlots):
-                guard let slot = findLengthSlot(for: valueIndex, in: lengthSlots) else {
-                    return nil
-                }
-                let elementValues = decomposeCompositeIndex(
-                    valueIndex - slot.flatOffset,
-                    activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
-                )
-                var elementTrees: [ChoiceTree] = []
-                var flatIdx = 0
-                for elemIdx in 0 ..< Int(slot.length) {
-                    if elemIdx < slot.activeElementCount {
-                        let slotParams = elementSlotParams[elemIdx]
-                        let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
-                        let subProfile = BoundaryDomainProfile(parameters: slotParams)
-                        guard let elemTree = Self.buildTree(row: subRow, profile: subProfile) else {
-                            return nil
-                        }
-                        elementTrees.append(elemTree)
-                        flatIdx += slotParams.count
-                    } else {
-                        elementTrees.append(.just)
+                case let .compositeSequence(lengthRange, elementSlotParams, lengthSlots):
+                    guard let slot = findLengthSlot(for: valueIndex, in: lengthSlots) else {
+                        return nil
                     }
-                }
-                let seqMetadata = ChoiceMetadata(validRange: lengthRange, isRangeExplicit: true)
-                trees.append(.sequence(length: slot.length, elements: elementTrees, seqMetadata))
-                i += 1
+                    let elementValues = decomposeCompositeIndex(
+                        valueIndex - slot.flatOffset,
+                        activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
+                    )
+                    var elementTrees: [ChoiceTree] = []
+                    var flatIdx = 0
+                    for elemIdx in 0 ..< Int(slot.length) {
+                        if elemIdx < slot.activeElementCount {
+                            let slotParams = elementSlotParams[elemIdx]
+                            let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
+                            let subProfile = BoundaryDomainProfile(parameters: slotParams)
+                            guard let elemTree = Self.buildTree(row: subRow, profile: subProfile) else {
+                                return nil
+                            }
+                            elementTrees.append(elemTree)
+                            flatIdx += slotParams.count
+                        } else {
+                            elementTrees.append(.just)
+                        }
+                    }
+                    let seqMetadata = ChoiceMetadata(validRange: lengthRange, isRangeExplicit: true)
+                    trees.append(.sequence(length: slot.length, elements: elementTrees, seqMetadata))
+                    i += 1
 
-            case let .pick(choices):
-                guard let tree = buildPickTree(
-                    param: param,
-                    valueIndex: valueIndex,
-                    choices: choices
-                ) else { return nil }
-                trees.append(tree)
-                i += 1
+                case let .pick(choices):
+                    guard let tree = buildPickTree(
+                        param: param,
+                        valueIndex: valueIndex,
+                        choices: choices
+                    ) else { return nil }
+                    trees.append(tree)
+                    i += 1
             }
         }
 
@@ -289,17 +289,17 @@ package enum BoundaryCoveringArrayReplay {
             let valueIndex = remainingValues[elementIdx]
 
             switch param.kind {
-            case let .sequenceElement(_, range, tag):
-                guard let tree = buildChooseBitsTree(
-                    param: param,
-                    valueIndex: valueIndex,
-                    range: range,
-                    tag: tag
-                ) else { return nil }
-                elementTrees.append(tree)
+                case let .sequenceElement(_, range, tag):
+                    guard let tree = buildChooseBitsTree(
+                        param: param,
+                        valueIndex: valueIndex,
+                        range: range,
+                        tag: tag
+                    ) else { return nil }
+                    elementTrees.append(tree)
 
-            default:
-                return nil
+                default:
+                    return nil
             }
         }
 
@@ -371,12 +371,12 @@ package enum BoundaryCoveringArrayReplay {
 extension BoundaryParameter {
     var tag: TypeTag {
         switch kind {
-        case let .chooseBits(_, tag), let .finiteChooseBits(_, tag):
-            tag
-        case let .sequenceElement(_, _, tag):
-            tag
-        case .sequenceLength, .pick, .compositeSequence:
-            .uint64
+            case let .chooseBits(_, tag), let .finiteChooseBits(_, tag):
+                tag
+            case let .sequenceElement(_, _, tag):
+                tag
+            case .sequenceLength, .pick, .compositeSequence:
+                .uint64
         }
     }
 }

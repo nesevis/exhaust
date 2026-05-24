@@ -115,5 +115,4 @@ enum RemovalQuery {
     }
 
     // MARK: - Subtree Removal Scopes
-
 }

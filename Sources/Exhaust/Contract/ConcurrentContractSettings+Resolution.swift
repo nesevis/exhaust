@@ -24,43 +24,43 @@ struct ResolvedConcurrentConfig {
         var config = ResolvedConcurrentConfig()
         for setting in settings {
             switch setting {
-            case let .concurrent(level):
-                config.concurrencyLevel = level
-            case let .budget(b):
-                config.budget = b
-            case let .commandLimit(limit):
-                config.commandLimit = limit
-            case let .replay(replaySeed):
-                guard let resolved = replaySeed.resolve() else {
-                    return .invalidReplaySeed(replaySeed)
-                }
-                config.seed = resolved
-            case let .suppress(option):
-                switch option {
-                case .issueReporting:
-                    config.suppressIssueReporting = true
-                case .logs:
-                    config.suppressLogs = true
-                case .all:
-                    config.suppressIssueReporting = true
-                    config.suppressLogs = true
-                }
-            case .collectOpenPBTStats:
-                config.collectOpenPBTStats = true
-            case let .onReport(closure):
-                if let existing = config.onReportClosure {
-                    let chained = existing
-                    config.onReportClosure = { report in
-                        chained(report)
-                        closure(report)
+                case let .concurrent(level):
+                    config.concurrencyLevel = level
+                case let .budget(b):
+                    config.budget = b
+                case let .commandLimit(limit):
+                    config.commandLimit = limit
+                case let .replay(replaySeed):
+                    guard let resolved = replaySeed.resolve() else {
+                        return .invalidReplaySeed(replaySeed)
                     }
-                } else {
-                    config.onReportClosure = closure
-                }
-            case let .idleTimeoutMs(ms):
-                config.idleTimeout = ms
-            case let .log(level):
-                config.logLevel = level
+                    config.seed = resolved
+                case let .suppress(option):
+                    switch option {
+                        case .issueReporting:
+                            config.suppressIssueReporting = true
+                        case .logs:
+                            config.suppressLogs = true
+                        case .all:
+                            config.suppressIssueReporting = true
+                            config.suppressLogs = true
+                    }
+                case .collectOpenPBTStats:
+                    config.collectOpenPBTStats = true
+                case let .onReport(closure):
+                    if let existing = config.onReportClosure {
+                        let chained = existing
+                        config.onReportClosure = { report in
+                            chained(report)
+                            closure(report)
+                        }
+                    } else {
+                        config.onReportClosure = closure
+                    }
+                case let .idleTimeoutMs(ms):
+                    config.idleTimeout = ms
+                case let .log(level):
+                    config.logLevel = level
             }
         }
         return .success(config)

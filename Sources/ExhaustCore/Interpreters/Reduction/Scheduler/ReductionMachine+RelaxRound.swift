@@ -1,5 +1,5 @@
 //
-//  ChoiceGraphScheduler+RelaxRound.swift
+//  ReductionMachine+RelaxRound.swift
 //  Exhaust
 //
 
@@ -155,35 +155,35 @@ extension ReductionMachine {
 
         for scope in ReplacementQuery.build(graph: graph) {
             switch scope {
-            case let .branchPivot(pickNodeID, targetBranchID):
-                if let candidate = buildUnguardedBranchPivot(
-                    pickNodeID: pickNodeID,
-                    targetBranchID: targetBranchID,
-                    sequence: sequence,
-                    graph: graph
-                ) {
-                    candidates.append(candidate)
-                }
+                case let .branchPivot(pickNodeID, targetBranchID):
+                    if let candidate = buildUnguardedBranchPivot(
+                        pickNodeID: pickNodeID,
+                        targetBranchID: targetBranchID,
+                        sequence: sequence,
+                        graph: graph
+                    ) {
+                        candidates.append(candidate)
+                    }
 
-            case let .selfSimilar(targetNodeID, donorNodeID, _):
-                if let candidate = buildUnguardedSelfSimilar(
-                    targetNodeID: targetNodeID,
-                    donorNodeID: donorNodeID,
-                    sequence: sequence,
-                    graph: graph
-                ) {
-                    candidates.append(candidate)
-                }
+                case let .selfSimilar(targetNodeID, donorNodeID, _):
+                    if let candidate = buildUnguardedSelfSimilar(
+                        targetNodeID: targetNodeID,
+                        donorNodeID: donorNodeID,
+                        sequence: sequence,
+                        graph: graph
+                    ) {
+                        candidates.append(candidate)
+                    }
 
-            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
-                if let candidate = buildUnguardedDescendantPromotion(
-                    ancestorPickNodeID: ancestorPickNodeID,
-                    descendantPickNodeID: descendantPickNodeID,
-                    sequence: sequence,
-                    graph: graph
-                ) {
-                    candidates.append(candidate)
-                }
+                case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
+                    if let candidate = buildUnguardedDescendantPromotion(
+                        ancestorPickNodeID: ancestorPickNodeID,
+                        descendantPickNodeID: descendantPickNodeID,
+                        sequence: sequence,
+                        graph: graph
+                    ) {
+                        candidates.append(candidate)
+                    }
             }
         }
 
@@ -206,10 +206,10 @@ extension ReductionMachine {
 
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
-            case let .branch(b):
-                b.id == targetBranchID
-            default:
-                false
+                case let .branch(b):
+                    b.id == targetBranchID
+                default:
+                    false
             }
         }) else { return nil }
 

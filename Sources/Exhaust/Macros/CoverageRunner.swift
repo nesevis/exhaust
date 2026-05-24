@@ -48,16 +48,16 @@ package enum CoverageRunner {
         let isExhaustiveCandidate: Bool
 
         switch analysis {
-        case let .finite(finiteProfile):
-            profile = finiteProfile
-            kind = "finite"
-            isExhaustiveCandidate = finiteProfile.totalSpace <= coverageBudget
-                && finiteProfile.originalTree?.containsBind == false
+            case let .finite(finiteProfile):
+                profile = finiteProfile
+                kind = "finite"
+                isExhaustiveCandidate = finiteProfile.totalSpace <= coverageBudget
+                    && finiteProfile.originalTree?.containsBind == false
 
-        case let .boundary(boundaryProfile):
-            profile = boundaryProfile
-            kind = "boundary"
-            isExhaustiveCandidate = false
+            case let .boundary(boundaryProfile):
+                profile = boundaryProfile
+                kind = "boundary"
+                isExhaustiveCandidate = false
         }
 
         let domainSizes = profile.domainSizes
@@ -167,11 +167,11 @@ package enum CoverageRunner {
         switch Materializer.materialize(
             gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
         ) {
-        case let .success(value, freshTree, _):
-            let passed = property(value)
-            return RowResult(value: value, tree: freshTree, passed: passed)
-        case .rejected, .failed:
-            return nil
+            case let .success(value, freshTree, _):
+                let passed = property(value)
+                return RowResult(value: value, tree: freshTree, passed: passed)
+            case .rejected, .failed:
+                return nil
         }
     }
 }

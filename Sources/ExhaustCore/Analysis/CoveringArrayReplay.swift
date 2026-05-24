@@ -55,74 +55,74 @@ package enum CoveringArrayReplay {
         paramIndex: inout Int
     ) -> ChoiceTree? {
         switch tree {
-        case .choice:
-            guard paramIndex < profile.parameters.count else { return nil }
-            let param = profile.parameters[paramIndex]
-            let valueIndex = row.values[paramIndex]
-            paramIndex += 1
-            return buildParameterTree(param: param, valueIndex: valueIndex)
-
-        case .just, .getSize, .resize:
-            return tree
-
-        case .group(_, isOpaque: true):
-            return tree
-
-        case let .group(children, _):
-            if ChoiceTreeAnalysis.isPick(children) {
+            case .choice:
                 guard paramIndex < profile.parameters.count else { return nil }
                 let param = profile.parameters[paramIndex]
                 let valueIndex = row.values[paramIndex]
                 paramIndex += 1
                 return buildParameterTree(param: param, valueIndex: valueIndex)
-            }
-            var newChildren: [ChoiceTree] = []
-            for child in children {
-                guard let newChild = substituteParameters(
-                    in: child,
+
+            case .just, .getSize, .resize:
+                return tree
+
+            case .group(_, isOpaque: true):
+                return tree
+
+            case let .group(children, _):
+                if ChoiceTreeAnalysis.isPick(children) {
+                    guard paramIndex < profile.parameters.count else { return nil }
+                    let param = profile.parameters[paramIndex]
+                    let valueIndex = row.values[paramIndex]
+                    paramIndex += 1
+                    return buildParameterTree(param: param, valueIndex: valueIndex)
+                }
+                var newChildren: [ChoiceTree] = []
+                for child in children {
+                    guard let newChild = substituteParameters(
+                        in: child,
+                        row: row,
+                        profile: profile,
+                        paramIndex: &paramIndex
+                    ) else {
+                        return nil
+                    }
+                    newChildren.append(newChild)
+                }
+                return .group(newChildren)
+
+            case let .bind(fingerprint, inner, bound):
+                // Substitute parameters in inner only; pass bound through unchanged.
+                guard let newInner = substituteParameters(
+                    in: inner,
                     row: row,
                     profile: profile,
                     paramIndex: &paramIndex
                 ) else {
                     return nil
                 }
-                newChildren.append(newChild)
-            }
-            return .group(newChildren)
+                return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
-        case let .bind(fingerprint, inner, bound):
-            // Substitute parameters in inner only; pass bound through unchanged.
-            guard let newInner = substituteParameters(
-                in: inner,
-                row: row,
-                profile: profile,
-                paramIndex: &paramIndex
-            ) else {
-                return nil
-            }
-            return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
+            case .sequence:
+                // Sequences produce boundary parameters (sequenceLength/sequenceElement), not finite parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume finite parameters.
+                return tree
 
-        case .sequence:
-            // Sequences produce boundary parameters (sequenceLength/sequenceElement), not finite parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume finite parameters.
-            return tree
-
-        case let .branch(b):
-            guard let newChoice = substituteParameters(
-                in: b.choice,
-                row: row,
-                profile: profile,
-                paramIndex: &paramIndex
-            ) else {
-                return nil
-            }
-            return .branch(
-                fingerprint: b.fingerprint,
-                weight: b.weight,
-                id: b.id,
-                branchCount: b.branchCount,
-                choice: newChoice,
-                isSelected: b.isSelected
-            )
+            case let .branch(b):
+                guard let newChoice = substituteParameters(
+                    in: b.choice,
+                    row: row,
+                    profile: profile,
+                    paramIndex: &paramIndex
+                ) else {
+                    return nil
+                }
+                return .branch(
+                    fingerprint: b.fingerprint,
+                    weight: b.weight,
+                    id: b.id,
+                    branchCount: b.branchCount,
+                    choice: newChoice,
+                    isSelected: b.isSelected
+                )
         }
     }
 
@@ -133,30 +133,30 @@ package enum CoveringArrayReplay {
         valueIndex: UInt64
     ) -> ChoiceTree? {
         switch param.kind {
-        case let .chooseBits(range, tag):
-            let bitPattern = range.lowerBound + valueIndex
-            let choiceValue = ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)
-            let metadata = ChoiceMetadata(validRange: range, isRangeExplicit: true)
-            return .choice(choiceValue, metadata)
+            case let .chooseBits(range, tag):
+                let bitPattern = range.lowerBound + valueIndex
+                let choiceValue = ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)
+                let metadata = ChoiceMetadata(validRange: range, isRangeExplicit: true)
+                return .choice(choiceValue, metadata)
 
-        case let .pick(choices):
-            guard valueIndex < choices.count else { return nil }
-            let chosen = choices[Int(valueIndex)]
+            case let .pick(choices):
+                guard valueIndex < choices.count else { return nil }
+                let chosen = choices[Int(valueIndex)]
 
-            // Build the sub-tree for the chosen branch's generator
-            guard let subTree = buildSubTree(for: chosen.generator) else {
-                return nil
-            }
+                // Build the sub-tree for the chosen branch's generator
+                guard let subTree = buildSubTree(for: chosen.generator) else {
+                    return nil
+                }
 
-            let branch = ChoiceTree.branch(
-                fingerprint: chosen.fingerprint,
-                weight: chosen.weight,
-                id: chosen.id,
-                branchCount: UInt64(choices.count),
-                choice: subTree,
-                isSelected: true
-            )
-            return .group([branch])
+                let branch = ChoiceTree.branch(
+                    fingerprint: chosen.fingerprint,
+                    weight: chosen.weight,
+                    id: chosen.id,
+                    branchCount: UInt64(choices.count),
+                    choice: subTree,
+                    isSelected: true
+                )
+                return .group([branch])
         }
     }
 

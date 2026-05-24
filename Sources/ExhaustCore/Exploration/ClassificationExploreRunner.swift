@@ -233,10 +233,10 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                     materializePicks: true
                 )
                 let reductionTree = switch fullTree {
-                case let .success(_, rematerialized, _):
-                    rematerialized as ChoiceTree?
-                case .rejected, .failed:
-                    ChoiceTree?.none
+                    case let .success(_, rematerialized, _):
+                        rematerialized as ChoiceTree?
+                    case .rejected, .failed:
+                        ChoiceTree?.none
                 }
                 let reduced = reduce(value: value, tree: reductionTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)

@@ -161,8 +161,12 @@ private func stablePartitionByPrefix(
     result.reserveCapacity(sequence.count)
 
     result.append(contentsOf: sequence[..<headerEnd])
-    for slice in prefixSlices { result.append(contentsOf: slice) }
-    for slice in concurrentSlices { result.append(contentsOf: slice) }
+    for slice in prefixSlices {
+        result.append(contentsOf: slice)
+    }
+    for slice in concurrentSlices {
+        result.append(contentsOf: slice)
+    }
     if trailerStart < sequence.count {
         result.append(contentsOf: sequence[trailerStart...])
     }

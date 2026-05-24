@@ -40,14 +40,14 @@ private enum AdvancedCoupledFixtures {
 
         for action in actions {
             switch action {
-            case let .push(value):
-                stack.push(value)
-                expectedCount += 1
-            case .pop:
-                stack.pop()
-                if expectedCount > 0 {
-                    expectedCount -= 1
-                }
+                case let .push(value):
+                    stack.push(value)
+                    expectedCount += 1
+                case .pop:
+                    stack.pop()
+                    if expectedCount > 0 {
+                        expectedCount -= 1
+                    }
             }
 
             if stack.count != expectedCount {
@@ -142,10 +142,10 @@ struct AdvancedCoupledScenariosTests {
         let actionGen: Generator<AdvancedCoupledFixtures.StackAction> = Gen.contramap(
             { (action: AdvancedCoupledFixtures.StackAction) -> (Int, String) in
                 switch action {
-                case .pop:
-                    (0, "a")
-                case let .push(value):
-                    (1, value)
+                    case .pop:
+                        (0, "a")
+                    case let .push(value):
+                        (1, value)
                 }
             },
             Gen.zip(

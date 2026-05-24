@@ -51,8 +51,8 @@ struct PostconditionTests {
         // Could be either invariant failure (count mismatch) or check failure
         #expect(result.trace.contains { step in
             switch step.outcome {
-            case .invariantFailed, .checkFailed: true
-            default: false
+                case .invariantFailed, .checkFailed: true
+                default: false
             }
         })
     }

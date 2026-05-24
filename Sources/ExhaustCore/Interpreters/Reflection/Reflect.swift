@@ -40,12 +40,12 @@ extension Interpreters {
         }.flatMap(\.self)
 
         switch matchingPaths.count {
-        case 0:
-            throw ReflectionError.couldNotMapInputToGenerator
-        case 1:
-            return matchingPaths[0]
-        default:
-            return .group(matchingPaths)
+            case 0:
+                throw ReflectionError.couldNotMapInputToGenerator
+            case 1:
+                return matchingPaths[0]
+            default:
+                return .group(matchingPaths)
         }
     }
 
@@ -61,26 +61,26 @@ extension Interpreters {
         onFinalOutput finalOutput: Any
     ) throws -> [(value: Output, path: [ChoiceTree])] {
         switch gen {
-        case let .pure(value):
-            // The pure value is the result for this path. No check needed here.
-            return [(value, [])]
+            case let .pure(value):
+                // The pure value is the result for this path. No check needed here.
+                return [(value, [])]
 
-        case let .impure(operation, continuation):
-            // 1. Interpret the operation against the final output value.
-            let intermediateResults = try interpretOperationBackward(
-                operation,
-                onFinalOutput: finalOutput
-            )
+            case let .impure(operation, continuation):
+                // 1. Interpret the operation against the final output value.
+                let intermediateResults = try interpretOperationBackward(
+                    operation,
+                    onFinalOutput: finalOutput
+                )
 
-            // 2. For each successful intermediate result...
-            return try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
-                let nextGen = try continuation(intermediateValue)
-                // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
-                let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
-                return finalResults.map { finalValue, restOfPath in
-                    (finalValue, partialPath + restOfPath)
+                // 2. For each successful intermediate result...
+                return try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
+                    let nextGen = try continuation(intermediateValue)
+                    // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
+                    let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+                    return finalResults.map { finalValue, restOfPath in
+                        (finalValue, partialPath + restOfPath)
+                    }
                 }
-            }
         }
     }
 
@@ -94,126 +94,126 @@ extension Interpreters {
         onFinalOutput finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
-        // A nil onFinalOutput at this point means the generator produces an Optional type.
-        case let .contramap(transform, nextGen):
-            return try reflectContramapOperation(
-                transform: transform,
-                nextGen: nextGen,
-                finalOutput: finalOutput
-            )
+            // A nil onFinalOutput at this point means the generator produces an Optional type.
+            case let .contramap(transform, nextGen):
+                return try reflectContramapOperation(
+                    transform: transform,
+                    nextGen: nextGen,
+                    finalOutput: finalOutput
+                )
 
-        case let .prune(nextGen):
-            return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput)
+            case let .prune(nextGen):
+                return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput)
 
-        case let .pick(choices):
-            return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
+            case let .pick(choices):
+                return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
 
-        case let .chooseBits(min, max, tag, isRangeExplicit, _):
-            return try reflectChooseBitsOperation(
-                min: min,
-                max: max,
-                tag: tag,
-                isRangeExplicit: isRangeExplicit,
-                finalOutput: finalOutput
-            )
+            case let .chooseBits(min, max, tag, isRangeExplicit, _):
+                return try reflectChooseBitsOperation(
+                    min: min,
+                    max: max,
+                    tag: tag,
+                    isRangeExplicit: isRangeExplicit,
+                    finalOutput: finalOutput
+                )
 
-        case let .just(value):
-            // Avoid expensive string interpolation and prefix operations
-            return [(value: value, path: [.just])]
+            case let .just(value):
+                // Avoid expensive string interpolation and prefix operations
+                return [(value: value, path: [.just])]
 
-        case .getSize:
-            // We can't derive the `getSize` parameter when reflecting as it is normally used within a `bind`. However, `isRangeExplicit` on `.chooseBits` helps us determine whether to use the `min` and `max` on that case, or default to the fitting range according to the value's `BitPatternConvertible` conformance.
-            var derivedSize: UInt64 = 0
-            if let sequence = finalOutput as? any Sequence {
-                derivedSize = UInt64(sequence.underestimatedCount)
-            }
-            // Store max size (100) so that replay and materialization see the full range for size-scaled generators.
-            return [(value: derivedSize, path: [.getSize(100)])]
+            case .getSize:
+                // We can't derive the `getSize` parameter when reflecting as it is normally used within a `bind`. However, `isRangeExplicit` on `.chooseBits` helps us determine whether to use the `min` and `max` on that case, or default to the fitting range according to the value's `BitPatternConvertible` conformance.
+                var derivedSize: UInt64 = 0
+                if let sequence = finalOutput as? any Sequence {
+                    derivedSize = UInt64(sequence.underestimatedCount)
+                }
+                // Store max size (100) so that replay and materialization see the full range for size-scaled generators.
+                return [(value: derivedSize, path: [.getSize(100)])]
 
-        case let .resize(newSize, nextGen):
-            return try reflectResizeOperation(
-                newSize: newSize,
-                nextGen: nextGen,
-                finalOutput: finalOutput
-            )
+            case let .resize(newSize, nextGen):
+                return try reflectResizeOperation(
+                    newSize: newSize,
+                    nextGen: nextGen,
+                    finalOutput: finalOutput
+                )
 
-        case let .sequence(lengthGen, elementGen):
-            return try reflectSequenceOperation(
-                lengthGen: lengthGen,
-                elementGen: elementGen,
-                finalOutput: finalOutput
-            )
+            case let .sequence(lengthGen, elementGen):
+                return try reflectSequenceOperation(
+                    lengthGen: lengthGen,
+                    elementGen: elementGen,
+                    finalOutput: finalOutput
+                )
 
-        case let .zip(generators, _):
-            return try reflectZipOperation(generators: generators, finalOutput: finalOutput)
+            case let .zip(generators, _):
+                return try reflectZipOperation(generators: generators, finalOutput: finalOutput)
 
-        case let .filter(gen, _, _, _, _, _):
-            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+            case let .filter(gen, _, _, _, _, _):
+                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
 
-        case let .classify(gen, _, _):
-            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+            case let .classify(gen, _, _):
+                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
 
-        case let .unique(gen, _, _):
-            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+            case let .unique(gen, _, _):
+                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
 
-        case let .transform(kind, inner):
-            switch kind {
-            case let .map(forward, inputType, outputType):
-                if let inputBPC = inputType as? any BitPatternConvertible.Type,
-                   let outputValue = finalOutput as? any BitPatternConvertible
-                {
-                    let inverted = inputBPC.init(bitPattern64: outputValue.bitPattern64)
-                    do {
-                        let roundTripped = try forward(inverted)
-                        if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
-                           roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
+            case let .transform(kind, inner):
+                switch kind {
+                    case let .map(forward, inputType, outputType):
+                        if let inputBPC = inputType as? any BitPatternConvertible.Type,
+                           let outputValue = finalOutput as? any BitPatternConvertible
                         {
-                            let reflected = try reflectRecursive(inner, onFinalOutput: inverted)
-                            return reflected.map { result in
-                                (value: roundTripped, path: result.path)
+                            let inverted = inputBPC.init(bitPattern64: outputValue.bitPattern64)
+                            do {
+                                let roundTripped = try forward(inverted)
+                                if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
+                                   roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
+                                {
+                                    let reflected = try reflectRecursive(inner, onFinalOutput: inverted)
+                                    return reflected.map { result in
+                                        (value: roundTripped, path: result.path)
+                                    }
+                                }
+                            } catch {
+                                // Forward application failed — fall through to error
                             }
                         }
-                    } catch {
-                        // Forward application failed — fall through to error
-                    }
-                }
-                throw ReflectionError.forwardOnlyMap(
-                    inputType: "\(inputType)",
-                    outputType: "\(outputType)"
-                )
-            case let .bind(fingerprint, forward, backward, inputType, outputType):
-                guard let backward else {
-                    throw ReflectionError.forwardOnlyBind(
-                        inputType: "\(inputType)",
-                        outputType: "\(outputType)"
-                    )
-                }
-                // Xia et al.'s comap at bind sites: extract the inner value from the final output.
-                let innerValue = try backward(finalOutput)
-                // Reconstruct the bound generator from the extracted inner value.
-                let boundGen = try forward(innerValue)
-                // Reflect both: inner against the extracted value, bound against the final output.
-                let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
-                let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
-                // Combine paths: inner choices followed by bound choices.
-                return innerResults.flatMap { innerResult in
-                    boundResults.map { boundResult in
-                        let innerTree = innerResult.path.count == 1
-                            ? innerResult.path[0]
-                            : .group(innerResult.path)
-                        let boundTree = boundResult.path.count == 1
-                            ? boundResult.path[0]
-                            : .group(boundResult.path)
-                        return (
-                            value: boundResult.value,
-                            path: [.bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)]
+                        throw ReflectionError.forwardOnlyMap(
+                            inputType: "\(inputType)",
+                            outputType: "\(outputType)"
                         )
-                    }
+                    case let .bind(fingerprint, forward, backward, inputType, outputType):
+                        guard let backward else {
+                            throw ReflectionError.forwardOnlyBind(
+                                inputType: "\(inputType)",
+                                outputType: "\(outputType)"
+                            )
+                        }
+                        // Xia et al.'s comap at bind sites: extract the inner value from the final output.
+                        let innerValue = try backward(finalOutput)
+                        // Reconstruct the bound generator from the extracted inner value.
+                        let boundGen = try forward(innerValue)
+                        // Reflect both: inner against the extracted value, bound against the final output.
+                        let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
+                        let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
+                        // Combine paths: inner choices followed by bound choices.
+                        return innerResults.flatMap { innerResult in
+                            boundResults.map { boundResult in
+                                let innerTree = innerResult.path.count == 1
+                                    ? innerResult.path[0]
+                                    : .group(innerResult.path)
+                                let boundTree = boundResult.path.count == 1
+                                    ? boundResult.path[0]
+                                    : .group(boundResult.path)
+                                return (
+                                    value: boundResult.value,
+                                    path: [.bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)]
+                                )
+                            }
+                        }
+                    case .metamorphic:
+                        // The contramap backward already extracted the original Value from the output tuple. Reflect on inner with that value — the transforms are deterministic and will be re-derived on the forward pass.
+                        return try reflectRecursive(inner, onFinalOutput: finalOutput)
                 }
-            case .metamorphic:
-                // The contramap backward already extracted the original Value from the output tuple. Reflect on inner with that value — the transforms are deterministic and will be re-derived on the forward pass.
-                return try reflectRecursive(inner, onFinalOutput: finalOutput)
-            }
         }
     }
 
@@ -275,10 +275,10 @@ extension Interpreters {
 
             } catch let error as ReflectionError {
                 switch error {
-                case .reflectedNil, .inputWasOutOfGeneratorRange, .contramapWasWrongType:
-                    return []
-                default:
-                    throw error
+                    case .reflectedNil, .inputWasOutOfGeneratorRange, .contramapWasWrongType:
+                        return []
+                    default:
+                        throw error
                 }
             }
         }

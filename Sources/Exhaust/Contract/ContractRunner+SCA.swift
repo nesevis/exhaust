@@ -39,13 +39,13 @@ func estimateCommandLimit(
     var domainSize: UInt64 = 0
     for profile in branchProfiles {
         let contribution: UInt64 = switch profile {
-        case .parameterFree, .unanalyzable:
-            1
-        case let .analyzed(params):
-            params.reduce(UInt64(1)) { acc, param in
-                let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
-                return overflow ? .max : product
-            }
+            case .parameterFree, .unanalyzable:
+                1
+            case let .analyzed(params):
+                params.reduce(UInt64(1)) { acc, param in
+                    let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
+                    return overflow ? .max : product
+                }
         }
         let (sum, overflow) = domainSize.addingReportingOverflow(contribution)
         domainSize = overflow ? .max : sum
@@ -91,8 +91,8 @@ enum SCAOutcome<Command> {
     /// Whether SCA ran to completion, covering command orderings.
     var isCompleted: Bool {
         switch self {
-        case .completed: true
-        case .failure, .skipped: false
+            case .completed: true
+            case .failure, .skipped: false
         }
     }
 }
@@ -135,11 +135,11 @@ func runSCACoverage<Command>(
     // Cap interaction strength based on sequence length. Higher strength gives better coverage but the number of covering array rows grows with C(sequenceLength, t).
     // Short sequences can afford high strength; long sequences fall back to pairwise.
     let strengthCap = switch sequenceLength {
-    case ...6: 6
-    case ...8: 5
-    case ...12: 4
-    case ...20: 3
-    default: 2
+        case ...6: 6
+        case ...8: 5
+        case ...12: 4
+        case ...20: 3
+        default: 2
     }
 
     guard let domain = SCADomain.build(
@@ -262,16 +262,16 @@ func pruneSequenceElements(
     at indices: Set<Int>
 ) -> ChoiceTree {
     switch tree {
-    case let .sequence(_, elements, meta):
-        let pruned = elements.enumerated()
-            .filter { indices.contains($0.offset) == false }
-            .map(\.element)
-        return .sequence(length: UInt64(pruned.count), elements: pruned, meta)
-    case let .group(children, isOpaque):
-        return .group(children.map { pruneSequenceElements(from: $0, at: indices) }, isOpaque: isOpaque)
-    case let .resize(newSize, choices):
-        return .resize(newSize: newSize, choices: choices.map { pruneSequenceElements(from: $0, at: indices) })
-    default:
-        return tree
+        case let .sequence(_, elements, meta):
+            let pruned = elements.enumerated()
+                .filter { indices.contains($0.offset) == false }
+                .map(\.element)
+            return .sequence(length: UInt64(pruned.count), elements: pruned, meta)
+        case let .group(children, isOpaque):
+            return .group(children.map { pruneSequenceElements(from: $0, at: indices) }, isOpaque: isOpaque)
+        case let .resize(newSize, choices):
+            return .resize(newSize: newSize, choices: choices.map { pruneSequenceElements(from: $0, at: indices) })
+        default:
+            return tree
     }
 }

@@ -7,7 +7,7 @@
 
 /// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
 @usableFromInline
-package enum TypeTag: Sendable {
+package enum TypeTag {
     /// Platform-width unsigned integer (``UInt``).
     case uint
     /// 64-bit unsigned integer.
@@ -49,44 +49,44 @@ package enum TypeTag: Sendable {
 package extension TypeTag {
     var discriminator: Int {
         switch self {
-        case .uint: 0
-        case .uint64: 1
-        case .uint32: 2
-        case .uint16: 3
-        case .uint8: 4
-        case .int: 5
-        case .int64: 6
-        case .int32: 7
-        case .int16: 8
-        case .int8: 9
-        case .double: 10
-        case .float: 11
-        case .float16: 12
-        case .date: 13
-        case .bits: 14
-        case .character: 15
-        case .depthControl: 16
-        case .laneControl: 17
+            case .uint: 0
+            case .uint64: 1
+            case .uint32: 2
+            case .uint16: 3
+            case .uint8: 4
+            case .int: 5
+            case .int64: 6
+            case .int32: 7
+            case .int16: 8
+            case .int8: 9
+            case .double: 10
+            case .float: 11
+            case .float16: 12
+            case .date: 13
+            case .bits: 14
+            case .character: 15
+            case .depthControl: 16
+            case .laneControl: 17
         }
     }
 
     /// Whether this tag represents a signed integer type.
     var isSigned: Bool {
         switch self {
-        case .int, .int8, .int16, .int32, .int64:
-            true
-        default:
-            false
+            case .int, .int8, .int16, .int32, .int64:
+                true
+            default:
+                false
         }
     }
 
     /// Whether this tag represents a floating-point type.
     var isFloatingPoint: Bool {
         switch self {
-        case .double, .float, .float16:
-            true
-        default:
-            false
+            case .double, .float, .float16:
+                true
+            default:
+                false
         }
     }
 
@@ -105,18 +105,18 @@ package extension TypeTag {
     @inline(__always)
     var simplestBitPattern: UInt64 {
         switch self {
-        case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character, .depthControl, .laneControl:
-            0
-        case .int8:
-            1 << 7
-        case .int16:
-            1 << 15
-        case .int32, .float:
-            1 << 31
-        case .float16:
-            1 << 15
-        case .int, .int64, .date, .double:
-            1 << 63
+            case .uint, .uint64, .uint32, .uint16, .uint8, .bits, .character, .depthControl, .laneControl:
+                0
+            case .int8:
+                1 << 7
+            case .int16:
+                1 << 15
+            case .int32, .float:
+                1 << 31
+            case .float16:
+                1 << 15
+            case .int, .int64, .date, .double:
+                1 << 63
         }
     }
 
@@ -125,20 +125,20 @@ package extension TypeTag {
     /// Returns `nil` if the tag is not a floating-point type, or if the narrowed result is non-finite and `allowNonFinite` is `false`.
     func floatingChoice(from value: Double, allowNonFinite: Bool = false) -> ChoiceValue? {
         switch self {
-        case .double:
-            guard allowNonFinite || value.isFinite else { return nil }
-            return ChoiceValue(value, tag: .double)
-        case .float:
-            let narrowed = Float(value)
-            guard allowNonFinite || narrowed.isFinite else { return nil }
-            return ChoiceValue(narrowed, tag: .float)
-        case .float16:
-            let encoded = Float16Emulation.encodedBitPattern(from: value)
-            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
-            guard allowNonFinite || reconstructed.isFinite else { return nil }
-            return ChoiceValue(encoded, tag: .float16)
-        default:
-            return nil
+            case .double:
+                guard allowNonFinite || value.isFinite else { return nil }
+                return ChoiceValue(value, tag: .double)
+            case .float:
+                let narrowed = Float(value)
+                guard allowNonFinite || narrowed.isFinite else { return nil }
+                return ChoiceValue(narrowed, tag: .float)
+            case .float16:
+                let encoded = Float16Emulation.encodedBitPattern(from: value)
+                let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
+                guard allowNonFinite || reconstructed.isFinite else { return nil }
+                return ChoiceValue(encoded, tag: .float16)
+            default:
+                return nil
         }
     }
 
@@ -147,10 +147,10 @@ package extension TypeTag {
     /// For `.float` and `.float16`, narrows through the intermediate type so the encoding round-trips correctly.
     func numericDoubleValue(forBitPattern bitPattern: UInt64) -> Double {
         switch self {
-        case .double: Double(bitPattern64: bitPattern)
-        case .float: Double(Float(bitPattern64: bitPattern))
-        case .float16: Float16Emulation.doubleValue(fromEncoded: bitPattern)
-        default: fatalError("numericDoubleValue requires a floating-point tag, got \(self)")
+            case .double: Double(bitPattern64: bitPattern)
+            case .float: Double(Float(bitPattern64: bitPattern))
+            case .float16: Float16Emulation.doubleValue(fromEncoded: bitPattern)
+            default: fatalError("numericDoubleValue requires a floating-point tag, got \(self)")
         }
     }
 
@@ -159,10 +159,10 @@ package extension TypeTag {
     /// For `.float` and `.float16`, narrows to the intermediate type first so precision matches the tag's width.
     func floatingBitPattern(from value: Double) -> UInt64 {
         switch self {
-        case .double: value.bitPattern64
-        case .float: Float(value).bitPattern64
-        case .float16: Float16Emulation.encodedBitPattern(from: value)
-        default: fatalError("floatingBitPattern requires a floating-point tag, got \(self)")
+            case .double: value.bitPattern64
+            case .float: Float(value).bitPattern64
+            case .float16: Float16Emulation.encodedBitPattern(from: value)
+            default: fatalError("floatingBitPattern requires a floating-point tag, got \(self)")
         }
     }
 
@@ -203,32 +203,32 @@ package extension TypeTag {
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {
-        case .uint: UInt(bitPattern64: bitPattern64)
-        case .uint64: UInt64(bitPattern64: bitPattern64)
-        case .uint32: UInt32(bitPattern64: bitPattern64)
-        case .uint16: UInt16(bitPattern64: bitPattern64)
-        case .uint8: UInt8(bitPattern64: bitPattern64)
-        case .int: Int(bitPattern64: bitPattern64)
-        case .int64: Int64(bitPattern64: bitPattern64)
-        case .int32: Int32(bitPattern64: bitPattern64)
-        case .int16: Int16(bitPattern64: bitPattern64)
-        case .int8: Int8(bitPattern64: bitPattern64)
-        case .double: Double(bitPattern64: bitPattern64)
-        case .float: Float(bitPattern64: bitPattern64)
-        #if arch(arm64) || arch(arm64_32)
-            case .float16:
-                if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
-                    Float16(bitPattern64: bitPattern64)
-                } else {
-                    Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
-                }
-        #else
-            case .float16: Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
-        #endif
-        case .date: Int64(bitPattern64: bitPattern64)
-        case .bits: UInt64(bitPattern64: bitPattern64)
-        case .character: UInt32(bitPattern64: bitPattern64)
-        case .depthControl, .laneControl: UInt64(bitPattern64: bitPattern64)
+            case .uint: UInt(bitPattern64: bitPattern64)
+            case .uint64: UInt64(bitPattern64: bitPattern64)
+            case .uint32: UInt32(bitPattern64: bitPattern64)
+            case .uint16: UInt16(bitPattern64: bitPattern64)
+            case .uint8: UInt8(bitPattern64: bitPattern64)
+            case .int: Int(bitPattern64: bitPattern64)
+            case .int64: Int64(bitPattern64: bitPattern64)
+            case .int32: Int32(bitPattern64: bitPattern64)
+            case .int16: Int16(bitPattern64: bitPattern64)
+            case .int8: Int8(bitPattern64: bitPattern64)
+            case .double: Double(bitPattern64: bitPattern64)
+            case .float: Float(bitPattern64: bitPattern64)
+            #if arch(arm64) || arch(arm64_32)
+                case .float16:
+                    if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
+                        Float16(bitPattern64: bitPattern64)
+                    } else {
+                        Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
+                    }
+            #else
+                case .float16: Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
+            #endif
+            case .date: Int64(bitPattern64: bitPattern64)
+            case .bits: UInt64(bitPattern64: bitPattern64)
+            case .character: UInt32(bitPattern64: bitPattern64)
+            case .depthControl, .laneControl: UInt64(bitPattern64: bitPattern64)
         }
     }
 }
@@ -236,24 +236,24 @@ package extension TypeTag {
 extension TypeTag: Equatable {
     public static func == (lhs: TypeTag, rhs: TypeTag) -> Bool {
         switch (lhs, rhs) {
-        case (.uint, .uint), (.uint64, .uint64), (.uint32, .uint32),
-             (.uint16, .uint16), (.uint8, .uint8),
-             (.int, .int), (.int64, .int64), (.int32, .int32),
-             (.int16, .int16), (.int8, .int8),
-             (.double, .double), (.float, .float), (.float16, .float16),
-             (.bits, .bits),
-             (.depthControl, .depthControl),
-             (.laneControl, .laneControl):
-            return true
-        case let (.character(lhsIndices), .character(rhsIndices)):
-            return lhsIndices == rhsIndices
-        case let (.date(lhsLower, lhsInterval, lhsTZ), .date(rhsLower, rhsInterval, rhsTZ)):
-            return lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ
-        default:
-            if lhs.discriminator == rhs.discriminator {
-                preconditionFailure("TypeTag.== missing case for: \(lhs), \(rhs)")
-            }
-            return false
+            case (.uint, .uint), (.uint64, .uint64), (.uint32, .uint32),
+                 (.uint16, .uint16), (.uint8, .uint8),
+                 (.int, .int), (.int64, .int64), (.int32, .int32),
+                 (.int16, .int16), (.int8, .int8),
+                 (.double, .double), (.float, .float), (.float16, .float16),
+                 (.bits, .bits),
+                 (.depthControl, .depthControl),
+                 (.laneControl, .laneControl):
+                return true
+            case let (.character(lhsIndices), .character(rhsIndices)):
+                return lhsIndices == rhsIndices
+            case let (.date(lhsLower, lhsInterval, lhsTZ), .date(rhsLower, rhsInterval, rhsTZ)):
+                return lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ
+            default:
+                if lhs.discriminator == rhs.discriminator {
+                    preconditionFailure("TypeTag.== missing case for: \(lhs), \(rhs)")
+                }
+                return false
         }
     }
 }
@@ -262,30 +262,30 @@ extension TypeTag: Hashable {
     /// Hashes by discriminator only for most cases. `.character` intentionally includes `boundaryIndices` because distinct character sets produce distinct generators that must not collide in keyed caches. `.date` includes all three associated values for the same reason.
     public func hash(into hasher: inout Hasher) {
         switch self {
-        case .uint: hasher.combine(0)
-        case .uint64: hasher.combine(1)
-        case .uint32: hasher.combine(2)
-        case .uint16: hasher.combine(3)
-        case .uint8: hasher.combine(4)
-        case .int: hasher.combine(5)
-        case .int64: hasher.combine(6)
-        case .int32: hasher.combine(7)
-        case .int16: hasher.combine(8)
-        case .int8: hasher.combine(9)
-        case .double: hasher.combine(10)
-        case .float: hasher.combine(11)
-        case .float16: hasher.combine(12)
-        case let .date(lower, interval, tzID):
-            hasher.combine(13)
-            hasher.combine(lower)
-            hasher.combine(interval)
-            hasher.combine(tzID)
-        case .bits: hasher.combine(14)
-        case let .character(boundaryIndices):
-            hasher.combine(15)
-            hasher.combine(boundaryIndices)
-        case .depthControl: hasher.combine(16)
-        case .laneControl: hasher.combine(17)
+            case .uint: hasher.combine(0)
+            case .uint64: hasher.combine(1)
+            case .uint32: hasher.combine(2)
+            case .uint16: hasher.combine(3)
+            case .uint8: hasher.combine(4)
+            case .int: hasher.combine(5)
+            case .int64: hasher.combine(6)
+            case .int32: hasher.combine(7)
+            case .int16: hasher.combine(8)
+            case .int8: hasher.combine(9)
+            case .double: hasher.combine(10)
+            case .float: hasher.combine(11)
+            case .float16: hasher.combine(12)
+            case let .date(lower, interval, tzID):
+                hasher.combine(13)
+                hasher.combine(lower)
+                hasher.combine(interval)
+                hasher.combine(tzID)
+            case .bits: hasher.combine(14)
+            case let .character(boundaryIndices):
+                hasher.combine(15)
+                hasher.combine(boundaryIndices)
+            case .depthControl: hasher.combine(16)
+            case .laneControl: hasher.combine(17)
         }
     }
 }
@@ -293,24 +293,24 @@ extension TypeTag: Hashable {
 extension TypeTag: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .uint: "UInt"
-        case .uint64: "UInt64"
-        case .uint32: "UInt32"
-        case .uint16: "UInt16"
-        case .uint8: "UInt8"
-        case .int: "Int"
-        case .int64: "Int64"
-        case .int32: "Int32"
-        case .int16: "Int16"
-        case .int8: "Int8"
-        case .double: "Double"
-        case .float: "Float"
-        case .float16: "Float16"
-        case .date: "Date"
-        case .bits: "Bits"
-        case .character: "Character"
-        case .depthControl: "DepthControl"
-        case .laneControl: "Control"
+            case .uint: "UInt"
+            case .uint64: "UInt64"
+            case .uint32: "UInt32"
+            case .uint16: "UInt16"
+            case .uint8: "UInt8"
+            case .int: "Int"
+            case .int64: "Int64"
+            case .int32: "Int32"
+            case .int16: "Int16"
+            case .int8: "Int8"
+            case .double: "Double"
+            case .float: "Float"
+            case .float16: "Float16"
+            case .date: "Date"
+            case .bits: "Bits"
+            case .character: "Character"
+            case .depthControl: "DepthControl"
+            case .laneControl: "Control"
         }
     }
 }

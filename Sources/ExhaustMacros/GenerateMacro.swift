@@ -36,22 +36,22 @@ public struct GenerateMacro: ExpressionMacro {
         )
 
         switch outcome {
-        case let .bidirectional(result):
-            return buildBidirectionalExpansion(
-                generatorArgs: generatorArgs,
-                closure: trailingClosure,
-                result: result
-            )
-        case .scalarConversion:
-            return buildScalarConversionExpansion(
-                generatorArg: generatorArgs[0],
-                closure: trailingClosure
-            )
-        case .forwardOnly:
-            return buildForwardOnlyExpansion(
-                generatorArgs: generatorArgs,
-                closure: trailingClosure
-            )
+            case let .bidirectional(result):
+                return buildBidirectionalExpansion(
+                    generatorArgs: generatorArgs,
+                    closure: trailingClosure,
+                    result: result
+                )
+            case .scalarConversion:
+                return buildScalarConversionExpansion(
+                    generatorArg: generatorArgs[0],
+                    closure: trailingClosure
+                )
+            case .forwardOnly:
+                return buildForwardOnlyExpansion(
+                    generatorArgs: generatorArgs,
+                    closure: trailingClosure
+                )
         }
     }
 

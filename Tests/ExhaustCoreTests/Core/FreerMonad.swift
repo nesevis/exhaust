@@ -309,24 +309,24 @@ func interpret<Value>(_ monad: LoggingFreerMonad<Value>) throws -> (value: Value
 /// The private, recursive engine for the logging interpreter.
 private func interpretLogRecursive<Value>(_ monad: LoggingFreerMonad<Value>, log: inout [String]) throws -> Value? {
     switch monad {
-    // Base case: We've reached a pure value. Return it.
-    case let .pure(value):
-        return value
+        // Base case: We've reached a pure value. Return it.
+        case let .pure(value):
+            return value
 
-    // Recursive step: We have an operation to perform.
-    case let .impure(operation, continuation):
-        switch operation {
-        case let .log(message):
-            // 1. Perform the side-effect (mutate the log).
-            log.append(message)
+        // Recursive step: We have an operation to perform.
+        case let .impure(operation, continuation):
+            switch operation {
+                case let .log(message):
+                    // 1. Perform the side-effect (mutate the log).
+                    log.append(message)
 
-            // 2. Get the next monad in the chain by calling the continuation.
-            //    The log operation itself produces `()`.
-            let nextMonad = try continuation(())
+                    // 2. Get the next monad in the chain by calling the continuation.
+                    //    The log operation itself produces `()`.
+                    let nextMonad = try continuation(())
 
-            // 3. Recursively call the interpreter on the next monad.
-            //    The compiler correctly infers the `Value` type for the next step.
-            return try interpretLogRecursive(nextMonad, log: &log)
-        }
+                    // 3. Recursively call the interpreter on the next monad.
+                    //    The compiler correctly infers the `Value` type for the next step.
+                    return try interpretLogRecursive(nextMonad, log: &log)
+            }
     }
 }

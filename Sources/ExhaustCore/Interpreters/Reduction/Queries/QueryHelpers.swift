@@ -16,23 +16,23 @@ enum QueryHelpers {
             return nodeID
         }
         switch node.kind {
-        case .zip:
-            for childID in node.children {
-                if let found = findSequenceBeneath(childID, graph: graph) {
-                    return found
+            case .zip:
+                for childID in node.children {
+                    if let found = findSequenceBeneath(childID, graph: graph) {
+                        return found
+                    }
                 }
-            }
-            return nil
-        case let .bind(metadata):
-            if metadata.isStructurallyConstant, node.children.count >= 2 {
-                let boundChildID = node.children[metadata.boundChildIndex]
-                return findSequenceBeneath(boundChildID, graph: graph)
-            }
-            return nil
-        case .chooseBits, .pick, .just:
-            return nil
-        case .sequence:
-            return nodeID
+                return nil
+            case let .bind(metadata):
+                if metadata.isStructurallyConstant, node.children.count >= 2 {
+                    let boundChildID = node.children[metadata.boundChildIndex]
+                    return findSequenceBeneath(boundChildID, graph: graph)
+                }
+                return nil
+            case .chooseBits, .pick, .just:
+                return nil
+            case .sequence:
+                return nodeID
         }
     }
 }

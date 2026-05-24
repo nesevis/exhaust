@@ -34,44 +34,44 @@ public extension __ExhaustRuntime {
         var shouldParallelize = false
         for setting in settings {
             switch setting {
-            case let .budget(exploreBudget):
-                budget = exploreBudget
-            case let .replay(replaySeed):
-                seed = replaySeed.resolve()
-                if seed == nil {
-                    reportIssue(
-                        "Invalid replay seed: \(replaySeed)",
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column
-                    )
-                    return ExploreReport(
-                        result: nil,
-                        seed: 0,
-                        directionCoverage: [],
-                        coOccurrence: CoOccurrenceMatrix(directionCount: 0),
-                        counterexampleDirections: [],
-                        propertyInvocations: 0,
-                        warmupSamples: 0,
-                        totalMilliseconds: 0,
-                        termination: .budgetExhausted
-                    )
-                }
-            case let .suppress(option):
-                switch option {
-                case .issueReporting:
-                    suppressIssueReporting = true
-                case .logs:
-                    suppressLogs = true
-                case .all:
-                    suppressIssueReporting = true
-                    suppressLogs = true
-                }
-            case let .log(level):
-                logLevel = level
-            case .parallel:
-                shouldParallelize = true
+                case let .budget(exploreBudget):
+                    budget = exploreBudget
+                case let .replay(replaySeed):
+                    seed = replaySeed.resolve()
+                    if seed == nil {
+                        reportIssue(
+                            "Invalid replay seed: \(replaySeed)",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                        return ExploreReport(
+                            result: nil,
+                            seed: 0,
+                            directionCoverage: [],
+                            coOccurrence: CoOccurrenceMatrix(directionCount: 0),
+                            counterexampleDirections: [],
+                            propertyInvocations: 0,
+                            warmupSamples: 0,
+                            totalMilliseconds: 0,
+                            termination: .budgetExhausted
+                        )
+                    }
+                case let .suppress(option):
+                    switch option {
+                        case .issueReporting:
+                            suppressIssueReporting = true
+                        case .logs:
+                            suppressLogs = true
+                        case .all:
+                            suppressIssueReporting = true
+                            suppressLogs = true
+                    }
+                case let .log(level):
+                    logLevel = level
+                case .parallel:
+                    shouldParallelize = true
             }
         }
 
@@ -135,9 +135,9 @@ public extension __ExhaustRuntime {
             }
 
             let termination: ExploreTermination = switch result.termination {
-            case .propertyFailed: .propertyFailed
-            case .coverageAchieved: .coverageAchieved
-            case .budgetExhausted: .budgetExhausted
+                case .propertyFailed: .propertyFailed
+                case .coverageAchieved: .coverageAchieved
+                case .budgetExhausted: .budgetExhausted
             }
 
             if let counterexample = result.counterexample {

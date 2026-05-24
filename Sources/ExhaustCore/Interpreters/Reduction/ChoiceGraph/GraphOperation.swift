@@ -41,17 +41,17 @@ enum GraphOperation {
     /// The encoder name that will handle this operation. Used by the ``ReducerConfiguration/enabledEncoders`` filter to skip operations targeting disabled encoders without instantiating the encoder.
     var encoderName: EncoderName {
         switch self {
-        case .remove: .deletion
-        case .replace: .substitution
-        case .migrate: .migration
-        case .minimize(.valueLeaves): .valueSearch
-        case .minimize(.floatLeaves): .floatSearch
-        case .minimize(.boundValue): .boundValueSearch
-        case .minimize(.laneCollapse): .laneCollapse
-        case .exchange(.redistribution): .redistribution
-        case .exchange(.tandem): .lockstep
-        case .permute: .siblingSwap
-        case .reorder: .numericReorder
+            case .remove: .deletion
+            case .replace: .substitution
+            case .migrate: .migration
+            case .minimize(.valueLeaves): .valueSearch
+            case .minimize(.floatLeaves): .floatSearch
+            case .minimize(.boundValue): .boundValueSearch
+            case .minimize(.laneCollapse): .laneCollapse
+            case .exchange(.redistribution): .redistribution
+            case .exchange(.tandem): .lockstep
+            case .permute: .siblingSwap
+            case .reorder: .numericReorder
         }
     }
 
@@ -64,10 +64,10 @@ enum GraphOperation {
     /// Whether this operation's scope data depends on leaf values (ChoiceValue, validRange, distance-to-target) rather than just graph topology. Value-dependent sources must be rebuilt after any value change, even structurally-identical ones.
     var isValueDependent: Bool {
         switch self {
-        case .minimize, .exchange:
-            return true
-        case .remove, .replace, .permute, .migrate, .reorder:
-            return false
+            case .minimize, .exchange:
+                return true
+            case .remove, .replace, .permute, .migrate, .reorder:
+                return false
         }
     }
 
@@ -84,45 +84,45 @@ enum GraphOperation {
     /// Returns `false` for search-based operations (minimize, exchange) and covering-aligned removal where the affected set is nondeterministic or not applicable.
     func forEachAffectedNodeID(_ body: (Int) -> Void) -> Bool {
         switch self {
-        case let .remove(scope):
-            switch scope {
-            case let .elements(elementScope):
-                for target in elementScope.targets {
-                    for nodeID in target.elementNodeIDs {
+            case let .remove(scope):
+                switch scope {
+                    case let .elements(elementScope):
+                        for target in elementScope.targets {
+                            for nodeID in target.elementNodeIDs {
+                                body(nodeID)
+                            }
+                        }
+                    case let .subtree(nodeID, _):
+                        body(nodeID)
+                    case .coveringAligned:
+                        return false
+                }
+            case let .replace(scope):
+                switch scope {
+                    case let .selfSimilar(targetNodeID, donorNodeID, _):
+                        body(targetNodeID)
+                        body(donorNodeID)
+                    case let .branchPivot(pickNodeID, _):
+                        body(pickNodeID)
+                    case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
+                        body(ancestorPickNodeID)
+                        body(descendantPickNodeID)
+                }
+            case let .permute(scope):
+                for group in scope.swappableGroups {
+                    for nodeID in group {
                         body(nodeID)
                     }
                 }
-            case let .subtree(nodeID, _):
-                body(nodeID)
-            case .coveringAligned:
-                return false
-            }
-        case let .replace(scope):
-            switch scope {
-            case let .selfSimilar(targetNodeID, donorNodeID, _):
-                body(targetNodeID)
-                body(donorNodeID)
-            case let .branchPivot(pickNodeID, _):
-                body(pickNodeID)
-            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
-                body(ancestorPickNodeID)
-                body(descendantPickNodeID)
-            }
-        case let .permute(scope):
-            for group in scope.swappableGroups {
-                for nodeID in group {
+            case let .migrate(scope):
+                for nodeID in scope.elementNodeIDs {
                     body(nodeID)
                 }
-            }
-        case let .migrate(scope):
-            for nodeID in scope.elementNodeIDs {
-                body(nodeID)
-            }
-            body(scope.receiverSequenceNodeID)
-        case .minimize, .exchange:
-            return false
-        case .reorder:
-            return false
+                body(scope.receiverSequenceNodeID)
+            case .minimize, .exchange:
+                return false
+            case .reorder:
+                return false
         }
         return true
     }
@@ -134,51 +134,51 @@ extension GraphOperation {
     /// Validates whether the operation's target nodes still exist and satisfy its preconditions in the current graph state.
     func isValid(in graph: ChoiceGraph) -> Bool {
         switch self {
-        case let .remove(.elements(scope)):
-            return scope.targets.allSatisfy { target in
-                guard target.sequenceNodeID < graph.nodes.count else { return false }
-                guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else { return false }
-                return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
-            }
-        case let .remove(.subtree(nodeID, _)):
-            return nodeID < graph.nodes.count
-                && graph.nodes[nodeID].positionRange != nil
-        case let .remove(.coveringAligned(scope)):
-            return scope.siblings.allSatisfy { sibling in
-                guard sibling.sequenceNodeID < graph.nodes.count else { return false }
-                guard case let .sequence(metadata) = graph.nodes[sibling.sequenceNodeID].kind else { return false }
-                return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
-            }
-        case let .replace(.selfSimilar(targetNodeID, donorNodeID, _)):
-            return targetNodeID < graph.nodes.count
-                && graph.nodes[targetNodeID].positionRange != nil
-                && donorNodeID < graph.nodes.count
-                && graph.nodes[donorNodeID].positionRange != nil
-        case let .replace(.branchPivot(pickNodeID, _)):
-            return pickNodeID < graph.nodes.count
-                && graph.nodes[pickNodeID].positionRange != nil
-        case let .replace(.descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _)):
-            return ancestorPickNodeID < graph.nodes.count
-                && graph.nodes[ancestorPickNodeID].positionRange != nil
-                && descendantPickNodeID < graph.nodes.count
-                && graph.nodes[descendantPickNodeID].positionRange != nil
-        case let .permute(scope):
-            return scope.parentNodeID < graph.nodes.count
-                && graph.nodes[scope.parentNodeID].positionRange != nil
-        case let .migrate(scope):
-            if let parentSeqID = scope.sourceParentSequenceNodeID {
-                guard parentSeqID < graph.nodes.count else { return false }
-                guard case let .sequence(metadata) = graph.nodes[parentSeqID].kind else { return false }
-                guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
-            } else {
-                guard scope.sourceSequenceNodeID < graph.nodes.count else { return false }
-                guard case let .sequence(metadata) = graph.nodes[scope.sourceSequenceNodeID].kind else { return false }
-                guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
-            }
-            return scope.receiverSequenceNodeID < graph.nodes.count
-                && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
-        case .minimize, .exchange, .reorder:
-            return true
+            case let .remove(.elements(scope)):
+                return scope.targets.allSatisfy { target in
+                    guard target.sequenceNodeID < graph.nodes.count else { return false }
+                    guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else { return false }
+                    return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+                }
+            case let .remove(.subtree(nodeID, _)):
+                return nodeID < graph.nodes.count
+                    && graph.nodes[nodeID].positionRange != nil
+            case let .remove(.coveringAligned(scope)):
+                return scope.siblings.allSatisfy { sibling in
+                    guard sibling.sequenceNodeID < graph.nodes.count else { return false }
+                    guard case let .sequence(metadata) = graph.nodes[sibling.sequenceNodeID].kind else { return false }
+                    return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+                }
+            case let .replace(.selfSimilar(targetNodeID, donorNodeID, _)):
+                return targetNodeID < graph.nodes.count
+                    && graph.nodes[targetNodeID].positionRange != nil
+                    && donorNodeID < graph.nodes.count
+                    && graph.nodes[donorNodeID].positionRange != nil
+            case let .replace(.branchPivot(pickNodeID, _)):
+                return pickNodeID < graph.nodes.count
+                    && graph.nodes[pickNodeID].positionRange != nil
+            case let .replace(.descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _)):
+                return ancestorPickNodeID < graph.nodes.count
+                    && graph.nodes[ancestorPickNodeID].positionRange != nil
+                    && descendantPickNodeID < graph.nodes.count
+                    && graph.nodes[descendantPickNodeID].positionRange != nil
+            case let .permute(scope):
+                return scope.parentNodeID < graph.nodes.count
+                    && graph.nodes[scope.parentNodeID].positionRange != nil
+            case let .migrate(scope):
+                if let parentSeqID = scope.sourceParentSequenceNodeID {
+                    guard parentSeqID < graph.nodes.count else { return false }
+                    guard case let .sequence(metadata) = graph.nodes[parentSeqID].kind else { return false }
+                    guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
+                } else {
+                    guard scope.sourceSequenceNodeID < graph.nodes.count else { return false }
+                    guard case let .sequence(metadata) = graph.nodes[scope.sourceSequenceNodeID].kind else { return false }
+                    guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
+                }
+                return scope.receiverSequenceNodeID < graph.nodes.count
+                    && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
+            case .minimize, .exchange, .reorder:
+                return true
         }
     }
 }

@@ -24,12 +24,12 @@ enum CalculatorFixture {
 
         var debugDescription: String {
             switch self {
-            case let .value(value):
-                "value(\(value))"
-            case let .add(lhs, rhs):
-                "add(\(lhs.debugDescription), \(rhs.debugDescription))"
-            case let .div(lhs, rhs):
-                "div(\(lhs.debugDescription), \(rhs.debugDescription))"
+                case let .value(value):
+                    "value(\(value))"
+                case let .add(lhs, rhs):
+                    "add(\(lhs.debugDescription), \(rhs.debugDescription))"
+                case let .div(lhs, rhs):
+                    "div(\(lhs.debugDescription), \(rhs.debugDescription))"
             }
         }
 
@@ -45,28 +45,28 @@ enum CalculatorFixture {
     /// Strict left-to-right evaluator. Throws ``EvalError/divisionByZero`` on a runtime divide-by-zero.
     static func eval(_ expr: Expr) throws -> Int {
         switch expr {
-        case let .value(value):
-            return value
-        case let .add(lhs, rhs):
-            return try eval(lhs) &+ eval(rhs)
-        case let .div(lhs, rhs):
-            let denominator = try eval(rhs)
-            guard denominator != 0 else { throw EvalError.divisionByZero }
-            return try eval(lhs) / denominator
+            case let .value(value):
+                return value
+            case let .add(lhs, rhs):
+                return try eval(lhs) &+ eval(rhs)
+            case let .div(lhs, rhs):
+                let denominator = try eval(rhs)
+                guard denominator != 0 else { throw EvalError.divisionByZero }
+                return try eval(lhs) / denominator
         }
     }
 
     /// Returns true if any subterm is the literal `_ / 0`. Used to filter out trivially-failing inputs.
     static func containsLiteralDivisionByZero(_ expr: Expr) -> Bool {
         switch expr {
-        case .value:
-            false
-        case let .add(lhs, rhs):
-            containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
-        case .div(_, .value(0)):
-            true
-        case let .div(lhs, rhs):
-            containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
+            case .value:
+                false
+            case let .add(lhs, rhs):
+                containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
+            case .div(_, .value(0)):
+                true
+            case let .div(lhs, rhs):
+                containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
         }
     }
 
@@ -92,10 +92,10 @@ enum CalculatorFixture {
                     forward: { lhs, rhs in Expr.add(lhs, rhs) },
                     backward: { value in
                         switch value {
-                        case let .add(lhs, rhs): (lhs, rhs)
-                        case let .div(lhs, rhs): (lhs, rhs)
-                        case .value:
-                            (value, value)
+                            case let .add(lhs, rhs): (lhs, rhs)
+                            case let .div(lhs, rhs): (lhs, rhs)
+                            case .value:
+                                (value, value)
                         }
                     }
                 )
@@ -104,10 +104,10 @@ enum CalculatorFixture {
                     forward: { lhs, rhs in Expr.div(lhs, rhs) },
                     backward: { value in
                         switch value {
-                        case let .add(lhs, rhs): (lhs, rhs)
-                        case let .div(lhs, rhs): (lhs, rhs)
-                        case .value:
-                            (value, value)
+                            case let .add(lhs, rhs): (lhs, rhs)
+                            case let .div(lhs, rhs): (lhs, rhs)
+                            case .value:
+                                (value, value)
                         }
                     }
                 )

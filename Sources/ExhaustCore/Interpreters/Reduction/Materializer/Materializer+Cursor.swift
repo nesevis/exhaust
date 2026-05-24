@@ -39,13 +39,13 @@ extension Materializer {
 
         mutating func pushScope(limit: Int) {
             switch scopeDepth {
-            case 0: scopeLimits.0 = limit
-            case 1: scopeLimits.1 = limit
-            case 2: scopeLimits.2 = limit
-            case 3: scopeLimits.3 = limit
-            default:
-                if scopeOverflow == nil { scopeOverflow = [] }
-                scopeOverflow!.append(limit)
+                case 0: scopeLimits.0 = limit
+                case 1: scopeLimits.1 = limit
+                case 2: scopeLimits.2 = limit
+                case 3: scopeLimits.3 = limit
+                default:
+                    if scopeOverflow == nil { scopeOverflow = [] }
+                    scopeOverflow!.append(limit)
             }
             scopeDepth &+= 1
             effectiveEnd = min(entries.count, limit)
@@ -64,10 +64,10 @@ extension Materializer {
                 effectiveEnd = min(entries.count, limit)
             } else if scopeDepth > 0 {
                 let limit = switch scopeDepth {
-                case 1: scopeLimits.0
-                case 2: scopeLimits.1
-                case 3: scopeLimits.2
-                default: scopeLimits.3
+                    case 1: scopeLimits.0
+                    case 2: scopeLimits.1
+                    case 3: scopeLimits.2
+                    default: scopeLimits.3
                 }
                 effectiveEnd = min(entries.count, limit)
             } else {
@@ -81,10 +81,10 @@ extension Materializer {
         mutating func skipGroups() {
             while position < effectiveEnd {
                 switch entries[position] {
-                case .group, .bind, .just:
-                    position &+= 1
-                default:
-                    return
+                    case .group, .bind, .just:
+                        position &+= 1
+                    default:
+                        return
                 }
             }
         }
@@ -95,10 +95,10 @@ extension Materializer {
         mutating func skipGroupCloses() {
             while position < effectiveEnd {
                 switch entries[position] {
-                case .group(false), .bind(false):
-                    position &+= 1
-                default:
-                    return
+                    case .group(false), .bind(false):
+                        position &+= 1
+                    default:
+                        return
                 }
             }
         }
@@ -114,12 +114,12 @@ extension Materializer {
                 return nil
             }
             switch entries[position] {
-            case let .value(v):
-                position &+= 1
-                return v
-            default:
-                exhausted = true
-                return nil
+                case let .value(v):
+                    position &+= 1
+                    return v
+                default:
+                    exhausted = true
+                    return nil
             }
         }
 
@@ -132,12 +132,12 @@ extension Materializer {
                 return nil
             }
             switch entries[position] {
-            case let .branch(b):
-                position &+= 1
-                return b
-            default:
-                exhausted = true
-                return nil
+                case let .branch(b):
+                    position &+= 1
+                    return b
+                default:
+                    exhausted = true
+                    return nil
             }
         }
 
@@ -180,17 +180,17 @@ extension Materializer {
 
             while pos < entries.count {
                 switch entries[pos] {
-                case .sequence(false, _, _) where depth == 0:
-                    return count
-                case .group(true), .bind(true), .sequence(true, _, _):
-                    if depth == 0 { count &+= 1 }
-                    depth &+= 1
-                case .group(false), .bind(false), .sequence(false, _, _):
-                    depth -= 1
-                case .value, .just:
-                    if depth == 0 { count &+= 1 }
-                case .branch:
-                    break
+                    case .sequence(false, _, _) where depth == 0:
+                        return count
+                    case .group(true), .bind(true), .sequence(true, _, _):
+                        if depth == 0 { count &+= 1 }
+                        depth &+= 1
+                    case .group(false), .bind(false), .sequence(false, _, _):
+                        depth -= 1
+                    case .value, .just:
+                        if depth == 0 { count &+= 1 }
+                    case .branch:
+                        break
                 }
                 pos &+= 1
             }

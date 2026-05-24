@@ -26,30 +26,30 @@ package extension Gen {
         let isInterpreting = __ExhaustRuntime.isInterpreting
         let tuned: AnyGenerator?
         switch (type, isInterpreting) {
-        case (.rejectionSampling, _),
-             (.choiceGradientSampling, true),
-             (.auto, true),
-             (.probeSampling, true),
-             (.customCGS, true):
-            tuned = nil
-        case (.choiceGradientSampling, false), (.auto, false):
-            tuned = try? ChoiceGradientTuner<Any>.tune(
-                erased,
-                predicate: erasedPredicate
-            )
-        case (.probeSampling, false):
-            tuned = try? GeneratorTuning.probeAndTune(
-                erased,
-                predicate: erasedPredicate
-            )
-        case let (.customCGS(warmupRuns, sampleCount, subdivisionThresholds), false):
-            tuned = try? ChoiceGradientTuner<Any>.tune(
-                erased,
-                predicate: erasedPredicate,
-                warmupRuns: warmupRuns,
-                sampleCount: sampleCount,
-                subdivisionThresholds: subdivisionThresholds
-            )
+            case (.rejectionSampling, _),
+                 (.choiceGradientSampling, true),
+                 (.auto, true),
+                 (.probeSampling, true),
+                 (.customCGS, true):
+                tuned = nil
+            case (.choiceGradientSampling, false), (.auto, false):
+                tuned = try? ChoiceGradientTuner<Any>.tune(
+                    erased,
+                    predicate: erasedPredicate
+                )
+            case (.probeSampling, false):
+                tuned = try? GeneratorTuning.probeAndTune(
+                    erased,
+                    predicate: erasedPredicate
+                )
+            case let (.customCGS(warmupRuns, sampleCount, subdivisionThresholds), false):
+                tuned = try? ChoiceGradientTuner<Any>.tune(
+                    erased,
+                    predicate: erasedPredicate,
+                    warmupRuns: warmupRuns,
+                    sampleCount: sampleCount,
+                    subdivisionThresholds: subdivisionThresholds
+                )
         }
 
         return .impure(

@@ -26,93 +26,92 @@ extension ChoiceGraph {
         remainingPath: ArraySlice<BindPathStep>
     ) -> ChoiceTree? {
         switch tree {
-        case .choice, .just, .getSize:
-            // Terminals — cannot contain further binds.
-            return nil
+            case .choice, .just, .getSize:
+                // Terminals — cannot contain further binds.
+                return nil
 
-        case let .sequence(_, elements, _):
-            guard let step = remainingPath.first,
-                  case let .sequenceChild(index) = step,
-                  elements.indices.contains(index)
-            else { return nil }
-            return walkForPathMatch(
-                tree: elements[index],
-                remainingPath: remainingPath.dropFirst()
-            )
-
-        case let .branch(b):
-            // Transparent wrapper — pass through without consuming a step.
-            return walkForPathMatch(tree: b.choice, remainingPath: remainingPath)
-
-        case let .group(array, _):
-            if isPickSite(array) {
+            case let .sequence(_, elements, _):
                 guard let step = remainingPath.first,
-                      case let .pickBranch(targetID) = step
+                      case let .sequenceChild(index) = step,
+                      elements.indices.contains(index)
                 else { return nil }
-                for element in array {
-                    // The selected element carries the originally-picked branch.
-                    if case let .branch(b) = element, b.isSelected,
-                       b.id == targetID
-                    {
+                return walkForPathMatch(
+                    tree: elements[index],
+                    remainingPath: remainingPath.dropFirst()
+                )
+
+            case let .branch(b):
+                // Transparent wrapper — pass through without consuming a step.
+                return walkForPathMatch(tree: b.choice, remainingPath: remainingPath)
+
+            case let .group(array, _):
+                if isPickSite(array) {
+                    guard let step = remainingPath.first,
+                          case let .pickBranch(targetID) = step
+                    else { return nil }
+                    for element in array {
+                        // The selected element carries the originally-picked branch.
+                        if case let .branch(b) = element, b.isSelected,
+                           b.id == targetID
+                        {
+                            return walkForPathMatch(
+                                tree: element,
+                                remainingPath: remainingPath.dropFirst()
+                            )
+                        }
+                    }
+                    return nil
+                }
+                // Regular zip group.
+                guard let step = remainingPath.first,
+                      case let .groupChild(index) = step,
+                      array.indices.contains(index)
+                else { return nil }
+                return walkForPathMatch(
+                    tree: array[index],
+                    remainingPath: remainingPath.dropFirst()
+                )
+
+            case let .bind(_, inner, bound):
+                if inner.isGetSize {
+                    // getSize-bind is transparent in the graph — pass through.
+                    return walkForPathMatch(tree: bound, remainingPath: remainingPath)
+                }
+                if remainingPath.isEmpty {
+                    // This is the target bind — return its bound child.
+                    return bound
+                }
+                guard let step = remainingPath.first else { return nil }
+                switch step {
+                    case .bindBound:
                         return walkForPathMatch(
-                            tree: element,
+                            tree: bound,
                             remainingPath: remainingPath.dropFirst()
                         )
-                    }
+                    case .bindInner:
+                        return walkForPathMatch(
+                            tree: inner,
+                            remainingPath: remainingPath.dropFirst()
+                        )
+                    default:
+                        return nil
                 }
-                return nil
-            }
-            // Regular zip group.
-            guard let step = remainingPath.first,
-                  case let .groupChild(index) = step,
-                  array.indices.contains(index)
-            else { return nil }
-            return walkForPathMatch(
-                tree: array[index],
-                remainingPath: remainingPath.dropFirst()
-            )
 
-        case let .bind(_, inner, bound):
-            if inner.isGetSize {
-                // getSize-bind is transparent in the graph — pass through.
-                return walkForPathMatch(tree: bound, remainingPath: remainingPath)
-            }
-            if remainingPath.isEmpty {
-                // This is the target bind — return its bound child.
-                return bound
-            }
-            guard let step = remainingPath.first else { return nil }
-            switch step {
-            case .bindBound:
+            case let .resize(_, choices):
+                guard let step = remainingPath.first,
+                      case let .groupChild(index) = step,
+                      choices.indices.contains(index)
+                else { return nil }
                 return walkForPathMatch(
-                    tree: bound,
+                    tree: choices[index],
                     remainingPath: remainingPath.dropFirst()
                 )
-            case .bindInner:
-                return walkForPathMatch(
-                    tree: inner,
-                    remainingPath: remainingPath.dropFirst()
-                )
-            default:
-                return nil
-            }
-
-        case let .resize(_, choices):
-            guard let step = remainingPath.first,
-                  case let .groupChild(index) = step,
-                  choices.indices.contains(index)
-            else { return nil }
-            return walkForPathMatch(
-                tree: choices[index],
-                remainingPath: remainingPath.dropFirst()
-            )
-
         }
     }
 
     /// Pick-site detection that mirrors ``ChoiceGraphBuilder/detectPickSite(_:)``: every child must be `.branch`, and at least one must be selected.
     private static func isPickSite(_ array: [ChoiceTree]) -> Bool {
-        guard array.allSatisfy({ $0.isBranch }) else {
+        guard array.allSatisfy(\.isBranch) else {
             return false
         }
         return array.contains(where: \.isSelected)

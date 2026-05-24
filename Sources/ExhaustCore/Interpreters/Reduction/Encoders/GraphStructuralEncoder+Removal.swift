@@ -12,29 +12,29 @@ extension GraphStructuralEncoder {
         graph: ChoiceGraph
     ) -> ProjectedMutation? {
         switch scope {
-        case let .elements(elementScope):
-            guard let built = buildElementCandidate(scope: elementScope, sequence: sequence, graph: graph) else {
-                return nil
-            }
-            candidate = built
-            return .sequenceElementsRemoved(
-                elementScope.targets.map { target in
-                    (seqNodeID: target.sequenceNodeID, removedNodeIDs: target.elementNodeIDs)
+            case let .elements(elementScope):
+                guard let built = buildElementCandidate(scope: elementScope, sequence: sequence, graph: graph) else {
+                    return nil
                 }
-            )
+                candidate = built
+                return .sequenceElementsRemoved(
+                    elementScope.targets.map { target in
+                        (seqNodeID: target.sequenceNodeID, removedNodeIDs: target.elementNodeIDs)
+                    }
+                )
 
-        case let .subtree(nodeID, _):
-            guard let built = buildSubtreeCandidate(nodeID: nodeID, sequence: sequence, graph: graph) else {
+            case let .subtree(nodeID, _):
+                guard let built = buildSubtreeCandidate(nodeID: nodeID, sequence: sequence, graph: graph) else {
+                    return nil
+                }
+                candidate = built
+                return .sequenceElementsRemoved(
+                    [(seqNodeID: graph.nodes[nodeID].parent ?? -1, removedNodeIDs: [nodeID])]
+                )
+
+            case .coveringAligned:
+                // Covering aligned removal is handled by the multi-shot path in ``GraphStructuralEncoder/nextCoveringAlignedProbe(into:)``.
                 return nil
-            }
-            candidate = built
-            return .sequenceElementsRemoved(
-                [(seqNodeID: graph.nodes[nodeID].parent ?? -1, removedNodeIDs: [nodeID])]
-            )
-
-        case .coveringAligned:
-            // Covering aligned removal is handled by the multi-shot path in ``GraphStructuralEncoder/nextCoveringAlignedProbe(into:)``.
-            return nil
         }
     }
 

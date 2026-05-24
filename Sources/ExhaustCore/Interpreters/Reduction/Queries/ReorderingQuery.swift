@@ -27,22 +27,22 @@ enum ReorderingQuery {
             let childKinds: [ChoiceGraphNodeKind]
 
             switch node.kind {
-            case let .sequence(metadata):
-                guard metadata.elementCount >= 2 else { continue }
-                guard metadata.childPositionRanges.count >= 2 else { continue }
-                childRanges = metadata.childPositionRanges
-                childKinds = node.children.map { graph.nodes[$0].kind }
+                case let .sequence(metadata):
+                    guard metadata.elementCount >= 2 else { continue }
+                    guard metadata.childPositionRanges.count >= 2 else { continue }
+                    childRanges = metadata.childPositionRanges
+                    childKinds = node.children.map { graph.nodes[$0].kind }
 
-            case .zip:
-                guard node.children.count >= 2 else { continue }
-                let childNodes = node.children.map { graph.nodes[$0] }
-                guard childNodes.allSatisfy({ $0.positionRange != nil }) else { continue }
-                childRanges = childNodes.compactMap(\.positionRange)
-                guard childRanges.count >= 2 else { continue }
-                childKinds = childNodes.map(\.kind)
+                case .zip:
+                    guard node.children.count >= 2 else { continue }
+                    let childNodes = node.children.map { graph.nodes[$0] }
+                    guard childNodes.allSatisfy({ $0.positionRange != nil }) else { continue }
+                    childRanges = childNodes.compactMap(\.positionRange)
+                    guard childRanges.count >= 2 else { continue }
+                    childKinds = childNodes.map(\.kind)
 
-            default:
-                continue
+                default:
+                    continue
             }
 
             let depth = nodeDepth(nodeID: nodeID, graph: graph)
@@ -137,14 +137,14 @@ enum ReorderingQuery {
     /// `chooseBits` nodes are split by ``TypeTag`` so that only siblings with the same type are grouped. Constraint ranges ensure siblings with different valid ranges are not grouped — reordering between different ranges would produce out-of-range values.
     private static func siblingGroupKey(_ kind: ChoiceGraphNodeKind) -> SiblingGroupKey {
         switch kind {
-        case let .chooseBits(metadata):
-            .chooseBits(typeTag: metadata.typeTag, constraintRange: metadata.validRange)
-        case .just: .just
-        case .bind: .bind
-        case .zip: .zip
-        case let .sequence(metadata):
-            .sequence(lengthConstraint: metadata.lengthConstraint)
-        case .pick: .pick
+            case let .chooseBits(metadata):
+                .chooseBits(typeTag: metadata.typeTag, constraintRange: metadata.validRange)
+            case .just: .just
+            case .bind: .bind
+            case .zip: .zip
+            case let .sequence(metadata):
+                .sequence(lengthConstraint: metadata.lengthConstraint)
+            case .pick: .pick
         }
     }
 

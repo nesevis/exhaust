@@ -39,10 +39,10 @@ package extension FreerMonad {
         _ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>
     ) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
-        case let .pure(value):
-            try transform(value)
-        case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0).bind(transform) }
+            case let .pure(value):
+                try transform(value)
+            case let .impure(operation, continuation):
+                .impure(operation: operation) { try continuation($0).bind(transform) }
         }
     }
 
@@ -57,9 +57,9 @@ package extension FreerMonad {
         _ transform: @escaping (Value) throws -> NewValue
     ) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
-        case let .pure(value): try .pure(transform(value))
-        case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0).map(transform) }
+            case let .pure(value): try .pure(transform(value))
+            case let .impure(operation, continuation):
+                .impure(operation: operation) { try continuation($0).map(transform) }
         }
     }
 
@@ -70,10 +70,10 @@ package extension FreerMonad {
     /// - Returns: An equivalent computation with value type erased to `Any`.
     func erase() -> FreerMonad<Operation, Any> {
         switch self {
-        case let .pure(value):
-            .pure(value as Any)
-        case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0).erase() }
+            case let .pure(value):
+                .pure(value as Any)
+            case let .impure(operation, continuation):
+                .impure(operation: operation) { try continuation($0).erase() }
         }
     }
 }

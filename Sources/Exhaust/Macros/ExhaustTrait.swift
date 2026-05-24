@@ -68,7 +68,7 @@
     /// @Suite(.exhaust(.budget(.extensive)))
     /// ```
     public struct ExhaustTraitOption: Sendable {
-        enum Kind: Sendable {
+        enum Kind {
             case budget(ExhaustBudget)
             case regressions([String])
         }
@@ -106,10 +106,10 @@
             var regressions: [String] = []
             for option in options {
                 switch option.kind {
-                case let .budget(value):
-                    budget = value
-                case let .regressions(seeds):
-                    regressions.append(contentsOf: seeds)
+                    case let .budget(value):
+                        budget = value
+                    case let .regressions(seeds):
+                        regressions.append(contentsOf: seeds)
                 }
             }
             return ExhaustTrait(budget: budget, regressions: regressions)

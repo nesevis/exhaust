@@ -33,9 +33,9 @@ enum ParserStmt: Equatable, CustomDebugStringConvertible {
     case ret(ParserExp)
     var debugDescription: String {
         switch self {
-        case let .assign(variable, expression): "Assign(\(variable), \(expression))"
-        case let .alloc(variable, expression): "Alloc(\(variable), \(expression))"
-        case let .ret(expression): "Return(\(expression))"
+            case let .assign(variable, expression): "Assign(\(variable), \(expression))"
+            case let .alloc(variable, expression): "Alloc(\(variable), \(expression))"
+            case let .ret(expression): "Return(\(expression))"
         }
     }
 }
@@ -52,15 +52,15 @@ indirect enum ParserExp: Equatable, CustomDebugStringConvertible {
     case or(ParserExp, ParserExp)
     var debugDescription: String {
         switch self {
-        case let .int(value): "Int(\(value))"
-        case let .bool(value): "Bool(\(value))"
-        case let .add(lhs, rhs): "Add(\(lhs), \(rhs))"
-        case let .sub(lhs, rhs): "Sub(\(lhs), \(rhs))"
-        case let .mul(lhs, rhs): "Mul(\(lhs), \(rhs))"
-        case let .div(lhs, rhs): "Div(\(lhs), \(rhs))"
-        case let .not(inner): "Not(\(inner))"
-        case let .and(lhs, rhs): "And(\(lhs), \(rhs))"
-        case let .or(lhs, rhs): "Or(\(lhs), \(rhs))"
+            case let .int(value): "Int(\(value))"
+            case let .bool(value): "Bool(\(value))"
+            case let .add(lhs, rhs): "Add(\(lhs), \(rhs))"
+            case let .sub(lhs, rhs): "Sub(\(lhs), \(rhs))"
+            case let .mul(lhs, rhs): "Mul(\(lhs), \(rhs))"
+            case let .div(lhs, rhs): "Div(\(lhs), \(rhs))"
+            case let .not(inner): "Not(\(inner))"
+            case let .and(lhs, rhs): "And(\(lhs), \(rhs))"
+            case let .or(lhs, rhs): "Or(\(lhs), \(rhs))"
         }
     }
 }
@@ -94,26 +94,26 @@ func parserSerialize(_ function: ParserFunc) -> String {
 
 func parserSerialize(_ stmt: ParserStmt) -> String {
     switch stmt {
-    case let .assign(variable, expression):
-        "Assign \(variable.name) (\(parserSerialize(expression)))"
-    case let .alloc(variable, expression):
-        "Alloc \(variable.name) (\(parserSerialize(expression)))"
-    case let .ret(expression):
-        "Return (\(parserSerialize(expression)))"
+        case let .assign(variable, expression):
+            "Assign \(variable.name) (\(parserSerialize(expression)))"
+        case let .alloc(variable, expression):
+            "Alloc \(variable.name) (\(parserSerialize(expression)))"
+        case let .ret(expression):
+            "Return (\(parserSerialize(expression)))"
     }
 }
 
 func parserSerialize(_ expression: ParserExp) -> String {
     switch expression {
-    case let .int(value): "Int \(value)"
-    case let .bool(value): "Bool \(value)"
-    case let .add(lhs, rhs): "Add (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
-    case let .sub(lhs, rhs): "Sub (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
-    case let .mul(lhs, rhs): "Mul (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
-    case let .div(lhs, rhs): "Div (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
-    case let .not(inner): "Not (\(parserSerialize(inner)))"
-    case let .and(lhs, rhs): "And (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
-    case let .or(lhs, rhs): "Or (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
+        case let .int(value): "Int \(value)"
+        case let .bool(value): "Bool \(value)"
+        case let .add(lhs, rhs): "Add (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
+        case let .sub(lhs, rhs): "Sub (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
+        case let .mul(lhs, rhs): "Mul (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
+        case let .div(lhs, rhs): "Div (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
+        case let .not(inner): "Not (\(parserSerialize(inner)))"
+        case let .and(lhs, rhs): "And (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
+        case let .or(lhs, rhs): "Or (\(parserSerialize(lhs))) (\(parserSerialize(rhs)))"
     }
 }
 
@@ -346,20 +346,20 @@ func parserSize(_ function: ParserFunc) -> Int {
 
 func parserSize(_ stmt: ParserStmt) -> Int {
     switch stmt {
-    case let .assign(_, expression): 1 + parserSize(expression)
-    case let .alloc(_, expression): 1 + parserSize(expression)
-    case let .ret(expression): 1 + parserSize(expression)
+        case let .assign(_, expression): 1 + parserSize(expression)
+        case let .alloc(_, expression): 1 + parserSize(expression)
+        case let .ret(expression): 1 + parserSize(expression)
     }
 }
 
 func parserSize(_ expression: ParserExp) -> Int {
     switch expression {
-    case .int, .bool: 1
-    case let .not(inner): 1 + parserSize(inner)
-    case let .add(lhs, rhs), let .sub(lhs, rhs),
-         let .mul(lhs, rhs), let .div(lhs, rhs),
-         let .and(lhs, rhs), let .or(lhs, rhs):
-        1 + parserSize(lhs) + parserSize(rhs)
+        case .int, .bool: 1
+        case let .not(inner): 1 + parserSize(inner)
+        case let .add(lhs, rhs), let .sub(lhs, rhs),
+             let .mul(lhs, rhs), let .div(lhs, rhs),
+             let .and(lhs, rhs), let .or(lhs, rhs):
+            1 + parserSize(lhs) + parserSize(rhs)
     }
 }
 

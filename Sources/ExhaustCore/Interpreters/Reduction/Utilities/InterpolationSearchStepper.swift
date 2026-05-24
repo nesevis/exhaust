@@ -40,8 +40,8 @@ struct InterpolationSearchStepper {
         self.lo = lo
         self.hi = hi
         switch direction {
-        case .findSmallest: bestAccepted = hi
-        case .findLargest: bestAccepted = lo
+            case .findSmallest: bestAccepted = hi
+            case .findLargest: bestAccepted = lo
         }
     }
 
@@ -60,42 +60,42 @@ struct InterpolationSearchStepper {
         guard converged == false else { return nil }
 
         switch direction {
-        case .findSmallest:
-            if lastAccepted {
-                bestAccepted = lastProbe
-                hi = lastProbe
-                divisor = Self.initialDivisor
-            } else {
-                lo = lastProbe + 1
-                if divisor > 2 { divisor /= 2 }
-            }
-            guard lo < hi else {
-                converged = true
-                return nil
-            }
+            case .findSmallest:
+                if lastAccepted {
+                    bestAccepted = lastProbe
+                    hi = lastProbe
+                    divisor = Self.initialDivisor
+                } else {
+                    lo = lastProbe + 1
+                    if divisor > 2 { divisor /= 2 }
+                }
+                guard lo < hi else {
+                    converged = true
+                    return nil
+                }
 
-        case .findLargest:
-            if lastAccepted {
-                bestAccepted = lastProbe
-                let (next, overflow) = lastProbe.addingReportingOverflow(1)
-                if overflow {
+            case .findLargest:
+                if lastAccepted {
+                    bestAccepted = lastProbe
+                    let (next, overflow) = lastProbe.addingReportingOverflow(1)
+                    if overflow {
+                        converged = true
+                        return nil
+                    }
+                    lo = next
+                    divisor = Self.initialDivisor
+                } else {
+                    guard lastProbe > lo else {
+                        converged = true
+                        return nil
+                    }
+                    hi = lastProbe - 1
+                    if divisor > 2 { divisor /= 2 }
+                }
+                guard lo <= hi else {
                     converged = true
                     return nil
                 }
-                lo = next
-                divisor = Self.initialDivisor
-            } else {
-                guard lastProbe > lo else {
-                    converged = true
-                    return nil
-                }
-                hi = lastProbe - 1
-                if divisor > 2 { divisor /= 2 }
-            }
-            guard lo <= hi else {
-                converged = true
-                return nil
-            }
         }
 
         lastProbe = probePoint()
@@ -108,26 +108,26 @@ struct InterpolationSearchStepper {
         let range = hi - lo
         if range < Self.binaryThreshold {
             switch direction {
-            case .findSmallest:
-                return lo + range / 2
-            case .findLargest:
-                return lo + (range + 1) / 2
+                case .findSmallest:
+                    return lo + range / 2
+                case .findLargest:
+                    return lo + (range + 1) / 2
             }
         }
         let step = range / divisor
         if step == 0 {
             switch direction {
-            case .findSmallest:
-                return lo + range / 2
-            case .findLargest:
-                return lo + (range + 1) / 2
+                case .findSmallest:
+                    return lo + range / 2
+                case .findLargest:
+                    return lo + (range + 1) / 2
             }
         }
         switch direction {
-        case .findSmallest:
-            return lo + step
-        case .findLargest:
-            return hi - step
+            case .findSmallest:
+                return lo + step
+            case .findLargest:
+                return hi - step
         }
     }
 }

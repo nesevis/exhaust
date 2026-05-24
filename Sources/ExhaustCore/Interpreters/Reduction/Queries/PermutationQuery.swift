@@ -66,19 +66,19 @@ enum PermutationQuery {
     /// Computes the shape key for a graph node.
     private static func nodeShapeKey(_ node: ChoiceGraphNode) -> NodeShapeKey {
         switch node.kind {
-        case .chooseBits:
-            return .value
-        case let .sequence(metadata):
-            if metadata.elementCount == 0 { return .emptySequence }
-            return .sequence(elementCount: metadata.elementCount)
-        case .zip:
-            return .zip(childCount: node.children.count)
-        case .bind:
-            return .bind
-        case let .pick(metadata):
-            return .pick(branchCount: Int(metadata.branchCount))
-        case .just:
-            return .just
+            case .chooseBits:
+                return .value
+            case let .sequence(metadata):
+                if metadata.elementCount == 0 { return .emptySequence }
+                return .sequence(elementCount: metadata.elementCount)
+            case .zip:
+                return .zip(childCount: node.children.count)
+            case .bind:
+                return .bind
+            case let .pick(metadata):
+                return .pick(branchCount: Int(metadata.branchCount))
+            case .just:
+                return .just
         }
     }
 }

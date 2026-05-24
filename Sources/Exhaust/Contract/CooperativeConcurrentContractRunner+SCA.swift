@@ -47,11 +47,11 @@ func runConcurrentSCACoverage<Command>(
     }
 
     let strengthCap = switch sequenceLength {
-    case ...6: 6
-    case ...8: 5
-    case ...12: 4
-    case ...20: 3
-    default: 2
+        case ...6: 6
+        case ...8: 5
+        case ...12: 4
+        case ...20: 3
+        default: 2
     }
 
     guard let domain = SCADomain.build(

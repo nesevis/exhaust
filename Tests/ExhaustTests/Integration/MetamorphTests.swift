@@ -249,14 +249,14 @@ struct MetamorphTests {
             let prefix = ChoiceSequence(tree)
 
             switch Materializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) {
-            case let .success(output, _, _):
-                let materialized = output
-                #expect(materialized.count == original.count)
-                for index in 0 ..< materialized.count {
-                    #expect(materialized[index] as! Int == original[index] as! Int)
-                }
-            case .rejected, .failed:
-                Issue.record("Materialize should succeed for metamorphic round-trip")
+                case let .success(output, _, _):
+                    let materialized = output
+                    #expect(materialized.count == original.count)
+                    for index in 0 ..< materialized.count {
+                        #expect(materialized[index] as! Int == original[index] as! Int)
+                    }
+                case .rejected, .failed:
+                    Issue.record("Materialize should succeed for metamorphic round-trip")
             }
         }
     }

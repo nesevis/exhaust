@@ -43,85 +43,85 @@ package extension ChoiceSequence {
         into output: inout ChoiceSequence
     ) {
         switch tree {
-        case let .choice(value, meta):
-            output.append(.value(.init(
-                choice: value,
-                validRange: meta.validRange,
-                isRangeExplicit: meta.isRangeExplicit
-            )))
-        case .just:
-            output.append(.just)
-        case .getSize:
-            break
-        case let .sequence(_, elements, meta):
-            output.append(.sequence(true, validRange: meta.validRange, isLengthExplicit: meta.isRangeExplicit))
-            // while-loop: avoiding IteratorProtocol overhead in debug builds.
-            var eIdx = 0
-            while eIdx < elements.count {
-                flatten(elements[eIdx], includingAllBranches: includingAllBranches, into: &output)
-                eIdx += 1
-            }
-            output.append(.sequence(false))
-        case let .branch(b):
-            flatten(b.choice, includingAllBranches: includingAllBranches, into: &output)
-        case let .group(array, _):
-            var i = 0
-            var selectedBranchTree: ChoiceTree?
-            while i < array.count {
-                let candidate = array[i]
-                if candidate.isSelected, candidate.isBranch {
-                    selectedBranchTree = candidate
-                    break
-                }
-                i += 1
-            }
-            if case let .branch(b) = selectedBranchTree, b.isSelected {
-                output.append(.group(true))
-                output.append(.branch(.init(id: b.id, branchCount: b.branchCount)))
-                let children = includingAllBranches ? array : [b.choice]
+            case let .choice(value, meta):
+                output.append(.value(.init(
+                    choice: value,
+                    validRange: meta.validRange,
+                    isRangeExplicit: meta.isRangeExplicit
+                )))
+            case .just:
+                output.append(.just)
+            case .getSize:
+                break
+            case let .sequence(_, elements, meta):
+                output.append(.sequence(true, validRange: meta.validRange, isLengthExplicit: meta.isRangeExplicit))
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
-                var cIdx = 0
-                while cIdx < children.count {
-                    flatten(
-                        children[cIdx],
-                        includingAllBranches: includingAllBranches,
-                        into: &output
-                    )
-                    cIdx += 1
+                var eIdx = 0
+                while eIdx < elements.count {
+                    flatten(elements[eIdx], includingAllBranches: includingAllBranches, into: &output)
+                    eIdx += 1
                 }
-                output.append(.group(false))
-            } else {
+                output.append(.sequence(false))
+            case let .branch(b):
+                flatten(b.choice, includingAllBranches: includingAllBranches, into: &output)
+            case let .group(array, _):
+                var i = 0
+                var selectedBranchTree: ChoiceTree?
+                while i < array.count {
+                    let candidate = array[i]
+                    if candidate.isSelected, candidate.isBranch {
+                        selectedBranchTree = candidate
+                        break
+                    }
+                    i += 1
+                }
+                if case let .branch(b) = selectedBranchTree, b.isSelected {
+                    output.append(.group(true))
+                    output.append(.branch(.init(id: b.id, branchCount: b.branchCount)))
+                    let children = includingAllBranches ? array : [b.choice]
+                    // while-loop: avoiding IteratorProtocol overhead in debug builds.
+                    var cIdx = 0
+                    while cIdx < children.count {
+                        flatten(
+                            children[cIdx],
+                            includingAllBranches: includingAllBranches,
+                            into: &output
+                        )
+                        cIdx += 1
+                    }
+                    output.append(.group(false))
+                } else {
+                    output.append(.group(true))
+                    // while-loop: avoiding IteratorProtocol overhead in debug builds.
+                    var aIdx = 0
+                    while aIdx < array.count {
+                        flatten(array[aIdx], includingAllBranches: includingAllBranches, into: &output)
+                        aIdx += 1
+                    }
+                    output.append(.group(false))
+                }
+            case let .bind(_, inner, bound):
+                if inner.isGetSize {
+                    // getSize-bound: structurally stable (size is fixed during reduction), so emit .group markers to let deletion encoders work through them.
+                    output.append(.group(true))
+                    flatten(inner, includingAllBranches: includingAllBranches, into: &output)
+                    flatten(bound, includingAllBranches: includingAllBranches, into: &output)
+                    output.append(.group(false))
+                } else {
+                    output.append(.bind(true))
+                    flatten(inner, includingAllBranches: includingAllBranches, into: &output)
+                    flatten(bound, includingAllBranches: includingAllBranches, into: &output)
+                    output.append(.bind(false))
+                }
+            case let .resize(_, choices):
                 output.append(.group(true))
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
-                var aIdx = 0
-                while aIdx < array.count {
-                    flatten(array[aIdx], includingAllBranches: includingAllBranches, into: &output)
-                    aIdx += 1
+                var rIdx = 0
+                while rIdx < choices.count {
+                    flatten(choices[rIdx], includingAllBranches: includingAllBranches, into: &output)
+                    rIdx += 1
                 }
                 output.append(.group(false))
-            }
-        case let .bind(_, inner, bound):
-            if inner.isGetSize {
-                // getSize-bound: structurally stable (size is fixed during reduction), so emit .group markers to let deletion encoders work through them.
-                output.append(.group(true))
-                flatten(inner, includingAllBranches: includingAllBranches, into: &output)
-                flatten(bound, includingAllBranches: includingAllBranches, into: &output)
-                output.append(.group(false))
-            } else {
-                output.append(.bind(true))
-                flatten(inner, includingAllBranches: includingAllBranches, into: &output)
-                flatten(bound, includingAllBranches: includingAllBranches, into: &output)
-                output.append(.bind(false))
-            }
-        case let .resize(_, choices):
-            output.append(.group(true))
-            // while-loop: avoiding IteratorProtocol overhead in debug builds.
-            var rIdx = 0
-            while rIdx < choices.count {
-                flatten(choices[rIdx], includingAllBranches: includingAllBranches, into: &output)
-                rIdx += 1
-            }
-            output.append(.group(false))
         }
     }
 
@@ -131,20 +131,20 @@ package extension ChoiceSequence {
         var bindCount = 0
         for element in sequence {
             switch element {
-            case .sequence(true, validRange: _, isLengthExplicit: _):
-                sequenceCount += 1
-            case .sequence(false, validRange: _, isLengthExplicit: _):
-                sequenceCount -= 1
-            case .group(true):
-                groupCount += 1
-            case .group(false):
-                groupCount -= 1
-            case .bind(true):
-                bindCount += 1
-            case .bind(false):
-                bindCount -= 1
-            case .value, .branch, .just:
-                break
+                case .sequence(true, validRange: _, isLengthExplicit: _):
+                    sequenceCount += 1
+                case .sequence(false, validRange: _, isLengthExplicit: _):
+                    sequenceCount -= 1
+                case .group(true):
+                    groupCount += 1
+                case .group(false):
+                    groupCount -= 1
+                case .bind(true):
+                    bindCount += 1
+                case .bind(false):
+                    bindCount -= 1
+                case .value, .branch, .just:
+                    break
             }
         }
         return sequenceCount == 0 && groupCount == 0 && bindCount == 0
@@ -161,10 +161,10 @@ package extension ChoiceSequence {
         var i = range.lowerBound
         while i <= range.upperBound {
             switch sequence[i] {
-            case let .value(v):
-                keys.append(v.choice)
-            case .branch, .sequence, .group, .bind, .just:
-                break
+                case let .value(v):
+                    keys.append(v.choice)
+                case .branch, .sequence, .group, .bind, .just:
+                    break
             }
             i += 1
         }
@@ -183,12 +183,12 @@ package extension ChoiceSequence {
         var i = 0
         while i < count {
             switch self[i].shortLexCompare(other[i]) {
-            case .lt:
-                return true
-            case .gt:
-                return false
-            case .eq:
-                i += 1
+                case .lt:
+                    return true
+                case .gt:
+                    return false
+                case .eq:
+                    i += 1
             }
         }
         // Value-projection tiebreaker: compare only value entries, ignoring structural noise that depends on generator argument order or tree topology rather than output simplicity.
@@ -203,11 +203,11 @@ package extension ChoiceSequence {
             }
             guard selfIdx < count, otherIdx < other.count else { break }
             switch self[selfIdx].value!.shortLexCompare(other[otherIdx].value!) {
-            case .lt: return true
-            case .gt: return false
-            case .eq:
-                selfIdx += 1
-                otherIdx += 1
+                case .lt: return true
+                case .gt: return false
+                case .eq:
+                    selfIdx += 1
+                    otherIdx += 1
             }
         }
         // Fewer remaining values wins.

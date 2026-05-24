@@ -31,18 +31,18 @@ extension ChoiceGraphScheduler {
         hasBind: Bool
     ) -> DecoderSelection {
         let picksUnchanged = switch mutation {
-        case let .leafValues(changes):
-            changes.contains(where: \.mayReshape) == false
-        case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped, .sequenceReordered:
-            true
-        case .branchSelected, .selfSimilarReplaced, .descendantPromoted:
-            false
+            case let .leafValues(changes):
+                changes.contains(where: \.mayReshape) == false
+            case .sequenceElementsRemoved, .sequenceElementsMigrated, .siblingsSwapped, .sequenceReordered:
+                true
+            case .branchSelected, .selfSimilarReplaced, .descendantPromoted:
+                false
         }
         let probeCanReshape = switch mutation {
-        case let .leafValues(changes):
-            changes.contains(where: \.mayReshape)
-        default:
-            hasBind
+            case let .leafValues(changes):
+                changes.contains(where: \.mayReshape)
+            default:
+                hasBind
         }
         return DecoderSelection(
             preferExact: requiresExactDecoder || probeCanReshape == false,
@@ -62,27 +62,27 @@ extension ChoiceGraphScheduler {
         let kind: String
         let subjectNodeIDs: [(label: String, id: Int)]
         switch mutation {
-        case let .branchSelected(pickNodeID, newSelectedID):
-            kind = "branchSelected"
-            subjectNodeIDs = [
-                ("pick_node", pickNodeID),
-                ("new_selected_id", Int(newSelectedID)),
-            ]
-        case let .selfSimilarReplaced(targetNodeID, donorNodeID):
-            kind = "selfSimilarReplaced"
-            subjectNodeIDs = [
-                ("target_node", targetNodeID),
-                ("donor_node", donorNodeID),
-            ]
-        case let .descendantPromoted(ancestorPickNodeID, descendantPickNodeID):
-            kind = "descendantPromoted"
-            subjectNodeIDs = [
-                ("ancestor_node", ancestorPickNodeID),
-                ("descendant_node", descendantPickNodeID),
-            ]
-        case .leafValues, .sequenceElementsRemoved, .sequenceElementsMigrated,
-             .siblingsSwapped, .sequenceReordered:
-            return
+            case let .branchSelected(pickNodeID, newSelectedID):
+                kind = "branchSelected"
+                subjectNodeIDs = [
+                    ("pick_node", pickNodeID),
+                    ("new_selected_id", Int(newSelectedID)),
+                ]
+            case let .selfSimilarReplaced(targetNodeID, donorNodeID):
+                kind = "selfSimilarReplaced"
+                subjectNodeIDs = [
+                    ("target_node", targetNodeID),
+                    ("donor_node", donorNodeID),
+                ]
+            case let .descendantPromoted(ancestorPickNodeID, descendantPickNodeID):
+                kind = "descendantPromoted"
+                subjectNodeIDs = [
+                    ("ancestor_node", ancestorPickNodeID),
+                    ("descendant_node", descendantPickNodeID),
+                ]
+            case .leafValues, .sequenceElementsRemoved, .sequenceElementsMigrated,
+                 .siblingsSwapped, .sequenceReordered:
+                return
         }
 
         var metadata: [String: String] = [

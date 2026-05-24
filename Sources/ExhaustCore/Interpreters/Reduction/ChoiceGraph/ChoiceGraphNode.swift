@@ -94,15 +94,25 @@ package struct ScopeAnnotation {
 
     static let `default` = ScopeAnnotation(bindRole: .independent, controlKind: .standard)
 
-    package var isBindInner: Bool { if case .bindInner = bindRole { true } else { false } }
+    package var isBindInner: Bool {
+        if case .bindInner = bindRole { true } else { false }
+    }
 
-    package var controllingBindNodeID: Int? { if case let .bindInner(nodeID, _) = bindRole { nodeID } else { nil } }
+    package var controllingBindNodeID: Int? {
+        if case let .bindInner(nodeID, _) = bindRole { nodeID } else { nil }
+    }
 
-    package var controllingBindDepth: Int? { if case let .bindInner(_, depth) = bindRole { depth } else { nil } }
+    package var controllingBindDepth: Int? {
+        if case let .bindInner(_, depth) = bindRole { depth } else { nil }
+    }
 
-    package var isDepthControl: Bool { if case .depthControl = controlKind { true } else { false } }
+    package var isDepthControl: Bool {
+        if case .depthControl = controlKind { true } else { false }
+    }
 
-    package var isLaneControl: Bool { if case .laneControl = controlKind { true } else { false } }
+    package var isLaneControl: Bool {
+        if case .laneControl = controlKind { true } else { false }
+    }
 }
 
 /// Whether a node is inside a bind's inner subtree.

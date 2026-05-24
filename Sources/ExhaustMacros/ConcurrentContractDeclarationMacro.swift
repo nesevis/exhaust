@@ -174,8 +174,8 @@ enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-        case .mustBeClass, .noCommands, .noSUT, .noOracle, .multipleOracles: .error
-        case .sutTypeNotInferred: .warning
+            case .mustBeClass, .noCommands, .noSUT, .noOracle, .multipleOracles: .error
+            case .sutTypeNotInferred: .warning
         }
     }
 }

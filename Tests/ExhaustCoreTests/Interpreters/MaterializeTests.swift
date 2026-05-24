@@ -22,8 +22,8 @@ struct MaterializeTests {
         guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
         let sequence = ChoiceSequence.flatten(tree)
         switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
-        case let .success(output, _, _): return output
-        case .rejected, .failed: return nil
+            case let .success(output, _, _): return output
+            case .rejected, .failed: return nil
         }
     }
 
@@ -307,16 +307,16 @@ struct MaterializeTests {
         var insideSequence = false
         for element in flattened {
             switch element {
-            case .sequence(true, validRange: _, isLengthExplicit: _):
-                emptySequence.append(element)
-                insideSequence = true
-            case .sequence(false, validRange: _, isLengthExplicit: _):
-                emptySequence.append(element)
-                insideSequence = false
-            default:
-                if !insideSequence {
+                case .sequence(true, validRange: _, isLengthExplicit: _):
                     emptySequence.append(element)
-                }
+                    insideSequence = true
+                case .sequence(false, validRange: _, isLengthExplicit: _):
+                    emptySequence.append(element)
+                    insideSequence = false
+                default:
+                    if !insideSequence {
+                        emptySequence.append(element)
+                    }
             }
         }
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: emptySequence, mode: .exact, fallbackTree: tree) else {
@@ -375,12 +375,12 @@ struct MaterializeTests {
             total += 1
             let sequence = ChoiceSequence.flatten(tree)
             switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
-            case let .success(materialized, _, _):
-                if materialized != value {
+                case let .success(materialized, _, _):
+                    if materialized != value {
+                        roundTripFailures += 1
+                    }
+                case .rejected, .failed:
                     roundTripFailures += 1
-                }
-            case .rejected, .failed:
-                roundTripFailures += 1
             }
         }
         #expect(total > 0)
@@ -402,12 +402,12 @@ struct MaterializeTests {
             total += 1
             let sequence = ChoiceSequence.flatten(tree)
             switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
-            case let .success(materialized, _, _):
-                if materialized != value {
+                case let .success(materialized, _, _):
+                    if materialized != value {
+                        roundTripFailures += 1
+                    }
+                case .rejected, .failed:
                     roundTripFailures += 1
-                }
-            case .rejected, .failed:
-                roundTripFailures += 1
             }
         }
         #expect(total > 0)

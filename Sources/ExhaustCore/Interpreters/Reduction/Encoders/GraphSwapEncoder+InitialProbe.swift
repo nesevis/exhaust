@@ -1,5 +1,5 @@
 //
-//  GraphStructuralEncoder+Swap.swift
+//  GraphSwapEncoder+InitialProbe.swift
 //  Exhaust
 //
 

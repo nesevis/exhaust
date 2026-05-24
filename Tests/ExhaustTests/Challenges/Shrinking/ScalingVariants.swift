@@ -100,8 +100,8 @@ struct BinaryHeapScalingVariant {
                     forward: { left, right in Heap.node(value, left, right) },
                     backward: { heap in
                         switch heap {
-                        case let .node(_, left, right): (left, right)
-                        case .empty: (.empty, .empty)
+                            case let .node(_, left, right): (left, right)
+                            case .empty: (.empty, .empty)
                         }
                     }
                 )
@@ -156,10 +156,10 @@ struct CalculatorScalingVariant {
                 forward: { lhs, rhs in Expr.add(lhs, rhs) },
                 backward: { value in
                     switch value {
-                    case let .add(lhs, rhs): (lhs, rhs)
-                    case let .div(lhs, rhs): (lhs, rhs)
-                    case .value:
-                        (value, value)
+                        case let .add(lhs, rhs): (lhs, rhs)
+                        case let .div(lhs, rhs): (lhs, rhs)
+                        case .value:
+                            (value, value)
                     }
                 }
             )
@@ -168,10 +168,10 @@ struct CalculatorScalingVariant {
                 forward: { lhs, rhs in Expr.div(lhs, rhs) },
                 backward: { value in
                     switch value {
-                    case let .add(lhs, rhs): (lhs, rhs)
-                    case let .div(lhs, rhs): (lhs, rhs)
-                    case .value:
-                        (value, value)
+                        case let .add(lhs, rhs): (lhs, rhs)
+                        case let .div(lhs, rhs): (lhs, rhs)
+                        case .value:
+                            (value, value)
                     }
                 }
             )
@@ -412,11 +412,11 @@ enum ScalingVariant: String, CaseIterable, CustomTestStringConvertible {
 
     func scaling<Bound: FixedWidthInteger & Sendable>(origin: Bound = 0) -> SizeScaling<Bound> {
         switch self {
-        case .constant: .constant
-        case .linear: .linear
-        case .linearFromOrigin: .linearFrom(origin: origin)
-        case .exponential: .exponential
-        case .exponentialFromOrigin: .exponentialFrom(origin: origin)
+            case .constant: .constant
+            case .linear: .linear
+            case .linearFromOrigin: .linearFrom(origin: origin)
+            case .exponential: .exponential
+            case .exponentialFromOrigin: .exponentialFrom(origin: origin)
         }
     }
 }

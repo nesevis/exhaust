@@ -28,24 +28,24 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-        case .forwardOnlyShorthandParams,
-             .forwardOnlyMultiStatement,
-             .forwardOnlyNotFunctionCall,
-             .forwardOnlyUnlabeledArguments,
-             .forwardOnlyComplexArguments,
-             .forwardOnlyParamMismatch:
-            .warning
-        case .noGeneratorArguments,
-             .exhaustMissingProperty,
-             .exhaustMissingGenerator,
-             .exploreMissingProperty,
-             .exploreMissingGenerator,
-             .exploreMissingDirections,
-             .exampleMissingGenerator,
-             .examineMissingGenerator,
-             .exhaustContractMissingSpec,
-             .closureCannotFail:
-            .error
+            case .forwardOnlyShorthandParams,
+                 .forwardOnlyMultiStatement,
+                 .forwardOnlyNotFunctionCall,
+                 .forwardOnlyUnlabeledArguments,
+                 .forwardOnlyComplexArguments,
+                 .forwardOnlyParamMismatch:
+                .warning
+            case .noGeneratorArguments,
+                 .exhaustMissingProperty,
+                 .exhaustMissingGenerator,
+                 .exploreMissingProperty,
+                 .exploreMissingGenerator,
+                 .exploreMissingDirections,
+                 .exampleMissingGenerator,
+                 .examineMissingGenerator,
+                 .exhaustContractMissingSpec,
+                 .closureCannotFail:
+                .error
         }
     }
 }

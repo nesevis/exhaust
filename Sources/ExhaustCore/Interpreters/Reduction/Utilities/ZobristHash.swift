@@ -60,28 +60,28 @@ package enum ZobristHash {
     /// Uses splitmix64 mixing for good avalanche with XOR combination.
     static func contribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
         var bits: UInt64 = switch value {
-        case let .value(v):
-            v.choice.bitPattern64 ^ (UInt64(v.choice.tag.discriminator) << 48)
-        case .sequence(true, validRange: _, isLengthExplicit: true):
-            1
-        case .sequence(true, validRange: _, isLengthExplicit: false):
-            2
-        case .sequence(false, validRange: _, isLengthExplicit: true):
-            3
-        case .sequence(false, validRange: _, isLengthExplicit: false):
-            4
-        case .group(true):
-            5
-        case .group(false):
-            6
-        case .bind(true):
-            8
-        case .bind(false):
-            9
-        case let .branch(b):
-            b.id ^ 0xDEAD_BEEF_CAFE_BABE
-        case .just:
-            7
+            case let .value(v):
+                v.choice.bitPattern64 ^ (UInt64(v.choice.tag.discriminator) << 48)
+            case .sequence(true, validRange: _, isLengthExplicit: true):
+                1
+            case .sequence(true, validRange: _, isLengthExplicit: false):
+                2
+            case .sequence(false, validRange: _, isLengthExplicit: true):
+                3
+            case .sequence(false, validRange: _, isLengthExplicit: false):
+                4
+            case .group(true):
+                5
+            case .group(false):
+                6
+            case .bind(true):
+                8
+            case .bind(false):
+                9
+            case let .branch(b):
+                b.id ^ 0xDEAD_BEEF_CAFE_BABE
+            case .just:
+                7
         }
         bits ^= UInt64(position) &* 0x9E37_79B9_7F4A_7C15
         bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
@@ -89,5 +89,4 @@ package enum ZobristHash {
         bits ^= bits >> 31
         return bits
     }
-
 }

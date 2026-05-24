@@ -39,8 +39,8 @@ struct BinarySearchStepper {
         self.lo = lo
         self.hi = hi
         switch direction {
-        case .findSmallest: bestAccepted = hi
-        case .findLargest: bestAccepted = lo
+            case .findSmallest: bestAccepted = hi
+            case .findLargest: bestAccepted = lo
         }
     }
 
@@ -59,38 +59,38 @@ struct BinarySearchStepper {
         guard converged == false else { return nil }
 
         switch direction {
-        case .findSmallest:
-            if lastAccepted {
-                bestAccepted = lastProbe
-                hi = lastProbe
-            } else {
-                lo = lastProbe + 1
-            }
-            guard lo < hi else {
-                converged = true
-                return nil
-            }
+            case .findSmallest:
+                if lastAccepted {
+                    bestAccepted = lastProbe
+                    hi = lastProbe
+                } else {
+                    lo = lastProbe + 1
+                }
+                guard lo < hi else {
+                    converged = true
+                    return nil
+                }
 
-        case .findLargest:
-            if lastAccepted {
-                bestAccepted = lastProbe
-                let (next, overflow) = lastProbe.addingReportingOverflow(1)
-                if overflow {
+            case .findLargest:
+                if lastAccepted {
+                    bestAccepted = lastProbe
+                    let (next, overflow) = lastProbe.addingReportingOverflow(1)
+                    if overflow {
+                        converged = true
+                        return nil
+                    }
+                    lo = next
+                } else {
+                    guard lastProbe > lo else {
+                        converged = true
+                        return nil
+                    }
+                    hi = lastProbe - 1
+                }
+                guard lo <= hi else {
                     converged = true
                     return nil
                 }
-                lo = next
-            } else {
-                guard lastProbe > lo else {
-                    converged = true
-                    return nil
-                }
-                hi = lastProbe - 1
-            }
-            guard lo <= hi else {
-                converged = true
-                return nil
-            }
         }
 
         lastProbe = midpoint()
@@ -102,10 +102,10 @@ struct BinarySearchStepper {
     private func midpoint() -> UInt64 {
         let range = hi - lo
         switch direction {
-        case .findSmallest:
-            return lo + range / 2
-        case .findLargest:
-            return lo + (range >> 1) + (range & 1)
+            case .findSmallest:
+                return lo + range / 2
+            case .findLargest:
+                return lo + (range >> 1) + (range & 1)
         }
     }
 }

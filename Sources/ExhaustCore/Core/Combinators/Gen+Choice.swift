@@ -185,12 +185,12 @@ package extension Gen {
         let origin: UInt64?
         let isExponential: Bool
         switch scaling {
-        case let .linear(o):
-            origin = o
-            isExponential = false
-        case let .exponential(o):
-            origin = o
-            isExponential = true
+            case let .linear(o):
+                origin = o
+                isExponential = false
+            case let .exponential(o):
+                origin = o
+                isExponential = true
         }
 
         if tag.isFloatingPoint {
@@ -269,20 +269,20 @@ package extension Gen {
         let isExponential: Bool
 
         switch scaling {
-        case .constant:
-            return range
-        case .linear:
-            originBits = min(max(Output.tag.simplestBitPattern, lowerBits), upperBits)
-            isExponential = false
-        case let .linearFrom(origin):
-            originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
-            isExponential = false
-        case .exponential:
-            originBits = min(max(Output.tag.simplestBitPattern, lowerBits), upperBits)
-            isExponential = true
-        case let .exponentialFrom(origin):
-            originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
-            isExponential = true
+            case .constant:
+                return range
+            case .linear:
+                originBits = min(max(Output.tag.simplestBitPattern, lowerBits), upperBits)
+                isExponential = false
+            case let .linearFrom(origin):
+                originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
+                isExponential = false
+            case .exponential:
+                originBits = min(max(Output.tag.simplestBitPattern, lowerBits), upperBits)
+                isExponential = true
+            case let .exponentialFrom(origin):
+                originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
+                isExponential = true
         }
 
         let lowerDistance = scaledDistance(

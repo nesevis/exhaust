@@ -592,11 +592,11 @@ struct OpaqueGroupTests {
             return
         }
         switch result {
-        case let .finite(profile):
-            // Only the int 0...100 should appear
-            #expect(profile.parameters.count == 1)
-        case let .boundary(profile):
-            #expect(profile.parameters.count == 1)
+            case let .finite(profile):
+                // Only the int 0...100 should appear
+                #expect(profile.parameters.count == 1)
+            case let .boundary(profile):
+                #expect(profile.parameters.count == 1)
         }
     }
 
@@ -618,12 +618,12 @@ struct OpaqueGroupTests {
             return
         }
         switch result {
-        case let .finite(profile):
-            // Only the int 0...10 should appear (11 values, finite domain)
-            #expect(profile.parameters.count == 1)
-            #expect(profile.parameters[0].domainSize == 11)
-        case let .boundary(profile):
-            #expect(profile.parameters.count == 1)
+            case let .finite(profile):
+                // Only the int 0...10 should appear (11 values, finite domain)
+                #expect(profile.parameters.count == 1)
+                #expect(profile.parameters[0].domainSize == 11)
+            case let .boundary(profile):
+                #expect(profile.parameters.count == 1)
         }
     }
 
@@ -719,14 +719,14 @@ struct CharacterBoundaryIndicesTests {
         }
 
         let profile: any CoverageProfile = switch analysis {
-        case let .finite(profile): profile
-        case let .boundary(profile): profile
+            case let .finite(profile): profile
+            case let .boundary(profile): profile
         }
 
         let domainSizes = profile.domainSizes
         let analysisKind = switch analysis {
-        case .finite: "finite"
-        case .boundary: "boundary"
+            case .finite: "finite"
+            case .boundary: "boundary"
         }
         print("Analysis: \(analysisKind), params=\(profile.parameterCount), domains=\(domainSizes)")
         #expect(domainSizes.isEmpty == false, "Analysis should produce at least one parameter")

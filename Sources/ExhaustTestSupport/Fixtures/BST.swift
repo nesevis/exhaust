@@ -34,13 +34,13 @@ package enum BST: Equatable, Hashable, CustomStringConvertible {
 
     private func isValidBST(min: UInt?, max: UInt?) -> Bool {
         switch self {
-        case .leaf:
-            return true
-        case let .node(left, value, right):
-            if let min, value <= min { return false }
-            if let max, value >= max { return false }
-            return left.isValidBST(min: min, max: value) &&
-                right.isValidBST(min: value, max: max)
+            case .leaf:
+                return true
+            case let .node(left, value, right):
+                if let min, value <= min { return false }
+                if let max, value >= max { return false }
+                return left.isValidBST(min: min, max: value) &&
+                    right.isValidBST(min: value, max: max)
         }
     }
 
@@ -50,34 +50,34 @@ package enum BST: Equatable, Hashable, CustomStringConvertible {
 
     private func isBalanced() -> Bool {
         switch self {
-        case .leaf:
-            return true
-        case let .node(left, _, right):
-            let diff = abs(left.height - right.height)
-            return diff <= 1 && left.isBalanced() && right.isBalanced()
+            case .leaf:
+                return true
+            case let .node(left, _, right):
+                let diff = abs(left.height - right.height)
+                return diff <= 1 && left.isBalanced() && right.isBalanced()
         }
     }
 
     package var nodeCount: Int {
         switch self {
-        case .leaf: 0
-        case let .node(left, _, right):
-            1 + left.nodeCount + right.nodeCount
+            case .leaf: 0
+            case let .node(left, _, right):
+                1 + left.nodeCount + right.nodeCount
         }
     }
 
     package var height: Int {
         switch self {
-        case .leaf: 0
-        case let .node(left, _, right):
-            1 + Swift.max(left.height, right.height)
+            case .leaf: 0
+            case let .node(left, _, right):
+                1 + Swift.max(left.height, right.height)
         }
     }
 
     package var description: String {
         switch self {
-        case .leaf: "."
-        case let .node(left, value, right): "(\(left) \(value) \(right))"
+            case .leaf: "."
+            case let .node(left, value, right): "(\(left) \(value) \(right))"
         }
     }
 }

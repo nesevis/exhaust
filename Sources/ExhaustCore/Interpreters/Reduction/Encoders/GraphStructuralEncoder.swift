@@ -48,32 +48,32 @@ struct GraphStructuralEncoder: GraphEncoder {
         let graph = scope.graph
 
         switch scope.transformation.operation {
-        case let .remove(removalScope):
-            name = .deletion
-            switch removalScope {
-            case .elements, .subtree:
-                probe = buildRemovalProbe(into: &candidateBuffer, scope: removalScope, sequence: sequence, graph: graph)
+            case let .remove(removalScope):
+                name = .deletion
+                switch removalScope {
+                    case .elements, .subtree:
+                        probe = buildRemovalProbe(into: &candidateBuffer, scope: removalScope, sequence: sequence, graph: graph)
+                        if probe != nil { probeCandidate = candidateBuffer }
+                    case let .coveringAligned(alignedScope):
+                        coveringAlignedState = CoveringAlignedState(
+                            scope: alignedScope,
+                            baseSequence: sequence,
+                            graph: graph
+                        )
+                }
+
+            case let .replace(replacementScope):
+                name = .substitution
+                probe = buildReplacementProbe(into: &candidateBuffer, scope: replacementScope, sequence: sequence, graph: graph)
                 if probe != nil { probeCandidate = candidateBuffer }
-            case let .coveringAligned(alignedScope):
-                coveringAlignedState = CoveringAlignedState(
-                    scope: alignedScope,
-                    baseSequence: sequence,
-                    graph: graph
-                )
-            }
 
-        case let .replace(replacementScope):
-            name = .substitution
-            probe = buildReplacementProbe(into: &candidateBuffer, scope: replacementScope, sequence: sequence, graph: graph)
-            if probe != nil { probeCandidate = candidateBuffer }
+            case let .migrate(migrationScope):
+                name = .migration
+                probe = buildMigrationProbe(into: &candidateBuffer, scope: migrationScope, sequence: sequence, graph: graph)
+                if probe != nil { probeCandidate = candidateBuffer }
 
-        case let .migrate(migrationScope):
-            name = .migration
-            probe = buildMigrationProbe(into: &candidateBuffer, scope: migrationScope, sequence: sequence, graph: graph)
-            if probe != nil { probeCandidate = candidateBuffer }
-
-        case .minimize, .exchange, .permute, .reorder:
-            break
+            case .minimize, .exchange, .permute, .reorder:
+                break
         }
     }
 

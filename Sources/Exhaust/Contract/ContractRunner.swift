@@ -34,44 +34,44 @@ public func __runContract<Spec: ContractSpec>(
     let logFormat: LogFormat = .keyValue
     for setting in settings {
         switch setting {
-        case let .commandLimit(limit):
-            commandLimit = limit
-        case let .budget(b):
-            budget = b
-        case let .replay(replaySeed):
-            seed = replaySeed.resolve()
-            if seed == nil {
-                reportIssue(
-                    "Invalid replay seed: \(replaySeed)",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-                return nil
-            }
-        case let .suppress(option):
-            switch option {
-            case .issueReporting:
-                suppressIssueReporting = true
-            case .logs:
-                suppressLogs = true
-            case .all:
-                suppressIssueReporting = true
-                suppressLogs = true
-            }
-        case .collectOpenPBTStats:
-            collectOpenPBTStats = true
-        case .includeDiff:
-            includeDiff = true
-        case let .onReport(closure):
-            let existing = onReportClosure
-            onReportClosure = { report in
-                existing?(report)
-                closure(report)
-            }
-        case let .log(level):
-            logLevel = level
+            case let .commandLimit(limit):
+                commandLimit = limit
+            case let .budget(b):
+                budget = b
+            case let .replay(replaySeed):
+                seed = replaySeed.resolve()
+                if seed == nil {
+                    reportIssue(
+                        "Invalid replay seed: \(replaySeed)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    return nil
+                }
+            case let .suppress(option):
+                switch option {
+                    case .issueReporting:
+                        suppressIssueReporting = true
+                    case .logs:
+                        suppressLogs = true
+                    case .all:
+                        suppressIssueReporting = true
+                        suppressLogs = true
+                }
+            case .collectOpenPBTStats:
+                collectOpenPBTStats = true
+            case .includeDiff:
+                includeDiff = true
+            case let .onReport(closure):
+                let existing = onReportClosure
+                onReportClosure = { report in
+                    existing?(report)
+                    closure(report)
+                }
+            case let .log(level):
+                logLevel = level
         }
     }
 
@@ -205,64 +205,64 @@ public func __runContract<Spec: ContractSpec>(
         let failingSequence: [Spec.Command]?
         let failureInfo: ContractFailureInfo<Spec.Command>
         switch scaOutcome {
-        case let .failure(commands, original, coverageInvocations, reductionStats):
-            failingSequence = commands
-            failureInfo = ContractFailureInfo(
-                originalCommands: original,
-                discoveryMethod: .coverage
-            )
-            if let onReportClosure {
-                var report = ExhaustReport()
-                report.seed = seed
-                report.setInvocations(
-                    coverage: coverageInvocations,
-                    randomSampling: 0,
-                    reduction: reductionStats.map(\.totalMaterializations) ?? 0
+            case let .failure(commands, original, coverageInvocations, reductionStats):
+                failingSequence = commands
+                failureInfo = ContractFailureInfo(
+                    originalCommands: original,
+                    discoveryMethod: .coverage
                 )
-                if let reductionStats {
-                    report.applyReductionStats(reductionStats)
+                if let onReportClosure {
+                    var report = ExhaustReport()
+                    report.seed = seed
+                    report.setInvocations(
+                        coverage: coverageInvocations,
+                        randomSampling: 0,
+                        reduction: reductionStats.map(\.totalMaterializations) ?? 0
+                    )
+                    if let reductionStats {
+                        report.applyReductionStats(reductionStats)
+                    }
+                    onReportClosure(report)
                 }
-                onReportClosure(report)
-            }
-        case .completed, .skipped:
-            let scaCoverageInvocations: Int
-            if case let .completed(count) = scaOutcome {
-                scaCoverageInvocations = count
-            } else {
-                scaCoverageInvocations = 0
-            }
-            var innerReport: ExhaustReport?
-            let onInnerReport: ((ExhaustReport) -> Void)? = onReportClosure.map { _ in
-                { report in innerReport = report }
-            }
-            failingSequence = __ExhaustRuntime.__exhaust(
-                commandSequenceGenerator.wrapped,
-                settings: buildPropertySettings(
-                    samplingBudget: samplingBudget,
-                    coverageBudget: scaOutcome.isCompleted ? UInt64(0) : coverageBudget,
-                    seed: seed,
-                    suppressIssueReporting: true,
-                    collectOpenPBTStats: collectOpenPBTStats,
-                    onReport: onInnerReport,
-                    logLevel: logLevel
-                ),
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column,
-                property: property
-            )
-            if let onReportClosure {
-                var report = innerReport ?? ExhaustReport()
-                report.seed = seed
-                report.coverageInvocations += scaCoverageInvocations
-                report.propertyInvocations += scaCoverageInvocations
-                onReportClosure(report)
-            }
-            failureInfo = ContractFailureInfo(
-                originalCommands: nil,
-                discoveryMethod: seed != nil ? .replay : .randomSampling
-            )
+            case .completed, .skipped:
+                let scaCoverageInvocations: Int
+                if case let .completed(count) = scaOutcome {
+                    scaCoverageInvocations = count
+                } else {
+                    scaCoverageInvocations = 0
+                }
+                var innerReport: ExhaustReport?
+                let onInnerReport: ((ExhaustReport) -> Void)? = onReportClosure.map { _ in
+                    { report in innerReport = report }
+                }
+                failingSequence = __ExhaustRuntime.__exhaust(
+                    commandSequenceGenerator.wrapped,
+                    settings: buildPropertySettings(
+                        samplingBudget: samplingBudget,
+                        coverageBudget: scaOutcome.isCompleted ? UInt64(0) : coverageBudget,
+                        seed: seed,
+                        suppressIssueReporting: true,
+                        collectOpenPBTStats: collectOpenPBTStats,
+                        onReport: onInnerReport,
+                        logLevel: logLevel
+                    ),
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    property: property
+                )
+                if let onReportClosure {
+                    var report = innerReport ?? ExhaustReport()
+                    report.seed = seed
+                    report.coverageInvocations += scaCoverageInvocations
+                    report.propertyInvocations += scaCoverageInvocations
+                    onReportClosure(report)
+                }
+                failureInfo = ContractFailureInfo(
+                    originalCommands: nil,
+                    discoveryMethod: seed != nil ? .replay : .randomSampling
+                )
         }
 
         guard let failingSequence else {

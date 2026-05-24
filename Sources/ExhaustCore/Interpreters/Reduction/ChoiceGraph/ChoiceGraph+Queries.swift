@@ -85,7 +85,6 @@ package extension ChoiceGraph {
         // Map back to node IDs.
         return antichainIndices.map { candidateIDs[$0] }
     }
-
 }
 
 // MARK: - Structural Fingerprint
@@ -100,12 +99,12 @@ package extension ChoiceGraph {
         for nodeID in liveNodeIDs {
             let node = nodes[nodeID]
             let kindByte: UInt64 = switch node.kind {
-            case .chooseBits: 0
-            case .pick: 1
-            case .bind: 2
-            case .zip: 3
-            case .sequence: 4
-            case .just: 5
+                case .chooseBits: 0
+                case .pick: 1
+                case .bind: 2
+                case .zip: 3
+                case .sequence: 4
+                case .just: 5
             }
             var nodeHash: UInt64 = 14_695_981_039_346_656_037 // FNV offset basis
             nodeHash = (nodeHash ^ kindByte) &* 1_099_511_628_211

@@ -9,7 +9,7 @@
 ///
 /// Each step in the path is a child index at the corresponding depth.
 /// For example, `[1, 0]` means "second child of root, then first child of that node".
-package struct Fingerprint: Hashable, Sendable {
+package struct Fingerprint: Hashable {
     /// The sequence of child indices that form the path from the root to a node.
     public private(set) var steps: [Int]
 
@@ -35,46 +35,46 @@ package extension ChoiceTree {
     /// The immediate children of this node in traversal order.
     var children: [ChoiceTree] {
         switch self {
-        case .choice, .just, .getSize:
-            []
-        case let .group(elements, _):
-            elements
-        case let .bind(_, inner, bound):
-            [inner, bound]
-        case let .sequence(_, elements, _):
-            elements
-        case let .branch(b):
-            [b.choice]
-        case let .resize(_, choices):
-            choices
+            case .choice, .just, .getSize:
+                []
+            case let .group(elements, _):
+                elements
+            case let .bind(_, inner, bound):
+                [inner, bound]
+            case let .sequence(_, elements, _):
+                elements
+            case let .branch(b):
+                [b.choice]
+            case let .resize(_, choices):
+                choices
         }
     }
 
     /// Returns a copy of this node with the child at `index` replaced by `newChild`.
     func replacingChild(at index: Int, with newChild: ChoiceTree) -> ChoiceTree {
         switch self {
-        case .choice, .just, .getSize:
-            preconditionFailure("Leaf nodes have no children to replace")
-        case let .group(elements, _):
-            var copy = elements
-            copy[index] = newChild
-            return .group(copy)
-        case let .bind(fingerprint, inner, bound):
-            precondition(index < 2, "bind has exactly two children")
-            return index == 0
-                ? .bind(fingerprint: fingerprint, inner: newChild, bound: bound)
-                : .bind(fingerprint: fingerprint, inner: inner, bound: newChild)
-        case let .sequence(length, elements, metadata):
-            var copy = elements
-            copy[index] = newChild
-            return .sequence(length: length, elements: copy, metadata)
-        case let .branch(b):
-            precondition(index == 0, "branch has exactly one child")
-            return .branch(fingerprint: b.fingerprint, weight: b.weight, id: b.id, branchCount: b.branchCount, choice: newChild, isSelected: b.isSelected)
-        case let .resize(newSize, choices):
-            var copy = choices
-            copy[index] = newChild
-            return .resize(newSize: newSize, choices: copy)
+            case .choice, .just, .getSize:
+                preconditionFailure("Leaf nodes have no children to replace")
+            case let .group(elements, _):
+                var copy = elements
+                copy[index] = newChild
+                return .group(copy)
+            case let .bind(fingerprint, inner, bound):
+                precondition(index < 2, "bind has exactly two children")
+                return index == 0
+                    ? .bind(fingerprint: fingerprint, inner: newChild, bound: bound)
+                    : .bind(fingerprint: fingerprint, inner: inner, bound: newChild)
+            case let .sequence(length, elements, metadata):
+                var copy = elements
+                copy[index] = newChild
+                return .sequence(length: length, elements: copy, metadata)
+            case let .branch(b):
+                precondition(index == 0, "branch has exactly one child")
+                return .branch(fingerprint: b.fingerprint, weight: b.weight, id: b.id, branchCount: b.branchCount, choice: newChild, isSelected: b.isSelected)
+            case let .resize(newSize, choices):
+                var copy = choices
+                copy[index] = newChild
+                return .resize(newSize: newSize, choices: copy)
         }
     }
 }

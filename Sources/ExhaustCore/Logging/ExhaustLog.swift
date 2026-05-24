@@ -37,16 +37,16 @@ public enum LogLevel: Int, CaseIterable, Comparable, Sendable {
         @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         package var osLogType: OSLogType {
             switch self {
-            case .trace, .debug:
-                .debug
-            case .info:
-                .info
-            case .notice, .warning:
-                .default
-            case .error:
-                .error
-            case .critical:
-                .fault
+                case .trace, .debug:
+                    .debug
+                case .info:
+                    .info
+                case .notice, .warning:
+                    .default
+                case .error:
+                    .error
+                case .critical:
+                    .fault
             }
         }
     #endif
@@ -63,7 +63,7 @@ public enum LogFormat: String, Sendable {
 /// Provides structured logging for Exhaust's internal subsystems.
 package enum ExhaustLog {
     /// Identifies the subsystem that originated a log message.
-    package enum Category: String, CaseIterable, Hashable, Sendable {
+    package enum Category: String, CaseIterable, Hashable {
         /// Core framework infrastructure including the Freer Monad interpreter loop.
         case core
         /// User-facing generator extension methods and combinators.
@@ -85,7 +85,7 @@ package enum ExhaustLog {
     }
 
     /// Controls per-category log levels and output format.
-    package struct Configuration: Sendable {
+    package struct Configuration {
         /// Enables or disables all logging globally.
         package var isEnabled: Bool
         /// Minimum ``LogLevel`` applied to categories without an explicit override.
@@ -413,24 +413,24 @@ package enum ExhaustLog {
         @available(macOS 11, iOS 14, tvOS 14, watchOS 7, *)
         private static func logger(for category: Category) -> Logger {
             switch category {
-            case .core:
-                coreLogger
-            case .extensions:
-                extensionsLogger
-            case .generation:
-                generationLogger
-            case .replay:
-                replayLogger
-            case .reflection:
-                reflectionLogger
-            case .materialize:
-                materializeLogger
-            case .reducer:
-                reducerLogger
-            case .adaptation:
-                adaptationLogger
-            case .propertyTest:
-                propertyTestLogger
+                case .core:
+                    coreLogger
+                case .extensions:
+                    extensionsLogger
+                case .generation:
+                    generationLogger
+                case .replay:
+                    replayLogger
+                case .reflection:
+                    reflectionLogger
+                case .materialize:
+                    materializeLogger
+                case .reducer:
+                    reducerLogger
+                case .adaptation:
+                    adaptationLogger
+                case .propertyTest:
+                    propertyTestLogger
             }
         }
     #endif
@@ -446,20 +446,20 @@ package enum ExhaustLog {
         format: LogFormat
     ) -> String {
         switch format {
-        case .keyValue:
-            let metadataDescription = renderKeyValueMetadata(metadata)
-            let messagePart = message.isEmpty ? "" : " \(message)"
-            return "[\(category.rawValue)] [\(level)] [\(event)]\(messagePart)\(metadataDescription)"
-        case .jsonl:
-            return renderJSONLLogLine(
-                category: category,
-                level: level,
-                event: event,
-                message: message,
-                file: file,
-                line: line,
-                metadata: metadata
-            )
+            case .keyValue:
+                let metadataDescription = renderKeyValueMetadata(metadata)
+                let messagePart = message.isEmpty ? "" : " \(message)"
+                return "[\(category.rawValue)] [\(level)] [\(event)]\(messagePart)\(metadataDescription)"
+            case .jsonl:
+                return renderJSONLLogLine(
+                    category: category,
+                    level: level,
+                    event: event,
+                    message: message,
+                    file: file,
+                    line: line,
+                    metadata: metadata
+                )
         }
     }
 

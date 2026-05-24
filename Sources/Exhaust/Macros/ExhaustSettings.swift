@@ -25,10 +25,10 @@ public enum ReplaySeed: Sendable {
     /// - Returns: The numeric seed, or `nil` if the encoded string is invalid.
     public func resolve() -> UInt64? {
         switch self {
-        case let .numeric(value):
-            value
-        case let .encoded(string):
-            CrockfordBase32.decode(string)
+            case let .numeric(value):
+                value
+            case let .encoded(string):
+                CrockfordBase32.decode(string)
         }
     }
 }
@@ -84,23 +84,23 @@ public enum ExhaustBudget: Sendable {
     /// The iteration budget for structured coverage analysis.
     public var coverageBudget: UInt64 {
         switch self {
-        case .quick: 100
-        case .standard: 200
-        case .thorough: 600
-        case .extensive: 2000
-        case let .custom(coverage, _): coverage
+            case .quick: 100
+            case .standard: 200
+            case .thorough: 600
+            case .extensive: 2000
+            case let .custom(coverage, _): coverage
         }
     }
 
     /// The iteration budget for random sampling.
     public var samplingBudget: UInt64 {
         switch self {
-        case .quick: 100
-        case .standard: 200
-        case .thorough: 600
-        case .extensive: 2000
-        case let .custom(_, sampling):
-            sampling
+            case .quick: 100
+            case .standard: 200
+            case .thorough: 600
+            case .extensive: 2000
+            case let .custom(_, sampling):
+                sampling
         }
     }
 

@@ -266,10 +266,10 @@ extension __ExhaustRuntime {
             materializePicks: true
         )
         let reductionTree: ChoiceTree? = switch fullTree {
-        case let .success(_, rematerialized, _):
-            rematerialized
-        case .rejected, .failed:
-            nil
+            case let .success(_, rematerialized, _):
+                rematerialized
+            case .rejected, .failed:
+                nil
         }
 
         guard let reduceTree = reductionTree else {

@@ -43,26 +43,26 @@ enum AnyCandidateSource {
 
     var peekPriority: DispatchPriority? {
         switch self {
-        case let .sorted(source): source.peekPriority
-        case let .batchedCrossSequence(source): source.peekPriority
-        case let .batchRemoval(source): source.peekPriority
+            case let .sorted(source): source.peekPriority
+            case let .batchedCrossSequence(source): source.peekPriority
+            case let .batchRemoval(source): source.peekPriority
         }
     }
 
     mutating func next(lastAccepted: Bool) -> GraphTransformation? {
         switch self {
-        case .sorted(var source):
-            let result = source.next(lastAccepted: lastAccepted)
-            self = .sorted(source)
-            return result
-        case .batchedCrossSequence(var source):
-            let result = source.next(lastAccepted: lastAccepted)
-            self = .batchedCrossSequence(source)
-            return result
-        case .batchRemoval(var source):
-            let result = source.next(lastAccepted: lastAccepted)
-            self = .batchRemoval(source)
-            return result
+            case var .sorted(source):
+                let result = source.next(lastAccepted: lastAccepted)
+                self = .sorted(source)
+                return result
+            case var .batchedCrossSequence(source):
+                let result = source.next(lastAccepted: lastAccepted)
+                self = .batchedCrossSequence(source)
+                return result
+            case var .batchRemoval(source):
+                let result = source.next(lastAccepted: lastAccepted)
+                self = .batchRemoval(source)
+                return result
         }
     }
 }

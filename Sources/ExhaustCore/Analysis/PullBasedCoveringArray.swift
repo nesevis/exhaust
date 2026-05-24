@@ -266,100 +266,100 @@ package final class PullBasedCoveringArrayGenerator {
         let domains = ordering.reorderedDomainSizes
 
         switch strength {
-        case 2:
-            allSlices.reserveCapacity(domainSizes.count * (domainSizes.count - 1) / 2)
-            var first = 0
-            while first < domainSizes.count {
-                var second = first &+ 1
-                while second < domainSizes.count {
-                    let d0 = UInt32(domains[first])
-                    let d1 = UInt32(domains[second])
-                    let tupleCount = Int(d0) * Int(d1)
-                    allSlices.append(PullCoverageSlice(
-                        bits: PullBitVector(bitCount: tupleCount),
-                        strides: (d1, 1, 0, 0),
-                        paramIndices: (UInt16(first), UInt16(second), 0, 0),
-                        remaining: tupleCount
-                    ))
-                    byColumn[second].append(allSlices.count &- 1)
-                    total &+= tupleCount
-                    second &+= 1
-                }
-                first &+= 1
-            }
-
-        case 3:
-            allSlices.reserveCapacity(
-                domainSizes.count * (domainSizes.count - 1) * (domainSizes.count - 2) / 6
-            )
-            var first = 0
-            while first < domainSizes.count {
-                var second = first &+ 1
-                while second < domainSizes.count {
-                    var third = second &+ 1
-                    while third < domainSizes.count {
+            case 2:
+                allSlices.reserveCapacity(domainSizes.count * (domainSizes.count - 1) / 2)
+                var first = 0
+                while first < domainSizes.count {
+                    var second = first &+ 1
+                    while second < domainSizes.count {
                         let d0 = UInt32(domains[first])
                         let d1 = UInt32(domains[second])
-                        let d2 = UInt32(domains[third])
-                        let tupleCount = Int(d0) * Int(d1) * Int(d2)
-                        let s0 = d1 &* d2
+                        let tupleCount = Int(d0) * Int(d1)
                         allSlices.append(PullCoverageSlice(
                             bits: PullBitVector(bitCount: tupleCount),
-                            strides: (s0, d2, 1, 0),
-                            paramIndices: (UInt16(first), UInt16(second), UInt16(third), 0),
+                            strides: (d1, 1, 0, 0),
+                            paramIndices: (UInt16(first), UInt16(second), 0, 0),
                             remaining: tupleCount
                         ))
-                        byColumn[third].append(allSlices.count &- 1)
+                        byColumn[second].append(allSlices.count &- 1)
                         total &+= tupleCount
-                        third &+= 1
+                        second &+= 1
                     }
-                    second &+= 1
+                    first &+= 1
                 }
-                first &+= 1
-            }
 
-        case 4:
-            allSlices.reserveCapacity(
-                domainSizes.count * (domainSizes.count - 1)
-                    * (domainSizes.count - 2) * (domainSizes.count - 3) / 24
-            )
-            var first = 0
-            while first < domainSizes.count {
-                var second = first &+ 1
-                while second < domainSizes.count {
-                    var third = second &+ 1
-                    while third < domainSizes.count {
-                        var fourth = third &+ 1
-                        while fourth < domainSizes.count {
+            case 3:
+                allSlices.reserveCapacity(
+                    domainSizes.count * (domainSizes.count - 1) * (domainSizes.count - 2) / 6
+                )
+                var first = 0
+                while first < domainSizes.count {
+                    var second = first &+ 1
+                    while second < domainSizes.count {
+                        var third = second &+ 1
+                        while third < domainSizes.count {
                             let d0 = UInt32(domains[first])
                             let d1 = UInt32(domains[second])
                             let d2 = UInt32(domains[third])
-                            let d3 = UInt32(domains[fourth])
-                            let tupleCount = Int(d0) * Int(d1) * Int(d2) * Int(d3)
-                            let s0 = d1 &* d2 &* d3
-                            let s1 = d2 &* d3
+                            let tupleCount = Int(d0) * Int(d1) * Int(d2)
+                            let s0 = d1 &* d2
                             allSlices.append(PullCoverageSlice(
                                 bits: PullBitVector(bitCount: tupleCount),
-                                strides: (s0, s1, d3, 1),
-                                paramIndices: (
-                                    UInt16(first), UInt16(second),
-                                    UInt16(third), UInt16(fourth)
-                                ),
+                                strides: (s0, d2, 1, 0),
+                                paramIndices: (UInt16(first), UInt16(second), UInt16(third), 0),
                                 remaining: tupleCount
                             ))
-                            byColumn[fourth].append(allSlices.count &- 1)
+                            byColumn[third].append(allSlices.count &- 1)
                             total &+= tupleCount
-                            fourth &+= 1
+                            third &+= 1
                         }
-                        third &+= 1
+                        second &+= 1
                     }
-                    second &+= 1
+                    first &+= 1
                 }
-                first &+= 1
-            }
 
-        default:
-            break
+            case 4:
+                allSlices.reserveCapacity(
+                    domainSizes.count * (domainSizes.count - 1)
+                        * (domainSizes.count - 2) * (domainSizes.count - 3) / 24
+                )
+                var first = 0
+                while first < domainSizes.count {
+                    var second = first &+ 1
+                    while second < domainSizes.count {
+                        var third = second &+ 1
+                        while third < domainSizes.count {
+                            var fourth = third &+ 1
+                            while fourth < domainSizes.count {
+                                let d0 = UInt32(domains[first])
+                                let d1 = UInt32(domains[second])
+                                let d2 = UInt32(domains[third])
+                                let d3 = UInt32(domains[fourth])
+                                let tupleCount = Int(d0) * Int(d1) * Int(d2) * Int(d3)
+                                let s0 = d1 &* d2 &* d3
+                                let s1 = d2 &* d3
+                                allSlices.append(PullCoverageSlice(
+                                    bits: PullBitVector(bitCount: tupleCount),
+                                    strides: (s0, s1, d3, 1),
+                                    paramIndices: (
+                                        UInt16(first), UInt16(second),
+                                        UInt16(third), UInt16(fourth)
+                                    ),
+                                    remaining: tupleCount
+                                ))
+                                byColumn[fourth].append(allSlices.count &- 1)
+                                total &+= tupleCount
+                                fourth &+= 1
+                            }
+                            third &+= 1
+                        }
+                        second &+= 1
+                    }
+                    first &+= 1
+                }
+
+            default:
+                break
         }
 
         // Build partial (non-completing) slice references for early columns.
@@ -406,10 +406,10 @@ package final class PullBasedCoveringArrayGenerator {
         if totalRemaining == 0 { return nil }
 
         switch strength {
-        case 2: fillRow2()
-        case 3: fillRow3()
-        case 4: fillRow4()
-        default: return nil
+            case 2: fillRow2()
+            case 3: fillRow3()
+            case 4: fillRow4()
+            default: return nil
         }
 
         markCoverage()
@@ -605,27 +605,27 @@ package final class PullBasedCoveringArrayGenerator {
                 let sliceIdx = relevantSlices[slicePos]
                 let flatIdx: UInt32
                 switch strength {
-                case 2:
-                    flatIdx = slices[sliceIdx].flatIndex2(
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.0)],
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.1)]
-                    )
-                case 3:
-                    flatIdx = slices[sliceIdx].flatIndex3(
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.0)],
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.1)],
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.2)]
-                    )
-                case 4:
-                    flatIdx = slices[sliceIdx].flatIndex4(
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.0)],
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.1)],
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.2)],
-                        rowBuffer[Int(slices[sliceIdx].paramIndices.3)]
-                    )
-                default:
-                    slicePos &+= 1
-                    continue
+                    case 2:
+                        flatIdx = slices[sliceIdx].flatIndex2(
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.0)],
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.1)]
+                        )
+                    case 3:
+                        flatIdx = slices[sliceIdx].flatIndex3(
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.0)],
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.1)],
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.2)]
+                        )
+                    case 4:
+                        flatIdx = slices[sliceIdx].flatIndex4(
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.0)],
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.1)],
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.2)],
+                            rowBuffer[Int(slices[sliceIdx].paramIndices.3)]
+                        )
+                    default:
+                        slicePos &+= 1
+                        continue
                 }
                 if slices[sliceIdx].mark(flatIdx) {
                     totalRemaining &-= 1

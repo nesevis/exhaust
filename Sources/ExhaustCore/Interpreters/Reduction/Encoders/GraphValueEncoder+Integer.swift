@@ -65,35 +65,35 @@ extension GraphValueEncoder {
         state.lastEmittedCandidate = nil
 
         switch state.phase {
-        case .batchZero:
-            // Try setting all leaves to their targets simultaneously.
-            var candidate = state.sequence
-            for leaf in state.leafPositions {
-                candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                    .withBitPattern(leaf.targetBitPattern)
-            }
-            if candidate.shortLexPrecedes(state.sequence) {
-                // Emit the batch-zero probe. If accepted, perLeafZero will see lastAccepted=true and converge all leaves. If rejected, perLeafZero tries each leaf individually at its target before per-leaf binary search.
-                state.phase = .perLeafZero(PerLeafZeroState())
-                state.lastEmittedCandidate = candidate
-                return candidate
-            }
-            // Batch zero not shortlex-smaller — skip to per-leaf.
-            state.batchRejected = true
-            state.phase = .perLeaf(PerLeafPhaseState())
-            return nextIntegerProbe(state: &state, lastAccepted: false)
-
-        case .perLeafZero:
-            return nextPerLeafZeroProbe(state: &state, lastAccepted: lastAccepted)
-
-        case .batchBisect:
-            if lastAccepted == false {
+            case .batchZero:
+                // Try setting all leaves to their targets simultaneously.
+                var candidate = state.sequence
+                for leaf in state.leafPositions {
+                    candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
+                        .withBitPattern(leaf.targetBitPattern)
+                }
+                if candidate.shortLexPrecedes(state.sequence) {
+                    // Emit the batch-zero probe. If accepted, perLeafZero will see lastAccepted=true and converge all leaves. If rejected, perLeafZero tries each leaf individually at its target before per-leaf binary search.
+                    state.phase = .perLeafZero(PerLeafZeroState())
+                    state.lastEmittedCandidate = candidate
+                    return candidate
+                }
+                // Batch zero not shortlex-smaller — skip to per-leaf.
                 state.batchRejected = true
-            }
-            return nextBatchBisectProbe(state: &state, lastAccepted: lastAccepted)
+                state.phase = .perLeaf(PerLeafPhaseState())
+                return nextIntegerProbe(state: &state, lastAccepted: false)
 
-        case .perLeaf:
-            return nextPerLeafProbe(state: &state, lastAccepted: lastAccepted)
+            case .perLeafZero:
+                return nextPerLeafZeroProbe(state: &state, lastAccepted: lastAccepted)
+
+            case .batchBisect:
+                if lastAccepted == false {
+                    state.batchRejected = true
+                }
+                return nextBatchBisectProbe(state: &state, lastAccepted: lastAccepted)
+
+            case .perLeaf:
+                return nextPerLeafProbe(state: &state, lastAccepted: lastAccepted)
         }
     }
 
@@ -104,7 +104,7 @@ extension GraphValueEncoder {
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        guard case .perLeafZero(var plz) = state.phase else {
+        guard case var .perLeafZero(plz) = state.phase else {
             state.phase = .perLeaf(PerLeafPhaseState())
             return nextIntegerProbe(state: &state, lastAccepted: lastAccepted)
         }
@@ -174,7 +174,7 @@ extension GraphValueEncoder {
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        guard case .batchBisect(var bisection) = state.phase else {
+        guard case var .batchBisect(bisection) = state.phase else {
             state.phase = .perLeaf(PerLeafPhaseState())
             return nextPerLeafProbe(state: &state, lastAccepted: false)
         }
@@ -308,7 +308,7 @@ extension GraphValueEncoder {
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        guard case .perLeaf(var perLeaf) = state.phase else { return nil }
+        guard case var .perLeaf(perLeaf) = state.phase else { return nil }
         let result = nextPerLeafProbeImpl(state: &state, perLeaf: &perLeaf, lastAccepted: lastAccepted)
         state.phase = .perLeaf(perLeaf)
         return result

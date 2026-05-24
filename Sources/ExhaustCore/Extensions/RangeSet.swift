@@ -1,5 +1,5 @@
 //
-//  ExhaustRangeSet.swift
+//  RangeSet.swift
 //  Exhaust
 //
 
@@ -19,7 +19,9 @@ package struct ExhaustRangeSet<Bound: Comparable> {
         }
     }
 
-    package var isEmpty: Bool { _ranges.isEmpty }
+    package var isEmpty: Bool {
+        _ranges.isEmpty
+    }
 
     package func contains(_ value: Bound) -> Bool {
         let index = _partitioningIndex(in: _ranges) { $0.upperBound > value }
@@ -75,35 +77,45 @@ package struct ExhaustRangeSet<Bound: Comparable> {
         let overlapsUpper = range.upperBound < _ranges[indices.upperBound - 1].upperBound
 
         switch (overlapsLower, overlapsUpper) {
-        case (false, false):
-            _ranges.removeSubrange(indices)
-        case (false, true):
-            _ranges.replaceSubrange(
-                indices,
-                with: CollectionOfOne(range.upperBound ..< _ranges[indices.upperBound - 1].upperBound)
-            )
-        case (true, false):
-            _ranges.replaceSubrange(
-                indices,
-                with: CollectionOfOne(_ranges[indices.lowerBound].lowerBound ..< range.lowerBound)
-            )
-        case (true, true):
-            _ranges.replaceSubrange(indices, with: _Pair(
-                _ranges[indices.lowerBound].lowerBound ..< range.lowerBound,
-                range.upperBound ..< _ranges[indices.upperBound - 1].upperBound
-            ))
+            case (false, false):
+                _ranges.removeSubrange(indices)
+            case (false, true):
+                _ranges.replaceSubrange(
+                    indices,
+                    with: CollectionOfOne(range.upperBound ..< _ranges[indices.upperBound - 1].upperBound)
+                )
+            case (true, false):
+                _ranges.replaceSubrange(
+                    indices,
+                    with: CollectionOfOne(_ranges[indices.lowerBound].lowerBound ..< range.lowerBound)
+                )
+            case (true, true):
+                _ranges.replaceSubrange(indices, with: _Pair(
+                    _ranges[indices.lowerBound].lowerBound ..< range.lowerBound,
+                    range.upperBound ..< _ranges[indices.upperBound - 1].upperBound
+                ))
         }
     }
 
     // MARK: - Ranges View
 
-    package var ranges: Ranges { Ranges(_ranges: _ranges) }
+    package var ranges: Ranges {
+        Ranges(_ranges: _ranges)
+    }
 
     package struct Ranges: RandomAccessCollection {
         var _ranges: ContiguousArray<Range<Bound>>
-        package var startIndex: Int { 0 }
-        package var endIndex: Int { _ranges.count }
-        package subscript(index: Int) -> Range<Bound> { _ranges[index] }
+        package var startIndex: Int {
+            0
+        }
+
+        package var endIndex: Int {
+            _ranges.count
+        }
+
+        package subscript(index: Int) -> Range<Bound> {
+            _ranges[index]
+        }
     }
 
     // MARK: - Internals
@@ -172,11 +184,7 @@ package struct ExhaustRangeSet<Bound: Comparable> {
 
 // MARK: - Equatable / Hashable
 
-extension ExhaustRangeSet: Equatable where Bound: Equatable {
-    package static func == (lhs: ExhaustRangeSet, rhs: ExhaustRangeSet) -> Bool {
-        lhs._ranges == rhs._ranges
-    }
-}
+extension ExhaustRangeSet: Equatable where Bound: Equatable {}
 
 extension ExhaustRangeSet: Hashable where Bound: Hashable {
     package func hash(into hasher: inout Hasher) {
@@ -227,8 +235,13 @@ private struct _Pair<Element>: RandomAccessCollection {
         self.second = second
     }
 
-    var startIndex: Int { 0 }
-    var endIndex: Int { 2 }
+    var startIndex: Int {
+        0
+    }
+
+    var endIndex: Int {
+        2
+    }
 
     subscript(position: Int) -> Element {
         position == 0 ? first : second

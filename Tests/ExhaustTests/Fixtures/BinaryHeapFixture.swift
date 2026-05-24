@@ -22,12 +22,12 @@ enum BinaryHeapFixture {
         while stack.isEmpty == false {
             let current = stack.removeLast()
             switch current {
-            case .empty:
-                continue
-            case let .node(value, left, right):
-                result.append(value)
-                stack.append(left)
-                stack.append(right)
+                case .empty:
+                    continue
+                case let .node(value, left, right):
+                    result.append(value)
+                    stack.append(left)
+                    stack.append(right)
             }
         }
         return result
@@ -36,45 +36,45 @@ enum BinaryHeapFixture {
     /// Buggy conversion to sorted list — uses `toList` instead of recursing. The bug is that it only correctly extracts the minimum, then flattens the rest without sorting.
     static func toSortedList<Element: Comparable>(_ heap: Heap<Element>) -> [Element] {
         switch heap {
-        case .empty:
-            []
-        case let .node(value, left, right):
-            [value] + toList(merge(left, right))
+            case .empty:
+                []
+            case let .node(value, left, right):
+                [value] + toList(merge(left, right))
         }
     }
 
     /// Merges two heaps maintaining the min-heap invariant.
     static func merge<Element: Comparable>(_ left: Heap<Element>, _ right: Heap<Element>) -> Heap<Element> {
         switch (left, right) {
-        case (_, .empty):
-            left
-        case (.empty, _):
-            right
-        case let (.node(leftValue, leftLeft, leftRight), .node(rightValue, rightLeft, rightRight)):
-            if leftValue <= rightValue {
-                .node(leftValue, merge(leftRight, right), leftLeft)
-            } else {
-                .node(rightValue, merge(rightRight, left), rightLeft)
-            }
+            case (_, .empty):
+                left
+            case (.empty, _):
+                right
+            case let (.node(leftValue, leftLeft, leftRight), .node(rightValue, rightLeft, rightRight)):
+                if leftValue <= rightValue {
+                    .node(leftValue, merge(leftRight, right), leftLeft)
+                } else {
+                    .node(rightValue, merge(rightRight, left), rightLeft)
+                }
         }
     }
 
     /// Checks the min-heap invariant: parent <= both children, recursively.
     static func invariant(_ heap: Heap<some Comparable>) -> Bool {
         switch heap {
-        case .empty:
-            true
-        case let .node(value, left, right):
-            lte(value, left) && lte(value, right) && invariant(left) && invariant(right)
+            case .empty:
+                true
+            case let .node(value, left, right):
+                lte(value, left) && lte(value, right) && invariant(left) && invariant(right)
         }
     }
 
     private static func lte<Element: Comparable>(_ value: Element, _ heap: Heap<Element>) -> Bool {
         switch heap {
-        case .empty:
-            true
-        case let .node(other, _, _):
-            value <= other
+            case .empty:
+                true
+            case let .node(other, _, _):
+                value <= other
         }
     }
 
@@ -97,8 +97,8 @@ enum BinaryHeapFixture {
                     forward: { left, right in Heap.node(value, left, right) },
                     backward: { heap in
                         switch heap {
-                        case let .node(_, left, right): (left, right)
-                        case .empty: (.empty, .empty)
+                            case let .node(_, left, right): (left, right)
+                            case .empty: (.empty, .empty)
                         }
                     }
                 )
@@ -121,8 +121,8 @@ enum BinaryHeapFixture {
                     forward: { value, left, right in Heap.node(value, left, right) },
                     backward: { heap in
                         switch heap {
-                        case let .node(value, left, right): (value, left, right)
-                        case .empty: (0, .empty, .empty)
+                            case let .node(value, left, right): (value, left, right)
+                            case .empty: (0, .empty, .empty)
                         }
                     }
                 )
@@ -144,10 +144,10 @@ enum BinaryHeapFixture {
 extension BinaryHeapFixture.Heap: CustomDebugStringConvertible {
     var debugDescription: String {
         switch self {
-        case .empty:
-            "None"
-        case let .node(value, left, right):
-            "(\(value), \(left.debugDescription), \(right.debugDescription))"
+            case .empty:
+                "None"
+            case let .node(value, left, right):
+                "(\(value), \(left.debugDescription), \(right.debugDescription))"
         }
     }
 }

@@ -89,10 +89,10 @@ extension ChoiceGraph {
             bindPath: bindMetadata.bindPath
         )
         let liftability: BindLiftability = switch (lowLift, highLift) {
-        case (.some, .some): .both
-        case (.some, .none): .lowOnly
-        case (.none, .some): .highOnly
-        case (.none, .none): .neither
+            case (.some, .some): .both
+            case (.some, .none): .lowOnly
+            case (.none, .some): .highOnly
+            case (.none, .none): .neither
         }
         guard let lowSubtree = lowLift, let highSubtree = highLift else {
             return (BindClassification(topology: .unclassifiable, liftability: liftability), nil)
@@ -220,7 +220,7 @@ extension ChoiceGraph {
     static func clampedEndpoints(
         range: ClosedRange<UInt64>,
         typeTag: TypeTag,
-        windowRadius: UInt64 = 10_000
+        windowRadius: UInt64 = 10000
     ) -> (low: UInt64, high: UInt64)? {
         let clampLow: UInt64
         let clampHigh: UInt64
@@ -251,56 +251,56 @@ extension ChoiceGraph {
         let lhs = unwrapTransparent(low)
         let rhs = unwrapTransparent(high)
         switch (lhs, rhs) {
-        case (.choice, .choice):
-            return true
-        case (.just, .just):
-            return true
-        case (.getSize, .getSize):
-            return true
-        case let (.sequence(_, lowElements, _), .sequence(_, highElements, _)):
-            let shared = min(lowElements.count, highElements.count)
-            var index = 0
-            while index < shared {
-                if sameTopology(lowElements[index], highElements[index]) == false {
-                    return false
+            case (.choice, .choice):
+                return true
+            case (.just, .just):
+                return true
+            case (.getSize, .getSize):
+                return true
+            case let (.sequence(_, lowElements, _), .sequence(_, highElements, _)):
+                let shared = min(lowElements.count, highElements.count)
+                var index = 0
+                while index < shared {
+                    if sameTopology(lowElements[index], highElements[index]) == false {
+                        return false
+                    }
+                    index += 1
                 }
-                index += 1
-            }
-            return true
-        case let (.bind(_, lowInner, lowBound), .bind(_, highInner, highBound)):
-            return sameTopology(lowInner, highInner) && sameTopology(lowBound, highBound)
-        case let (.group(lowArray, _), .group(highArray, _)):
-            if lowArray.count != highArray.count { return false }
-            var index = 0
-            while index < lowArray.count {
-                if sameTopology(lowArray[index], highArray[index]) == false {
-                    return false
+                return true
+            case let (.bind(_, lowInner, lowBound), .bind(_, highInner, highBound)):
+                return sameTopology(lowInner, highInner) && sameTopology(lowBound, highBound)
+            case let (.group(lowArray, _), .group(highArray, _)):
+                if lowArray.count != highArray.count { return false }
+                var index = 0
+                while index < lowArray.count {
+                    if sameTopology(lowArray[index], highArray[index]) == false {
+                        return false
+                    }
+                    index += 1
                 }
-                index += 1
-            }
-            return true
-        case let (.resize(_, lowChoices), .resize(_, highChoices)):
-            if lowChoices.count != highChoices.count { return false }
-            var index = 0
-            while index < lowChoices.count {
-                if sameTopology(lowChoices[index], highChoices[index]) == false {
-                    return false
+                return true
+            case let (.resize(_, lowChoices), .resize(_, highChoices)):
+                if lowChoices.count != highChoices.count { return false }
+                var index = 0
+                while index < lowChoices.count {
+                    if sameTopology(lowChoices[index], highChoices[index]) == false {
+                        return false
+                    }
+                    index += 1
                 }
-                index += 1
-            }
-            return true
-        default:
-            return false
+                return true
+            default:
+                return false
         }
     }
 
     /// Strips through transparent tree wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:isSelected:)``) so the caller can compare the underlying structure without tripping on wrapper asymmetry.
     private static func unwrapTransparent(_ tree: ChoiceTree) -> ChoiceTree {
         switch tree {
-        case let .branch(b):
-            unwrapTransparent(b.choice)
-        default:
-            tree
+            case let .branch(b):
+                unwrapTransparent(b.choice)
+            default:
+                tree
         }
     }
 
@@ -315,39 +315,39 @@ extension ChoiceGraph {
 
     private static func fold(_ tree: ChoiceTree, into hash: inout UInt64) {
         let marker: UInt64 = switch tree {
-        case .choice: 1
-        case .just: 2
-        case .getSize: 3
-        case .sequence: 4
-        case .branch: 5
-        case .group: 6
-        case .resize: 7
-        case .bind: 8
+            case .choice: 1
+            case .just: 2
+            case .getSize: 3
+            case .sequence: 4
+            case .branch: 5
+            case .group: 6
+            case .resize: 7
+            case .bind: 8
         }
         hash = (hash ^ marker) &* 1_099_511_628_211
         switch tree {
-        case .choice, .just, .getSize:
-            return
-        case let .sequence(_, elements, _):
-            hash = (hash ^ UInt64(elements.count)) &* 1_099_511_628_211
-            for element in elements {
-                fold(element, into: &hash)
-            }
-        case let .branch(b):
-            fold(b.choice, into: &hash)
-        case let .group(array, _):
-            hash = (hash ^ UInt64(array.count)) &* 1_099_511_628_211
-            for child in array {
-                fold(child, into: &hash)
-            }
-        case let .resize(_, choices):
-            hash = (hash ^ UInt64(choices.count)) &* 1_099_511_628_211
-            for child in choices {
-                fold(child, into: &hash)
-            }
-        case let .bind(_, inner, bound):
-            fold(inner, into: &hash)
-            fold(bound, into: &hash)
+            case .choice, .just, .getSize:
+                return
+            case let .sequence(_, elements, _):
+                hash = (hash ^ UInt64(elements.count)) &* 1_099_511_628_211
+                for element in elements {
+                    fold(element, into: &hash)
+                }
+            case let .branch(b):
+                fold(b.choice, into: &hash)
+            case let .group(array, _):
+                hash = (hash ^ UInt64(array.count)) &* 1_099_511_628_211
+                for child in array {
+                    fold(child, into: &hash)
+                }
+            case let .resize(_, choices):
+                hash = (hash ^ UInt64(choices.count)) &* 1_099_511_628_211
+                for child in choices {
+                    fold(child, into: &hash)
+                }
+            case let .bind(_, inner, bound):
+                fold(inner, into: &hash)
+                fold(bound, into: &hash)
         }
     }
 }

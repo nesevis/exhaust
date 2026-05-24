@@ -10,10 +10,10 @@ indirect enum Heap<Element: Comparable>: Equatable {
 extension Heap: CustomDebugStringConvertible {
     var debugDescription: String {
         switch self {
-        case .empty:
-            "None"
-        case let .node(value, left, right):
-            "(\(value), \(left.debugDescription), \(right.debugDescription))"
+            case .empty:
+                "None"
+            case let .node(value, left, right):
+                "(\(value), \(left.debugDescription), \(right.debugDescription))"
         }
     }
 }
@@ -38,8 +38,8 @@ func binaryHeapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>
                 forward: { left, right in Heap.node(value, left, right) },
                 backward: { heap in
                     switch heap {
-                    case let .node(_, left, right): (left, right)
-                    case .empty: (.empty, .empty)
+                        case let .node(_, left, right): (left, right)
+                        case .empty: (.empty, .empty)
                     }
                 }
             )
@@ -59,8 +59,8 @@ func binaryHeapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<In
                 forward: { value, left, right in Heap.node(value, left, right) },
                 backward: { heap in
                     switch heap {
-                    case let .node(value, left, right): (value, left, right)
-                    case .empty: (0, .empty, .empty)
+                        case let .node(value, left, right): (value, left, right)
+                        case .empty: (0, .empty, .empty)
                     }
                 }
             )
@@ -77,12 +77,12 @@ func heapToList<Element>(_ heap: Heap<Element>) -> [Element] {
     while stack.isEmpty == false {
         let current = stack.removeLast()
         switch current {
-        case .empty:
-            continue
-        case let .node(x, h1, h2):
-            result.append(x)
-            stack.append(h1)
-            stack.append(h2)
+            case .empty:
+                continue
+            case let .node(x, h1, h2):
+                result.append(x)
+                stack.append(h1)
+                stack.append(h2)
         }
     }
     return result
@@ -90,43 +90,43 @@ func heapToList<Element>(_ heap: Heap<Element>) -> [Element] {
 
 func heapToSortedList<Element: Comparable>(_ heap: Heap<Element>) -> [Element] {
     switch heap {
-    case .empty:
-        []
-    case let .node(x, h1, h2):
-        [x] + heapToList(heapMerge(h1, h2))
+        case .empty:
+            []
+        case let .node(x, h1, h2):
+            [x] + heapToList(heapMerge(h1, h2))
     }
 }
 
 private func heapMerge<Element: Comparable>(_ h1: Heap<Element>, _ h2: Heap<Element>) -> Heap<Element> {
     switch (h1, h2) {
-    case (_, .empty):
-        h1
-    case (.empty, _):
-        h2
-    case let (.node(x, h11, h12), .node(y, h21, h22)):
-        if x <= y {
-            .node(x, heapMerge(h12, h2), h11)
-        } else {
-            .node(y, heapMerge(h22, h1), h21)
-        }
+        case (_, .empty):
+            h1
+        case (.empty, _):
+            h2
+        case let (.node(x, h11, h12), .node(y, h21, h22)):
+            if x <= y {
+                .node(x, heapMerge(h12, h2), h11)
+            } else {
+                .node(y, heapMerge(h22, h1), h21)
+            }
     }
 }
 
 func heapInvariant(_ heap: Heap<some Comparable>) -> Bool {
     switch heap {
-    case .empty:
-        true
-    case let .node(x, h1, h2):
-        heapLte(x, h1) && heapLte(x, h2) && heapInvariant(h1) && heapInvariant(h2)
+        case .empty:
+            true
+        case let .node(x, h1, h2):
+            heapLte(x, h1) && heapLte(x, h2) && heapInvariant(h1) && heapInvariant(h2)
     }
 }
 
 private func heapLte<Element: Comparable>(_ x: Element, _ heap: Heap<Element>) -> Bool {
     switch heap {
-    case .empty:
-        true
-    case let .node(y, _, _):
-        x <= y
+        case .empty:
+            true
+        case let .node(y, _, _):
+            x <= y
     }
 }
 

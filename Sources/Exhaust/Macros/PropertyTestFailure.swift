@@ -24,10 +24,10 @@ struct PropertyTestFailure<Output> {
     /// Dispatches to the appropriate renderer based on the configured log format.
     func render(format: LogFormat) -> String {
         switch format {
-        case .keyValue:
-            renderKeyValue()
-        case .jsonl:
-            renderJSONL()
+            case .keyValue:
+                renderKeyValue()
+            case .jsonl:
+                renderJSONL()
         }
     }
 

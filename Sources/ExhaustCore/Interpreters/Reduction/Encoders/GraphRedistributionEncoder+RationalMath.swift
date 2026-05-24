@@ -207,11 +207,11 @@ extension GraphRedistributionEncoder {
 
     private static func isIntegerTag(_ tag: TypeTag) -> Bool {
         switch tag {
-        case .int, .int8, .int16, .int32, .int64,
-             .uint, .uint8, .uint16, .uint32, .uint64:
-            true
-        default:
-            false
+            case .int, .int8, .int16, .int32, .int64,
+                 .uint, .uint8, .uint16, .uint32, .uint64:
+                true
+            default:
+                false
         }
     }
 }

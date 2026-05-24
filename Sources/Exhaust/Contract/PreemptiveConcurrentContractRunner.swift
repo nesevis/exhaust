@@ -24,14 +24,14 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 ) -> ContractResult<Spec>? {
     let config: ResolvedConcurrentConfig
     switch ResolvedConcurrentConfig.parse(settings) {
-    case let .success(resolved):
-        config = resolved
-    case let .invalidReplaySeed(seed):
-        reportIssue(
-            "Invalid replay seed: \(seed)",
-            fileID: fileID, filePath: filePath, line: line, column: column
-        )
-        return nil
+        case let .success(resolved):
+            config = resolved
+        case let .invalidReplaySeed(seed):
+            reportIssue(
+                "Invalid replay seed: \(seed)",
+                fileID: fileID, filePath: filePath, line: line, column: column
+            )
+            return nil
     }
 
     let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)

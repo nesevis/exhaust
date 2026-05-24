@@ -28,18 +28,18 @@ package extension ChoiceValue {
     /// - For unsigned integers and floats: the key equals the bit pattern.
     static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
         switch tag {
-        case .int, .int8, .int16, .int32, .int64, .date:
-            let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
-            let bp: UInt64 = switch tag {
-            case .int8: Int8(truncatingIfNeeded: decoded).bitPattern64
-            case .int16: Int16(truncatingIfNeeded: decoded).bitPattern64
-            case .int32: Int32(truncatingIfNeeded: decoded).bitPattern64
-            case .int: Int(truncatingIfNeeded: decoded).bitPattern64
-            default: decoded.bitPattern64
-            }
-            return ChoiceValue(bp, tag: tag)
-        default:
-            return ChoiceValue(key, tag: tag)
+            case .int, .int8, .int16, .int32, .int64, .date:
+                let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
+                let bp: UInt64 = switch tag {
+                    case .int8: Int8(truncatingIfNeeded: decoded).bitPattern64
+                    case .int16: Int16(truncatingIfNeeded: decoded).bitPattern64
+                    case .int32: Int32(truncatingIfNeeded: decoded).bitPattern64
+                    case .int: Int(truncatingIfNeeded: decoded).bitPattern64
+                    default: decoded.bitPattern64
+                }
+                return ChoiceValue(bp, tag: tag)
+            default:
+                return ChoiceValue(key, tag: tag)
         }
     }
 

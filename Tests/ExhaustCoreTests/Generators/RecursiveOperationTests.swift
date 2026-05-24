@@ -135,10 +135,10 @@ struct RecursiveOperationTests {
         while let (value, tree) = try iterator.next() {
             let sequence = ChoiceSequence(tree)
             switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
-            case let .success(materialized, _, _):
-                #expect(materialized == value, "Materialized value should match original. Original: \(value), materialized: \(String(describing: materialized))")
-            case .rejected, .failed:
-                Issue.record("Expected .success for value: \(value)")
+                case let .success(materialized, _, _):
+                    #expect(materialized == value, "Materialized value should match original. Original: \(value), materialized: \(String(describing: materialized))")
+                case .rejected, .failed:
+                    Issue.record("Expected .success for value: \(value)")
             }
         }
     }
@@ -158,9 +158,9 @@ struct RecursiveOperationTests {
             var sawArray = false
             while let value = try iterator.next() {
                 switch value {
-                case .null: sawNull = true
-                case .int: sawInt = true
-                case .array: sawArray = true
+                    case .null: sawNull = true
+                    case .int: sawInt = true
+                    case .array: sawArray = true
                 }
                 generated += 1
             }
@@ -221,10 +221,10 @@ struct RecursiveOperationTests {
             while let (value, tree) = try iterator.next() {
                 let sequence = ChoiceSequence(tree)
                 switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
-                case let .success(materialized, _, _):
-                    #expect(materialized == value, "Materialized value should match original. Original: \(value), materialized: \(String(describing: materialized))")
-                case .rejected, .failed:
-                    Issue.record("Expected .success for value: \(value)")
+                    case let .success(materialized, _, _):
+                        #expect(materialized == value, "Materialized value should match original. Original: \(value), materialized: \(String(describing: materialized))")
+                    case .rejected, .failed:
+                        Issue.record("Expected .success for value: \(value)")
                 }
             }
         }

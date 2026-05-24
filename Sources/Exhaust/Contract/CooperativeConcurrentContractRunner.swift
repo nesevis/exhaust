@@ -81,17 +81,17 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
 ) async -> ContractResult<Spec>? {
     var config: ResolvedConcurrentConfig
     switch ResolvedConcurrentConfig.parse(settings) {
-    case let .success(resolved):
-        config = resolved
-    case let .invalidReplaySeed(seed):
-        reportIssue(
-            "Invalid replay seed: \(seed)",
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
-        return nil
+        case let .success(resolved):
+            config = resolved
+        case let .invalidReplaySeed(seed):
+            reportIssue(
+                "Invalid replay seed: \(seed)",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+            return nil
     }
     precondition((1 ... 8).contains(config.concurrencyLevel), "concurrencyLevel must be between 1 and 8")
 

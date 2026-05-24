@@ -27,7 +27,6 @@ protocol ProbeSessionState {
 ///
 /// Constructed by the machine when dispatch selects an encoder. Advanced by ``step(state:)`` (one sub-phase per call) or ``runToCompletion(state:deadlineCheck:)`` (loops step internally). Produces a ``PassReport`` when finished via ``report()``.
 struct ProbeSession {
-
     // MARK: - Phase
 
     /// Tracks the session's position within the encode-decode cycle.
@@ -84,9 +83,9 @@ struct ProbeSession {
         self.encoder = encoder
         self.transformation = transformation
         self.boundValueFingerprint = boundValueFingerprint
-        self.baseHash = ZobristHash.hash(of: baseSequence)
+        baseHash = ZobristHash.hash(of: baseSequence)
         self.hasBind = hasBind
-        self.candidateBuffer = baseSequence
+        candidateBuffer = baseSequence
     }
 
     // MARK: - Step
@@ -94,12 +93,12 @@ struct ProbeSession {
     /// Advances the session by one encode or decode sub-phase.
     mutating func step(state: inout some ProbeSessionState) throws -> StepResult {
         switch phase {
-        case .encode:
-            return stepEncode(state: &state)
-        case .decode:
-            return try stepDecode(state: &state)
-        case .finished:
-            return .finished
+            case .encode:
+                return stepEncode(state: &state)
+            case .decode:
+                return try stepDecode(state: &state)
+            case .finished:
+                return .finished
         }
     }
 

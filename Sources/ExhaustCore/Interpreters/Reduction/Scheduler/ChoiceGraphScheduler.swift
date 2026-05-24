@@ -12,7 +12,6 @@
 /// - Pure decision functions (``evaluateDispatch``, ``evaluateAcceptance``, ``evaluatePostCycle``) that compute scheduling decisions from immutable inputs.
 /// - Encoder selection and instrumentation helpers shared by the machine and its sub-systems.
 enum ChoiceGraphScheduler {
-
     // MARK: - Entry Points
 
     /// Reduces a failing counterexample by constructing and driving a ``ReductionMachine`` to completion.
@@ -112,10 +111,10 @@ enum ChoiceGraphScheduler {
             return .continueDispatching
         }
         let isBoundValue = switch operation {
-        case .minimize(.boundValue):
-            true
-        default:
-            false
+            case .minimize(.boundValue):
+                true
+            default:
+                false
         }
         if outcome.requiresRebuild || isBoundValue {
             return .rebuildAndResume(treeIsStripped: outcome.treeIsStripped)
@@ -164,18 +163,18 @@ enum ChoiceGraphScheduler {
             let fingerprint = bindMetadata.fingerprint
 
             switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
-            case .skip:
-                return .skip
-            case .classifyFirst:
-                if let cached = graph.bindClassifications[fingerprint] {
-                    if cached.topology != .identical || cached.liftability != .both {
-                        return .skip
+                case .skip:
+                    return .skip
+                case .classifyFirst:
+                    if let cached = graph.bindClassifications[fingerprint] {
+                        if cached.topology != .identical || cached.liftability != .both {
+                            return .skip
+                        }
+                    } else {
+                        return .classifyBind(bindNodeID: bindScope.bindNodeID, fingerprint: fingerprint)
                     }
-                } else {
-                    return .classifyBind(bindNodeID: bindScope.bindNodeID, fingerprint: fingerprint)
-                }
-            case .dispatch:
-                break
+                case .dispatch:
+                    break
             }
 
             return .readyToDispatch(boundValueFingerprint: fingerprint)
@@ -193,27 +192,27 @@ enum ChoiceGraphScheduler {
     /// Selects the appropriate encoder for a graph operation type. Bound value minimization scopes are not handled here because they require the typed generator at construction time; the dispatch step builds them via ``makeBoundValueComposition(bindScope:scope:graph:gen:upstreamBudget:)`` instead.
     static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
         switch operation {
-        case .remove, .replace, .migrate:
-            GraphStructuralEncoder()
-        case .permute:
-            GraphSwapEncoder()
-        case .minimize(.laneCollapse):
-            GraphLaneCollapseEncoder()
-        case .minimize:
-            GraphValueEncoder()
-        case .exchange(.redistribution):
-            GraphRedistributionEncoder()
-        case .exchange(.tandem):
-            GraphLockstepEncoder()
-        case .reorder:
-            GraphReorderEncoder()
+            case .remove, .replace, .migrate:
+                GraphStructuralEncoder()
+            case .permute:
+                GraphSwapEncoder()
+            case .minimize(.laneCollapse):
+                GraphLaneCollapseEncoder()
+            case .minimize:
+                GraphValueEncoder()
+            case .exchange(.redistribution):
+                GraphRedistributionEncoder()
+            case .exchange(.tandem):
+                GraphLockstepEncoder()
+            case .reorder:
+                GraphReorderEncoder()
         }
     }
 
     // MARK: - Post-Cycle Evaluation
 
     /// Snapshot of what happened during a single reduction cycle, consumed by ``evaluatePostCycle`` to determine the next actions.
-    struct CycleOutcome: Sendable {
+    struct CycleOutcome {
         let anyAccepted: Bool
         let hadReplacementShortlexRejection: Bool
         let allConverged: Bool
@@ -222,14 +221,14 @@ enum ChoiceGraphScheduler {
     }
 
     /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful relax round prevents termination, and convergence confirmation can clear stale floors that change the ``allValuesConverged`` result).
-    enum PostCycleAction: Equatable, Sendable {
+    enum PostCycleAction: Equatable {
         case confirmConvergence
         case relaxRound
         case releaseDeferral
     }
 
     /// Result of evaluating a cycle's outcome, containing the ordered list of actions to attempt and updated loop control values.
-    struct PostCycleEvaluation: Equatable, Sendable {
+    struct PostCycleEvaluation: Equatable {
         let actions: [PostCycleAction]
         let newStallBudget: Int
         let newDeferBindInner: Bool

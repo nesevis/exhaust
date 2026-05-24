@@ -25,38 +25,38 @@ package enum SharedInterpreterHelpers {
     /// Returns whether a generator produces values without any choices (no chooseBits, pick, sequence, zip, or getSize operations). Walks through transparent wrappers (pure, just, contramap, prune, transform).
     static func isParameterFree(_ gen: AnyGenerator) -> Bool {
         switch gen {
-        case .pure:
-            true
-        case let .impure(operation, _):
-            switch operation {
-            case .just:
+            case .pure:
                 true
-            case let .contramap(_, inner), let .prune(inner):
-                isParameterFree(inner)
-            case let .transform(_, inner):
-                isParameterFree(inner)
-            default:
-                false
-            }
+            case let .impure(operation, _):
+                switch operation {
+                    case .just:
+                        true
+                    case let .contramap(_, inner), let .prune(inner):
+                        isParameterFree(inner)
+                    case let .transform(_, inner):
+                        isParameterFree(inner)
+                    default:
+                        false
+                }
         }
     }
 
     /// Builds a minimal subtree for a parameter-free generator, or `nil` if the generator contains choices. Walks through transparent wrappers, returning `.just` for terminals.
     static func buildParameterFreeSubTree(for gen: AnyGenerator) -> ChoiceTree? {
         switch gen {
-        case .pure:
-            .just
-        case let .impure(operation, _):
-            switch operation {
-            case .just:
+            case .pure:
                 .just
-            case let .contramap(_, next), let .prune(next):
-                buildParameterFreeSubTree(for: next)
-            case let .transform(_, inner):
-                buildParameterFreeSubTree(for: inner)
-            default:
-                nil
-            }
+            case let .impure(operation, _):
+                switch operation {
+                    case .just:
+                        .just
+                    case let .contramap(_, next), let .prune(next):
+                        buildParameterFreeSubTree(for: next)
+                    case let .transform(_, inner):
+                        buildParameterFreeSubTree(for: inner)
+                    default:
+                        nil
+                }
         }
     }
 

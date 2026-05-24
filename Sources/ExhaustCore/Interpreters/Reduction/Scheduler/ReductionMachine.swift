@@ -27,7 +27,6 @@
 ///
 /// The ``dispatching`` phase uses three sub-phases (``DispatchPhase``): select and evaluate a source (``dispatch``), delegate to the active ``ProbeSession`` for encode-decode stepping (``probing``), and optionally rebuild the graph after a structural acceptance (``rebuild``).
 package struct ReductionMachine: ProbeSessionState {
-
     // MARK: - Phase
 
     /// Tracks which stage of the reduction pipeline the machine is in. The outer loop cycles through ``beginCycle`` → ``dispatching`` → ``endCycle`` → ``postCycle`` → ``checkTermination``, exiting via ``reorderPass`` → ``done`` when the stall budget is exhausted or all values converge.
@@ -192,22 +191,22 @@ package struct ReductionMachine: ProbeSessionState {
 
         self.sequence = sequence
         self.tree = tree
-        self.output = initialOutput
+        output = initialOutput
         self.graph = graph
         self.gen = erasedGen
         self.property = wrappedProperty
-        self.tuning = config.tuning
-        self.enabledEncoders = config.enabledEncoders
+        tuning = config.tuning
+        enabledEncoders = config.enabledEncoders
         self.collectStats = collectStats
-        self.isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
-        self.convergence = ConvergenceTracker(
+        isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
+        convergence = ConvergenceTracker(
             stallBudget: config.maxStalls,
             maxStalls: config.maxStalls,
             deferBindInner: graph.reductionEdges.isEmpty == false,
             gate: BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
         )
-        self.deadlineNanoseconds = config.wallClockDeadlineNanoseconds
-        self.startNanoseconds = deadlineNanoseconds > 0 ? monotonicNanoseconds() : 0
+        deadlineNanoseconds = config.wallClockDeadlineNanoseconds
+        startNanoseconds = deadlineNanoseconds > 0 ? monotonicNanoseconds() : 0
 
         if collectStats {
             stats.graphStats = ChoiceGraphStats.from(graph)
@@ -236,22 +235,22 @@ package struct ReductionMachine: ProbeSessionState {
     /// Advances the machine by one step, returning a ``Transition`` that describes what happened, or `nil` when reduction is complete.
     mutating func next() throws -> Transition? {
         switch phase {
-        case .beginCycle:
-            return stepBeginCycle()
-        case .buildSources:
-            return stepBuildSources()
-        case .dispatching:
-            return try stepDispatching()
-        case .endCycle:
-            return stepEndCycle()
-        case let .postCycle(remaining):
-            return try stepPostCycle(remaining: remaining)
-        case .checkTermination:
-            return stepCheckTermination()
-        case .reorderPass:
-            return try stepReorderPass()
-        case .done:
-            return nil
+            case .beginCycle:
+                return stepBeginCycle()
+            case .buildSources:
+                return stepBuildSources()
+            case .dispatching:
+                return try stepDispatching()
+            case .endCycle:
+                return stepEndCycle()
+            case let .postCycle(remaining):
+                return try stepPostCycle(remaining: remaining)
+            case .checkTermination:
+                return stepCheckTermination()
+            case .reorderPass:
+                return try stepReorderPass()
+            case .done:
+                return nil
         }
     }
 
@@ -318,21 +317,21 @@ package struct ReductionMachine: ProbeSessionState {
         phase = rest.isEmpty ? .checkTermination : .postCycle(remaining: rest)
 
         switch action {
-        case .confirmConvergence:
-            let anyStale = try confirmConvergence()
-            return .convergenceConfirmed(anyStale: anyStale)
-        case .relaxRound:
-            let improved = try runRelaxRound()
-            if improved {
-                anyAccepted = true
-                scopeRejectionCache.clear()
-            }
-            return .relaxRoundCompleted(improved: improved)
-        case .releaseDeferral:
-            ChoiceGraphScheduler.logReducer("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
-                "cycle": "\(cycles)", "seq_len": "\(sequence.count)",
-            ])
-            return .deferralReleased
+            case .confirmConvergence:
+                let anyStale = try confirmConvergence()
+                return .convergenceConfirmed(anyStale: anyStale)
+            case .relaxRound:
+                let improved = try runRelaxRound()
+                if improved {
+                    anyAccepted = true
+                    scopeRejectionCache.clear()
+                }
+                return .relaxRoundCompleted(improved: improved)
+            case .releaseDeferral:
+                ChoiceGraphScheduler.logReducer("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
+                    "cycle": "\(cycles)", "seq_len": "\(sequence.count)",
+                ])
+                return .deferralReleased
         }
     }
 

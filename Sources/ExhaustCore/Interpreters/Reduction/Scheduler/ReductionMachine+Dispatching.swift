@@ -9,12 +9,12 @@ extension ReductionMachine {
     /// Routes to the active ``DispatchPhase`` sub-step.
     mutating func stepDispatching() throws -> Transition {
         switch dispatchPhase {
-        case .dispatch:
-            return try stepDispatch()
-        case .probing:
-            return try stepProbing()
-        case .rebuild:
-            return stepRebuild()
+            case .dispatch:
+                return try stepDispatch()
+            case .probing:
+                return try stepProbing()
+            case .rebuild:
+                return stepRebuild()
         }
     }
 
@@ -71,33 +71,33 @@ extension ReductionMachine {
         }
 
         switch decision {
-        case .skip:
-            return .dispatched(decision: .skipped)
+            case .skip:
+                return .dispatched(decision: .skipped)
 
-        case .classifyBind:
-            return .dispatched(decision: .skipped)
+            case .classifyBind:
+                return .dispatched(decision: .skipped)
 
-        case .rematerialize:
-            if case let .success(_, fullTree, _) = Materializer.materializeAny(
-                gen,
-                prefix: sequence,
-                mode: .exact,
-                fallbackTree: tree,
-                materializePicks: true
-            ) {
-                tree = fullTree
-            }
-            let graphBefore = graph
-            _ = rebuildAndUpdateGraph()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
-            graphIsStripped = false
-            return .dispatched(decision: .rematerialized)
+            case .rematerialize:
+                if case let .success(_, fullTree, _) = Materializer.materializeAny(
+                    gen,
+                    prefix: sequence,
+                    mode: .exact,
+                    fallbackTree: tree,
+                    materializePicks: true
+                ) {
+                    tree = fullTree
+                }
+                let graphBefore = graph
+                _ = rebuildAndUpdateGraph()
+                sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
+                graphIsStripped = false
+                return .dispatched(decision: .rematerialized)
 
-        case let .readyToDispatch(boundValueFingerprint):
-            return beginProbeSession(
-                transformation: transformation,
-                boundValueFingerprint: boundValueFingerprint
-            )
+            case let .readyToDispatch(boundValueFingerprint):
+                return beginProbeSession(
+                    transformation: transformation,
+                    boundValueFingerprint: boundValueFingerprint
+                )
         }
     }
 
@@ -162,28 +162,28 @@ extension ReductionMachine {
         activeSession = session
 
         switch result {
-        case let .encoded(encoder, cacheHit):
-            return .encoded(encoder: encoder, cacheHit: cacheHit)
+            case let .encoded(encoder, cacheHit):
+                return .encoded(encoder: encoder, cacheHit: cacheHit)
 
-        case let .decoded(encoder, accepted):
-            if isDeadlineExceeded() {
-                if session.anyRequiresRebuild {
-                    _ = rebuildAndUpdateGraph()
+            case let .decoded(encoder, accepted):
+                if isDeadlineExceeded() {
+                    if session.anyRequiresRebuild {
+                        _ = rebuildAndUpdateGraph()
+                    }
+                    activeSession = nil
+                    pendingReport = nil
+                    stats.reductionWasCapped = true
+                    phase = .reorderPass
+                    return .decoded(encoder: encoder, accepted: accepted)
                 }
-                activeSession = nil
-                pendingReport = nil
-                stats.reductionWasCapped = true
-                phase = .reorderPass
                 return .decoded(encoder: encoder, accepted: accepted)
-            }
-            return .decoded(encoder: encoder, accepted: accepted)
 
-        case .finished:
-            var s = activeSession!
-            let report = s.report()
-            activeSession = nil
-            pendingReport = report
-            return applyPassReport(report)
+            case .finished:
+                var s = activeSession!
+                let report = s.report()
+                activeSession = nil
+                pendingReport = report
+                return applyPassReport(report)
         }
     }
 
@@ -236,21 +236,21 @@ extension ReductionMachine {
         }
 
         switch acceptanceAction {
-        case .continueDispatching:
-            if report.anyAccepted == false {
-                scopeRejectionCache.recordRejection(
-                    operation: report.transformation.operation,
-                    sequence: sequence,
-                    graph: graph
-                )
-            }
-            pendingReport = nil
-            dispatchPhase = .dispatch
-            return .dispatched(decision: .sourceExhausted)
+            case .continueDispatching:
+                if report.anyAccepted == false {
+                    scopeRejectionCache.recordRejection(
+                        operation: report.transformation.operation,
+                        sequence: sequence,
+                        graph: graph
+                    )
+                }
+                pendingReport = nil
+                dispatchPhase = .dispatch
+                return .dispatched(decision: .sourceExhausted)
 
-        case .rebuildAndResume:
-            dispatchPhase = .rebuild
-            return .dispatched(decision: .sourceExhausted)
+            case .rebuildAndResume:
+                dispatchPhase = .rebuild
+                return .dispatched(decision: .sourceExhausted)
         }
     }
 

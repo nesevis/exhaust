@@ -105,19 +105,19 @@ package extension Gen {
                     step(currentState, remaining).bindReified(
                         { result in
                             switch result {
-                            case let .done(output):
-                                return Gen.just(output)
-                            case let .recurse(nextState):
-                                guard remaining > 0 else {
-                                    preconditionFailure(
-                                        "step returned .recurse at remaining=0; "
-                                            + "step must return .done when remaining is 0"
+                                case let .done(output):
+                                    return Gen.just(output)
+                                case let .recurse(nextState):
+                                    guard remaining > 0 else {
+                                        preconditionFailure(
+                                            "step returned .recurse at remaining=0; "
+                                                + "step must return .done when remaining is 0"
+                                        )
+                                    }
+                                    return loop(
+                                        state: Gen.just(nextState),
+                                        remaining: remaining - 1
                                     )
-                                }
-                                return loop(
-                                    state: Gen.just(nextState),
-                                    remaining: remaining - 1
-                                )
                             }
                         },
                         fileID: fileID, line: line &+ 1, column: column

@@ -139,57 +139,57 @@ package enum ChoiceGradientTuner<FinalOutput> {
         depth: Int = 0
     ) -> Generator<Output> {
         switch gen {
-        case .pure:
-            return gen
-
-        case let .impure(operation, continuation):
-            switch operation {
-            case let .pick(choices):
-                var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
-                baked.reserveCapacity(choices.count)
-                let depthOffset = UInt64(depth) &* 0x9E37_79B9_7F4A_7C15
-
-                let precomputedWeights = computeFitnessSharingWeights(
-                    choices: choices, records: accumulator.records, fingerprintOffset: depthOffset
-                )
-
-                for (index, choice) in choices.enumerated() {
-                    let weight = precomputedWeights[index]
-                    baked.append(ReflectiveOperation.PickTuple(
-                        fingerprint: choice.fingerprint,
-                        id: choice.id,
-                        weight: Swift.max(1, weight),
-                        generator: bakeWeights(
-                            choice.generator,
-                            from: accumulator,
-                            strategy: strategy,
-                            depth: depth + 1
-                        )
-                    ))
-                }
-                return .impure(operation: .pick(choices: baked), continuation: continuation)
-
-            case let .zip(generators, _):
-                let bakedGens = ContiguousArray(generators.map {
-                    bakeWeights($0, from: accumulator, strategy: strategy, depth: depth + 1)
-                })
-                return .impure(operation: .zip(bakedGens), continuation: continuation)
-
-            case let .sequence(lengthGen, elementGen):
-                return .impure(
-                    operation: .sequence(
-                        length: bakeWeights(lengthGen, from: accumulator, strategy: strategy, depth: depth),
-                        gen: bakeWeights(elementGen, from: accumulator, strategy: strategy, depth: depth)
-                    ),
-                    continuation: continuation
-                )
-
-            default:
-                if let mapped = operation.mapInnerGenerator({ bakeWeights($0, from: accumulator, strategy: strategy, depth: depth) }) {
-                    return .impure(operation: mapped, continuation: continuation)
-                }
+            case .pure:
                 return gen
-            }
+
+            case let .impure(operation, continuation):
+                switch operation {
+                    case let .pick(choices):
+                        var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
+                        baked.reserveCapacity(choices.count)
+                        let depthOffset = UInt64(depth) &* 0x9E37_79B9_7F4A_7C15
+
+                        let precomputedWeights = computeFitnessSharingWeights(
+                            choices: choices, records: accumulator.records, fingerprintOffset: depthOffset
+                        )
+
+                        for (index, choice) in choices.enumerated() {
+                            let weight = precomputedWeights[index]
+                            baked.append(ReflectiveOperation.PickTuple(
+                                fingerprint: choice.fingerprint,
+                                id: choice.id,
+                                weight: Swift.max(1, weight),
+                                generator: bakeWeights(
+                                    choice.generator,
+                                    from: accumulator,
+                                    strategy: strategy,
+                                    depth: depth + 1
+                                )
+                            ))
+                        }
+                        return .impure(operation: .pick(choices: baked), continuation: continuation)
+
+                    case let .zip(generators, _):
+                        let bakedGens = ContiguousArray(generators.map {
+                            bakeWeights($0, from: accumulator, strategy: strategy, depth: depth + 1)
+                        })
+                        return .impure(operation: .zip(bakedGens), continuation: continuation)
+
+                    case let .sequence(lengthGen, elementGen):
+                        return .impure(
+                            operation: .sequence(
+                                length: bakeWeights(lengthGen, from: accumulator, strategy: strategy, depth: depth),
+                                gen: bakeWeights(elementGen, from: accumulator, strategy: strategy, depth: depth)
+                            ),
+                            continuation: continuation
+                        )
+
+                    default:
+                        if let mapped = operation.mapInnerGenerator({ bakeWeights($0, from: accumulator, strategy: strategy, depth: depth) }) {
+                            return .impure(operation: mapped, continuation: continuation)
+                        }
+                        return gen
+                }
         }
     }
 
@@ -253,136 +253,136 @@ package enum ChoiceGradientTuner<FinalOutput> {
         thresholds: CGSSubdivisionThresholds
     ) throws -> Generator<Output> {
         switch gen {
-        case .pure:
-            return gen
+            case .pure:
+                return gen
 
-        case let .impure(operation, continuation):
-            switch operation {
-            case let .sequence(lengthGen, elementGen):
-                // 1. Recurse into element generator, then subdivide its chooseBits if thresholds allow
-                var subdividedElement = try subdivideForCGS(elementGen, context: context, thresholds: thresholds)
-                subdividedElement = try subdivideChooseBits(subdividedElement, context: context, thresholds: thresholds)
+            case let .impure(operation, continuation):
+                switch operation {
+                    case let .sequence(lengthGen, elementGen):
+                        // 1. Recurse into element generator, then subdivide its chooseBits if thresholds allow
+                        var subdividedElement = try subdivideForCGS(elementGen, context: context, thresholds: thresholds)
+                        subdividedElement = try subdivideChooseBits(subdividedElement, context: context, thresholds: thresholds)
 
-                // 2a. Check if length generator is a direct .chooseBits with range > 4
-                if case let .impure(
-                    .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
-                    lengthContinuation
-                ) = lengthGen {
-                    let rangeSize = (lower ... upper).saturatingCount
-                    if rangeSize > 4 {
-                        let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
-                        let subranges = (lower ... upper).split(into: subrangeCount)
+                        // 2a. Check if length generator is a direct .chooseBits with range > 4
+                        if case let .impure(
+                            .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
+                            lengthContinuation
+                        ) = lengthGen {
+                            let rangeSize = (lower ... upper).saturatingCount
+                            if rangeSize > 4 {
+                                let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
+                                let subranges = (lower ... upper).split(into: subrangeCount)
 
-                        var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-                        subrangeChoices.reserveCapacity(subranges.count)
+                                var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
+                                subrangeChoices.reserveCapacity(subranges.count)
 
-                        for (index, subrange) in subranges.enumerated() {
-                            let subLengthGen: Generator<UInt64> = .impure(
-                                operation: .chooseBits(
-                                    min: subrange.lowerBound,
-                                    max: subrange.upperBound,
-                                    tag: tag,
-                                    isRangeExplicit: isRangeExplicit,
-                                    scaling: scaling
-                                ),
-                                continuation: lengthContinuation
-                            )
+                                for (index, subrange) in subranges.enumerated() {
+                                    let subLengthGen: Generator<UInt64> = .impure(
+                                        operation: .chooseBits(
+                                            min: subrange.lowerBound,
+                                            max: subrange.upperBound,
+                                            tag: tag,
+                                            isRangeExplicit: isRangeExplicit,
+                                            scaling: scaling
+                                        ),
+                                        continuation: lengthContinuation
+                                    )
 
-                            let subSeqGen: AnyGenerator = .impure(
-                                operation: .sequence(length: subLengthGen, gen: subdividedElement),
-                                continuation: { .pure($0) }
-                            )
+                                    let subSeqGen: AnyGenerator = .impure(
+                                        operation: .sequence(length: subLengthGen, gen: subdividedElement),
+                                        continuation: { .pure($0) }
+                                    )
 
-                            subrangeChoices.append(ReflectiveOperation.PickTuple(
-                                fingerprint: context.makeID(),
-                                id: UInt64(index),
-                                weight: 1,
-                                generator: subSeqGen
-                            ))
+                                    subrangeChoices.append(ReflectiveOperation.PickTuple(
+                                        fingerprint: context.makeID(),
+                                        id: UInt64(index),
+                                        weight: 1,
+                                        generator: subSeqGen
+                                    ))
+                                }
+
+                                // Do NOT recurse into synthesized pick — inner generators are already subdivided
+                                return .impure(
+                                    operation: .pick(choices: subrangeChoices),
+                                    continuation: continuation
+                                )
+                            }
                         }
 
-                        // Do NOT recurse into synthesized pick — inner generators are already subdivided
+                        // 2b. Check if length generator is .getSize → continuation
+                        if case let .impure(.getSize, getSizeContinuation) = lengthGen {
+                            let subranges = (0 ... context.maxSize).split(
+                                into: Swift.min(4, Int(context.maxSize + 1))
+                            )
+
+                            var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
+                            subrangeChoices.reserveCapacity(subranges.count)
+
+                            for (index, subrange) in subranges.enumerated() {
+                                let subSizeGen: Generator<UInt64> = .impure(
+                                    operation: .chooseBits(
+                                        min: subrange.lowerBound,
+                                        max: subrange.upperBound,
+                                        tag: .uint64,
+                                        isRangeExplicit: false
+                                    ),
+                                    continuation: { .pure($0 as! UInt64) }
+                                )
+
+                                let subSeqGen: AnyGenerator = try .impure(
+                                    operation: .sequence(
+                                        length: subSizeGen.bindReified(getSizeContinuation),
+                                        gen: subdividedElement
+                                    ),
+                                    continuation: { .pure($0) }
+                                )
+
+                                subrangeChoices.append(ReflectiveOperation.PickTuple(
+                                    fingerprint: context.makeID(),
+                                    id: UInt64(index),
+                                    weight: 1,
+                                    generator: subSeqGen
+                                ))
+                            }
+
+                            // Do NOT recurse into synthesized pick — inner generators are already subdivided
+                            return .impure(
+                                operation: .pick(choices: subrangeChoices),
+                                continuation: continuation
+                            )
+                        }
+
+                        // Fallback: return sequence with subdivided element generator
                         return .impure(
-                            operation: .pick(choices: subrangeChoices),
+                            operation: .sequence(length: lengthGen, gen: subdividedElement),
                             continuation: continuation
                         )
-                    }
+
+                    case let .pick(choices):
+                        var subdivided = ContiguousArray<ReflectiveOperation.PickTuple>()
+                        subdivided.reserveCapacity(choices.count)
+                        for choice in choices {
+                            try subdivided.append(ReflectiveOperation.PickTuple(
+                                fingerprint: choice.fingerprint,
+                                id: choice.id,
+                                weight: choice.weight,
+                                generator: subdivideForCGS(choice.generator, context: context, thresholds: thresholds)
+                            ))
+                        }
+                        return .impure(operation: .pick(choices: subdivided), continuation: continuation)
+
+                    case let .zip(generators, _):
+                        let subdivided = try ContiguousArray(generators.map {
+                            try subdivideForCGS($0, context: context, thresholds: thresholds)
+                        })
+                        return .impure(operation: .zip(subdivided), continuation: continuation)
+
+                    default:
+                        if let mapped = try operation.mapInnerGenerator({ try subdivideForCGS($0, context: context, thresholds: thresholds) }) {
+                            return .impure(operation: mapped, continuation: continuation)
+                        }
+                        return gen
                 }
-
-                // 2b. Check if length generator is .getSize → continuation
-                if case let .impure(.getSize, getSizeContinuation) = lengthGen {
-                    let subranges = (0 ... context.maxSize).split(
-                        into: Swift.min(4, Int(context.maxSize + 1))
-                    )
-
-                    var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-                    subrangeChoices.reserveCapacity(subranges.count)
-
-                    for (index, subrange) in subranges.enumerated() {
-                        let subSizeGen: Generator<UInt64> = .impure(
-                            operation: .chooseBits(
-                                min: subrange.lowerBound,
-                                max: subrange.upperBound,
-                                tag: .uint64,
-                                isRangeExplicit: false
-                            ),
-                            continuation: { .pure($0 as! UInt64) }
-                        )
-
-                        let subSeqGen: AnyGenerator = try .impure(
-                            operation: .sequence(
-                                length: subSizeGen.bindReified(getSizeContinuation),
-                                gen: subdividedElement
-                            ),
-                            continuation: { .pure($0) }
-                        )
-
-                        subrangeChoices.append(ReflectiveOperation.PickTuple(
-                            fingerprint: context.makeID(),
-                            id: UInt64(index),
-                            weight: 1,
-                            generator: subSeqGen
-                        ))
-                    }
-
-                    // Do NOT recurse into synthesized pick — inner generators are already subdivided
-                    return .impure(
-                        operation: .pick(choices: subrangeChoices),
-                        continuation: continuation
-                    )
-                }
-
-                // Fallback: return sequence with subdivided element generator
-                return .impure(
-                    operation: .sequence(length: lengthGen, gen: subdividedElement),
-                    continuation: continuation
-                )
-
-            case let .pick(choices):
-                var subdivided = ContiguousArray<ReflectiveOperation.PickTuple>()
-                subdivided.reserveCapacity(choices.count)
-                for choice in choices {
-                    try subdivided.append(ReflectiveOperation.PickTuple(
-                        fingerprint: choice.fingerprint,
-                        id: choice.id,
-                        weight: choice.weight,
-                        generator: subdivideForCGS(choice.generator, context: context, thresholds: thresholds)
-                    ))
-                }
-                return .impure(operation: .pick(choices: subdivided), continuation: continuation)
-
-            case let .zip(generators, _):
-                let subdivided = try ContiguousArray(generators.map {
-                    try subdivideForCGS($0, context: context, thresholds: thresholds)
-                })
-                return .impure(operation: .zip(subdivided), continuation: continuation)
-
-            default:
-                if let mapped = try operation.mapInnerGenerator({ try subdivideForCGS($0, context: context, thresholds: thresholds) }) {
-                    return .impure(operation: mapped, continuation: continuation)
-                }
-                return gen
-            }
         }
     }
 
@@ -391,44 +391,44 @@ package enum ChoiceGradientTuner<FinalOutput> {
         _ gen: Generator<Output>
     ) -> Generator<Output> {
         switch gen {
-        case .pure:
-            return gen
-
-        case let .impure(operation, continuation):
-            switch operation {
-            case let .pick(choices) where choices.count >= 2:
-                if let collapsed: Generator<Output> = collapseIfUniform(choices, continuation: continuation) {
-                    return collapsed
-                }
-                let recursed = ContiguousArray(choices.map { choice in
-                    ReflectiveOperation.PickTuple(
-                        fingerprint: choice.fingerprint,
-                        id: choice.id,
-                        weight: choice.weight,
-                        generator: collapseUniformSubdivisions(choice.generator)
-                    )
-                })
-                return .impure(operation: .pick(choices: recursed), continuation: continuation)
-
-            case let .sequence(lengthGen, elementGen):
-                return .impure(
-                    operation: .sequence(
-                        length: collapseUniformSubdivisions(lengthGen),
-                        gen: collapseUniformSubdivisions(elementGen)
-                    ),
-                    continuation: continuation
-                )
-
-            case let .zip(generators, _):
-                let recursed = ContiguousArray(generators.map { collapseUniformSubdivisions($0) })
-                return .impure(operation: .zip(recursed), continuation: continuation)
-
-            default:
-                if let mapped = operation.mapInnerGenerator({ collapseUniformSubdivisions($0) }) {
-                    return .impure(operation: mapped, continuation: continuation)
-                }
+            case .pure:
                 return gen
-            }
+
+            case let .impure(operation, continuation):
+                switch operation {
+                    case let .pick(choices) where choices.count >= 2:
+                        if let collapsed: Generator<Output> = collapseIfUniform(choices, continuation: continuation) {
+                            return collapsed
+                        }
+                        let recursed = ContiguousArray(choices.map { choice in
+                            ReflectiveOperation.PickTuple(
+                                fingerprint: choice.fingerprint,
+                                id: choice.id,
+                                weight: choice.weight,
+                                generator: collapseUniformSubdivisions(choice.generator)
+                            )
+                        })
+                        return .impure(operation: .pick(choices: recursed), continuation: continuation)
+
+                    case let .sequence(lengthGen, elementGen):
+                        return .impure(
+                            operation: .sequence(
+                                length: collapseUniformSubdivisions(lengthGen),
+                                gen: collapseUniformSubdivisions(elementGen)
+                            ),
+                            continuation: continuation
+                        )
+
+                    case let .zip(generators, _):
+                        let recursed = ContiguousArray(generators.map { collapseUniformSubdivisions($0) })
+                        return .impure(operation: .zip(recursed), continuation: continuation)
+
+                    default:
+                        if let mapped = operation.mapInnerGenerator({ collapseUniformSubdivisions($0) }) {
+                            return .impure(operation: mapped, continuation: continuation)
+                        }
+                        return gen
+                }
         }
     }
 

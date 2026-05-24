@@ -1,5 +1,5 @@
 //
-//  Generator+CustomDebugStringConvertible.swift
+//  ReflectiveGenerator+CustomDebugStringConvertible.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 12/12/2025.
@@ -36,16 +36,16 @@ extension Generator where Operation == ReflectiveOperation {
         let childPrefix = prefix + (isLast ? "    " : "│   ")
 
         switch self {
-        case let .pure(value):
-            return prefix + connector + "pure(\(value))"
+            case let .pure(value):
+                return prefix + connector + "pure(\(value))"
 
-        case let .impure(operation, _):
-            let operationDesc = operationDescription(
-                operation,
-                childPrefix: childPrefix,
-                depth: depth + 1
-            )
-            return prefix + connector + operationDesc
+            case let .impure(operation, _):
+                let operationDesc = operationDescription(
+                    operation,
+                    childPrefix: childPrefix,
+                    depth: depth + 1
+                )
+                return prefix + connector + operationDesc
         }
     }
 
@@ -55,126 +55,126 @@ extension Generator where Operation == ReflectiveOperation {
         depth: Int
     ) -> String {
         switch operation {
-        case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
-            let range = formatBitRange(min: min, max: max, tag: tag)
-            var suffix = isRangeExplicit ? "" : " [derived]"
-            switch scaling {
-            case .none: break
-            case .some(.linear): suffix += " [linear]"
-            case .some(.exponential): suffix += " [exponential]"
-            }
-            return "chooseBits(\(tag.description): \(range))\(suffix)"
+            case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
+                let range = formatBitRange(min: min, max: max, tag: tag)
+                var suffix = isRangeExplicit ? "" : " [derived]"
+                switch scaling {
+                    case .none: break
+                    case .some(.linear): suffix += " [linear]"
+                    case .some(.exponential): suffix += " [exponential]"
+                }
+                return "chooseBits(\(tag.description): \(range))\(suffix)"
 
-        case let .pick(choices):
-            let fingerprint = choices.first?.fingerprint ?? 0
-            let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            let header = "pick(id: \(fingerprintShort), choices: \(choices.count))"
-            if choices.isEmpty {
-                return header
-            }
+            case let .pick(choices):
+                let fingerprint = choices.first?.fingerprint ?? 0
+                let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
+                let header = "pick(id: \(fingerprintShort), choices: \(choices.count))"
+                if choices.isEmpty {
+                    return header
+                }
 
-            let childDescriptions = choices.enumerated().map { index, choice in
-                let isLast = index == choices.count - 1
-                let weightDesc = choice.weight > 0 ? " [weight: \(choice.weight)]" : " (pruned)"
-                let choiceHeader = "choice\(weightDesc)"
+                let childDescriptions = choices.enumerated().map { index, choice in
+                    let isLast = index == choices.count - 1
+                    let weightDesc = choice.weight > 0 ? " [weight: \(choice.weight)]" : " (pruned)"
+                    let choiceHeader = "choice\(weightDesc)"
 
-                // Try to get meaningful description of the nested generator
-                let nestedDesc = choice.generator.treeDescription(
-                    prefix: childPrefix + (isLast ? "    " : "│   "),
+                    // Try to get meaningful description of the nested generator
+                    let nestedDesc = choice.generator.treeDescription(
+                        prefix: childPrefix + (isLast ? "    " : "│   "),
+                        isLast: true,
+                        depth: depth + 1
+                    )
+
+                    let connector = isLast ? "└── " : "├── "
+                    return childPrefix + connector + choiceHeader
+                        + "\n" + nestedDesc
+                }
+
+                return header + "\n" + childDescriptions.joined(separator: "\n")
+
+            case let .zip(generators, _):
+                let header = "zip(generators: \(generators.count))"
+                if generators.isEmpty {
+                    return header
+                }
+
+                let childDescriptions = generators.enumerated().map { index, generator in
+                    let isLast = index == generators.count - 1
+                    return generator.treeDescription(
+                        prefix: childPrefix,
+                        isLast: isLast,
+                        depth: depth + 1
+                    )
+                }
+
+                return header + "\n" + childDescriptions.joined(separator: "\n")
+
+            case let .sequence(length, gen):
+                let lengthDesc = length.treeDescription(
+                    prefix: childPrefix,
+                    isLast: false,
+                    depth: depth + 1
+                )
+                let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+                return "sequence\n" + lengthDesc + "\n" + genDesc
+
+            case let .contramap(_, next):
+                let nextDesc = next.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+                return "contramap\n" + nextDesc
+
+            case let .prune(next):
+                let nextDesc = next.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+                return "prune\n" + nextDesc
+
+            case let .just(value):
+                return "just(\(formatJustValue(value)))"
+
+            case .getSize:
+                return "getSize"
+
+            case let .filter(gen, fingerprint, _, _, _, _):
+                let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
+                let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+                return "filter(fingerprint: \(fingerprintShort))\n" + genDesc
+
+            case let .resize(newSize, next):
+                let nextDesc = next.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+                return "resize(size: \(newSize))\n" + nextDesc
+
+            case let .classify(gen, fingerprint, classifiers):
+                let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
+                let classifierLabels = classifiers.map(\.label).joined(separator: ", ")
+                let genDesc = gen.treeDescription(
+                    prefix: childPrefix,
                     isLast: true,
                     depth: depth + 1
                 )
+                let header = "classify(fingerprint: \(fingerprintShort), labels: [\(classifierLabels)])"
+                return header + "\n" + genDesc
 
-                let connector = isLast ? "└── " : "├── "
-                return childPrefix + connector + choiceHeader
-                    + "\n" + nestedDesc
-            }
+            case let .unique(gen, fingerprint, keyExtractor):
+                let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
+                let mode = keyExtractor != nil ? "by key" : "by choice sequence"
+                let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+                return "unique(fingerprint: \(fingerprintShort), \(mode))\n" + genDesc
 
-            return header + "\n" + childDescriptions.joined(separator: "\n")
-
-        case let .zip(generators, _):
-            let header = "zip(generators: \(generators.count))"
-            if generators.isEmpty {
-                return header
-            }
-
-            let childDescriptions = generators.enumerated().map { index, generator in
-                let isLast = index == generators.count - 1
-                return generator.treeDescription(
+            case let .transform(kind, inner):
+                let kindDesc: String
+                switch kind {
+                    case let .map(_, inputType, outputType):
+                        kindDesc = "map: \(inputType) → \(outputType)"
+                    case let .bind(_, _, backward, inputType, outputType):
+                        let direction = backward != nil ? "bind↔" : "bind→"
+                        kindDesc = "\(direction): \(inputType) → \(outputType)"
+                    case let .metamorphic(transforms, inputType):
+                        kindDesc = "metamorphic(\(transforms.count)×): \(inputType)"
+                }
+                let innerDesc = inner.treeDescription(
                     prefix: childPrefix,
-                    isLast: isLast,
+                    isLast: true,
                     depth: depth + 1
                 )
-            }
-
-            return header + "\n" + childDescriptions.joined(separator: "\n")
-
-        case let .sequence(length, gen):
-            let lengthDesc = length.treeDescription(
-                prefix: childPrefix,
-                isLast: false,
-                depth: depth + 1
-            )
-            let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "sequence\n" + lengthDesc + "\n" + genDesc
-
-        case let .contramap(_, next):
-            let nextDesc = next.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "contramap\n" + nextDesc
-
-        case let .prune(next):
-            let nextDesc = next.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "prune\n" + nextDesc
-
-        case let .just(value):
-            return "just(\(formatJustValue(value)))"
-
-        case .getSize:
-            return "getSize"
-
-        case let .filter(gen, fingerprint, _, _, _, _):
-            let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "filter(fingerprint: \(fingerprintShort))\n" + genDesc
-
-        case let .resize(newSize, next):
-            let nextDesc = next.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "resize(size: \(newSize))\n" + nextDesc
-
-        case let .classify(gen, fingerprint, classifiers):
-            let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            let classifierLabels = classifiers.map(\.label).joined(separator: ", ")
-            let genDesc = gen.treeDescription(
-                prefix: childPrefix,
-                isLast: true,
-                depth: depth + 1
-            )
-            let header = "classify(fingerprint: \(fingerprintShort), labels: [\(classifierLabels)])"
-            return header + "\n" + genDesc
-
-        case let .unique(gen, fingerprint, keyExtractor):
-            let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            let mode = keyExtractor != nil ? "by key" : "by choice sequence"
-            let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "unique(fingerprint: \(fingerprintShort), \(mode))\n" + genDesc
-
-        case let .transform(kind, inner):
-            let kindDesc: String
-            switch kind {
-            case let .map(_, inputType, outputType):
-                kindDesc = "map: \(inputType) → \(outputType)"
-            case let .bind(_, _, backward, inputType, outputType):
-                let direction = backward != nil ? "bind↔" : "bind→"
-                kindDesc = "\(direction): \(inputType) → \(outputType)"
-            case let .metamorphic(transforms, inputType):
-                kindDesc = "metamorphic(\(transforms.count)×): \(inputType)"
-            }
-            let innerDesc = inner.treeDescription(
-                prefix: childPrefix,
-                isLast: true,
-                depth: depth + 1
-            )
-            return "transform(\(kindDesc))\n" + innerDesc
+                return "transform(\(kindDesc))\n" + innerDesc
         }
     }
 

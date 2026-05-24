@@ -204,12 +204,12 @@ struct ResultGeneratorTests {
 
         for (first, second) in zip(values1, values2) {
             switch (first, second) {
-            case let (.success(lhs), .success(rhs)):
-                #expect(lhs == rhs)
-            case let (.failure(lhs), .failure(rhs)):
-                #expect(lhs == rhs)
-            default:
-                Issue.record("Mismatched Result cases across seeds")
+                case let (.success(lhs), .success(rhs)):
+                    #expect(lhs == rhs)
+                case let (.failure(lhs), .failure(rhs)):
+                    #expect(lhs == rhs)
+                default:
+                    Issue.record("Mismatched Result cases across seeds")
             }
         }
     }

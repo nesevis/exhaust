@@ -12,7 +12,7 @@ import Foundation
 ///
 /// Lane indices are zero-based: lane 0 is "a", lane 1 is "b", and so on up to the concurrency level minus one. The label maps index to a lowercase ASCII letter for trace output.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-struct LaneID: Hashable, Sendable {
+struct LaneID: Hashable {
     let index: UInt8
 
     var label: String {
@@ -56,7 +56,9 @@ final class RunQueue: @unchecked Sendable {
         var cursor: Int = 0
         var isComplete: Bool = false
 
-        var hasPendingJob: Bool { cursor < jobs.count }
+        var hasPendingJob: Bool {
+            cursor < jobs.count
+        }
     }
 
     private var lanes: [Lane]

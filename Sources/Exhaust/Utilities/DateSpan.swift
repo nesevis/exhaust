@@ -31,13 +31,13 @@ public enum DateStride: Sendable, Comparable, Equatable {
     /// Uses fixed conversions: 1 minute = 60 seconds, 1 hour = 3600, 1 day = 86400, 1 week = 604800, 1 month = 2592000 (30 days), 1 year = 31536000 (365 days). This is the value that ``Comparable`` and ``Equatable`` conformances compare.
     public var fixedSeconds: Int {
         switch self {
-        case let .seconds(n): n
-        case let .minutes(n): n * 60
-        case let .hours(n): n * 3600
-        case let .days(n): n * 86400
-        case let .weeks(n): n * 604_800
-        case let .months(n): n * 2_592_000 // 30 days
-        case let .years(n): n * 31_536_000 // 365 days
+            case let .seconds(n): n
+            case let .minutes(n): n * 60
+            case let .hours(n): n * 3600
+            case let .days(n): n * 86400
+            case let .weeks(n): n * 604_800
+            case let .months(n): n * 2_592_000 // 30 days
+            case let .years(n): n * 31_536_000 // 365 days
         }
     }
 

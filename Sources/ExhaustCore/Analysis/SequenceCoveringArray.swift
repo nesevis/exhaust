@@ -133,13 +133,13 @@ package enum SequenceCoveringArray {
 
         for (index, profile) in branchProfiles.enumerated() {
             let contribution: UInt64 = switch profile {
-            case .parameterFree, .unanalyzable:
-                1
-            case let .analyzed(params):
-                params.reduce(UInt64(1)) { acc, param in
-                    let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
-                    return overflow ? .max : product
-                }
+                case .parameterFree, .unanalyzable:
+                    1
+                case let .analyzed(params):
+                    params.reduce(UInt64(1)) { acc, param in
+                        let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
+                        return overflow ? .max : product
+                    }
             }
 
             slots.append(SCADomainSlot(
@@ -213,15 +213,15 @@ package enum SequenceCoveringArray {
 
             let subTree: ChoiceTree
             switch slot.argProfile {
-            case .parameterFree, .unanalyzable:
-                subTree = .just
-            case let .analyzed(params):
-                let localIndex = valueIndex - slot.flatOffset
-                guard let argTree = buildArgTree(
-                    localIndex: localIndex,
-                    params: params
-                ) else { return nil }
-                subTree = argTree
+                case .parameterFree, .unanalyzable:
+                    subTree = .just
+                case let .analyzed(params):
+                    let localIndex = valueIndex - slot.flatOffset
+                    guard let argTree = buildArgTree(
+                        localIndex: localIndex,
+                        params: params
+                    ) else { return nil }
+                    subTree = argTree
             }
 
             let branch = ChoiceTree.branch(
@@ -259,60 +259,60 @@ package enum SequenceCoveringArray {
         threshold: UInt64
     ) -> [BoundaryParameter] {
         switch result {
-        case let .finite(profile):
-            profile.parameters.enumerated().map { i, param in
-                switch param.kind {
-                case let .chooseBits(range, tag):
-                    if param.domainSize <= threshold {
-                        return BoundaryParameter(
-                            index: i,
-                            values: Array(range.lowerBound ... range.upperBound),
-                            domainSize: param.domainSize,
-                            kind: .finiteChooseBits(range: range, tag: tag)
-                        )
-                    } else {
-                        let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
-                            min: range.lowerBound, max: range.upperBound, tag: tag
-                        )
-                        return BoundaryParameter(
-                            index: i,
-                            values: boundaryValues,
-                            domainSize: UInt64(boundaryValues.count),
-                            kind: .chooseBits(range: range, tag: tag)
-                        )
+            case let .finite(profile):
+                profile.parameters.enumerated().map { i, param in
+                    switch param.kind {
+                        case let .chooseBits(range, tag):
+                            if param.domainSize <= threshold {
+                                return BoundaryParameter(
+                                    index: i,
+                                    values: Array(range.lowerBound ... range.upperBound),
+                                    domainSize: param.domainSize,
+                                    kind: .finiteChooseBits(range: range, tag: tag)
+                                )
+                            } else {
+                                let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                                    min: range.lowerBound, max: range.upperBound, tag: tag
+                                )
+                                return BoundaryParameter(
+                                    index: i,
+                                    values: boundaryValues,
+                                    domainSize: UInt64(boundaryValues.count),
+                                    kind: .chooseBits(range: range, tag: tag)
+                                )
+                            }
+                        case let .pick(choices):
+                            return BoundaryParameter(
+                                index: i,
+                                values: Array(0 ..< UInt64(choices.count)),
+                                domainSize: UInt64(choices.count),
+                                kind: .pick(choices: choices)
+                            )
                     }
-                case let .pick(choices):
-                    return BoundaryParameter(
-                        index: i,
-                        values: Array(0 ..< UInt64(choices.count)),
-                        domainSize: UInt64(choices.count),
-                        kind: .pick(choices: choices)
-                    )
                 }
-            }
 
-        case let .boundary(profile):
-            profile.parameters.enumerated().map { i, param in
-                switch param.kind {
-                case let .finiteChooseBits(range, tag) where param.domainSize > threshold:
-                    let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
-                        min: range.lowerBound, max: range.upperBound, tag: tag
-                    )
-                    return BoundaryParameter(
-                        index: i,
-                        values: boundaryValues,
-                        domainSize: UInt64(boundaryValues.count),
-                        kind: .chooseBits(range: range, tag: tag)
-                    )
-                default:
-                    return BoundaryParameter(
-                        index: i,
-                        values: param.values,
-                        domainSize: param.domainSize,
-                        kind: param.kind
-                    )
+            case let .boundary(profile):
+                profile.parameters.enumerated().map { i, param in
+                    switch param.kind {
+                        case let .finiteChooseBits(range, tag) where param.domainSize > threshold:
+                            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                                min: range.lowerBound, max: range.upperBound, tag: tag
+                            )
+                            return BoundaryParameter(
+                                index: i,
+                                values: boundaryValues,
+                                domainSize: UInt64(boundaryValues.count),
+                                kind: .chooseBits(range: range, tag: tag)
+                            )
+                        default:
+                            return BoundaryParameter(
+                                index: i,
+                                values: param.values,
+                                domainSize: param.domainSize,
+                                kind: param.kind
+                            )
+                    }
                 }
-            }
         }
     }
 

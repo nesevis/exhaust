@@ -79,7 +79,9 @@ struct BatchedCrossSequenceRemovalSource {
         recomputePriority()
     }
 
-    var peekPriority: DispatchPriority? { cachedPriority }
+    var peekPriority: DispatchPriority? {
+        cachedPriority
+    }
 
     private mutating func recomputePriority() {
         guard exhausted == false else {
@@ -230,7 +232,9 @@ struct BatchRemovalSource {
         recomputePriority()
     }
 
-    var peekPriority: DispatchPriority? { cachedPriority }
+    var peekPriority: DispatchPriority? {
+        cachedPriority
+    }
 
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard exhausted == false, currentBatch > 0 else { return nil }
@@ -239,8 +243,8 @@ struct BatchRemovalSource {
 
         // Build the scope with specific positions.
         let offset = switch anchor {
-        case .tail: elements.count - currentBatch
-        case .head: elements.count - maxBatch
+            case .tail: elements.count - currentBatch
+            case .head: elements.count - maxBatch
         }
         guard offset >= 0, offset + currentBatch <= elements.count else {
             exhausted = true
@@ -299,8 +303,8 @@ struct BatchRemovalSource {
         }
         let anchor: RemovalAnchor = triedTail ? .head : .tail
         let offset = switch anchor {
-        case .tail: elements.count - currentBatch
-        case .head: elements.count - maxBatch
+            case .tail: elements.count - currentBatch
+            case .head: elements.count - maxBatch
         }
         guard offset >= 0, offset + currentBatch <= elements.count else {
             cachedPriority = nil

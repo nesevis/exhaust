@@ -100,30 +100,30 @@ package enum ChoiceTreeAnalysis {
         }
         let allFinite = parameters.allSatisfy { param in
             switch param.kind {
-            case .finiteChooseBits, .pick:
-                true
-            case .chooseBits, .sequenceLength, .sequenceElement, .compositeSequence:
-                false
+                case .finiteChooseBits, .pick:
+                    true
+                case .chooseBits, .sequenceLength, .sequenceElement, .compositeSequence:
+                    false
             }
         }
 
         if allFinite {
             let finiteParams = parameters.enumerated().map { i, param -> FiniteParameter in
                 switch param.kind {
-                case let .finiteChooseBits(range, tag):
-                    return FiniteParameter(
-                        index: i,
-                        domainSize: param.domainSize,
-                        kind: .chooseBits(range: range, tag: tag)
-                    )
-                case let .pick(choices):
-                    return FiniteParameter(
-                        index: i,
-                        domainSize: param.domainSize,
-                        kind: .pick(choices: choices)
-                    )
-                default:
-                    fatalError("unreachable: allFinite check passed")
+                    case let .finiteChooseBits(range, tag):
+                        return FiniteParameter(
+                            index: i,
+                            domainSize: param.domainSize,
+                            kind: .chooseBits(range: range, tag: tag)
+                        )
+                    case let .pick(choices):
+                        return FiniteParameter(
+                            index: i,
+                            domainSize: param.domainSize,
+                            kind: .pick(choices: choices)
+                        )
+                    default:
+                        fatalError("unreachable: allFinite check passed")
                 }
             }
             var totalSpace: UInt64 = 1
@@ -165,46 +165,46 @@ package enum ChoiceTreeAnalysis {
         parameters: inout [BoundaryParameter]
     ) -> Bool {
         switch tree {
-        case let .choice(value, metadata):
-            return walkChoice(value: value, metadata: metadata, parameters: &parameters)
+            case let .choice(value, metadata):
+                return walkChoice(value: value, metadata: metadata, parameters: &parameters)
 
-        case .just:
-            return true
+            case .just:
+                return true
 
-        case .group(_, isOpaque: true):
-            return true
+            case .group(_, isOpaque: true):
+                return true
 
-        case let .group(children, _):
-            return walkGroup(children, expandSequencePairs: expandSequencePairs, parameters: &parameters)
+            case let .group(children, _):
+                return walkGroup(children, expandSequencePairs: expandSequencePairs, parameters: &parameters)
 
-        case let .bind(_, inner, bound):
-            // Walk inner subtree normally; validate bound subtree without collecting parameters because bound parameters depend on the inner value — extracting them into covering arrays would produce invalid combinations.
-            // The bound subtree is preserved in the original tree for replay.
-            guard walkTree(inner, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
-            return walkTreeValidateOnly(bound)
+            case let .bind(_, inner, bound):
+                // Walk inner subtree normally; validate bound subtree without collecting parameters because bound parameters depend on the inner value — extracting them into covering arrays would produce invalid combinations.
+                // The bound subtree is preserved in the original tree for replay.
+                guard walkTree(inner, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
+                return walkTreeValidateOnly(bound)
 
-        case let .sequence(length, elements, metadata):
-            return walkSequence(
-                length: length,
-                elements: elements,
-                metadata: metadata,
-                expandSequencePairs: expandSequencePairs,
-                parameters: &parameters
-            )
+            case let .sequence(length, elements, metadata):
+                return walkSequence(
+                    length: length,
+                    elements: elements,
+                    metadata: metadata,
+                    expandSequencePairs: expandSequencePairs,
+                    parameters: &parameters
+                )
 
-        case .getSize:
-            // getSize reads the current size parameter — a fixed value during any given generation run. Not a choice point.
-            return true
+            case .getSize:
+                // getSize reads the current size parameter — a fixed value during any given generation run. Not a choice point.
+                return true
 
-        case let .resize(_, children):
-            // resize changes the size context for its subtree. The children contain concrete choices that can be walked normally.
-            for child in children {
-                guard walkTree(child, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
-            }
-            return true
+            case let .resize(_, children):
+                // resize changes the size context for its subtree. The children contain concrete choices that can be walked normally.
+                for child in children {
+                    guard walkTree(child, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
+                }
+                return true
 
-        case .branch:
-            return false
+            case .branch:
+                return false
         }
     }
 
@@ -215,18 +215,18 @@ package enum ChoiceTreeAnalysis {
 
     private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
         switch tree {
-        case .choice, .just, .getSize, .resize:
-            true
-        case .group(_, isOpaque: true):
-            true
-        case let .group(children, _):
-            children.allSatisfy { walkTreeValidateOnly($0) }
-        case let .bind(_, inner, bound):
-            walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
-        case let .sequence(_, elements, _):
-            elements.allSatisfy { walkTreeValidateOnly($0) }
-        case let .branch(b):
-            walkTreeValidateOnly(b.choice)
+            case .choice, .just, .getSize, .resize:
+                true
+            case .group(_, isOpaque: true):
+                true
+            case let .group(children, _):
+                children.allSatisfy { walkTreeValidateOnly($0) }
+            case let .bind(_, inner, bound):
+                walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
+            case let .sequence(_, elements, _):
+                elements.allSatisfy { walkTreeValidateOnly($0) }
+            case let .branch(b):
+                walkTreeValidateOnly(b.choice)
         }
     }
 
@@ -435,42 +435,42 @@ package enum ChoiceTreeAnalysis {
         parameters: inout [BoundaryParameter]
     ) -> Bool {
         switch tree {
-        case let .choice(value, metadata):
-            return walkElementChoice(
-                value: value,
-                metadata: metadata,
-                elementIndex: elementIndex,
-                parameters: &parameters
-            )
-
-        case .just:
-            return true
-
-        case .group(_, isOpaque: true):
-            return true
-
-        case let .group(children, _):
-            if isPick(children) {
-                return walkPick(children, parameters: &parameters)
-            }
-            for child in children {
-                guard walkElementTree(
-                    child,
+            case let .choice(value, metadata):
+                return walkElementChoice(
+                    value: value,
+                    metadata: metadata,
                     elementIndex: elementIndex,
                     parameters: &parameters
-                ) else { return false }
-            }
-            return true
+                )
 
-        case .bind:
-            // Bind inside a sequence element — treat as opaque (dependent parameters)
-            return true
+            case .just:
+                return true
 
-        case .getSize:
-            return true
+            case .group(_, isOpaque: true):
+                return true
 
-        case .resize, .sequence, .branch:
-            return false
+            case let .group(children, _):
+                if isPick(children) {
+                    return walkPick(children, parameters: &parameters)
+                }
+                for child in children {
+                    guard walkElementTree(
+                        child,
+                        elementIndex: elementIndex,
+                        parameters: &parameters
+                    ) else { return false }
+                }
+                return true
+
+            case .bind:
+                // Bind inside a sequence element — treat as opaque (dependent parameters)
+                return true
+
+            case .getSize:
+                return true
+
+            case .resize, .sequence, .branch:
+                return false
         }
     }
 
