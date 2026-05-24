@@ -57,6 +57,39 @@ public extension __ExhaustRuntime {
     ///   - function: The enclosing function name (injected by macro expansion).
     ///   - property: The property to test — returns `true` for passing values.
     /// - Returns: The reduced counterexample if the property failed, or `nil` if all iterations passed.
+    /// Runs a property test with a non-throwing predicate. This is the base case — the throwing variant wraps its closure and delegates here.
+    @discardableResult
+    static func __exhaust<Output>(
+        _ refGen: ReflectiveGenerator<Output>,
+        settings: [PropertySettings],
+        reflecting: Output? = nil,
+
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        function: StaticString = #function,
+        property: @Sendable (Output) -> Bool
+    ) -> Output? {
+        let gen = refGen.gen
+        return __ExhaustRuntime.withIsInterpreting(true) {
+            withoutActuallyEscaping(property) { property in
+                __exhaustBody(
+                    gen: gen,
+                    settings: settings,
+                    reflecting: reflecting,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    function: function,
+                    property: property
+                )
+            }
+        }
+    }
+
+    /// Runs a property test with a throwing predicate. Wraps the closure to catch errors (including `XCTSkip`) and delegates to the non-throwing base case.
     @discardableResult
     static func __exhaust<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -83,240 +116,264 @@ public extension __ExhaustRuntime {
                         return false
                     }
                 }
+                return __exhaustBody(
+                    gen: gen,
+                    settings: settings,
+                    reflecting: reflecting,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    function: function,
+                    property: property
+                )
+            }
+        }
+    }
 
-                var budget = ExhaustBudget.standard
-                var seed: UInt64?
-                var suppressIssueReporting = false
-                var suppressLogs = false
-                var visualize = false
-                var includeDiff = false
-                var onReportClosure: ((ExhaustReport) -> Void)?
-                var collectOpenPBTStats = false
-                var parallelLanes: UInt8 = 0
-                var logLevel: LogLevel = .error
-                let logFormat: LogFormat = .keyValue
+    // swiftlint:disable:next function_body_length
+    private static func __exhaustBody<Output>(
+        gen: Generator<Output>,
+        settings: [PropertySettings],
+        reflecting: Output?,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt,
+        function: StaticString,
+        property: @escaping @Sendable (Output) -> Bool
+    ) -> Output? {
+        var budget = ExhaustBudget.standard
+        var seed: UInt64?
+        var suppressIssueReporting = false
+        var suppressLogs = false
+        var visualize = false
+        var includeDiff = false
+        var onReportClosure: ((ExhaustReport) -> Void)?
+        var collectOpenPBTStats = false
+        var parallelLanes: UInt8 = 0
+        var logLevel: LogLevel = .error
+        let logFormat: LogFormat = .keyValue
 
-                for setting in settings {
-                    switch setting {
-                        case let .budget(b):
-                            budget = b
-                        case let .replay(replaySeed):
-                            seed = replaySeed.resolve()
-                            if seed == nil {
-                                reportIssue(
-                                    "Invalid replay seed: \(replaySeed)",
-                                    fileID: fileID,
-                                    filePath: filePath,
-                                    line: line,
-                                    column: column
-                                )
-                                return nil as Output?
-                            }
-                        case let .suppress(option):
-                            switch option {
-                                case .issueReporting:
-                                    suppressIssueReporting = true
-                                case .logs:
-                                    suppressLogs = true
-                                case .all:
-                                    suppressIssueReporting = true
-                                    suppressLogs = true
-                            }
-                        case .visualize:
-                            visualize = true
-                        case let .onReport(closure):
-                            if let existing = onReportClosure {
-                                let chained = existing
-                                onReportClosure = { report in
-                                    chained(report)
-                                    closure(report)
-                                }
-                            } else {
-                                onReportClosure = closure
-                            }
-                        case .collectOpenPBTStats:
-                            collectOpenPBTStats = true
-                        case .includeDiff:
-                            includeDiff = true
-                        case let .parallel(lanes):
-                            parallelLanes = UInt8(clamping: max(1, lanes))
-                        case let .log(level):
-                            logLevel = level
+        for setting in settings {
+            switch setting {
+                case let .budget(b):
+                    budget = b
+                case let .replay(replaySeed):
+                    seed = replaySeed.resolve()
+                    if seed == nil {
+                        reportIssue(
+                            "Invalid replay seed: \(replaySeed)",
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column
+                        )
+                        return nil as Output?
+                    }
+                case let .suppress(option):
+                    switch option {
+                        case .issueReporting:
+                            suppressIssueReporting = true
+                        case .logs:
+                            suppressLogs = true
+                        case .all:
+                            suppressIssueReporting = true
+                            suppressLogs = true
+                    }
+                case .visualize:
+                    visualize = true
+                case let .onReport(closure):
+                    if let existing = onReportClosure {
+                        let chained = existing
+                        onReportClosure = { report in
+                            chained(report)
+                            closure(report)
+                        }
+                    } else {
+                        onReportClosure = closure
+                    }
+                case .collectOpenPBTStats:
+                    collectOpenPBTStats = true
+                case .includeDiff:
+                    includeDiff = true
+                case let .parallel(lanes):
+                    parallelLanes = UInt8(clamping: max(1, lanes))
+                case let .log(level):
+                    logLevel = level
+            }
+        }
+
+        let logConfiguration = ExhaustLog.Configuration(
+            isEnabled: suppressLogs == false,
+            minimumLevel: logLevel,
+            format: logFormat
+        )
+        return ExhaustLog.withConfiguration(logConfiguration) {
+            #if canImport(Testing)
+                if let traitConfig = ExhaustTraitConfiguration.current {
+                    let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                    if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                        budget = traitBudget
                     }
                 }
+            #endif
 
-                let logConfiguration = ExhaustLog.Configuration(
-                    isEnabled: suppressLogs == false,
-                    minimumLevel: logLevel,
-                    format: logFormat
-                )
-                return ExhaustLog.withConfiguration(logConfiguration) {
-                    #if canImport(Testing)
-                        if let traitConfig = ExhaustTraitConfiguration.current {
-                            let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
-                            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
-                                budget = traitBudget
-                            }
-                        }
-                    #endif
+            let samplingBudget = budget.samplingBudget
+            let coverageBudget = budget.coverageBudget
+            let totalBudget = coverageBudget + samplingBudget
+            let reductionDeadlineNanoseconds = UInt64(totalBudget) * 5 * 1_000_000
+            let reductionConfig = Interpreters.ReducerConfiguration(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
+            )
 
-                    let samplingBudget = budget.samplingBudget
-                    let coverageBudget = budget.coverageBudget
-                    let totalBudget = coverageBudget + samplingBudget
-                    let reductionDeadlineNanoseconds = UInt64(totalBudget) * 5 * 1_000_000
-                    let reductionConfig = Interpreters.ReducerConfiguration(
-                        maxStalls: 2,
-                        wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
-                    )
+            var report = ExhaustReport()
+            defer { onReportClosure?(report) }
 
-                    var report = ExhaustReport()
-                    defer { onReportClosure?(report) }
-
-                    let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
-                        ? OpenPBTStatsAccumulator(propertyName: "\(function)")
-                        : nil
-                    defer {
-                        if let statsAccumulator {
-                            let lines = statsAccumulator.finalize()
-                            if lines.isEmpty == false {
-                                report.openPBTStatsLines = lines
-                                let attachmentName = "\(function)-openpbtstats.jsonl"
-                                switch TestContext.current {
-                                    #if canImport(Testing)
-                                        case .swiftTesting:
-                                            Attachment.record(lines.jsonlString(), named: attachmentName)
-                                    #endif
-                                    #if canImport(ObjectiveC)
-                                        case .xcTest:
-                                            let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
-                                            xctAttachment.name = attachmentName
-                                            MainActor.assumeIsolated {
-                                                XCTContext.runActivity(named: "OpenPBTStats") { activity in
-                                                    activity.add(xctAttachment)
-                                                }
-                                            }
-                                    #endif
-                                    default:
-                                        break
-                                }
-                            }
+            let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
+                ? OpenPBTStatsAccumulator(propertyName: "\(function)")
+                : nil
+            defer {
+                if let statsAccumulator {
+                    let lines = statsAccumulator.finalize()
+                    if lines.isEmpty == false {
+                        report.openPBTStatsLines = lines
+                        let attachmentName = "\(function)-openpbtstats.jsonl"
+                        switch TestContext.current {
+                            #if canImport(Testing)
+                                case .swiftTesting:
+                                    Attachment.record(lines.jsonlString(), named: attachmentName)
+                            #endif
+                            #if canImport(ObjectiveC)
+                                case .xcTest:
+                                    let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
+                                    xctAttachment.name = attachmentName
+                                    MainActor.assumeIsolated {
+                                        XCTContext.runActivity(named: "OpenPBTStats") { activity in
+                                            activity.add(xctAttachment)
+                                        }
+                                    }
+                            #endif
+                            default:
+                                break
                         }
                     }
+                }
+            }
 
-                    let context = PipelineContext(
-                        gen: gen,
-                        property: property,
-                        samplingBudget: samplingBudget,
+            let context = PipelineContext(
+                gen: gen,
+                property: property,
+                samplingBudget: samplingBudget,
+                reductionConfig: reductionConfig,
+                visualize: visualize,
+                suppressIssueReporting: suppressIssueReporting,
+                includeDiff: includeDiff,
+                parallelLanes: parallelLanes,
+
+                logFormat: logFormat,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                statsAccumulator: statsAccumulator
+            )
+
+            if let reflecting {
+                do {
+                    return try __reduceReflected(
+                        gen,
+                        value: reflecting,
                         reductionConfig: reductionConfig,
                         visualize: visualize,
                         suppressIssueReporting: suppressIssueReporting,
                         includeDiff: includeDiff,
-                        parallelLanes: parallelLanes,
 
-                        logFormat: logFormat,
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
                         column: column,
-                        statsAccumulator: statsAccumulator
-                    )
-
-                    if let reflecting {
-                        do {
-                            return try __reduceReflected(
-                                gen,
-                                value: reflecting,
-                                reductionConfig: reductionConfig,
-                                visualize: visualize,
-                                suppressIssueReporting: suppressIssueReporting,
-                                includeDiff: includeDiff,
-
-                                fileID: fileID,
-                                filePath: filePath,
-                                line: line,
-                                column: column,
-                                property: property,
-                                report: &report
-                            )
-                        } catch {
-                            reportIssue(localizedErrorMessage(error), fileID: fileID, filePath: filePath, line: line, column: column)
-                            return reflecting
-                        }
-                    }
-
-                    let phaseTimingStart = monotonicNanoseconds()
-                    var coverageIterations = 0
-                    if coverageBudget == 0 {
-                        ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
-                    } else if seed != nil {
-                        ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped (deterministic replay)")
-                    } else {
-                        let outcome: CoverageOutcome<Output> = runCoveragePhase(
-                            context: context,
-                            coverageBudget: coverageBudget,
-                            report: &report
-                        )
-                        switch outcome {
-                            case let .counterexample(value):
-                                let coverageEnd = monotonicNanoseconds()
-                                report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                                report.totalMilliseconds = report.coverageMilliseconds
-                                return value
-                            case let .exhaustivePass(iterations):
-                                let coverageEnd = monotonicNanoseconds()
-                                report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                                report.totalMilliseconds = report.coverageMilliseconds
-                                report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
-                                return nil
-                            case let .proceed(iterations):
-                                coverageIterations = iterations
-                        }
-                    }
-                    let coveragePhaseEndTime = monotonicNanoseconds()
-
-                    let samplingResult = runSamplingPhase(
-                        context: context,
-                        seed: seed,
-                        coverageIterations: coverageIterations,
+                        property: property,
                         report: &report
                     )
-
-                    let endTime = monotonicNanoseconds()
-                    report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
-                    report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
-
-                    if samplingResult == nil {
-                        report.generationMilliseconds = Double(endTime - coveragePhaseEndTime) / 1_000_000
-                        let totalPropertyCalls = coverageIterations + report.randomSamplingInvocations
-                        var passMetadata = [
-                            "iterations": "\(samplingBudget)",
-                            "property_invocations": "\(totalPropertyCalls)",
-                        ]
-                        if coverageIterations > 0 {
-                            passMetadata["coverage_invocations"] = "\(coverageIterations)"
-                            passMetadata["random_invocations"] = "\(report.randomSamplingInvocations)"
-                        }
-                        ExhaustLog.notice(
-                            category: .propertyTest,
-                            event: "property_passed",
-                            metadata: passMetadata
-                        )
-                    }
-
-                    ExhaustLog.notice(
-                        category: .propertyTest,
-                        event: "phase_timing",
-                        metadata: [
-                            "coverage_ms": String(format: "%.1f", report.coverageMilliseconds),
-                            "generation_ms": String(format: "%.1f", report.generationMilliseconds),
-                            "reduction_ms": String(format: "%.1f", report.reductionMilliseconds),
-                            "total_ms": String(format: "%.1f", report.totalMilliseconds),
-                        ]
-                    )
-
-                    return samplingResult
+                } catch {
+                    reportIssue(localizedErrorMessage(error), fileID: fileID, filePath: filePath, line: line, column: column)
+                    return reflecting
                 }
             }
+
+            let phaseTimingStart = monotonicNanoseconds()
+            var coverageIterations = 0
+            if coverageBudget == 0 {
+                ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
+            } else if seed != nil {
+                ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped (deterministic replay)")
+            } else {
+                let outcome: CoverageOutcome<Output> = runCoveragePhase(
+                    context: context,
+                    coverageBudget: coverageBudget,
+                    report: &report
+                )
+                switch outcome {
+                    case let .counterexample(value):
+                        let coverageEnd = monotonicNanoseconds()
+                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.coverageMilliseconds
+                        return value
+                    case let .exhaustivePass(iterations):
+                        let coverageEnd = monotonicNanoseconds()
+                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.coverageMilliseconds
+                        report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
+                        return nil
+                    case let .proceed(iterations):
+                        coverageIterations = iterations
+                }
+            }
+            let coveragePhaseEndTime = monotonicNanoseconds()
+
+            let samplingResult = runSamplingPhase(
+                context: context,
+                seed: seed,
+                coverageIterations: coverageIterations,
+                report: &report
+            )
+
+            let endTime = monotonicNanoseconds()
+            report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
+            report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
+
+            if samplingResult == nil {
+                report.generationMilliseconds = Double(endTime - coveragePhaseEndTime) / 1_000_000
+                let totalPropertyCalls = coverageIterations + report.randomSamplingInvocations
+                var passMetadata = [
+                    "iterations": "\(samplingBudget)",
+                    "property_invocations": "\(totalPropertyCalls)",
+                ]
+                if coverageIterations > 0 {
+                    passMetadata["coverage_invocations"] = "\(coverageIterations)"
+                    passMetadata["random_invocations"] = "\(report.randomSamplingInvocations)"
+                }
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "property_passed",
+                    metadata: passMetadata
+                )
+            }
+
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "phase_timing",
+                metadata: [
+                    "coverage_ms": String(format: "%.1f", report.coverageMilliseconds),
+                    "generation_ms": String(format: "%.1f", report.generationMilliseconds),
+                    "reduction_ms": String(format: "%.1f", report.reductionMilliseconds),
+                    "total_ms": String(format: "%.1f", report.totalMilliseconds),
+                ]
+            )
+
+            return samplingResult
         }
     }
 
