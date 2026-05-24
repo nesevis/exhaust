@@ -42,7 +42,7 @@ struct GraphComposedEncoderTests {
             probeCount += 1
         }
 
-        #expect(probeCount > 1, "Composition should emit multiple probes from upstream × downstream")
+        #expect(probeCount > 5, "Composition of two binary-search encoders over 0...100 should emit more than 5 probes")
     }
 
     // MARK: - Budget Enforcement

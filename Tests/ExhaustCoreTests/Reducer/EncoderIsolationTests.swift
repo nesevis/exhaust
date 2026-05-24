@@ -82,7 +82,7 @@ struct EncoderIsolationTests {
         }
 
         #expect(probeCount > 0)
-        #expect(probeCount < 100)
+        #expect(probeCount < 80, "Value encoder over 0...100 should terminate well within 80 probes")
     }
 
     // MARK: - GraphStructuralEncoder (Removal)

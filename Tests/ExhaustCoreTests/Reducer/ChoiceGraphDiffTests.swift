@@ -12,7 +12,7 @@ struct ChoiceGraphDiffTests {
         #expect(diff.isStructurallyIdentical == true)
         #expect(diff.added.isEmpty)
         #expect(diff.removed.isEmpty)
-        #expect(diff.preserved.isEmpty == false)
+        #expect(diff.preserved.count >= 2, "Both leaf nodes should be preserved")
     }
 
     @Test("Added nodes appear in diff when new graph has more structure")
@@ -22,7 +22,8 @@ struct ChoiceGraphDiffTests {
         let diff = ChoiceGraphDiff.diff(old: graph1, new: graph2)
 
         #expect(diff.isStructurallyIdentical == false)
-        #expect(diff.added.isEmpty == false)
+        #expect(diff.added.count >= 1,
+                "Two-leaf zip vs single leaf should have at least one added path")
     }
 
     @Test("Removed nodes appear in diff when old graph has more structure")
@@ -32,7 +33,8 @@ struct ChoiceGraphDiffTests {
         let diff = ChoiceGraphDiff.diff(old: graph1, new: graph2)
 
         #expect(diff.isStructurallyIdentical == false)
-        #expect(diff.removed.isEmpty == false)
+        #expect(diff.removed.count >= 1,
+                "Two-leaf zip vs single leaf should have at least one removed path")
     }
 
     @Test("Preserved nodes map old IDs to new IDs")

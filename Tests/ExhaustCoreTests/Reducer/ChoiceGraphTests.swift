@@ -116,8 +116,8 @@ struct ChoiceGraphTests {
         // Active branch has position range; inactive branch does not.
         let activeChildren = pickNodes[0].children.filter { graph.nodes[$0].positionRange != nil }
         let inactiveChildren = pickNodes[0].children.filter { graph.nodes[$0].positionRange == nil }
-        #expect(activeChildren.count >= 1)
-        #expect(inactiveChildren.count >= 1)
+        #expect(activeChildren.count == 1)
+        #expect(inactiveChildren.count == 1)
     }
 
     @Test("Sequence node with element children")
@@ -199,15 +199,14 @@ struct ChoiceGraphTests {
 
         let graph = ChoiceGraph.build(from: outerBind)
 
-        // The outer bind's inner child should have a dependency edge to the inner bind node.
         #expect(graph.dependencyEdges.isEmpty == false)
 
-        // Verify the dependency edge connects the correct nodes.
-        let outerBindNode = graph.nodes.first {
-            if case let .bind(meta) = $0.kind, meta.bindDepth == 0 { return true }
-            return false
+        // Verify that each dependency edge references valid nodes in the graph.
+        for edge in graph.dependencyEdges {
+            #expect(edge.source < graph.nodes.count, "Dependency edge source out of bounds")
+            #expect(edge.target < graph.nodes.count, "Dependency edge target out of bounds")
+            #expect(edge.source != edge.target, "Dependency edge should not be self-referential")
         }
-        #expect(outerBindNode != nil)
     }
 
     @Test("Containment edges form tree structure")
@@ -263,9 +262,9 @@ struct ChoiceGraphTests {
 
         let graph = ChoiceGraph.build(from: tree)
 
-        // One active pick — its group has size 1, no self-similar pairs possible.
-        let group = graph.selfSimilarityGroups[1]
-        #expect(group == nil || group?.count == 1)
+        // One active pick with fingerprint 1000 — group has size 1, no self-similar pairs possible.
+        let group = graph.selfSimilarityGroups[1000]
+        #expect(group?.count == 1)
     }
 
     // MARK: - Query Tests

@@ -86,10 +86,12 @@ struct GraphReachabilityTests {
             return
         }
         let innerChildID = fixture.graph.nodes[bindNodeID].children[metadata.innerChildIndex]
+        let boundChildID = fixture.graph.nodes[bindNodeID].children[metadata.boundChildIndex]
         let candidates = Set(fixture.graph.liveNodeIDs)
         let reachable = fixture.graph.reachableNodes(from: innerChildID, within: candidates)
 
-        #expect(reachable.isEmpty == false, "Inner should reach at least the bound child via dependency edge")
+        #expect(reachable.contains(boundChildID),
+                "Inner node should reach the bound child via dependency edge")
     }
 
     @Test("reachableNodes excludes the source node itself")

@@ -381,7 +381,8 @@ struct RedistributionRationalMathTests {
 
         #expect(newSource.decodedDoubleValue.isFinite)
         #expect(newSink.decodedDoubleValue.isFinite)
-        #expect(newSource.decodedDoubleValue < 6.0)
+        #expect(newSource.decodedDoubleValue < 6.0, "Source should decrease after redistribution")
+        #expect(newSink.decodedDoubleValue > 2.0, "Sink should increase after redistribution")
     }
 
     // MARK: - Conservation Property

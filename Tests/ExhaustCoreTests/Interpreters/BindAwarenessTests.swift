@@ -185,12 +185,14 @@ struct BindAwarenessTests {
 
         // With opaque-bound handling, only the inner parameter (0...3) should be extracted.
         // Without opaque-bound, the bound array's parameters would also be extracted.
-        if case let .finite(profile) = result {
-            // inner: 0...3 = 4 values, that's 1 parameter
-            #expect(profile.parameters.count <= 2, "Expected few parameters — bound subtree should be opaque")
-        } else if case let .boundary(profile) = result {
-            #expect(profile.parameters.count <= 2, "Expected few parameters — bound subtree should be opaque")
+        // It's also valid for analyze() to return nil if the generator is unanalyzable.
+        switch result {
+            case let .finite(profile):
+                #expect(profile.parameters.count == 1, "Only the inner parameter (0...3) should be extracted")
+            case let .boundary(profile):
+                #expect(profile.parameters.count == 1, "Only the inner parameter (0...3) should be extracted")
+            case nil:
+                break
         }
-        // It's also valid for analyze() to return nil if the generator is unanalyzable
     }
 }

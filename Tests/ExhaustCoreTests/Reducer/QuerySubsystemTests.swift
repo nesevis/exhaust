@@ -97,7 +97,7 @@ struct ExchangeQueryTests {
             if case .redistribution = $0 { return true }
             return false
         }
-        #expect(redistScopes.isEmpty == false, "Same-type sequence elements should produce redistribution pairs")
+        #expect(redistScopes.count >= 1, "Three same-type sequence elements should produce at least one redistribution pair")
     }
 
     @Test("Produces tandem scope for same-type leaves")
@@ -109,7 +109,7 @@ struct ExchangeQueryTests {
             if case .tandem = $0 { return true }
             return false
         }
-        #expect(tandemScopes.isEmpty == false, "Same-type leaf pair should produce tandem scope")
+        #expect(tandemScopes.count == 1, "A pair of same-type leaves should produce exactly one tandem scope")
     }
 
     @Test("No scopes for single leaf")
@@ -144,7 +144,7 @@ struct PermutationQueryTests {
 
         #expect(scopes.count == 1, "Zip with two same-type chooseBits children should produce one permutation scope")
         if let scope = scopes.first {
-            #expect(scope.swappableGroups.count >= 1)
+            #expect(scope.swappableGroups.count == 1)
             #expect(scope.swappableGroups[0].count == 2)
         }
     }
