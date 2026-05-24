@@ -82,7 +82,7 @@ public extension __ExhaustRuntime {
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
             let result: ClassificationExploreResult<Output>
             do {
-                result = try __ExhaustRuntime.$isInterpreting.withValue(true) { () throws -> ClassificationExploreResult<Output> in
+                result = try __ExhaustRuntime.withIsInterpreting(true) { () throws -> ClassificationExploreResult<Output> in
                     if shouldParallelize, seed == nil, namedDirections.count > 1 {
                         return try runParallelExplore(
                             gen: gen,

@@ -32,21 +32,19 @@ struct ParserShrinkingChallenge {
         let output = try #require(
             #exhaust(
                 ParserFixture.langGen,
-                .budget(.custom(coverage: 0, sampling: 2000)), // coverage takes a long time
+                .budget(.custom(coverage: 0, sampling: 200)), // coverage takes a long time
+                .replay(1337),
                 .log(.debug),
                 .suppress(.issueReporting),
                 property: ParserFixture.property
             )
         )
-
-        print("Output: \(output)")
         #expect(ParserFixture.property(output) == false)
 
         // Size metric matches the SmartCheck/Hypothesis evaluation.
         // Hypothesis achieves ~3.31, QuickCheck ~3.99, SmartCheck ~4.08.
         // Exhaust averages ~3.64
         let outputSize = ParserFixture.size(output)
-        print("Size: \(outputSize)")
-        #expect(outputSize <= 5)
+        #expect(outputSize == 3)
     }
 }

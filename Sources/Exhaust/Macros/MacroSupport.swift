@@ -71,7 +71,7 @@ public extension __ExhaustRuntime {
         property: @Sendable (Output) throws -> Bool
     ) -> Output? {
         let gen = refGen.gen
-        return __ExhaustRuntime.$isInterpreting.withValue(true) {
+        return __ExhaustRuntime.withIsInterpreting(true) {
             withoutActuallyEscaping(property) { property in
                 let property: @Sendable (Output) -> Bool = { value in
                     do {
@@ -650,7 +650,7 @@ public extension __ExhaustRuntime {
         column _: UInt = #column
     ) -> Output {
         let gen = refGen.gen
-        return __ExhaustRuntime.$isInterpreting.withValue(true) {
+        return __ExhaustRuntime.withIsInterpreting(true) {
             var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
             guard let value = try? interpreter.next() else {
                 preconditionFailure(
@@ -672,7 +672,7 @@ public extension __ExhaustRuntime {
         column: UInt = #column
     ) -> [Output] {
         let gen = refGen.gen
-        return __ExhaustRuntime.$isInterpreting.withValue(true) {
+        return __ExhaustRuntime.withIsInterpreting(true) {
             var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
             var results: [Output] = []
             while let value = try? interpreter.next() {
@@ -707,7 +707,7 @@ public extension __ExhaustRuntime {
         column: UInt
     ) -> ValidationReport {
         let gen = refGen.gen
-        return __ExhaustRuntime.$isInterpreting.withValue(true) {
+        return __ExhaustRuntime.withIsInterpreting(true) {
             gen.validate(
                 samples: samples,
                 seed: seed,
@@ -733,7 +733,7 @@ public extension __ExhaustRuntime {
         column: UInt
     ) -> ValidationReport {
         let gen = refGen.gen
-        return __ExhaustRuntime.$isInterpreting.withValue(true) {
+        return __ExhaustRuntime.withIsInterpreting(true) {
             gen.validate(
                 samples: samples,
                 seed: seed,

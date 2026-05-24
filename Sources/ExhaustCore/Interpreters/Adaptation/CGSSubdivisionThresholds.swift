@@ -15,14 +15,12 @@ public struct CGSSubdivisionThresholds: Sendable, Equatable, Hashable {
     }
 
     /// Default thresholds for `.filter(.choiceGradientSampling)`: range size at least 1000, derivative depth below three.
-    public static let `default` = CGSSubdivisionThresholds(
-        minimumRangeSize: 1000,
-        maximumDerivativeDepth: 3
-    )
+    public static var `default`: CGSSubdivisionThresholds {
+        CGSSubdivisionThresholds(minimumRangeSize: 1000, maximumDerivativeDepth: 3)
+    }
 
     /// Relaxed thresholds for `#explore` direction tuning: any range with structural variation, derivative depth below 10.
-    public static let relaxed = CGSSubdivisionThresholds(
-        minimumRangeSize: 2,
-        maximumDerivativeDepth: 10
-    )
+    public static var relaxed: CGSSubdivisionThresholds {
+        CGSSubdivisionThresholds(minimumRangeSize: 2, maximumDerivativeDepth: 10)
+    }
 }
