@@ -14,7 +14,9 @@ package struct Fingerprint: Hashable {
     public private(set) var steps: [Int]
 
     /// The empty fingerprint representing the root of a tree.
-    public static let root = Fingerprint(steps: [])
+    public static var root: Fingerprint {
+        Fingerprint(steps: [])
+    }
 
     /// Returns a new fingerprint with `childIndex` appended as the next step.
     public func appending(_ childIndex: Int) -> Fingerprint {

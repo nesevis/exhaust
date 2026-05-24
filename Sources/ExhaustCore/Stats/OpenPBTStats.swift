@@ -14,7 +14,7 @@ package enum OpenPBTStatsPhase: String, Codable {
 }
 
 /// Per-example features attached to each OpenPBTStats line.
-package struct OpenPBTStatsFeatures: Codable {
+package struct OpenPBTStatsFeatures: Codable, Sendable {
     /// Generation phase that produced this example.
     package let phase: OpenPBTStatsPhase
     /// Number of choice points in the generated value's choice tree.
