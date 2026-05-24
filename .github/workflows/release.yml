@@ -68,6 +68,21 @@ jobs:
           swift test --no-parallel --skip ExhaustCoreTests 2>&1 | tee .build/test-output-xcframework.txt
           exit ${PIPESTATUS[0]}
 
+      - name: Collect crash reports
+        if: failure()
+        run: |
+          REPORT_DIR="$HOME/Library/Logs/DiagnosticReports"
+          if [ -d "$REPORT_DIR" ]; then
+            echo "### Crash reports" >> "$GITHUB_STEP_SUMMARY"
+            for f in "$REPORT_DIR"/*.ips "$REPORT_DIR"/*.crash; do
+              [ -f "$f" ] || continue
+              echo "#### $(basename "$f")" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              head -80 "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+
       - name: Test report
         if: always()
         run: |

@@ -1,11 +1,9 @@
-name: Tests
+name: XCFramework Tests
 
-on:
-  push:
-    branches: [main]
+on: workflow_dispatch
 
 jobs:
-  test:
+  test-xcframework:
     runs-on: macos-26
 
     steps:
@@ -14,11 +12,16 @@ jobs:
       - name: Select Xcode 26.2
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
-      - name: Run tests
+      - name: Build XCFramework
+        run: bash Scripts/build-xcframework.sh
+
+      - name: Run tests (binary xcframework)
+        env:
+          EXHAUST_RELEASE: "1"
         run: |
           mkdir -p .build
           set +o pipefail
-          swift test --parallel 2>&1 | tee .build/test-output.txt
+          swift test --no-parallel --skip ExhaustCoreTests 2>&1 | tee .build/test-output.txt
           exit ${PIPESTATUS[0]}
 
       - name: Collect crash reports
