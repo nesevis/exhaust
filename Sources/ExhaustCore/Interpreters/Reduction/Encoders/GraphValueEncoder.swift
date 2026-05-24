@@ -142,41 +142,40 @@ struct GraphValueEncoder: GraphEncoder {
     /// Directional search stepper for bit-pattern-space search.
     ///
     /// Uses interpolation search for large ranges and plain binary search for small ranges. The threshold is ``InterpolationSearchStepper/binaryThreshold``.
-    enum DirectionalStepper {
-        case binary(BinarySearchStepper)
-        case interpolation(InterpolationSearchStepper)
+    ///
+    /// Exactly one of `binary` or `interpolation` is non-nil at any time. The flat-optional layout avoids the overhead of enum associated-value extraction and reconstruction on every call to ``advance(lastAccepted:)``, which sits on the reducer's tightest per-iteration loop.
+    struct DirectionalStepper {
+        private var binary: BinarySearchStepper?
+        private var interpolation: InterpolationSearchStepper?
 
         var bestAccepted: UInt64 {
-            switch self {
-                case let .binary(stepper): stepper.bestAccepted
-                case let .interpolation(stepper): stepper.bestAccepted
-            }
+            binary?.bestAccepted ?? interpolation?.bestAccepted ?? 0
+        }
+
+        init(binary stepper: BinarySearchStepper) {
+            binary = stepper
+        }
+
+        init(interpolation stepper: InterpolationSearchStepper) {
+            interpolation = stepper
         }
 
         mutating func start() -> UInt64? {
-            switch self {
-                case var .binary(stepper):
-                    let value = stepper.start()
-                    self = .binary(stepper)
-                    return value
-                case var .interpolation(stepper):
-                    let value = stepper.start()
-                    self = .interpolation(stepper)
-                    return value
+            if binary != nil {
+                return binary!.start()
+            } else if interpolation != nil {
+                return interpolation!.start()
             }
+            return nil
         }
 
         mutating func advance(lastAccepted: Bool) -> UInt64? {
-            switch self {
-                case var .binary(stepper):
-                    let value = stepper.advance(lastAccepted: lastAccepted)
-                    self = .binary(stepper)
-                    return value
-                case var .interpolation(stepper):
-                    let value = stepper.advance(lastAccepted: lastAccepted)
-                    self = .interpolation(stepper)
-                    return value
+            if binary != nil {
+                return binary!.advance(lastAccepted: lastAccepted)
+            } else if interpolation != nil {
+                return interpolation!.advance(lastAccepted: lastAccepted)
             }
+            return nil
         }
     }
 
