@@ -1,5 +1,10 @@
 import Foundation
 
+/// A type that exposes a mutable boolean flag for cooperative cancellation.
+protocol CancellationFlag: AnyObject, Sendable {
+    var isCancelled: Bool { get set }
+}
+
 /// Mutable box for passing a value across a sendability boundary without synchronization.
 ///
 /// Intentionally `@unchecked Sendable` — the caller must ensure that reads and writes do not race. Typical safe patterns: a single writer followed by a `DispatchSemaphore` barrier before the reader, or a sequential closure captured by a `@Sendable`-requiring API.
@@ -9,6 +14,13 @@ final class UnsafeSendableBox<Value>: @unchecked Sendable {
     var value: Value
     init(_ value: Value) {
         self.value = value
+    }
+}
+
+extension UnsafeSendableBox: CancellationFlag where Value == Bool {
+    var isCancelled: Bool {
+        get { value }
+        set { value = newValue }
     }
 }
 
@@ -48,5 +60,12 @@ final class SendableBox<Value>: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return try body(&storage)
+    }
+}
+
+extension SendableBox: CancellationFlag where Value == Bool {
+    var isCancelled: Bool {
+        get { value }
+        set { value = newValue }
     }
 }
