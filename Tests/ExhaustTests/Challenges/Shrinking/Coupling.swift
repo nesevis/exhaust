@@ -53,8 +53,8 @@ struct CouplingShrinkingChallenge {
         #expect(value == [1, 0])
     }
 
-    @Test
-    func `Coupling Pathological 1`() throws {
+    @Test("Coupling Pathological 1")
+    func couplingPathological1() throws {
         let value = try #require(
             #exhaust(
                 Self.gen,
@@ -66,8 +66,8 @@ struct CouplingShrinkingChallenge {
         #expect(value == [1, 0])
     }
 
-    @Test
-    func `Coupling Pathological 2`() throws {
+    @Test("Coupling Pathological 2")
+    func couplingPathological2() throws {
         let value = try #require(
             #exhaust(
                 Self.gen,

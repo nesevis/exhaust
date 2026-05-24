@@ -7,8 +7,8 @@ import Testing
 @Suite("Leaky bucket concurrent tests", .serialized, .tags(.contract))
 struct LeakyBucketConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Detects check-then-act bug that requires state buildup`() async throws {
+    @Test("Detects check-then-act bug that requires state buildup")
+    func detectsCheckThenActBugThatRequiresStateBuildup() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 LeakyBucketSpec.self,
@@ -25,8 +25,8 @@ struct LeakyBucketConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Lane collapse encoder accepts probes when prefix is required`() async throws {
+    @Test("Lane collapse encoder accepts probes when prefix is required")
+    func laneCollapseEncoderAcceptsProbesWhenPrefixIsRequired() async throws {
         var deliveredReport: ExhaustReport?
         _ = await __runContractConcurrent(
             LeakyBucketSpec.self,
@@ -44,8 +44,8 @@ struct LeakyBucketConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Reports issue through Swift Testing when suppression is off`() async {
+    @Test("Reports issue through Swift Testing when suppression is off")
+    func reportsIssueThroughSwiftTestingWhenSuppressionIsOff() async {
         await withKnownIssue {
             let result = try #require(
                 await __runContractConcurrent(

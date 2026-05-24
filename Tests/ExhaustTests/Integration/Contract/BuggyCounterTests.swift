@@ -6,8 +6,8 @@ import Testing
 
 @Suite("Buggy counter state machine tests", .serialized, .tags(.contract))
 struct BuggyCounterTests {
-    @Test
-    func `Detects model/SUT divergence in buggy counter`() throws {
+    @Test("Detects model/SUT divergence in buggy counter")
+    func detectsModelSUTDivergenceInBuggyCounter() throws {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,
@@ -25,8 +25,8 @@ struct BuggyCounterTests {
         #expect(result.systemUnderTest.capacity == 3)
     }
 
-    @Test
-    func `Trace steps have correct structure`() throws {
+    @Test("Trace steps have correct structure")
+    func traceStepsHaveCorrectStructure() throws {
         let result = try #require(
             #exhaust(
                 BuggyCounterSpec.self,

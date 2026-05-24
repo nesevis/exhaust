@@ -4,7 +4,7 @@ import Testing
 struct SwiftTestingIntegrationTests {
     // MARK: - Void property with #expect
 
-    @Test func `void property reduces to minimal counterexample`() {
+    @Test("void property reduces to minimal counterexample") func voidPropertyReducesToMinimalCounterexample() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -15,7 +15,7 @@ struct SwiftTestingIntegrationTests {
         #expect(result == 50, "Minimal counterexample for value < 50 on 0...100 should be 50")
     }
 
-    @Test func `void property with require`() {
+    @Test("void property with require") func voidPropertyWithRequire() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -29,7 +29,7 @@ struct SwiftTestingIntegrationTests {
         }
     }
 
-    @Test func `void property passes when no failure`() {
+    @Test("void property passes when no failure") func voidPropertyPassesWhenNoFailure() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -41,7 +41,7 @@ struct SwiftTestingIntegrationTests {
         #expect(result == nil, "All values in 0...100 should pass")
     }
 
-    @Test func `void property with multiple expect failures`() {
+    @Test("void property with multiple expect failures") func voidPropertyWithMultipleExpectFailures() {
         let result = #exhaust(
             #gen(.int(in: -10 ... 10)),
             .suppress(.issueReporting),
@@ -53,7 +53,7 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil, "Should find a counterexample")
     }
 
-    @Test func `void property with thrown error`() {
+    @Test("void property with thrown error") func voidPropertyWithThrownError() {
         struct TestError: Error {}
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -69,7 +69,7 @@ struct SwiftTestingIntegrationTests {
 
     // MARK: - Bool property unchanged
 
-    @Test func `bool property still works`() {
+    @Test("bool property still works") func boolPropertyStillWorks() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -82,7 +82,7 @@ struct SwiftTestingIntegrationTests {
 
     // MARK: - Overload resolution
 
-    @Test func `bool closure resolves to bool overload`() {
+    @Test("bool closure resolves to bool overload") func boolClosureResolvesToBoolOverload() {
         // { value in value < 50 } returns Bool — uses #exhaust.
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -94,7 +94,7 @@ struct SwiftTestingIntegrationTests {
         #expect(result == 50)
     }
 
-    @Test func `expect closure resolves to void overload`() {
+    @Test("expect closure resolves to void overload") func expectClosureResolvesToVoidOverload() {
         // { value in #expect(value < 50) } returns Void — should resolve to Void overload.
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -108,7 +108,7 @@ struct SwiftTestingIntegrationTests {
 
     // MARK: - Replay with numeric seed
 
-    @Test func `replay with numeric seed`() {
+    @Test("replay with numeric seed") func replayWithNumericSeed() {
         let result1 = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
@@ -132,20 +132,20 @@ struct SwiftTestingIntegrationTests {
 
     // MARK: - ReplaySeed literals
 
-    @Test func `replay seed integer literal`() {
+    @Test("replay seed integer literal") func replaySeedIntegerLiteral() {
         let seed: ReplaySeed = 42
         #expect(seed.resolve() == 42)
     }
 
-    @Test func `replay seed invalid string returns nil`() {
+    @Test("replay seed invalid string returns nil") func replaySeedInvalidStringReturnsNil() {
         let seed = ReplaySeed.encoded("INVALID!!!")
         #expect(seed.resolve() == nil)
     }
 
     // MARK: - Configuration Trait
 
-    @Test(.exhaust(.budget(.thorough)))
-    func `trait sets budget`() {
+    @Test("Trait sets budget", .exhaust(.budget(.thorough)))
+    func traitSetsBudget() {
         // The trait sets .thorough (sampling: 600). Verify the trait budget is applied
         // instead of the default .standard (200) by checking the iteration count.
         var capturedReport: ExhaustReport?
@@ -164,8 +164,8 @@ struct SwiftTestingIntegrationTests {
         #expect(capturedReport?.randomSamplingInvocations == 600, "Trait should set .thorough budget (600), not default .standard (200)")
     }
 
-    @Test(.exhaust(.budget(.standard)))
-    func `trait budget overridden by inline`() {
+    @Test("Trait budget overridden by inline", .exhaust(.budget(.standard)))
+    func traitBudgetOverriddenByInline() {
         // Trait sets .standard, inline sets a custom budget. Inline should win.
         var capturedReport: ExhaustReport?
         let result = #exhaust(
@@ -183,8 +183,8 @@ struct SwiftTestingIntegrationTests {
         #expect(capturedReport?.randomSamplingInvocations ?? 0 <= 5)
     }
 
-    @Test(.exhaust(.regressions("1A")))
-    func `trait with regression seed that fails`() {
+    @Test("Trait with regression seed that fails", .exhaust(.regressions("1A")))
+    func traitWithRegressionSeedThatFails() {
         // Seed "1A" (= 42) should reproduce a counterexample for value < 50 on 0...100.
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -195,8 +195,8 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil, "Regression seed should find a counterexample")
     }
 
-    @Test(.exhaust(.budget(.standard), .regressions("0")))
-    func `trait with passing regression seed`() {
+    @Test("Trait with passing regression seed", .exhaust(.budget(.standard), .regressions("0")))
+    func traitWithPassingRegressionSeed() {
         // Seed "0" should produce a value that passes value >= 0 on 0...100.
         // The regression "now passes" warning should be emitted as an issue.
         // Since suppressing, we just verify the pipeline continues to the normal run.

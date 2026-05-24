@@ -4,8 +4,8 @@ import Testing
 
 @Suite("Concurrent failure rendering", .serialized, .tags(.contract))
 struct ConcurrentFailureRenderingTests {
-    @Test
-    func `renderFailure produces full report with seed`() {
+    @Test("renderFailure produces full report with seed")
+    func renderFailureProducesFullReportWithSeed() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (.prefix, "setup()"),
@@ -32,8 +32,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Reproduce:"))
     }
 
-    @Test
-    func `renderFailure without seed omits replay line`() {
+    @Test("renderFailure without seed omits replay line")
+    func renderFailureWithoutSeedOmitsReplayLine() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "push(1)"),
@@ -50,8 +50,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Reproduce:") == false)
     }
 
-    @Test
-    func `renderFailure with oracleDescription includes it`() {
+    @Test("renderFailure with oracleDescription includes it")
+    func renderFailureWithOracleDescriptionIncludesIt() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
@@ -67,8 +67,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Expected 5 but got 4"))
     }
 
-    @Test
-    func `renderFailure delegates to renderTimeout when timedOut`() {
+    @Test("renderFailure delegates to renderTimeout when timedOut")
+    func renderFailureDelegatesToRenderTimeoutWhenTimedOut() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "slowOp()"),
@@ -81,8 +81,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("drain loop stalled"))
     }
 
-    @Test
-    func `renderFailure includes scheduling caveat for preemptive random sampling`() {
+    @Test("renderFailure includes scheduling caveat for preemptive random sampling")
+    func renderFailureIncludesSchedulingCaveatForPreemptiveRandomSampling() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
@@ -102,8 +102,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Preemptive scheduling depends on OS thread timing"))
     }
 
-    @Test
-    func `renderFailure includes scheduling caveat for preemptive coverage`() {
+    @Test("renderFailure includes scheduling caveat for preemptive coverage")
+    func renderFailureIncludesSchedulingCaveatForPreemptiveCoverage() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
@@ -120,8 +120,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Preemptive scheduling depends on OS thread timing"))
     }
 
-    @Test
-    func `renderFailure omits scheduling caveat for cooperative random sampling`() {
+    @Test("renderFailure omits scheduling caveat for cooperative random sampling")
+    func renderFailureOmitsSchedulingCaveatForCooperativeRandomSampling() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
@@ -139,8 +139,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Preemptive") == false)
     }
 
-    @Test
-    func `renderTimeout with partial trace includes trace lines`() {
+    @Test("renderTimeout with partial trace includes trace lines")
+    func renderTimeoutWithPartialTraceIncludesTraceLines() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else { return }
         let tagged: [(ScheduleMarker, String)] = [
             (.prefix, "init()"),

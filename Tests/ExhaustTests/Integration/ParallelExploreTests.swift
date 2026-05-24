@@ -5,8 +5,8 @@ import Testing
 struct ParallelExploreTests {
     private static let budget = ExploreBudget.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)
 
-    @Test
-    func `Passing property with .parallel reaches coverage for all directions`() {
+    @Test("Passing property with .parallel reaches coverage for all directions")
+    func passingPropertyWithParallelReachesCoverageForAllDirections() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
@@ -28,8 +28,8 @@ struct ParallelExploreTests {
         }
     }
 
-    @Test
-    func `Failing property finds and reduces a counterexample`() {
+    @Test("Failing property finds and reduces a counterexample")
+    func failingPropertyFindsAndReducesACounterexample() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
@@ -47,8 +47,8 @@ struct ParallelExploreTests {
         #expect(report.termination == .propertyFailed)
     }
 
-    @Test
-    func `Cancellation stops other lanes early when a failure is found`() {
+    @Test("Cancellation stops other lanes early when a failure is found")
+    func cancellationStopsOtherLanesEarlyWhenAFailureIsFound() {
         let gen = #gen(.int(in: 0 ... 10000))
         let report = #explore(
             gen,
@@ -68,8 +68,8 @@ struct ParallelExploreTests {
         #expect(report.propertyInvocations < maxPossible, "Should stop early, not exhaust all budgets")
     }
 
-    @Test
-    func `Direction coverage stats are populated for each direction`() {
+    @Test("Direction coverage stats are populated for each direction")
+    func directionCoverageStatsArePopulatedForEachDirection() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
@@ -92,8 +92,8 @@ struct ParallelExploreTests {
         }
     }
 
-    @Test
-    func `Co-occurrence matrix is populated across directions`() {
+    @Test("Co-occurrence matrix is populated across directions")
+    func coOccurrenceMatrixIsPopulatedAcrossDirections() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
@@ -112,8 +112,8 @@ struct ParallelExploreTests {
         #expect(report.coOccurrence.count(direction: 1, direction: 1) > 0)
     }
 
-    @Test
-    func `Single direction falls back to sequential`() {
+    @Test("Single direction falls back to sequential")
+    func singleDirectionFallsBackToSequential() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
@@ -129,8 +129,8 @@ struct ParallelExploreTests {
         #expect(report.warmupSamples > 0, "Sequential path runs warm-up")
     }
 
-    @Test
-    func `Property invocations do not exceed the total budget`() {
+    @Test("Property invocations do not exceed the total budget")
+    func propertyInvocationsDoNotExceedTheTotalBudget() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
@@ -148,8 +148,8 @@ struct ParallelExploreTests {
         #expect(report.propertyInvocations <= maxBudget)
     }
 
-    @Test
-    func `Cross-direction hits from other lanes are merged into the total`() {
+    @Test("Cross-direction hits from other lanes are merged into the total")
+    func crossDirectionHitsFromOtherLanesAreMergedIntoTheTotal() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,

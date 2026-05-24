@@ -6,8 +6,8 @@ import Testing
 @Suite("Preemptive concurrent contract: non-atomic counter", .serialized, .tags(.contract))
 struct PreemptiveNonAtomicCounterTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Detects lost-update bug via oracle comparison`() async throws {
+    @Test("Detects lost-update bug via oracle comparison")
+    func detectsLostUpdateBugViaOracleComparison() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
                 __runPreemptiveConcurrentContract(
@@ -25,8 +25,8 @@ struct PreemptiveNonAtomicCounterTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Failure report renders correctly`() async throws {
+    @Test("Failure report renders correctly")
+    func failureReportRendersCorrectly() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
                 __runPreemptiveConcurrentContract(
@@ -46,8 +46,8 @@ struct PreemptiveNonAtomicCounterTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `onReport delivers profiling summary`() async throws {
+    @Test("onReport delivers profiling summary")
+    func onReportDeliversProfilingSummary() async throws {
         var capturedReport: ExhaustReport?
         _ = await __ExhaustRuntime.dispatchToGCD {
             __runPreemptiveConcurrentContract(
@@ -68,8 +68,8 @@ struct PreemptiveNonAtomicCounterTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Reduction shrinks the counterexample`() async throws {
+    @Test("Reduction shrinks the counterexample")
+    func reductionShrinksTheCounterexample() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
                 __runPreemptiveConcurrentContract(

@@ -37,7 +37,7 @@
 
 # rules
 
---disable noForceUnwrapInTests,conditionalAssignment
+--disable noForceUnwrapInTests,conditionalAssignment,swiftTestingTestCaseNames
 --enable isEmpty
 # --enable noGuardInTests
 --enable preferFinalClasses

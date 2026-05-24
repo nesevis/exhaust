@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Preemptive concurrent contract: smoke test", .serialized, .tags(.contract))
 struct PreemptiveSmokeTestTests {
-    @Test
-    func `Smoke test catches sequential bug before concurrent phase`() async throws {
+    @Test("Smoke test catches sequential bug before concurrent phase")
+    func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
                 __runPreemptiveConcurrentContract(

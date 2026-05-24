@@ -6,8 +6,8 @@ import Testing
 
 @Suite("Invariant-only contract tests", .serialized, .tags(.contract))
 struct InvariantOnlyTests {
-    @Test
-    func `Circular buffer capacity invariant detects overflow`() throws {
+    @Test("Circular buffer capacity invariant detects overflow")
+    func circularBufferCapacityInvariantDetectsOverflow() throws {
         let result = try #require(
             #exhaust(
                 CircularBufferContract.self,
@@ -22,8 +22,8 @@ struct InvariantOnlyTests {
         })
     }
 
-    @Test
-    func `Sorted backing invariant detects unsorted insert`() throws {
+    @Test("Sorted backing invariant detects unsorted insert")
+    func sortedBackingInvariantDetectsUnsortedInsert() throws {
         let result = try #require(
             #exhaust(
                 SortedBackingContract.self,

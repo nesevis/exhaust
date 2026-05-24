@@ -4,8 +4,8 @@ import Testing
 
 @Suite("estimateCommandLimit", .serialized, .tags(.contract))
 struct EstimateCommandLimitTests {
-    @Test
-    func `Parameter-free 2-command pick produces ceiling-capped result`() {
+    @Test("Parameter-free 2-command pick produces ceiling-capped result")
+    func parameterFree2CommandPickProducesCeilingCappedResult() {
         let gen = Gen.pick(choices: [
             (weight: 1, generator: Gen.just("a").map { $0 as Any }),
             (weight: 1, generator: Gen.just("b").map { $0 as Any }),
@@ -15,15 +15,15 @@ struct EstimateCommandLimitTests {
         #expect(limit >= 6, "Should be at least the exploration floor (branchCount * 3)")
     }
 
-    @Test
-    func `Non-pick generator falls back to 10`() {
+    @Test("Non-pick generator falls back to 10")
+    func nonPickGeneratorFallsBackTo10() {
         let gen = Gen.just("single value").map { $0 as Any }
         let limit = estimateCommandLimit(commandGen: gen, coverageBudget: 200)
         #expect(limit == 10)
     }
 
-    @Test
-    func `Many commands produce higher exploration floor`() {
+    @Test("Many commands produce higher exploration floor")
+    func manyCommandsProduceHigherExplorationFloor() {
         let choices: [(weight: Int, generator: Generator<Any>)] = (0 ..< 10).map { index in
             (weight: 1, generator: Gen.just("\(index)").map { $0 as Any })
         }
@@ -32,8 +32,8 @@ struct EstimateCommandLimitTests {
         #expect(limit >= 30, "Exploration floor should be at least branchCount * 3 = 30")
     }
 
-    @Test
-    func `Zero coverage budget produces exploration floor`() {
+    @Test("Zero coverage budget produces exploration floor")
+    func zeroCoverageBudgetProducesExplorationFloor() {
         let gen = Gen.pick(choices: [
             (weight: 1, generator: Gen.just("a").map { $0 as Any }),
             (weight: 1, generator: Gen.just("b").map { $0 as Any }),

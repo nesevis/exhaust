@@ -20,8 +20,8 @@ import Testing
 
 @Suite("Budget affordability contract tests", .serialized, .tags(.contract))
 struct BudgetAffordabilityTests {
-    @Test
-    func `canAfford agrees with brute-force reference for all generated bills`() {
+    @Test("canAfford agrees with brute-force reference for all generated bills")
+    func canAffordAgreesWithBruteForceReferenceForAllGeneratedBills() {
         let result = #exhaust(
             BudgetAffordabilitySpec.self,
             .suppress(.issueReporting)
@@ -29,8 +29,8 @@ struct BudgetAffordabilityTests {
         #expect(result == nil, "correct canAfford must agree with brute-force for all inputs")
     }
 
-    @Test
-    func `Greedy canAfford disagrees with brute-force on optimal assignment`() throws {
+    @Test("Greedy canAfford disagrees with brute-force on optimal assignment")
+    func greedyCanAffordDisagreesWithBruteForceOnOptimalAssignment() throws {
         let result = try #require(
             #exhaust(
                 BuggyBudgetAffordabilitySpec.self,

@@ -23,8 +23,8 @@ private let asyncTestMacros: [String: any Macro.Type] = [
 
 @Suite("#exhaust contract macro expansion tests")
 struct ContractMacroTests {
-    @Test
-    func `Basic #exhaust contract expansion with commandLimit`() {
+    @Test("Basic #exhaust contract expansion with commandLimit")
+    func basicExhaustContractExpansionWithCommandLimit() {
         assertMacroExpansion(
             """
             #exhaust(BoundedQueueSpec.self, .commandLimit(20))
@@ -43,8 +43,8 @@ struct ContractMacroTests {
         )
     }
 
-    @Test
-    func `#exhaust contract with settings`() {
+    @Test("#exhaust contract with settings")
+    func exhaustContractWithSettings() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self, .commandLimit(20), .budget(.thorough))
@@ -63,8 +63,8 @@ struct ContractMacroTests {
         )
     }
 
-    @Test
-    func `#exhaust contract with no settings`() {
+    @Test("#exhaust contract with no settings")
+    func exhaustContractWithNoSettings() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self)
@@ -83,8 +83,8 @@ struct ContractMacroTests {
         )
     }
 
-    @Test
-    func `#exhaust contract with suppress only`() {
+    @Test("#exhaust contract with suppress only")
+    func exhaustContractWithSuppressOnly() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self, .suppress(.issueReporting))
@@ -106,8 +106,8 @@ struct ContractMacroTests {
 
 @Suite("@Contract declaration macro tests")
 struct ContractDeclarationMacroTests {
-    @Test
-    func `Synthesizes Command enum, SUT typealias, and conformance`() {
+    @Test("Synthesizes Command enum, SUT typealias, and conformance")
+    func synthesizesCommandEnumSUTTypealiasAndConformance() {
         assertMacroExpansion(
             """
             @Contract
@@ -196,8 +196,8 @@ struct ContractDeclarationMacroTests {
         )
     }
 
-    @Test
-    func `Marker macros produce no peer declarations`() {
+    @Test("Marker macros produce no peer declarations")
+    func markerMacrosProduceNoPeerDeclarations() {
         assertMacroExpansion(
             """
             @Model var x: Int = 0
@@ -209,8 +209,8 @@ struct ContractDeclarationMacroTests {
         )
     }
 
-    @Test
-    func `Async command produces AsyncContractSpec conformance and async run/checkInvariants`() {
+    @Test("Async command produces AsyncContractSpec conformance and async run/checkInvariants")
+    func asyncCommandProducesAsyncContractSpecConformanceAndAsyncRuncheckInvariants() {
         assertMacroExpansion(
             """
             @Contract
@@ -297,8 +297,8 @@ struct ContractDeclarationMacroTests {
         )
     }
 
-    @Test
-    func `Async invariant produces AsyncContractSpec conformance`() {
+    @Test("Async invariant produces AsyncContractSpec conformance")
+    func asyncInvariantProducesAsyncContractSpecConformance() {
         assertMacroExpansion(
             """
             @Contract
@@ -375,8 +375,8 @@ struct ContractDeclarationMacroTests {
         )
     }
 
-    @Test
-    func `All-sync commands still produce ContractSpec conformance`() {
+    @Test("All-sync commands still produce ContractSpec conformance")
+    func allSyncCommandsStillProduceContractSpecConformance() {
         assertMacroExpansion(
             """
             @Contract
@@ -442,8 +442,8 @@ struct ContractDeclarationMacroTests {
         )
     }
 
-    @Test
-    func `@Command with generator expression produces #gen in commandGenerator`() {
+    @Test("@Command with generator expression produces #gen in commandGenerator")
+    func commandWithGeneratorExpressionProducesGenInCommandGenerator() {
         assertMacroExpansion(
             """
             @Contract
@@ -512,8 +512,8 @@ struct ContractDeclarationMacroTests {
 
 @Suite("@Contract tab indentation tests")
 struct ContractTabIndentationTests {
-    @Test
-    func `@Contract with tab indentation synthesizes correctly indented members`() {
+    @Test("@Contract with tab indentation synthesizes correctly indented members")
+    func contractWithTabIndentationSynthesizesCorrectlyIndentedMembers() {
         assertMacroExpansion(
             """
             @Contract
@@ -603,8 +603,8 @@ struct ContractTabIndentationTests {
         )
     }
 
-    @Test
-    func `@Contract with tab indentation and generator expressions`() {
+    @Test("@Contract with tab indentation and generator expressions")
+    func contractWithTabIndentationAndGeneratorExpressions() {
         assertMacroExpansion(
             """
             @Contract
@@ -671,8 +671,8 @@ struct ContractTabIndentationTests {
         )
     }
 
-    @Test
-    func `@Contract with tab indentation and multiple model properties`() {
+    @Test("@Contract with tab indentation and multiple model properties")
+    func contractWithTabIndentationAndMultipleModelProperties() {
         assertMacroExpansion(
             """
             @Contract
@@ -749,8 +749,8 @@ struct ContractTabIndentationTests {
 
 @Suite("#exhaust async contract macro expansion tests")
 struct AsyncContractMacroTests {
-    @Test
-    func `#exhaust async contract expansion with no settings`() {
+    @Test("#exhaust async contract expansion with no settings")
+    func exhaustAsyncContractExpansionWithNoSettings() {
         assertMacroExpansion(
             """
             #exhaust(AsyncSpec.self)
@@ -769,8 +769,8 @@ struct AsyncContractMacroTests {
         )
     }
 
-    @Test
-    func `#exhaust async contract with settings`() {
+    @Test("#exhaust async contract with settings")
+    func exhaustAsyncContractWithSettings() {
         assertMacroExpansion(
             """
             #exhaust(AsyncSpec.self, .commandLimit(10), .concurrent(3))

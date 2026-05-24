@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Preemptive concurrent contract: async facade over racy dispatch queue", .serialized, .tags(.contract))
 struct PreemptiveAsyncFacadeTests {
-    @Test
-    func `Detects lost-update bug behind async facade`() async throws {
+    @Test("Detects lost-update bug behind async facade")
+    func detectsLostUpdateBugBehindAsyncFacade() async throws {
         let result = try #require(
             await __runPreemptiveConcurrentContractAsync(
                 AsyncRacyCounterSpec.self,
@@ -21,8 +21,8 @@ struct PreemptiveAsyncFacadeTests {
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }
 
-    @Test
-    func `onReport delivers profiling summary`() async throws {
+    @Test("onReport delivers profiling summary")
+    func onReportDeliversProfilingSummary() async throws {
         var capturedReport: ExhaustReport?
         _ = await __runPreemptiveConcurrentContractAsync(
             AsyncRacyCounterSpec.self,
@@ -40,8 +40,8 @@ struct PreemptiveAsyncFacadeTests {
         #expect(report.randomSamplingInvocations > 0)
     }
 
-    @Test
-    func `Reports issue through Swift Testing when suppression is off`() async {
+    @Test("Reports issue through Swift Testing when suppression is off")
+    func reportsIssueThroughSwiftTestingWhenSuppressionIsOff() async {
         await withKnownIssue {
             _ = try #require(
                 await __runPreemptiveConcurrentContractAsync(

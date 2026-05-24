@@ -10,7 +10,7 @@
 
 /// Min-heap of `Int` plus a buggy `toSortedList` that violates the property `toSortedList(h).sorted() == toList(h).sorted()`.
 enum BinaryHeapFixture {
-    indirect enum Heap<Element: Comparable & Sendable>: Equatable, Sendable {
+    indirect enum Heap<Element: Comparable & Sendable>: Equatable {
         case empty
         case node(Element, Heap, Heap)
     }

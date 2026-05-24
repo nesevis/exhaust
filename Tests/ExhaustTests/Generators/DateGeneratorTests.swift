@@ -19,8 +19,8 @@ struct DateGeneratorTests {
 
     @Suite("date(between:interval:)")
     struct BetweenStride {
-        @Test
-        func `Generates dates within the specified range`() {
+        @Test("Generates dates within the specified range")
+        func generatesDatesWithinTheSpecifiedRange() {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 30) // 30 days
             let gen = #gen(.date(between: lower ... upper, interval: .days(1)))
@@ -32,8 +32,8 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test
-        func `Dates are quantized to stride intervals`() {
+        @Test("Dates are quantized to stride intervals")
+        func datesAreQuantizedToStrideIntervals() {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 7) // 7 days
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
@@ -45,8 +45,8 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test
-        func `Stride of seconds produces integral-second dates`() {
+        @Test("Stride of seconds produces integral-second dates")
+        func strideOfSecondsProducesIntegralSecondDates() {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(3600) // 1 hour
             let gen = #gen(.date(between: lower ... upper, interval: .seconds(1)))
@@ -56,8 +56,8 @@ struct DateGeneratorTests {
             #expect(ti == ti.rounded(.down))
         }
 
-        @Test
-        func `Deterministic: same seed produces same dates`() {
+        @Test("Deterministic: same seed produces same dates")
+        func deterministicSameSeedProducesSameDates() {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 365)
             let gen = #gen(.date(between: lower ... upper, interval: .days(1)))
@@ -67,8 +67,8 @@ struct DateGeneratorTests {
             #expect(dates1 == dates2)
         }
 
-        @Test
-        func `Week stride covers expected range`() {
+        @Test("Week stride covers expected range")
+        func weekStrideCoversExpectedRange() {
             let lower = DateGeneratorTests.jan1_2025
             let upper = lower.addingTimeInterval(86400 * 365) // ~1 year
             let gen = #gen(.date(between: lower ... upper, interval: .weeks(1)))
@@ -83,8 +83,8 @@ struct DateGeneratorTests {
 
     @Suite("date(within:of:interval:)")
     struct WithinSpan {
-        @Test
-        func `Generates dates within fixed-length span of anchor`() {
+        @Test("Generates dates within fixed-length span of anchor")
+        func generatesDatesWithinFixedLengthSpanOfAnchor() {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(30), of: anchor, interval: .hours(1)))
             let dates = #example(gen, count: 20, seed: 42)
@@ -98,8 +98,8 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test
-        func `Month span produces valid range (30-day months)`() {
+        @Test("Month span produces valid range (30-day months)")
+        func monthSpanProducesValidRange30DayMonths() {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .months(6), of: anchor, interval: .days(1)))
             let dates = #example(gen, count: 20, seed: 42)
@@ -114,8 +114,8 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test
-        func `Year span produces valid range (365-day years)`() {
+        @Test("Year span produces valid range (365-day years)")
+        func yearSpanProducesValidRange365DayYears() {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .years(1), of: anchor, interval: .days(1)))
             let dates = #example(gen, count: 20, seed: 42)
@@ -135,8 +135,8 @@ struct DateGeneratorTests {
 
     @Suite("date(within: ClosedRange<DateStride>, of:interval:)")
     struct WithinSpanRange {
-        @Test
-        func `Asymmetric span produces correct bounds`() {
+        @Test("Asymmetric span produces correct bounds")
+        func asymmetricSpanProducesCorrectBounds() {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(-7) ... .days(30), of: anchor, interval: .hours(1)))
             let dates = #example(gen, count: 20, seed: 42)
@@ -150,8 +150,8 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test
-        func `Past-only range (both bounds negative)`() {
+        @Test("Past-only range (both bounds negative)")
+        func pastOnlyRangeBothBoundsNegative() {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(-30) ... .days(-1), of: anchor, interval: .hours(1)))
             let dates = #example(gen, count: 20, seed: 42)
@@ -165,8 +165,8 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test
-        func `Mixed units in range bounds`() {
+        @Test("Mixed units in range bounds")
+        func mixedUnitsInRangeBounds() {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .hours(-12) ... .weeks(2), of: anchor, interval: .minutes(30)))
             let dates = #example(gen, count: 20, seed: 42)
@@ -180,8 +180,8 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test
-        func `Dates are quantized to interval`() {
+        @Test("Dates are quantized to interval")
+        func datesAreQuantizedToInterval() {
             let anchor = DateGeneratorTests.epoch
             let gen = #gen(.date(within: .days(-10) ... .days(10), of: anchor, interval: .hours(6)))
             let dates = #example(gen, count: 20, seed: 42)
@@ -199,8 +199,8 @@ struct DateGeneratorTests {
 
     @Suite("Shrinking")
     struct ShrinkingTests {
-        @Test
-        func `Shrinks to boundary: date before noon`() throws {
+        @Test("Shrinks to boundary: date before noon")
+        func shrinksToBoundaryDateBeforeNoon() throws {
             // Range: Jan 1 – Jan 31 2025, hourly intervals
             let lower = DateGeneratorTests.jan1_2025
             let upper = lower.addingTimeInterval(86400 * 30)
@@ -220,8 +220,8 @@ struct DateGeneratorTests {
             #expect(offset.truncatingRemainder(dividingBy: 3600) == 0)
         }
 
-        @Test
-        func `Shrinks to boundary: date after a threshold`() throws {
+        @Test("Shrinks to boundary: date after a threshold")
+        func shrinksToBoundaryDateAfterAThreshold() throws {
             // Range: full year 2025, daily intervals
             let lower = DateGeneratorTests.jan1_2025
             let upper = lower.addingTimeInterval(86400 * 365)
@@ -243,7 +243,7 @@ struct DateGeneratorTests {
 
     @Suite("DateStride")
     struct DateStrideTests {
-        @Test(arguments: [
+        @Test("Fixed spans convert to correct seconds", arguments: [
             (DateStride.seconds(1), 1),
             (DateStride.minutes(1), 60),
             (DateStride.hours(1), 3600),
@@ -255,7 +255,7 @@ struct DateGeneratorTests {
             (DateStride.months(1), 2_592_000),
             (DateStride.years(1), 31_536_000),
         ])
-        func `Fixed spans convert to correct seconds`(span: DateStride, expectedSeconds: Int) {
+        func fixedSpansConvertToCorrectSeconds(span: DateStride, expectedSeconds: Int) {
             #expect(span.fixedSeconds == expectedSeconds)
         }
     }
@@ -264,16 +264,16 @@ struct DateGeneratorTests {
 
     @Suite("Reflection")
     struct ReflectionTests {
-        @Test
-        func `Backward mapping round-trips through forward`() {
+        @Test("Backward mapping round-trips through forward")
+        func backwardMappingRoundTripsThroughForward() {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 365)
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
             #expect(#examine(gen, samples: 20, seed: 42).passed)
         }
 
-        @Test
-        func `Off-grid date reflection snaps to nearest earlier grid point`() throws {
+        @Test("Off-grid date reflection snaps to nearest earlier grid point")
+        func offGridDateReflectionSnapsToNearestEarlierGridPoint() throws {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400)
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
@@ -286,8 +286,8 @@ struct DateGeneratorTests {
             #expect(replayed == expectedSnap)
         }
 
-        @Test
-        func `On-grid date reflection round-trips correctly`() throws {
+        @Test("On-grid date reflection round-trips correctly")
+        func onGridDateReflectionRoundTripsCorrectly() throws {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400)
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))

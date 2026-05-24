@@ -18,8 +18,8 @@ struct NestedListsShrinkingChallenge {
     /// The reason this is interesting is that it has lots of local minima under pure deletion based approaches. e.g. [[0], ..., [0]] and [[0, ..., 0]] are both minima for this under anything that can only make individual elements smaller.
     ///
     /// Some libraries, e.g. Hypothesis and jqwik, can shrink this reliably to a single list of 11 elements: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]].
-    @Test
-    func `Nested Lists`() {
+    @Test("Nested Lists")
+    func nestedLists() {
         let gen = #gen(.uint().array().array())
         let output = #exhaust(
             gen,

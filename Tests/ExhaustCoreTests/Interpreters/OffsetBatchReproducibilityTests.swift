@@ -3,8 +3,8 @@ import Testing
 
 @Suite("Offset batch reproducibility")
 struct OffsetBatchReproducibilityTests {
-    @Test
-    func `Two offset interpreters with the same seed concatenate to the sequential result`() throws {
+    @Test("Two offset interpreters with the same seed concatenate to the sequential result")
+    func twoOffsetInterpretersWithTheSameSeedConcatenateToTheSequentialResult() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 10000)
         let seed: UInt64 = 42
         let totalRuns: UInt64 = 200

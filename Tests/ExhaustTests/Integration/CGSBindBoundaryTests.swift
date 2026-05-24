@@ -4,8 +4,8 @@ import Testing
 
 @Suite("CGS Derivative Context Through Bind Boundaries")
 struct CGSBindBoundaryTests {
-    @Test
-    func `Pick inside bind with different inner/outer types does not crash CGS`() {
+    @Test("Pick inside bind with different inner/outer types does not crash CGS")
+    func pickInsideBindWithDifferentInnerouterTypesDoesNotCrashCGS() {
         let gen = ReflectiveGenerator<String>.oneOf(
             .just("hello"),
             .just("world"),
@@ -18,8 +18,8 @@ struct CGSBindBoundaryTests {
         #expect(values.allSatisfy { $0 != 0 })
     }
 
-    @Test
-    func `Pick inside nested binds with type changes does not crash CGS`() {
+    @Test("Pick inside nested binds with type changes does not crash CGS")
+    func pickInsideNestedBindsWithTypeChangesDoesNotCrashCGS() {
         let gen = ReflectiveGenerator<Bool>.oneOf(
             .just(true),
             .just(false)
@@ -33,8 +33,8 @@ struct CGSBindBoundaryTests {
         #expect(values.allSatisfy { $0.isEmpty == false })
     }
 
-    @Test
-    func `Unfold with filter does not crash CGS`() {
+    @Test("Unfold with filter does not crash CGS")
+    func unfoldWithFilterDoesNotCrashCGS() {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .just(0),
             depthRange: 1 ... 3
@@ -52,8 +52,8 @@ struct CGSBindBoundaryTests {
         #expect(values.allSatisfy { $0 >= 0 })
     }
 
-    @Test
-    func `CGS tunes picks inside bind toward filter predicate`() {
+    @Test("CGS tunes picks inside bind toward filter predicate")
+    func cGSTunesPicksInsideBindTowardFilterPredicate() {
         let gen = ReflectiveGenerator<Int>.oneOf(
             weighted: (1, .int(in: 1 ... 100)),
             (1, .int(in: 901 ... 1000))

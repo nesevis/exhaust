@@ -24,8 +24,8 @@ import Testing
 
 @Suite("Key-value store lifecycle contract tests", .serialized, .tags(.contract))
 struct KVStoreLifecycleTests {
-    @Test
-    func `Stale data after close/reopen detected via invariant or postcondition`() throws {
+    @Test("Stale data after close/reopen detected via invariant or postcondition")
+    func staleDataAfterClosereopenDetectedViaInvariantOrPostcondition() throws {
         // Bonsai is more or less equivalent here
         let result = try #require(
             #exhaust(

@@ -7,8 +7,8 @@ import Testing
 @Suite("Detection boundary and multi-lane behavior", .serialized, .tags(.contract))
 struct DetectionBoundaryTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Race without suspension point is NOT detected (demonstrates tool limitation)`() async {
+    @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")
+    func raceWithoutSuspensionPointIsNOTDetectedDemonstratesToolLimitation() async {
         let result = await __runContractConcurrent(
             SilentRaceSpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
@@ -17,8 +17,8 @@ struct DetectionBoundaryTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Same race WITH suspension point IS detected`() async throws {
+    @Test("Same race WITH suspension point IS detected")
+    func sameRaceWITHSuspensionPointISDetected() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 ExposedRaceSpec.self,
@@ -33,8 +33,8 @@ struct DetectionBoundaryTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Three-way race detected with concurrencyLevel 3`() async throws {
+    @Test("Three-way race detected with concurrencyLevel 3")
+    func threeWayRaceDetectedWithConcurrencyLevel3() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 ThreeWayRaceSpec.self,
@@ -49,8 +49,8 @@ struct DetectionBoundaryTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Four-way race detected with concurrencyLevel 4 (exercises chooseLaneControl)`() async throws {
+    @Test("Four-way race detected with concurrencyLevel 4 (exercises chooseLaneControl)")
+    func fourWayRaceDetectedWithConcurrencyLevel4ExercisesChooseLaneControl() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 ThreeWayRaceSpec.self,

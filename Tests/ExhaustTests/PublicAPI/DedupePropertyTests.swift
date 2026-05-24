@@ -3,8 +3,8 @@ import Testing
 
 @Suite("Dedupe property tests")
 struct DedupePropertyTests {
-    @Test
-    func `Dedupe preserves all distinct elements`() {
+    @Test("Dedupe preserves all distinct elements")
+    func dedupePreservesAllDistinctElements() {
         let generator = #gen(.int().array(length: 0 ... 20))
 
         #exhaust(

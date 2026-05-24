@@ -4,8 +4,8 @@ import Testing
 
 @Suite("Multiple @Invariant methods", .serialized, .tags(.contract))
 struct MultiInvariantTests {
-    @Test
-    func `First failing invariant is reported in trace`() {
+    @Test("First failing invariant is reported in trace")
+    func firstFailingInvariantIsReportedInTrace() {
         let result = #exhaust(
             FiveInvariantSpec.self,
             .commandLimit(4),
@@ -22,8 +22,8 @@ struct MultiInvariantTests {
         }
     }
 
-    @Test
-    func `Passing spec with five invariants produces no counterexample`() {
+    @Test("Passing spec with five invariants produces no counterexample")
+    func passingSpecWithFiveInvariantsProducesNoCounterexample() {
         let result = #exhaust(
             PassingFiveInvariantSpec.self,
             .commandLimit(6),

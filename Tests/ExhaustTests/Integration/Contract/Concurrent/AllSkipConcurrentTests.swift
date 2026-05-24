@@ -5,8 +5,8 @@ import Testing
 @Suite("All-skip concurrent contract tests", .serialized, .tags(.contract))
 struct AllSkipConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `100% skip rate does not hang or crash`() async {
+    @Test("100% skip rate does not hang or crash")
+    func fullSkipRateDoesNotHangOrCrash() async {
         let result = await __runContractConcurrent(
             AlwaysSkipSpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting)]
@@ -15,8 +15,8 @@ struct AllSkipConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `100% skip rate with coverage phase`() async {
+    @Test("100% skip rate with coverage phase")
+    func fullSkipRateWithCoveragePhase() async {
         let result = await __runContractConcurrent(
             AlwaysSkipSpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 100, sampling: 50)), .suppress(.issueReporting)]

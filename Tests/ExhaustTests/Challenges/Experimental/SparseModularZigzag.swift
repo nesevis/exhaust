@@ -68,8 +68,8 @@ struct SparseModularZigzagChallenge {
     /// It is completely stuck at n=23, but there IS a smaller counterexample: (18, 19) since 18 * 19 % 31 = 1 < 3.
     /// The reducer can't reach it because every value between 19 and 23 fails (m * n) % 31 < 3 — there's no monotone path. Binary search, redistribution, and Kleisli composition all try nearby values and hit the 90% rejection wall.
     /// This is the non-monotone gap problem at scale. The linearScan encoder handles small gaps (remaining range ≤ 64), but the gap from 23 to 18 in the modular landscape is too wide for it to bridge, and the coordinates are coupled so it can't scan them independently.
-    @Test
-    func `Sparse modular zigzag`() throws {
+    @Test("Sparse modular zigzag")
+    func sparseModularZigzag() throws {
         let value = try #require(
             #exhaust(
                 Self.gen,

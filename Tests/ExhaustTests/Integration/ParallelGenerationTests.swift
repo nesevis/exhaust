@@ -3,8 +3,8 @@ import Testing
 
 @Suite("Parallel generation", .serialized)
 struct ParallelGenerationTests {
-    @Test
-    func `All iterations run when no counterexample exists`() {
+    @Test("All iterations run when no counterexample exists")
+    func allIterationsRunWhenNoCounterexampleExists() {
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -17,8 +17,8 @@ struct ParallelGenerationTests {
         #expect(capturedReport?.randomSamplingInvocations == 200)
     }
 
-    @Test
-    func `First failure cancels remaining lanes before the full budget is consumed`() throws {
+    @Test("First failure cancels remaining lanes before the full budget is consumed")
+    func firstFailureCancelsRemainingLanesBeforeTheFullBudgetIsConsumed() throws {
         var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 10000)),
@@ -33,8 +33,8 @@ struct ParallelGenerationTests {
         #expect(report.randomSamplingInvocations < 2000, "Should stop early, not run the full budget")
     }
 
-    @Test
-    func `Each lane produces stats lines tagged with its lane index`() throws {
+    @Test("Each lane produces stats lines tagged with its lane index")
+    func eachLaneProducesStatsLinesTaggedWithItsLaneIndex() throws {
         var capturedReport: ExhaustReport?
         #exhaust(
             #gen(.int(in: 0 ... 100)),

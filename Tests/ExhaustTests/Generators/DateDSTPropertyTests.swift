@@ -34,8 +34,8 @@ struct DateDSTPropertyTests {
 
     // MARK: - Bug: "Every day has 24 hours"
 
-    @Test
-    func `Buggy daysBetween disagrees with Calendar around DST spring forward`() {
+    @Test("Buggy daysBetween disagrees with Calendar around DST spring forward")
+    func buggyDaysBetweenDisagreesWithCalendarAroundDSTSpringForward() {
         let gen = #gen(.date(between: Self.springRange, interval: .hours(1), timeZone: Self.usEastern))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
@@ -53,8 +53,8 @@ struct DateDSTPropertyTests {
 
     // MARK: - Bug: "Midnight to midnight is always 86400 seconds"
 
-    @Test
-    func `Buggy secondsInDay disagrees with Calendar on DST transition day`() {
+    @Test("Buggy secondsInDay disagrees with Calendar on DST transition day")
+    func buggySecondsInDayDisagreesWithCalendarOnDSTTransitionDay() {
         let gen = #gen(.date(between: Self.springRange, interval: .hours(1), timeZone: Self.usEastern))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
@@ -75,8 +75,8 @@ struct DateDSTPropertyTests {
 
     // MARK: - Bug: "Adding N * 3600 seconds advances by N hours"
 
-    @Test
-    func `Buggy hourOfDay disagrees with Calendar after spring forward`() {
+    @Test("Buggy hourOfDay disagrees with Calendar after spring forward")
+    func buggyHourOfDayDisagreesWithCalendarAfterSpringForward() {
         let gen = #gen(.date(between: Self.springRange, interval: .minutes(30), timeZone: Self.usEastern))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
@@ -103,8 +103,8 @@ struct DateDSTPropertyTests {
     // (>24h from midnight but still the same calendar day) is wrongly labeled
     // "tomorrow". The bug only manifests during the ~1 hour repeated window.
 
-    @Test
-    func `Google Closure Library relative day label bug on DST fall-back`() {
+    @Test("Google Closure Library relative day label bug on DST fall-back")
+    func googleClosureLibraryRelativeDayLabelBugOnDSTFallBack() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
@@ -129,8 +129,8 @@ struct DateDSTPropertyTests {
         #expect(counterExample != nil, "Expected boundary analysis to find the 1-hour-per-year DST bug")
     }
 
-    @Test(.disabled("A source of flakiness because it does hit it once in a blue moon"))
-    func `Random testing alone misses the same-day misclassification`() {
+    @Test("Random testing alone misses the same-day misclassification", .disabled("A source of flakiness because it does hit it once in a blue moon"))
+    func randomTestingAloneMissesTheSameDayMisclassification() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
@@ -186,8 +186,8 @@ struct DateDSTPropertyTests {
     static let auSpringForwardRange = auSpringForward2024.addingTimeInterval(-14 * 86400)
         ... auSpringForward2024.addingTimeInterval(14 * 86400)
 
-    @Test
-    func `iOS recurring alarm fires at wrong hour across AU spring-forward DST`() {
+    @Test("iOS recurring alarm fires at wrong hour across AU spring-forward DST")
+    func iOSRecurringAlarmFiresAtWrongHourAcrossAUSpringForwardDST() {
         let gen = #gen(.date(between: Self.auSpringForwardRange, interval: .hours(1), timeZone: Self.auSydney))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { alarmTime in
@@ -211,8 +211,8 @@ struct DateDSTPropertyTests {
         #expect(counterExample != nil, "Expected boundary analysis to find the iOS alarm DST bug (spring forward)")
     }
 
-    @Test
-    func `iOS recurring alarm fires at wrong hour across AU fall-back DST`() {
+    @Test("iOS recurring alarm fires at wrong hour across AU fall-back DST")
+    func iOSRecurringAlarmFiresAtWrongHourAcrossAUFallBackDST() {
         let gen = #gen(.date(between: Self.auFallBackRange, interval: .hours(1), timeZone: Self.auSydney))
 
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { alarmTime in
@@ -258,8 +258,8 @@ struct DateDSTPropertyTests {
     static let yearRange2024 = Date(timeIntervalSinceReferenceDate: 725_760_000) // 2024-01-01
         ... Date(timeIntervalSinceReferenceDate: 725_760_000 + 86400 * 366) // 2025-01-01
 
-    @Test
-    func `DateFormatter returns nil for valid calendar dates where midnight doesn't exist`() {
+    @Test("DateFormatter returns nil for valid calendar dates where midnight doesn't exist")
+    func dateFormatterReturnsNilForValidCalendarDatesWhereMidnightDoesntExist() {
         let havana = TimeZone(identifier: "America/Havana")!
         let gen = #gen(.date(between: Self.yearRange2024, interval: .hours(1), timeZone: havana))
 

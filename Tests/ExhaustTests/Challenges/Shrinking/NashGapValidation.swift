@@ -22,8 +22,8 @@ struct NashGapValidation {
     /// Nash-gap tier sort: pairs (a,b) and (c,d) (both-coupled tier) come before
     /// any pair involving e/f/g/h (no dependency signal), finding productive
     /// redistributions in fewer probes.
-    @Test
-    func `Mixed coupling — coupled pairs among independent high-value coordinates`() {
+    @Test("Mixed coupling — coupled pairs among independent high-value coordinates")
+    func mixedCouplingCoupledPairsAmongIndependentHighValueCoordinates() {
         let gen = #gen(
             .int(in: 0 ... 30),
             .int(in: 0 ... 30),
@@ -63,8 +63,8 @@ struct NashGapValidation {
     /// 10 integers: 3 coupled pairs (sum >= 8 each) + 4 independent (each >= 20).
     /// More coordinates = more wasted probes on independent-to-independent pairs
     /// without tier-based sorting.
-    @Test
-    func `Wide mixed coupling — 3 coupled pairs + 4 independent`() {
+    @Test("Wide mixed coupling — 3 coupled pairs + 4 independent")
+    func wideMixedCoupling3CoupledPairs4Independent() {
         let gen = #gen(
             .int(in: 0 ... 40),
             .int(in: 0 ... 40),

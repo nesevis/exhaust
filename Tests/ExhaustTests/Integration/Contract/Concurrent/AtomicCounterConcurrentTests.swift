@@ -7,8 +7,8 @@ import Testing
 @Suite("Atomic counter concurrent tests", .serialized, .tags(.contract))
 struct AtomicCounterConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Thread-safe counter passes under all interleavings`() async {
+    @Test("Thread-safe counter passes under all interleavings")
+    func threadSafeCounterPassesUnderAllInterleavings() async {
         let result = await __runContractConcurrent(
             AtomicCounterSpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
@@ -17,8 +17,8 @@ struct AtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Narrow race in non-suspending counter is invisible to cooperative scheduler`() async {
+    @Test("Narrow race in non-suspending counter is invisible to cooperative scheduler")
+    func narrowRaceInNonSuspendingCounterIsInvisibleToCooperativeScheduler() async {
         let result = await __runContractConcurrent(
             NarrowRaceCounterSpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]

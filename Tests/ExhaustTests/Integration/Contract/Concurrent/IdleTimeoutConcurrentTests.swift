@@ -7,8 +7,8 @@ import Testing
 @Suite("Idle timeout concurrent tests", .serialized, .tags(.contract))
 struct IdleTimeoutConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Idle timeout fires for SUT that escapes the cooperative executor`() async throws {
+    @Test("Idle timeout fires for SUT that escapes the cooperative executor")
+    func idleTimeoutFiresForSUTThatEscapesTheCooperativeExecutor() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 SleepingSpec.self,

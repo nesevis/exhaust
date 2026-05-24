@@ -6,8 +6,8 @@ import Testing
 
 @Suite("Postcondition-only contract tests", .serialized, .tags(.contract))
 struct PostconditionTests {
-    @Test
-    func `Set uniqueness postcondition detects duplicate add`() throws {
+    @Test("Set uniqueness postcondition detects duplicate add")
+    func setUniquenessPostconditionDetectsDuplicateAdd() throws {
         let result = try #require(
             #exhaust(
                 SetUniquenessContract.self,
@@ -22,8 +22,8 @@ struct PostconditionTests {
         })
     }
 
-    @Test
-    func `Stack LIFO postcondition detects wrong peek`() throws {
+    @Test("Stack LIFO postcondition detects wrong peek")
+    func stackLIFOPostconditionDetectsWrongPeek() throws {
         let result = try #require(
             #exhaust(
                 StackLIFOContract.self,
@@ -38,8 +38,8 @@ struct PostconditionTests {
         })
     }
 
-    @Test
-    func `Dictionary consistency detects count drift`() throws {
+    @Test("Dictionary consistency detects count drift")
+    func dictionaryConsistencyDetectsCountDrift() throws {
         let result = try #require(
             #exhaust(
                 DictionaryConsistencyContract.self,

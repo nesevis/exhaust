@@ -22,8 +22,8 @@ private let asyncGCDExhaustMacros: [String: any Macro.Type] = [
 
 @Suite("@ConcurrentContract declaration macro tests")
 struct ConcurrentContractMacroTests {
-    @Test
-    func `Synthesizes Command enum, SUT typealias, oracleCheck, and ConcurrentContractSpec conformance`() {
+    @Test("Synthesizes Command enum, SUT typealias, oracleCheck, and ConcurrentContractSpec conformance")
+    func synthesizesCommandEnumSUTTypealiasOracleCheckAndConcurrentContractSpecConformance() {
         assertMacroExpansion(
             """
             @ConcurrentContract
@@ -128,8 +128,8 @@ struct ConcurrentContractMacroTests {
         )
     }
 
-    @Test
-    func `Async commands produce AsyncConcurrentContractSpec conformance`() {
+    @Test("Async commands produce AsyncConcurrentContractSpec conformance")
+    func asyncCommandsProduceAsyncConcurrentContractSpecConformance() {
         assertMacroExpansion(
             """
             @ConcurrentContract
@@ -211,8 +211,8 @@ struct ConcurrentContractMacroTests {
         )
     }
 
-    @Test
-    func `Missing @Oracle produces diagnostic`() {
+    @Test("Missing @Oracle produces diagnostic")
+    func missingOracleProducesDiagnostic() {
         assertMacroExpansion(
             """
             @ConcurrentContract
@@ -284,8 +284,8 @@ struct ConcurrentContractMacroTests {
         )
     }
 
-    @Test
-    func `Struct (not class) produces diagnostic`() {
+    @Test("Struct (not class) produces diagnostic")
+    func structNotClassProducesDiagnostic() {
         assertMacroExpansion(
             """
             @ConcurrentContract
@@ -363,8 +363,8 @@ struct ConcurrentContractMacroTests {
         )
     }
 
-    @Test
-    func `@Oracle marker macro produces no peer declarations`() {
+    @Test("@Oracle marker macro produces no peer declarations")
+    func oracleMarkerMacroProducesNoPeerDeclarations() {
         assertMacroExpansion(
             """
             @Oracle
@@ -377,8 +377,8 @@ struct ConcurrentContractMacroTests {
         )
     }
 
-    @Test
-    func `@Command with generator expression synthesizes correctly`() {
+    @Test("@Command with generator expression synthesizes correctly")
+    func commandWithGeneratorExpressionSynthesizesCorrectly() {
         assertMacroExpansion(
             """
             @ConcurrentContract
@@ -461,8 +461,8 @@ struct ConcurrentContractMacroTests {
 
 @Suite("#exhaust GCD concurrent contract macro expansion tests")
 struct GCDContractExhaustMacroTests {
-    @Test
-    func `#exhaust sync concurrent contract expansion with no settings`() {
+    @Test("#exhaust sync concurrent contract expansion with no settings")
+    func exhaustSyncConcurrentContractExpansionWithNoSettings() {
         assertMacroExpansion(
             """
             #exhaust(CounterSpec.self)
@@ -483,8 +483,8 @@ struct GCDContractExhaustMacroTests {
         )
     }
 
-    @Test
-    func `#exhaust sync concurrent contract with settings`() {
+    @Test("#exhaust sync concurrent contract with settings")
+    func exhaustSyncConcurrentContractWithSettings() {
         assertMacroExpansion(
             """
             #exhaust(CounterSpec.self, .concurrent(2), .commandLimit(6))
@@ -505,8 +505,8 @@ struct GCDContractExhaustMacroTests {
         )
     }
 
-    @Test
-    func `#exhaust async concurrent contract expansion with no settings`() {
+    @Test("#exhaust async concurrent contract expansion with no settings")
+    func exhaustAsyncConcurrentContractExpansionWithNoSettings() {
         assertMacroExpansion(
             """
             #exhaust(AsyncCounterSpec.self)
@@ -525,8 +525,8 @@ struct GCDContractExhaustMacroTests {
         )
     }
 
-    @Test
-    func `#exhaust async concurrent contract with settings`() {
+    @Test("#exhaust async concurrent contract with settings")
+    func exhaustAsyncConcurrentContractWithSettings() {
         assertMacroExpansion(
             """
             #exhaust(AsyncCounterSpec.self, .concurrent(2), .budget(.quick))

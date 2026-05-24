@@ -40,8 +40,8 @@ struct MetamorphTests {
 
     // MARK: - ValueInterpreter (Generation)
 
-    @Test
-    func `ValueInterpreter produces original at index zero and transformed copies`() throws {
+    @Test("ValueInterpreter produces original at index zero and transformed copies")
+    func valueInterpreterProducesOriginalAtIndexZeroAndTransformedCopies() throws {
         let gen = intNegateGen()
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 50)
         var count = 0
@@ -55,8 +55,8 @@ struct MetamorphTests {
         #expect(count > 0)
     }
 
-    @Test
-    func `ValueInterpreter handles multiple transforms`() throws {
+    @Test("ValueInterpreter handles multiple transforms")
+    func valueInterpreterHandlesMultipleTransforms() throws {
         let gen = intDoubleAndNegateGen()
         var iterator = ValueInterpreter(gen, seed: 7, maxRuns: 30)
         while let results = try iterator.next() {
@@ -71,8 +71,8 @@ struct MetamorphTests {
 
     // MARK: - ValueAndChoiceTreeInterpreter (Generation + Tree)
 
-    @Test
-    func `VACTI produces transparent choice tree (same as inner)`() throws {
+    @Test("VACTI produces transparent choice tree (same as inner)")
+    func vACTIProducesTransparentChoiceTreeSameAsInner() throws {
         let gen = intNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 42)
         let (results, tree) = try #require(try iterator.next())
@@ -90,8 +90,8 @@ struct MetamorphTests {
 
     // MARK: - Replay
 
-    @Test
-    func `Replay produces identical results from the same choice tree`() throws {
+    @Test("Replay produces identical results from the same choice tree")
+    func replayProducesIdenticalResultsFromTheSameChoiceTree() throws {
         let gen = intNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 42)
 
@@ -108,8 +108,8 @@ struct MetamorphTests {
         }
     }
 
-    @Test
-    func `Replay with multiple transforms matches generation`() throws {
+    @Test("Replay with multiple transforms matches generation")
+    func replayWithMultipleTransformsMatchesGeneration() throws {
         let gen = intDoubleAndNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 13)
 
@@ -126,8 +126,8 @@ struct MetamorphTests {
 
     // MARK: - Independent Copies (Reference Type Safety)
 
-    @Test
-    func `Each transform receives an independently generated copy`() throws {
+    @Test("Each transform receives an independently generated copy")
+    func eachTransformReceivesAnIndependentlyGeneratedCopy() throws {
         // Use an array generator — arrays are value types in Swift but this
         // validates that each transform's input was generated from the same
         // PRNG state, producing identical but independent values.
@@ -172,8 +172,8 @@ struct MetamorphTests {
 
     // MARK: - Reflection
 
-    @Test
-    func `Reflection passes through to inner generator`() throws {
+    @Test("Reflection passes through to inner generator")
+    func reflectionPassesThroughToInnerGenerator() throws {
         // Build a metamorphic gen via mapped (the public API pattern):
         // contramap(backward) + _map(forward) wrapping the metamorphic operation.
         // For this test, we use the raw operation and verify reflection directly.
@@ -190,8 +190,8 @@ struct MetamorphTests {
 
     // MARK: - Reduction / Bonsai
 
-    @Test
-    func `Bonsai reduces the source value and transforms follow`() throws {
+    @Test("Bonsai reduces the source value and transforms follow")
+    func bonsaiReducesTheSourceValueAndTransformsFollow() throws {
         let inner = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
         let gen: Generator<[Any]> = .impure(
             operation: .transform(
@@ -239,8 +239,8 @@ struct MetamorphTests {
 
     // MARK: - Materialization Round-Trip
 
-    @Test
-    func `Materialize round-trips through VACTI tree`() throws {
+    @Test("Materialize round-trips through VACTI tree")
+    func materializeRoundTripsThroughVACTITree() throws {
         let gen = intNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
 

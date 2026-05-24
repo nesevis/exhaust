@@ -6,8 +6,8 @@ import Testing
 
 @Suite("Stack state machine tests", .serialized, .tags(.contract))
 struct StackTests {
-    @Test
-    func `Passing spec produces no counterexample`() {
+    @Test("Passing spec produces no counterexample")
+    func passingSpecProducesNoCounterexample() {
         let result = #exhaust(
             StackSpec.self,
             .commandLimit(15),

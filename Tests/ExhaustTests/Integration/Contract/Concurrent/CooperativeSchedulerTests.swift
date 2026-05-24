@@ -5,8 +5,8 @@ import Testing
 @Suite("Cooperative scheduler behavior", .serialized, .tags(.contract))
 struct CooperativeSchedulerTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Sequential prefix passes without triggering concurrency bugs`() {
+    @Test("Sequential prefix passes without triggering concurrency bugs")
+    func sequentialPrefixPassesWithoutTriggeringConcurrencyBugs() {
         let commands: [(ScheduleMarker, NonAtomicCounterSpec.Command)] = [
             (.prefix, .increment),
             (.prefix, .increment),
@@ -22,8 +22,8 @@ struct CooperativeSchedulerTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Same seed produces identical trace across repeated runs`() async throws {
+    @Test("Same seed produces identical trace across repeated runs")
+    func sameSeedProducesIdenticalTraceAcrossRepeatedRuns() async throws {
         var traces: [[TraceStep]] = []
         for _ in 0 ..< 10 {
             let result = try #require(
@@ -43,8 +43,8 @@ struct CooperativeSchedulerTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Reduction produces a counterexample that still fails on replay`() async throws {
+    @Test("Reduction produces a counterexample that still fails on replay")
+    func reductionProducesACounterexampleThatStillFailsOnReplay() async throws {
         let result = try #require(
             await __runContractConcurrent(
                 NonAtomicCounterSpec.self,
@@ -61,8 +61,8 @@ struct CooperativeSchedulerTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `concurrencyLevel 1 runs everything sequentially and finds no concurrency bugs`() async {
+    @Test("concurrencyLevel 1 runs everything sequentially and finds no concurrency bugs")
+    func concurrencyLevel1RunsEverythingSequentiallyAndFindsNoConcurrencyBugs() async {
         let result = await __runContractConcurrent(
             NonAtomicCounterSpec.self,
             settings: [.concurrent(1), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]

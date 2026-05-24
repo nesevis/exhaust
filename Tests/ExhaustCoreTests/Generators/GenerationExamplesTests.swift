@@ -119,7 +119,7 @@ struct GenerationExamplesTests {
         func debugArrayStepByStep() throws {
             // 1. Test #gen(.string()) alone
             let singleStringGen = stringGen()
-            for i in 0 ..< 3 {
+            for _ in 0 ..< 3 {
                 var iterator = ValueInterpreter(singleStringGen)
                 let generated = try iterator.next()!
                 if let recipe = try Interpreters.reflect(singleStringGen, with: generated) {
@@ -135,7 +135,7 @@ struct GenerationExamplesTests {
 
             // 2. Test array alone (without map)
             let arrayGen = Gen.arrayOf(stringGen(), within: UInt64(1) ... 3)
-            for i in 0 ..< 3 {
+            for _ in 0 ..< 3 {
                 var iterator = ValueInterpreter(arrayGen)
                 let generated = try iterator.next()!
                 if let recipe = try Interpreters.reflect(arrayGen, with: generated) {

@@ -466,7 +466,7 @@ struct DateBoundaryValueTests {
 
 @Suite("Date Boundary Values — DST Transitions")
 struct DateDSTBoundaryTests {
-    struct DSTCase: Sendable, CustomTestStringConvertible {
+    struct DSTCase: CustomTestStringConvertible {
         let label: String
         let timeZoneID: String
         let year: Int

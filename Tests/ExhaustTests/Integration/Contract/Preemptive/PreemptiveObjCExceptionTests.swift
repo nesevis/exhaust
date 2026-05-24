@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Preemptive concurrent contract: ObjC exception handling", .serialized, .tags(.contract))
 struct PreemptiveObjCExceptionTests {
-    @Test
-    func `Catches NSException from concurrent command without crashing`() async throws {
+    @Test("Catches NSException from concurrent command without crashing")
+    func catchesNSExceptionFromConcurrentCommandWithoutCrashing() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
                 __runPreemptiveConcurrentContract(

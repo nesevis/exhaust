@@ -33,8 +33,8 @@ struct CircularQueueTests {
     //
     // An invariant ensures the SUT count stays within bounds.
 
-    @Test
-    func `Position-dependent corruption detected via FIFO postcondition`() throws {
+    @Test("Position-dependent corruption detected via FIFO postcondition")
+    func positionDependentCorruptionDetectedViaFIFOPostcondition() throws {
         let result = try #require(
             #exhaust(
                 CircularQueueContract.self,

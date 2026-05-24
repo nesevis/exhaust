@@ -1,7 +1,7 @@
 import Testing
 @testable import ExhaustCore
 
-@Suite struct CrockfordBase32Tests {
+struct CrockfordBase32Tests {
     @Test func encodesZero() {
         #expect(CrockfordBase32.encode(0) == "0")
     }

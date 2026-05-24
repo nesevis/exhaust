@@ -5,8 +5,8 @@ import Testing
 @Suite("Concurrent trace parsing", .serialized, .tags(.contract))
 struct ConcurrentTraceTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Collapses no-op suspend/resume pairs with no interleaving between them`() {
+    @Test("Collapses no-op suspend/resume pairs with no interleaving between them")
+    func collapsesNoOpSuspendresumePairsWithNoInterleavingBetweenThem() {
         let events: [TraceEvent] = [
             TraceEvent(kind: .started, lane: "a", label: "1A foo"),
             TraceEvent(kind: .suspended, lane: "a", label: ""),
@@ -19,8 +19,8 @@ struct ConcurrentTraceTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Preserves meaningful suspensions when another lane ran between suspend and resume`() {
+    @Test("Preserves meaningful suspensions when another lane ran between suspend and resume")
+    func preservesMeaningfulSuspensionsWhenAnotherLaneRanBetweenSuspendAndResume() {
         let events: [TraceEvent] = [
             TraceEvent(kind: .started, lane: "a", label: "1A foo"),
             TraceEvent(kind: .suspended, lane: "a", label: ""),
@@ -37,8 +37,8 @@ struct ConcurrentTraceTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Collapses adjacent started+completed into single entry`() {
+    @Test("Collapses adjacent started+completed into single entry")
+    func collapsesAdjacentStartedcompletedIntoSingleEntry() {
         let events: [TraceEvent] = [
             TraceEvent(kind: .started, lane: "a", label: "1A deposit"),
             TraceEvent(kind: .completed, lane: "a", label: "1A deposit"),
@@ -52,8 +52,8 @@ struct ConcurrentTraceTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Handles prefix commands correctly`() {
+    @Test("Handles prefix commands correctly")
+    func handlesPrefixCommandsCorrectly() {
         let events: [TraceEvent] = [
             TraceEvent(kind: .started, lane: "prefix", label: "setup"),
             TraceEvent(kind: .completed, lane: "prefix", label: "setup"),
@@ -67,8 +67,8 @@ struct ConcurrentTraceTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Failure step carries the invariant name`() {
+    @Test("Failure step carries the invariant name")
+    func failureStepCarriesTheInvariantName() {
         let events: [TraceEvent] = [
             TraceEvent(kind: .started, lane: "a", label: "1A increment"),
             TraceEvent(kind: .failed(message: "matchesModel"), lane: "a", label: "1A increment"),
@@ -85,8 +85,8 @@ struct ConcurrentTraceTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test
-    func `Command name containing colons does not break parsing`() {
+    @Test("Command name containing colons does not break parsing")
+    func commandNameContainingColonsDoesNotBreakParsing() {
         let events: [TraceEvent] = [
             TraceEvent(kind: .started, lane: "a", label: "1A reset(mode:forced)"),
             TraceEvent(kind: .completed, lane: "a", label: "1A reset(mode:forced)"),

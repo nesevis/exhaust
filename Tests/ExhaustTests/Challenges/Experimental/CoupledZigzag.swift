@@ -29,8 +29,8 @@ struct CoupledZigzagChallenge {
      Expected smallest counterexample: (10, 9)
      */
 
-    @Test
-    func `Coupled zigzag via bind`() throws {
+    @Test("Coupled zigzag via bind")
+    func coupledZigzagViaBind() throws {
         let gen = #gen(.int(in: 0 ... 500))
             .bind { m in
                 #gen(.int(in: 0 ... 500)).map { n in (m, n) }
@@ -59,8 +59,8 @@ struct CoupledZigzagChallenge {
         #expect(value == counterExample)
     }
 
-    @Test
-    func `Coupled zigzag via nested bind (oscillation damping)`() throws {
+    @Test("Coupled zigzag via nested bind (oscillation damping)")
+    func coupledZigzagViaNestedBindOscillationDamping() throws {
         // Nested binds separate m and n into different bind containers:
         // [outer_bind, val(m), inner_bind, val(n), just, /inner_bind, /outer_bind]
         //
