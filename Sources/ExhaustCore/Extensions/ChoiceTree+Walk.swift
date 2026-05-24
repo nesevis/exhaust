@@ -9,7 +9,7 @@
 ///
 /// Each step in the path is a child index at the corresponding depth.
 /// For example, `[1, 0]` means "second child of root, then first child of that node".
-package struct Fingerprint: Hashable {
+package struct Fingerprint: Hashable, Sendable {
     /// The sequence of child indices that form the path from the root to a node.
     public private(set) var steps: [Int]
 

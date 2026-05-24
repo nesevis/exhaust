@@ -2,7 +2,7 @@
 ///
 /// Ordered from highest fidelity (exact carry-forward from the prefix) to lowest (PRNG fallback).
 /// The raw value encodes this ordering for use in ``DecodingReport/fidelity``.
-package enum ResolutionTier: UInt8 {
+package enum ResolutionTier: UInt8, Sendable {
     /// Value carried forward unchanged from the prefix.
     case exactCarryForward = 0
     /// Value resolved from the fallback tree (clamped to the new domain).
@@ -14,7 +14,7 @@ package enum ResolutionTier: UInt8 {
 /// Diagnostics collected during a single materialization pass.
 ///
 /// Tracks per-coordinate resolution tier counts (how closely guided materialization preserved the original value assignment) and per-fingerprint filter predicate observations. Resolution tier data is meaningful for guided mode; filter observations are populated in both exact and guided modes.
-package struct DecodingReport {
+package struct DecodingReport: Sendable {
     private var exactCarryForwardCount = 0
     private var fallbackTreeCount = 0
     private var prngCount = 0

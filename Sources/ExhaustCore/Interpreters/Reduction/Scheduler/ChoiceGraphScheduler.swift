@@ -212,7 +212,7 @@ enum ChoiceGraphScheduler {
     // MARK: - Post-Cycle Evaluation
 
     /// Snapshot of what happened during a single reduction cycle, consumed by ``evaluatePostCycle`` to determine the next actions.
-    struct CycleOutcome {
+    struct CycleOutcome: Sendable {
         let anyAccepted: Bool
         let hadReplacementShortlexRejection: Bool
         let allConverged: Bool
@@ -221,14 +221,14 @@ enum ChoiceGraphScheduler {
     }
 
     /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful relax round prevents termination, and convergence confirmation can clear stale floors that change the ``allValuesConverged`` result).
-    enum PostCycleAction: Equatable {
+    enum PostCycleAction: Equatable, Sendable {
         case confirmConvergence
         case relaxRound
         case releaseDeferral
     }
 
     /// Result of evaluating a cycle's outcome, containing the ordered list of actions to attempt and updated loop control values.
-    struct PostCycleEvaluation: Equatable {
+    struct PostCycleEvaluation: Equatable, Sendable {
         let actions: [PostCycleAction]
         let newStallBudget: Int
         let newDeferBindInner: Bool

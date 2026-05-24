@@ -49,7 +49,7 @@ package enum BoundaryParameterKind: @unchecked Sendable {
 }
 
 /// Maps a range of flat composite indices to a specific sequence length and its element parameters.
-package struct SequenceLengthSlot {
+package struct SequenceLengthSlot: Sendable {
     /// The sequence length this slot represents.
     package let length: UInt64
     /// Starting offset of this slot in the composite domain.

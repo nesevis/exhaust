@@ -16,7 +16,7 @@ import Foundation
 ///
 /// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, reduce, or analyze generated values.
 @usableFromInline
-package indirect enum ChoiceTree: Hashable, Equatable { // NOTE: The entire enum is marked as `indirect` for performance reasons
+package indirect enum ChoiceTree: Hashable, Equatable, Sendable { // NOTE: The entire enum is marked as `indirect` for performance reasons
     /// A single randomness decision. Produces one entry in the ``ChoiceSequence`` whose ``ChoiceValue`` the reducer can minimize toward semantic simplest. The ``ChoiceMetadata`` records the valid range so the reducer never proposes an out-of-bounds value.
     case choice(ChoiceValue, ChoiceMetadata)
 
@@ -400,7 +400,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
 // MARK: - Normalized Complexity Scores
 
 /// Summary statistics derived from per-choice-point normalized scores.
-package struct ComplexityFeatures {
+package struct ComplexityFeatures: Sendable {
     /// Number of choice points in the tree.
     public let choiceCount: Int
     /// Minimum normalized score across all choice points.

@@ -12,7 +12,7 @@ import Foundation
 ///
 /// Lane indices are zero-based: lane 0 is "a", lane 1 is "b", and so on up to the concurrency level minus one. The label maps index to a lowercase ASCII letter for trace output.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-struct LaneID: Hashable {
+struct LaneID: Hashable, Sendable {
     let index: UInt8
 
     var label: String {

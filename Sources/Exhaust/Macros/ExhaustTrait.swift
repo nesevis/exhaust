@@ -68,7 +68,7 @@
     /// @Suite(.exhaust(.budget(.extensive)))
     /// ```
     public struct ExhaustTraitOption: Sendable {
-        enum Kind {
+        enum Kind: Sendable {
             case budget(ExhaustBudget)
             case regressions([String])
         }

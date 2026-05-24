@@ -6,7 +6,7 @@
 import Foundation
 
 /// Generation phase that produced an example.
-package enum OpenPBTStatsPhase: String, Codable {
+package enum OpenPBTStatsPhase: String, Codable, Sendable {
     /// Indicates the example was produced during structured covering-array enumeration, which runs first to achieve combinatorial coverage of the generator's parameter space.
     case coverage
     /// Indicates the example was produced during standard PRNG-based sampling, which runs after the coverage phase completes.

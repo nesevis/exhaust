@@ -8,7 +8,7 @@
 /// Stores the convergence bound and observation from a prior encoder pass.
 ///
 /// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored in ``ChoiceGraph/convergenceStore`` keyed by node ID and harvested by the scheduler after each probe loop.
-package struct ConvergedOrigin {
+package struct ConvergedOrigin: Sendable {
     /// The bit-pattern value at which the search converged. Warm-start data.
     package let bound: UInt64
 
@@ -38,7 +38,7 @@ package struct ConvergedOrigin {
 /// Records what an encoder observed when it terminated, reported to the factory for cross-cycle decisions.
 ///
 /// Each encoder produces a signal at convergence. The factory pattern-matches on the signal to select the recovery encoder for the next cycle. Signals are stored in ``ConvergedOrigin`` alongside the warm-start bound.
-package enum ConvergenceSignal: Hashable {
+package enum ConvergenceSignal: Hashable, Sendable {
     /// Binary search converged normally. Monotonicity held throughout.
     case monotoneConvergence
 
@@ -55,7 +55,7 @@ package enum ConvergenceSignal: Hashable {
 /// Identifies the encoder configuration that produced a convergence record.
 ///
 /// The factory uses this to reject cache entries from a different configuration so that warm-start data from one encoder does not pollute another's search.
-package enum EncoderConfiguration: Hashable {
+package enum EncoderConfiguration: Hashable, Sendable {
     case binarySearchSemanticSimplest
     case linearScan
 }

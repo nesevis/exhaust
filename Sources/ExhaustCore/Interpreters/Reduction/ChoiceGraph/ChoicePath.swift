@@ -8,7 +8,7 @@
 /// A single descent step in a ``ChoicePath``.
 ///
 /// Each step identifies which child of a ``ChoiceTree`` variant to descend into when walking from the tree root to a target node. Transparent variants (``ChoiceTree/branch``, getSize-inner ``ChoiceTree/bind``) do not consume a step — they are walked through without a path increment.
-package enum ChoicePathStep: Equatable, Hashable {
+package enum ChoicePathStep: Equatable, Hashable, Sendable {
     /// Descend into the nth element of a ``ChoiceTree/sequence``.
     case sequenceChild(Int)
 

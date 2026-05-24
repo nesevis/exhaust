@@ -63,7 +63,7 @@ public enum LogFormat: String, Sendable {
 /// Provides structured logging for Exhaust's internal subsystems.
 package enum ExhaustLog {
     /// Identifies the subsystem that originated a log message.
-    package enum Category: String, CaseIterable, Hashable {
+    package enum Category: String, CaseIterable, Hashable, Sendable {
         /// Core framework infrastructure including the Freer Monad interpreter loop.
         case core
         /// User-facing generator extension methods and combinators.
@@ -85,7 +85,7 @@ package enum ExhaustLog {
     }
 
     /// Controls per-category log levels and output format.
-    package struct Configuration {
+    package struct Configuration: Sendable {
         /// Enables or disables all logging globally.
         package var isEnabled: Bool
         /// Minimum ``LogLevel`` applied to categories without an explicit override.
