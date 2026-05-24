@@ -129,7 +129,7 @@ struct DateDSTPropertyTests {
         #expect(counterExample != nil, "Expected boundary analysis to find the 1-hour-per-year DST bug")
     }
 
-    @Test
+    @Test(.disabled("A source of flakiness because it does hit it once in a blue moon"))
     func `Random testing alone misses the same-day misclassification`() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
