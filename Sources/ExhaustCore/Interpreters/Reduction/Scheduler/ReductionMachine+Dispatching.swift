@@ -116,7 +116,7 @@ extension ReductionMachine {
             warmStartRecords: warmStarts
         )
 
-        var encoder: any GraphEncoder
+        var encoder: EncoderDispatch
         if case let .minimize(.boundValue(bindScope)) = transformation.operation,
            let fingerprint = boundValueFingerprint
         {

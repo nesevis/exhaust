@@ -185,8 +185,8 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
 struct GraphComposedEncoder: StatefulGraphEncoder {
     let name: EncoderName
 
-    private var upstream: any GraphEncoder
-    private var downstream: any GraphEncoder
+    private var upstream: EncoderDispatch
+    private var downstream: EncoderDispatch
     private let lift: (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
     private let upstreamBudget: Int
 
@@ -206,9 +206,9 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     ///   - lift: Closure that materializes the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialization fails).
     init(
         name: EncoderName,
-        upstream: any GraphEncoder,
+        upstream: EncoderDispatch,
         upstreamScope: EncoderInput,
-        downstream: any GraphEncoder,
+        downstream: EncoderDispatch,
         upstreamBudget: Int = 15,
         lift: @escaping (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
     ) {

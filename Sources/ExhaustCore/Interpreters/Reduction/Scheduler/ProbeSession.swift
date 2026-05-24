@@ -47,7 +47,7 @@ struct ProbeSession {
 
     // MARK: - State
 
-    private(set) var encoder: any GraphEncoder
+    private(set) var encoder: EncoderDispatch
     let transformation: GraphTransformation
     let boundValueFingerprint: UInt64?
 
@@ -74,7 +74,7 @@ struct ProbeSession {
     // MARK: - Init
 
     init(
-        encoder: any GraphEncoder,
+        encoder: EncoderDispatch,
         transformation: GraphTransformation,
         boundValueFingerprint: UInt64?,
         baseSequence: ChoiceSequence,
@@ -128,7 +128,7 @@ struct ProbeSession {
 
         let selection = ChoiceGraphScheduler.selectDecoder(
             for: mutation,
-            requiresExactDecoder: encoder is StatefulGraphEncoder,
+            requiresExactDecoder: encoder.isStateful,
             hasBind: hasBind
         )
 
@@ -176,7 +176,7 @@ struct ProbeSession {
             state.countMaterialization()
             latestTreeIsStripped = selection.materializePicks == false
 
-            if encoder is StatefulGraphEncoder {
+            if encoder.isStateful {
                 anyRequiresRebuild = true
             } else {
                 let application = state.graph.apply(mutation)
@@ -189,9 +189,8 @@ struct ProbeSession {
 
             state.countMaterialization()
 
-            if var stateful = encoder as? StatefulGraphEncoder {
-                stateful.refreshState(graph: state.graph, sequence: state.sequence)
-                encoder = stateful
+            if encoder.isStateful {
+                encoder.refreshState(graph: state.graph, sequence: state.sequence)
             }
 
             phase = .encode

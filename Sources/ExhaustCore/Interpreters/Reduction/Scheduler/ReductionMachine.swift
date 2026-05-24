@@ -413,7 +413,7 @@ package struct ReductionMachine: ProbeSessionState {
             graph: graph,
             warmStartRecords: [:]
         )
-        var encoder: any GraphEncoder = GraphReorderEncoder()
+        var encoder: EncoderDispatch = .reorder(GraphReorderEncoder())
         encoder.start(scope: scope)
 
         let savedRejectCache = rejectCache

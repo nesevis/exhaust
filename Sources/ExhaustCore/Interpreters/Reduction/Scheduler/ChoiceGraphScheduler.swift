@@ -190,22 +190,22 @@ enum ChoiceGraphScheduler {
     // MARK: - Encoder Selection
 
     /// Selects the appropriate encoder for a graph operation type. Bound value minimization scopes are not handled here because they require the typed generator at construction time; the dispatch step builds them via ``makeBoundValueComposition(bindScope:scope:graph:gen:upstreamBudget:)`` instead.
-    static func selectEncoder(for operation: GraphOperation) -> any GraphEncoder {
+    static func selectEncoder(for operation: GraphOperation) -> EncoderDispatch {
         switch operation {
             case .remove, .replace, .migrate:
-                GraphStructuralEncoder()
+                .structural(GraphStructuralEncoder())
             case .permute:
-                GraphSwapEncoder()
+                .swap(GraphSwapEncoder())
             case .minimize(.laneCollapse):
-                GraphLaneCollapseEncoder()
+                .laneCollapse(GraphLaneCollapseEncoder())
             case .minimize:
-                GraphValueEncoder()
+                .value(GraphValueEncoder())
             case .exchange(.redistribution):
-                GraphRedistributionEncoder()
+                .redistribution(GraphRedistributionEncoder())
             case .exchange(.tandem):
-                GraphLockstepEncoder()
+                .lockstep(GraphLockstepEncoder())
             case .reorder:
-                GraphReorderEncoder()
+                .reorder(GraphReorderEncoder())
         }
     }
 

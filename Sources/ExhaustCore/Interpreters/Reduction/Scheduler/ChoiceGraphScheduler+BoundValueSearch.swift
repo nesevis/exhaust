@@ -25,7 +25,7 @@ extension ChoiceGraphScheduler {
         graph: ChoiceGraph,
         gen: AnyGenerator,
         upstreamBudget: Int = 15
-    ) -> any GraphEncoder {
+    ) -> EncoderDispatch {
         // Synthesise the upstream scope: a one-leaf integer minimization on the bind-inner. ``mayReshapeOnAcceptance`` is false here because the composition synthesises the reshape change in ``GraphComposedEncoder/wrap``
         // when wrapping each downstream probe — the upstream encoder produces a pure value-only mutation and the composition flips ``mayReshape`` on its way out.
         let upstreamLeafEntry = LeafEntry(
@@ -50,9 +50,9 @@ extension ChoiceGraphScheduler {
         // Downstream: choose encoder based on bound subtree dimensionality.
         // Single-leaf bound subtrees use binary search — the covering encoder requires ≥ 2 parameters for pairwise covering and falls through with zero probes for large single-parameter domains. Binary search converges in O(log domain) steps and correctly handles the cross-zero phase for signed types, finding the minimum failing value directly.
         // Multi-leaf bound subtrees use BoundValueCoveringEncoder to discover failures across combinations.
-        let downstreamEncoder: any GraphEncoder = bindScope.downstreamNodeIDs.count == 1
-            ? GraphBinarySearchEncoder()
-            : GraphBoundValueCoveringEncoder()
+        let downstreamEncoder: EncoderDispatch = bindScope.downstreamNodeIDs.count == 1
+            ? .binarySearch(GraphBinarySearchEncoder())
+            : .boundValueCovering(GraphBoundValueCoveringEncoder())
 
         let lift: (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput? = { upstreamCandidate, upstreamMutation, parent in
             Self.boundValueLift(
@@ -65,14 +65,14 @@ extension ChoiceGraphScheduler {
             )
         }
 
-        return GraphComposedEncoder(
+        return .composed(GraphComposedEncoder(
             name: .composed,
-            upstream: GraphBinarySearchEncoder(),
+            upstream: .binarySearch(GraphBinarySearchEncoder()),
             upstreamScope: upstreamScope,
             downstream: downstreamEncoder,
             upstreamBudget: upstreamBudget,
             lift: lift
-        )
+        ))
     }
 
     /// Lifts an upstream probe into a downstream ``EncoderInput`` for the bound value composition.
