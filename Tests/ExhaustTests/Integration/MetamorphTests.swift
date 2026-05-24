@@ -1,5 +1,5 @@
+import ExhaustCore
 import Testing
-@testable import ExhaustCore
 
 @Suite("Metamorphic Transform")
 struct MetamorphTests {
@@ -40,8 +40,8 @@ struct MetamorphTests {
 
     // MARK: - ValueInterpreter (Generation)
 
-    @Test("ValueInterpreter produces original at index zero and transformed copies")
-    func valueInterpreterBasic() throws {
+    @Test
+    func `ValueInterpreter produces original at index zero and transformed copies`() throws {
         let gen = intNegateGen()
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 50)
         var count = 0
@@ -55,8 +55,8 @@ struct MetamorphTests {
         #expect(count > 0)
     }
 
-    @Test("ValueInterpreter handles multiple transforms")
-    func valueInterpreterMultipleTransforms() throws {
+    @Test
+    func `ValueInterpreter handles multiple transforms`() throws {
         let gen = intDoubleAndNegateGen()
         var iterator = ValueInterpreter(gen, seed: 7, maxRuns: 30)
         while let results = try iterator.next() {
@@ -71,8 +71,8 @@ struct MetamorphTests {
 
     // MARK: - ValueAndChoiceTreeInterpreter (Generation + Tree)
 
-    @Test("VACTI produces transparent choice tree (same as inner)")
-    func vactiTreeShape() throws {
+    @Test
+    func `VACTI produces transparent choice tree (same as inner)`() throws {
         let gen = intNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 42)
         let (results, tree) = try #require(try iterator.next())
@@ -90,8 +90,8 @@ struct MetamorphTests {
 
     // MARK: - Replay
 
-    @Test("Replay produces identical results from the same choice tree")
-    func replayDeterminism() throws {
+    @Test
+    func `Replay produces identical results from the same choice tree`() throws {
         let gen = intNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 42)
 
@@ -108,8 +108,8 @@ struct MetamorphTests {
         }
     }
 
-    @Test("Replay with multiple transforms matches generation")
-    func replayMultipleTransforms() throws {
+    @Test
+    func `Replay with multiple transforms matches generation`() throws {
         let gen = intDoubleAndNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 13)
 
@@ -126,8 +126,8 @@ struct MetamorphTests {
 
     // MARK: - Independent Copies (Reference Type Safety)
 
-    @Test("Each transform receives an independently generated copy")
-    func independentCopies() throws {
+    @Test
+    func `Each transform receives an independently generated copy`() throws {
         // Use an array generator — arrays are value types in Swift but this
         // validates that each transform's input was generated from the same
         // PRNG state, producing identical but independent values.
@@ -172,8 +172,8 @@ struct MetamorphTests {
 
     // MARK: - Reflection
 
-    @Test("Reflection passes through to inner generator")
-    func reflectionPassthrough() throws {
+    @Test
+    func `Reflection passes through to inner generator`() throws {
         // Build a metamorphic gen via mapped (the public API pattern):
         // contramap(backward) + _map(forward) wrapping the metamorphic operation.
         // For this test, we use the raw operation and verify reflection directly.
@@ -190,8 +190,8 @@ struct MetamorphTests {
 
     // MARK: - Reduction / Bonsai
 
-    @Test("Bonsai reduces the source value and transforms follow")
-    func bonsaiReduction() throws {
+    @Test
+    func `Bonsai reduces the source value and transforms follow`() throws {
         let inner = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
         let gen: Generator<[Any]> = .impure(
             operation: .transform(
@@ -239,8 +239,8 @@ struct MetamorphTests {
 
     // MARK: - Materialization Round-Trip
 
-    @Test("Materialize round-trips through VACTI tree")
-    func materializeRoundTrip() throws {
+    @Test
+    func `Materialize round-trips through VACTI tree`() throws {
         let gen = intNegateGen()
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
 

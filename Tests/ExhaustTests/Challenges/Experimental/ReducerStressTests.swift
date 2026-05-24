@@ -3,11 +3,11 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import Exhaust
-@testable import ExhaustCore
 
 @Suite("Reducer Stress Tests", .tags(.challenge, .slow))
 struct ReducerStressTests {
@@ -19,8 +19,8 @@ struct ReducerStressTests {
 
     // MARK: - Wide Flat Sequence
 
-    @Test("Wide flat sequence — 5000 elements")
-    func wideFlatSequence() {
+    @Test
+    func `Wide flat sequence — 5000 elements`() {
         let gen = #gen(.int(in: 0 ... 10000).array(length: 0 ... 5000))
         let value = Array(0 ..< 5000)
 
@@ -37,8 +37,8 @@ struct ReducerStressTests {
 
     // MARK: - Deeply Nested Sequences
 
-    @Test("Deeply nested sequences — 5 x 10 x 10 array")
-    func deeplyNestedSequences() {
+    @Test
+    func `Deeply nested sequences — 5 x 10 x 10 array`() {
         let gen = #gen(.int(in: 0 ... 50).array(length: 0 ... 10).array(length: 0 ... 10).array(length: 0 ... 5))
         let value: [[[Int]]] = (0 ..< 5).map { _ in
             (0 ..< 10).map { _ in
@@ -55,8 +55,8 @@ struct ReducerStressTests {
 
     // MARK: - Fixed-Length Wide Array
 
-    @Test("Fixed-length wide array — 5000 elements, pure value reduction")
-    func fixedLengthWideArray() {
+    @Test
+    func `Fixed-length wide array — 5000 elements, pure value reduction`() {
         let gen = #gen(.int(in: -10000 ... 10000).array(length: 5000 ... 5000))
         let value = (0 ..< 5000).map { $0 * 4 - 10000 }
 
@@ -68,8 +68,8 @@ struct ReducerStressTests {
 
     // MARK: - Many Small Sequences
 
-    @Test("Many small sequences — 100 arrays of 0-4 elements")
-    func manySmallSequences() {
+    @Test
+    func `Many small sequences — 100 arrays of 0-4 elements`() {
         let gen = #gen(.int(in: 0 ... 100).array(length: 0 ... 4).array(length: 100 ... 100))
         let value = Array(repeating: [10, 20, 30, 40], count: 100)
 
@@ -92,8 +92,8 @@ struct ReducerStressTests {
         let arrays: [[Int]]
     }
 
-    @Test("Wide coupled arrays — bound fans out to 5 dependent arrays")
-    func wideCoupledArrays() {
+    @Test
+    func `Wide coupled arrays — bound fans out to 5 dependent arrays`() {
         let gen = #gen(.int(in: 1 ... 30)).bound(
             forward: { size in
                 #gen(.int(in: 0 ... size).array(length: 0 ... max(1, size)).array(length: 5 ... 5))
@@ -121,8 +121,8 @@ struct ReducerStressTests {
         let innerArray: [Int]
     }
 
-    @Test("Nested bind cascade — controlling length determines dependent array")
-    func nestedBindCascade() {
+    @Test
+    func `Nested bind cascade — controlling length determines dependent array`() {
         let gen = #gen(.int(in: 3 ... 40)).bound(
             forward: { outerLength in
                 #gen(.int(in: 0 ... 50).array(length: max(1, outerLength) ... max(1, outerLength)))
@@ -144,8 +144,8 @@ struct ReducerStressTests {
 
     // MARK: - Large Compound Elements
 
-    @Test("Large sequence of compound elements — 80 triples")
-    func largeSequenceOfCompounds() {
+    @Test
+    func `Large sequence of compound elements — 80 triples`() {
         let tripleGen = #gen(.int(in: -100 ... 100), .int(in: -200 ... 200), .int(in: -300 ... 300))
         let gen = tripleGen.array(length: 0 ... 100)
         let value = (0 ..< 80).map { i in (i, i * 2, i * 3) }
@@ -164,8 +164,8 @@ struct ReducerStressTests {
         let elements: [Int]
     }
 
-    @Test("Size-dependent sequence — 200 elements controlled by bind-inner")
-    func sizeDependentSequence() {
+    @Test
+    func `Size-dependent sequence — 200 elements controlled by bind-inner`() {
         let gen = #gen(.int(in: 10 ... 200)).bound(
             forward: { size in
                 #gen(.int(in: 0 ... size).array(length: size ... size))
@@ -187,8 +187,8 @@ struct ReducerStressTests {
 
     // MARK: - One-At-A-Time Deletion
 
-    @Test("One-at-a-time deletion — 300 elements, pairwise consecutive")
-    func oneAtATimeDeletion() {
+    @Test
+    func `One-at-a-time deletion — 300 elements, pairwise consecutive`() {
         // The property requires every adjacent pair to differ by exactly 1.
         // The initial value is [0, 1, 2, ..., 299]. Deleting any element
         // from the middle creates a gap (for example, removing 5 makes the
@@ -210,8 +210,8 @@ struct ReducerStressTests {
         #expect(output?.count == 10)
     }
 
-    @Test("One-at-a-time deletion — 5000 elements")
-    func oneAtATimeDeletionLarge() {
+    @Test
+    func `One-at-a-time deletion — 5000 elements`() {
         let gen = #gen(.int(in: 0 ... 10000).array(length: 0 ... 5000))
         let value = Array(0 ..< 5000)
 
