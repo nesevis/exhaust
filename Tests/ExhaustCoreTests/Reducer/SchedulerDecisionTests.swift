@@ -22,8 +22,9 @@ struct SchedulerDecisionTests {
 
         let original = ChoiceSequence.flatten(tree)
         if let (reduced, _) = result {
-            #expect(reduced == original)
+            #expect(reduced == original, "Property always passes — sequence should be unchanged")
         }
+        // nil result is also valid — means the reducer found no counterexample to work with
     }
 
     @Test("Scheduler converges to minimum for trivially-falsified single value")

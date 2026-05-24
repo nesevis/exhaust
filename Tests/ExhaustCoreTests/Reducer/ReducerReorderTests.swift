@@ -54,8 +54,7 @@ struct ReducerReorderTests {
                 break
             }
         }
-        // If no naturally sorted seed is found, that's fine — skip
-        guard let (originalValue, tree) = foundResult else { return }
+        let (_, tree) = try #require(foundResult, "No naturally sorted seed found in 0...1000")
 
         // Property always fails
         let property: ([UInt64]) -> Bool = { _ in false }

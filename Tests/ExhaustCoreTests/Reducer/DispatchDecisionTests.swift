@@ -49,9 +49,9 @@ struct DispatchDecisionTests {
     // MARK: - Scope Rejection Cache
 
     @Test("Scope-rejected operation returns skip")
-    func scopeRejectedSkipped() {
+    func scopeRejectedSkipped() throws {
         let scopes = RemovalQuery.elementRemovalScopes(graph: Self.fixtureGraph)
-        guard let scope = scopes.first else { return }
+        let scope = try #require(scopes.first, "Expected at least one removal scope")
         let operation = GraphOperation.remove(.elements(scope))
         let transformation = GraphTransformation(operation: operation, priority: Self.defaultPriority)
 
@@ -77,9 +77,9 @@ struct DispatchDecisionTests {
     // MARK: - Non-Bound Value Operations
 
     @Test("Valid removal operation is ready to dispatch")
-    func validRemovalDispatches() {
+    func validRemovalDispatches() throws {
         let scopes = RemovalQuery.elementRemovalScopes(graph: Self.fixtureGraph)
-        guard let scope = scopes.first else { return }
+        let scope = try #require(scopes.first, "Expected at least one removal scope")
         let operation = GraphOperation.remove(.elements(scope))
         let transformation = GraphTransformation(operation: operation, priority: Self.defaultPriority)
 
@@ -96,9 +96,9 @@ struct DispatchDecisionTests {
     }
 
     @Test("Valid minimization is ready to dispatch with nil fingerprint")
-    func validMinimizationDispatches() {
+    func validMinimizationDispatches() throws {
         let scopes = MinimizationQuery.build(graph: Self.fixtureGraph)
-        guard let scope = scopes.first else { return }
+        let scope = try #require(scopes.first, "Expected at least one minimization scope")
         let transformation = GraphTransformation(
             operation: .minimize(scope),
             priority: Self.defaultPriority
@@ -137,9 +137,9 @@ struct DispatchDecisionTests {
     }
 
     @Test("Non-path-changing operation on stripped graph dispatches normally")
-    func strippedGraphNonPathChanging() {
+    func strippedGraphNonPathChanging() throws {
         let scopes = RemovalQuery.elementRemovalScopes(graph: Self.fixtureGraph)
-        guard let scope = scopes.first else { return }
+        let scope = try #require(scopes.first, "Expected at least one removal scope")
         let transformation = GraphTransformation(
             operation: .remove(.elements(scope)),
             priority: Self.defaultPriority
@@ -160,7 +160,7 @@ struct DispatchDecisionTests {
     // MARK: - Bound Value Gate Integration
 
     @Test("Bound value with fruitless gate returns skip")
-    func boundValueFruitlessSkipped() {
+    func boundValueFruitlessSkipped() throws {
         let bindTree = ChoiceTree.bind(
             fingerprint: 0xABCD,
             inner: .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
@@ -169,12 +169,17 @@ struct DispatchDecisionTests {
         let graph = ChoiceGraph.build(from: bindTree)
         let sequence = ChoiceSequence.flatten(bindTree)
 
-        let bindNodeID = graph.nodes.firstIndex { node in
-            if case .bind = node.kind { return true }
-            return false
+        let bindID = try #require(
+            graph.nodes.firstIndex { node in
+                if case .bind = node.kind { return true }
+                return false
+            },
+            "Expected bind node in graph"
+        )
+        guard case let .bind(metadata) = graph.nodes[bindID].kind else {
+            Issue.record("Expected bind kind at node \(bindID)")
+            return
         }
-        guard let bindID = bindNodeID else { return }
-        guard case let .bind(metadata) = graph.nodes[bindID].kind else { return }
 
         let innerChildID = graph.nodes[bindID].children[metadata.innerChildIndex]
         let boundChildID = graph.nodes[bindID].children[metadata.boundChildIndex]
@@ -206,7 +211,7 @@ struct DispatchDecisionTests {
     }
 
     @Test("Bound value with acceptance deferral returns skip")
-    func boundValueAcceptanceDeferralSkipped() {
+    func boundValueAcceptanceDeferralSkipped() throws {
         let bindTree = ChoiceTree.bind(
             fingerprint: 0xABCD,
             inner: .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
@@ -215,12 +220,17 @@ struct DispatchDecisionTests {
         let graph = ChoiceGraph.build(from: bindTree)
         let sequence = ChoiceSequence.flatten(bindTree)
 
-        let bindNodeID = graph.nodes.firstIndex { node in
-            if case .bind = node.kind { return true }
-            return false
+        let bindID = try #require(
+            graph.nodes.firstIndex { node in
+                if case .bind = node.kind { return true }
+                return false
+            },
+            "Expected bind node in graph"
+        )
+        guard case let .bind(metadata) = graph.nodes[bindID].kind else {
+            Issue.record("Expected bind kind at node \(bindID)")
+            return
         }
-        guard let bindID = bindNodeID else { return }
-        guard case let .bind(metadata) = graph.nodes[bindID].kind else { return }
 
         let innerChildID = graph.nodes[bindID].children[metadata.innerChildIndex]
         let boundChildID = graph.nodes[bindID].children[metadata.boundChildIndex]
@@ -249,7 +259,7 @@ struct DispatchDecisionTests {
     }
 
     @Test("Bound value needing classification returns classifyBind")
-    func boundValueNeedsClassification() {
+    func boundValueNeedsClassification() throws {
         let bindTree = ChoiceTree.bind(
             fingerprint: 0xABCD,
             inner: .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
@@ -258,12 +268,17 @@ struct DispatchDecisionTests {
         let graph = ChoiceGraph.build(from: bindTree)
         let sequence = ChoiceSequence.flatten(bindTree)
 
-        let bindNodeID = graph.nodes.firstIndex { node in
-            if case .bind = node.kind { return true }
-            return false
+        let bindID = try #require(
+            graph.nodes.firstIndex { node in
+                if case .bind = node.kind { return true }
+                return false
+            },
+            "Expected bind node in graph"
+        )
+        guard case let .bind(metadata) = graph.nodes[bindID].kind else {
+            Issue.record("Expected bind kind at node \(bindID)")
+            return
         }
-        guard let bindID = bindNodeID else { return }
-        guard case let .bind(metadata) = graph.nodes[bindID].kind else { return }
 
         let innerChildID = graph.nodes[bindID].children[metadata.innerChildIndex]
         let boundChildID = graph.nodes[bindID].children[metadata.boundChildIndex]

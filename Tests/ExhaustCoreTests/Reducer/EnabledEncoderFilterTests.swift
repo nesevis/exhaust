@@ -81,6 +81,7 @@ struct EnabledEncoderFilterTests {
         if let result {
             #expect(result.1 == value, "No encoders enabled means the result should be unchanged")
         }
+        // nil result is also acceptable — it means no improvement was found
     }
 
     @Test("Two-pass staging: structural then value reaches the same result as all-at-once")

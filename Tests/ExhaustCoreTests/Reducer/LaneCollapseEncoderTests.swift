@@ -67,15 +67,14 @@ struct LaneCollapseEncoderTests {
             enabledEncoders: [.laneCollapse]
         )
 
-        let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in
-            false
-        }
+        let (_, reduced) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false },
+            "Reducer should produce a result when property always fails"
+        )
 
-        if let (_, reduced) = result {
-            let laneMarkers = reduced.map(\.0)
-            #expect(laneMarkers == [0, 0, 0], "All elements should remain prefix: \(laneMarkers)")
-            #expect(reduced.map(\.1) == [10, 20, 30], "Values should be unchanged")
-        }
+        let laneMarkers = reduced.map(\.0)
+        #expect(laneMarkers == [0, 0, 0], "All elements should remain prefix: \(laneMarkers)")
+        #expect(reduced.map(\.1) == [10, 20, 30], "Values should be unchanged")
     }
 
     @Test("Prefix elements are contiguous at the front after reduction with 3 lanes")

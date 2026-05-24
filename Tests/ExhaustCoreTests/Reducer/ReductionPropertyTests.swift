@@ -14,7 +14,7 @@ struct ReductionPropertyTests {
         let (value, tree) = try generate(gen, seed: 99)
 
         let property: ([UInt64]) -> Bool = { $0.reduce(0, +) < 50 }
-        guard property(value) == false else { return }
+        try #require(property(value) == false, "Seed 99 must produce a counterexample (sum >= 50)")
 
         let (reduced, _) = try #require(
             try Interpreters.choiceGraphReduce(
@@ -40,7 +40,7 @@ struct ReductionPropertyTests {
         let (value, tree) = try generate(gen, seed: 77)
 
         let property: (UInt64) -> Bool = { $0 < 30 }
-        guard property(value) == false else { return }
+        try #require(property(value) == false, "Seed 77 must produce a counterexample (value >= 30)")
 
         let (reduced, _) = try #require(
             try Interpreters.choiceGraphReduce(
@@ -91,11 +91,11 @@ struct ReductionPropertyTests {
 
     @Test("Reducing an already-reduced value produces the same sequence")
     func idempotenceIntArray() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 0 ... 5)
-        let (value, tree) = try generate(gen, seed: 42)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 1 ... 5)
+        let (value, tree) = try generate(gen, seed: 99)
 
         let property: ([UInt64]) -> Bool = { $0.reduce(0, +) < 50 }
-        guard property(value) == false else { return }
+        try #require(property(value) == false, "Seed 99 must produce a counterexample (sum >= 50)")
 
         let (firstSequence, firstOutput) = try #require(
             try Interpreters.choiceGraphReduce(
@@ -147,8 +147,9 @@ struct ReductionPropertyTests {
 
         let originalSequence = ChoiceSequence.flatten(tree)
         if let (reduced, _) = result {
-            #expect(reduced == originalSequence)
+            #expect(reduced == originalSequence, "Minimal value should not change during reduction")
         }
+        // nil result is also acceptable — it means the reducer found no improvement
     }
 }
 

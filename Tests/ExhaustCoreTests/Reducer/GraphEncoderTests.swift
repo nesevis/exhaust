@@ -147,7 +147,7 @@ struct GraphEncoderTests {
     // MARK: - GraphStructuralEncoder (Migration)
 
     @Test("Migration encoder merges sibling sequences and removes the empty source")
-    func migrationMergesSiblingSequencesAndShortens() {
+    func migrationMergesSiblingSequencesAndShortens() throws {
         // Two sibling sequences under an outer sequence node — the sequence-of-sequences shape used by NestedLists and LargeUnionList.
         let inner1 = ChoiceTree.sequence(
             length: 2,
@@ -229,8 +229,7 @@ struct GraphEncoderTests {
         encoder.start(scope: scope)
         var candidateBuffer = sequence
         let probe = encoder.nextProbe(into: &candidateBuffer, lastAccepted: false)
-
-        guard probe != nil else { return }
+        try #require(probe != nil, "Migration encoder should produce at least one probe")
 
         // Migration must produce a strictly shorter sequence (the source's
         // wrappers are removed entirely, not just emptied).
