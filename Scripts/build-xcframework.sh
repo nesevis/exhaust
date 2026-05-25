@@ -92,14 +92,17 @@ collect() {
            "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.abi.json"
     fi
 
-    # Only ship .swiftinterface (public). Exhaust re-exports ExhaustCore, so
-    # external consumers need the public interface. The Exhaust module itself uses
-    # the compiled binary .swiftmodule for package-level access (same release).
-    # Shipping multiple interface files causes "Conflicting parseable interfaces"
-    # linker warnings in consumers.
+    # Textual interfaces (for library evolution)
     if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.swiftinterface" ]; then
         cp "${build_products}/ExhaustCore.build/ExhaustCore.swiftinterface" \
            "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.swiftinterface"
+    fi
+    # .private.swiftinterface omitted — no @_spi declarations exist, and shipping
+    # both .private and .package interfaces causes "Conflicting parseable interfaces"
+    # warnings in consumers.
+    if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" ]; then
+        cp "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" \
+           "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.package.swiftinterface"
     fi
 }
 
