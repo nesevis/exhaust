@@ -24,7 +24,7 @@ public func __runContract<Spec: ContractSpec>(
 ) -> ContractResult<Spec>? {
     var commandLimit: Int?
     var budget = ExhaustBudget.standard
-    var seed: UInt64?
+    var seed: UInt64? = Xoshiro256().seed
     var suppressIssueReporting = false
     var suppressLogs = false
     var collectOpenPBTStats = false
@@ -146,6 +146,7 @@ public func __runContract<Spec: ContractSpec>(
                                     trace: trace,
                                     systemUnderTest: spec.systemUnderTest,
                                     seed: regressionSeed,
+                                    replaySeed: CrockfordBase32.encode(regressionSeed),
                                     discoveryMethod: .replay
                                 )
                                 if suppressIssueReporting == false {
@@ -204,9 +205,11 @@ public func __runContract<Spec: ContractSpec>(
 
         let failingSequence: [Spec.Command]?
         let failureInfo: ContractFailureInfo<Spec.Command>
+        var capturedReplaySeed: String?
         switch scaOutcome {
             case let .failure(commands, original, coverageInvocations, reductionStats):
                 failingSequence = commands
+                capturedReplaySeed = CrockfordBase32.encodeCoverageRow(coverageInvocations - 1)
                 failureInfo = ContractFailureInfo(
                     originalCommands: original,
                     discoveryMethod: .coverage
@@ -231,34 +234,37 @@ public func __runContract<Spec: ContractSpec>(
                 } else {
                     scaCoverageInvocations = 0
                 }
-                var innerReport: ExhaustReport?
-                let onInnerReport: ((ExhaustReport) -> Void)? = onReportClosure.map { _ in
-                    { report in innerReport = report }
+                let (counterexample, innerReplaySeed) = __ExhaustRuntime.withIsInterpreting(true) {
+                    __ExhaustRuntime.__exhaustBody(
+                        gen: commandSequenceGenerator,
+                        settings: buildPropertySettings(
+                            samplingBudget: samplingBudget,
+                            coverageBudget: scaOutcome.isCompleted ? UInt64(0) : coverageBudget,
+                            seed: seed,
+                            suppressIssueReporting: true,
+                            collectOpenPBTStats: collectOpenPBTStats,
+                            onReport: onReportClosure.map { closure in
+                                { report in
+                                    var report = report
+                                    report.seed = seed
+                                    report.coverageInvocations += scaCoverageInvocations
+                                    report.propertyInvocations += scaCoverageInvocations
+                                    closure(report)
+                                }
+                            },
+                            logLevel: logLevel
+                        ),
+                        reflecting: nil,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                        function: "contract",
+                        property: property
+                    )
                 }
-                failingSequence = __ExhaustRuntime.__exhaust(
-                    commandSequenceGenerator.wrapped,
-                    settings: buildPropertySettings(
-                        samplingBudget: samplingBudget,
-                        coverageBudget: scaOutcome.isCompleted ? UInt64(0) : coverageBudget,
-                        seed: seed,
-                        suppressIssueReporting: true,
-                        collectOpenPBTStats: collectOpenPBTStats,
-                        onReport: onInnerReport,
-                        logLevel: logLevel
-                    ),
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column,
-                    property: property
-                )
-                if let onReportClosure {
-                    var report = innerReport ?? ExhaustReport()
-                    report.seed = seed
-                    report.coverageInvocations += scaCoverageInvocations
-                    report.propertyInvocations += scaCoverageInvocations
-                    onReportClosure(report)
-                }
+                failingSequence = counterexample
+                capturedReplaySeed = innerReplaySeed
                 failureInfo = ContractFailureInfo(
                     originalCommands: nil,
                     discoveryMethod: seed != nil ? .replay : .randomSampling
@@ -277,6 +283,7 @@ public func __runContract<Spec: ContractSpec>(
             trace: trace,
             systemUnderTest: spec.systemUnderTest,
             seed: seed,
+            replaySeed: capturedReplaySeed ?? seed.map { CrockfordBase32.encode($0) },
             discoveryMethod: failureInfo.discoveryMethod
         )
 
@@ -483,7 +490,8 @@ func renderFailure<Spec: ContractSpecBase>(
 
     if let seed = result.seed {
         lines.append("")
-        lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
+        let encodedSeed = result.replaySeed ?? CrockfordBase32.encode(seed)
+        lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
     }
 
     return lines.joined(separator: "\n")

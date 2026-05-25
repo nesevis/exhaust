@@ -172,7 +172,7 @@ Command sequence (4 steps, reduced from 8):
 Model: [12, 5]
 SUT:   BuggyCircularQueue(count: 2, capacity: 6)
 
-Reproduce: .replay("3JK4M2")
+Reproduce: .replay("3JK4M2-5")
 ```
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
@@ -258,7 +258,7 @@ Execution trace:
   3. 1A tryConsume (suspended)
   4. 1B refill (completed) ✗ invariant 'matchesModel'
 
-Reproduce: .replay("7MK2N9")
+Reproduce: .replay("7MK2N9-4")
 ```
 
 The trace shows exactly where the interleaving happened. The reducer drove the first `refill` command from a concurrent lane into the sequential prefix (proving it doesn't need to be concurrent), leaving only `tryConsume` and the second `refill` as the concurrent pair that triggers the race.
@@ -367,7 +367,7 @@ All contract styles accept settings as variadic arguments to `#exhaust`:
 | `.concurrent(N)` | 2 | Number of concurrent lanes (concurrent contracts only, 1...8). |
 | `.budget(.thorough)` | `.thorough` | Controls coverage rows and random sampling iterations. |
 | `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (cooperative runner only). |
-| `.replay("seed")` | — | Deterministic replay of a specific run. |
+| `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
 | `.includeDiff` | off | Includes a structural diff between the original and reduced command sequences (sequential only). |
 | `.collectOpenPBTStats` | off | Records per-example stats in OpenPBTStats JSON Lines format. |

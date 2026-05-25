@@ -250,7 +250,7 @@ public extension __ExhaustRuntime {
                         try property(counterexample)
                     } catch {}
 
-                    let encoded = CrockfordBase32.encode(report.seed)
+                    let encoded = CrockfordBase32.encode(seed: report.seed, iteration: report.propertyInvocations)
                     reportIssue(
                         "Reproduce: .replay(\"\(encoded)\")",
                         fileID: fileID,

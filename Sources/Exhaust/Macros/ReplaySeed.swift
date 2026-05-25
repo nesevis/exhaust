@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// A replay seed for deterministic reproduction, accepting either a raw `UInt64` or a Crockford Base32 string.
+/// Identifies a specific failing run for deterministic reproduction, accepting either a raw `UInt64` or a Crockford Base32 string.
 ///
 /// ```swift
 /// .replay(42)                // UInt64 literal
@@ -14,7 +14,7 @@ public enum ReplaySeed: Sendable {
     /// A Crockford Base32 encoded seed string, optionally with an iteration suffix (for example, `"1A-7"`).
     case encoded(String)
 
-    /// The resolved form of a replay seed.
+    /// Distinguishes sampling replays (seed plus optional iteration) from coverage replays (row index).
     public enum Resolved: Sendable {
         /// Replay a sampling run with the given seed, optionally jumping to a specific iteration.
         case sampling(seed: UInt64, iteration: Int?)

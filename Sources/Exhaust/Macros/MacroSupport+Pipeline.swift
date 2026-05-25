@@ -89,6 +89,7 @@ package extension __ExhaustRuntime {
                         tree
                 }
                 let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration - 1)
+                report.replaySeed = coverageReplaySeed
                 let result = reduceAndReport(
                     context: context,
                     value: value,
@@ -597,6 +598,7 @@ package extension __ExhaustRuntime {
                 failure.includeDiff = context.includeDiff
                 let rendered = failure.render(format: context.logFormat)
                 report.renderedFailure = rendered
+                report.replaySeed = failure.encodedReplaySeed
                 ExhaustLog.debug(
                     category: .propertyTest,
                     event: "reduced_blueprint",
@@ -656,6 +658,7 @@ package extension __ExhaustRuntime {
         failure.replayHint = replayHint
         let rendered = failure.render(format: context.logFormat)
         report.renderedFailure = rendered
+        report.replaySeed = failure.encodedReplaySeed
         if context.suppressIssueReporting == false {
             reportIssue(
                 rendered,

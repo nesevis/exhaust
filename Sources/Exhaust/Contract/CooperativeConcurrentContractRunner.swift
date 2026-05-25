@@ -41,11 +41,21 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     // Run the commands sequentially on a fresh spec. If the sequential replay passes, the resulting state is the expected outcome — what the system should have produced without the race.
     let oracle = timedOut ? nil : sequentialOracle(commands: finalInput.map(\.1), specInit: specInit, idleTimeoutMilliseconds: idleTimeout)
 
+    let replaySeed: String?
+    if let seed {
+        replaySeed = CrockfordBase32.encode(seed: seed, iteration: failureContext.iteration)
+    } else if discoveryMethod == .coverage || discoveryMethod == .smokeTest {
+        replaySeed = CrockfordBase32.encodeCoverageRow(failureContext.iteration - 1)
+    } else {
+        replaySeed = nil
+    }
+
     let result = ContractResult<Spec>(
         commands: finalInput.map(\.1),
         trace: trace,
         systemUnderTest: oracle?.systemUnderTest ?? Spec().systemUnderTest,
         seed: seed,
+        replaySeed: replaySeed,
         discoveryMethod: discoveryMethod
     )
 

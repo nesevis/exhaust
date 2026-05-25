@@ -16,6 +16,9 @@ public struct ContractResult<Spec: ContractSpecBase> {
     /// The seed for deterministic replay, if available.
     public let seed: UInt64?
 
+    /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"U3"`), or `nil` if no seed is available.
+    public let replaySeed: String?
+
     /// How the failing example was discovered.
     public let discoveryMethod: ContractDiscoveryMethod
 }

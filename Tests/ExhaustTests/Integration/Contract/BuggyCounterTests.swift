@@ -52,6 +52,35 @@ struct BuggyCounterTests {
             #expect(!step.description.isEmpty)
         }
     }
+
+    @Test("Sequential contract failure carries replay seed")
+    func sequentialContractFailureCarriesReplaySeed() throws {
+        let result = try #require(
+            #exhaust(
+                BuggyCounterSpec.self,
+                .commandLimit(10),
+                .budget(.custom(coverage: 0, sampling: 200)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(result.replaySeed != nil, "Sampling failure should carry a replay seed")
+        #expect(result.seed != nil, "Sampling failure should carry a PRNG seed")
+    }
+
+    @Test("Sequential contract SCA coverage failure carries U-prefixed replay seed")
+    func sequentialContractSCACoverageFailureCarriesUPrefixedReplaySeed() throws {
+        let result = try #require(
+            #exhaust(
+                BuggyCounterSpec.self,
+                .commandLimit(4),
+                .suppress(.issueReporting)
+            )
+        )
+        if result.discoveryMethod == .coverage {
+            let replaySeed = try #require(result.replaySeed)
+            #expect(replaySeed.hasPrefix("U"), "SCA coverage replay seed should have U prefix")
+        }
+    }
 }
 
 // MARK: - Contract

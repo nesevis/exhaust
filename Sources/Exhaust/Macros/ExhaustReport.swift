@@ -7,6 +7,9 @@ public struct ExhaustReport: Sendable {
     /// The PRNG seed used for random sampling, if any.
     public var seed: UInt64?
 
+    /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"U3"`), or `nil` if the test passed.
+    public var replaySeed: String?
+
     /// The rendered failure message from the Bool pipeline, stored for `__exhaustExpect` to emit.
     package var renderedFailure: String?
 

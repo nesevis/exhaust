@@ -112,6 +112,32 @@ struct NonAtomicCounterConcurrentTests {
         #expect(result.commands.count <= 8, "Reducer should shrink the command count")
         #expect(result.commands.count >= 2, "Need at least 2 commands for interleaving")
     }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Concurrent contract failure carries iteration-aware replay seed")
+    func concurrentContractFailureCarriesIterationAwareReplaySeed() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                NonAtomicCounterSpec.self,
+                settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            )
+        )
+        let replaySeed = try #require(result.replaySeed)
+        #expect(replaySeed.contains("-"), "Replay seed should include iteration suffix")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Concurrent contract coverage failure carries U-prefixed replay seed")
+    func concurrentContractCoverageFailureCarriesUPrefixedReplaySeed() async throws {
+        let result = try #require(
+            await __runContractConcurrent(
+                NonAtomicCounterSpec.self,
+                settings: [.commandLimit(6), .budget(.custom(coverage: 500, sampling: 0)), .suppress(.issueReporting)]
+            )
+        )
+        let replaySeed = try #require(result.replaySeed)
+        #expect(replaySeed.hasPrefix("U"), "Coverage replay seed should have U prefix")
+    }
 }
 
 // MARK: - Spec

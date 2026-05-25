@@ -28,7 +28,7 @@ Counterexample:
 
 Property invoked: 31 times
 
-Reproduce: .replay("8SYM3KW758FWP")
+Reproduce: .replay("8SYM3KW758FWP-3")
 ```
 
 Three lines. Millisecond feedback. No custom shrinkers, no `Arbitrary` conformances, no separate slow-test target. Property tests that read like unit tests and live right next to them.
@@ -95,7 +95,7 @@ Execution trace:
   3. 1A increment (suspended)
   4. 1B increment (completed) ✗ invariant 'matchesModel'
 
-Reproduce: .replay("7MK2N9")
+Reproduce: .replay("7MK2N9-4")
 ```
 
 The reducer drove the first `increment` into the sequential prefix, leaving only two concurrent increments as the minimal race.
@@ -270,7 +270,7 @@ Configure behaviour with settings:
 | `.budget(.extensive)` | — | 2000 coverage rows, 2000 random samples. |
 | `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
 | `.budget(.thorough * 3)` | — | Scale any preset with `*` or `/`. |
-| `.replay(seed)` | — | Deterministic reproduction of a specific run. Accepts a raw `UInt64` or a Crockford Base32 string (for example `.replay("8DZR69")`). |
+| `.replay(seed)` | — | Deterministic reproduction from a failure report seed (for example `.replay("8DZR69-7")`). Also accepts a raw `UInt64`. |
 | `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)). Passed as a named parameter, not a setting. |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualisation — useful for understanding how Exhaust represents and reduces your generator. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
@@ -639,7 +639,7 @@ Execution trace:
   3. 1A increment (suspended)
   4. 1B increment (completed) ✗ invariant 'matchesModel'
 
-Reproduce: .replay("7MK2N9")
+Reproduce: .replay("7MK2N9-4")
 ```
 
 The reducer drove the first `increment` into the sequential prefix (proving it doesn't need to be concurrent), leaving only two concurrent increments as the minimal race.
@@ -657,7 +657,7 @@ Sync contract tests accept `ContractSettings`; async contract tests accept `Conc
 | `.concurrent(N)` | 2 | Number of concurrent execution lanes (concurrent contracts only, 1...8). |
 | `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
 | `.idleTimeoutMs(ms)` | 1000 | Drain loop stall detection (async only). |
-| `.replay(.numeric(seed))` | — | Deterministic reproduction. |
+| `.replay(seed)` | — | Deterministic reproduction from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppress issue reporting. |
 | `.includeDiff` | off | Includes a structural diff between the original and reduced counterexample (sync only). |
 | `.collectOpenPBTStats` | off | Records per-example stats in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. |

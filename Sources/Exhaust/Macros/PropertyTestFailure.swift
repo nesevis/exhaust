@@ -21,8 +21,8 @@ struct PropertyTestFailure<Output> {
     /// When `true`, includes a structural diff between the original and reduced values. Off by default because the diff is expensive for large values.
     var includeDiff: Bool = false
 
-    /// Produces the encoded replay string including the iteration for O(1) reproduction.
-    private var encodedReplaySeed: String? {
+    /// Produces the encoded replay string including the iteration for direct reproduction.
+    var encodedReplaySeed: String? {
         guard let seed else { return nil }
         return CrockfordBase32.encode(seed: seed, iteration: iteration)
     }

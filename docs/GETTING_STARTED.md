@@ -322,7 +322,7 @@ A habit worth forming: when a property test fails, don't reach for the debugger 
 When you want to lock in a specific failing case as a permanent regression, Exhaust exposes a Swift Testing trait that attaches seeds to a test:
 
 ```swift
-@Test(.exhaust(regressions: "1A", "2A"))
+@Test(.exhaust(regressions: "1A-3", "2A-1"))
 func myDedupePreservesDistinctElements() {
     // ...
 }

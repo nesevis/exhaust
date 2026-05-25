@@ -87,6 +87,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                     trace: buildPreemptiveTrace(reduced),
                     systemUnderTest: oracleSpec.systemUnderTest,
                     seed: seed,
+                    replaySeed: nil,
                     discoveryMethod: discoveryMethod
                 )
             }
@@ -96,6 +97,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
             if config.seed == nil {
                 let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
                 var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
+                var smokeRow = 0
                 do { while let (commands, _) = try smokeIterator.next() {
                     let spec = Spec()
                     nonisolated(unsafe) let unsafeSpec = spec
@@ -112,6 +114,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                             trace: trace,
                             systemUnderTest: spec.systemUnderTest,
                             seed: nil,
+                            replaySeed: CrockfordBase32.encodeCoverageRow(smokeRow),
                             discoveryMethod: .smokeTest
                         )
                         let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
@@ -124,6 +127,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                         deferredIssues.append(message)
                         return (result, deferredIssues, report)
                     }
+                    smokeRow += 1
                 }
                 } catch {
                     deferredIssues.append("Generator failed during smoke test: \(error)")

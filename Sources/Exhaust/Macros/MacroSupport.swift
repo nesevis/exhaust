@@ -84,7 +84,7 @@ public extension __ExhaustRuntime {
                     column: column,
                     function: function,
                     property: property
-                )
+                ).0
             }
         }
     }
@@ -126,13 +126,13 @@ public extension __ExhaustRuntime {
                     column: column,
                     function: function,
                     property: property
-                )
+                ).0
             }
         }
     }
 
     // swiftlint:disable:next function_body_length
-    private static func __exhaustBody<Output>(
+    package static func __exhaustBody<Output>(
         gen: Generator<Output>,
         settings: [PropertySettings],
         reflecting: Output?,
@@ -142,7 +142,7 @@ public extension __ExhaustRuntime {
         column: UInt,
         function: StaticString,
         property: @escaping @Sendable (Output) -> Bool
-    ) -> Output? {
+    ) -> (Output?, String?) {
         var budget = ExhaustBudget.standard
         var seed: UInt64?
         var replayIteration: Int?
@@ -170,7 +170,7 @@ public extension __ExhaustRuntime {
                             line: line,
                             column: column
                         )
-                        return nil as Output?
+                        return (nil, nil)
                     }
                     switch resolved {
                         case let .sampling(resolvedSeed, iteration):
@@ -290,7 +290,7 @@ public extension __ExhaustRuntime {
 
             if let reflecting {
                 do {
-                    return try __reduceReflected(
+                    let result = try __reduceReflected(
                         gen,
                         value: reflecting,
                         reductionConfig: reductionConfig,
@@ -305,9 +305,10 @@ public extension __ExhaustRuntime {
                         property: property,
                         report: &report
                     )
+                    return (result, nil)
                 } catch {
                     reportIssue(localizedErrorMessage(error), fileID: fileID, filePath: filePath, line: line, column: column)
-                    return reflecting
+                    return (reflecting, nil)
                 }
             }
 
@@ -325,13 +326,13 @@ public extension __ExhaustRuntime {
                         let coverageEnd = monotonicNanoseconds()
                         report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.coverageMilliseconds
-                        return value
+                        return (value, report.replaySeed)
                     case .exhaustivePass, .proceed:
                         let coverageEnd = monotonicNanoseconds()
                         report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.coverageMilliseconds
                         report.setInvocations(coverage: 1, randomSampling: 0, reduction: 0)
-                        return nil
+                        return (nil, nil)
                 }
             } else if coverageBudget == 0 {
                 ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
@@ -348,13 +349,13 @@ public extension __ExhaustRuntime {
                         let coverageEnd = monotonicNanoseconds()
                         report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.coverageMilliseconds
-                        return value
+                        return (value, report.replaySeed)
                     case let .exhaustivePass(iterations):
                         let coverageEnd = monotonicNanoseconds()
                         report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.coverageMilliseconds
                         report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
-                        return nil
+                        return (nil, nil)
                     case let .proceed(iterations):
                         coverageIterations = iterations
                 }
@@ -402,7 +403,7 @@ public extension __ExhaustRuntime {
                 ]
             )
 
-            return samplingResult
+            return (samplingResult, report.replaySeed)
         }
     }
 
@@ -420,10 +421,12 @@ public extension __ExhaustRuntime {
             column: UInt,
             function: StaticString,
             property: @Sendable (Output) -> Bool
-        ) -> (counterexample: Output, seed: UInt64)? {
+        ) -> (counterexample: Output, replaySeed: String)? {
             guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
             for encodedSeed in traitConfig.regressions {
-                guard let resolved = CrockfordBase32.decodeWithIteration(encodedSeed) else {
+                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
+                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
+                else {
                     reportIssue(
                         "Invalid regression seed: \(encodedSeed)",
                         fileID: fileID,
@@ -433,7 +436,6 @@ public extension __ExhaustRuntime {
                     )
                     continue
                 }
-                let seed = resolved.seed
                 let replayResult = __exhaust(
                     gen.wrapped,
                     settings: [
@@ -455,7 +457,7 @@ public extension __ExhaustRuntime {
                     // Seed now passes — the bug was fixed. The seed sits inert as a
                     // silent regression guard until the property fails again.
                 } else if let counterexample = replayResult {
-                    return (counterexample, seed)
+                    return (counterexample, replaySeed: encodedSeed)
                 }
             }
             return nil
@@ -505,7 +507,7 @@ public extension __ExhaustRuntime {
                 // Suppress assertion issues during coverage/sampling/reduction.
                 // The final re-run (outside this scope) produces the user-facing assertion output.
                 nonisolated(unsafe) var pipelineResult: Output?
-                nonisolated(unsafe) var capturedSeed: UInt64?
+                nonisolated(unsafe) var capturedReplaySeed: String?
                 nonisolated(unsafe) var capturedRenderedFailure: String?
                 withExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
@@ -514,7 +516,7 @@ public extension __ExhaustRuntime {
                             function: function, property: boolProperty
                         ) {
                             pipelineResult = regression.counterexample
-                            capturedSeed = regression.seed
+                            capturedReplaySeed = regression.replaySeed
                             return
                         }
                     #endif
@@ -522,7 +524,7 @@ public extension __ExhaustRuntime {
                     // Capture seed and rendered failure from the Bool pipeline.
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
                     augmentedSettings.append(.onReport { report in
-                        capturedSeed = report.seed
+                        capturedReplaySeed = report.replaySeed
                         capturedRenderedFailure = report.renderedFailure
                     })
 
@@ -561,9 +563,8 @@ public extension __ExhaustRuntime {
                         // Error propagates to Swift Testing naturally.
                     }
 
-                    if let seed = capturedSeed {
-                        let encoded = CrockfordBase32.encode(seed)
-                        print("exhaust:\(function):replay:\(encoded)")
+                    if let replaySeed = capturedReplaySeed {
+                        print("exhaust:\(function):replay:\(replaySeed)")
                     }
                 }
 
@@ -635,7 +636,7 @@ public extension __ExhaustRuntime {
             let syncDetection = bridgeAsyncDetection(detection)
 
             nonisolated(unsafe) var pipelineResult: Output?
-            nonisolated(unsafe) var capturedSeed: UInt64?
+            nonisolated(unsafe) var capturedReplaySeed: String?
             nonisolated(unsafe) var capturedRenderedFailure: String?
 
             await dispatchToGCD {
@@ -653,13 +654,13 @@ public extension __ExhaustRuntime {
                             property: syncDetection
                         ) {
                             pipelineResult = regression.counterexample
-                            capturedSeed = regression.seed
+                            capturedReplaySeed = regression.replaySeed
                             return
                         }
 
                         var augmentedSettings = settings + [.suppress(.issueReporting)]
                         augmentedSettings.append(.onReport { report in
-                            capturedSeed = report.seed
+                            capturedReplaySeed = report.replaySeed
                             capturedRenderedFailure = report.renderedFailure
                         })
 
@@ -679,7 +680,7 @@ public extension __ExhaustRuntime {
                 #else
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
                     augmentedSettings.append(.onReport { report in
-                        capturedSeed = report.seed
+                        capturedReplaySeed = report.replaySeed
                         capturedRenderedFailure = report.renderedFailure
                     })
 
@@ -715,9 +716,8 @@ public extension __ExhaustRuntime {
                     // Error propagates to Swift Testing naturally.
                 }
 
-                if let seed = capturedSeed {
-                    let encoded = CrockfordBase32.encode(seed)
-                    print("exhaust:\(function):replay:\(encoded)")
+                if let replaySeed = capturedReplaySeed {
+                    print("exhaust:\(function):replay:\(replaySeed)")
                 }
             }
 

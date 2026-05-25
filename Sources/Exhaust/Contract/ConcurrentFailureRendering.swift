@@ -30,7 +30,8 @@ func renderFailure(
 
     var lines: [String] = []
     if let seed = context.seed {
-        lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod), seed \(CrockfordBase32.encode(seed)))")
+        let encodedSeed = CrockfordBase32.encode(seed: seed, iteration: context.iteration)
+        lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod), seed \(encodedSeed))")
     } else {
         lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod))")
     }
@@ -62,8 +63,9 @@ func renderFailure(
     lines.append("Command sequences tested: \(context.sequencesTested + context.reductionInvocations)")
 
     if let seed = context.seed {
+        let encodedSeed = CrockfordBase32.encode(seed: seed, iteration: context.iteration)
         lines.append("")
-        lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
+        lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
     }
 
     if context.isPreemptive {
