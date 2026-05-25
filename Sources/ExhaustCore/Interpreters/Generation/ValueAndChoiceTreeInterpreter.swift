@@ -427,8 +427,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ) throws -> (Any, ChoiceTree)? {
         let nextGen = try continuation(result)
 
-        // Optimisation! Do not remove. This early return cuts 70% of the time for string generators
-        if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
+        if case let .pure(value) = nextGen {
             return (value, calleeChoiceTree)
         }
         if let (continuationResult, innerChoiceTree) = try generateRecursiveAny(
