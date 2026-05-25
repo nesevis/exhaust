@@ -169,6 +169,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                         failureContext.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
                         failureContext.reductionInvocations = scaResult.reductionInvocations
                         failureContext.originalCount = scaResult.originalCount
+                        failureContext.replaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
                         failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
                         let message = renderFailure(scaResult.finalInput, trace: result.trace, context: failureContext)
                         deferredIssues.append(message)
@@ -219,6 +220,7 @@ public func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContract
                         failureContext.sequencesTested = samplingIteration
                         failureContext.reductionInvocations = reductionResult.propertyInvocations
                         failureContext.originalCount = taggedCommands.count
+                        failureContext.replaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: samplingIteration)
                         failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
                         let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
                         deferredIssues.append(message)

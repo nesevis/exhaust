@@ -60,6 +60,7 @@ private func buildFailureResult<Spec: AsyncContractSpec>(
     )
 
     failureContext.discoveryMethod = discoveryMethod
+    failureContext.replaySeed = replaySeed
     failureContext.timedOut = timedOut
     failureContext.oracleDescription = oracle.map { oracle in
         let hasModel = oracle.modelDescription != "(no model properties)"

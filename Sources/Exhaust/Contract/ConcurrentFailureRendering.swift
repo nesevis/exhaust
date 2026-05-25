@@ -13,6 +13,7 @@ struct FailureContext {
     var reductionInvocations: Int = 0
     var timedOut: Bool = false
     var isPreemptive: Bool = false
+    var replaySeed: String?
     var oracleDescription: String?
 }
 
@@ -29,9 +30,8 @@ func renderFailure(
     }
 
     var lines: [String] = []
-    if let seed = context.seed {
-        let encodedSeed = CrockfordBase32.encode(seed: seed, iteration: context.iteration)
-        lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod), seed \(encodedSeed))")
+    if let replaySeed = context.replaySeed {
+        lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod), seed \(replaySeed))")
     } else {
         lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod))")
     }
@@ -62,10 +62,9 @@ func renderFailure(
     lines.append("")
     lines.append("Command sequences tested: \(context.sequencesTested + context.reductionInvocations)")
 
-    if let seed = context.seed {
-        let encodedSeed = CrockfordBase32.encode(seed: seed, iteration: context.iteration)
+    if let replaySeed = context.replaySeed {
         lines.append("")
-        lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
+        lines.append("Reproduce: .replay(\"\(replaySeed)\")")
     }
 
     if context.isPreemptive {
