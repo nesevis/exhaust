@@ -6,7 +6,7 @@ PACKAGE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${PACKAGE_DIR}/.build/xcframework-staging"
 OUTPUT_DIR="${PACKAGE_DIR}/Frameworks"
 
-EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface -Xswiftc -package-name -Xswiftc exhaust)
+EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface -Xswiftc -package-name -Xswiftc exhaust -Xswiftc -gnone)
 IOS_SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 IOS_DEPLOYMENT_TARGET="18.0"
 
@@ -97,10 +97,9 @@ collect() {
         cp "${build_products}/ExhaustCore.build/ExhaustCore.swiftinterface" \
            "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.swiftinterface"
     fi
-    if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.private.swiftinterface" ]; then
-        cp "${build_products}/ExhaustCore.build/ExhaustCore.private.swiftinterface" \
-           "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.private.swiftinterface"
-    fi
+    # .private.swiftinterface omitted — no @_spi declarations exist, and shipping
+    # both .private and .package interfaces causes "Conflicting parseable interfaces"
+    # warnings in consumers.
     if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" ]; then
         cp "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" \
            "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.package.swiftinterface"
