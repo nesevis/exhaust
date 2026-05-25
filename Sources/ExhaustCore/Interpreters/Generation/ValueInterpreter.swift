@@ -278,7 +278,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     }
                     let passed = predicate(candidate)
                     if context.filterObservations[fingerprint] == nil {
-                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
+                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                     }
                     context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
                     if passed {

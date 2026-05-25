@@ -6,7 +6,7 @@
 //
 
 /// Strategy used by the `filter` combinator to satisfy its predicate.
-public enum FilterType: Equatable, Hashable {
+public enum FilterType: Sendable, Equatable, Hashable {
     /// Selects a strategy automatically based on generator structure.
     /// Uses ``choiceGradientSampling`` to tune pick weights via CGS with fitness sharing, producing the best balance of validity rate and output diversity.
     case auto
@@ -83,11 +83,15 @@ public struct FilterObservation: Sendable {
     /// Source location of the `.filter(...)` call that created this observation.
     public var sourceLocation: FilterSourceLocation?
 
+    /// Strategy used by the filter that produced this observation.
+    public var filterType: FilterType?
+
     /// Creates a filter observation with the given attempt and pass counts.
-    public init(attempts: Int = 0, passes: Int = 0, sourceLocation: FilterSourceLocation? = nil) {
+    public init(attempts: Int = 0, passes: Int = 0, sourceLocation: FilterSourceLocation? = nil, filterType: FilterType? = nil) {
         self.attempts = attempts
         self.passes = passes
         self.sourceLocation = sourceLocation
+        self.filterType = filterType
     }
 
     /// Fraction of attempts that passed, or zero if no attempts were recorded.
