@@ -36,7 +36,7 @@ extension ValueAndChoiceTreeInterpreter {
                         }
                         let rawBits = context.prng.next(in: effectiveRange)
                         let randomBits = tag.isFloatingPoint
-                            ? Self.floatingPointBits(rawBits: rawBits, tag: tag, effectiveRange: effectiveRange)
+                            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
                             : rawBits
                         result = randomBits
                         calleeTree = .choice(

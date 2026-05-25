@@ -33,7 +33,7 @@ extension ValueInterpreter {
                         }
                         let rawBits = context.prng.next(in: effectiveRange)
                         result = tag.isFloatingPoint
-                            ? floatingPointBits(rawBits: rawBits, tag: tag, effectiveRange: effectiveRange)
+                            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
                             : rawBits
 
                     case .getSize:

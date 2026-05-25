@@ -236,7 +236,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
                 let rawBits = context.prng.next(in: effectiveRange)
                 let randomBits = tag.isFloatingPoint
-                    ? Self.floatingPointBits(rawBits: rawBits, tag: tag, effectiveRange: effectiveRange)
+                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
                     : rawBits
                 let calleeTree = ChoiceTree.choice(
                     ChoiceValue(randomBits, tag: tag),
@@ -564,13 +564,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
         SharedInterpreterHelpers.consumeSize(&context)
-    }
-
-    @inline(never)
-    static func floatingPointBits(
-        rawBits: UInt64, tag: TypeTag, effectiveRange: ClosedRange<UInt64>
-    ) -> UInt64 {
-        tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
     }
 
     @inline(__always)
