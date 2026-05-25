@@ -8,53 +8,6 @@
 // ```
 import ExhaustCore
 
-/// A replay seed for deterministic reproduction, accepting either a raw `UInt64` or a Crockford Base32 string.
-///
-/// ```swift
-/// .replay(42)                // UInt64 literal
-/// .replay("3RT5GH8KM2")     // Crockford Base32 (seed only, runs full budget)
-/// .replay("3RT5GH8KM2-7")   // Crockford Base32 with iteration (reproduces in one step)
-/// ```
-public enum ReplaySeed: Sendable {
-    /// A raw numeric seed.
-    case numeric(UInt64)
-    /// A Crockford Base32 encoded seed string, optionally with an iteration suffix (for example, `"1A-7"`).
-    case encoded(String)
-
-    /// The resolved components of a replay seed.
-    public struct Resolved: Sendable {
-        /// The base PRNG seed.
-        public let seed: UInt64
-        /// The iteration at which the failure occurred, or `nil` to run the full budget.
-        public let iteration: Int?
-    }
-
-    /// Resolves the seed to its components.
-    ///
-    /// - Returns: The resolved seed and optional iteration, or `nil` if the encoded string is invalid.
-    public func resolve() -> Resolved? {
-        switch self {
-            case let .numeric(value):
-                return Resolved(seed: value, iteration: nil)
-            case let .encoded(string):
-                guard let decoded = CrockfordBase32.decodeWithIteration(string) else { return nil }
-                return Resolved(seed: decoded.seed, iteration: decoded.iteration)
-        }
-    }
-}
-
-extension ReplaySeed: ExpressibleByIntegerLiteral {
-    public init(integerLiteral value: UInt64) {
-        self = .numeric(value)
-    }
-}
-
-extension ReplaySeed: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
-        self = .encoded(value)
-    }
-}
-
 /// Controls which outputs a test run silences.
 ///
 /// Pass a single option to ``PropertySettings/suppress(_:)`` to disable issue reporting, log output, or both.

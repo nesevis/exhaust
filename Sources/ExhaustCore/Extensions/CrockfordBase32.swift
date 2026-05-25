@@ -34,6 +34,23 @@ package enum CrockfordBase32 {
         return (seed: seed, iteration: nil)
     }
 
+    /// Encodes a coverage row index as a replay string (for example, `"U7"`).
+    ///
+    /// The `U` prefix distinguishes coverage replays from sampling replays. `U` is not a valid Crockford Base32 digit and has no typo fallback mapping.
+    public static func encodeCoverageRow(_ row: Int) -> String {
+        "U\(row)"
+    }
+
+    /// Decodes a `U`-prefixed coverage replay string into a row index.
+    ///
+    /// Returns `nil` if the string does not start with `U` or the row is not a valid non-negative integer.
+    public static func decodeCoverageRow(_ string: String) -> Int? {
+        guard let first = string.first, first == "U" || first == "u" else { return nil }
+        let rowPart = String(string.dropFirst())
+        guard let row = Int(rowPart), row >= 0 else { return nil }
+        return row
+    }
+
     /// Encodes a `UInt64` as a Crockford Base32 string.
     ///
     /// - Parameter value: The value to encode.

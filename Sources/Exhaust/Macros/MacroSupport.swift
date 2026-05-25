@@ -146,6 +146,7 @@ public extension __ExhaustRuntime {
         var budget = ExhaustBudget.standard
         var seed: UInt64?
         var replayIteration: Int?
+        var coverageReplayRow: Int?
         var suppressIssueReporting = false
         var suppressLogs = false
         var visualize = false
@@ -171,8 +172,13 @@ public extension __ExhaustRuntime {
                         )
                         return nil as Output?
                     }
-                    seed = resolved.seed
-                    replayIteration = resolved.iteration
+                    switch resolved {
+                        case let .sampling(resolvedSeed, iteration):
+                            seed = resolvedSeed
+                            replayIteration = iteration
+                        case let .coverage(row):
+                            coverageReplayRow = row
+                    }
                 case let .suppress(option):
                     switch option {
                         case .issueReporting:
@@ -221,8 +227,8 @@ public extension __ExhaustRuntime {
                 }
             #endif
 
-            let samplingBudget = replayIteration != nil ? 1 : budget.samplingBudget
-            let coverageBudget: UInt64 = replayIteration != nil ? 0 : budget.coverageBudget
+            let samplingBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 1 : budget.samplingBudget
+            let coverageBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 0 : budget.coverageBudget
             let totalBudget = coverageBudget + samplingBudget
             let reductionDeadlineNanoseconds = UInt64(totalBudget) * 5 * 1_000_000
             let reductionConfig = Interpreters.ReducerConfiguration(
@@ -307,7 +313,27 @@ public extension __ExhaustRuntime {
 
             let phaseTimingStart = monotonicNanoseconds()
             var coverageIterations = 0
-            if coverageBudget == 0 {
+            if let coverageReplayRow {
+                let outcome: CoverageOutcome<Output> = runCoveragePhase(
+                    context: context,
+                    coverageBudget: budget.coverageBudget,
+                    skipToRow: coverageReplayRow,
+                    report: &report
+                )
+                switch outcome {
+                    case let .counterexample(value):
+                        let coverageEnd = monotonicNanoseconds()
+                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.coverageMilliseconds
+                        return value
+                    case .exhaustivePass, .proceed:
+                        let coverageEnd = monotonicNanoseconds()
+                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.coverageMilliseconds
+                        report.setInvocations(coverage: 1, randomSampling: 0, reduction: 0)
+                        return nil
+                }
+            } else if coverageBudget == 0 {
                 ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
             } else if seed != nil {
                 ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped (deterministic replay)")

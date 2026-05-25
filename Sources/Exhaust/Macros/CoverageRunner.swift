@@ -25,9 +25,12 @@ package enum CoverageRunner {
     }
 
     /// Runs coverage analysis and iterates through the covering array, calling `property` for each row.
+    ///
+    /// - Parameter skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) coverage replay.
     package static func run<Output>(
         _ gen: Generator<Output>,
         coverageBudget: UInt64,
+        skipToRow: Int? = nil,
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
@@ -78,6 +81,10 @@ package enum CoverageRunner {
             var iterations = 0
             var rowIndex = 0
             while rowIndex < budget, let row = generator.next() {
+                if let target = skipToRow, rowIndex < target {
+                    rowIndex += 1
+                    continue
+                }
                 let rowResult = testRow(
                     gen, row: row, rowIndex: rowIndex,
                     profile: profile, property: property
@@ -86,12 +93,13 @@ package enum CoverageRunner {
                     onExample?(rowResult.value, rowResult.tree, rowResult.passed)
                     if rowResult.passed == false {
                         return .failure(
-                            value: rowResult.value, tree: rowResult.tree, iteration: iterations + 1,
+                            value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
                             strength: strength, rows: rowIndex + 1,
                             parameters: paramCount, totalSpace: totalSpace, kind: kind
                         )
                     }
                 }
+                if skipToRow != nil { break }
                 rowIndex += 1
                 iterations += 1
             }
@@ -109,7 +117,7 @@ package enum CoverageRunner {
 
         // Single parameter: enumerate all values.
         var iterations = 0
-        var rowIndex = 0
+        var rowIndex = skipToRow ?? 0
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
             let row = CoveringArrayRow(values: [UInt64(rowIndex)])
             let rowResult = testRow(
@@ -120,12 +128,13 @@ package enum CoverageRunner {
                 onExample?(rowResult.value, rowResult.tree, rowResult.passed)
                 if rowResult.passed == false {
                     return .failure(
-                        value: rowResult.value, tree: rowResult.tree, iteration: iterations + 1,
+                        value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
                         strength: 1, rows: rowIndex + 1,
                         parameters: paramCount, totalSpace: totalSpace, kind: kind
                     )
                 }
             }
+            if skipToRow != nil { break }
             rowIndex += 1
             iterations += 1
         }

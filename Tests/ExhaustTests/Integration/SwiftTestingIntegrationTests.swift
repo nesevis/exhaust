@@ -132,28 +132,32 @@ struct SwiftTestingIntegrationTests {
 
     // MARK: - ReplaySeed literals
 
-    @Test("replay seed integer literal") func replaySeedIntegerLiteral() {
+    @Test("replay seed integer literal")
+    func replaySeedIntegerLiteral() {
         let seed: ReplaySeed = 42
         let resolved = seed.resolve()
         #expect(resolved?.seed == 42)
         #expect(resolved?.iteration == nil)
     }
 
-    @Test("replay seed with iteration") func replaySeedWithIteration() {
+    @Test("replay seed with iteration")
+    func replaySeedWithIteration() {
         let seed = ReplaySeed.encoded("1A-7")
         let resolved = seed.resolve()
         #expect(resolved?.seed == 42)
         #expect(resolved?.iteration == 7)
     }
 
-    @Test("replay seed without iteration") func replaySeedWithoutIteration() {
+    @Test("replay seed without iteration")
+    func replaySeedWithoutIteration() {
         let seed = ReplaySeed.encoded("1A")
         let resolved = seed.resolve()
         #expect(resolved?.seed == 42)
         #expect(resolved?.iteration == nil)
     }
 
-    @Test("replay seed with iteration generates exactly one value") func replaySeedWithIterationGeneratesOneValue() {
+    @Test("replay seed with iteration generates exactly one value")
+    func replaySeedWithIterationGeneratesOneValue() {
         let generator = #gen(.int(in: 0 ... 1000).array(length: 1 ... 5))
         var invocations = 0
         #exhaust(generator, .replay("19-3"), .suppress(.issueReporting), .onReport { report in
@@ -164,7 +168,8 @@ struct SwiftTestingIntegrationTests {
         #expect(invocations == 1)
     }
 
-    @Test("replay seed without iteration runs full budget") func replaySeedWithoutIterationRunsFullBudget() {
+    @Test("replay seed without iteration runs full budget")
+    func replaySeedWithoutIterationRunsFullBudget() {
         let generator = #gen(.int(in: 0 ... 100))
         var invocations = 0
         #exhaust(generator, .replay("19"), .budget(.custom(coverage: 0, sampling: 2)), .onReport { report in
@@ -173,6 +178,29 @@ struct SwiftTestingIntegrationTests {
             true
         }
         #expect(invocations == 2)
+    }
+
+    @Test("coverage replay seed resolves to row")
+    func coverageReplaySeedResolvesToRow() {
+        let seed = ReplaySeed.encoded("U6")
+        let resolved = seed.resolve()
+        if case let .coverage(row) = resolved {
+            #expect(row == 6)
+        } else {
+            Issue.record("Expected .coverage(row:), got \(String(describing: resolved))")
+        }
+    }
+
+    @Test("coverage replay tests exactly one row")
+    func coverageReplayTestsOneRow() {
+        let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))
+        var invocations = 0
+        #exhaust(generator, .replay("U3"), .suppress(.issueReporting), .onReport { report in
+            invocations = report.coverageInvocations
+        }) { _ in
+            true
+        }
+        #expect(invocations == 1)
     }
 
     @Test("replay seed invalid string returns nil") func replaySeedInvalidStringReturnsNil() {

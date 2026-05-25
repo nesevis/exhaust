@@ -50,11 +50,13 @@ package extension __ExhaustRuntime {
     static func runCoveragePhase<Output>(
         context: PipelineContext<Output>,
         coverageBudget: UInt64,
+        skipToRow: Int? = nil,
         report: inout ExhaustReport
     ) -> CoverageOutcome<Output> {
         let coverageResult = CoverageRunner.run(
             context.gen,
             coverageBudget: coverageBudget,
+            skipToRow: skipToRow,
             property: context.property,
             onExample: context.statsAccumulator.map { accumulator in
                 { value, tree, passed in
@@ -86,6 +88,7 @@ package extension __ExhaustRuntime {
                     case .rejected, .failed:
                         tree
                 }
+                let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration - 1)
                 let result = reduceAndReport(
                     context: context,
                     value: value,
@@ -95,7 +98,7 @@ package extension __ExhaustRuntime {
                     phaseBudget: coverageBudget,
                     coverageIterations: iteration,
                     randomSamplingIterations: 0,
-                    replayHint: "No replay seed — found via systematic combinatorial coverage.",
+                    replayHint: "Reproduce: .replay(\"\(coverageReplaySeed)\")",
                     report: &report
                 )
                 switch result {
@@ -321,12 +324,13 @@ package extension __ExhaustRuntime {
                     report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
                     emitFilterWarnings(interpreter.filterObservations, context: context)
 
+                    let absoluteIteration = Int(startIndex) + iterations
                     let result = reduceAndReport(
                         context: context,
                         value: next,
                         tree: tree,
                         seed: baseSeed,
-                        iteration: iterations,
+                        iteration: absoluteIteration,
                         phaseBudget: context.samplingBudget,
                         coverageIterations: coverageIterations,
                         randomSamplingIterations: iterations,
