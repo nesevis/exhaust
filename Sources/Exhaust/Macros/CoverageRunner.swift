@@ -38,10 +38,12 @@ package enum CoverageRunner {
             return .notApplicable
         }
 
-        if case let .boundary(boundaryProfile) = analysis,
-           boundaryProfile.totalSpace > coverageBudget
-        {
-            if let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false) {
+        if case let .boundary(boundaryProfile) = analysis {
+            let sorted = boundaryProfile.domainSizes.sorted(by: >)
+            let largestPairProduct = sorted.prefix(2).reduce(UInt64(1), *)
+            if largestPairProduct > coverageBudget,
+               let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false)
+            {
                 analysis = smaller
             }
         }
