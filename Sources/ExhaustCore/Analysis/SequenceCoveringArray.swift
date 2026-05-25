@@ -335,7 +335,7 @@ package enum SequenceCoveringArray {
         // Linear interpolation guess: assume roughly uniform contribution sizes.
         let totalDomain = lastSlot.flatOffset &+ lastSlot.contribution
         let guess = totalDomain > 0
-            ? min(Int(value &* UInt64(lastIdx) / totalDomain), lastIdx - 1)
+            ? min(Int(Double(value) * Double(lastIdx) / Double(totalDomain)), lastIdx - 1)
             : 0
 
         let idx = AdaptiveProbe.binarySearchWithGuess(
