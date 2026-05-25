@@ -67,6 +67,15 @@ public enum ExamineSettings: Sendable {
     /// .replay("3RT5GH8KM2")
     /// ```
     case replay(ReplaySeed)
+
+    /// Suppresses log output, issue reporting, or both.
+    ///
+    /// Use `.suppress(.issueReporting)` when the test asserts on the returned ``ValidationReport`` rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
+    /// ```swift
+    /// #examine(gen, .suppress(.logs))
+    /// #examine(gen, .suppress(.all))
+    /// ```
+    case suppress(SuppressOption)
 }
 
 // MARK: - Resolved Configuration
@@ -85,6 +94,10 @@ package struct ExamineReportingConfiguration {
     var samples: Int
     /// Replay seed for deterministic runs, or `nil` for random.
     var replaySeed: ReplaySeed?
+    /// Whether to suppress log output.
+    var suppressLogs: Bool
+    /// Whether to suppress issue reporting.
+    var suppressIssueReporting: Bool
 
     /// Builds a configuration by resolving an array of ``ExamineSettings``.
     ///
@@ -98,6 +111,8 @@ package struct ExamineReportingConfiguration {
         var filterHealthOverride: ExamineSeverity?
         var samples = 200
         var replaySeed: ReplaySeed?
+        var suppressLogs = false
+        var suppressIssueReporting = false
 
         for setting in settings {
             switch setting {
@@ -113,6 +128,16 @@ package struct ExamineReportingConfiguration {
                     samples = count
                 case let .replay(seed):
                     replaySeed = seed
+                case let .suppress(option):
+                    switch option {
+                        case .issueReporting:
+                            suppressIssueReporting = true
+                        case .logs:
+                            suppressLogs = true
+                        case .all:
+                            suppressIssueReporting = true
+                            suppressLogs = true
+                    }
             }
         }
 
@@ -122,5 +147,7 @@ package struct ExamineReportingConfiguration {
         filterHealthSeverity = filterHealthOverride ?? base
         self.samples = samples
         self.replaySeed = replaySeed
+        self.suppressLogs = suppressLogs
+        self.suppressIssueReporting = suppressIssueReporting
     }
 }
