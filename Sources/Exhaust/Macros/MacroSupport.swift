@@ -145,6 +145,7 @@ public extension __ExhaustRuntime {
     ) -> Output? {
         var budget = ExhaustBudget.standard
         var seed: UInt64?
+        var replayIteration: Int?
         var suppressIssueReporting = false
         var suppressLogs = false
         var visualize = false
@@ -160,8 +161,7 @@ public extension __ExhaustRuntime {
                 case let .budget(b):
                     budget = b
                 case let .replay(replaySeed):
-                    seed = replaySeed.resolve()
-                    if seed == nil {
+                    guard let resolved = replaySeed.resolve() else {
                         reportIssue(
                             "Invalid replay seed: \(replaySeed)",
                             fileID: fileID,
@@ -171,6 +171,8 @@ public extension __ExhaustRuntime {
                         )
                         return nil as Output?
                     }
+                    seed = resolved.seed
+                    replayIteration = resolved.iteration
                 case let .suppress(option):
                     switch option {
                         case .issueReporting:
@@ -219,8 +221,8 @@ public extension __ExhaustRuntime {
                 }
             #endif
 
-            let samplingBudget = budget.samplingBudget
-            let coverageBudget = budget.coverageBudget
+            let samplingBudget = replayIteration != nil ? 1 : budget.samplingBudget
+            let coverageBudget: UInt64 = replayIteration != nil ? 0 : budget.coverageBudget
             let totalBudget = coverageBudget + samplingBudget
             let reductionDeadlineNanoseconds = UInt64(totalBudget) * 5 * 1_000_000
             let reductionConfig = Interpreters.ReducerConfiguration(
@@ -336,6 +338,7 @@ public extension __ExhaustRuntime {
             let samplingResult = runSamplingPhase(
                 context: context,
                 seed: seed,
+                replayIteration: replayIteration,
                 coverageIterations: coverageIterations,
                 report: &report
             )
@@ -394,7 +397,7 @@ public extension __ExhaustRuntime {
         ) -> (counterexample: Output, seed: UInt64)? {
             guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
             for encodedSeed in traitConfig.regressions {
-                guard let seed = CrockfordBase32.decode(encodedSeed) else {
+                guard let resolved = CrockfordBase32.decodeWithIteration(encodedSeed) else {
                     reportIssue(
                         "Invalid regression seed: \(encodedSeed)",
                         fileID: fileID,
@@ -404,10 +407,11 @@ public extension __ExhaustRuntime {
                     )
                     continue
                 }
+                let seed = resolved.seed
                 let replayResult = __exhaust(
                     gen.wrapped,
                     settings: [
-                        .replay(.numeric(seed)),
+                        .replay(.encoded(encodedSeed)),
                         .suppress(.issueReporting),
                     ] + settings.filter { setting in
                         if case .budget = setting { return true }
@@ -785,7 +789,7 @@ public extension __ExhaustRuntime {
                     filterObservations: [:]
                 )
             }
-            seed = resolved
+            seed = resolved.seed
         }
 
         let gen = refGen.gen
@@ -837,7 +841,7 @@ public extension __ExhaustRuntime {
                     filterObservations: [:]
                 )
             }
-            seed = resolved
+            seed = resolved.seed
         }
 
         let gen = refGen.gen

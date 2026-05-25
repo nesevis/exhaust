@@ -134,7 +134,45 @@ struct SwiftTestingIntegrationTests {
 
     @Test("replay seed integer literal") func replaySeedIntegerLiteral() {
         let seed: ReplaySeed = 42
-        #expect(seed.resolve() == 42)
+        let resolved = seed.resolve()
+        #expect(resolved?.seed == 42)
+        #expect(resolved?.iteration == nil)
+    }
+
+    @Test("replay seed with iteration") func replaySeedWithIteration() {
+        let seed = ReplaySeed.encoded("1A-7")
+        let resolved = seed.resolve()
+        #expect(resolved?.seed == 42)
+        #expect(resolved?.iteration == 7)
+    }
+
+    @Test("replay seed without iteration") func replaySeedWithoutIteration() {
+        let seed = ReplaySeed.encoded("1A")
+        let resolved = seed.resolve()
+        #expect(resolved?.seed == 42)
+        #expect(resolved?.iteration == nil)
+    }
+
+    @Test("replay seed with iteration generates exactly one value") func replaySeedWithIterationGeneratesOneValue() {
+        let generator = #gen(.int(in: 0 ... 1000).array(length: 1 ... 5))
+        var invocations = 0
+        #exhaust(generator, .replay("19-3"), .suppress(.issueReporting), .onReport { report in
+            invocations = report.randomSamplingInvocations
+        }) { _ in
+            false
+        }
+        #expect(invocations == 1)
+    }
+
+    @Test("replay seed without iteration runs full budget") func replaySeedWithoutIterationRunsFullBudget() {
+        let generator = #gen(.int(in: 0 ... 100))
+        var invocations = 0
+        #exhaust(generator, .replay("19"), .budget(.custom(coverage: 0, sampling: 2)), .onReport { report in
+            invocations = report.randomSamplingInvocations
+        }) { _ in
+            true
+        }
+        #expect(invocations == 2)
     }
 
     @Test("replay seed invalid string returns nil") func replaySeedInvalidStringReturnsNil() {

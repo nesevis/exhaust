@@ -37,8 +37,7 @@ public extension __ExhaustRuntime {
                 case let .budget(exploreBudget):
                     budget = exploreBudget
                 case let .replay(replaySeed):
-                    seed = replaySeed.resolve()
-                    if seed == nil {
+                    guard let resolved = replaySeed.resolve() else {
                         reportIssue(
                             "Invalid replay seed: \(replaySeed)",
                             fileID: fileID,
@@ -58,6 +57,7 @@ public extension __ExhaustRuntime {
                             termination: .budgetExhausted
                         )
                     }
+                    seed = resolved.seed
                 case let .suppress(option):
                     switch option {
                         case .issueReporting:

@@ -34,7 +34,7 @@ struct ResolvedConcurrentConfig {
                     guard let resolved = replaySeed.resolve() else {
                         return .invalidReplaySeed(replaySeed)
                     }
-                    config.seed = resolved
+                    config.seed = resolved.seed
                 case let .suppress(option):
                     switch option {
                         case .issueReporting:

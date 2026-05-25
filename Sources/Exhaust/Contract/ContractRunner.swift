@@ -39,8 +39,7 @@ public func __runContract<Spec: ContractSpec>(
             case let .budget(b):
                 budget = b
             case let .replay(replaySeed):
-                seed = replaySeed.resolve()
-                if seed == nil {
+                guard let resolved = replaySeed.resolve() else {
                     reportIssue(
                         "Invalid replay seed: \(replaySeed)",
                         fileID: fileID,
@@ -50,6 +49,7 @@ public func __runContract<Spec: ContractSpec>(
                     )
                     return nil
                 }
+                seed = resolved.seed
             case let .suppress(option):
                 switch option {
                     case .issueReporting:

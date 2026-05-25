@@ -11,6 +11,29 @@ package enum CrockfordBase32 {
         "R", "S", "T", "V", "W", "X", "Y", "Z",
     ]
 
+    /// Encodes a seed and iteration into a combined replay string (for example, `"1A-7"`).
+    ///
+    /// The iteration suffix allows replay to jump directly to the failing run without regenerating preceding values.
+    public static func encode(seed: UInt64, iteration: Int) -> String {
+        "\(encode(seed))-\(iteration)"
+    }
+
+    /// Decodes a replay string into a seed and optional iteration.
+    ///
+    /// Accepts both `"1A"` (iteration is nil) and `"1A-7"` (iteration is 7) formats.
+    public static func decodeWithIteration(_ string: String) -> (seed: UInt64, iteration: Int?)? {
+        if let dashIndex = string.firstIndex(of: "-") {
+            let seedPart = String(string[string.startIndex ..< dashIndex])
+            let iterPart = String(string[string.index(after: dashIndex)...])
+            guard let seed = decode(seedPart), let iteration = Int(iterPart), iteration >= 0 else {
+                return nil
+            }
+            return (seed: seed, iteration: iteration)
+        }
+        guard let seed = decode(string) else { return nil }
+        return (seed: seed, iteration: nil)
+    }
+
     /// Encodes a `UInt64` as a Crockford Base32 string.
     ///
     /// - Parameter value: The value to encode.

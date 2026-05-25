@@ -21,6 +21,12 @@ struct PropertyTestFailure<Output> {
     /// When `true`, includes a structural diff between the original and reduced values. Off by default because the diff is expensive for large values.
     var includeDiff: Bool = false
 
+    /// Produces the encoded replay string including the iteration for O(1) reproduction.
+    private var encodedReplaySeed: String? {
+        guard let seed else { return nil }
+        return CrockfordBase32.encode(seed: seed, iteration: iteration)
+    }
+
     /// Dispatches to the appropriate renderer based on the configured log format.
     func render(format: LogFormat) -> String {
         switch format {
@@ -85,9 +91,9 @@ struct PropertyTestFailure<Output> {
             lines.append("Note: Reduction halted by time limit. Increase .budget(...) to allow more reduction time.")
         }
 
-        if let seed {
+        if let replaySeed = encodedReplaySeed {
             lines.append("")
-            lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")")
+            lines.append("Reproduce: .replay(\"\(replaySeed)\")")
         } else if let replayHint {
             lines.append("")
             lines.append(replayHint)
@@ -98,8 +104,8 @@ struct PropertyTestFailure<Output> {
 
     /// Renders only the replay seed — the `#expect` assertions provide per-value detail.
     private func renderKeyValueTransparent() -> String {
-        if let seed {
-            "Reproduce: .replay(\"\(CrockfordBase32.encode(seed))\")"
+        if let replaySeed = encodedReplaySeed {
+            "Reproduce: .replay(\"\(replaySeed)\")"
         } else if let replayHint {
             replayHint
         } else {
@@ -120,18 +126,16 @@ struct PropertyTestFailure<Output> {
             originalDump = dump
         }
 
-        let encodedSeed = seed.map { CrockfordBase32.encode($0) }
-
         let logLine = JSONLLogLine(
             event: "property_failed",
-            seed: encodedSeed,
+            seed: seed.map { CrockfordBase32.encode($0) },
             iteration: iteration,
             phaseBudget: phaseBudget,
             counterexample: transparent ? nil : counterexampleDump,
             original: originalDump,
             propertyInvocations: propertyInvocations,
-            replay: encodedSeed.map { ".replay(\"\($0)\")" },
-            replayHint: encodedSeed == nil ? replayHint : nil
+            replay: encodedReplaySeed.map { ".replay(\"\($0)\")" },
+            replayHint: encodedReplaySeed == nil ? replayHint : nil
         )
 
         let encoder = JSONEncoder()

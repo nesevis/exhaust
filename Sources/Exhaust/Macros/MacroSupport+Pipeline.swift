@@ -292,16 +292,19 @@ package extension __ExhaustRuntime {
     private static func runSingleLaneSampling<Output>(
         context: PipelineContext<Output>,
         baseSeed: UInt64,
+        replayIteration: Int?,
         generationPhaseStart: UInt64,
         coverageIterations: Int,
         report: inout ExhaustReport
     ) -> Output? {
+        let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
+        let maxRuns = replayIteration.map { UInt64($0) } ?? context.samplingBudget
         var interpreter = ValueAndChoiceTreeInterpreter(
             context.gen,
             materializePicks: false,
             seed: baseSeed,
-            maxRuns: context.samplingBudget,
-            initialRunIndex: 0
+            maxRuns: maxRuns,
+            initialRunIndex: startIndex
         )
         var iterations = 0
 
@@ -360,7 +363,7 @@ package extension __ExhaustRuntime {
         return nil
     }
 
-    /// Emits filter validity warnings when rejection rates are dangerously high.
+    /// Emits filter validity warnings when the rejection rate exceeds 98%.
     private static func emitFilterWarnings(
         _ observations: [UInt64: FilterObservation],
         context: PipelineContext<some Any>
@@ -388,6 +391,7 @@ package extension __ExhaustRuntime {
     static func runSamplingPhase<Output>( // swiftlint:disable:this function_body_length
         context: PipelineContext<Output>,
         seed: UInt64?,
+        replayIteration: Int? = nil,
         coverageIterations: Int,
         report: inout ExhaustReport
     ) -> Output? {
@@ -407,6 +411,7 @@ package extension __ExhaustRuntime {
             return runSingleLaneSampling(
                 context: context,
                 baseSeed: baseSeed,
+                replayIteration: replayIteration,
                 generationPhaseStart: generationPhaseStart,
                 coverageIterations: coverageIterations,
                 report: &report
