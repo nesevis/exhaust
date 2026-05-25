@@ -216,10 +216,10 @@ extension Materializer {
                     continuationFallback: continuationFallback
                 )
 
-            case let .impure(.pick(choices), continuation):
+            case let .impure(.pick(choices, totalWeight), continuation):
                 let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handlePick(
-                    choices,
+                    choices, totalWeight: totalWeight,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: calleeFallback,
                     continuationFallback: continuationFallback

@@ -105,7 +105,7 @@ extension Interpreters {
             case let .prune(nextGen):
                 return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput)
 
-            case let .pick(choices):
+            case let .pick(choices, _):
                 return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
 
             case let .chooseBits(min, max, tag, isRangeExplicit, _):

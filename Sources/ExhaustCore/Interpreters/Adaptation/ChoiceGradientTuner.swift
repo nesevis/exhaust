@@ -144,7 +144,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
             case let .impure(operation, continuation):
                 switch operation {
-                    case let .pick(choices):
+                    case let .pick(choices, _):
                         var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
                         baked.reserveCapacity(choices.count)
                         let depthOffset = UInt64(depth) &* 0x9E37_79B9_7F4A_7C15
@@ -167,7 +167,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                                 )
                             ))
                         }
-                        return .impure(operation: .pick(choices: baked), continuation: continuation)
+                        return .impure(operation: .pick(choices: baked, totalWeight: baked.reduce(0) { $0 &+ $1.weight }), continuation: continuation)
 
                     case let .zip(generators, _):
                         let bakedGens = ContiguousArray(generators.map {
@@ -303,7 +303,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                                 // Do NOT recurse into synthesized pick — inner generators are already subdivided
                                 return .impure(
-                                    operation: .pick(choices: subrangeChoices),
+                                    operation: .pick(choices: subrangeChoices, totalWeight: subrangeChoices.reduce(0) { $0 &+ $1.weight }),
                                     continuation: continuation
                                 )
                             }
@@ -347,7 +347,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                             // Do NOT recurse into synthesized pick — inner generators are already subdivided
                             return .impure(
-                                operation: .pick(choices: subrangeChoices),
+                                operation: .pick(choices: subrangeChoices, totalWeight: subrangeChoices.reduce(0) { $0 &+ $1.weight }),
                                 continuation: continuation
                             )
                         }
@@ -358,7 +358,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                             continuation: continuation
                         )
 
-                    case let .pick(choices):
+                    case let .pick(choices, _):
                         var subdivided = ContiguousArray<ReflectiveOperation.PickTuple>()
                         subdivided.reserveCapacity(choices.count)
                         for choice in choices {
@@ -369,7 +369,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                                 generator: subdivideForCGS(choice.generator, context: context, thresholds: thresholds)
                             ))
                         }
-                        return .impure(operation: .pick(choices: subdivided), continuation: continuation)
+                        return .impure(operation: .pick(choices: subdivided, totalWeight: subdivided.reduce(0) { $0 &+ $1.weight }), continuation: continuation)
 
                     case let .zip(generators, _):
                         let subdivided = try ContiguousArray(generators.map {
@@ -396,7 +396,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
             case let .impure(operation, continuation):
                 switch operation {
-                    case let .pick(choices) where choices.count >= 2:
+                    case let .pick(choices, _) where choices.count >= 2:
                         if let collapsed: Generator<Output> = collapseIfUniform(choices, continuation: continuation) {
                             return collapsed
                         }
@@ -408,7 +408,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                                 generator: collapseUniformSubdivisions(choice.generator)
                             )
                         })
-                        return .impure(operation: .pick(choices: recursed), continuation: continuation)
+                        return .impure(operation: .pick(choices: recursed, totalWeight: recursed.reduce(0) { $0 &+ $1.weight }), continuation: continuation)
 
                     case let .sequence(lengthGen, elementGen):
                         return .impure(
@@ -511,7 +511,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         }
 
         return .impure(
-            operation: .pick(choices: choices),
+            operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
             continuation: { .pure($0 as! Output) } // swiftlint:disable:this force_cast
         )
     }

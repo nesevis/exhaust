@@ -39,7 +39,7 @@ package extension Gen {
                 generator: choice.generator.erase()
             ))
         }
-        return liftF(.pick(choices: array))
+        return liftF(.pick(choices: array, totalWeight: array.reduce(0) { $0 &+ $1.weight }))
     }
 
     /// Selects from multiple weighted generator options.

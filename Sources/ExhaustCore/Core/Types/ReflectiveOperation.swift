@@ -105,8 +105,10 @@ package enum ReflectiveOperation {
     ///
     /// **Invariants:** Every ``PickTuple/generator`` is type-erased to `AnyGenerator` and must produce a value whose type matches the continuation attached to this operation. Branch identifiers are `0 ..< choices.count`.
     ///
-    /// - Parameter choices: Array of weighted generator options with replay labels.
-    case pick(choices: ContiguousArray<PickTuple>)
+    /// - Parameters:
+    ///   - choices: Array of weighted generator options with replay labels.
+    ///   - totalWeight: Pre-computed sum of all branch weights, cached at construction to avoid recomputing on every draw.
+    case pick(choices: ContiguousArray<PickTuple>, totalWeight: UInt64)
 
     /// Eliminates a reflection branch when the preceding ``contramap`` returns `nil`.
     ///

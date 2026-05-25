@@ -283,7 +283,7 @@ extension GeneratorTuning {
         }
 
         return .impure(
-            operation: .pick(choices: tunedChoices),
+            operation: .pick(choices: tunedChoices, totalWeight: tunedChoices.reduce(0) { $0 &+ $1.weight }),
             continuation: continuation
         )
     }
@@ -318,7 +318,7 @@ extension GeneratorTuning {
         }
 
         let synthesisedPick: Generator<Output> = .impure(
-            operation: .pick(choices: choices),
+            operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
             continuation: continuation
         )
 
@@ -388,7 +388,7 @@ extension GeneratorTuning {
             }
 
             let synthesisedPick: Generator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices),
+                operation: .pick(choices: subrangeChoices, totalWeight: subrangeChoices.reduce(0) { $0 &+ $1.weight }),
                 continuation: continuation
             )
 
@@ -443,7 +443,7 @@ extension GeneratorTuning {
             }
 
             let synthesisedPick: Generator<Output> = .impure(
-                operation: .pick(choices: subrangeChoices),
+                operation: .pick(choices: subrangeChoices, totalWeight: subrangeChoices.reduce(0) { $0 &+ $1.weight }),
                 continuation: continuation
             )
 
@@ -499,7 +499,7 @@ extension GeneratorTuning {
         }
 
         let synthesisedPick: Generator<Output> = .impure(
-            operation: .pick(choices: choices),
+            operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
             continuation: continuation
         )
 

@@ -144,7 +144,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 let rawBits = context.prng.next(in: effectiveRange)
                 let randomBits: Any = tag.isFloatingPoint
-                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    ? floatingPointBits(rawBits: rawBits, tag: tag, effectiveRange: effectiveRange)
                     : rawBits
                 let nextGen = try continuation(randomBits)
                 if case let .pure(final) = nextGen { return final }
@@ -190,9 +190,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
         // MARK: pick
 
-            case let .impure(operation: .pick(choices), continuation):
+            case let .impure(operation: .pick(choices, totalWeight), continuation):
                 guard let selectedChoice = WeightedPickSelection.draw(
-                    from: choices, using: &context.prng
+                    from: choices, totalWeight: totalWeight, using: &context.prng
                 ) else {
                     return nil
                 }
@@ -415,5 +415,12 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     @inline(__always)
     static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
         SharedInterpreterHelpers.consumeSize(&context)
+    }
+
+    @inline(never)
+    static func floatingPointBits(
+        rawBits: UInt64, tag: TypeTag, effectiveRange: ClosedRange<UInt64>
+    ) -> Any {
+        tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
     }
 }

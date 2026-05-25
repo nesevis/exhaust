@@ -156,6 +156,7 @@ extension Materializer {
     @inline(__always)
     static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        totalWeight: UInt64,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
@@ -202,11 +203,11 @@ extension Materializer {
                     let fallbackIndex = Int(fbBranchId)
                     selectedChoice = fallbackIndex < choices.count ? choices[fallbackIndex] : nil
                 } else {
-                    selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng)
+                    selectedChoice = WeightedPickSelection.draw(from: choices, totalWeight: totalWeight, using: &context.prng)
                 }
 
             case .generate:
-                selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng)
+                selectedChoice = WeightedPickSelection.draw(from: choices, totalWeight: totalWeight, using: &context.prng)
 
             case .minimize:
                 selectedChoice = choices.first

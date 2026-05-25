@@ -236,7 +236,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
                 let rawBits = context.prng.next(in: effectiveRange)
                 let randomBits = tag.isFloatingPoint
-                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    ? Self.floatingPointBits(rawBits: rawBits, tag: tag, effectiveRange: effectiveRange)
                     : rawBits
                 let calleeTree = ChoiceTree.choice(
                     ChoiceValue(randomBits, tag: tag),
@@ -291,9 +291,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // MARK: pick
 
-            case let .impure(operation: .pick(choices), continuation):
+            case let .impure(operation: .pick(choices, totalWeight), continuation):
                 return try handlePick(
-                    choices,
+                    choices, totalWeight: totalWeight,
                     continuation: continuation, inputValue: inputValue, context: &context
                 )
 
@@ -447,13 +447,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     private static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        totalWeight: UInt64,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
         let branchCount = UInt64(choices.count)
         guard let selectedChoice = WeightedPickSelection.draw(
-            from: choices,
+            from: choices, totalWeight: totalWeight,
             using: &context.prng
         ) else {
             return nil
@@ -563,6 +564,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     @inline(__always)
     static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
         SharedInterpreterHelpers.consumeSize(&context)
+    }
+
+    @inline(never)
+    static func floatingPointBits(
+        rawBits: UInt64, tag: TypeTag, effectiveRange: ClosedRange<UInt64>
+    ) -> UInt64 {
+        tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
     }
 
     @inline(__always)

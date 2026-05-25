@@ -298,9 +298,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Pick (CGS Core)
 
-                    case let .pick(choices):
+                    case let .pick(choices, totalWeight):
                         return try handlePick(
-                            choices,
+                            choices, totalWeight: totalWeight,
                             continuation: continuation,
                             inputValue: inputValue,
                             context: &context,
@@ -323,7 +323,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                            )
                         {
                             let synthesisedPick: Generator<Output> = .impure(
-                                operation: .pick(choices: choices),
+                                operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
                                 continuation: continuation
                             )
 
@@ -707,6 +707,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     @inline(__always)
     private static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        totalWeight: UInt64,
         continuation: @escaping (Any) throws -> Generator<Output>,
         inputValue: some Any,
         context: inout GenerationContext,
@@ -720,7 +721,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         let effectiveSampleCount = Swift.max(2, sampleCount >> derivativeContext.depth)
         if choices.count == 1 || derivativeContext.depth >= Self.maxDerivativeDepth {
             guard let selectedChoice = WeightedPickSelection.draw(
-                from: choices, using: &context.prng
+                from: choices, totalWeight: totalWeight, using: &context.prng
             ) else {
                 return nil
             }
@@ -891,8 +892,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         }
 
         // 3. Select branch weighted by fitness
+        let weightedTotalWeight = weightedChoices.reduce(0 as UInt64) { $0 &+ $1.weight }
         guard let selectedChoice = WeightedPickSelection.draw(
-            from: weightedChoices, using: &context.prng
+            from: weightedChoices, totalWeight: weightedTotalWeight, using: &context.prng
         ) else {
             return nil
         }

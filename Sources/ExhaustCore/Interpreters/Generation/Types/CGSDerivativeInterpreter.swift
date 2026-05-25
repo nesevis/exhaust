@@ -62,8 +62,8 @@ package enum CGSDerivativeInterpreter {
                             inputValue: inputValue, rng: &rng, size: size
                         )
 
-                    case let .pick(choices):
-                        guard let selected = WeightedPickSelection.draw(from: choices, using: &rng) else {
+                    case let .pick(choices, totalWeight):
+                        guard let selected = WeightedPickSelection.draw(from: choices, totalWeight: totalWeight, using: &rng) else {
                             return nil
                         }
                         _ = rng.next() // parity with other interpreters
