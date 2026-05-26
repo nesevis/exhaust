@@ -175,7 +175,7 @@ Based on the Apple Style Guide (June 2025), US English:
 3. **No Latin abbreviations**: "for example" not "e.g.", "that is" not "i.e.", "and so on" not "etc."
 4. **Present tense, active voice**: "Generates dates within the range" not "This will generate dates".
 5. **Numerals**: Spell out zero through nine. Use numerals for 10 and above. Exception: always use numerals in technical contexts (bit widths, array lengths, domain sizes).
-6. **Code references**: Double backticks for symbol references in doc comments (``ReflectiveGenerator``). Single backticks for inline code literals in discussion text (`UInt64`).
+6. **Code references**: Double backticks for Exhaust-defined symbol references in doc comments (``ReflectiveGenerator``, ``Gen/choose(in:)``). Single backticks for standard library and system framework types (`Int`, `Double`, `Hashable`, `CharacterSet`) and for inline code literals in discussion text (`UInt64`).
 7. **Punctuation**: All summary lines and list items end with a period.
 8. **No hard line breaks in comment prose**: Do not insert line breaks to wrap paragraph text in `///` doc comments or `//` implementation notes. Write each sentence or logical clause as a continuous line — do not break lines to fit a character-per-line limit. Hard breaks in prose cause awkward double-wrapping at narrow widths. This does not apply to code examples, tables, diagrams, or other content where visual layout matters.
 

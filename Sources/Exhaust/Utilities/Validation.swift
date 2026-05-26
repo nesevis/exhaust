@@ -5,26 +5,58 @@ import IssueReporting
 
 // MARK: - Types
 
-/// A report summarizing the results of generator validation.
+/// Summarizes the correctness and coverage results of a ``#examine`` validation run.
 ///
-/// This type is public because it appears in the return type of ``#examine``. Users inspect reports but do not construct them directly — validation is performed internally by the ``#examine`` macro.
-public struct ValidationReport: Sendable, CustomStringConvertible {
+/// Capture the return value of ``#examine`` to assert on coverage quality:
+/// ```swift
+/// let report = #examine(myGen, .samples(200))
+/// #expect(report.decilesCovered.allSatisfy { $0.value >= 6 })
+/// #expect(report.branchCoverage == 1.0)
+/// ```
+///
+/// Correctness properties (``reflectionRoundTripSuccesses``, ``replayDeterminismSuccesses``) reflect whether the generator round-trips and replays correctly. Coverage properties (``decilesCovered``, ``branchCoverage``, ``sequenceLengthDeciles``, ``characterVariety``, ``complexityDeciles``) measure how well the generator explores its domain. When a metric does not apply to the generator (for example, ``branchCoverage`` on a generator with no picks), the property returns a passing default so assertions do not fail on irrelevant checks.
+public struct ExamineReport: Sendable, CustomStringConvertible {
     /// Number of samples requested for the validation run.
     public let sampleCount: Int
-    /// Number of values the generator actually produced.
+    /// Number of values the generator actually produced. Lower than ``sampleCount`` when generation fails for some samples.
     public let valuesGenerated: Int
-    /// Number of values that survived reflection round-trip without change.
+    /// Number of values that survived reflection round-trip without change. Equal to ``valuesGenerated`` for a healthy generator.
     public let reflectionRoundTripSuccesses: Int
-    /// Number of values that replayed deterministically from their choice tree.
+    /// Number of values that replayed deterministically from their choice tree. Equal to ``valuesGenerated`` for a healthy generator.
     public let replayDeterminismSuccesses: Int
-    /// Number of distinct choice sequences observed across all generated values.
+    /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
     public let uniqueChoiceSequences: Int
-    /// All validation failures detected during the run.
-    public let failures: [ValidationFailure]
-    /// Total wall-clock time for the validation run, in seconds.
+    /// All validation failures detected during the run. Empty when the generator is healthy.
+    public let failures: [ExamineFailure]
+    /// Wall-clock time spent generating values, in seconds. Does not include correctness checks.
+    public let generationTime: Double
+    /// Total wall-clock time for the entire validation run, in seconds.
     public let elapsedTime: Double
-    /// Per-fingerprint filter predicate observations accumulated during generation.
+    /// Per-filter predicate observations accumulated during generation, keyed by filter fingerprint. Check ``FilterObservation/validityRate`` and ``FilterObservation/sourceLocation`` to identify sparse filters.
     public let filterObservations: [UInt64: FilterObservation]
+
+    // MARK: - Coverage Metrics
+
+    /// Per-type coverage and descriptive statistics for numeric parameters. Each entry reports decile coverage and min/max/mean of the decoded values. Empty when the generator has no numeric parameters with a domain size of 10 or more.
+    public let numericCoverage: [NumericTypeCoverage]
+    /// Fraction of all pick branches observed out of all possible branches across all pick sites. Returns 1.0 when the generator has no pick sites.
+    public let branchCoverage: Double
+    /// Minimum decile coverage across all sequence-length sites. A value below 10 means at least one sequence site did not explore its full length range. Returns 10 when the generator has no sequences.
+    public let sequenceLengthDeciles: Int
+    /// Whether the generator contains sequence nodes.
+    public let hasSequences: Bool
+    /// Per-domain character variety. Each entry reports the fraction covered and the domain size. Empty when the generator has no character parameters. The minimum variety across all domains is used for single-value assertions.
+    public let characterCoverage: [(domainSize: Int, variety: Double)]
+
+    /// Minimum character variety across all character domains. Returns 1.0 when the generator has no character parameters.
+    public var characterVariety: Double {
+        characterCoverage.map(\.variety).min() ?? 1.0
+    }
+
+    /// Deciles covered in the normalized per-sample complexity distribution. A value below 10 means the generator does not produce a full variety of structural sizes. Returns 10 when complexity does not vary (for example, generators with no sequences).
+    public let complexityDeciles: Int
+    /// A representative sample from the midpoint of the run, showing the generator's structural shape at a typical size parameter.
+    package let representativeTree: ChoiceTree?
 
     /// Whether the validation passed with no failures.
     public var passed: Bool {
@@ -43,10 +75,10 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
         return Double(uniqueChoiceSequences) / Double(valuesGenerated)
     }
 
-    /// Average time per sample (generate + reflect + replay), in seconds.
+    /// Average generation time per sample, in seconds. Does not include correctness checks.
     public var averageTimePerSample: Double {
         guard valuesGenerated > 0 else { return 0 }
-        return elapsedTime / Double(valuesGenerated)
+        return generationTime / Double(valuesGenerated)
     }
 
     /// Whether the average time per sample exceeds 5 ms, suggesting the generator may be too expensive for large-scale property testing.
@@ -56,47 +88,113 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
 
     public var description: String {
         var lines: [String] = []
-        lines.append("ValidationReport(samples: \(sampleCount), generated: \(valuesGenerated))")
-        lines.append("  Reflection round-trip: \(reflectionRoundTripSuccesses)/\(valuesGenerated) (\(String(format: "%.1f", reflectionSuccessRate * 100))%)")
-        lines.append("  Replay determinism:    \(replayDeterminismSuccesses)/\(valuesGenerated)")
-        lines.append("  Unique sequences:      \(uniqueChoiceSequences)/\(valuesGenerated) (\(String(format: "%.1f", uniquenessRate * 100))%)")
         let perSampleMs = averageTimePerSample * 1000
-        lines.append("  Avg time per sample:   \(String(format: "%.2f", perSampleMs)) ms\(isSlowGenerator ? " (slow)" : "")")
-        if filterObservations.isEmpty == false {
-            for (fingerprint, observation) in filterObservations.sorted(by: { $0.key < $1.key }) {
-                let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-                lines.append("  Filter \(fingerprintShort):       \(observation.passes)/\(observation.attempts) (\(String(format: "%.1f", observation.validityRate * 100))%)")
+        lines.append("#examine: \(valuesGenerated) samples, \(String(format: "%.3f", perSampleMs))ms/sample")
+
+        lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection, \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
+        lines.append("  Unique: \(uniqueChoiceSequences)/\(valuesGenerated)")
+
+        let hasNumeric = numericCoverage.isEmpty == false
+        let hasBranches = branchCoverage < 1.0
+        let hasCharacterCoverage = characterCoverage.isEmpty == false
+
+        if hasNumeric || hasSequences || hasBranches || hasCharacterCoverage {
+            lines.append("  Coverage:")
+            for entry in numericCoverage {
+                let bar = decileBar(covered: entry.decilesCovered)
+                let stats = formatStats(entry)
+                lines.append("    \(entry.type): \(bar) \(entry.decilesCovered)/10 deciles \(stats)")
+            }
+            if hasSequences {
+                lines.append("    Sequences: \(sequenceLengthDeciles)/10 deciles")
+            }
+            if hasBranches {
+                lines.append("    Branches: \(String(format: "%.0f", branchCoverage * 100))%")
+            }
+            if hasCharacterCoverage {
+                for entry in characterCoverage {
+                    lines.append("    Characters: \(String(format: "%.0f", entry.variety * 100))% (of \(entry.domainSize) code points)")
+                }
             }
         }
-        if failures.isEmpty {
-            lines.append("  Result: PASSED")
-        } else {
-            lines.append("  Result: FAILED (\(failures.count) failure(s))")
-            for failure in failures {
+
+        if filterObservations.isEmpty == false {
+            lines.append("  Filters:")
+            for (_, observation) in filterObservations.sorted(by: { $0.key < $1.key }) {
+                let location: String
+                if let source = observation.sourceLocation {
+                    let file = "\(source.fileID)".split(separator: "/").last.map(String.init) ?? "\(source.fileID)"
+                    location = "\(file):\(source.line)"
+                } else {
+                    location = "unknown"
+                }
+                let filterTypeLabel = observation.filterType?.shortDescription ?? "auto"
+                let discarded = observation.attempts - observation.passes
+                lines.append("    \(location): \(String(format: "%.0f", observation.validityRate * 100))% (\(filterTypeLabel), \(discarded) discarded)")
+            }
+        }
+
+        if complexityDeciles < 10 {
+            lines.append("  Complexity: \(complexityDeciles)/10 deciles")
+        }
+
+        if failures.isEmpty == false {
+            lines.append("  Failures: \(failures.count)")
+            for failure in failures.prefix(5) {
                 lines.append("    - \(failure)")
             }
+            if failures.count > 5 {
+                lines.append("    ... and \(failures.count - 5) more")
+            }
         }
+
+        if let tree = representativeTree {
+            lines.append("  Example:")
+            for treeLine in tree.debugDescription.split(separator: "\n", omittingEmptySubsequences: false) {
+                lines.append("    \(treeLine)")
+            }
+        }
+
         return lines.joined(separator: "\n")
+    }
+
+    private func decileBar(covered: Int) -> String {
+        var bar = "["
+        for index in 0 ..< 10 {
+            bar += index < covered ? "\u{2022}" : " "
+        }
+        bar += "]"
+        return bar
+    }
+
+    private func formatStats(_ entry: NumericTypeCoverage) -> String {
+        let formatValue = { (value: Double) -> String in
+            if value == value.rounded(), abs(value) < 1e15 {
+                return String(format: "%.0f", value)
+            }
+            return String(format: "%.2f", value)
+        }
+        return "(min: \(formatValue(entry.min)), max: \(formatValue(entry.max)), mean: \(formatValue(entry.mean)))"
     }
 }
 
-/// A specific validation failure detected during generator validation.
+/// Describes a single failure detected during an ``#examine`` validation run.
 ///
-/// Public because it appears in ``ValidationReport/failures``. Users match cases to diagnose failures reported by ``#examine`` but do not construct instances directly.
-public enum ValidationFailure: Sendable, CustomStringConvertible {
-    /// Indicates that reflecting and replaying a generated value produced a different result.
+/// Match on cases to diagnose failures reported in ``ExamineReport/failures``.
+public enum ExamineFailure: Sendable, CustomStringConvertible {
+    /// The generator's `backward` mapping does not invert its `forward` mapping for this sample. Check that `backward(forward(x)) == x` holds.
     case reflectionRoundTripMismatch(sampleIndex: Int, detail: String)
-    /// Indicates that reflecting a generated value back through the generator threw an error.
+    /// Reflection threw an error for this sample. The generator may use an unsupported operation or have an incomplete backward mapping.
     case reflectionFailed(sampleIndex: Int, errorDescription: String?)
-    /// Indicates that replaying a reflected choice tree did not produce a value.
+    /// Replaying the choice tree produced no value. The generator may depend on external state that changed between generation and replay.
     case replayFailed(sampleIndex: Int)
-    /// Indicates that replaying a reflected choice tree produced a different value than the original.
+    /// Two replays of the same choice tree produced different values. The generator contains non-determinism, for example, reliance on mutable external state.
     case replayNonDeterministic(sampleIndex: Int, detail: String?)
-    /// Indicates that the generator produced no values during the validation sample.
+    /// The generator produced no values at all. It may always throw, or its filter may reject every candidate.
     case noValuesGenerated
-    /// Reflection failed because the generator contains a forward-only `map` or `bind`.
+    /// The generator contains a forward-only `map` or `bind` without a backward mapping. Use `.mapped(forward:backward:)` or `.bound(forward:backward:)` to provide an inverse.
     case forwardOnlyTransform(inputType: String, outputType: String, kind: String)
-    /// A filter's predicate passed less than 5% of the time over a meaningful sample.
+    /// A filter predicate passed less than 5% of the time over at least 20 attempts. The generator is spending most of its budget on rejection.
     case lowFilterValidityRate(fingerprint: UInt64, rate: Double, attempts: Int)
 
     public var description: String {
@@ -132,7 +230,7 @@ package extension Generator where Operation == ReflectiveOperation {
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
-    /// - Returns: A ``ValidationReport`` summarizing the results.
+    /// - Returns: A ``ExamineReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
@@ -142,7 +240,7 @@ package extension Generator where Operation == ReflectiveOperation {
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ValidationReport {
+    ) -> ExamineReport {
         _validate(
             samples: samples,
             seed: seed,
@@ -167,7 +265,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
-    /// - Returns: A ``ValidationReport`` summarizing the results.
+    /// - Returns: A ``ExamineReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
@@ -177,7 +275,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ValidationReport {
+    ) -> ExamineReport {
         _validate(
             samples: samples,
             seed: seed,
@@ -222,14 +320,16 @@ private extension Generator where Operation == ReflectiveOperation {
         filePath: StaticString,
         line: UInt,
         column: UInt
-    ) -> ValidationReport {
+    ) -> ExamineReport {
         let maxFailures = 20
-        var failures: [ValidationFailure] = []
+        var failures: [ExamineFailure] = []
         var forwardOnlyDetected = false
         var valuesGenerated = 0
         var roundTripSuccesses = 0
         var determinismSuccesses = 0
         var uniqueSequences: Set<ChoiceSequence> = []
+        var storedTrees: [ChoiceTree] = []
+        storedTrees.reserveCapacity(samples)
         let startNanoseconds = monotonicNanoseconds()
 
         var iterator = ValueAndChoiceTreeInterpreter(
@@ -238,9 +338,14 @@ private extension Generator where Operation == ReflectiveOperation {
             maxRuns: UInt64(samples)
         )
 
+        var generationNanoseconds: UInt64 = 0
+
         for sampleIndex in 0 ..< samples {
+            let genStart = monotonicNanoseconds()
             guard let (value, tree) = try? iterator.next() else { continue }
+            generationNanoseconds += monotonicNanoseconds() - genStart
             valuesGenerated += 1
+            storedTrees.append(tree)
 
             let generatedSequence = ChoiceSequence.flatten(tree)
             uniqueSequences.insert(generatedSequence)
@@ -270,16 +375,15 @@ private extension Generator where Operation == ReflectiveOperation {
                             ))
                         }
                     } else {
-                        // Non-Equatable path: compare via choice sequences
-                        let reflectedSequence = ChoiceSequence.flatten(tree)
-                        if generatedSequence == reflectedSequence {
-                            roundTripSuccesses += 1
-                        } else {
-                            let detail = "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)"
+                        // Non-Equatable path: walk both trees and compare values at every choice site
+                        let originalTree = storedTrees[valuesGenerated - 1]
+                        if let mismatch = ChoiceTree.compareValues(originalTree, tree) {
                             failures.append(.reflectionRoundTripMismatch(
                                 sampleIndex: sampleIndex,
-                                detail: detail
+                                detail: mismatch
                             ))
+                        } else {
+                            roundTripSuccesses += 1
                         }
                     }
                 } catch let error as ReflectionError {
@@ -342,8 +446,10 @@ private extension Generator where Operation == ReflectiveOperation {
             }
         }
 
-        let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
-        let elapsedSeconds = Double(elapsedNanoseconds) * 1e-9
+        let nanosecondsPerSecond = 1_000_000_000.0
+        let totalElapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
+        let elapsedSeconds = Double(totalElapsedNanoseconds) / nanosecondsPerSecond
+        let generationSeconds = Double(generationNanoseconds) / nanosecondsPerSecond
 
         if valuesGenerated == 0 {
             failures.append(.noValuesGenerated)
@@ -359,16 +465,30 @@ private extension Generator where Operation == ReflectiveOperation {
             }
         }
 
-        let report = ValidationReport(
+        let coverage = ExamineCoverageAnalysis.analyze(trees: storedTrees)
+
+        let report = ExamineReport(
             sampleCount: samples,
             valuesGenerated: valuesGenerated,
             reflectionRoundTripSuccesses: roundTripSuccesses,
             replayDeterminismSuccesses: determinismSuccesses,
             uniqueChoiceSequences: uniqueSequences.count,
             failures: failures,
+            generationTime: generationSeconds,
             elapsedTime: elapsedSeconds,
-            filterObservations: iterator.filterObservations
+            filterObservations: iterator.filterObservations,
+            numericCoverage: coverage.numericCoverage,
+            branchCoverage: coverage.branchCoverage,
+            sequenceLengthDeciles: coverage.sequenceLengthDeciles,
+            hasSequences: coverage.hasSequences,
+            characterCoverage: coverage.characterCoverage,
+            complexityDeciles: coverage.complexityDeciles,
+            representativeTree: Self.medianComplexityTree(from: storedTrees)
         )
+
+        if reporting?.suppressIssueReporting == true {
+            return report
+        }
 
         for failure in report.failures {
             let examineSeverity: ExamineSeverity = switch failure {
@@ -418,6 +538,13 @@ private extension Generator where Operation == ReflectiveOperation {
         }
 
         return report
+    }
+
+    static func medianComplexityTree(from trees: [ChoiceTree]) -> ChoiceTree? {
+        guard trees.isEmpty == false else { return nil }
+        let scored = trees.enumerated().map { (index: $0.offset, complexity: $0.element.complexity) }
+        let sorted = scored.sorted { $0.complexity < $1.complexity }
+        return trees[sorted[sorted.count / 2].index]
     }
 }
 

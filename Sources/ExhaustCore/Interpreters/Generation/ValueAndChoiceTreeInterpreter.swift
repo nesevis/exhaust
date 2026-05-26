@@ -349,7 +349,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     ) else { return nil }
                     let passed = predicate(result)
                     if context.filterObservations[fingerprint] == nil {
-                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation)
+                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                     }
                     context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
                     if passed {
