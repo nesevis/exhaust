@@ -66,11 +66,11 @@ The reducer drove the first `increment` into the sequential prefix, leaving two 
 
 ## What makes Exhaust different
 
-Exhaust is built on [reflective generators](https://dl.acm.org/doi/10.1145/3607842): generators as inspectable data structures rather than opaque closures. The library runs them forward to generate values, backward to reflect known values, and replays them for deterministic reproduction. Three things follow from this foundation:
+Exhaust is built on [reflective generators](https://dl.acm.org/doi/10.1145/3607842): generators that are inspectable data structures rather than opaque closures. This foundation enables:
 
-- **Edge cases first**: Before random sampling begins, Exhaust systematically tests values that bugs cluster around: range boundaries, zero crossings, NaN, empty collections, timezone transitions, funky unicode. These are combined in pairwise order. Random sampling would take thousands of iterations to reach these values by chance.
+- **Edge cases first**: Before random sampling begins, Exhaust systematically tests values that bugs cluster around: range boundaries, zero crossings, NaN, empty collections, timezone transitions, funky unicode. These are combined in pairwise order. Because the generator's structure is inspectable, Exhaust is able to analyse its parameters and their domains; because it's replayable, these values can be targeted directly. Random sampling would take thousands of iterations to reach these values by chance.
 
-- **Minimal counterexamples**: When a property fails, Exhaust reduces the failing input to the smallest counterexample that still triggers the failure. Reduction operates on the generator's recorded choices rather than the output value, so it works for every type without custom reduction logic. Because the generator's structure is inspectable, the reducer understands how values relate to each other — which are independent, which are entangled through dependencies — and finds [smaller counterexamples](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/README.md) than most other reducers.
+- **Minimal counterexamples**: When a property fails, Exhaust reduces the failing input to the smallest counterexample that still triggers the failure. Reduction works for every type without custom logic, and because the reducer understands how values relate to each other, it finds [smaller counterexamples](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/README.md) than most other reducers.
 
 - **Filters that don't time out**: Most similar libraries implement `.filter` by generating values and discarding those that fail the predicate. When valid values are sparse, this can appear to hang. Exhaust analyses the generator, measures which choices lead toward valid outputs, and reweights accordingly, a technique called Choice Gradient Sampling (CGS).
 
