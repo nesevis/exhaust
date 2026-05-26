@@ -34,6 +34,9 @@ package enum ExamineCoverageAnalysis {
             branchCoverage: branchAccumulator.result(),
             sequenceLengthDeciles: sequenceAccumulator.result(),
             hasSequences: sequenceAccumulator.hasObservations,
+            sequenceLengthMin: sequenceAccumulator.minLength,
+            sequenceLengthMax: sequenceAccumulator.maxLength,
+            sequenceLengthMean: sequenceAccumulator.meanLength,
             characterCoverage: characterAccumulator.results(),
             complexityDeciles: computeComplexityDeciles(complexityScores)
         )
@@ -66,6 +69,12 @@ package struct ExamineCoverageResult: Sendable {
     package let sequenceLengthDeciles: Int
     /// Whether the generator contains sequence nodes.
     package let hasSequences: Bool
+    /// Smallest observed sequence length.
+    package let sequenceLengthMin: Int
+    /// Largest observed sequence length.
+    package let sequenceLengthMax: Int
+    /// Mean observed sequence length.
+    package let sequenceLengthMean: Double
     /// Per-domain character variety. Each entry reports the fraction of that domain covered and its total size.
     package let characterCoverage: [(domainSize: Int, variety: Double)]
     /// Deciles covered in the normalized per-tree complexity distribution.
@@ -76,6 +85,9 @@ package struct ExamineCoverageResult: Sendable {
         branchCoverage: 1.0,
         sequenceLengthDeciles: 10,
         hasSequences: false,
+        sequenceLengthMin: 0,
+        sequenceLengthMax: 0,
+        sequenceLengthMean: 0,
         characterCoverage: [],
         complexityDeciles: 10
     )
@@ -309,6 +321,19 @@ private struct SequenceAccumulator {
 
     var hasObservations: Bool {
         observations.isEmpty == false
+    }
+
+    var minLength: Int {
+        observations.map { Int($0.length) }.min() ?? 0
+    }
+
+    var maxLength: Int {
+        observations.map { Int($0.length) }.max() ?? 0
+    }
+
+    var meanLength: Double {
+        guard observations.isEmpty == false else { return 0 }
+        return Double(observations.map { Int($0.length) }.reduce(0, +)) / Double(observations.count)
     }
 
     func result() -> Int {

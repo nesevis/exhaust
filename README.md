@@ -495,21 +495,21 @@ A passing property test gives no signal about whether the generator explored its
 `#examine` generates 200 samples (configurable), checks that each value round-trips through reflection and replays deterministically, and measures how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
 
 ```
-#examine: 200 samples, 0.062ms/sample
+#examine: 200 samples, 0.064ms/sample
   Correctness: 200/200 reflection, 200/200 replay
   Unique: 200/200
   Coverage:
-    UInt: [••••••••• ] 9/10 deciles (min: 18, max: 120, mean: 66.61)
-    Sequences: 10/10 deciles
+    UInt: [••••••••• ] 9/10 deciles (min: 20, max: 120, mean: 69.19)
+    Sequences: [••••••••••] 10/10 deciles (min: 0, max: 95, mean: 26.07)
     Characters: 100% (of 95 code points)
     Characters: 2% (of 291108 code points)
   Filters:
-    YourFile.swift:125: 87% (CGS, 31 discarded)
+    YourFile.swift:125: 83% (CGS, 40 discarded)
   Example:
     └── group
-        ├── string(length: 29) 0...42
-        ├── string(length: 18) 0...42
-        └── choice(unsigned: 27) 0...120
+        ├── string(length: 42) 0...55
+        ├── string(length: 2) 0...55
+        └── choice(unsigned: 81) 0...120
 ```
 
 `10/10 deciles` means the generator spread across its entire range. `3/10` means it clustered and is worth investigating.

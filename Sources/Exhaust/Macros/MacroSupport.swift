@@ -818,6 +818,9 @@ public extension __ExhaustRuntime {
                     branchCoverage: 1.0,
                     sequenceLengthDeciles: 10,
                     hasSequences: false,
+                    sequenceLengthMin: 0,
+                    sequenceLengthMax: 0,
+                    sequenceLengthMean: 0,
                     characterCoverage: [],
                     complexityDeciles: 10,
                     representativeTree: nil
@@ -878,6 +881,9 @@ public extension __ExhaustRuntime {
                     branchCoverage: 1.0,
                     sequenceLengthDeciles: 10,
                     hasSequences: false,
+                    sequenceLengthMin: 0,
+                    sequenceLengthMax: 0,
+                    sequenceLengthMean: 0,
                     characterCoverage: [],
                     complexityDeciles: 10,
                     representativeTree: nil

@@ -45,6 +45,12 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public let sequenceLengthDeciles: Int
     /// Whether the generator contains sequence nodes.
     public let hasSequences: Bool
+    /// Smallest observed sequence length. Zero when the generator has no sequences.
+    public let sequenceLengthMin: Int
+    /// Largest observed sequence length. Zero when the generator has no sequences.
+    public let sequenceLengthMax: Int
+    /// Mean observed sequence length. Zero when the generator has no sequences.
+    public let sequenceLengthMean: Double
     /// Per-domain character variety. Each entry reports the fraction covered and the domain size. Empty when the generator has no character parameters. The minimum variety across all domains is used for single-value assertions.
     public let characterCoverage: [(domainSize: Int, variety: Double)]
 
@@ -106,7 +112,9 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
                 lines.append("    \(entry.type): \(bar) \(entry.decilesCovered)/10 deciles \(stats)")
             }
             if hasSequences {
-                lines.append("    Sequences: \(sequenceLengthDeciles)/10 deciles")
+                let bar = decileBar(covered: sequenceLengthDeciles)
+                let meanStr = sequenceLengthMean == sequenceLengthMean.rounded() ? String(format: "%.0f", sequenceLengthMean) : String(format: "%.2f", sequenceLengthMean)
+                lines.append("    Sequences: \(bar) \(sequenceLengthDeciles)/10 deciles (min: \(sequenceLengthMin), max: \(sequenceLengthMax), mean: \(meanStr))")
             }
             if hasBranches {
                 lines.append("    Branches: \(String(format: "%.0f", branchCoverage * 100))%")
@@ -481,6 +489,9 @@ private extension Generator where Operation == ReflectiveOperation {
             branchCoverage: coverage.branchCoverage,
             sequenceLengthDeciles: coverage.sequenceLengthDeciles,
             hasSequences: coverage.hasSequences,
+            sequenceLengthMin: coverage.sequenceLengthMin,
+            sequenceLengthMax: coverage.sequenceLengthMax,
+            sequenceLengthMean: coverage.sequenceLengthMean,
             characterCoverage: coverage.characterCoverage,
             complexityDeciles: coverage.complexityDeciles,
             representativeTree: Self.medianComplexityTree(from: storedTrees)
