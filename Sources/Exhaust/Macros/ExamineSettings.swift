@@ -2,7 +2,7 @@ import IssueReporting
 
 /// Controls how ``#examine`` reports validation failures for a specific check.
 ///
-/// Each severity level determines both whether a failure appears in test output and whether it causes the test to fail. Use `.error` (the default) when validation failures should block the test, `.warning` when you want visibility without failure, and `.silent` when you only need the data in the returned ``ValidationReport``.
+/// Each severity level determines both whether a failure appears in test output and whether it causes the test to fail. Use `.error` (the default) when validation failures should block the test, `.warning` when you want visibility without failure, and `.silent` when you only need the data in the returned ``ExamineReport``.
 ///
 /// ```swift
 /// #examine(personGen, .reflection(.warning))
@@ -13,7 +13,7 @@ public enum ExamineSeverity: Sendable {
     case error
     /// Reports the failure via `reportIssue` at warning severity. The issue appears in test output but does not cause the test to fail.
     case warning
-    /// Does not report the failure. The check still runs and its results appear in the returned ``ValidationReport``.
+    /// Does not report the failure. The check still runs and its results appear in the returned ``ExamineReport``.
     case silent
 
     /// Maps to ``IssueReporting/IssueSeverity``, or `nil` for `.silent`.
@@ -70,7 +70,7 @@ public enum ExamineSettings: Sendable {
 
     /// Suppresses log output, issue reporting, or both.
     ///
-    /// Use `.suppress(.issueReporting)` when the test asserts on the returned ``ValidationReport`` rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
+    /// Use `.suppress(.issueReporting)` when the test asserts on the returned ``ExamineReport`` rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     /// ```swift
     /// #examine(gen, .suppress(.logs))
     /// #examine(gen, .suppress(.all))

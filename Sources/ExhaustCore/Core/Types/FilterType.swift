@@ -34,6 +34,19 @@ public enum FilterType: Sendable, Equatable, Hashable {
     )
 }
 
+package extension FilterType {
+    /// Short display label for diagnostic output.
+    var shortDescription: String {
+        switch self {
+            case .auto: FilterType.choiceGradientSampling.shortDescription
+            case .rejectionSampling: "rejection"
+            case .probeSampling: "probe"
+            case .choiceGradientSampling: "CGS"
+            case .customCGS: "CGS (custom)"
+        }
+    }
+}
+
 // MARK: - Filter Source Location
 
 /// Source location captured at a ``Generator/filter(_:_:fileID:filePath:line:column:)`` call site.

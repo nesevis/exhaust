@@ -155,7 +155,7 @@ Then add it as a dependency of your test target:
 | `#exhaust(Spec.self, ...)` | Run a contract test against a stateful system (async specs get concurrent interleaving) |
 | `#explore(gen, directions:) { ... }` | Test a property with per-direction coverage guarantees |
 | `#example(gen)` | Generate values outside of tests — for prototyping and snapshots |
-| `#examine(gen)` | Validate that a generator round-trips correctly through reflection and replay |
+| `#examine(gen)` | Validate a generator's correctness and measure how well it covers its domain |
 
 ## Building Generators
 
@@ -427,7 +427,7 @@ Exhaust uses `mapped` automatically when it can synthesise a backward mapping �
 | `#exhaust` (generation + reduction) | Yes | Yes |
 | `#exhaust(..., reflecting: value)` | Yes | No |
 | `#example` | Yes | Yes |
-| `#examine` (round-trip validation) | Yes | No |
+| `#examine` (coverage + round-trip) | Yes | Coverage only |
 | Structured coverage | Yes | Yes |
 
 Generators built entirely from `#gen` primitives and `mapped`/`bound` are fully reflectable. Adding a `.map` or `.bind` makes the generator forward-only at that point — generation and reduction still work, but reflection from a concrete value cannot pass backward through the forward-only closure.
@@ -484,7 +484,7 @@ let classified = #gen(.int().classify(
 
 ## Validating Generators
 
-A subtle bug in a generator — a backward mapping that doesn't round-trip, or a replay that produces a different value — can cause confusing failures that look like property violations but are really generator issues. This is a common source of frustration with property-based testing frameworks. `#examine` catches these problems early:
+A passing property test gives no signal about whether the generator explored its domain well or clustered in a narrow slice. A subtle bug in a backward mapping can cause failures that look like property violations but are really generator issues. `#examine` answers both questions (correctness and coverage) in a single call:
 
 ```swift
 @Test func personGeneratorIsHealthy() {
@@ -492,7 +492,39 @@ A subtle bug in a generator — a backward mapping that doesn't round-trip, or a
 }
 ```
 
-`#examine` generates 200 samples (configurable), checks that each value round-trips through reflection and replays deterministically, and reports failures as test issues.
+`#examine` generates 200 samples (configurable), checks that each value round-trips through reflection and replays deterministically, and measures how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
+
+```
+#examine: 200 samples, 0.061ms/sample
+  Correctness: 200/200 reflection, 200/200 replay
+  Unique: 200/200
+  Coverage:
+    UInt: [••••••••• ] 9/10 deciles
+    Sequences: 10/10 deciles
+    Characters: 100% (of 95 code points)
+    Characters: 2% (of 291108 code points)
+  Filters:
+    YourFile.swift:125: 81% (CGS, 48 discarded)
+  Example:
+    └── group
+        ├── string(length: 35) 0...45
+        ├── string(length: 12) 0...45
+        └── choice(unsigned: 33) 0...120
+```
+
+`10/10 deciles` means the generator spread across its entire range. `3/10` means it clustered, worth investigating. You don't need to understand distributions or coverage theory to read the signal.
+
+The returned `ExamineReport` exposes coverage metrics as assertable properties, so you can enforce quality thresholds on generator fixtures:
+
+```swift
+@Test func personGeneratorCoversItsRange() {
+    let report = #examine(personGen, .samples(500))
+    #expect(report.decilesCovered.allSatisfy { $0.value >= 7 })
+    #expect(report.branchCoverage >= 0.9)
+}
+```
+
+Correctness checks (reflection round-trip, replay determinism, filter health) can fail the test. Coverage metrics populate the report but never fail on their own. Assert on the properties that are important to you.
 
 ## Contract Testing
 

@@ -51,7 +51,7 @@ struct ExamineTests {
     func lowFilterValidityRate() throws {
         // ~1% validity rate (10 out of 1001) — should trigger warning
         let gen = #gen(.int(in: 0 ... 1000, scaling: .constant)).filter(.rejectionSampling) { $0 < 10 }
-        var report: ValidationReport!
+        var report: ExamineReport!
         withKnownIssue {
             report = gen.gen.validate(samples: 50, seed: 99)
         }

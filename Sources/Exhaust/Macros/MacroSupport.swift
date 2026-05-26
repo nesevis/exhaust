@@ -791,7 +791,7 @@ public extension __ExhaustRuntime {
         filePath: StaticString,
         line: UInt,
         column: UInt
-    ) -> ValidationReport {
+    ) -> ExamineReport {
         let config = ExamineReportingConfiguration(from: settings)
 
         var seed: UInt64?
@@ -804,15 +804,23 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column
                 )
-                return ValidationReport(
+                return ExamineReport(
                     sampleCount: 0,
                     valuesGenerated: 0,
                     reflectionRoundTripSuccesses: 0,
                     replayDeterminismSuccesses: 0,
                     uniqueChoiceSequences: 0,
                     failures: [],
+                    generationTime: 0,
                     elapsedTime: 0,
-                    filterObservations: [:]
+                    filterObservations: [:],
+                    decilesCovered: [],
+                    branchCoverage: 1.0,
+                    sequenceLengthDeciles: 10,
+                    hasSequences: false,
+                    characterCoverage: [],
+                    complexityDeciles: 10,
+                    representativeTree: nil
                 )
             }
             seed = resolved.seed
@@ -843,7 +851,7 @@ public extension __ExhaustRuntime {
         filePath: StaticString,
         line: UInt,
         column: UInt
-    ) -> ValidationReport {
+    ) -> ExamineReport {
         let config = ExamineReportingConfiguration(from: settings)
 
         var seed: UInt64?
@@ -856,15 +864,23 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column
                 )
-                return ValidationReport(
+                return ExamineReport(
                     sampleCount: 0,
                     valuesGenerated: 0,
                     reflectionRoundTripSuccesses: 0,
                     replayDeterminismSuccesses: 0,
                     uniqueChoiceSequences: 0,
                     failures: [],
+                    generationTime: 0,
                     elapsedTime: 0,
-                    filterObservations: [:]
+                    filterObservations: [:],
+                    decilesCovered: [],
+                    branchCoverage: 1.0,
+                    sequenceLengthDeciles: 10,
+                    hasSequences: false,
+                    characterCoverage: [],
+                    complexityDeciles: 10,
+                    representativeTree: nil
                 )
             }
             seed = resolved.seed

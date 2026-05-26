@@ -311,13 +311,16 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 } else if value.tag.isSigned {
                     return prefix + connector + "choice(signed: \(value.decodedSignedValue)) \(displayRange)"
                 } else {
-                    return prefix + connector + "choice(unsigned:\(value.bitPattern64)) \(displayRange)"
+                    return prefix + connector + "choice(unsigned: \(value.bitPattern64)) \(displayRange)"
                 }
 
             case .just:
                 return prefix + connector + "just"
 
             case let .sequence(length, elements, meta):
+                if elements.first?.isCharacterChoice == true {
+                    return prefix + connector + "string(length: \(length)) \(meta.validRange.map { "\($0)" } ?? "nil")"
+                }
                 var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange.map { "\($0)" } ?? "nil")"
                 for (index, element) in elements.enumerated() {
                     let isLastElement = index == elements.count - 1
@@ -394,6 +397,103 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return b.id
         }
         return nil
+    }
+
+    var isCharacterChoice: Bool {
+        if case let .choice(value, _) = self, case .character = value.tag {
+            return true
+        }
+        return false
+    }
+}
+
+// MARK: - Complexity
+
+package extension ChoiceTree {
+    /// Structural complexity score: sequence nodes contribute their length, free choice nodes contribute one.
+    var complexity: Int {
+        switch self {
+            case .choice:
+                1
+            case .just, .getSize:
+                0
+            case let .sequence(length, elements, _):
+                Int(length) + elements.reduce(0) { $0 + $1.complexity }
+            case let .branch(data):
+                data.choice.complexity
+            case let .group(children, _):
+                children.reduce(0) { $0 + $1.complexity }
+            case let .bind(_, inner, bound):
+                inner.complexity + bound.complexity
+            case let .resize(_, choices):
+                choices.reduce(0) { $0 + $1.complexity }
+        }
+    }
+}
+
+// MARK: - Value Comparison
+
+package extension ChoiceTree {
+    /// Walks two trees in lockstep and compares the chosen values at every choice site, ignoring metadata such as valid ranges. Returns `nil` when all values match, or a description of the first mismatch.
+    static func compareValues(_ lhs: ChoiceTree, _ rhs: ChoiceTree) -> String? {
+        switch (lhs, rhs) {
+            case let (.choice(lhsValue, _), .choice(rhsValue, _)):
+                if lhsValue.bitPattern64 != rhsValue.bitPattern64 {
+                    return "value mismatch: \(lhsValue.bitPattern64) vs \(rhsValue.bitPattern64)"
+                }
+                return nil
+
+            case (.just, .just):
+                return nil
+
+            case let (.sequence(lhsLength, lhsElements, _), .sequence(rhsLength, rhsElements, _)):
+                if lhsLength != rhsLength {
+                    return "sequence length mismatch: \(lhsLength) vs \(rhsLength)"
+                }
+                for index in 0 ..< min(lhsElements.count, rhsElements.count) {
+                    if let mismatch = compareValues(lhsElements[index], rhsElements[index]) {
+                        return "element \(index): \(mismatch)"
+                    }
+                }
+                return nil
+
+            case let (.branch(lhsData), .branch(rhsData)):
+                if lhsData.id != rhsData.id {
+                    return "branch mismatch: id \(lhsData.id) vs \(rhsData.id)"
+                }
+                return compareValues(lhsData.choice, rhsData.choice)
+
+            case let (.group(lhsChildren, _), .group(rhsChildren, _)):
+                for index in 0 ..< min(lhsChildren.count, rhsChildren.count) {
+                    if let mismatch = compareValues(lhsChildren[index], rhsChildren[index]) {
+                        return "group child \(index): \(mismatch)"
+                    }
+                }
+                return nil
+
+            case let (.bind(_, lhsInner, lhsBound), .bind(_, rhsInner, rhsBound)):
+                if let mismatch = compareValues(lhsInner, rhsInner) {
+                    return "bind inner: \(mismatch)"
+                }
+                return compareValues(lhsBound, rhsBound)
+
+            case let (.resize(_, lhsChoices), .resize(_, rhsChoices)):
+                for index in 0 ..< min(lhsChoices.count, rhsChoices.count) {
+                    if let mismatch = compareValues(lhsChoices[index], rhsChoices[index]) {
+                        return "resize child \(index): \(mismatch)"
+                    }
+                }
+                return nil
+
+            case let (.getSize(lhsSize), .getSize(rhsSize)):
+                if lhsSize != rhsSize {
+                    return "getSize mismatch: \(lhsSize) vs \(rhsSize)"
+                }
+                return nil
+
+            default:
+                return "structural mismatch: \(lhs.elementDescription) vs \(rhs.elementDescription)"
+        }
     }
 }
 
