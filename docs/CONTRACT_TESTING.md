@@ -271,7 +271,7 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 ### Concurrency level
 
-`.concurrent(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. Use 3 or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
+`.concurrent(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. A study of 105 real-world concurrency bugs in MySQL, Apache, Mozilla, and OpenOffice found that 96% manifest with just two threads (Lu et al., [Learning from Mistakes](https://dl.acm.org/doi/10.1145/1346281.1346323), ASPLOS 2008). Use 3 or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
 
 `.concurrent(1)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
 
