@@ -33,10 +33,11 @@ mkdir -p "${BUILD_DIR}"
 for triple in arm64-apple-macosx \
     arm64-apple-ios arm64-apple-ios-simulator x86_64-apple-ios-simulator \
     arm64-apple-tvos arm64-apple-tvos-simulator x86_64-apple-tvos-simulator \
-    arm64-apple-watchos arm64-apple-watchos-simulator x86_64-apple-watchos-simulator \
-    arm64-apple-xros arm64-apple-xros-simulator; do
+    arm64-apple-watchos arm64-apple-watchos-simulator x86_64-apple-watchos-simulator; do
     rm -rf "${PACKAGE_DIR}/.build/${triple}/release/ExhaustCore.build"
 done
+# visionOS uses separate scratch paths (--sdk workaround)
+rm -rf "${PACKAGE_DIR}/.build/xros-device" "${PACKAGE_DIR}/.build/xros-sim"
 
 # Pre-resolve so parallel builds don't race on the workspace lock
 swift package resolve --package-path "${PACKAGE_DIR}"
@@ -55,6 +56,25 @@ build_triple() {
         --configuration release \
         "${EVOLUTION_FLAGS[@]}" \
         "$@" \
+        --target ExhaustCore 2>&1 | tail -20
+}
+
+# SwiftPM 6.3 crashes on --triple arm64-apple-xros (Triple+Basics.swift fatalError
+# for "unknown os" when computing dynamic library extensions). Work around by using
+# --sdk with a separate --scratch-path and passing the target triple via -Xswiftc.
+XROS_DEV_SCRATCH="${PACKAGE_DIR}/.build/xros-device"
+XROS_SIM_SCRATCH="${PACKAGE_DIR}/.build/xros-sim"
+
+build_xros() {
+    local label=$1 sdk_path=$2 target_triple=$3 scratch_path=$4
+    echo "==> Building ExhaustCore for ${label}"
+    swift build \
+        --package-path "${PACKAGE_DIR}" \
+        --scratch-path "${scratch_path}" \
+        --sdk "${sdk_path}" \
+        --configuration release \
+        "${EVOLUTION_FLAGS[@]}" \
+        -Xswiftc -target -Xswiftc "${target_triple}" \
         --target ExhaustCore 2>&1 | tail -20
 }
 
@@ -112,14 +132,17 @@ build_triple x86_64-apple-watchos-simulator \
 PIDS+=($!)
 
 # visionOS (arm64 only — no x86_64 slices exist)
-build_triple arm64-apple-xros \
-    -Xswiftc -sdk -Xswiftc "${VISIONOS_DEV_SDK}" \
-    -Xswiftc -target -Xswiftc "arm64-apple-xros${VISIONOS_DEPLOYMENT_TARGET}" &
+# Uses build_xros workaround; see comment above build_xros.
+build_xros "arm64-apple-xros" \
+    "${VISIONOS_DEV_SDK}" \
+    "arm64-apple-xros${VISIONOS_DEPLOYMENT_TARGET}" \
+    "${XROS_DEV_SCRATCH}" &
 PIDS+=($!)
 
-build_triple arm64-apple-xros-simulator \
-    -Xswiftc -sdk -Xswiftc "${VISIONOS_SIM_SDK}" \
-    -Xswiftc -target -Xswiftc "arm64-apple-xros${VISIONOS_DEPLOYMENT_TARGET}-simulator" &
+build_xros "arm64-apple-xros-simulator" \
+    "${VISIONOS_SIM_SDK}" \
+    "arm64-apple-xros${VISIONOS_DEPLOYMENT_TARGET}-simulator" \
+    "${XROS_SIM_SCRATCH}" &
 PIDS+=($!)
 
 for pid in "${PIDS[@]}"; do wait "${pid}"; done
@@ -172,6 +195,39 @@ collect() {
     fi
 }
 
+# Same as collect() but reads from a --scratch-path directory where products
+# land under the host triple (arm64-apple-macosx) instead of the cross triple.
+collect_xros() {
+    local scratch_path=$1 arch_qualifier=$2 dest=$3
+    local build_products="${scratch_path}/arm64-apple-macosx/release"
+
+    mkdir -p "${dest}/ExhaustCore.swiftmodule"
+
+    ar rcs "${dest}/libExhaustCore.a" "${build_products}/ExhaustCore.build/"*.o
+
+    cp "${build_products}/Modules/ExhaustCore.swiftmodule" \
+       "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.swiftmodule"
+
+    if [ -f "${build_products}/Modules/ExhaustCore.swiftdoc" ]; then
+        cp "${build_products}/Modules/ExhaustCore.swiftdoc" \
+           "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.swiftdoc"
+    fi
+
+    if [ -f "${build_products}/Modules/ExhaustCore.abi.json" ]; then
+        cp "${build_products}/Modules/ExhaustCore.abi.json" \
+           "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.abi.json"
+    fi
+
+    if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.swiftinterface" ]; then
+        cp "${build_products}/ExhaustCore.build/ExhaustCore.swiftinterface" \
+           "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.swiftinterface"
+    fi
+    if [ -f "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" ]; then
+        cp "${build_products}/ExhaustCore.build/ExhaustCore.package.swiftinterface" \
+           "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.package.swiftinterface"
+    fi
+}
+
 MACOS_DIR="${BUILD_DIR}/macos-arm64"
 IOS_DEV_DIR="${BUILD_DIR}/ios-arm64"
 IOS_SIM_ARM64_DIR="${BUILD_DIR}/ios-simulator-arm64"
@@ -198,8 +254,8 @@ collect x86_64-apple-tvos-simulator     "x86_64-apple-tvos-simulator"       "${T
 collect arm64-apple-watchos             "arm64-apple-watchos"               "${WATCHOS_DEV_DIR}"
 collect arm64-apple-watchos-simulator   "arm64-apple-watchos-simulator"     "${WATCHOS_SIM_ARM64_DIR}"
 collect x86_64-apple-watchos-simulator  "x86_64-apple-watchos-simulator"    "${WATCHOS_SIM_X86_DIR}"
-collect arm64-apple-xros                "arm64-apple-xros"                  "${VISIONOS_DEV_DIR}"
-collect arm64-apple-xros-simulator      "arm64-apple-xros-simulator"        "${VISIONOS_SIM_DIR}"
+collect_xros "${XROS_DEV_SCRATCH}" "arm64-apple-xros"           "${VISIONOS_DEV_DIR}"
+collect_xros "${XROS_SIM_SCRATCH}" "arm64-apple-xros-simulator" "${VISIONOS_SIM_DIR}"
 
 # ---------- Create fat Simulator libraries ----------
 
