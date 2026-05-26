@@ -22,7 +22,7 @@ package extension Equatable {
         return self == other
     }
 
-    /// Returns false for non-``Equatable`` values, providing a safe fallback for heterogeneous comparison without requiring the caller to check conformance.
+    /// Returns false for non-`Equatable` values, providing a safe fallback for heterogeneous comparison without requiring the caller to check conformance.
     func isEqualToAny(_ other: Any) -> Bool {
         guard let other = other as? any Equatable else {
             return false
@@ -43,7 +43,7 @@ private func unwrapOptional(_ value: Any) -> Any {
     return child.value
 }
 
-/// Recursive structural equality for values that may not conform to ``Equatable`` (for example, tuples). Uses ``Equatable/isEqualToAny(_:)`` at leaf nodes and ``Mirror`` to decompose compound values like tuples. Returns `true` when both values are structurally identical down to their ``Equatable`` leaves.
+/// Recursive structural equality for values that may not conform to `Equatable` (for example, tuples). Uses `Equatable/isEqualToAny(_:)` at leaf nodes and `Mirror` to decompose compound values like tuples. Returns `true` when both values are structurally identical down to their `Equatable` leaves.
 package func structurallyEqual(_ lhs: Any, _ rhs: Any) -> Bool {
     let lhsUnwrapped = unwrapOptional(lhs)
     let rhsUnwrapped = unwrapOptional(rhs)
@@ -62,6 +62,7 @@ package func structurallyEqual(_ lhs: Any, _ rhs: Any) -> Bool {
     }
 
     for (lhsChild, rhsChild) in zip(lhsMirror.children, rhsMirror.children) {
+        // swiftlint:disable:next for_where
         if structurallyEqual(lhsChild.value, rhsChild.value) == false {
             return false
         }

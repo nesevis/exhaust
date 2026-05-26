@@ -1,6 +1,3 @@
-/// Describes a type that can be losslessly represented by a ``UInt64`` bit pattern.
-///
-/// Without this protocol, each numeric type would need its own generator and reduction logic instead of sharing the unified ``Gen/choose(in:)`` path. Any type that conforms (for example, ``Int`` and ``Float``) gets ``Gen/choose(in:)`` support automatically.
 /// Returns whether the given value is at its type's semantic simplest bit pattern.
 ///
 /// Attempts to cast the value to each ``BitPatternConvertible`` conformer and compares its ``BitPatternConvertible/bitPattern64`` against ``TypeTag/simplestBitPattern``. Returns `nil` when the value is not a recognized ``BitPatternConvertible`` type.
@@ -24,8 +21,11 @@ package func isAtSemanticSimplest(_ value: Any) -> Bool? {
     return nil
 }
 
+/// Describes a type that can be losslessly represented by a ``UInt64`` bit pattern.
+///
+/// Without this protocol, each numeric type would need its own generator and reduction logic instead of sharing the unified ``Gen/choose(in:)`` path. Any type that conforms (for example, `Int` and `Float`) gets ``Gen/choose(in:)`` support automatically.
 package protocol BitPatternConvertible: Equatable, Sendable {
-    /// The valid range of this type, expressed as an inclusive ``ClosedRange`` of ``UInt64`` bit patterns. This is used by ``Gen/choose(in:)`` as the default range if a more specific one is not provided.
+    /// The valid range of this type, expressed as an inclusive `ClosedRange` of `UInt64` bit patterns. This is used by ``Gen/choose(in:)`` as the default range if a more specific one is not provided.
     static var bitPatternRange: ClosedRange<UInt64> { get }
 
     /// Provides the type metadata used by coverage analysis, boundary value analysis, and the human-readable type formatter.

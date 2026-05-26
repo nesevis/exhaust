@@ -50,7 +50,7 @@ package enum Materializer {
     ///   - gen: The generator to materialize.
     ///   - prefix: The choice sequence to replay from.
     ///   - mode: How to resolve values at each choice point.
-    /// - Returns: A ``Result`` containing the output value and fresh tree on success.
+    /// - Returns: A `Result` containing the output value and fresh tree on success.
     public static func materialize<Output>(
         _ gen: Generator<Output>,
         prefix: consuming ChoiceSequence,

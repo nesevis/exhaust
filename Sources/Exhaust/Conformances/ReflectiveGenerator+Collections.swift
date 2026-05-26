@@ -123,7 +123,7 @@ public extension ReflectiveGenerator {
     /// Creates a generator that produces sets of an exact fixed count.
     ///
     /// ```swift
-    /// let gen = #gen(.set(.int(in: 0...100), count: UInt64(3)))
+    /// let gen = #gen(.set(.int(in: 0...100), count: 3))
     /// ```
     ///
     /// - Parameters:
@@ -316,7 +316,7 @@ public extension ReflectiveGenerator {
     /// Wraps this element generator to produce sets of an exact fixed count.
     ///
     /// ```swift
-    /// let gen = #gen(.int(in: 0...100)).set(count: UInt64(3))
+    /// let gen = #gen(.int(in: 0...100)).set(count: 3)
     /// ```
     ///
     /// - Parameter count: The exact number of elements in each generated set.
@@ -362,7 +362,7 @@ public extension ReflectiveGenerator {
 
     /// Picks a random element from a fixed collection.
     ///
-    /// The collection is captured at construction time. The backward pass finds the element's index via hash-based O(1) lookup for reflection and test case reduction.
+    /// The collection is captured at construction time. Reflection identifies elements by hash, so lookup is O(1).
     ///
     /// ```swift
     /// let gen = #gen(.element(from: ["♠", "♥", "♦", "♣"]))
@@ -378,7 +378,7 @@ public extension ReflectiveGenerator {
 
     /// Picks a random element from a fixed collection.
     ///
-    /// The collection is captured at construction time. The backward pass finds the element's index via linear equality scan for reflection and test case reduction.
+    /// The collection is captured at construction time. Reflection identifies elements by linear equality scan.
     ///
     /// ```swift
     /// let gen = #gen(.element(from: [1.0, 2.5, 3.14]))
@@ -392,9 +392,9 @@ public extension ReflectiveGenerator {
         Gen.element(from: collection).wrapped
     }
 
-    /// Picks a random element from a fixed collection, identified by a hashable key path for O(1) reflection.
+    /// Picks a random element from a fixed collection, identified by a hashable key path during reflection.
     ///
-    /// The collection is captured at construction time. The backward pass identifies the element via hash-based dictionary lookup on the extracted value, enabling reflection for types that are not ``Hashable`` themselves.
+    /// The collection is captured at construction time. Reflection identifies the element by the extracted key, enabling reflection for types that are not `Hashable` themselves.
     ///
     /// ```swift
     /// let gen = #gen(.element(from: configs, id: \.id))
@@ -411,9 +411,9 @@ public extension ReflectiveGenerator {
         Gen.element(from: collection, id: path).wrapped
     }
 
-    /// Picks a random element from a fixed collection, identified by an equatable key path for reflection.
+    /// Picks a random element from a fixed collection, identified by an equatable key path during reflection.
     ///
-    /// The collection is captured at construction time. The backward pass identifies the element by linear scan comparing the extracted value, enabling reflection for types that are not ``Equatable``.
+    /// The collection is captured at construction time. Reflection identifies the element by linear scan on the extracted key, enabling reflection for types that are not `Equatable`.
     ///
     /// ```swift
     /// let gen = #gen(.element(from: configs, id: \.name))

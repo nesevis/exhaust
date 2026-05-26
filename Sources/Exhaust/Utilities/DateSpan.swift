@@ -9,7 +9,7 @@
 
 /// A fixed-second approximation of a calendar interval, for specifying date generator step sizes.
 ///
-/// Each case converts to a fixed number of seconds: `.months` uses 30 days and `.years` uses 365 days. ``Comparable`` and ``Equatable`` conformances compare by this fixed-second value, so `.months(1)` is less than `.days(31)`.
+/// Each case converts to a fixed number of seconds: `.months` uses 30 days and `.years` uses 365 days. `Comparable` and `Equatable` conformances compare by this fixed-second value, so `.months(1)` is less than `.days(31)`.
 public enum DateStride: Sendable, Comparable, Equatable {
     /// Specifies an interval measured in seconds.
     case seconds(Int)
@@ -28,7 +28,7 @@ public enum DateStride: Sendable, Comparable, Equatable {
 
     /// The number of seconds represented by this span.
     ///
-    /// Uses fixed conversions: 1 minute = 60 seconds, 1 hour = 3600, 1 day = 86400, 1 week = 604800, 1 month = 2592000 (30 days), 1 year = 31536000 (365 days). This is the value that ``Comparable`` and ``Equatable`` conformances compare.
+    /// Uses fixed conversions: 1 minute = 60 seconds, 1 hour = 3600, 1 day = 86400, 1 week = 604800, 1 month = 2592000 (30 days), 1 year = 31536000 (365 days). This is the value that `Comparable` and `Equatable` conformances compare.
     public var fixedSeconds: Int {
         switch self {
             case let .seconds(n): n

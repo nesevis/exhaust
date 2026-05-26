@@ -157,6 +157,8 @@ public extension ReflectiveGenerator {
 public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt8` values within the given range.
     ///
+    /// When no range is specified, generates across the full `UInt8` range with size scaling.
+    ///
     /// ```swift
     /// let gen = #gen(.uint8(in: 0...200))
     /// ```
@@ -178,7 +180,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `UInt8` values within the given range.
     static func uint8(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt8>? = nil
@@ -194,6 +196,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt16` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `UInt16` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.uint16(in: 0...1000))
@@ -216,7 +220,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `UInt16` values within the given range.
     static func uint16(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt16>? = nil
@@ -232,6 +236,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt32` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `UInt32` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.uint32(in: 0...100_000))
@@ -254,7 +260,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `UInt32` values within the given range.
     static func uint32(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt32>? = nil
@@ -270,6 +276,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt64` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `UInt64` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.uint64(in: 0...1_000_000))
@@ -292,7 +300,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `UInt64` values within the given range.
     static func uint64(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt64>? = nil
@@ -308,6 +316,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `UInt` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `UInt` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.uint(in: 0...100))
@@ -330,7 +340,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `UInt` values within the given range.
     static func uint(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<UInt>? = nil
@@ -350,6 +360,8 @@ public extension ReflectiveGenerator {
 
 public extension ReflectiveGenerator {
     /// Generates arbitrary `Int8` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `Int8` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.int8(in: -100...100))
@@ -372,7 +384,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `Int8` values within the given range.
     static func int8(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int8>? = nil
@@ -384,6 +396,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `Int16` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `Int16` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.int16(in: -1000...1000))
@@ -406,7 +420,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `Int16` values within the given range.
     static func int16(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int16>? = nil
@@ -418,6 +432,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `Int32` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `Int32` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.int32(in: -100_000...100_000))
@@ -440,7 +456,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `Int32` values within the given range.
     static func int32(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int32>? = nil
@@ -452,6 +468,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `Int64` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `Int64` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.int64(in: -1_000_000...1_000_000))
@@ -474,7 +492,7 @@ public extension ReflectiveGenerator {
         return generator.wrapped
     }
 
-    /// Generates arbitrary values within the given range.
+    /// Generates arbitrary `Int64` values within the given range.
     static func int64(
         in range: ClosedRange<Int>,
         scaling: SizeScaling<Int64>? = nil
@@ -483,6 +501,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Generates arbitrary `Int` values within the given range.
+    ///
+    /// When no range is specified, generates across the full `Int` range with size scaling.
     ///
     /// ```swift
     /// let gen = #gen(.int(in: 0...100))

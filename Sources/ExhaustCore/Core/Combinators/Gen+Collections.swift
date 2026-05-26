@@ -89,7 +89,7 @@ package extension Gen {
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
     /// - Returns: A generator that produces dictionaries with random key-value pairs.
-    /// - Note: Reflection decomposes the dictionary into key/value arrays via ``Dictionary/keys`` and ``Dictionary/values``. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may degrade reduction quality.
+    /// - Note: Reflection decomposes the dictionary into key/value arrays via `Dictionary/keys` and `Dictionary/values`. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may degrade reduction quality.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: Generator<KeyOutput>,
         _ valueGenerator: Generator<ValueOutput>
@@ -261,7 +261,7 @@ package extension Gen {
 
     /// Picks a random element from a collection.
     ///
-    /// Prefer this overload when elements conform to ``Hashable`` — reflection uses hash-based O(1) lookup to find the element's index.
+    /// Prefer this overload when elements conform to `Hashable` — reflection uses hash-based O(1) lookup to find the element's index.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.
@@ -292,9 +292,9 @@ package extension Gen {
         )
     }
 
-    /// Picks a random element from a collection whose elements are ``Equatable`` but not ``Hashable``.
+    /// Picks a random element from a collection whose elements are `Equatable` but not `Hashable`.
     ///
-    /// Reflection uses a linear equality scan (O(n)) to find the element's index. Prefer the ``Hashable`` overload when available for O(1) reflection.
+    /// Reflection uses a linear equality scan (O(n)) to find the element's index. Prefer the `Hashable` overload when available for O(1) reflection.
     ///
     /// - Parameter collection: The collection to pick elements from.
     /// - Returns: A generator that produces random elements from the collection.
@@ -320,9 +320,9 @@ package extension Gen {
         )
     }
 
-    /// Picks a random element from a collection, using a ``Hashable`` key path for O(1) reflection lookup.
+    /// Picks a random element from a collection, using a `Hashable` key path for O(1) reflection lookup.
     ///
-    /// Use this overload when elements are not ``Hashable`` themselves but have a hashable property that uniquely identifies them.
+    /// Use this overload when elements are not `Hashable` themselves but have a hashable property that uniquely identifies them.
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
@@ -359,9 +359,9 @@ package extension Gen {
         )
     }
 
-    /// Picks a random element from a collection, using an ``Equatable`` key path for linear-scan reflection.
+    /// Picks a random element from a collection, using an `Equatable` key path for linear-scan reflection.
     ///
-    /// Use this overload when elements are not ``Equatable`` but have an equatable property that uniquely identifies them. Prefer the ``Hashable`` key-path overload when the key conforms to ``Hashable`` for O(1) lookup.
+    /// Use this overload when elements are not `Equatable` but have an equatable property that uniquely identifies them. Prefer the `Hashable` key-path overload when the key conforms to `Hashable` for O(1) lookup.
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.

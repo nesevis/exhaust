@@ -74,7 +74,7 @@ public extension ReflectiveGenerator {
 
     // MARK: - CharacterSet-based generators
 
-    /// Generates a random character from the given ``CharacterSet``.
+    /// Generates a random character from the given `CharacterSet`.
     ///
     /// Characters are drawn uniformly from the provided set.
     ///
@@ -91,7 +91,7 @@ public extension ReflectiveGenerator {
         return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
     }
 
-    /// Generates a random character from the union of two or more ``CharacterSet``s.
+    /// Generates a random character from the union of two or more `CharacterSet`s.
     ///
     /// ```swift
     /// let gen = #gen(.character(from: .letters, .decimalDigits))
@@ -101,7 +101,7 @@ public extension ReflectiveGenerator {
         return character(from: combined)
     }
 
-    /// Generates a random string whose characters are drawn from the given ``CharacterSet``.
+    /// Generates a random string whose characters are drawn from the given `CharacterSet`.
     ///
     /// ```swift
     /// let gen = #gen(.string(from: .letters, length: 1...10))
@@ -122,7 +122,7 @@ public extension ReflectiveGenerator {
         )
     }
 
-    /// Generates a random string whose characters are drawn from the given ``CharacterSet``.
+    /// Generates a random string whose characters are drawn from the given `CharacterSet`.
     ///
     /// ```swift
     /// let gen = #gen(.string(from: .letters, length: 1...10))

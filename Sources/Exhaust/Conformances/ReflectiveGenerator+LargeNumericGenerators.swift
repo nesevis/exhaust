@@ -9,7 +9,9 @@ import ExhaustCore
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public extension ReflectiveGenerator {
-    /// Generates arbitrary ``UInt128`` values across the full range.
+    /// Generates arbitrary `UInt128` values across the full range.
+    ///
+    /// Test case reduction drives values toward zero.
     ///
     /// ```swift
     /// let gen = #gen(.uint128())
@@ -31,7 +33,7 @@ public extension ReflectiveGenerator {
         )
     }
 
-    /// Generates arbitrary ``Int128`` values across the full range.
+    /// Generates arbitrary `Int128` values across the full range.
     ///
     /// Test case reduction drives values toward zero.
     ///

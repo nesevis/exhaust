@@ -36,7 +36,7 @@ import ExhaustCore
 ///
 /// ## Settings
 ///
-/// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (500/500), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
+/// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (600/600), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
 /// - `.suppress(.logs)`: silences all console output. Overrides `.log(...)`.
@@ -105,7 +105,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 ///
 /// ## Settings
 ///
-/// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (500/500), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
+/// - `.budget(_)`: controls iteration budgets for coverage and sampling. Presets: `.quick` (100/100), `.standard` (200/200, default), `.thorough` (600/600), `.extensive` (2000/2000), or `.custom(coverage:sampling:)`. Scale any preset with arithmetic (`.thorough * 3`).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Accepts a raw `UInt64` or a Crockford Base32 string. Skips structured coverage.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
 /// - `.suppress(.logs)`: silences all console output. Overrides `.log(...)`.
@@ -189,23 +189,22 @@ public macro exhaust<Spec: AsyncContractSpec>(
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustConcurrentContractMacro")
 
-// Generates command sequences and dispatches them across real GCD threads to detect races in synchronous primitives.
-//
-// Define a spec with `@ConcurrentContract`, using `@Oracle` instead of `@Model` for correctness checking (model updates inside command bodies would race with each other on real threads). Commands run on real OS threads with non-deterministic scheduling — the same seed does not guarantee the same interleaving. Bug detection relies on repetition across the sampling budget. Use this to catch races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
-//
-// ```swift
-// @Test func counterThreadSafety() {
-//     let result = #exhaust(CounterGCDSpec.self, .concurrent(2), .budget(.extensive))
-// }
-// ```
-//
-// ## Settings
-//
-// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread.
-// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
-// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
-// - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run.* Run the test repeatedly to reproduce.
-
+/// Generates command sequences and dispatches them across real GCD threads to detect races in synchronous primitives.
+///
+/// Define a spec with `@ConcurrentContract`, using `@Oracle` instead of `@Model` for correctness checking (model updates inside command bodies would race with each other on real threads). Commands run on real OS threads with non-deterministic scheduling — the same seed does not guarantee the same interleaving. Bug detection relies on repetition across the sampling budget. Use this to catch races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
+///
+/// ```swift
+/// @Test func counterThreadSafety() {
+///     let result = #exhaust(CounterGCDSpec.self, .concurrent(2), .budget(.extensive))
+/// }
+/// ```
+///
+/// ## Settings
+///
+/// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread.
+/// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
+/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
+/// - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run. Run the test repeatedly to reproduce.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 /// - `.suppress(.all)`: skips issue reporting and silences all console output.
@@ -218,23 +217,22 @@ public macro exhaust<Spec: ConcurrentContractSpec>(
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustGCDContractMacro")
 
-// Generates command sequences and dispatches them across real GCD threads, bridging async command execution via `Task` + semaphore.
-//
-// Use this when the spec's `@Command` methods are `async` but the SUT uses synchronous primitives internally (locks, dispatch queues, atomics behind an async facade). Each lane gets a real OS thread; async commands are driven synchronously within that thread. Non-deterministic scheduling — bug detection relies on repetition across the sampling budget.
-//
-// ```swift
-// @Test func asyncCounterThreadSafety() async {
-//     let result = await #exhaust(AsyncCounterGCDSpec.self, .concurrent(2), .budget(.extensive))
-// }
-// ```
-//
-// ## Settings
-//
-// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread with async execution bridged via `Task` + semaphore.
-// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
-// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
-// - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run.* Run the test repeatedly to reproduce.
-
+/// Generates command sequences and dispatches them across real GCD threads, bridging async command execution via `Task` + semaphore.
+///
+/// Use this when the spec's `@Command` methods are `async` but the SUT uses synchronous primitives internally (locks, dispatch queues, atomics behind an async facade). Each lane gets a real OS thread; async commands are driven synchronously within that thread. Non-deterministic scheduling — bug detection relies on repetition across the sampling budget.
+///
+/// ```swift
+/// @Test func asyncCounterThreadSafety() async {
+///     let result = await #exhaust(AsyncCounterGCDSpec.self, .concurrent(2), .budget(.extensive))
+/// }
+/// ```
+///
+/// ## Settings
+///
+/// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Each lane dispatches its commands to a separate GCD thread with async execution bridged via `Task` + semaphore.
+/// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
+/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200). Higher budgets increase the probability of hitting narrow race windows.
+/// - `.replay(_)`: fixed seed for reproduction. Reproduces the same command sequence, but the interleaving depends on OS thread scheduling and may not fail on every run. Run the test repeatedly to reproduce.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 /// - `.suppress(.all)`: skips issue reporting and silences all console output.

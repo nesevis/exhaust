@@ -282,7 +282,7 @@ package enum TransformKind {
 
     /// Generates independent copies of the inner value and applies a different transform to each.
     ///
-    /// The interpreter saves PRNG state before generating the inner value, then restores and re-generates for each transform to produce independent copies. The result is an ``Array`` of ``Any`` where index zero is the untransformed original (for reflection backward) and indices one through N are the transformed copies.
+    /// The interpreter saves PRNG state before generating the inner value, then restores and re-generates for each transform to produce independent copies. The result is an `Array` of `Any` where index zero is the untransformed original (for reflection backward) and indices one through N are the transformed copies.
     ///
     /// - Parameters:
     ///   - transforms: Type-erased transform functions, one per copy.

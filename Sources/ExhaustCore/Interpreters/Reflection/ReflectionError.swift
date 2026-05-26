@@ -23,7 +23,7 @@ public enum ReflectionError: LocalizedError, Equatable {
     case inputWasWrongForSequence(String)
     /// Indicates that an individual element within a sequence could not be reflected through the element generator.
     case couldNotReflectOnSequenceElement(String)
-    /// Indicates that a pick branch value lacks the ``Equatable`` conformance needed to match against the target.
+    /// Indicates that a pick branch value lacks the `Equatable` conformance needed to match against the target.
     case pickValueIsNotEquatable(String)
     /// Indicates that the reflected bit pattern falls outside the declared chooseBits range.
     case inputWasOutOfGeneratorRange(String, range: String)

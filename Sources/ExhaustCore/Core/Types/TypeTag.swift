@@ -8,7 +8,7 @@
 /// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
 @usableFromInline
 package enum TypeTag: Sendable {
-    /// Platform-width unsigned integer (``UInt``).
+    /// Platform-width unsigned integer (`UInt`).
     case uint
     /// 64-bit unsigned integer.
     case uint64
@@ -18,7 +18,7 @@ package enum TypeTag: Sendable {
     case uint16
     /// 8-bit unsigned integer.
     case uint8
-    /// Platform-width signed integer (``Int``).
+    /// Platform-width signed integer (`Int`).
     case int
     /// 64-bit signed integer.
     case int64
@@ -120,7 +120,7 @@ package extension TypeTag {
         }
     }
 
-    /// Creates a ``ChoiceValue`` by narrowing a ``Double`` to this tag's floating-point type.
+    /// Creates a ``ChoiceValue`` by narrowing a `Double` to this tag's floating-point type.
     ///
     /// Returns `nil` if the tag is not a floating-point type, or if the narrowed result is non-finite and `allowNonFinite` is `false`.
     func floatingChoice(from value: Double, allowNonFinite: Bool = false) -> ChoiceValue? {
@@ -142,7 +142,7 @@ package extension TypeTag {
         }
     }
 
-    /// Decodes an order-preserving bit pattern to its numeric ``Double`` value for this tag's floating-point type.
+    /// Decodes an order-preserving bit pattern to its numeric `Double` value for this tag's floating-point type.
     ///
     /// For `.float` and `.float16`, narrows through the intermediate type so the encoding round-trips correctly.
     func numericDoubleValue(forBitPattern bitPattern: UInt64) -> Double {
@@ -154,7 +154,7 @@ package extension TypeTag {
         }
     }
 
-    /// Encodes a ``Double`` value as an order-preserving bit pattern for this tag's floating-point type.
+    /// Encodes a `Double` value as an order-preserving bit pattern for this tag's floating-point type.
     ///
     /// For `.float` and `.float16`, narrows to the intermediate type first so precision matches the tag's width.
     func floatingBitPattern(from value: Double) -> UInt64 {

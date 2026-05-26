@@ -88,7 +88,7 @@ package extension Gen {
         )
     }
 
-    /// Generates a random element from a collection whose elements are ``Equatable``.
+    /// Generates a random element from a collection whose elements are `Equatable`.
     ///
     /// Reflection uses equality-based index lookup. Round-robin indexing on the generated index prevents out-of-bounds failures when the reducer narrows the index range.
     static func choose<C: Collection>(
@@ -116,7 +116,7 @@ package extension Gen {
         )
     }
 
-    /// Generates a random element from a collection without requiring ``Equatable`` conformance.
+    /// Generates a random element from a collection without requiring `Equatable` conformance.
     ///
     /// Forward-only: reflection is not supported because there is no way to find the element's index without equality comparison.
     static func choose<C: Collection>(
@@ -305,7 +305,7 @@ package extension Gen {
     ///
     /// Follows Hedgehog's scaling approach in real-valued arithmetic: linear is `(distance + 1) · fraction`, exponential is `(distance + 1)^fraction - 1`. The `+1` ensures non-trivial ranges at small sizes.
     ///
-    /// - Note: Arithmetic is performed in ``Double`` to avoid overflow when `distance` is close to `UInt64.max / size`. Integer multiplication would wrap silently and collapse the effective range to zero at inconvenient sizes.
+    /// - Note: Arithmetic is performed in `Double` to avoid overflow when `distance` is close to `UInt64.max / size`. Integer multiplication would wrap silently and collapse the effective range to zero at inconvenient sizes.
     static func scaledDistance(
         _ distance: UInt64,
         fraction: Double,
