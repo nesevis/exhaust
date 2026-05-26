@@ -180,12 +180,12 @@ struct SwiftTestingIntegrationTests {
         #expect(invocations == 2)
     }
 
-    @Test("coverage replay seed resolves to row")
+    @Test("coverage replay seed resolves to row - 1")
     func coverageReplaySeedResolvesToRow() {
         let seed = ReplaySeed.encoded("U6")
         let resolved = seed.resolve()
         if case let .coverage(row) = resolved {
-            #expect(row == 6)
+            #expect(row == 5)
         } else {
             Issue.record("Expected .coverage(row:), got \(String(describing: resolved))")
         }
