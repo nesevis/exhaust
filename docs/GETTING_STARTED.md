@@ -263,11 +263,11 @@ It's worth running this against code you already trust, just to see what happens
 
 `#exhaust` does more than random sampling. Every run moves through phases, and each one does a different job.
 
-**Coverage sampling.** Before random sampling starts, Exhaust systematically exercises the boundary values most likely to cause bugs. What counts as a boundary depends on the type: min and max (plus one off each) for signed and unsigned integers; NaN, infinities, and `ulpOfOne` for floating-point types; DST transitions and timezone edges for dates; the set of lengths 0, 1, 2, and the range's lower bound (filtered to whichever fit the permitted range) for collections. 
+**Coverage sampling.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min and max (plus one off each) for signed and unsigned integers; NaN, infinities, and `ulpOfOne` for floating-point types; DST transitions and timezone edges for dates; the set of lengths 0, 1, 2, and the range's lower bound (filtered to whichever fit the permitted range) for collections. 
 
-The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These boundary values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their boundaries simultaneously gets caught without your having to remember to test the combination yourself. 
+The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
 
-Generators with very small domains get enumerated exhaustively as a special case.
+Generators with very small domains get enumerated exhaustively as a special case. See [Ordered coverage of problematic values](EXHAUST.md#ordered-coverage-of-problematic-values) for the full detail.
 
 **Random sampling.** Once coverage is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.thorough`, `.extensive`) scale both numbers in lockstep.
 
@@ -275,7 +275,7 @@ Generators with very small domains get enumerated exhaustively as a special case
 
 Big structural simplifications tend to happen first, because they shrink the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the smallest, simplest input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
 
-The first two phases search for bugs. The third makes the bugs actionable. A property that passes all three means *no failures in the coverage budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically.
+The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the coverage budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. [How reduction works](REDUCTION.md) walks through a complete example.
 
 ## Reading a failure report
 
@@ -338,7 +338,7 @@ Property closures can be async, throwing or return a simple boolean.
 
 ## Writing your own generators
 
-Built-in generators (`.int()`, `.array()`, `.string()`, and their siblings) are simple enough. Generators compose together in ways that let you express almost any generator you could care to think of.
+Built-in generators (`.int()`, `.array()`, `.string()`, and their siblings) are simple enough. Generators compose together in ways that let you express almost any generator you could care to think of. [Building generators](GEN.md) covers the main concepts in more depth.
 
 ```swift
 struct Order {
@@ -428,7 +428,7 @@ Each direction gets its own tuning pass and its own biased generator.
 
 At the default `.standard` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator — because some constraint in the generator rules it out — the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
 
-The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s.
+The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s. See [Directed exploration](EXPLORE.md) for the full reference.
 
 A few signs you've crossed into `#explore` territory:
 
@@ -471,16 +471,3 @@ For async SUTs, the contract becomes a `final class` and the runner tests concur
 
 Contract testing has its own guide: [Contract Testing with Exhaust](CONTRACT_TESTING.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
 
-## The tools, in summary
-
-Here's when each tool is the right answer:
-
-**`#example(generator, count: n)`**. *Create instance(s) of the generator's output*. Use this to avoid having to manually construct test data, or even to inspect the output of your generator.
-
-**`#examine(generator)`**. *Validate that values from this generator round-trip correctly.* Run it once on each custom generator you write to confirm reduction will behave as expected.
-
-**`#exhaust(generator) { value in ... }`**. *Run the property against a wide distribution of inputs*, with deterministic coverage of structural choice points and reduction on failure. This is the workhorse. Use it for properties that should hold across the generator's natural distribution.
-
-**`#explore(generator, directions: [...]) { value in ... }`**. *Guarantee that each declared region of the input space gets exercised.* Use it when you can name the regions you care about and want assurance they were tested, and reach for it when `#exhaust` passes too easily for comfort.
-
-**`@Contract`**. *Test stateful systems across sequences of operations.* Reach for it when the bug you're worried about lives in the ordering or combination of several calls rather than in any single call. Async contracts also test concurrent interleaving at `await` boundaries. See [Contract Testing with Exhaust](CONTRACT_TESTING.md) for the full guide.

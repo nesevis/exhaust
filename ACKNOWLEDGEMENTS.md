@@ -14,8 +14,9 @@ Links:
 
 1. [Property-based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content) (2024)
 2. [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842) (2023)
-3. [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Tjoa et al; Goldstein as co-author)
-4. [Tyche: Making Sense of PBT Effectiveness](https://dl.acm.org/doi/10.1145/3654777.3676407) (2024)
+3. [Do Judge a Test by its Cover: Combining Combinatorial and Property-Based Testing](https://doi.org/10.1007/978-3-030-72019-3_10) (2021, with Hughes, Lampropoulos, and Pierce)
+4. [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Tjoa et al; Goldstein as co-author)
+5. [Tyche: Making Sense of PBT Effectiveness](https://dl.acm.org/doi/10.1145/3654777.3676407) (2024)
 
 ## David MacIver, Alastair Donaldson and Hypothesis
 
@@ -48,7 +49,7 @@ Links:
 
 ## Renée Bryce & Charles Colbourn
 
-Their _Density_ algorithm provides a way to do pull-based/lazy covering array generation. This is used by Exhaust to perform exhaustive generation of values for finite domains and boundary coverage of interesting values for larger domains.
+Their _Density_ algorithm provides a way to do pull-based/lazy covering array generation. Exhaust uses it to combine problematic values across generator parameters efficiently, ensuring every pairwise combination is tested without generating the full Cartesian product. The one-row-at-a-time design means Exhaust can stop the moment a property fails, without wasting budget on rows that would never be tested.
 
 Links:
 
