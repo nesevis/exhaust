@@ -88,7 +88,7 @@ package extension __ExhaustRuntime {
                     case .rejected, .failed:
                         tree
                 }
-                let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration - 1)
+                let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration)
                 report.replaySeed = coverageReplaySeed
                 let result = reduceAndReport(
                     context: context,
@@ -582,6 +582,7 @@ package extension __ExhaustRuntime {
             report.applyReductionStats(reduceResult.stats)
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
             if let (reducedSequence, reducedValue) = reduceResult.reduced {
+                let totalInvocations = coverageIterations + randomSamplingIterations + propertyInvocationCount
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
                     original: value,
@@ -590,7 +591,7 @@ package extension __ExhaustRuntime {
                     iteration: iteration,
                     phaseBudget: phaseBudget,
                     blueprint: reducedSequence.shortString,
-                    propertyInvocations: propertyInvocationCount,
+                    propertyInvocations: totalInvocations,
                     reducedSequence: reducedSequence
                 )
                 failure.replayHint = replayHint
@@ -646,6 +647,7 @@ package extension __ExhaustRuntime {
         }
 
         // Reduction ran but could not improve
+        let totalInvocationsUnreduced = coverageIterations + randomSamplingIterations + propertyInvocationCount
         var failure = PropertyTestFailure(
             counterexample: value,
             original: nil as Output?,
@@ -653,7 +655,7 @@ package extension __ExhaustRuntime {
             iteration: iteration,
             phaseBudget: phaseBudget,
             blueprint: nil,
-            propertyInvocations: propertyInvocationCount
+            propertyInvocations: totalInvocationsUnreduced
         )
         failure.replayHint = replayHint
         let rendered = failure.render(format: context.logFormat)
