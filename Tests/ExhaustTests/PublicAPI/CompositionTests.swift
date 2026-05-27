@@ -146,7 +146,8 @@ struct CompositionTests {
                 (1, nestedGen),
                 (1, nestedGen.mapped(forward: { $0.reversed() }, backward: { $0.reversed() }))))
 
-            #expect(#examine(pickedGen, .samples(100), .replay(42), .reflection(.silent)).valuesGenerated == 100)
+            let report = #examine(pickedGen, .samples(100), .replay(42), .reflection(.silent))
+            #expect(report.valuesGenerated == 100)
         }
     }
 

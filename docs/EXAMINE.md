@@ -13,21 +13,21 @@ A passing property test gives no signal about whether the generator explored its
 `#examine` generates 200 samples (configurable), checks that each value roundtrips through reflection, and records how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
 
 ```
-#examine: 200 samples, 0.064ms/sample
+#examine: 200 samples, 0.115ms/sample
   Correctness: 200/200 reflection
   Unique: 200/200
   Coverage:
-    UInt: [••••••••• ] 9/10 deciles (min: 20, max: 120, mean: 69.19)
-    Sequences: [••••••••••] 10/10 deciles (min: 0, max: 95, mean: 26.07)
+    UInt: [••••••••• ] 9/10 deciles (min: 18, max: 120, mean: 69.94)
+    Sequences: [••••••••••] 10/10 deciles (min: 0, max: 100, mean: 50.35)
     Characters: 100% (of 95 code points)
-    Characters: 2% (of 291108 code points)
+    Characters: 3% (of 291108 code points)
   Filters:
-    YourFile.swift:125: 83% (CGS, 40 discarded)
+    YourFile.swift:125: 85% (CGS, 35 discarded)
   Example:
     └── group
-        ├── string(length: 42) 0...55
-        ├── string(length: 2) 0...55
-        └── choice(unsigned: 81) 0...120
+        ├── string(length: 18) 0...100
+        ├── string(length: 83) 0...100
+        └── choice(unsigned: 72) 0...120
 ```
 
 > [!Tip]

@@ -329,7 +329,8 @@ private extension Generator where Operation == ReflectiveOperation {
         var iterator = ValueAndChoiceTreeInterpreter(
             self,
             seed: seed,
-            maxRuns: UInt64(samples)
+            maxRuns: UInt64(samples),
+            sizeOverride: 100
         )
 
         var generationNanoseconds: UInt64 = 0

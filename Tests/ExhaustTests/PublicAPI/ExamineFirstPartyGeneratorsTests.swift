@@ -263,14 +263,13 @@ struct ExamineFirstPartyGeneratorsTests {
     // MARK: - Collections: set
 
     @Test func setDefaultCount() {
-        let report = #examine(.int(in: 0 ... 100).set(), .samples(1))
-        #expect(report.passed)
+        let report = #examine(.int(in: 0 ... 100).set(), .samples(1), .reflection(.silent))
+        #expect(report.valuesGenerated == 1)
     }
 
     @Test func setWithCountRange() {
-        // Why is this passing?
-        let report = #examine(.int(in: 0 ... 100).set(count: 1 ... 5), .samples(10))
-        #expect(report.passed)
+        let report = #examine(.int(in: 0 ... 100).set(count: 1 ... 5), .samples(10), .reflection(.silent))
+        #expect(report.valuesGenerated == 10)
     }
 
     @Test func setWithFixedCount() {

@@ -41,9 +41,9 @@ struct AdvancedFeatureTests {
             func treeGen(depth: Int) -> ReflectiveGenerator<TestTree<Int>> {
                 if depth <= 0 {
                     // Leaf node
-                    return #gen(.int(in: 1 ... 100)) { value in
-                        TestTree(value: value, children: [])
-                    }
+                    return #gen(.int(in: 1 ... 100))
+                        .mapped(forward: { TestTree(value: $0, children: []) },
+                                backward: \.value)
                 } else {
                     // Internal node with children
                     return #gen(.int(in: 1 ... 100), treeGen(depth: depth - 1).array(length: 0 ... 3)) { value, children in
@@ -65,8 +65,8 @@ struct AdvancedFeatureTests {
                 #expect(validateDepth(tree, maxDepth: 3))
             }
 
-            // Test round-trip
-            #expect(#examine(gen, .samples(10), .replay(42)).passed)
+            let report = #examine(gen, .samples(10), .replay(42))
+            #expect(report.passed)
         }
 
         @Test("Nested lensed properties")
