@@ -13,7 +13,7 @@
 struct CandidateRejectionCache {
     private var rejectedHashes = Set<UInt64>()
 
-    /// Value-independent hash for replacement operations only. Keyed by (operation type, targeted node IDs) without leaf values. Branch pivot is genuinely value-independent because the encoder speculatively minimizes all leaves via ``ChoiceTree/minimizingLeaves``. Self-similar substitution and descendant promotion copy donor entries verbatim, so they are technically value-dependent — but the coarse cache is cleared per-cycle via ``clearCoarse()``, which limits stale rejections to within a single cycle. Deletion and migration are excluded because their acceptance depends on leaf values: a deletion rejected when the element had value 5 may succeed after value search minimizes it to 0.
+    /// Value-independent hash for structural operations. Keyed by (operation type, targeted node IDs) without leaf values. Branch pivot is genuinely value-independent because the encoder speculatively minimizes all leaves via ``ChoiceTree/minimizingLeaves``. Self-similar substitution, descendant promotion, deletion, and migration are technically value-dependent — but the coarse cache is cleared per-cycle via ``clearCoarse()``, which limits stale rejections to within a single cycle.
     private var coarseRejectedHashes = Set<UInt64>()
 
     /// Records a rejected structural transformation.
@@ -22,7 +22,7 @@ struct CandidateRejectionCache {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) {
-        // Structural operations (replacement, deletion, migration) use the coarse (value-independent) cache, cleared per-cycle. A structural operation rejected with old leaf values may succeed after value search changes the surrounding tree — the property outcome depends on the whole tree, not just the targeted positions. Value-based operations (minimization, exchange) use the fine-grained cache.
+        // Replacement, deletion, and migration use the coarse (value-independent) cache, cleared per-cycle via clearCoarse(). Permutation uses the fine-grained (value-dependent) cache.
         switch operation {
             case .replace, .remove, .migrate:
                 if let hash = coarseScopeHash(operation: operation, graph: graph) {
