@@ -88,7 +88,7 @@ struct ConcurrentContractReplayTests {
     @Test("Iteration-targeted replay reproduces a cooperative concurrent failure")
     func iterationTargetedReplayReproducesCooperativeConcurrentFailure() async throws {
         let initial = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 ReplayableNonAtomicCounterSpec.self,
                 settings: [
                     .commandLimit(6),
@@ -101,7 +101,7 @@ struct ConcurrentContractReplayTests {
         #expect(replaySeed.contains("-"), "Sampling replay seed should include iteration suffix")
 
         let replayed = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 ReplayableNonAtomicCounterSpec.self,
                 settings: [
                     .commandLimit(6),
@@ -119,7 +119,7 @@ struct ConcurrentContractReplayTests {
     @Test("Coverage row replay reproduces a cooperative concurrent SCA failure")
     func coverageRowReplayReproducesCooperativeConcurrentSCAFailure() async throws {
         let initial = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 ReplayableNonAtomicCounterSpec.self,
                 settings: [
                     .commandLimit(6),
@@ -132,7 +132,7 @@ struct ConcurrentContractReplayTests {
         #expect(replaySeed.hasPrefix("U"), "Coverage replay seed should have U prefix")
 
         let replayed = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 ReplayableNonAtomicCounterSpec.self,
                 settings: [
                     .commandLimit(6),

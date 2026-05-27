@@ -9,7 +9,7 @@ struct PreemptiveSmokeTestTests {
     func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SequentiallyBrokenSpec.self,
                     settings: [
                         .concurrent(2),
@@ -27,7 +27,7 @@ struct PreemptiveSmokeTestTests {
     func smokeTestFailureCarriesUPrefixedReplaySeed() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SequentiallyBrokenSpec.self,
                     settings: [
                         .concurrent(2),

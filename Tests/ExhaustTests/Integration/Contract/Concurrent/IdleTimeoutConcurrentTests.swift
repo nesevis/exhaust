@@ -10,7 +10,7 @@ struct IdleTimeoutConcurrentTests {
     @Test("Idle timeout fires for SUT that escapes the cooperative executor")
     func idleTimeoutFiresForSUTThatEscapesTheCooperativeExecutor() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 SleepingSpec.self,
                 settings: [.commandLimit(2), .idleTimeoutMs(10), .budget(.custom(coverage: 0, sampling: 10)), .suppress(.issueReporting)]
             )

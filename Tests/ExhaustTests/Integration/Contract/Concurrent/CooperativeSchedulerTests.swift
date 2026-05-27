@@ -27,7 +27,7 @@ struct CooperativeSchedulerTests {
         var traces: [[TraceStep]] = []
         for _ in 0 ..< 10 {
             let result = try #require(
-                await __runContractConcurrent(
+                await __ExhaustRuntime.__runContractConcurrent(
                     NonAtomicCounterSpec.self,
                     settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(12345)), .suppress(.issueReporting)]
                 )
@@ -46,13 +46,13 @@ struct CooperativeSchedulerTests {
     @Test("Reduction produces a counterexample that still fails on replay")
     func reductionProducesACounterexampleThatStillFailsOnReplay() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
         )
         let replayResult = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(result.seed!)), .suppress(.issueReporting)]
             )
@@ -63,7 +63,7 @@ struct CooperativeSchedulerTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("concurrencyLevel 1 runs everything sequentially and finds no concurrency bugs")
     func concurrencyLevel1RunsEverythingSequentiallyAndFindsNoConcurrencyBugs() async {
-        let result = await __runContractConcurrent(
+        let result = await __ExhaustRuntime.__runContractConcurrent(
             NonAtomicCounterSpec.self,
             settings: [.concurrent(1), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
         )

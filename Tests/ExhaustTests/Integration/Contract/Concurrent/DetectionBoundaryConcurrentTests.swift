@@ -9,7 +9,7 @@ struct DetectionBoundaryTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")
     func raceWithoutSuspensionPointIsNOTDetectedDemonstratesToolLimitation() async {
-        let result = await __runContractConcurrent(
+        let result = await __ExhaustRuntime.__runContractConcurrent(
             SilentRaceSpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
         )
@@ -20,7 +20,7 @@ struct DetectionBoundaryTests {
     @Test("Same race WITH suspension point IS detected")
     func sameRaceWITHSuspensionPointISDetected() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 ExposedRaceSpec.self,
                 settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
@@ -36,7 +36,7 @@ struct DetectionBoundaryTests {
     @Test("Three-way race detected with concurrencyLevel 3")
     func threeWayRaceDetectedWithConcurrencyLevel3() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 ThreeWayRaceSpec.self,
                 settings: [.concurrent(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
@@ -52,7 +52,7 @@ struct DetectionBoundaryTests {
     @Test("Four-way race detected with concurrencyLevel 4 (exercises chooseLaneControl)")
     func fourWayRaceDetectedWithConcurrencyLevel4ExercisesChooseLaneControl() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 ThreeWayRaceSpec.self,
                 settings: [.concurrent(4), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )

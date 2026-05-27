@@ -9,7 +9,7 @@ struct PreemptiveCommandFailureTests {
     func syncCheckerDetectsPostconditionFailureInPrefixCommand() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SyncPrefixFailingSpec.self,
                     settings: [
                         .concurrent(2),
@@ -27,7 +27,7 @@ struct PreemptiveCommandFailureTests {
     func syncCheckerDetectsPostconditionFailureInConcurrentLane() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SyncLaneFailingSpec.self,
                     settings: [
                         .concurrent(2),
@@ -44,7 +44,7 @@ struct PreemptiveCommandFailureTests {
     @Test("Async checker detects postcondition failure in prefix command")
     func asyncCheckerDetectsPostconditionFailureInPrefixCommand() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncPrefixFailingSpec.self,
                 settings: [
                     .concurrent(2),
@@ -60,7 +60,7 @@ struct PreemptiveCommandFailureTests {
     @Test("Async checker detects postcondition failure in concurrent lane")
     func asyncCheckerDetectsPostconditionFailureInConcurrentLane() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncLaneFailingSpec.self,
                 settings: [
                     .concurrent(2),

@@ -14,7 +14,7 @@ struct ConcurrentFailureRenderingTests {
             (ScheduleMarker(rawValue: 1), "deposit(10)"),
             (ScheduleMarker(rawValue: 2), "withdraw(5)"),
         ]
-        var context = FailureContext()
+        var context = __ExhaustRuntime.FailureContext()
         context.specName = "BankSpec"
         context.seed = 42
         context.iteration = 3
@@ -23,7 +23,7 @@ struct ConcurrentFailureRenderingTests {
         context.sequencesTested = 50
         context.replaySeed = CrockfordBase32.encode(seed: 42, iteration: 3)
 
-        let output = renderFailure(tagged, trace: [], context: context)
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("BankSpec failure"))
         #expect(output.contains("seed"))
         #expect(output.contains("Reduced from 5 to 3 commands"))
@@ -43,14 +43,14 @@ struct ConcurrentFailureRenderingTests {
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "push(1)"),
         ]
-        var context = FailureContext()
+        var context = __ExhaustRuntime.FailureContext()
         context.specName = "StackSpec"
         context.iteration = 1
         context.budget = 10
         context.originalCount = 1
         context.sequencesTested = 5
 
-        let output = renderFailure(tagged, trace: [], context: context)
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("StackSpec failure"))
         #expect(output.contains("Reproduce:") == false)
     }
@@ -63,14 +63,14 @@ struct ConcurrentFailureRenderingTests {
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
         ]
-        var context = FailureContext()
+        var context = __ExhaustRuntime.FailureContext()
         context.specName = "CounterSpec"
         context.oracleDescription = "Expected 5 but got 4"
         context.iteration = 1
         context.budget = 10
         context.sequencesTested = 3
 
-        let output = renderFailure(tagged, trace: [], context: context)
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("Expected 5 but got 4"))
     }
 
@@ -82,10 +82,10 @@ struct ConcurrentFailureRenderingTests {
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "slowOp()"),
         ]
-        var context = FailureContext()
+        var context = __ExhaustRuntime.FailureContext()
         context.timedOut = true
 
-        let output = renderFailure(tagged, trace: [], context: context)
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("timed out"))
         #expect(output.contains("drain loop stalled"))
     }
@@ -99,7 +99,7 @@ struct ConcurrentFailureRenderingTests {
             (ScheduleMarker(rawValue: 1), "increment()"),
             (ScheduleMarker(rawValue: 2), "decrement()"),
         ]
-        var context = FailureContext()
+        var context = __ExhaustRuntime.FailureContext()
         context.specName = "CounterSpec"
         context.seed = 99
         context.isPreemptive = true
@@ -109,7 +109,7 @@ struct ConcurrentFailureRenderingTests {
         context.sequencesTested = 10
         context.replaySeed = CrockfordBase32.encode(seed: 99, iteration: 1)
 
-        let output = renderFailure(tagged, trace: [], context: context)
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("Reproduce:"))
         #expect(output.contains("Preemptive scheduling depends on OS thread timing"))
     }
@@ -122,7 +122,7 @@ struct ConcurrentFailureRenderingTests {
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
         ]
-        var context = FailureContext()
+        var context = __ExhaustRuntime.FailureContext()
         context.specName = "CounterSpec"
         context.isPreemptive = true
         context.discoveryMethod = .coverage
@@ -130,7 +130,7 @@ struct ConcurrentFailureRenderingTests {
         context.budget = 200
         context.sequencesTested = 10
 
-        let output = renderFailure(tagged, trace: [], context: context)
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("Preemptive scheduling depends on OS thread timing"))
     }
 
@@ -142,7 +142,7 @@ struct ConcurrentFailureRenderingTests {
         let tagged: [(ScheduleMarker, String)] = [
             (ScheduleMarker(rawValue: 1), "increment()"),
         ]
-        var context = FailureContext()
+        var context = __ExhaustRuntime.FailureContext()
         context.specName = "CounterSpec"
         context.seed = 99
         context.discoveryMethod = .randomSampling
@@ -151,7 +151,7 @@ struct ConcurrentFailureRenderingTests {
         context.sequencesTested = 10
         context.replaySeed = CrockfordBase32.encode(seed: 99, iteration: 1)
 
-        let output = renderFailure(tagged, trace: [], context: context)
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("Reproduce:"))
         #expect(output.contains("Preemptive") == false)
     }
@@ -170,7 +170,7 @@ struct ConcurrentFailureRenderingTests {
             TraceStep(index: 2, command: "block()", outcome: .ok),
         ]
 
-        let output = renderTimeout(tagged, trace: trace)
+        let output = __ExhaustRuntime.renderTimeout(tagged, trace: trace)
         #expect(output.contains("Partial execution trace"))
         #expect(output.contains("init()"))
     }

@@ -82,7 +82,7 @@ public extension __ExhaustRuntime {
                     filePath: filePath,
                     line: line,
                     column: column,
-                    function: function,
+                    testName: "\(function)",
                     property: property
                 ).0
             }
@@ -124,7 +124,7 @@ public extension __ExhaustRuntime {
                     filePath: filePath,
                     line: line,
                     column: column,
-                    function: function,
+                    testName: "\(function)",
                     property: property
                 ).0
             }
@@ -140,7 +140,7 @@ public extension __ExhaustRuntime {
         filePath: StaticString,
         line: UInt,
         column: UInt,
-        function: StaticString,
+        testName: String,
         property: @escaping @Sendable (Output) -> Bool
     ) -> (Output?, String?) {
         var budget = ExhaustBudget.standard
@@ -240,14 +240,14 @@ public extension __ExhaustRuntime {
             defer { onReportClosure?(report) }
 
             let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
-                ? OpenPBTStatsAccumulator(propertyName: "\(function)")
+                ? OpenPBTStatsAccumulator(propertyName: "\(testName)")
                 : nil
             defer {
                 if let statsAccumulator {
                     let lines = statsAccumulator.finalize()
                     if lines.isEmpty == false {
                         report.openPBTStatsLines = lines
-                        let attachmentName = "\(function)-openpbtstats.jsonl"
+                        let attachmentName = "\(testName)-openpbtstats.jsonl"
                         switch TestContext.current {
                             #if canImport(Testing)
                                 case .swiftTesting:

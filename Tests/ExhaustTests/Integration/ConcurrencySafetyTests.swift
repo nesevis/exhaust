@@ -237,7 +237,7 @@ struct ConcurrentContractDrainLoopTests {
     @Test("Concurrent contract with Task.yield suspension points")
     func concurrentContractWithTaskyieldSuspensionPoints() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 YieldingCounterSpec.self,
                 settings: [
                     .commandLimit(6),
@@ -255,7 +255,7 @@ struct ConcurrentContractDrainLoopTests {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0 ..< 5 {
                 group.addTask {
-                    _ = await __runContractConcurrent(
+                    _ = await __ExhaustRuntime.__runContractConcurrent(
                         YieldingCounterSpec.self,
                         settings: [
                             .commandLimit(4),

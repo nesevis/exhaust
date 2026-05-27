@@ -469,7 +469,7 @@ struct GCDContractExhaustMacroTests {
             """,
             expandedSource: """
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     CounterSpec.self,
                     settings: [],
                     fileID: #fileID,
@@ -491,7 +491,7 @@ struct GCDContractExhaustMacroTests {
             """,
             expandedSource: """
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     CounterSpec.self,
                     settings: [.concurrent(2), .commandLimit(6)],
                     fileID: #fileID,
@@ -512,7 +512,7 @@ struct GCDContractExhaustMacroTests {
             #exhaust(AsyncCounterSpec.self)
             """,
             expandedSource: """
-            __runPreemptiveConcurrentContractAsync(
+            __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncCounterSpec.self,
                 settings: [],
                 fileID: #fileID,
@@ -532,7 +532,7 @@ struct GCDContractExhaustMacroTests {
             #exhaust(AsyncCounterSpec.self, .concurrent(2), .budget(.quick))
             """,
             expandedSource: """
-            __runPreemptiveConcurrentContractAsync(
+            __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncCounterSpec.self,
                 settings: [.concurrent(2), .budget(.quick)],
                 fileID: #fileID,

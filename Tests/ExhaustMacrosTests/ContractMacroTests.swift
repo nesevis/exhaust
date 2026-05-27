@@ -30,7 +30,7 @@ struct ContractMacroTests {
             #exhaust(BoundedQueueSpec.self, .commandLimit(20))
             """,
             expandedSource: """
-            __runContract(
+            __ExhaustRuntime.__runContract(
                 BoundedQueueSpec.self,
                 settings: [.commandLimit(20)],
                 fileID: #fileID,
@@ -50,7 +50,7 @@ struct ContractMacroTests {
             #exhaust(Spec.self, .commandLimit(20), .budget(.thorough))
             """,
             expandedSource: """
-            __runContract(
+            __ExhaustRuntime.__runContract(
                 Spec.self,
                 settings: [.commandLimit(20), .budget(.thorough)],
                 fileID: #fileID,
@@ -70,7 +70,7 @@ struct ContractMacroTests {
             #exhaust(Spec.self)
             """,
             expandedSource: """
-            __runContract(
+            __ExhaustRuntime.__runContract(
                 Spec.self,
                 settings: [],
                 fileID: #fileID,
@@ -90,7 +90,7 @@ struct ContractMacroTests {
             #exhaust(Spec.self, .suppress(.issueReporting))
             """,
             expandedSource: """
-            __runContract(
+            __ExhaustRuntime.__runContract(
                 Spec.self,
                 settings: [.suppress(.issueReporting)],
                 fileID: #fileID,
@@ -756,7 +756,7 @@ struct AsyncContractMacroTests {
             #exhaust(AsyncSpec.self)
             """,
             expandedSource: """
-            __runContractConcurrent(
+            __ExhaustRuntime.__runContractConcurrent(
                 AsyncSpec.self,
                 settings: [],
                 fileID: #fileID,
@@ -776,7 +776,7 @@ struct AsyncContractMacroTests {
             #exhaust(AsyncSpec.self, .commandLimit(10), .concurrent(3))
             """,
             expandedSource: """
-            __runContractConcurrent(
+            __ExhaustRuntime.__runContractConcurrent(
                 AsyncSpec.self,
                 settings: [.commandLimit(10), .concurrent(3)],
                 fileID: #fileID,

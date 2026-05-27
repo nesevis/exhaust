@@ -17,7 +17,7 @@ struct PreemptiveNonAtomicCounterParityTests {
     @Test("Detects lost-update bug in non-atomic counter")
     func detectsLostUpdateBugInNonAtomicCounter() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 PreemptiveNonAtomicCounterParitySpec.self,
                 settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
@@ -28,7 +28,7 @@ struct PreemptiveNonAtomicCounterParityTests {
     @Test("Reduced counterexample is smaller than original")
     func reducedCounterexampleIsSmallerThanOriginal() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 PreemptiveNonAtomicCounterParitySpec.self,
                 settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
@@ -71,7 +71,7 @@ struct PreemptiveLeakyBucketParityTests {
     @Test("Detects check-then-act bug that requires state buildup")
     func detectsCheckThenActBugThatRequiresStateBuildup() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 PreemptiveLeakyBucketParitySpec.self,
                 settings: [.budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
@@ -114,7 +114,7 @@ final class PreemptiveLeakyBucketParitySpec {
 struct PreemptiveAtomicCounterParityTests {
     @Test("Thread-safe counter passes under preemptive execution")
     func threadSafeCounterPassesUnderPreemptiveExecution() async {
-        let result = await __runPreemptiveConcurrentContractAsync(
+        let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
             PreemptiveAtomicCounterParitySpec.self,
             settings: [
                 .commandLimit(4),
@@ -153,7 +153,7 @@ struct PreemptiveDetectionBoundaryParityTests {
     @Test("Race with Task.yield() is detected by preemptive runner", .disabled("Race detection depends on scheduling timing"))
     func raceWithTaskyieldIsDetectedByPreemptiveRunner() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 PreemptiveExposedRaceParitySpec.self,
                 settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
@@ -164,7 +164,7 @@ struct PreemptiveDetectionBoundaryParityTests {
     @Test("Three-way race detected with concurrencyLevel 3", .disabled("Race detection depends on scheduling timing"))
     func threeWayRaceDetectedWithConcurrencyLevel3() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 PreemptiveThreeWayRaceParitySpec.self,
                 settings: [.concurrent(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
@@ -211,7 +211,7 @@ final class PreemptiveThreeWayRaceParitySpec {
 struct PreemptiveAllSkipParityTests {
     @Test("100% skip rate does not hang or crash")
     func fullSkipRateDoesNotHangOrCrash() async {
-        let result = await __runPreemptiveConcurrentContractAsync(
+        let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
             PreemptiveAlwaysSkipParitySpec.self,
             settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting)]
         )
@@ -220,7 +220,7 @@ struct PreemptiveAllSkipParityTests {
 
     @Test("100% skip rate with coverage phase")
     func fullSkipRateWithCoveragePhase() async {
-        let result = await __runPreemptiveConcurrentContractAsync(
+        let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
             PreemptiveAlwaysSkipParitySpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 100, sampling: 50)), .suppress(.issueReporting)]
         )
