@@ -22,6 +22,8 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public let valuesGenerated: Int
     /// Number of values whose reflected choice tree matched the generation tree. Equal to ``valuesGenerated`` for a healthy generator.
     public let reflectionRoundTripSuccesses: Int
+    /// Number of values that passed the user-provided replay equivalence check. Nil when no `replayCheck` closure was provided.
+    public let replayDeterminismSuccesses: Int?
     /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
     public let uniqueChoiceSequences: Int
     /// All validation failures detected during the run. Empty when the generator is healthy.
@@ -95,7 +97,11 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
         let perSampleMs = averageTimePerSample * 1000
         lines.append("#examine: \(valuesGenerated) samples, \(String(format: "%.3f", perSampleMs))ms/sample")
 
-        lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection")
+        if let replayDeterminismSuccesses {
+            lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection, \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
+        } else {
+            lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection")
+        }
         lines.append("  Unique: \(uniqueChoiceSequences)/\(valuesGenerated)")
 
         let hasNumeric = numericCoverage.isEmpty == false
@@ -196,6 +202,8 @@ public enum ExamineFailure: Sendable, CustomStringConvertible {
     case noValuesGenerated
     /// The generator contains a forward-only `map` or `bind` without a backward mapping. Use `.mapped(forward:backward:)` or `.bound(forward:backward:)` to provide an inverse.
     case forwardOnlyTransform(inputType: String, outputType: String, kind: String)
+    /// Two replays of the same choice tree produced values that the user-provided equivalence closure rejected.
+    case replayDivergence(sampleIndex: Int)
     /// A filter predicate passed less than 5% of the time over at least 20 attempts. The generator is spending most of its budget on rejection.
     case lowFilterValidityRate(fingerprint: UInt64, rate: Double, attempts: Int)
 
@@ -211,6 +219,8 @@ public enum ExamineFailure: Sendable, CustomStringConvertible {
                 "Reflection blocked by forward-only map (\(inputType) → \(outputType)). Use .mapped(forward:backward:) to provide an inverse."
             case let .forwardOnlyTransform(inputType, outputType, _):
                 "Reflection blocked by bind (\(inputType) → \(outputType)). This will prevent replay and reduction of externally created values of \(outputType)."
+            case let .replayDivergence(index):
+                "Sample \(index): replay produced non-equivalent values under the provided comparison"
             case let .lowFilterValidityRate(fingerprint, rate, attempts):
                 "Filter \(String(format: "%08X", fingerprint & 0xFFFF_FFFF)): validity rate \(String(format: "%.1f", rate * 100))% over \(attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate."
         }
@@ -227,12 +237,14 @@ package extension Generator where Operation == ReflectiveOperation {
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
+    ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
-    /// - Returns: A ``ExamineReport`` summarizing the results.
+    /// - Returns: An ``ExamineReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
+        replayCheck: ((Any, Any) -> Bool)? = nil,
         reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -242,6 +254,7 @@ package extension Generator where Operation == ReflectiveOperation {
         _validate(
             samples: samples,
             seed: seed,
+            replayCheck: replayCheck,
             reporting: reporting,
             fileID: fileID,
             filePath: filePath,
@@ -261,12 +274,14 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
+    ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
-    /// - Returns: A ``ExamineReport`` summarizing the results.
+    /// - Returns: An ``ExamineReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
+        replayCheck: ((Any, Any) -> Bool)? = nil,
         reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -276,6 +291,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
         _validate(
             samples: samples,
             seed: seed,
+            replayCheck: replayCheck,
             reporting: reporting,
             fileID: fileID,
             filePath: filePath,
@@ -292,6 +308,7 @@ private extension Generator where Operation == ReflectiveOperation {
     func _validate(
         samples: Int,
         seed: UInt64?,
+        replayCheck: ((Any, Any) -> Bool)?,
         reporting: ExamineReportingConfiguration?,
         fileID: StaticString,
         filePath: StaticString,
@@ -303,6 +320,7 @@ private extension Generator where Operation == ReflectiveOperation {
         var forwardOnlyDetected = false
         var valuesGenerated = 0
         var roundTripSuccesses = 0
+        var replaySuccesses = 0
         var uniqueSequences: Set<ChoiceSequence> = []
         var storedTrees: [ChoiceTree] = []
         storedTrees.reserveCapacity(samples)
@@ -336,6 +354,16 @@ private extension Generator where Operation == ReflectiveOperation {
                 )
                 if success { roundTripSuccesses += 1 }
             }
+
+            if let replayCheck, failures.count < maxFailures {
+                let replayPassed = checkReplayDeterminism(
+                    tree: tree,
+                    sampleIndex: sampleIndex,
+                    replayCheck: replayCheck,
+                    failures: &failures
+                )
+                if replayPassed { replaySuccesses += 1 }
+            }
         }
 
         let nanosecondsPerSecond = 1_000_000_000.0
@@ -363,6 +391,7 @@ private extension Generator where Operation == ReflectiveOperation {
             sampleCount: samples,
             valuesGenerated: valuesGenerated,
             reflectionRoundTripSuccesses: roundTripSuccesses,
+            replayDeterminismSuccesses: replayCheck != nil ? replaySuccesses : nil,
             uniqueChoiceSequences: uniqueSequences.count,
             failures: failures,
             generationTime: generationSeconds,
@@ -388,6 +417,8 @@ private extension Generator where Operation == ReflectiveOperation {
             let examineSeverity: ExamineSeverity = switch failure {
                 case .reflectionRoundTripMismatch, .reflectionFailed, .forwardOnlyTransform:
                     reporting?.reflectionSeverity ?? .error
+                case .replayDivergence:
+                    .error
                 case .lowFilterValidityRate:
                     reporting?.filterHealthSeverity ?? .error
                 case .noValuesGenerated:
@@ -490,6 +521,27 @@ private extension Generator where Operation == ReflectiveOperation {
             ))
             return false
         }
+    }
+
+    // MARK: - Replay Determinism Check
+
+    /// Replays the choice tree twice and compares the results using the user-provided equivalence closure. Returns `false` and appends a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure when the closure rejects the pair.
+    func checkReplayDeterminism(
+        tree: ChoiceTree,
+        sampleIndex: Int,
+        replayCheck: (Any, Any) -> Bool,
+        failures: inout [ExamineFailure]
+    ) -> Bool {
+        guard let replay1 = try? Interpreters.replay(self, using: tree),
+              let replay2 = try? Interpreters.replay(self, using: tree)
+        else {
+            return true
+        }
+        if replayCheck(replay1, replay2) == false {
+            failures.append(.replayDivergence(sampleIndex: sampleIndex))
+            return false
+        }
+        return true
     }
 
     static func medianComplexityTree(from trees: [ChoiceTree]) -> ChoiceTree? {

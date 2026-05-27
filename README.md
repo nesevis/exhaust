@@ -89,7 +89,7 @@ Exhaust's entry points are five macros. `#gen` builds generators; the rest consu
 | [`#exhaust(Spec.self, …)`](docs/EXHAUST.md#contract-invocation) | Run a contract test against a stateful system. |
 | [`#explore(gen, directions:) {…}`](docs/EXPLORE.md) | Test a property with per-direction coverage guarantees. |
 | [`#example(gen)`](docs/GEN.md#example) | Generate test data from your generators. |
-| [`#examine(gen)`](docs/EXAMINE.md) | Test your generators: correctness, coverage, and distribution quality. |
+| [`#examine(gen) {…}`](docs/EXAMINE.md) | Test your generators: correctness, coverage, and distribution quality. |
 
 ## Installation
 
