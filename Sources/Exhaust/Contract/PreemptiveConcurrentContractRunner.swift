@@ -318,15 +318,22 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
         let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
 
         for (_, command) in prefixCommands {
-            runCatchingObjC { try? concurrentSpec.run(command) }
-            runCatchingObjC { try? sequentialSpec.run(command) }
+            guard runCommandCatchingObjC(command, on: concurrentSpec) else {
+                return false
+            }
+            guard runCommandCatchingObjC(command, on: sequentialSpec) else {
+                return false
+            }
         }
 
         for (_, command) in concurrentCommands {
-            runCatchingObjC { try? sequentialSpec.run(command) }
+            guard runCommandCatchingObjC(command, on: sequentialSpec) else {
+                return false
+            }
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
+        let commandFailed = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
         for (_, laneCommands) in laneGroups {
@@ -335,7 +342,15 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
                     for (_, command) in laneCommands {
-                        try? concurrentSpec.run(command)
+                        if commandFailed.value { break }
+                        do {
+                            try concurrentSpec.run(command)
+                        } catch is ContractSkip {
+                            continue
+                        } catch {
+                            commandFailed.value = true
+                            break
+                        }
                     }
                 }, &exception)
                 if succeeded == false {
@@ -346,7 +361,7 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
         }
         group.wait()
 
-        if caughtException.value != nil {
+        if caughtException.value != nil || commandFailed.value {
             return false
         }
 
@@ -357,6 +372,25 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
         }
 
         return concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
+    }
+
+    /// Runs a command on a spec with ObjC exception safety, treating ``ContractSkip`` as a pass.
+    private func runCommandCatchingObjC(_ command: Spec.Command, on spec: Spec) -> Bool {
+        var commandError: (any Error)?
+        let objcSucceeded = runCatchingObjC {
+            do {
+                try spec.run(command)
+            } catch {
+                commandError = error
+            }
+        }
+        guard objcSucceeded else {
+            return false
+        }
+        if let commandError, commandError is ContractSkip == false {
+            return false
+        }
+        return true
     }
 
     struct ReductionResult {

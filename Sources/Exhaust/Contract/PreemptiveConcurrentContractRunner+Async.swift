@@ -279,11 +279,18 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         let prefixCommands = taggedCommands.filter(\.0.isPrefix)
         let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
 
-        runSequentially(prefixCommands.map(\.1), on: concurrentSpec)
-        runSequentially(prefixCommands.map(\.1), on: sequentialSpec)
-        runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
+        guard runSequentially(prefixCommands.map(\.1), on: concurrentSpec) else {
+            return false
+        }
+        guard runSequentially(prefixCommands.map(\.1), on: sequentialSpec) else {
+            return false
+        }
+        guard runSequentially(concurrentCommands.map(\.1), on: sequentialSpec) else {
+            return false
+        }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
+        let commandFailed = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
         for (_, laneCommands) in laneGroups {
@@ -294,7 +301,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
                 let succeeded = exhaust_runCatchingObjCException({
                     __ExhaustRuntime.blockingAwait {
                         for (_, command) in laneCommands {
-                            try? await spec.run(command)
+                            if commandFailed.value { break }
+                            do {
+                                try await spec.run(command)
+                            } catch is ContractSkip {
+                                continue
+                            } catch {
+                                commandFailed.value = true
+                                break
+                            }
                         }
                     }
                 }, &exception)
@@ -306,7 +321,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         }
         group.wait()
 
-        if caughtException.value != nil {
+        if caughtException.value != nil || commandFailed.value {
             return false
         }
 
@@ -328,16 +343,28 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
     }
 
     /// Runs commands sequentially on a spec, bridging async execution via ``__ExhaustRuntime/blockingAwait(_:)``. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.
-    func runSequentially(_ commands: [Spec.Command], on spec: Spec) {
+    ///
+    /// Returns `true` if all commands succeeded or were skipped, `false` if any command threw a non-skip error or an NSException was caught.
+    @discardableResult
+    func runSequentially(_ commands: [Spec.Command], on spec: Spec) -> Bool {
         var exception: NSException?
+        let failed = SendableBox(false)
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
             __ExhaustRuntime.blockingAwait {
                 for command in commands {
-                    try? await spec.run(command)
+                    do {
+                        try await spec.run(command)
+                    } catch is ContractSkip {
+                        continue
+                    } catch {
+                        failed.value = true
+                        break
+                    }
                 }
             }
         }, &exception)
+        return exception == nil && failed.value == false
     }
 
     struct ReductionResult {
