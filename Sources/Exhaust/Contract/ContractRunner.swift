@@ -22,85 +22,31 @@ public func __runContract<Spec: ContractSpec>(
     line: UInt = #line,
     column: UInt = #column
 ) -> ContractResult<Spec>? {
-    var commandLimit: Int?
-    var budget = ExhaustBudget.standard
-    var seed: UInt64? = Xoshiro256().seed
-    var replayIteration: Int?
-    var coverageReplayRow: Int?
-    var suppressIssueReporting = false
-    var suppressLogs = false
-    var collectOpenPBTStats = false
-    var includeDiff = false
-    var onReportClosure: ((ExhaustReport) -> Void)?
-    var logLevel: LogLevel = .error
-    let logFormat: LogFormat = .keyValue
-    for setting in settings {
-        switch setting {
-            case let .commandLimit(limit):
-                commandLimit = limit
-            case let .budget(b):
-                budget = b
-            case let .replay(replaySeed):
-                guard let resolved = replaySeed.resolve() else {
-                    reportIssue(
-                        "Invalid replay seed: \(replaySeed)",
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column
-                    )
-                    return nil
-                }
-                switch resolved {
-                    case let .sampling(resolvedSeed, iteration):
-                        seed = resolvedSeed
-                        replayIteration = iteration
-                    case let .coverage(row):
-                        seed = nil
-                        coverageReplayRow = row
-                }
-            case let .suppress(option):
-                switch option {
-                    case .issueReporting:
-                        suppressIssueReporting = true
-                    case .logs:
-                        suppressLogs = true
-                    case .all:
-                        suppressIssueReporting = true
-                        suppressLogs = true
-                }
-            case .collectOpenPBTStats:
-                collectOpenPBTStats = true
-            case .includeDiff:
-                includeDiff = true
-            case let .onReport(closure):
-                let existing = onReportClosure
-                onReportClosure = { report in
-                    existing?(report)
-                    closure(report)
-                }
-            case let .log(level):
-                logLevel = level
-        }
+    let context = ContractContext(
+        settings: settings,
+        fileID: fileID,
+        filePath: filePath,
+        line: line,
+        column: column
+    )
+
+    guard context.hasInvalidReplaySeed == false else {
+        reportIssue(
+            "Invalid replay seed",
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+        return nil
     }
 
-    #if canImport(Testing)
-        if let traitConfig = ExhaustTraitConfiguration.current {
-            let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
-            if hasInlineBudget == false, let traitBudget = traitConfig.budget {
-                budget = traitBudget
-            }
-        }
-    #endif
-
-    return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
-        let samplingBudget = budget.samplingBudget
-        let coverageBudget = budget.coverageBudget
-
+    return ExhaustLog.withConfiguration(.init(isEnabled: context.suppressLogs == false, minimumLevel: context.logLevel, format: context.logFormat)) {
+        var context = context
         let commandGen = Spec.commandGenerator
-        let resolvedCommandLimit = commandLimit ?? estimateCommandLimit(
+        let resolvedCommandLimit = context.commandLimit ?? estimateCommandLimit(
             commandGen: commandGen.gen,
-            coverageBudget: coverageBudget
+            coverageBudget: context.coverageBudget
         )
 
         // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can reduce sequences below the user's minimum — the minimum is a generation hint, not a reduction floor.
@@ -127,207 +73,46 @@ public func __runContract<Spec: ContractSpec>(
             return true
         }
 
-        #if canImport(Testing)
-            if let traitConfig = ExhaustTraitConfiguration.current, traitConfig.regressions.isEmpty == false {
-                for encodedSeed in traitConfig.regressions {
-                    guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
-                        reportIssue(
-                            "Invalid regression seed: \(encodedSeed)",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                        continue
-                    }
-                    var regressionInterpreter = ValueAndChoiceTreeInterpreter(
-                        commandSequenceGenerator,
-                        materializePicks: true,
-                        seed: regressionSeed,
-                        maxRuns: 1
-                    )
-                    do {
-                        if let (input, _) = try regressionInterpreter.next() {
-                            if property(input) == false {
-                                let (trace, spec) = buildTrace(input, specType: specType)
-                                let result = ContractResult<Spec>(
-                                    commands: input,
-                                    trace: trace,
-                                    systemUnderTest: spec.systemUnderTest,
-                                    seed: regressionSeed,
-                                    replaySeed: CrockfordBase32.encode(regressionSeed),
-                                    discoveryMethod: .replay
-                                )
-                                if suppressIssueReporting == false {
-                                    let rendered = renderFailure(
-                                        result,
-                                        failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
-                                        modelDescription: spec.modelDescription,
-                                        includeDiff: includeDiff
-                                    )
-                                    reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
-                                }
-                                return result
-                            } else if suppressIssueReporting == false {
-                                reportIssue(
-                                    "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
-                                    fileID: fileID,
-                                    filePath: filePath,
-                                    line: line,
-                                    column: column
-                                )
-                            }
-                        }
-                    } catch {
-                        reportIssue(
-                            "Generator failed during regression replay (seed \(encodedSeed)): \(error)",
-                            fileID: fileID, filePath: filePath, line: line, column: column
-                        )
-                    }
-                }
-            }
-        #endif
-
-        var scaOutcome: SCAOutcome<Spec.Command> = .skipped
-        if coverageReplayRow != nil {
-            scaOutcome = runSCACoverage(
-                seqGen: commandSequenceGenerator,
-                commandGen: commandGen.gen,
-                commandLimit: resolvedCommandLimit,
-                coverageBudget: coverageBudget,
-                skipToRow: coverageReplayRow,
-                property: property,
-                identifySkips: Spec.skipIdentifier
-            )
-        } else if coverageBudget == 0 {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "sca_coverage_skipped",
-                "SCA coverage skipped (zero coverage budget)"
-            )
-        } else if seed != nil {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "sca_coverage_skipped",
-                "SCA coverage skipped (deterministic replay)"
-            )
-        } else {
-            scaOutcome = runSCACoverage(
-                seqGen: commandSequenceGenerator,
-                commandGen: commandGen.gen,
-                commandLimit: resolvedCommandLimit,
-                coverageBudget: coverageBudget,
-                property: property,
-                identifySkips: Spec.skipIdentifier
-            )
+        // If regression seeds were passed in through a Swift Testing trait, execute those first
+        if let result = runRegressionSeeds(
+            specType: specType,
+            sequenceGenerator: commandSequenceGenerator,
+            property: property,
+            context: context
+        ) {
+            return result
         }
 
-        let failingSequence: [Spec.Command]?
-        let failureInfo: ContractFailureInfo<Spec.Command>
-        var capturedReplaySeed: String?
-        switch scaOutcome {
-            case let .failure(commands, original, coverageInvocations, reductionStats):
-                failingSequence = commands
-                capturedReplaySeed = CrockfordBase32.encodeCoverageRow(coverageInvocations - 1)
-                failureInfo = ContractFailureInfo(
-                    originalCommands: original,
-                    discoveryMethod: .coverage
-                )
-                if let onReportClosure {
-                    var report = ExhaustReport()
-                    report.seed = seed
-                    report.setInvocations(
-                        coverage: coverageInvocations,
-                        randomSampling: 0,
-                        reduction: reductionStats.map(\.totalMaterializations) ?? 0
-                    )
-                    if let reductionStats {
-                        report.applyReductionStats(reductionStats)
-                    }
-                    onReportClosure(report)
-                }
-            case .completed, .skipped:
-                if coverageReplayRow != nil {
-                    failingSequence = nil
-                    capturedReplaySeed = nil
-                    failureInfo = ContractFailureInfo(
-                        originalCommands: nil,
-                        discoveryMethod: .replay
-                    )
-                } else {
-                    let scaCoverageInvocations: Int
-                    if case let .completed(count) = scaOutcome {
-                        scaCoverageInvocations = count
-                    } else {
-                        scaCoverageInvocations = 0
-                    }
-                    var replaySettings: [PropertySettings] = []
-                    if let replayIteration, let seed {
-                        let encoded = CrockfordBase32.encode(seed: seed, iteration: replayIteration)
-                        replaySettings.append(.replay(.encoded(encoded)))
-                    } else if let seed {
-                        replaySettings.append(.replay(.numeric(seed)))
-                    }
-                    let (counterexample, innerReplaySeed) = __ExhaustRuntime.withIsInterpreting(true) {
-                        __ExhaustRuntime.__exhaustBody(
-                            gen: commandSequenceGenerator,
-                            settings: buildPropertySettings(
-                                samplingBudget: replayIteration != nil ? 1 : samplingBudget,
-                                coverageBudget: scaOutcome.isCompleted ? UInt64(0) : coverageBudget,
-                                replaySettings: replaySettings,
-                                suppressIssueReporting: true,
-                                collectOpenPBTStats: collectOpenPBTStats,
-                                onReport: onReportClosure.map { closure in
-                                    { report in
-                                        var report = report
-                                        report.seed = seed
-                                        report.coverageInvocations += scaCoverageInvocations
-                                        report.propertyInvocations += scaCoverageInvocations
-                                        closure(report)
-                                    }
-                                },
-                                logLevel: logLevel
-                            ),
-                            reflecting: nil,
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column,
-                            function: "contract",
-                            property: property
-                        )
-                    }
-                    failingSequence = counterexample
-                    capturedReplaySeed = innerReplaySeed
-                    failureInfo = ContractFailureInfo(
-                        originalCommands: nil,
-                        discoveryMethod: seed != nil ? .replay : .randomSampling
-                    )
-                }
-        }
-
-        guard let failingSequence else {
+        guard let discovery = runCoverageAndSampling(
+            specType: specType,
+            commandGen: commandGen,
+            commandLimit: resolvedCommandLimit,
+            sequenceGenerator: commandSequenceGenerator,
+            property: property,
+            context: &context
+        ) else {
+            // The test passed
             return nil
         }
 
         // Re-execute the reduced sequence to build the trace and capture SUT state.
-        let (trace, spec) = buildTrace(failingSequence, specType: specType)
+        let (trace, spec) = buildTrace(discovery.commands, specType: specType)
 
         let result = ContractResult<Spec>(
-            commands: failingSequence,
+            commands: discovery.commands,
             trace: trace,
             systemUnderTest: spec.systemUnderTest,
-            seed: seed,
-            replaySeed: capturedReplaySeed ?? seed.map { CrockfordBase32.encode($0) },
-            discoveryMethod: failureInfo.discoveryMethod
+            seed: context.seed,
+            replaySeed: discovery.replaySeed ?? context.encodedReplaySeed,
+            discoveryMethod: discovery.failureInfo.discoveryMethod
         )
 
-        if suppressIssueReporting == false {
+        if context.suppressIssueReporting == false {
             let rendered = renderFailure(
                 result,
-                failureInfo: failureInfo,
+                failureInfo: discovery.failureInfo,
                 modelDescription: spec.modelDescription,
-                includeDiff: includeDiff
+                includeDiff: context.includeDiff
             )
             ExhaustLog.error(
                 category: .propertyTest,
@@ -345,6 +130,237 @@ public func __runContract<Spec: ContractSpec>(
 
         return result
     } // withConfiguration
+}
+
+// MARK: - Coverage and Sampling
+
+struct ContractDiscovery<Command> {
+    let commands: [Command]
+    let failureInfo: ContractFailureInfo<Command>
+    let replaySeed: String?
+}
+
+private func runCoverageAndSampling<Spec: ContractSpec>(
+    specType _: Spec.Type,
+    commandGen: ReflectiveGenerator<Spec.Command>,
+    commandLimit: Int,
+    sequenceGenerator: Generator<[Spec.Command]>,
+    property: @escaping @Sendable ([Spec.Command]) -> Bool,
+    context: inout ContractContext
+) -> ContractDiscovery<Spec.Command>? {
+    let scaOutcome = runContractCoverage(
+        commandGen: commandGen.gen,
+        commandLimit: commandLimit,
+        sequenceGenerator: sequenceGenerator,
+        property: property,
+        identifySkips: Spec.skipIdentifier,
+        context: context
+    )
+
+    switch scaOutcome {
+        case let .failure(commands, original, coverageInvocations, reductionStats):
+            if let onReport = context.onReportClosure {
+                var report = ExhaustReport()
+                report.seed = context.seed
+                report.setInvocations(
+                    coverage: coverageInvocations,
+                    randomSampling: 0,
+                    reduction: reductionStats.map(\.totalMaterializations) ?? 0
+                )
+                if let reductionStats {
+                    report.applyReductionStats(reductionStats)
+                }
+                onReport(report)
+            }
+            return ContractDiscovery(
+                commands: commands,
+                failureInfo: ContractFailureInfo(originalCommands: original, discoveryMethod: .coverage),
+                replaySeed: CrockfordBase32.encodeCoverageRow(coverageInvocations - 1)
+            )
+
+        case .completed, .skipped:
+            guard context.coverageReplayRow == nil else {
+                return nil
+            }
+            return runContractSampling(
+                scaOutcome: scaOutcome,
+                sequenceGenerator: sequenceGenerator,
+                property: property,
+                context: &context
+            )
+    }
+}
+
+private func runContractCoverage<Command>(
+    commandGen: Generator<Command>,
+    commandLimit: Int,
+    sequenceGenerator: Generator<[Command]>,
+    property: @escaping @Sendable ([Command]) -> Bool,
+    identifySkips: @escaping @Sendable ([Command]) -> Set<Int>,
+    context: ContractContext
+) -> SCAOutcome<Command> {
+    if context.coverageReplayRow != nil {
+        return runSCACoverage(
+            seqGen: sequenceGenerator,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            coverageBudget: context.coverageBudget,
+            skipToRow: context.coverageReplayRow,
+            property: property,
+            identifySkips: identifySkips
+        )
+    }
+    if context.coverageBudget == 0 {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            "SCA coverage skipped (zero coverage budget)"
+        )
+        return .skipped
+    }
+    if context.isSamplingReplay {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            "SCA coverage skipped (deterministic replay)"
+        )
+        return .skipped
+    }
+    return runSCACoverage(
+        seqGen: sequenceGenerator,
+        commandGen: commandGen,
+        commandLimit: commandLimit,
+        coverageBudget: context.coverageBudget,
+        property: property,
+        identifySkips: identifySkips
+    )
+}
+
+private func runContractSampling<Command>(
+    scaOutcome: SCAOutcome<Command>,
+    sequenceGenerator: Generator<[Command]>,
+    property: @escaping @Sendable ([Command]) -> Bool,
+    context: inout ContractContext
+) -> ContractDiscovery<Command>? {
+    let scaCoverageInvocations: Int = switch scaOutcome {
+        case let .completed(count): count
+        default: 0
+    }
+
+    context.ensureSeed()
+    let capturedSeed = context.seed
+    let samplingSettings = context.propertySettings(
+        samplingBudget: context.samplingReplayIteration != nil ? 1 : context.samplingBudget,
+        coverageBudget: scaOutcome.isCompleted ? UInt64(0) : context.coverageBudget,
+        onReport: context.onReportClosure.map { closure in
+            { report in
+                var report = report
+                report.seed = capturedSeed
+                report.coverageInvocations += scaCoverageInvocations
+                report.propertyInvocations += scaCoverageInvocations
+                closure(report)
+            }
+        }
+    )
+    let (counterexample, innerReplaySeed) = __ExhaustRuntime.withIsInterpreting(true) {
+        __ExhaustRuntime.__exhaustBody(
+            gen: sequenceGenerator,
+            settings: samplingSettings,
+            reflecting: nil,
+            fileID: context.fileID,
+            filePath: context.filePath,
+            line: context.line,
+            column: context.column,
+            function: "contract",
+            property: property
+        )
+    }
+
+    guard let counterexample else { return nil }
+    return ContractDiscovery(
+        commands: counterexample,
+        failureInfo: ContractFailureInfo(
+            originalCommands: nil,
+            discoveryMethod: context.isSamplingReplay ? .replay : .randomSampling
+        ),
+        replaySeed: innerReplaySeed
+    )
+}
+
+// MARK: - Regression Seeds
+
+private func runRegressionSeeds<Spec: ContractSpec>(
+    specType: Spec.Type,
+    sequenceGenerator: Generator<[Spec.Command]>,
+    property: @escaping @Sendable ([Spec.Command]) -> Bool,
+    context: ContractContext
+) -> ContractResult<Spec>? {
+    #if canImport(Testing)
+        guard let traitConfig = ExhaustTraitConfiguration.current,
+              traitConfig.regressions.isEmpty == false
+        else {
+            return nil
+        }
+
+        for encodedSeed in traitConfig.regressions {
+            guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
+                reportIssue(
+                    "Invalid regression seed: \(encodedSeed)",
+                    fileID: context.fileID,
+                    filePath: context.filePath,
+                    line: context.line,
+                    column: context.column
+                )
+                continue
+            }
+            var regressionInterpreter = ValueAndChoiceTreeInterpreter(
+                sequenceGenerator,
+                materializePicks: true,
+                seed: regressionSeed,
+                maxRuns: 1
+            )
+            do {
+                guard let (input, _) = try regressionInterpreter.next() else { continue }
+                if property(input) == false {
+                    let (trace, spec) = buildTrace(input, specType: specType)
+                    let result = ContractResult<Spec>(
+                        commands: input,
+                        trace: trace,
+                        systemUnderTest: spec.systemUnderTest,
+                        seed: regressionSeed,
+                        replaySeed: CrockfordBase32.encode(regressionSeed),
+                        discoveryMethod: .replay
+                    )
+                    if context.suppressIssueReporting == false {
+                        let rendered = renderFailure(
+                            result,
+                            failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
+                            modelDescription: spec.modelDescription,
+                            includeDiff: context.includeDiff
+                        )
+                        reportIssue(rendered, fileID: context.fileID, filePath: context.filePath, line: context.line, column: context.column)
+                    }
+                    return result
+                } else if context.suppressIssueReporting == false {
+                    reportIssue(
+                        "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                        fileID: context.fileID,
+                        filePath: context.filePath,
+                        line: context.line,
+                        column: context.column
+                    )
+                }
+            } catch {
+                reportIssue(
+                    "Generator failed during regression replay (seed \(encodedSeed)): \(error)",
+                    fileID: context.fileID, filePath: context.filePath, line: context.line, column: context.column
+                )
+            }
+        }
+        return nil
+    #else
+        return nil
+    #endif
 }
 
 // MARK: - Trace building
@@ -540,39 +556,4 @@ struct ContractFailureInfo<Command> {
     var originalCommands: [Command]?
     /// How the failure was discovered.
     var discoveryMethod: ContractDiscoveryMethod
-}
-
-/// Builds a ``PropertySettings`` array from contract runner parameters, wiring budget, seed, logging, and diagnostic options.
-func buildPropertySettings(
-    samplingBudget: UInt64,
-    coverageBudget: UInt64,
-    seed: UInt64? = nil,
-    replaySettings: [PropertySettings] = [],
-    suppressIssueReporting: Bool,
-    collectOpenPBTStats: Bool = false,
-    onReport: ((ExhaustReport) -> Void)? = nil,
-    logLevel: LogLevel = .error
-) -> [PropertySettings] {
-    var settings: [PropertySettings] = [
-        .budget(.custom(
-            coverage: coverageBudget,
-            sampling: samplingBudget
-        )),
-    ]
-    if replaySettings.isEmpty == false {
-        settings.append(contentsOf: replaySettings)
-    } else if let seed {
-        settings.append(.replay(.numeric(seed)))
-    }
-    if suppressIssueReporting {
-        settings.append(.suppress(.issueReporting))
-    }
-    if collectOpenPBTStats {
-        settings.append(.collectOpenPBTStats)
-    }
-    if let onReport {
-        settings.append(.onReport(onReport))
-    }
-    settings.append(.log(logLevel))
-    return settings
 }
