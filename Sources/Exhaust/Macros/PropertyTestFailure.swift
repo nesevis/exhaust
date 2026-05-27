@@ -16,6 +16,8 @@ struct PropertyTestFailure<Output> {
     var replayHint: String?
     /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
     var transparent: Bool = false
+    /// When `true`, reduction was attempted but produced no improvement over the original counterexample.
+    var reductionProducedNoImprovement: Bool = false
     /// When `true`, the reduction was cut short by the wall-clock deadline and the counterexample may not be fully reduced.
     var reductionWasCapped: Bool = false
     /// When `true`, includes a structural diff between the original and reduced values. Off by default because the diff is expensive for large values.
@@ -86,7 +88,10 @@ struct PropertyTestFailure<Output> {
             lines.append("Property invoked: \(propertyInvocations) times")
         }
 
-        if reductionWasCapped {
+        if reductionProducedNoImprovement {
+            lines.append("")
+            lines.append("Note: this result could not be reduced.")
+        } else if reductionWasCapped {
             lines.append("")
             lines.append("Note: Reduction halted by time limit. Increase .budget(...) to allow more reduction time.")
         }

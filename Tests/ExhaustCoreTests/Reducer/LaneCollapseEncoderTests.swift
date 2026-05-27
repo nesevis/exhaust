@@ -56,7 +56,7 @@ struct LaneCollapseEncoderTests {
         #expect(reducedValues == originalValues, "Values should be preserved: \(reduced.map(\.1))")
     }
 
-    @Test("Does not modify elements when all are already prefix")
+    @Test("Returns nil when all elements are already prefix")
     func allPrefixIsNoOp() throws {
         let gen = laneTaggedArrayGen(concurrencyLevel: 2)
         let value: [(UInt8, UInt64)] = [(0, 10), (0, 20), (0, 30)]
@@ -67,14 +67,8 @@ struct LaneCollapseEncoderTests {
             enabledEncoders: [.laneCollapse]
         )
 
-        let (_, reduced) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false },
-            "Reducer should produce a result when property always fails"
-        )
-
-        let laneMarkers = reduced.map(\.0)
-        #expect(laneMarkers == [0, 0, 0], "All elements should remain prefix: \(laneMarkers)")
-        #expect(reduced.map(\.1) == [10, 20, 30], "Values should be unchanged")
+        let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false }
+        #expect(result == nil, "Reducer should return nil when nothing can be improved")
     }
 
     @Test("Prefix elements are contiguous at the front after reduction with 3 lanes")

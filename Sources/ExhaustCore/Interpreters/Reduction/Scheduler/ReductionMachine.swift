@@ -88,6 +88,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Core State
 
+    let initialSequence: ChoiceSequence
     var sequence: ChoiceSequence
     var tree: ChoiceTree
     var output: Any
@@ -189,6 +190,7 @@ package struct ReductionMachine: ProbeSessionState {
         var graph = ChoiceGraph.build(from: tree)
         graph.observeBindTopologies(tree: tree)
 
+        initialSequence = sequence
         self.sequence = sequence
         self.tree = tree
         output = initialOutput
@@ -219,12 +221,15 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Result Extraction
 
-    /// Extracts the final reduced counterexample and accumulated statistics, folding in graph-level stats that were tracked separately during reduction. Call once after ``next()`` returns `nil`.
+    /// Extracts the final reduced counterexample and accumulated statistics, folding in graph-level stats that were tracked separately during reduction. Returns nil for `reduced` when the sequence is unchanged from the input. Call once after ``next()`` returns `nil`.
     mutating func typedResult<Output>() -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
         let finalStats = stats
+        guard sequence != initialSequence else {
+            return (reduced: nil, stats: finalStats)
+        }
         // swiftlint:disable:next force_cast
         let typedOutput = output as! Output
         return (reduced: (sequence, typedOutput), stats: finalStats)

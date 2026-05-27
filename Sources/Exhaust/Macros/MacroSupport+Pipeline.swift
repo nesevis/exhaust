@@ -658,6 +658,7 @@ package extension __ExhaustRuntime {
             propertyInvocations: totalInvocationsUnreduced
         )
         failure.replayHint = replayHint
+        failure.reductionProducedNoImprovement = true
         let rendered = failure.render(format: context.logFormat)
         report.renderedFailure = rendered
         report.replaySeed = failure.encodedReplaySeed
@@ -804,6 +805,7 @@ package extension __ExhaustRuntime {
             propertyInvocations: propertyInvocationCount
         )
         failure.replayHint = "No replay seed — counterexample found via reflection."
+        failure.reductionProducedNoImprovement = true
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         report.renderedFailure = rendered
         let reductionEnd = monotonicNanoseconds()

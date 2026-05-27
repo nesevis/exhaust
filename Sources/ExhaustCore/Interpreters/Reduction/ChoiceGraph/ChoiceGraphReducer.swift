@@ -16,7 +16,7 @@ package extension Interpreters {
     ///   - output: The output value from the failing run.
     ///   - config: Reducer configuration (stall budget, and so on).
     ///   - property: The property that fails on the counterexample.
-    /// - Returns: The reduced (sequence, output) pair, or `nil` if reduction could not improve the result.
+    /// - Returns: The reduced (sequence, output) pair, or `nil` when reduction produces no improvement.
     static func choiceGraphReduce<Output>(
         gen: Generator<Output>,
         tree: ChoiceTree,
@@ -57,7 +57,7 @@ package extension Interpreters {
 
     /// Reduces a failing counterexample using the graph-based pipeline and returns accumulated statistics.
     ///
-    /// - Returns: The reduced result and a ``ReductionStats`` value summarizing encoder probe counts, materialization attempts, and cycle count.
+    /// - Returns: The reduced result (or `nil` when reduction produces no improvement) and a ``ReductionStats`` value summarizing encoder probe counts, materialization attempts, and cycle count.
     static func choiceGraphReduceCollectingStats<Output>(
         gen: Generator<Output>,
         tree: ChoiceTree,

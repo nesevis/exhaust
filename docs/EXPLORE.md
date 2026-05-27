@@ -29,7 +29,7 @@ Directions are named predicates over the generated value:
 
 ## How exploration works
 
-Exploration starts with an untuned warm-up phase that samples without bias. This often covers several directions at once. Then, for each direction that still needs samples, Exhaust tunes a separate copy of the generator via Choice Gradient Sampling to steer toward that region and draws K samples. Directions are explored in parallel, and every sample is classified against every direction, so a single sample can satisfy multiple directions simultaneously. Unused budget from directions that are satisfied early flows to directions that need more attempts.
+Exploration starts with an untuned warm-up phase that samples without bias. This often covers several directions at once. Then, for each direction that still needs samples, Exhaust tunes a separate copy of the generator via Choice Gradient Sampling to steer toward that region and draws K samples. Every sample is classified against every direction, so a single sample can satisfy multiple directions simultaneously. Unused budget from directions that are satisfied early flows to directions that need more attempts.
 
 `#exhaust` asks "does the property hold across the generator's structural edges?" `#explore` asks "have the specific regions I declared actually been visited?" Use `#exhaust` for structural coverage, `#explore` for semantic coverage, or both when you want both guarantees.
 
