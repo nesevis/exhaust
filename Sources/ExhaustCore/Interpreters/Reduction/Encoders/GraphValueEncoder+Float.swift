@@ -179,7 +179,7 @@ extension GraphValueEncoder {
         else { return }
 
         let currentInt = Int64(target.currentValue)
-        let targetInt: Int64 = 0
+        let targetInt = floatIntegerReductionTarget(target: target)
         let movesUp = targetInt > currentInt
         let distance = movesUp
             ? UInt64(targetInt - currentInt)
@@ -217,7 +217,7 @@ extension GraphValueEncoder {
 
         let denominator = Int64(ratio.denominator)
         let (integerPart, remainder) = floorDivMod(ratio.numerator, denominator)
-        let targetInt: Int64 = 0
+        let targetInt = floatIntegerReductionTarget(target: target)
         let movesUp = targetInt > integerPart
         let distance = movesUp
             ? UInt64(targetInt - integerPart)
@@ -573,5 +573,14 @@ extension GraphValueEncoder {
             remainder += denominator
         }
         return (quotient, remainder)
+    }
+
+    private func floatIntegerReductionTarget(target: FloatTarget) -> Int64 {
+        guard target.isRangeExplicit, let validRange = target.validRange else { return 0 }
+        let targetBitPattern = ChoiceValue(target.currentBitPattern, tag: target.typeTag)
+            .reductionTarget(in: validRange)
+        let targetValue = target.typeTag.numericDoubleValue(forBitPattern: targetBitPattern)
+        guard targetValue.isFinite, abs(targetValue) <= Double(Int64.max) else { return 0 }
+        return Int64(targetValue.rounded(.towardZero))
     }
 }
