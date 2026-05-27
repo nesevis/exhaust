@@ -98,7 +98,7 @@ private extension __ExhaustRuntime {
         regressionSeeds: [String],
         fileID: StaticString
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
-        let runStart = ContinuousClock.now
+        let runStopwatch = Stopwatch()
         nonisolated(unsafe) var report = ExhaustReport()
         nonisolated(unsafe) var coverageInvocations = 0
         var deferredIssues: [String] = []
@@ -151,7 +151,7 @@ private extension __ExhaustRuntime {
 
         defer {
             let samplingInvocations = invocationCounter.value - coverageInvocations
-            report.totalMilliseconds = Double((ContinuousClock.now - runStart).components.attoseconds) / 1e15
+            report.totalMilliseconds = runStopwatch.elapsedMilliseconds
             report.setInvocations(
                 coverage: coverageInvocations,
                 randomSampling: samplingInvocations,
@@ -183,7 +183,7 @@ private extension __ExhaustRuntime {
         }
 
         // Ordered coverage
-        let coverageStart = ContinuousClock.now
+        let coverageStopwatch = Stopwatch()
         var discovery: ConcurrentDiscovery<Spec.Command>?
 
         if config.shouldRunCoverage {
@@ -216,7 +216,7 @@ private extension __ExhaustRuntime {
         }
 
         coverageInvocations = invocationCounter.value
-        report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
+        report.coverageMilliseconds = coverageStopwatch.elapsedMilliseconds
 
         // Random sampling
         if discovery == nil, config.coverageReplayRow == nil {
@@ -461,7 +461,7 @@ private extension __ExhaustRuntime {
             reductionPropertyInvocations += 1
             return property(taggedCommands)
         }
-        let reductionStart = ContinuousClock.now
+        let reductionStopwatch = Stopwatch()
         let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
             gen: sequenceGen,
             tree: reduceTree,
@@ -469,7 +469,7 @@ private extension __ExhaustRuntime {
             config: reductionConfig,
             property: countingProperty
         )
-        let reductionMilliseconds = Double((ContinuousClock.now - reductionStart).components.attoseconds) / 1e15
+        let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
 
         let finalInput: [(ScheduleMarker, Command)]
         if case let .reduced(_, reduced) = reduceResult.outcome {

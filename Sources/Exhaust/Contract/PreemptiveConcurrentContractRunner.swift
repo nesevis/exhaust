@@ -38,13 +38,12 @@ public extension __ExhaustRuntime {
         let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
         return DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(logConfiguration) {
-                let runStartNanos = DispatchTime.now().uptimeNanoseconds
+                let runStopwatch = Stopwatch()
                 var report = ExhaustReport()
                 report.seed = config.seed
 
                 defer {
-                    let elapsedNanos = DispatchTime.now().uptimeNanoseconds - runStartNanos
-                    report.totalMilliseconds = Double(elapsedNanos) / 1_000_000
+                    report.totalMilliseconds = runStopwatch.elapsedMilliseconds
                     config.onReportClosure?(report)
                 }
 

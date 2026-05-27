@@ -39,14 +39,13 @@ public extension __ExhaustRuntime {
         let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
         let outcome: (ContractResult<Spec>?, [String], ExhaustReport) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(logConfiguration) { () -> (ContractResult<Spec>?, [String], ExhaustReport) in
-                let runStartNanos = DispatchTime.now().uptimeNanoseconds
+                let runStopwatch = Stopwatch()
                 var report = ExhaustReport()
                 report.seed = config.seed
                 var deferredIssues: [String] = []
 
                 func finalizeReport() {
-                    let elapsedNanos = DispatchTime.now().uptimeNanoseconds - runStartNanos
-                    report.totalMilliseconds = Double(elapsedNanos) / 1_000_000
+                    report.totalMilliseconds = runStopwatch.elapsedMilliseconds
                 }
 
                 let commandGen = Spec.commandGenerator.gen

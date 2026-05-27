@@ -1,5 +1,3 @@
-import Foundation
-
 // MARK: - Academic Provenance
 
 //
@@ -77,7 +75,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
     /// Runs the classification-aware exploration and returns a result describing per-direction coverage, co-occurrence, and any counterexample.
     package mutating func run() throws -> ClassificationExploreResult<Output> {
         let directionCount = directions.count
-        let startTime = DispatchTime.now()
+        let runStopwatch = Stopwatch()
         let totalPool = directionCount * maxAttemptsPerDirection
         var state = RunState(directionCount: directionCount, totalPool: totalPool)
         let warmupCount = max(100, hitsPerDirection)
@@ -110,7 +108,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                 let reducedDirections = classify(reduced.counterexample)
                 return assembleResult(
                     state: state, failure: reduced, matchingDirections: reducedDirections,
-                    startTime: startTime, termination: .propertyFailed
+                    stopwatch: runStopwatch, termination: .propertyFailed
                 )
             }
         }
@@ -137,7 +135,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                 passBudget: passBudget,
                 directionCount: directionCount,
                 state: &state,
-                startTime: startTime
+                stopwatch: runStopwatch
             ) {
                 return failureResult
             }
@@ -157,7 +155,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
         return assembleResult(
             state: state, failure: nil, matchingDirections: [],
-            startTime: startTime, termination: termination
+            stopwatch: runStopwatch, termination: termination
         )
     }
 
@@ -169,7 +167,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         passBudget: Int,
         directionCount: Int,
         state: inout RunState,
-        startTime: DispatchTime
+        stopwatch: Stopwatch
     ) throws -> ClassificationExploreResult<Output>? {
         let tunedGen: Generator<Output>
         do {
@@ -243,7 +241,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                 state.remainingPool += passBudget - passSamplesDrawn
                 return assembleResult(
                     state: state, failure: reduced, matchingDirections: reducedDirections,
-                    startTime: startTime, termination: .propertyFailed
+                    stopwatch: stopwatch, termination: .propertyFailed
                 )
             }
         }
@@ -314,7 +312,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         state: RunState,
         failure: ReducedFailure<Output>?,
         matchingDirections: [Int],
-        startTime: DispatchTime,
+        stopwatch: Stopwatch,
         termination: ClassificationExploreTermination
     ) -> ClassificationExploreResult<Output> {
         var coverageEntries = [ClassificationExploreResult<Output>.DirectionCoverageEntry]()
@@ -336,7 +334,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             ))
         }
 
-        let elapsed = Double(DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000
+        let elapsed = stopwatch.elapsedMilliseconds
 
         return ClassificationExploreResult(
             counterexample: failure?.counterexample,

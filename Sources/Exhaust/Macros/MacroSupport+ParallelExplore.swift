@@ -35,7 +35,7 @@ extension __ExhaustRuntime {
         maxAttemptsPerDirection: Int
     ) throws -> ClassificationExploreResult<Output> {
         let directionCount = directions.count
-        let startTime = DispatchTime.now()
+        let runStopwatch = Stopwatch()
         let baseSeed = Xoshiro256().seed
 
         let cancelled = SendableBox(false)
@@ -95,7 +95,7 @@ extension __ExhaustRuntime {
             throw error
         }
 
-        let elapsed = Double(DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000
+        let elapsed = runStopwatch.elapsedMilliseconds
 
         var coverageEntries = [ClassificationExploreResult<Output>.DirectionCoverageEntry]()
         for (index, direction) in directions.enumerated() {
