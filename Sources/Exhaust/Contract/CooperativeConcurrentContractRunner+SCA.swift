@@ -138,7 +138,7 @@ func runConcurrentSCACoverage<Command>(
                 config: reductionConfig,
                 property: countingProperty
             ) {
-                if let (_, reduced) = reduceResult.reduced {
+                if case let .reduced(_, reduced) = reduceResult.outcome {
                     return SCAFailureResult(
                         finalInput: reduced,
                         originalCount: value.count,

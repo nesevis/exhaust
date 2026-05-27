@@ -581,7 +581,7 @@ package extension __ExhaustRuntime {
             )
             report.applyReductionStats(reduceResult.stats)
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
-            if let (reducedSequence, reducedValue) = reduceResult.reduced {
+            if case let .reduced(reducedSequence, reducedValue) = reduceResult.outcome {
                 let totalInvocations = coverageIterations + randomSamplingIterations + propertyInvocationCount
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
@@ -747,7 +747,7 @@ package extension __ExhaustRuntime {
         )
         report.applyReductionStats(reduceResult.stats)
 
-        if let (reducedSequence, reducedValue) = reduceResult.reduced {
+        if case let .reduced(reducedSequence, reducedValue) = reduceResult.outcome {
             var failure = PropertyTestFailure(
                 counterexample: reducedValue,
                 original: value,

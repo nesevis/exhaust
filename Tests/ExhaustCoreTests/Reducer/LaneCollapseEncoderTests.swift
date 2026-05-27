@@ -28,11 +28,10 @@ struct LaneCollapseEncoderTests {
             enabledEncoders: [.laneCollapse]
         )
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
+        let (_, reduced) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
-        let reduced = result.1
         let laneMarkers = reduced.map(\.0)
         let nonPrefixCount = laneMarkers.count(where: { $0 != 0 })
 
@@ -68,7 +67,9 @@ struct LaneCollapseEncoderTests {
         )
 
         let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false }
-        #expect(result == nil, "Reducer should return nil when nothing can be improved")
+        if case .reduced = result {
+            Issue.record("Reducer should not improve when nothing can be changed")
+        }
     }
 
     @Test("Prefix elements are contiguous at the front after reduction with 3 lanes")
@@ -101,11 +102,11 @@ struct LaneCollapseEncoderTests {
             #expect(roundTripped.count == value.count, "Reflected value should round-trip: got \(roundTripped.map(\.0))")
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
+        let (_, reduced) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
-        let laneMarkers = result.1.map(\.0)
+        let laneMarkers = reduced.map(\.0)
         let nonPrefixCount = laneMarkers.count(where: { $0 != 0 })
         let prefixCount = laneMarkers.count(where: { $0 == 0 })
 

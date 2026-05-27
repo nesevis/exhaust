@@ -290,13 +290,14 @@ extension __ExhaustRuntime {
             }
 
         do {
-            if let (reducedSequence, reducedValue) = try Interpreters.choiceGraphReduce(
+            let outcome = try Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: reduceTree,
                 output: failure.value,
                 config: .init(maxStalls: 2),
                 property: { reductionPredicate($0) == false }
-            ) {
+            )
+            if case let .reduced(reducedSequence, reducedValue) = outcome {
                 return (reducedValue, failure.value, reducedSequence)
             }
         } catch {

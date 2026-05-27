@@ -142,13 +142,13 @@ struct ReducerSimplifyValuesTests {
             return arr.count != 3
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(iterationCount > 0)
-        #expect(result.1.count == 3)
-        #expect(result.1.allSatisfy { $0 == 0 })
+        #expect(output.count == 3)
+        #expect(output.allSatisfy { $0 == 0 })
     }
 
     @Test("Adaptive probe batches simplification around a load-bearing value")
@@ -166,19 +166,19 @@ struct ReducerSimplifyValuesTests {
             return arr[2] == 0
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
         print()
 
-        #expect(result.1.count == 5)
+        #expect(output.count == 5)
         // Non-load-bearing values simplified to 0
-        #expect(result.1[0] == 0)
-        #expect(result.1[1] == 0)
-        #expect(result.1[3] == 0)
-        #expect(result.1[4] == 0)
+        #expect(output[0] == 0)
+        #expect(output[1] == 0)
+        #expect(output[3] == 0)
+        #expect(output[4] == 0)
         // Load-bearing value preserved (simplified to 1, the smallest non-zero)
-        #expect(result.1[2] >= 1)
+        #expect(output[2] >= 1)
     }
 
     @Test("Reduced sequence is shortlex-smaller after simplification")
@@ -194,12 +194,12 @@ struct ReducerSimplifyValuesTests {
         // Property always fails → value should simplify to 0
         let property: (UInt64) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (sequence, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(result.0.shortLexPrecedes(originalSequence))
-        #expect(result.1 == 0)
+        #expect(sequence.shortLexPrecedes(originalSequence))
+        #expect(output == 0)
     }
 
     @Test("Simplification preserves property failure")
@@ -213,12 +213,12 @@ struct ReducerSimplifyValuesTests {
             arr.reduce(0, +) == 0
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // The reduced output must still fail the property
-        #expect(property(result.1) == false)
+        #expect(property(output) == false)
     }
 
     @Test("Values already at simplest are not changed")
@@ -226,16 +226,14 @@ struct ReducerSimplifyValuesTests {
         let gen = Gen.choose(in: UInt64(0) ... 100)
 
         let (_, tree) = try generate(gen)
-        let originalSequence = ChoiceSequence.flatten(tree)
 
         // Property always passes → nothing can be simplified
         let property: (UInt64) -> Bool = { _ in true }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
-        )
-
-        #expect(result.0 == originalSequence)
+        let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        if case .reduced = result {
+            Issue.record("Property always passes — reduction should not find an improvement")
+        }
     }
 
     @Test("Simplification works with positive signed integers")
@@ -249,12 +247,12 @@ struct ReducerSimplifyValuesTests {
         // Property always fails
         let property: (Int64) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // The output should be 0 (semantic simplest for signed)
-        #expect(result.1 == 0)
+        #expect(output == 0)
     }
 
     @Test("Signed values in range containing zero simplify to 0")
@@ -266,11 +264,11 @@ struct ReducerSimplifyValuesTests {
 
         let property: (Int64) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(result.1 == 0)
+        #expect(output == 0)
     }
 
     @Test("Simplification works with characters")
@@ -285,12 +283,12 @@ struct ReducerSimplifyValuesTests {
         // Property always fails
         let property: ([Character]) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // All characters should be " "
-        #expect(result.1.allSatisfy { $0 == " " })
+        #expect(output.allSatisfy { $0 == " " })
     }
 
     @Test("Partial simplification when some values are failure-relevant")
@@ -305,14 +303,14 @@ struct ReducerSimplifyValuesTests {
             arr.reduce(0, +) <= 50
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (sequence, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // Should be simpler than original
-        #expect(result.0.shortLexPrecedes(originalSequence))
+        #expect(sequence.shortLexPrecedes(originalSequence))
         // But must still fail the property
-        #expect(property(result.1) == false)
+        #expect(property(output) == false)
     }
 
     @Test("Reduced sequence has balanced brackets after simplification")
@@ -323,11 +321,11 @@ struct ReducerSimplifyValuesTests {
 
         let property: ([UInt64]) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (sequence, _) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(ChoiceSequence.validate(result.0))
+        #expect(ChoiceSequence.validate(sequence))
     }
 
     @Test("Materialized output matches reduced sequence")
@@ -338,16 +336,16 @@ struct ReducerSimplifyValuesTests {
 
         let property: ([UInt64]) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (sequence, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }
 
-        #expect(result.1 == rematerialized)
+        #expect(output == rematerialized)
     }
 }
 

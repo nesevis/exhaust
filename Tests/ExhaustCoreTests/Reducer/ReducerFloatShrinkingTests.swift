@@ -6,6 +6,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Reducer Float Shrinking")
@@ -15,12 +16,9 @@ struct ReducerFloatShrinkingTests {
         startingAt value: Output,
         config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
         property: (Output) -> Bool
-    ) throws -> Output {
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
-        )
-        return output
+    ) throws -> Output? {
+        guard try (Interpreters.reflect(gen, with: value)) != nil else { return nil }
+        return try reduceFromReflection(gen, startingAt: value, config: config, property: property)
     }
 
     @Test("Double truncation finds coarse fractional boundary")
@@ -33,7 +31,6 @@ struct ReducerFloatShrinkingTests {
 
         let output = try reduce(gen, startingAt: 3.14159, property: property)
 
-        #expect(property(output) == false)
         #expect(output == 3.125)
     }
 
@@ -46,7 +43,7 @@ struct ReducerFloatShrinkingTests {
 
         let output = try reduce(gen, startingAt: Double.nan, property: property)
 
-        #expect(output.isNaN)
+        #expect(output?.isNaN == true)
     }
 
     @Test("Double special-values phase allows out-of-range inf and preserves it")
@@ -57,9 +54,8 @@ struct ReducerFloatShrinkingTests {
         }
 
         let output = try reduce(gen, startingAt: Double.infinity, property: property)
-        print(output)
 
-        #expect(output.isFinite == false)
+        #expect(output?.isFinite == false)
     }
 
     @Test("Double as_integer_ratio phase reduces integer part while preserving fraction")
@@ -72,7 +68,6 @@ struct ReducerFloatShrinkingTests {
 
         let output = try reduce(gen, startingAt: 3.75, property: property)
 
-        #expect(property(output) == false)
         #expect(output == 1.75)
     }
 
@@ -86,7 +81,6 @@ struct ReducerFloatShrinkingTests {
 
         let output = try reduce(gen, startingAt: Float(3.75), property: property)
 
-        #expect(property(output) == false)
         #expect(output == Float(1.75))
     }
 
@@ -100,7 +94,6 @@ struct ReducerFloatShrinkingTests {
         let minimalFailing = 4_503_599_627_370_496.0 // 2^52
         let output = try reduce(gen, startingAt: minimalFailing, property: property)
 
-        #expect(property(output) == false)
         #expect(output == minimalFailing)
     }
 
@@ -113,7 +106,6 @@ struct ReducerFloatShrinkingTests {
 
         let output = try reduce(gen, startingAt: 7.75, property: property)
 
-        #expect(property(output) == false)
         #expect(output == 0.0)
     }
 
@@ -126,7 +118,6 @@ struct ReducerFloatShrinkingTests {
 
         let output = try reduce(gen, startingAt: Float(7.75), property: property)
 
-        #expect(property(output) == false)
         #expect(output == 0.0)
     }
 }

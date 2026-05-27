@@ -187,7 +187,7 @@ private func registerECOOPChallenge<Output>(
             let reduceEnd = monotonicNanoseconds()
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
-            let output = reduceResult?.reduced?.1 ?? value
+            let output = reduceResult?.outcome.counterexample?.1 ?? value
             let materializationCount = reduceResult?.stats.totalMaterializations ?? 0
             results.append(SeedResult(
                 seed: seed,

@@ -283,13 +283,14 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
 
         do {
-            if let (reducedSequence, reducedValue) = try Interpreters.choiceGraphReduce(
+            let outcome = try Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: reduceTree,
                 output: value,
                 config: .init(maxStalls: 2),
                 property: { reductionPredicate($0) == false }
-            ) {
+            )
+            if case let .reduced(reducedSequence, reducedValue) = outcome {
                 return ReducedFailure(
                     counterexample: reducedValue,
                     original: value,

@@ -230,7 +230,7 @@ func runSCACoverage<Command>(
                 config: .init(maxStalls: 2),
                 property: property
             ) {
-                if let (_, reducedValue) = result.reduced {
+                if case let .reduced(_, reducedValue) = result.outcome {
                     return .failure(commands: reducedValue, original: value, coverageInvocations: iterations, reductionStats: result.stats)
                 }
                 return .failure(commands: reduceValue, original: value, coverageInvocations: iterations, reductionStats: result.stats)

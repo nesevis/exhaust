@@ -62,11 +62,11 @@ struct ReducerReduceValuesTests {
         // Property fails for values >= 5
         let property: (UInt64) -> Bool = { $0 < 5 }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(result.1 == 5)
+        #expect(output == 5)
     }
 
     @Test("Unsigned value in range not containing 0")
@@ -79,11 +79,11 @@ struct ReducerReduceValuesTests {
         // Property fails for values >= 50
         let property: (UInt64) -> Bool = { $0 < 50 }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(result.1 == 50)
+        #expect(output == 50)
     }
 
     @Test("Signed value reduced toward 0")
@@ -96,11 +96,11 @@ struct ReducerReduceValuesTests {
         // Property fails for values <= -5
         let property: (Int64) -> Bool = { $0 > -5 }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(result.1 == -5)
+        #expect(output == -5)
     }
 
     @Test("Value already at target is unchanged")
@@ -108,16 +108,14 @@ struct ReducerReduceValuesTests {
         let gen = Gen.choose(in: UInt64(0) ... 100)
 
         let (_, tree) = try generate(gen)
-        let originalSequence = ChoiceSequence.flatten(tree)
 
         // Property always passes — no reduction possible
         let property: (UInt64) -> Bool = { _ in true }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
-        )
-
-        #expect(result.0 == originalSequence)
+        let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        if case .reduced = result {
+            Issue.record("Property always passes — reduction should not find an improvement")
+        }
     }
 
     @Test("Reduction preserves property failure")
@@ -130,12 +128,12 @@ struct ReducerReduceValuesTests {
         // Property fails for values >= 10
         let property: (UInt64) -> Bool = { $0 < 10 }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(property(result.1) == false)
-        #expect(result.1 >= 10)
+        #expect(property(output) == false)
+        #expect(output >= 10)
     }
 
     @Test("Character value reduced within its range")
@@ -156,11 +154,11 @@ struct ReducerReduceValuesTests {
         // Property fails for characters > "e"
         let property: (Character) -> Bool = { $0 <= "e" }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(result.1 == "f")
+        #expect(output == "f")
     }
 
     @Test("Float value reduced naively via bit pattern search")
@@ -184,12 +182,12 @@ struct ReducerReduceValuesTests {
         // Property always fails — should reduce toward 0.0
         let property: (Double) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // Value should be reduced toward 0 (Pass 3 sets it to 0.0 directly since property always fails)
-        #expect(result.1 == 0.0)
+        #expect(output == 0.0)
     }
 
     @Test("Pass 3 + Pass 5 work together")
@@ -205,15 +203,15 @@ struct ReducerReduceValuesTests {
             return arr.allSatisfy { $0 < 100 }
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(result.1.count == 3)
+        #expect(output.count == 3)
         // At least one value should be exactly 100 (minimum failing)
-        #expect(result.1.contains(100))
+        #expect(output.contains(100))
         // The other values should be 0 (simplified by Pass 3)
-        let nonLoadBearing = result.1.filter { $0 != 100 }
+        let nonLoadBearing = output.filter { $0 != 100 }
         #expect(nonLoadBearing.allSatisfy { $0 == 0 })
     }
 
@@ -242,13 +240,13 @@ struct ReducerReduceValuesTests {
         }
         let (_, tree) = try #require(found)
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // Minimal failing tuple under constraints:
         // p <= left, p <= right, and left < right  ==>  (0, 0, 1)
-        #expect(result.1 == (0, 0, 1))
+        #expect(output == (0, 0, 1))
     }
 }
 

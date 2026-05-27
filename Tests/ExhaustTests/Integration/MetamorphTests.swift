@@ -230,7 +230,7 @@ struct MetamorphTests {
         let (_, shrunk) = try #require(
             try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .init(maxStalls: 2)) { results in
                 (results[0] as! Int) <= 100
-            }
+            }.counterexample
         )
 
         let shrunkOriginal = shrunk[0] as! Int

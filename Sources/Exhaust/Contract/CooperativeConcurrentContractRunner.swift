@@ -354,7 +354,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             report.reductionMilliseconds = Double((ContinuousClock.now - reductionStart).components.attoseconds) / 1e15
                             report.reductionInvocations = reductionPropertyInvocations
 
-                            if let (_, reduced) = reduceResult.reduced {
+                            if case let .reduced(_, reduced) = reduceResult.outcome {
                                 ExhaustLog.notice(
                                     category: .propertyTest,
                                     event: "concurrent_reduced",

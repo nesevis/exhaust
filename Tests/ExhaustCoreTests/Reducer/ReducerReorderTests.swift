@@ -33,12 +33,12 @@ struct ReducerReorderTests {
         // Property: always fails → reducer can freely reorder
         let property: ([UInt64]) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // The output should be sorted (or at least simpler than the original)
-        #expect(result.1.sorted() == result.1)
+        #expect(output.sorted() == output)
     }
 
     @Test("Already-sorted sequence is not changed by reorder pass")
@@ -59,12 +59,12 @@ struct ReducerReorderTests {
         // Property always fails
         let property: ([UInt64]) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // Values should still be sorted after reduction
-        #expect(result.1 == result.1.sorted())
+        #expect(output == output.sorted())
     }
 
     @Test("Reordering that would cause property to pass is not accepted")
@@ -87,14 +87,14 @@ struct ReducerReorderTests {
             arr == arr.sorted()
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (_, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // The output must still fail the property
-        #expect(property(result.1) == false)
+        #expect(property(output) == false)
         // Therefore the array must NOT be sorted
-        #expect(result.1 != result.1.sorted())
+        #expect(output != output.sorted())
     }
 
     @Test("Reduced sequence from reorder pass has balanced brackets")
@@ -105,11 +105,11 @@ struct ReducerReorderTests {
 
         let property: ([UInt64]) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (sequence, _) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(ChoiceSequence.validate(result.0))
+        #expect(ChoiceSequence.validate(sequence))
     }
 
     @Test("Materialized output from reordered sequence matches stored output")
@@ -120,16 +120,16 @@ struct ReducerReorderTests {
 
         let property: ([UInt64]) -> Bool = { _ in false }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let (sequence, output) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }
 
-        #expect(result.1 == rematerialized)
+        #expect(output == rematerialized)
     }
 }
 

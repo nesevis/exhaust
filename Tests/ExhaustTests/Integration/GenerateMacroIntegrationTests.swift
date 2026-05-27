@@ -131,7 +131,7 @@ struct GenerateMacroIntegrationTests {
         #expect(property(failing) == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.choiceGraphReduce(gen: personGen, tree: tree, config: .init(maxStalls: 2), property: property)
+            try Interpreters.choiceGraphReduce(gen: personGen, tree: tree, config: .init(maxStalls: 2), property: property).counterexample
         )
         #expect(property(shrunk) == false)
         #expect(shrunk.age <= failing.age)

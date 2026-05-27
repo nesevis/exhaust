@@ -21,10 +21,10 @@ struct SchedulerDecisionTests {
         ) { _ in true }
 
         let original = ChoiceSequence.flatten(tree)
-        if let (reduced, _) = result {
+        if case let .reduced(reduced, _) = result {
             #expect(reduced == original, "Property always passes — sequence should be unchanged")
         }
-        // nil result is also valid — means the reducer found no counterexample to work with
+        // .unreduced / .failure is also valid — means the reducer found no counterexample to work with
     }
 
     @Test("Scheduler converges to minimum for trivially-falsified single value")
@@ -39,7 +39,7 @@ struct SchedulerDecisionTests {
                 tree: tree,
                 output: value,
                 config: reducerConfig
-            ) { $0 == 0 }
+            ) { $0 == 0 }.counterexample
         )
 
         #expect(reducedValue == 1)
@@ -59,7 +59,7 @@ struct SchedulerDecisionTests {
                 tree: tree,
                 output: value,
                 config: reducerConfig
-            ) { $0.isEmpty || $0[0] < 5 }.reduced
+            ) { $0.isEmpty || $0[0] < 5 }.outcome.counterexample
         )
 
         #expect(reducedValue.count <= value.count)
@@ -104,7 +104,7 @@ struct SchedulerDecisionTests {
                 tree: tree,
                 output: value,
                 config: reducerConfig
-            ) { pair in pair.0 < 10 || pair.1 < 10 }
+            ) { pair in pair.0 < 10 || pair.1 < 10 }.counterexample
         )
 
         #expect(reducedValue.0 == 10 || reducedValue.1 == 10)

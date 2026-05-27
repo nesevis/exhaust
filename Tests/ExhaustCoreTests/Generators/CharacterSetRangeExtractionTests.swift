@@ -216,7 +216,7 @@ struct CharacterSetRangeExtractionTests {
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 100)
         while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
-            guard let (_, shrunk) = try Interpreters.choiceGraphReduce(
+            guard case let .reduced(_, shrunk) = try Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
             // Shrunk value should be '5' (the smallest digit failing the property)

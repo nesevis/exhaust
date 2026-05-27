@@ -406,7 +406,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
             property: property
         ) {
             aggregateStats.merge(result.stats)
-            if let (sequence, reduced) = result.reduced {
+            if case let .reduced(sequence, reduced) = result.outcome {
                 currentOutput = reduced
                 if case let .success(_, freshTree, _) = Materializer.materialize(
                     generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
@@ -424,7 +424,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
             property: property
         ) {
             aggregateStats.merge(result.stats)
-            if let (sequence, reduced) = result.reduced {
+            if case let .reduced(sequence, reduced) = result.outcome {
                 currentOutput = reduced
                 if case let .success(_, freshTree, _) = Materializer.materialize(
                     generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
@@ -442,7 +442,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
             property: property
         ) {
             aggregateStats.merge(result.stats)
-            if let (_, reduced) = result.reduced {
+            if case let .reduced(_, reduced) = result.outcome {
                 currentOutput = reduced
             }
         }

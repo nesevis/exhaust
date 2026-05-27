@@ -18,9 +18,10 @@ package func findMinimalCounterexample<Value>(
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: maxIterations)
     while let (value, tree) = try iter.next() {
         guard property(value) == false else { continue }
-        if let (_, reduced) = try Interpreters.choiceGraphReduce(
+        let outcome = try Interpreters.choiceGraphReduce(
             gen: gen, tree: tree, config: .init(maxStalls: maxStalls), property: property
-        ) {
+        )
+        if case let .reduced(_, reduced) = outcome {
             return reduced
         }
         return value

@@ -21,7 +21,7 @@ enum ChoiceGraphScheduler {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
-    ) throws -> (ChoiceSequence, Output)? {
+    ) throws -> ReductionOutcome<Output> {
         var machine = ReductionMachine(
             gen: gen,
             initialTree: initialTree,
@@ -31,7 +31,7 @@ enum ChoiceGraphScheduler {
             property: property
         )
         while try machine.next() != nil {}
-        return machine.typedResult().reduced
+        return machine.typedResult().outcome
     }
 
     /// Reduces a failing counterexample with per-step wall-time measurement, returning both the reduced result and accumulated ``ReductionStats`` including ``ReductionStats/StepTimings``.
@@ -41,7 +41,7 @@ enum ChoiceGraphScheduler {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
-    ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
+    ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         var machine = ReductionMachine(
             gen: gen,
             initialTree: initialTree,
