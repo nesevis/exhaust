@@ -1,8 +1,7 @@
 // Async preemptive concurrent contract runner.
 //
 // Async variant of the preemptive runner for AsyncConcurrentContractSpec conformances.
-// Bridges async command execution to GCD threads via Task+semaphore to catch races in
-// synchronous primitives hidden behind async facades.
+// Bridges async command execution to GCD threads via Task+semaphore to catch races in synchronous primitives hidden behind async facades.
 import ExhaustCore
 import ExhaustObjCSupport
 import Foundation
@@ -141,7 +140,7 @@ public extension __ExhaustRuntime {
                     }
                 }
 
-                if config.seed == nil, config.replayIteration == nil, coverageBudget > 0 {
+                if config.shouldRunCoverage {
                     if let scaResult = runConcurrentSCACoverage(
                         seqGen: sequenceGen,
                         commandGen: commandGen,

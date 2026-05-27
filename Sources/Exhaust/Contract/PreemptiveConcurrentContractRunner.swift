@@ -149,7 +149,7 @@ public extension __ExhaustRuntime {
                     }
                 }
 
-                if config.seed == nil, config.replayIteration == nil, coverageBudget > 0 {
+                if config.shouldRunCoverage {
                     if let scaResult = runConcurrentSCACoverage(
                         seqGen: sequenceGen,
                         commandGen: commandGen,

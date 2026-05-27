@@ -139,12 +139,14 @@ public extension __ExhaustRuntime {
 // MARK: - Coverage and Sampling
 
 private extension __ExhaustRuntime {
+    /// Carries the failing command sequence, failure metadata, and replay seed from the coverage or sampling phase back to the entry point for result assembly and issue reporting.
     struct ContractDiscovery<Command> {
         let commands: [Command]
         let failureInfo: ContractFailureInfo<Command>
         let replaySeed: String?
     }
 
+    /// Runs the SCA coverage phase followed by random sampling, returning a ``ContractDiscovery`` on the first failure or nil when the full budget passes.
     static func runCoverageAndSampling<Spec: ContractSpec>(
         specType _: Spec.Type,
         commandGen: ReflectiveGenerator<Spec.Command>,
@@ -196,6 +198,7 @@ private extension __ExhaustRuntime {
         }
     }
 
+    /// Dispatches to the SCA coverage pipeline, handling replay-row targeting and budget-zero / deterministic-replay skip conditions.
     static func runContractCoverage<Command>(
         commandGen: Generator<Command>,
         commandLimit: Int,
@@ -241,6 +244,7 @@ private extension __ExhaustRuntime {
         )
     }
 
+    /// Runs random sampling via ``__ExhaustRuntime/__exhaustBody(gen:settings:reflecting:fileID:filePath:line:column:testName:property:)``, folding in any coverage invocations from the prior phase for accurate reporting.
     static func runContractSampling<Command>(
         scaOutcome: SCAOutcome<Command>,
         sequenceGenerator: Generator<[Command]>,
@@ -298,6 +302,7 @@ private extension __ExhaustRuntime {
 // MARK: - Regression Seeds
 
 private extension __ExhaustRuntime {
+    /// Replays each regression seed from the Swift Testing trait configuration, returning the first failure as a ``ContractResult``. Returns nil when all seeds pass, none are configured, or Swift Testing is unavailable.
     static func runRegressionSeeds<Spec: ContractSpec>(
         specType: Spec.Type,
         sequenceGenerator: Generator<[Spec.Command]>,

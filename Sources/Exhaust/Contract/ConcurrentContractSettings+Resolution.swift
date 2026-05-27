@@ -17,6 +17,12 @@ struct ResolvedConcurrentConfig {
     var logLevel: LogLevel = .error
     let logFormat: LogFormat = .keyValue
 
+    var shouldRunCoverage: Bool {
+        replayIteration == nil
+            && (seed == nil || coverageReplayRow != nil)
+            && budget.coverageBudget > 0
+    }
+
     enum ParseResult {
         case success(ResolvedConcurrentConfig)
         case invalidReplaySeed(ReplaySeed)
