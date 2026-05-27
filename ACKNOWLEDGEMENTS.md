@@ -88,6 +88,6 @@ I used tests from these libraries to help verify Exhaust’s reduction code
 - [jqwik](https://jqwik.net/) Java/Kotlin
 - [CsCheck](https://github.com/AnthonyLloyd/CsCheck) C#
 
-### Pointfree
+### Point-free
 
-[Pointfree](https://www.pointfree.co)'s excellent library [Custom Dump](https://github.com/pointfreeco/swift-custom-dump) is used to output counterexamples and diffs in a standardised way, and [Swift Issue Reporting](https://github.com/pointfreeco/swift-issue-reporting) is used for surfacing issues in Swift Testing and XCTest.
+[Point-free](https://www.pointfree.co)'s excellent library [Custom Dump](https://github.com/pointfreeco/swift-custom-dump) is used to output counterexamples and diffs in a standardised way, and [Swift Issue Reporting](https://github.com/pointfreeco/swift-issue-reporting) is used for surfacing issues in Swift Testing and XCTest. Macros are also tested with [MacroTests](https://github.com/pointfreeco/swift-macro-testing).
