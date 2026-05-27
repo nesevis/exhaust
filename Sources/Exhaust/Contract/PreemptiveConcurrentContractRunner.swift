@@ -268,7 +268,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
 
 // MARK: - Trace Building
 
-/// Builds a trace from a preemptive execution's reduced command sequence. No interleaving annotations — preemptive scheduling is non-deterministic, so the trace only records command completion order.
+/// Builds a trace from a preemptive execution's reduced command sequence in input order. No interleaving annotations — preemptive scheduling is non-deterministic, so actual execution order may differ from the listed order.
 func buildPreemptiveTrace(
     _ reduced: [(ScheduleMarker, some CustomStringConvertible)]
 ) -> [TraceStep] {

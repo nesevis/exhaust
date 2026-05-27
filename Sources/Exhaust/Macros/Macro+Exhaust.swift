@@ -161,7 +161,7 @@ public macro exhaust<Spec: ContractSpec>(
 
 /// Generates command sequences and executes them across concurrent lanes with deterministic interleaving at `await` boundaries.
 ///
-/// Define a spec with `@Contract` and async `@Command` methods. The cooperative scheduler controls interleaving deterministically — the same seed produces the same interleaving and the same counterexample. Commands are distributed across two concurrent lanes by default. On failure, the command sequence and interleaving are reduced to a minimal counterexample.
+/// Define a spec with `@Contract` and async `@Command` methods. The cooperative scheduler controls interleaving deterministically at command boundaries — the same seed produces the same lane assignment and command ordering. Commands that suspend multiple times internally consume additional schedule entries; once the schedule is exhausted, continuation-level lane assignment falls back to deterministic round-robin. Commands are distributed across two concurrent lanes by default. On failure, the command sequence and interleaving are reduced to a minimal counterexample.
 ///
 /// ```swift
 /// @Test func concurrentQueueBehavior() async {
@@ -174,7 +174,7 @@ public macro exhaust<Spec: ContractSpec>(
 /// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Higher values explore more complex interleavings but grow the search space combinatorially. Use `.concurrent(1)` as a sequential baseline to confirm that failures require concurrency.
 /// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
-/// - `.replay(_)`: fixed seed for deterministic reproduction. The same seed with the same concurrency level produces the same interleaving.
+/// - `.replay(_)`: fixed seed for deterministic reproduction. The same seed with the same concurrency level produces the same command ordering and lane assignment.
 /// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout (default 1000). When the idle timeout fires, the current command sequence is reported as a failure without reduction.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.

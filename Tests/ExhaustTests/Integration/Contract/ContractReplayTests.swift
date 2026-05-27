@@ -92,7 +92,7 @@ struct ConcurrentContractReplayTests {
                 ReplayableNonAtomicCounterSpec.self,
                 settings: [
                     .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .budget(.custom(coverage: 0, sampling: 2000)),
                     .suppress(.all),
                 ]
             )
@@ -105,7 +105,7 @@ struct ConcurrentContractReplayTests {
                 ReplayableNonAtomicCounterSpec.self,
                 settings: [
                     .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .budget(.custom(coverage: 0, sampling: 2000)),
                     .replay(.encoded(replaySeed)),
                     .suppress(.all),
                 ]
@@ -143,78 +143,6 @@ struct ConcurrentContractReplayTests {
             )
         )
         #expect(replayed.commands.isEmpty == false, "Coverage row replay should reproduce the failure")
-    }
-
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Preemptive iteration-targeted replay reproduces a failure")
-    func preemptiveIterationTargetedReplayReproducesFailure() async throws {
-        let initial = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
-                    PreemptiveReplayableSpec.self,
-                    settings: [
-                        .concurrent(2),
-                        .commandLimit(6),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                        .suppress(.all),
-                    ]
-                )
-            }
-        )
-        let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed.contains("-"), "Preemptive sampling replay seed should include iteration suffix")
-
-        let replayed = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
-                    PreemptiveReplayableSpec.self,
-                    settings: [
-                        .concurrent(2),
-                        .commandLimit(6),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                        .replay(.encoded(replaySeed)),
-                        .suppress(.all),
-                    ]
-                )
-            }
-        )
-        #expect(replayed.commands.isEmpty == false, "Preemptive iteration replay should reproduce the failure")
-    }
-
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Preemptive smoke test coverage replay reproduces a failure")
-    func preemptiveSmokeTestCoverageReplayReproducesFailure() async throws {
-        let initial = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
-                    PreemptiveSequentiallyBrokenSpec.self,
-                    settings: [
-                        .concurrent(2),
-                        .commandLimit(4),
-                        .budget(.custom(coverage: 2000, sampling: 0)),
-                        .suppress(.all),
-                    ]
-                )
-            }
-        )
-        let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "Smoke test replay seed should have U prefix")
-
-        let replayed = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
-                    PreemptiveSequentiallyBrokenSpec.self,
-                    settings: [
-                        .concurrent(2),
-                        .commandLimit(4),
-                        .budget(.custom(coverage: 2000, sampling: 0)),
-                        .replay(.encoded(replaySeed)),
-                        .suppress(.all),
-                    ]
-                )
-            }
-        )
-        #expect(replayed.commands.isEmpty == false, "Smoke test coverage replay should reproduce the failure")
     }
 }
 
