@@ -51,7 +51,7 @@ struct ProbeSession {
     let transformation: GraphTransformation
     let boundValueFingerprint: UInt64?
 
-    private let baseHash: UInt64
+    private var baseHash: UInt64
     private let hasBind: Bool
 
     private var candidateBuffer: ChoiceSequence
@@ -169,6 +169,7 @@ struct ProbeSession {
             state.sequence = result.sequence
             state.tree = result.tree
             state.output = result.output
+            baseHash = ZobristHash.hash(of: state.sequence)
             lastProbeAccepted = true
             anyAccepted = true
             acceptCount += 1
