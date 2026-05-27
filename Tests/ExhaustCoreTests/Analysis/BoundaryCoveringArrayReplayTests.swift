@@ -367,5 +367,62 @@ struct BoundaryCoveringArrayReplayUnitTests {
             }
             #expect(replayedCount == rowCount)
         }
+
+        @Test("Int inside resize round-trips through replay")
+        func resizeRoundTrip() throws {
+            let gen = Gen.choose(in: 0 ... 10000).wrapped.resize(50).gen
+            let profile = try #require(analyzeBoundary(gen))
+
+            #expect(profile.parameters.count == 1, "Should extract one parameter from inside the resize")
+
+            let expectedCount = profile.parameters[0].values.count
+            var replayedCount = 0
+            for valueIndex in 0 ..< UInt64(expectedCount) {
+                let row = CoveringArrayRow(values: [valueIndex])
+                let tree = try #require(
+                    BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    "buildTree failed for value index \(valueIndex)"
+                )
+                let value = try #require(
+                    Interpreters.replay(gen, using: tree) as Int?,
+                    "Replay failed for value index \(valueIndex)"
+                )
+                #expect(0 ... 10000 ~= value)
+                replayedCount += 1
+            }
+            #expect(replayedCount == expectedCount)
+        }
+
+        @Test("Zip with resize peer round-trips through replay")
+        func zipWithResizeRoundTrip() throws {
+            let gen = Gen.zip(
+                Gen.choose(in: 0 ... 10000).wrapped.resize(50).gen,
+                Gen.choose(in: 0 ... 10000)
+            )
+            let profile = try #require(analyzeBoundary(gen))
+
+            #expect(profile.parameters.count == 2, "Should extract parameters from both peers")
+
+            let generator = PullBasedCoveringArrayGenerator(
+                domainSizes: profile.domainSizes,
+                strength: 2
+            )
+
+            var replayedCount = 0
+            while let row = generator.next() {
+                replayedCount += 1
+                let tree = try #require(
+                    BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    "buildTree failed for row \(replayedCount)"
+                )
+                let (resized, plain) = try #require(
+                    Interpreters.replay(gen, using: tree) as (Int, Int)?,
+                    "Replay failed for row \(replayedCount)"
+                )
+                #expect(0 ... 10000 ~= resized)
+                #expect(0 ... 10000 ~= plain)
+            }
+            #expect(replayedCount > 0)
+        }
     }
 }
