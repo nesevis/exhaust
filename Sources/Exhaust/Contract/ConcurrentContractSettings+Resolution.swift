@@ -7,6 +7,8 @@ struct ResolvedConcurrentConfig {
     var concurrencyLevel: Int = 2
     var budget: ExhaustBudget = .standard
     var seed: UInt64?
+    var replayIteration: Int?
+    var coverageReplayRow: Int?
     var idleTimeout: Int = 1000
     var suppressIssueReporting: Bool = false
     var suppressLogs: Bool = false
@@ -34,7 +36,13 @@ struct ResolvedConcurrentConfig {
                     guard let resolved = replaySeed.resolve() else {
                         return .invalidReplaySeed(replaySeed)
                     }
-                    config.seed = resolved.seed
+                    switch resolved {
+                        case let .sampling(resolvedSeed, iteration):
+                            config.seed = resolvedSeed
+                            config.replayIteration = iteration
+                        case let .coverage(row):
+                            config.coverageReplayRow = row
+                    }
                 case let .suppress(option):
                     switch option {
                         case .issueReporting:

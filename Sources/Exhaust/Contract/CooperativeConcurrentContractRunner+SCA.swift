@@ -23,6 +23,7 @@ func runConcurrentSCACoverage<Command>(
     coverageBudget: UInt64,
     concurrencyLevel _: Int,
     idleTimeout _: Int,
+    skipToRow: Int? = nil,
     property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
     identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
     lastRunTimedOut: UnsafeSendableBox<Bool>
@@ -102,6 +103,7 @@ func runConcurrentSCACoverage<Command>(
         }
 
         iterations += 1
+        if let skipToRow, iterations - 1 < skipToRow { continue }
         if property(value) == false {
             let timedOut = lastRunTimedOut.value
             ExhaustLog.notice(
@@ -162,6 +164,7 @@ func runConcurrentSCACoverage<Command>(
                 timedOut: false
             )
         }
+        if skipToRow != nil { break }
     }
 
     ExhaustLog.notice(

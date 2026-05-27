@@ -107,6 +107,7 @@ func runSCACoverage<Command>(
     commandGen: Generator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
+    skipToRow: Int? = nil,
     property: @escaping @Sendable ([Command]) -> Bool,
     identifySkips: @escaping @Sendable ([Command]) -> Set<Int>
 ) -> SCAOutcome<Command> {
@@ -189,6 +190,7 @@ func runSCACoverage<Command>(
         }
 
         iterations += 1
+        if let skipToRow, iterations - 1 < skipToRow { continue }
         if property(value) == false {
             var reduceValue = value
             var reduceTree = freshTree
@@ -235,6 +237,7 @@ func runSCACoverage<Command>(
             }
             return .failure(commands: reduceValue, original: value, coverageInvocations: iterations, reductionStats: nil)
         }
+        if skipToRow != nil { break }
     }
 
     ExhaustLog.notice(

@@ -88,7 +88,7 @@ package extension __ExhaustRuntime {
                     case .rejected, .failed:
                         tree
                 }
-                let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration)
+                let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration - 1)
                 report.replaySeed = coverageReplaySeed
                 let result = reduceAndReport(
                     context: context,

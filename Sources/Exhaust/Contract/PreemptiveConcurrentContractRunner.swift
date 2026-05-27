@@ -75,6 +75,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
             func buildPreemptiveResult(
                 reduced: [(ScheduleMarker, Spec.Command)],
                 seed: UInt64?,
+                replaySeed: String?,
                 discoveryMethod: ContractDiscoveryMethod
             ) -> ContractResult<Spec> {
                 let oracleSpec = Spec()
@@ -86,16 +87,20 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                     trace: buildPreemptiveTrace(reduced),
                     systemUnderTest: oracleSpec.systemUnderTest,
                     seed: seed,
-                    replaySeed: nil,
+                    replaySeed: replaySeed,
                     discoveryMethod: discoveryMethod
                 )
             }
 
-            if config.seed == nil {
+            if config.seed == nil, config.replayIteration == nil {
                 let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
                 var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
                 var smokeRow = 0
                 do { while let (commands, _) = try smokeIterator.next() {
+                    if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {
+                        smokeRow += 1
+                        continue
+                    }
                     let spec = Spec()
                     let (trace, failed) = buildSequentialTrace(
                         commands,
@@ -134,6 +139,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                         return result
                     }
                     smokeRow += 1
+                    if config.coverageReplayRow != nil { break }
                 } } catch {
                     reportIssue(
                         "Generator failed during smoke test: \(error)",
@@ -142,7 +148,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                 }
             }
 
-            if config.seed == nil, coverageBudget > 0 {
+            if config.seed == nil, config.replayIteration == nil, coverageBudget > 0 {
                 if let scaResult = runConcurrentSCACoverage(
                     seqGen: sequenceGen,
                     commandGen: commandGen,
@@ -150,6 +156,7 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                     coverageBudget: coverageBudget,
                     concurrencyLevel: config.concurrencyLevel,
                     idleTimeout: config.idleTimeout,
+                    skipToRow: config.coverageReplayRow,
                     property: property,
                     identifySkips: identifySkips,
                     lastRunTimedOut: lastRunTimedOut
@@ -159,9 +166,11 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
                     }
                     report.reductionInvocations = scaResult.reductionInvocations
 
+                    let scaReplaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
                     let result = buildPreemptiveResult(
                         reduced: scaResult.finalInput,
                         seed: nil,
+                        replaySeed: scaReplaySeed,
                         discoveryMethod: .coverage
                     )
                     coverageInvocations = invocationCounter.value
@@ -188,61 +197,70 @@ public func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
             }
             coverageInvocations = invocationCounter.value
 
-            var interpreter = ValueAndChoiceTreeInterpreter(
-                sequenceGen,
-                materializePicks: true,
-                seed: config.seed,
-                maxRuns: samplingBudget
-            )
-            let actualSeed = interpreter.baseSeed
-
-            var samplingIteration = 0
-            do { while let (taggedCommands, tree) = try interpreter.next() {
-                samplingIteration += 1
-                if check.execute(taggedCommands) == false {
-                    let reductionResult = check.reduce(
-                        generator: sequenceGen,
-                        tree: tree,
-                        output: taggedCommands,
-                        repetitions: 10
-                    )
-
-                    let result = buildPreemptiveResult(
-                        reduced: reductionResult.output,
-                        seed: actualSeed,
-                        discoveryMethod: .randomSampling
-                    )
-
-                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionResult.propertyInvocations)
-                    report.applyReductionStats(reductionResult.stats)
-
-                    if config.suppressIssueReporting == false {
-                        var failureContext = FailureContext()
-                        failureContext.isPreemptive = true
-                        failureContext.specName = "\(Spec.self)"
-                        failureContext.discoveryMethod = .randomSampling
-                        failureContext.seed = actualSeed
-                        failureContext.iteration = samplingIteration
-                        failureContext.budget = samplingBudget
-                        failureContext.sequencesTested = samplingIteration
-                        failureContext.reductionInvocations = reductionResult.propertyInvocations
-                        failureContext.originalCount = taggedCommands.count
-                        failureContext.replaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: samplingIteration)
-                        failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
-                        let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
-                        reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
-                    }
-
-                    return result
-                }
-            } } catch {
-                reportIssue(
-                    "Generator failed during sampling: \(error)",
-                    fileID: fileID, filePath: filePath, line: line, column: column
+            if config.coverageReplayRow == nil {
+                let startIndex = config.replayIteration.map { UInt64($0 - 1) } ?? 0
+                let maxRuns = config.replayIteration.map { UInt64($0) } ?? samplingBudget
+                var interpreter = ValueAndChoiceTreeInterpreter(
+                    sequenceGen,
+                    materializePicks: true,
+                    seed: config.seed,
+                    maxRuns: maxRuns,
+                    initialRunIndex: startIndex
                 )
+                let actualSeed = interpreter.baseSeed
+
+                var samplingIteration = 0
+                do { while let (taggedCommands, tree) = try interpreter.next() {
+                    samplingIteration += 1
+                    let absoluteIteration = Int(startIndex) + samplingIteration
+                    if check.execute(taggedCommands) == false {
+                        let reductionResult = check.reduce(
+                            generator: sequenceGen,
+                            tree: tree,
+                            output: taggedCommands,
+                            repetitions: 10
+                        )
+
+                        let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
+                        let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
+                        let result = buildPreemptiveResult(
+                            reduced: reductionResult.output,
+                            seed: actualSeed,
+                            replaySeed: samplingReplaySeed,
+                            discoveryMethod: discoveryMethod
+                        )
+
+                        report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionResult.propertyInvocations)
+                        report.applyReductionStats(reductionResult.stats)
+
+                        if config.suppressIssueReporting == false {
+                            var failureContext = FailureContext()
+                            failureContext.isPreemptive = true
+                            failureContext.specName = "\(Spec.self)"
+                            failureContext.discoveryMethod = discoveryMethod
+                            failureContext.seed = actualSeed
+                            failureContext.iteration = absoluteIteration
+                            failureContext.budget = samplingBudget
+                            failureContext.sequencesTested = samplingIteration
+                            failureContext.reductionInvocations = reductionResult.propertyInvocations
+                            failureContext.originalCount = taggedCommands.count
+                            failureContext.replaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
+                            failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
+                            let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
+                            reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
+                        }
+
+                        return result
+                    }
+                } } catch {
+                    reportIssue(
+                        "Generator failed during sampling: \(error)",
+                        fileID: fileID, filePath: filePath, line: line, column: column
+                    )
+                }
             }
 
-            report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
+            report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: 0)
             return nil
         } // withConfiguration
     } // dispatchToGCD

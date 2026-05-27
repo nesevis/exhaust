@@ -231,7 +231,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             #endif
 
             let coverageStart = ContinuousClock.now
-            if config.seed == nil, coverageBudget > 0 {
+            if config.replayIteration == nil, config.seed == nil || config.coverageReplayRow != nil, coverageBudget > 0 {
                 if let scaResult = runConcurrentSCACoverage(
                     seqGen: sequenceGen,
                     commandGen: commandGen,
@@ -239,6 +239,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                     coverageBudget: coverageBudget,
                     concurrencyLevel: concurrencyLevel,
                     idleTimeout: idleTimeout,
+                    skipToRow: config.coverageReplayRow,
                     property: property,
                     identifySkips: identifySkips,
                     lastRunTimedOut: lastRunTimedOut
@@ -275,11 +276,18 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             coverageInvocations = invocationCounter.value
             report.coverageMilliseconds = Double((ContinuousClock.now - coverageStart).components.attoseconds) / 1e15
 
+            if config.coverageReplayRow != nil {
+                return (nil as ContractResult<Spec>?, deferredIssues)
+            }
+
+            let startIndex = config.replayIteration.map { UInt64($0 - 1) } ?? 0
+            let maxRuns = config.replayIteration.map { UInt64($0) } ?? samplingBudget
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
                 materializePicks: true,
                 seed: config.seed,
-                maxRuns: samplingBudget
+                maxRuns: maxRuns,
+                initialRunIndex: startIndex
             )
             let actualSeed = interpreter.baseSeed
 
@@ -287,6 +295,7 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
             do {
                 while let (input, tree) = try interpreter.next() {
                     samplingIteration += 1
+                    let absoluteIteration = Int(startIndex) + samplingIteration
                     let passed = property(input)
                     statsAccumulator?.record(
                         representation: "\(input.map { "[\($0.0)] \($0.1)" })",
@@ -368,11 +377,11 @@ public func __runContractConcurrent<Spec: AsyncContractSpec>(
                             }
                         }
 
-                        let discoveryMethod: ContractDiscoveryMethod = config.seed != nil ? .replay : .randomSampling
+                        let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
                         var ctx = failureContext
                         ctx.seed = actualSeed
                         ctx.originalCount = input.count
-                        ctx.iteration = samplingIteration
+                        ctx.iteration = absoluteIteration
                         ctx.budget = samplingBudget
                         ctx.sequencesTested = invocationCounter.value + report.reductionInvocations
                         let failure = buildFailureResult(
