@@ -16,10 +16,10 @@ let coreTarget: Target = usePrecompiled
         name: "ExhaustCore",
         dependencies: [],
         swiftSettings: [
-            .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
+            .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
         ],
         plugins: swiftLintPlugins
-      )
+    )
 
 let package = Package(
     name: "Exhaust",
@@ -41,9 +41,10 @@ let package = Package(
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
+        .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.5.0"),
     ] + swiftLintDependency,
     targets: [
         coreTarget,
@@ -90,7 +91,7 @@ let package = Package(
             dependencies: [
                 "Exhaust",
                 "ExhaustMacros",
-                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
+                .product(name: "MacroTesting", package: "swift-macro-testing"),
             ]
         ),
         .executableTarget(
@@ -98,12 +99,12 @@ let package = Package(
             dependencies: [
                 "Exhaust",
                 "ExhaustCore",
-                .product(name: "Benchmark", package: "swift-benchmark")
+                .product(name: "Benchmark", package: "swift-benchmark"),
             ],
             swiftSettings: [
                 .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
             ],
-            plugins: swiftLintPlugins,
+            plugins: swiftLintPlugins
         ),
     ]
 )
