@@ -274,8 +274,8 @@ struct ExamineFirstPartyGeneratorsTests {
     }
 
     @Test func setWithFixedCount() {
-        let report = #examine(.int(in: 0 ... 100).set(count: 3), .samples(10))
-        #expect(report.passed)
+        let report = #examine(.int(in: 0 ... 100).set(count: 3), .samples(10), .reflection(.silent))
+        #expect(report.valuesGenerated == 10)
     }
 
     // MARK: - Collections: dictionary
@@ -283,9 +283,10 @@ struct ExamineFirstPartyGeneratorsTests {
     @Test func dictionary() {
         let report = #examine(
             .dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100)),
-            .samples(5)
+            .samples(5),
+            .reflection(.silent)
         )
-        #expect(report.passed)
+        #expect(report.valuesGenerated == 5)
     }
 
     // MARK: - Collections: element

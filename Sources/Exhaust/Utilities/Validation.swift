@@ -20,10 +20,8 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public let sampleCount: Int
     /// Number of values the generator actually produced. Lower than ``sampleCount`` when generation fails for some samples.
     public let valuesGenerated: Int
-    /// Number of values that survived reflection round-trip without change. Equal to ``valuesGenerated`` for a healthy generator.
+    /// Number of values whose reflected choice tree matched the generation tree. Equal to ``valuesGenerated`` for a healthy generator.
     public let reflectionRoundTripSuccesses: Int
-    /// Number of values that replayed deterministically from their choice tree. Equal to ``valuesGenerated`` for a healthy generator.
-    public let replayDeterminismSuccesses: Int
     /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
     public let uniqueChoiceSequences: Int
     /// All validation failures detected during the run. Empty when the generator is healthy.
@@ -97,7 +95,7 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
         let perSampleMs = averageTimePerSample * 1000
         lines.append("#examine: \(valuesGenerated) samples, \(String(format: "%.3f", perSampleMs))ms/sample")
 
-        lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection, \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
+        lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection")
         lines.append("  Unique: \(uniqueChoiceSequences)/\(valuesGenerated)")
 
         let hasNumeric = numericCoverage.isEmpty == false
@@ -194,10 +192,6 @@ public enum ExamineFailure: Sendable, CustomStringConvertible {
     case reflectionRoundTripMismatch(sampleIndex: Int, detail: String)
     /// Reflection threw an error for this sample. The generator may use an unsupported operation or have an incomplete backward mapping.
     case reflectionFailed(sampleIndex: Int, errorDescription: String?)
-    /// Replaying the choice tree produced no value. The generator may depend on external state that changed between generation and replay.
-    case replayFailed(sampleIndex: Int)
-    /// Two replays of the same choice tree produced different values. The generator contains non-determinism, for example, reliance on mutable external state.
-    case replayNonDeterministic(sampleIndex: Int, detail: String?)
     /// The generator produced no values at all. It may always throw, or its filter may reject every candidate.
     case noValuesGenerated
     /// The generator contains a forward-only `map` or `bind` without a backward mapping. Use `.mapped(forward:backward:)` or `.bound(forward:backward:)` to provide an inverse.
@@ -211,10 +205,6 @@ public enum ExamineFailure: Sendable, CustomStringConvertible {
                 "Sample \(index): reflection round-trip mismatch — \(detail)"
             case let .reflectionFailed(index, error):
                 "Sample \(index): reflection failed — \(error ?? "unknown error")"
-            case let .replayFailed(index):
-                "Sample \(index): replay returned nil"
-            case let .replayNonDeterministic(index, detail):
-                "Sample \(index): replay produced different results" + (detail.map { " — \($0)" } ?? "")
             case .noValuesGenerated:
                 "Generator produced no values"
             case let .forwardOnlyTransform(inputType, outputType, "map"):
@@ -230,9 +220,9 @@ public enum ExamineFailure: Sendable, CustomStringConvertible {
 // MARK: - Non-Equatable overload
 
 package extension Generator where Operation == ReflectiveOperation {
-    /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses choice-sequence comparison for round-trip checks.
+    /// Validates this generator by checking reflection round-trip correctness and generation health.
     ///
-    /// Failures are recorded as test issues via ``reportIssue``, so calling this inside a test is sufficient — no assertions needed.
+    /// The round-trip check generates a value, reflects it to obtain a choice tree, and compares that tree against the generation tree. A mismatch indicates a broken backward mapping. Failures are recorded as test issues via ``reportIssue``.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
@@ -252,7 +242,6 @@ package extension Generator where Operation == ReflectiveOperation {
         _validate(
             samples: samples,
             seed: seed,
-            differ: nil,
             reporting: reporting,
             fileID: fileID,
             filePath: filePath,
@@ -265,9 +254,9 @@ package extension Generator where Operation == ReflectiveOperation {
 // MARK: - Equatable overload
 
 package extension Generator where Operation == ReflectiveOperation, Value: Equatable {
-    /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses `Equatable` conformance and `CustomDump.diff` for rich failure output.
+    /// Validates this generator by checking reflection round-trip correctness and generation health.
     ///
-    /// Failures are recorded as test issues via ``reportIssue``, so calling this inside a test is sufficient — no assertions needed.
+    /// The round-trip check generates a value, reflects it to obtain a choice tree, and compares that tree against the generation tree. A mismatch indicates a broken backward mapping. Failures are recorded as test issues via ``reportIssue``.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
@@ -287,13 +276,6 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
         _validate(
             samples: samples,
             seed: seed,
-            differ: { lhs, rhs in
-                guard let l = lhs as? Value, let r = rhs as? Value else {
-                    return .notEqual(detail: "type mismatch")
-                }
-                if l == r { return .equal }
-                return .notEqual(detail: diff(l, r) ?? "\(l) != \(r)")
-            },
             reporting: reporting,
             fileID: fileID,
             filePath: filePath,
@@ -305,24 +287,11 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
 
 // MARK: - Shared implementation
 
-private enum DiffResult {
-    case equal
-    case notEqual(detail: String)
-}
-
 private extension Generator where Operation == ReflectiveOperation {
     /// Core validation loop shared by both overloads.
-    ///
-    /// - Parameters:
-    ///   - samples: Number of values to generate.
-    ///   - seed: Optional deterministic seed.
-    ///   - differ: Value differ for round-trip and determinism checks.
-    ///     Returns `.equal` or `.notEqual(detail:)` with a rich diff string.
-    ///     When `nil`, choice-sequence comparison is used instead.
     func _validate(
         samples: Int,
         seed: UInt64?,
-        differ: ((Any, Any) -> DiffResult)?,
         reporting: ExamineReportingConfiguration?,
         fileID: StaticString,
         filePath: StaticString,
@@ -334,7 +303,6 @@ private extension Generator where Operation == ReflectiveOperation {
         var forwardOnlyDetected = false
         var valuesGenerated = 0
         var roundTripSuccesses = 0
-        var determinismSuccesses = 0
         var uniqueSequences: Set<ChoiceSequence> = []
         var storedTrees: [ChoiceTree] = []
         storedTrees.reserveCapacity(samples)
@@ -358,99 +326,15 @@ private extension Generator where Operation == ReflectiveOperation {
             let generatedSequence = ChoiceSequence.flatten(tree)
             uniqueSequences.insert(generatedSequence)
 
-            // -- Round-trip check --
             if forwardOnlyDetected == false, failures.count < maxFailures {
-                do {
-                    let reflectedTree = try Interpreters.reflect(self, with: value)
-                    let tree = reflectedTree ?? tree
-
-                    if let differ {
-                        // Equatable path: replay the reflected tree and compare values
-                        if let replayedValue = try Interpreters.replay(self, using: tree) {
-                            switch differ(value, replayedValue) {
-                                case .equal:
-                                    roundTripSuccesses += 1
-                                case let .notEqual(detail):
-                                    failures.append(.reflectionRoundTripMismatch(
-                                        sampleIndex: sampleIndex,
-                                        detail: detail
-                                    ))
-                            }
-                        } else {
-                            failures.append(.reflectionFailed(
-                                sampleIndex: sampleIndex,
-                                errorDescription: "replay of reflected tree returned nil"
-                            ))
-                        }
-                    } else {
-                        // Non-Equatable path: walk both trees and compare values at every choice site
-                        let originalTree = storedTrees[valuesGenerated - 1]
-                        if let mismatch = ChoiceTree.compareValues(originalTree, tree) {
-                            failures.append(.reflectionRoundTripMismatch(
-                                sampleIndex: sampleIndex,
-                                detail: mismatch
-                            ))
-                        } else {
-                            roundTripSuccesses += 1
-                        }
-                    }
-                } catch let error as ReflectionError {
-                    switch error {
-                        case let .forwardOnlyMap(inputType, outputType):
-                            failures.append(.forwardOnlyTransform(
-                                inputType: "\(inputType)",
-                                outputType: "\(outputType)",
-                                kind: "map"
-                            ))
-                            forwardOnlyDetected = true
-                        case let .forwardOnlyBind(inputType, outputType):
-                            failures.append(.forwardOnlyTransform(
-                                inputType: "\(inputType)",
-                                outputType: "\(outputType)",
-                                kind: "bind"
-                            ))
-                            forwardOnlyDetected = true
-                        default:
-                            failures.append(.reflectionFailed(
-                                sampleIndex: sampleIndex,
-                                errorDescription: localizedErrorMessage(error)
-                            ))
-                    }
-                } catch {
-                    failures.append(.reflectionFailed(
-                        sampleIndex: sampleIndex,
-                        errorDescription: "\(error)"
-                    ))
-                }
-            }
-
-            // -- Determinism check --
-            if failures.count < maxFailures {
-                do {
-                    let replay1 = try Interpreters.replay(self, using: tree)
-                    let replay2 = try Interpreters.replay(self, using: tree)
-
-                    if let r1 = replay1, let r2 = replay2 {
-                        if let differ {
-                            switch differ(r1, r2) {
-                                case .equal:
-                                    determinismSuccesses += 1
-                                case let .notEqual(detail):
-                                    failures.append(.replayNonDeterministic(
-                                        sampleIndex: sampleIndex,
-                                        detail: detail
-                                    ))
-                            }
-                        } else {
-                            // Non-Equatable: both non-nil is sufficient since replay is deterministic by construction
-                            determinismSuccesses += 1
-                        }
-                    } else {
-                        failures.append(.replayFailed(sampleIndex: sampleIndex))
-                    }
-                } catch {
-                    failures.append(.replayFailed(sampleIndex: sampleIndex))
-                }
+                let success = checkReflectionRoundTrip(
+                    value: value,
+                    originalTree: tree,
+                    sampleIndex: sampleIndex,
+                    forwardOnlyDetected: &forwardOnlyDetected,
+                    failures: &failures
+                )
+                if success { roundTripSuccesses += 1 }
             }
         }
 
@@ -479,7 +363,6 @@ private extension Generator where Operation == ReflectiveOperation {
             sampleCount: samples,
             valuesGenerated: valuesGenerated,
             reflectionRoundTripSuccesses: roundTripSuccesses,
-            replayDeterminismSuccesses: determinismSuccesses,
             uniqueChoiceSequences: uniqueSequences.count,
             failures: failures,
             generationTime: generationSeconds,
@@ -505,8 +388,6 @@ private extension Generator where Operation == ReflectiveOperation {
             let examineSeverity: ExamineSeverity = switch failure {
                 case .reflectionRoundTripMismatch, .reflectionFailed, .forwardOnlyTransform:
                     reporting?.reflectionSeverity ?? .error
-                case .replayFailed, .replayNonDeterministic:
-                    reporting?.determinismSeverity ?? .error
                 case .lowFilterValidityRate:
                     reporting?.filterHealthSeverity ?? .error
                 case .noValuesGenerated:
@@ -549,6 +430,66 @@ private extension Generator where Operation == ReflectiveOperation {
         }
 
         return report
+    }
+
+    // MARK: - Round-Trip Check
+
+    /// Reflects a generated value and compares the reflected choice tree against the original generation tree.
+    ///
+    /// Returns `true` when the trees match (round-trip success). Appends to `failures` on mismatch or error. Sets `forwardOnlyDetected` when a forward-only transform blocks reflection.
+    func checkReflectionRoundTrip(
+        value: Value,
+        originalTree: ChoiceTree,
+        sampleIndex: Int,
+        forwardOnlyDetected: inout Bool,
+        failures: inout [ExamineFailure]
+    ) -> Bool {
+        do {
+            guard let reflectedTree = try Interpreters.reflect(self, with: value) else {
+                failures.append(.reflectionFailed(
+                    sampleIndex: sampleIndex,
+                    errorDescription: "reflection returned nil"
+                ))
+                return false
+            }
+            if let mismatch = ChoiceTree.compareValues(originalTree, reflectedTree) {
+                failures.append(.reflectionRoundTripMismatch(
+                    sampleIndex: sampleIndex,
+                    detail: mismatch
+                ))
+                return false
+            }
+            return true
+        } catch let error as ReflectionError {
+            switch error {
+                case let .forwardOnlyMap(inputType, outputType):
+                    failures.append(.forwardOnlyTransform(
+                        inputType: "\(inputType)",
+                        outputType: "\(outputType)",
+                        kind: "map"
+                    ))
+                    forwardOnlyDetected = true
+                case let .forwardOnlyBind(inputType, outputType):
+                    failures.append(.forwardOnlyTransform(
+                        inputType: "\(inputType)",
+                        outputType: "\(outputType)",
+                        kind: "bind"
+                    ))
+                    forwardOnlyDetected = true
+                default:
+                    failures.append(.reflectionFailed(
+                        sampleIndex: sampleIndex,
+                        errorDescription: localizedErrorMessage(error)
+                    ))
+            }
+            return false
+        } catch {
+            failures.append(.reflectionFailed(
+                sampleIndex: sampleIndex,
+                errorDescription: "\(error)"
+            ))
+            return false
+        }
     }
 
     static func medianComplexityTree(from trees: [ChoiceTree]) -> ChoiceTree? {
