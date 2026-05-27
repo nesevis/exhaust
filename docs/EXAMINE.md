@@ -10,24 +10,24 @@ A passing property test gives no signal about whether the generator explored its
 }
 ```
 
-`#examine` generates 200 samples (configurable), checks that each value roundtrips through reflection and replays deterministically. Additionally it records quantitative data about how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
+`#examine` generates 200 samples (configurable), checks that each value roundtrips through reflection, and records how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
 
 ```
-#examine: 200 samples, 0.064ms/sample
-  Correctness: 200/200 reflection, 200/200 replay
+#examine: 200 samples, 0.115ms/sample
+  Correctness: 200/200 reflection
   Unique: 200/200
   Coverage:
-    UInt: [••••••••• ] 9/10 deciles (min: 20, max: 120, mean: 69.19)
-    Sequences: [••••••••••] 10/10 deciles (min: 0, max: 95, mean: 26.07)
+    UInt: [••••••••• ] 9/10 deciles (min: 18, max: 120, mean: 69.94)
+    Sequences: [••••••••••] 10/10 deciles (min: 0, max: 100, mean: 50.35)
     Characters: 100% (of 95 code points)
-    Characters: 2% (of 291108 code points)
+    Characters: 3% (of 291108 code points)
   Filters:
-    YourFile.swift:125: 83% (CGS, 40 discarded)
+    YourFile.swift:125: 85% (CGS, 35 discarded)
   Example:
     └── group
-        ├── string(length: 42) 0...55
-        ├── string(length: 2) 0...55
-        └── choice(unsigned: 81) 0...120
+        ├── string(length: 18) 0...100
+        ├── string(length: 83) 0...100
+        └── choice(unsigned: 72) 0...120
 ```
 
 > [!Tip]
@@ -37,9 +37,29 @@ A passing property test gives no signal about whether the generator explored its
 
 ### Correctness checks
 
-- **Reflection round-trip**: each generated value is reflected back through the generator and the recovered choices are compared against the originals. A mismatch indicates a bug in a `mapped` or `bound` backward function.
-- **Replay determinism**: the recorded choices are replayed and the resulting value is compared against the original. A mismatch indicates non-determinism in the generator, or a lossy mapping (such as unordered sets or dictionaries).
+- **Reflection round-trip**: each generated value is reflected back through the generator and the recovered choice tree is compared against the generation tree. A mismatch indicates a bug in a `mapped` or `bound` backward function, or a lossy mapping (such as unordered sets or dictionaries where reflection cannot recover the original element order).
+- **Replay determinism** (opt-in): when a trailing comparison closure is provided, each sample's choice tree is replayed twice and the two values are compared using the closure. A mismatch indicates non-determinism in the generator or its output type.
 - **Filter health**: for filtered generators, the acceptance rate and CGS tuning effectiveness are reported.
+
+### Providing a replay check
+
+`#examine` operates on choice trees, not on your output values. By default it does not inspect generated values at all. When you want to verify that your type doesn't introduce non-determinism (for example, a stored `UUID()` or a non-deterministic closure inside `.map`), provide a trailing comparison closure:
+
+```swift
+@Test func personGeneratorReplaysDeterministically() {
+    #examine(personGen, .samples(200)) { lhs, rhs in
+        lhs.name == rhs.name && lhs.age == rhs.age
+    }
+}
+```
+
+Each sample is replayed twice from its choice tree and the two values are passed to your closure. A `false` return records a failure. When provided, the report includes replay statistics in the correctness line:
+
+```
+Correctness: 200/200 reflection, 200/200 replay
+```
+
+Without the closure, no replay determinism check runs and the replay column is omitted.
 
 ### Coverage metrics
 
@@ -60,4 +80,4 @@ The returned `ExamineReport` exposes coverage metrics as assertable properties, 
 }
 ```
 
-Correctness checks (reflection roundtrip, replay determinism, filter health) can fail the test. Coverage metrics populate the report but never fail on their own. Assert on the properties that matter to you.
+Correctness checks (reflection round-trip, filter health) can fail the test. Coverage metrics populate the report but never fail on their own. Assert on the properties that matter to you.

@@ -10,7 +10,7 @@ struct PreemptiveNonAtomicCounterTests {
     func detectsLostUpdateBugViaOracleComparison() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
                         .concurrent(2),
@@ -29,7 +29,7 @@ struct PreemptiveNonAtomicCounterTests {
     func failureReportRendersCorrectly() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
                         .concurrent(2),
@@ -50,7 +50,7 @@ struct PreemptiveNonAtomicCounterTests {
     func onReportDeliversProfilingSummary() async throws {
         var capturedReport: ExhaustReport?
         _ = await __ExhaustRuntime.dispatchToGCD {
-            __runPreemptiveConcurrentContract(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
                 PreemptiveCounterSpec.self,
                 settings: [
                     .concurrent(2),
@@ -72,7 +72,7 @@ struct PreemptiveNonAtomicCounterTests {
     func reductionShrinksTheCounterexample() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __runPreemptiveConcurrentContract(
+                __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
                         .concurrent(2),

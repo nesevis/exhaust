@@ -6,23 +6,9 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
-
-private enum HypothesisFloatParityHelpers {
-    static func reduce<Output>(
-        _ gen: Generator<Output>,
-        startingAt value: Output,
-        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
-        property: (Output) -> Bool
-    ) throws -> Output {
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
-        )
-        return output
-    }
-}
 
 @Suite("Hypothesis Float Shrinking Parity — Filter Tests")
 struct HypothesisFloatShrinkingFilterTests {
@@ -39,7 +25,7 @@ struct HypothesisFloatShrinkingFilterTests {
                 value > lower && value < upper && value.rounded(.towardZero) != value
             }
 
-            let output = try HypothesisFloatParityHelpers.reduce(
+            let output = try reduceFromReflection(
                 gen,
                 startingAt: lower + 0.875
             ) { _ in

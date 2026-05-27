@@ -8,7 +8,7 @@ struct PreemptiveAsyncFacadeTests {
     @Test("Detects lost-update bug behind async facade")
     func detectsLostUpdateBugBehindAsyncFacade() async throws {
         let result = try #require(
-            await __runPreemptiveConcurrentContractAsync(
+            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncRacyCounterSpec.self,
                 settings: [
                     .concurrent(2),
@@ -24,7 +24,7 @@ struct PreemptiveAsyncFacadeTests {
     @Test("onReport delivers profiling summary")
     func onReportDeliversProfilingSummary() async throws {
         var capturedReport: ExhaustReport?
-        _ = await __runPreemptiveConcurrentContractAsync(
+        _ = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
             AsyncRacyCounterSpec.self,
             settings: [
                 .concurrent(2),
@@ -44,7 +44,7 @@ struct PreemptiveAsyncFacadeTests {
     func reportsIssueThroughSwiftTestingWhenSuppressionIsOff() async {
         await withKnownIssue {
             _ = try #require(
-                await __runPreemptiveConcurrentContractAsync(
+                await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                     AsyncRacyCounterSpec.self,
                     settings: [
                         .concurrent(2),

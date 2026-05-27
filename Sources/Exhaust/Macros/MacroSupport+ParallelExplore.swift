@@ -35,7 +35,7 @@ extension __ExhaustRuntime {
         maxAttemptsPerDirection: Int
     ) throws -> ClassificationExploreResult<Output> {
         let directionCount = directions.count
-        let startTime = DispatchTime.now()
+        let runStopwatch = Stopwatch()
         let baseSeed = Xoshiro256().seed
 
         let cancelled = SendableBox(false)
@@ -95,7 +95,7 @@ extension __ExhaustRuntime {
             throw error
         }
 
-        let elapsed = Double(DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000
+        let elapsed = runStopwatch.elapsedMilliseconds
 
         var coverageEntries = [ClassificationExploreResult<Output>.DirectionCoverageEntry]()
         for (index, direction) in directions.enumerated() {
@@ -290,13 +290,14 @@ extension __ExhaustRuntime {
             }
 
         do {
-            if let (reducedSequence, reducedValue) = try Interpreters.choiceGraphReduce(
+            let outcome = try Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: reduceTree,
                 output: failure.value,
                 config: .init(maxStalls: 2),
                 property: { reductionPredicate($0) == false }
-            ) {
+            )
+            if case let .reduced(reducedSequence, reducedValue) = outcome {
                 return (reducedValue, failure.value, reducedSequence)
             }
         } catch {

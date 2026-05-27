@@ -45,6 +45,7 @@ struct GraphLaneCollapseEncoder: GraphEncoder {
         if lastAccepted, leafIndex > 0 {
             currentSequence = candidate
             elements = remapElements(sequence: currentSequence, oldElements: elements)
+            rebuildLeaves()
         }
 
         while leafIndex < leaves.count {
@@ -69,6 +70,23 @@ struct GraphLaneCollapseEncoder: GraphEncoder {
             return .sequenceReordered
         }
         return nil
+    }
+
+    private mutating func rebuildLeaves() {
+        leaves = elements.enumerated().compactMap { elementIndex, element in
+            for position in element.range {
+                guard position < currentSequence.count else { break }
+                if case let .value(entry) = currentSequence[position],
+                   case .laneControl = entry.choice.tag,
+                   entry.choice.bitPattern64 != 0
+                {
+                    return LaneLeaf(leafNodeID: 0, leafPosition: position, elementIndex: elementIndex)
+                }
+            }
+            return nil
+        }
+        leaves.sort { $0.leafPosition < $1.leafPosition }
+        leafIndex = 0
     }
 }
 

@@ -272,13 +272,13 @@ struct ChoiceGraphReducerIntegrationTests {
         let (value, tree) = try #require(try iterator.next())
         try #require(value > 5)
 
-        let result = try #require(
+        let (_, output) = try #require(
             try Interpreters.choiceGraphReduce(gen: gen, tree: tree, output: value, config: .init(maxStalls: 2)) {
                 $0 < 5
-            }
+            }.counterexample
         )
 
-        #expect(result.1 == 5)
+        #expect(output == 5)
     }
 
     @Test("CollectingStats returns valid statistics")
@@ -296,7 +296,11 @@ struct ChoiceGraphReducerIntegrationTests {
             config: .init(maxStalls: 2)
         ) { $0 < 10 }
 
-        #expect(result.reduced != nil)
+        if case .reduced = result.outcome {
+            // Reduction succeeded
+        } else {
+            Issue.record("Expected .reduced outcome")
+        }
         #expect(result.stats.cycles > 0)
         #expect(result.stats.totalMaterializations > 0)
     }

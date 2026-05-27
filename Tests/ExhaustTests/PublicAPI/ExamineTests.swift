@@ -23,7 +23,6 @@ struct ExamineTests {
         let b = #examine(.int(in: 0 ... 1_000_000), .samples(30), .replay(42))
         #expect(a.valuesGenerated == b.valuesGenerated)
         #expect(a.reflectionRoundTripSuccesses == b.reflectionRoundTripSuccesses)
-        #expect(a.replayDeterminismSuccesses == b.replayDeterminismSuccesses)
     }
 
     @Test("Examine reports reflection and replay stats")
@@ -31,7 +30,6 @@ struct ExamineTests {
         let report = #examine(.bool(), .samples(20))
         #expect(report.passed)
         #expect(report.reflectionRoundTripSuccesses == report.valuesGenerated)
-        #expect(report.replayDeterminismSuccesses == report.valuesGenerated)
     }
 
     @Test("Examine tracks filter observations")
@@ -107,7 +105,6 @@ struct ExamineTests {
             .reflection(.warning),
         ])
         #expect(config.reflectionSeverity == .warning)
-        #expect(config.determinismSeverity == .silent)
         #expect(config.filterHealthSeverity == .silent)
     }
 
@@ -115,7 +112,6 @@ struct ExamineTests {
     func defaultSeverityIsError() {
         let config = ExamineReportingConfiguration(from: [])
         #expect(config.reflectionSeverity == .error)
-        #expect(config.determinismSeverity == .error)
         #expect(config.filterHealthSeverity == .error)
         #expect(config.samples == 200)
         #expect(config.replaySeed == nil)

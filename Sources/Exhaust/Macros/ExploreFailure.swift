@@ -10,6 +10,7 @@ struct ExploreFailure<Output> {
     let totalBudget: Int
     let matchedDirections: [(index: Int, name: String)]
     var reducedSequence: ChoiceSequence?
+    var reductionProducedNoImprovement: Bool = false
 
     /// Renders the failure as a human-readable string with direction attribution.
     func render() -> String {
@@ -50,6 +51,11 @@ struct ExploreFailure<Output> {
                     lines.append("  \(line)")
                 }
             }
+        }
+
+        if reductionProducedNoImprovement {
+            lines.append("")
+            lines.append("Note: this result could not be reduced.")
         }
 
         lines.append("")

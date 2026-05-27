@@ -68,6 +68,33 @@ struct ZobristHashTests {
         #expect(incrementalResult == expectedHash)
     }
 
+    // MARK: - Cross-Acceptance Invariant
+
+    @Test("Stale base hash after acceptance corrupts incremental result")
+    func staleBaseHashAfterAcceptance() {
+        let original = GraphFixture(.uint64Zip([10, 20, 30], in: 0 ... 100)).sequence
+        let accepted = GraphFixture(.uint64Zip([10, 5, 30], in: 0 ... 100)).sequence
+        let nextProbe = GraphFixture(.uint64Zip([10, 5, 1], in: 0 ... 100)).sequence
+
+        let staleHash = ZobristHash.hash(of: original)
+        let freshHash = ZobristHash.hash(of: accepted)
+
+        let staleResult = ZobristHash.incrementalHash(
+            baseHash: staleHash,
+            baseSequence: accepted,
+            probe: nextProbe
+        )
+        let freshResult = ZobristHash.incrementalHash(
+            baseHash: freshHash,
+            baseSequence: accepted,
+            probe: nextProbe
+        )
+        let expectedHash = ZobristHash.hash(of: nextProbe)
+
+        #expect(freshResult == expectedHash)
+        #expect(staleResult != expectedHash)
+    }
+
     // MARK: - Contribution
 
     @Test("Same value at different positions produces different contributions")

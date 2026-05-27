@@ -88,7 +88,7 @@ package extension __ExhaustRuntime {
                     case .rejected, .failed:
                         tree
                 }
-                let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration)
+                let coverageReplaySeed = CrockfordBase32.encodeCoverageRow(iteration - 1)
                 report.replaySeed = coverageReplaySeed
                 let result = reduceAndReport(
                     context: context,
@@ -581,7 +581,7 @@ package extension __ExhaustRuntime {
             )
             report.applyReductionStats(reduceResult.stats)
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
-            if let (reducedSequence, reducedValue) = reduceResult.reduced {
+            if case let .reduced(reducedSequence, reducedValue) = reduceResult.outcome {
                 let totalInvocations = coverageIterations + randomSamplingIterations + propertyInvocationCount
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
@@ -658,6 +658,7 @@ package extension __ExhaustRuntime {
             propertyInvocations: totalInvocationsUnreduced
         )
         failure.replayHint = replayHint
+        failure.reductionProducedNoImprovement = true
         let rendered = failure.render(format: context.logFormat)
         report.renderedFailure = rendered
         report.replaySeed = failure.encodedReplaySeed
@@ -746,7 +747,7 @@ package extension __ExhaustRuntime {
         )
         report.applyReductionStats(reduceResult.stats)
 
-        if let (reducedSequence, reducedValue) = reduceResult.reduced {
+        if case let .reduced(reducedSequence, reducedValue) = reduceResult.outcome {
             var failure = PropertyTestFailure(
                 counterexample: reducedValue,
                 original: value,
@@ -804,6 +805,7 @@ package extension __ExhaustRuntime {
             propertyInvocations: propertyInvocationCount
         )
         failure.replayHint = "No replay seed — counterexample found via reflection."
+        failure.reductionProducedNoImprovement = true
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         report.renderedFailure = rendered
         let reductionEnd = monotonicNanoseconds()

@@ -6,6 +6,7 @@
 //  tests/quality/test_shrink_quality.py.
 //
 
+import ExhaustTestSupport
 import Testing
 @testable import Exhaust
 
@@ -17,12 +18,7 @@ struct HypothesisShrinkQualityParityTests {
         config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
         property: (Output) -> Bool
     ) throws -> Output {
-        let gen = gen.gen
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
-        )
-        return output
+        try reduceFromReflection(gen.gen, startingAt: value, config: config, property: property)
     }
 
     private func startPair(
@@ -268,12 +264,7 @@ struct HypothesisShrinkQualityParityTests {
             config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
             property: (Output) -> Bool
         ) throws -> Output {
-            let gen = gen.gen
-            let tree = try #require(try Interpreters.reflect(gen, with: value))
-            let (_, output) = try #require(
-                try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
-            )
-            return output
+            try reduceFromReflection(gen.gen, startingAt: value, config: config, property: property)
         }
 
         @Test("Float16::test_sum_of_pair_mixed")

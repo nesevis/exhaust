@@ -113,7 +113,7 @@ private extension ExamineCoverageAnalysis {
 
                 switch tag {
                     case .character:
-                        characters.record(bitPattern: value.bitPattern64, domainSize: domainSize + 1)
+                        characters.record(bitPattern: value.bitPattern64, range: range)
                     case .depthControl, .laneControl:
                         break
                     case .double, .float, .float16:
@@ -309,63 +309,66 @@ private struct BranchAccumulator {
 // MARK: - Sequence Accumulator
 
 private struct SequenceAccumulator {
-    private var observations: [(length: UInt64, lowerBound: UInt64)] = []
-    private var maxUpperBound: UInt64 = 0
+    private var sites: [ClosedRange<UInt64>: [UInt64]] = [:]
 
     mutating func record(length: UInt64, range: ClosedRange<UInt64>) {
-        observations.append((length: length, lowerBound: range.lowerBound))
-        if range.upperBound > maxUpperBound {
-            maxUpperBound = range.upperBound
-        }
+        sites[range, default: []].append(length)
     }
 
     var hasObservations: Bool {
-        observations.isEmpty == false
+        sites.isEmpty == false
     }
 
     var minLength: Int {
-        observations.map { Int($0.length) }.min() ?? 0
+        sites.values.flatMap(\.self).map { Int($0) }.min() ?? 0
     }
 
     var maxLength: Int {
-        observations.map { Int($0.length) }.max() ?? 0
+        sites.values.flatMap(\.self).map { Int($0) }.max() ?? 0
     }
 
     var meanLength: Double {
-        guard observations.isEmpty == false else { return 0 }
-        return Double(observations.map { Int($0.length) }.reduce(0, +)) / Double(observations.count)
+        let allLengths = sites.values.flatMap(\.self)
+        guard allLengths.isEmpty == false else { return 0 }
+        return Double(allLengths.map { Int($0) }.reduce(0, +)) / Double(allLengths.count)
     }
 
     func result() -> Int {
-        guard observations.isEmpty == false else { return 10 }
-        let span = maxUpperBound - (observations.first?.lowerBound ?? 0)
-        guard span > 0 else { return 10 }
-        var buckets = [Bool](repeating: false, count: 10)
-        for observation in observations {
-            let normalized = Double(observation.length - observation.lowerBound) / Double(span)
-            let bucket = min(Int(normalized * 10), 9)
-            buckets[bucket] = true
+        guard sites.isEmpty == false else { return 10 }
+        var worstDeciles = 10
+        for (range, lengths) in sites {
+            let span = range.upperBound - range.lowerBound
+            guard span > 0 else { continue }
+            var buckets = [Bool](repeating: false, count: 10)
+            for length in lengths {
+                let normalized = Double(length - range.lowerBound) / Double(span)
+                let bucket = min(Int(normalized * 10), 9)
+                buckets[bucket] = true
+            }
+            let covered = buckets.count(where: { $0 })
+            worstDeciles = min(worstDeciles, covered)
         }
-        return buckets.count(where: { $0 })
+        return worstDeciles
     }
 }
 
 // MARK: - Character Accumulator
 
 private struct CharacterAccumulator {
-    private var domains: [UInt64: Set<UInt64>] = [:]
+    private var sites: [ClosedRange<UInt64>: Set<UInt64>] = [:]
 
-    mutating func record(bitPattern: UInt64, domainSize: UInt64) {
-        domains[domainSize, default: []].insert(bitPattern)
+    mutating func record(bitPattern: UInt64, range: ClosedRange<UInt64>) {
+        sites[range, default: []].insert(bitPattern)
     }
 
     var hasObservations: Bool {
-        domains.isEmpty == false
+        sites.isEmpty == false
     }
 
     func results() -> [(domainSize: Int, variety: Double)] {
-        domains.map { domainSize, uniqueValues in
-            (domainSize: Int(domainSize), variety: Double(uniqueValues.count) / Double(domainSize))
+        sites.map { range, uniqueValues in
+            let domainSize = range.upperBound - range.lowerBound + 1
+            return (domainSize: Int(domainSize), variety: Double(uniqueValues.count) / Double(domainSize))
         }.sorted { $0.domainSize < $1.domainSize }
     }
 }

@@ -1,6 +1,6 @@
-import ExhaustCore
 import ExhaustTestSupport
 import Testing
+@testable import ExhaustCore
 
 @Suite("Lane-collapse encoder")
 struct LaneCollapseEncoderTests {
@@ -28,11 +28,10 @@ struct LaneCollapseEncoderTests {
             enabledEncoders: [.laneCollapse]
         )
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
+        let (_, reduced) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
-        let reduced = result.1
         let laneMarkers = reduced.map(\.0)
         let nonPrefixCount = laneMarkers.count(where: { $0 != 0 })
 
@@ -56,7 +55,7 @@ struct LaneCollapseEncoderTests {
         #expect(reducedValues == originalValues, "Values should be preserved: \(reduced.map(\.1))")
     }
 
-    @Test("Does not modify elements when all are already prefix")
+    @Test("Returns nil when all elements are already prefix")
     func allPrefixIsNoOp() throws {
         let gen = laneTaggedArrayGen(concurrencyLevel: 2)
         let value: [(UInt8, UInt64)] = [(0, 10), (0, 20), (0, 30)]
@@ -67,14 +66,10 @@ struct LaneCollapseEncoderTests {
             enabledEncoders: [.laneCollapse]
         )
 
-        let (_, reduced) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false },
-            "Reducer should produce a result when property always fails"
-        )
-
-        let laneMarkers = reduced.map(\.0)
-        #expect(laneMarkers == [0, 0, 0], "All elements should remain prefix: \(laneMarkers)")
-        #expect(reduced.map(\.1) == [10, 20, 30], "Values should be unchanged")
+        let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false }
+        if case .reduced = result {
+            Issue.record("Reducer should not improve when nothing can be changed")
+        }
     }
 
     @Test("Prefix elements are contiguous at the front after reduction with 3 lanes")
@@ -107,11 +102,11 @@ struct LaneCollapseEncoderTests {
             #expect(roundTripped.count == value.count, "Reflected value should round-trip: got \(roundTripped.map(\.0))")
         }
 
-        let result = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
+        let (_, reduced) = try #require(
+            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
-        let laneMarkers = result.1.map(\.0)
+        let laneMarkers = reduced.map(\.0)
         let nonPrefixCount = laneMarkers.count(where: { $0 != 0 })
         let prefixCount = laneMarkers.count(where: { $0 == 0 })
 
@@ -123,6 +118,58 @@ struct LaneCollapseEncoderTests {
         #expect(firstNonPrefixIndex == prefixCount, "Prefix region ends at index \(prefixCount): \(laneMarkers)")
         let noPrefixInTail = laneMarkers.suffix(from: firstNonPrefixIndex).contains(where: { $0 == 0 }) == false
         #expect(noPrefixInTail, "No prefix elements in the concurrent tail: \(laneMarkers)")
+    }
+
+    @Test("Encoder finds all leaves after partition moves elements")
+    func leavesRebuildAfterReorder() throws {
+        let gen = laneTaggedArrayGen(concurrencyLevel: 3)
+        // Interleaved: concurrent, concurrent, prefix, concurrent.
+        // When the first concurrent is zeroed, the partition moves the existing
+        // prefix element forward, displacing stale leaf positions.
+        let value: [(UInt8, UInt64)] = [
+            (1, 10),
+            (2, 20),
+            (0, 30),
+            (3, 40),
+        ]
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
+        let graph = ChoiceGraph.build(from: tree)
+        let sequence = ChoiceSequence.flatten(tree)
+
+        guard let minimizationScope = LaneCollapseQuery.build(graph: graph) else {
+            Issue.record("No lane-collapse scope")
+            return
+        }
+        let transformation = GraphTransformation(
+            operation: .minimize(minimizationScope),
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 10
+            )
+        )
+        let scope = EncoderInput(
+            transformation: transformation,
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+
+        var encoder = GraphLaneCollapseEncoder()
+        encoder.start(scope: scope)
+
+        var candidate = sequence
+        var acceptedCount = 0
+        while encoder.nextProbe(into: &candidate, lastAccepted: acceptedCount > 0) != nil {
+            acceptedCount += 1
+        }
+
+        #expect(
+            acceptedCount == 3,
+            "Encoder should probe all 3 non-zero lanes in a single pass, got \(acceptedCount)"
+        )
     }
 
     @Test("Graph tags laneControl leaves correctly")

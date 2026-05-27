@@ -7,6 +7,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 private enum AdvancedCoupledFixtures {
@@ -103,11 +104,7 @@ struct AdvancedCoupledScenariosTests {
         config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
         property: (Output) -> Bool
     ) throws -> Output {
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
-        )
-        return output
+        try reduceFromReflection(gen, startingAt: value, config: config, property: property)
     }
 
     @Test("2.1 Coupled Integers (fast-check)")

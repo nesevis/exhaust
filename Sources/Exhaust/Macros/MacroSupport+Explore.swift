@@ -144,7 +144,7 @@ public extension __ExhaustRuntime {
                 let matchedDirections = result.counterexampleDirections.map { index in
                     (index: index, name: directionCoverage[index].name)
                 }
-                let failure = ExploreFailure(
+                var failure = ExploreFailure(
                     counterexample: counterexample,
                     original: result.original,
                     seed: result.seed,
@@ -153,6 +153,7 @@ public extension __ExhaustRuntime {
                     matchedDirections: matchedDirections,
                     reducedSequence: result.reducedSequence
                 )
+                failure.reductionProducedNoImprovement = result.reducedSequence == nil
                 let rendered = failure.render()
                 if suppressIssueReporting == false {
                     reportIssue(

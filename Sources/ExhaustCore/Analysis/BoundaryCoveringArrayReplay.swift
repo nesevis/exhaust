@@ -46,8 +46,23 @@ package enum BoundaryCoveringArrayReplay {
                 let tag = param.tag
                 return buildChooseBitsTree(param: param, valueIndex: valueIndex, range: range, tag: tag)
 
-            case .just, .getSize, .resize:
+            case .just, .getSize:
                 return tree
+
+            case let .resize(newSize, children):
+                var newChildren: [ChoiceTree] = []
+                for child in children {
+                    guard let newChild = substituteParameters(
+                        in: child,
+                        row: row,
+                        profile: profile,
+                        paramIndex: &paramIndex
+                    ) else {
+                        return nil
+                    }
+                    newChildren.append(newChild)
+                }
+                return .resize(newSize: newSize, choices: newChildren)
 
             case .group(_, isOpaque: true):
                 return tree

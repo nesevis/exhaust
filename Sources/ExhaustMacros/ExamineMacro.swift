@@ -21,12 +21,36 @@ public struct ExamineMacro: ExpressionMacro {
         let generatorExpr = args[0].expression.trimmedDescription
 
         var settingsExprs: [String] = []
+        var replayCheckExpr: String?
         for arg in args.dropFirst() {
-            settingsExprs.append(arg.expression.trimmedDescription)
+            if arg.label?.text == "replayCheck" {
+                replayCheckExpr = arg.expression.trimmedDescription
+            } else {
+                settingsExprs.append(arg.expression.trimmedDescription)
+            }
         }
+
+        if replayCheckExpr == nil, let trailingClosure = node.trailingClosure {
+            replayCheckExpr = trailingClosure.trimmedDescription
+        }
+
         let settingsArray = settingsExprs.isEmpty
             ? "[]"
             : "[\(settingsExprs.joined(separator: ", "))]"
+
+        if let replayCheckExpr {
+            return """
+            __ExhaustRuntime.__examine(
+                \(raw: generatorExpr),
+                settings: \(raw: settingsArray),
+                replayCheck: \(raw: replayCheckExpr),
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """
+        }
 
         return """
         __ExhaustRuntime.__examine(

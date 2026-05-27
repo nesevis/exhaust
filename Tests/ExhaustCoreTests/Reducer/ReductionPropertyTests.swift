@@ -23,7 +23,7 @@ struct ReductionPropertyTests {
                 output: value,
                 config: reducerConfig,
                 property: property
-            )
+            ).counterexample
         )
 
         let original = ChoiceSequence.flatten(tree)
@@ -49,7 +49,7 @@ struct ReductionPropertyTests {
                 output: value,
                 config: reducerConfig,
                 property: property
-            )
+            ).counterexample
         )
 
         let original = ChoiceSequence.flatten(tree)
@@ -76,7 +76,7 @@ struct ReductionPropertyTests {
                     output: value,
                     config: reducerConfig,
                     property: property
-                )
+                ).counterexample
             )
 
             let original = ChoiceSequence.flatten(tree)
@@ -104,7 +104,7 @@ struct ReductionPropertyTests {
                 output: value,
                 config: reducerConfig,
                 property: property
-            )
+            ).counterexample
         )
 
         guard case let .success(_, secondTree, _) = Materializer.materialize(
@@ -125,7 +125,7 @@ struct ReductionPropertyTests {
             property: property
         )
 
-        if let (secondSequence, _) = secondResult {
+        if let (secondSequence, _) = secondResult.counterexample {
             #expect(secondSequence == firstSequence)
         }
     }
@@ -146,10 +146,10 @@ struct ReductionPropertyTests {
         )
 
         let originalSequence = ChoiceSequence.flatten(tree)
-        if let (reduced, _) = result {
+        if case let .reduced(reduced, _) = result {
             #expect(reduced == originalSequence, "Minimal value should not change during reduction")
         }
-        // nil result is also acceptable — it means the reducer found no improvement
+        // .unreduced / .failure is also acceptable — it means the reducer found no improvement
     }
 }
 

@@ -7,23 +7,11 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
 
 private enum Helpers {
-    static func reduce<Output>(
-        _ gen: Generator<Output>,
-        startingAt value: Output,
-        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
-        property: (Output) -> Bool
-    ) throws -> Output {
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
-        )
-        return output
-    }
-
     static func minimalDouble(
         from start: Double,
         in range: ClosedRange<Double>? = nil,
@@ -35,7 +23,7 @@ private enum Helpers {
             Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
         }
 
-        return try reduce(gen, startingAt: start) { value in
+        return try reduceFromReflection(gen, startingAt: start) { value in
             !condition(value)
         }
     }
@@ -67,7 +55,7 @@ struct HypothesisFloatShrinkingParityTests {
             let gen = Gen.arrayOf(Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling), exactly: UInt64(n))
             let start = Array(repeating: 2.0, count: n)
 
-            let output = try Helpers.reduce(
+            let output = try reduceFromReflection(
                 gen,
                 startingAt: start
             ) { value in
@@ -114,7 +102,7 @@ struct HypothesisFloatShrinkingParityTests {
                 continuation: { .pure($0 as! Double) }
             )
 
-            let output = try Helpers.reduce(
+            let output = try reduceFromReflection(
                 gen,
                 startingAt: lower + 0.875
             ) { _ in

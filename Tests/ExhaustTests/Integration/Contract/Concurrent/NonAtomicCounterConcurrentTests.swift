@@ -10,7 +10,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Detects lost-update bug in non-atomic counter")
     func detectsLostUpdateBugInNonAtomicCounter() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
@@ -27,7 +27,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Reduced counterexample is smaller than original")
     func reducedCounterexampleIsSmallerThanOriginal() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
@@ -39,7 +39,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Coverage phase reports discoveryMethod .coverage with no seed")
     func coveragePhaseReportsDiscoveryMethodCoverageWithNoSeed() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(6), .budget(.custom(coverage: 500, sampling: 0)), .suppress(.issueReporting)]
             )
@@ -52,7 +52,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Random sampling reports discoveryMethod .randomSampling with a seed")
     func randomSamplingReportsDiscoveryMethodRandomSamplingWithASeed() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
@@ -65,7 +65,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test(".onReport delivers invocation counts and materializations")
     func onReportDeliversInvocationCountsAndMaterializations() async throws {
         var deliveredReport: ExhaustReport?
-        _ = await __runContractConcurrent(
+        _ = await __ExhaustRuntime.__runContractConcurrent(
             NonAtomicCounterSpec.self,
             settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
         )
@@ -86,13 +86,13 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Deterministic replay produces same result")
     func deterministicReplayProducesSameResult() async throws {
         let result1 = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(10), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(42)), .suppress(.issueReporting)]
             )
         )
         let result2 = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(10), .budget(.custom(coverage: 0, sampling: 200)), .replay(.numeric(42)), .suppress(.issueReporting)]
             )
@@ -104,7 +104,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Reduction drives schedule markers toward prefix")
     func reductionDrivesScheduleMarkersTowardPrefix() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
@@ -117,7 +117,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Concurrent contract failure carries iteration-aware replay seed")
     func concurrentContractFailureCarriesIterationAwareReplaySeed() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
             )
@@ -130,7 +130,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test("Concurrent contract coverage failure carries U-prefixed replay seed")
     func concurrentContractCoverageFailureCarriesUPrefixedReplaySeed() async throws {
         let result = try #require(
-            await __runContractConcurrent(
+            await __ExhaustRuntime.__runContractConcurrent(
                 NonAtomicCounterSpec.self,
                 settings: [.commandLimit(6), .budget(.custom(coverage: 500, sampling: 0)), .suppress(.issueReporting)]
             )

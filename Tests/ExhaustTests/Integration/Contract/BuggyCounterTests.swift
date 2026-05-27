@@ -83,6 +83,24 @@ struct BuggyCounterTests {
     }
 }
 
+@Suite("SCA reduction coverage", .serialized, .tags(.contract))
+struct SCAReductionCoverageTests {
+    @Test("SCA coverage exercises the reduction path")
+    func scaCoverageExercisesReductionPath() throws {
+        let result = try #require(
+            #exhaust(
+                PairwiseBugSpec.self,
+                .commandLimit(3),
+                .budget(.custom(coverage: 200, sampling: 0)),
+                .suppress(.issueReporting),
+                .log(.debug)
+            )
+        )
+        #expect(result.discoveryMethod == .coverage)
+        #expect(result.trace.isEmpty == false)
+    }
+}
+
 // MARK: - Contract
 
 @Contract
@@ -123,4 +141,36 @@ struct BuggyCounter {
     mutating func reset() {
         value = 0
     }
+}
+
+// MARK: - Pairwise Bug Contract
+
+/// A contract where any sequence containing both `setA` and `setB` triggers the invariant failure. Pairwise SCA at t=2 is guaranteed to produce such a row.
+@Contract
+struct PairwiseBugSpec {
+    @Model var modelState: Int = 0
+    @SystemUnderTest var sut = PairwiseBugSUT()
+
+    @Invariant
+    func notBothSet() -> Bool {
+        sut.flagA == false || sut.flagB == false
+    }
+
+    @Command
+    mutating func setA() throws {
+        sut.flagA = true
+    }
+
+    @Command
+    mutating func setB() throws {
+        sut.flagB = true
+    }
+
+    @Command
+    mutating func noop() throws {}
+}
+
+struct PairwiseBugSUT {
+    var flagA: Bool = false
+    var flagB: Bool = false
 }

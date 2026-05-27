@@ -11,7 +11,6 @@ struct ValidationTests {
         #expect(report.passed)
         #expect(report.valuesGenerated == 50)
         #expect(report.reflectionRoundTripSuccesses == 50)
-        #expect(report.replayDeterminismSuccesses == 50)
     }
 
     @Test("Bad backward mapping fails round-trip")

@@ -3,6 +3,29 @@
 //  Exhaust
 //
 
+// MARK: - Reduction Outcome
+
+/// Describes the result of a reduction pass.
+package enum ReductionOutcome<Output> {
+    /// Reduction improved the counterexample.
+    case reduced(ChoiceSequence, Output)
+
+    /// Reduction ran but could not improve the counterexample.
+    case unreduced(ChoiceSequence, Output)
+
+    /// Reduction could not produce a result (for example, materialization of the input failed).
+    case failure
+
+    /// The counterexample and its choice sequence, regardless of whether reduction improved it.
+    package var counterexample: (ChoiceSequence, Output)? {
+        switch self {
+            case let .reduced(sequence, output): (sequence, output)
+            case let .unreduced(sequence, output): (sequence, output)
+            case .failure: nil
+        }
+    }
+}
+
 // MARK: - Choice Graph Reducer
 
 package extension Interpreters {
@@ -16,20 +39,20 @@ package extension Interpreters {
     ///   - output: The output value from the failing run.
     ///   - config: Reducer configuration (stall budget, and so on).
     ///   - property: The property that fails on the counterexample.
-    /// - Returns: The reduced (sequence, output) pair, or `nil` if reduction could not improve the result.
+    /// - Returns: A ``ReductionOutcome`` describing whether the counterexample was reduced, unchanged, or could not be processed.
     static func choiceGraphReduce<Output>(
         gen: Generator<Output>,
         tree: ChoiceTree,
         output: Output,
         config: ReducerConfiguration,
         property: (Output) -> Bool
-    ) throws -> (ChoiceSequence, Output)? {
+    ) throws -> ReductionOutcome<Output> {
         if config.visualize {
             print("── Before reduction ──")
             print(tree.visualization(width: 100))
         }
 
-        let result = try withoutActuallyEscaping(property) { escapingProperty in
+        let outcome = try withoutActuallyEscaping(property) { escapingProperty in
             try ChoiceGraphScheduler.run(
                 gen: gen,
                 initialTree: tree,
@@ -39,7 +62,7 @@ package extension Interpreters {
             )
         }
 
-        if config.visualize, let (resultSequence, _) = result {
+        if config.visualize, let (resultSequence, _) = outcome.counterexample {
             let resultTree = Materializer.materialize(
                 gen,
                 prefix: resultSequence,
@@ -52,19 +75,19 @@ package extension Interpreters {
             }
         }
 
-        return result
+        return outcome
     }
 
     /// Reduces a failing counterexample using the graph-based pipeline and returns accumulated statistics.
     ///
-    /// - Returns: The reduced result and a ``ReductionStats`` value summarizing encoder probe counts, materialization attempts, and cycle count.
+    /// - Returns: A ``ReductionOutcome`` and a ``ReductionStats`` value summarizing encoder probe counts, materialization attempts, and cycle count.
     static func choiceGraphReduceCollectingStats<Output>(
         gen: Generator<Output>,
         tree: ChoiceTree,
         output: Output,
         config: ReducerConfiguration,
         property: (Output) -> Bool
-    ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
+    ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         if config.visualize {
             print("── Before reduction ──")
             print(tree.visualization(width: 100))
@@ -80,7 +103,7 @@ package extension Interpreters {
             )
         }
 
-        if config.visualize, let (resultSequence, _) = result.reduced {
+        if config.visualize, let (resultSequence, _) = result.outcome.counterexample {
             let resultTree = Materializer.materialize(
                 gen,
                 prefix: resultSequence,
@@ -102,13 +125,13 @@ package extension Interpreters {
         tree: ChoiceTree,
         config: ReducerConfiguration,
         property: (Output) -> Bool
-    ) throws -> (ChoiceSequence, Output)? {
+    ) throws -> ReductionOutcome<Output> {
         let prefix = ChoiceSequence.flatten(tree)
         guard case let .success(output, _, _) = Materializer.materialize(
             gen, prefix: prefix, mode: .exact, fallbackTree: tree,
             materializePicks: true
         ) else {
-            return nil
+            return .failure
         }
         return try choiceGraphReduce(
             gen: gen,
