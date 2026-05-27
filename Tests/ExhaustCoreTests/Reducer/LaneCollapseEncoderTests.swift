@@ -1,6 +1,6 @@
-import ExhaustCore
 import ExhaustTestSupport
 import Testing
+@testable import ExhaustCore
 
 @Suite("Lane-collapse encoder")
 struct LaneCollapseEncoderTests {
@@ -123,6 +123,58 @@ struct LaneCollapseEncoderTests {
         #expect(firstNonPrefixIndex == prefixCount, "Prefix region ends at index \(prefixCount): \(laneMarkers)")
         let noPrefixInTail = laneMarkers.suffix(from: firstNonPrefixIndex).contains(where: { $0 == 0 }) == false
         #expect(noPrefixInTail, "No prefix elements in the concurrent tail: \(laneMarkers)")
+    }
+
+    @Test("Encoder finds all leaves after partition moves elements")
+    func leavesRebuildAfterReorder() throws {
+        let gen = laneTaggedArrayGen(concurrencyLevel: 3)
+        // Interleaved: concurrent, concurrent, prefix, concurrent.
+        // When the first concurrent is zeroed, the partition moves the existing
+        // prefix element forward, displacing stale leaf positions.
+        let value: [(UInt8, UInt64)] = [
+            (1, 10),
+            (2, 20),
+            (0, 30),
+            (3, 40),
+        ]
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
+        let graph = ChoiceGraph.build(from: tree)
+        let sequence = ChoiceSequence.flatten(tree)
+
+        guard let minimizationScope = LaneCollapseQuery.build(graph: graph) else {
+            Issue.record("No lane-collapse scope")
+            return
+        }
+        let transformation = GraphTransformation(
+            operation: .minimize(minimizationScope),
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 10
+            )
+        )
+        let scope = EncoderInput(
+            transformation: transformation,
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+
+        var encoder = GraphLaneCollapseEncoder()
+        encoder.start(scope: scope)
+
+        var candidate = sequence
+        var acceptedCount = 0
+        while encoder.nextProbe(into: &candidate, lastAccepted: acceptedCount > 0) != nil {
+            acceptedCount += 1
+        }
+
+        #expect(
+            acceptedCount == 3,
+            "Encoder should probe all 3 non-zero lanes in a single pass, got \(acceptedCount)"
+        )
     }
 
     @Test("Graph tags laneControl leaves correctly")
