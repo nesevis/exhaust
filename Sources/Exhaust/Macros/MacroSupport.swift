@@ -592,18 +592,28 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> Output? {
         let syncProperty = bridgeAsyncProperty(property)
+        #if canImport(Testing)
+            let traitConfig = ExhaustTraitConfiguration.current
+        #endif
         return await dispatchToGCD {
-            __exhaust(
-                refGen,
-                settings: settings,
-                reflecting: reflecting,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column,
-                function: function,
-                property: syncProperty
-            )
+            let run = {
+                __exhaust(
+                    refGen,
+                    settings: settings,
+                    reflecting: reflecting,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    function: function,
+                    property: syncProperty
+                )
+            }
+            #if canImport(Testing)
+                return ExhaustTraitConfiguration.$current.withValue(traitConfig, operation: run)
+            #else
+                return run()
+            #endif
         }
     }
 
@@ -634,6 +644,9 @@ public extension __ExhaustRuntime {
 
         return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: .keyValue)) {
             let syncDetection = bridgeAsyncDetection(detection)
+            #if canImport(Testing)
+                let traitConfig = ExhaustTraitConfiguration.current
+            #endif
 
             nonisolated(unsafe) var pipelineResult: Output?
             nonisolated(unsafe) var capturedReplaySeed: String?
@@ -642,40 +655,42 @@ public extension __ExhaustRuntime {
             await dispatchToGCD {
                 // withExpectedIssue cannot be used inside dispatchToGCD because Test.current is nil on the GCD thread, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
                 #if canImport(Testing)
-                    withKnownIssue(isIntermittent: true) {
-                        if let regression = replayRegressionSeeds(
-                            gen: gen,
-                            settings: settings,
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column,
-                            function: function,
-                            property: syncDetection
-                        ) {
-                            pipelineResult = regression.counterexample
-                            capturedReplaySeed = regression.replaySeed
-                            return
+                    ExhaustTraitConfiguration.$current.withValue(traitConfig) {
+                        withKnownIssue(isIntermittent: true) {
+                            if let regression = replayRegressionSeeds(
+                                gen: gen,
+                                settings: settings,
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column,
+                                function: function,
+                                property: syncDetection
+                            ) {
+                                pipelineResult = regression.counterexample
+                                capturedReplaySeed = regression.replaySeed
+                                return
+                            }
+
+                            var augmentedSettings = settings + [.suppress(.issueReporting)]
+                            augmentedSettings.append(.onReport { report in
+                                capturedReplaySeed = report.replaySeed
+                                capturedRenderedFailure = report.renderedFailure
+                            })
+
+                            pipelineResult = __exhaust(
+                                refGen,
+                                settings: augmentedSettings,
+                                reflecting: reflecting,
+
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column,
+                                function: function,
+                                property: syncDetection
+                            )
                         }
-
-                        var augmentedSettings = settings + [.suppress(.issueReporting)]
-                        augmentedSettings.append(.onReport { report in
-                            capturedReplaySeed = report.replaySeed
-                            capturedRenderedFailure = report.renderedFailure
-                        })
-
-                        pipelineResult = __exhaust(
-                            refGen,
-                            settings: augmentedSettings,
-                            reflecting: reflecting,
-
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column,
-                            function: function,
-                            property: syncDetection
-                        )
                     }
                 #else
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
