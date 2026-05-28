@@ -331,7 +331,7 @@ private func registerParser() {
 //    let coverageFinds = coverageFindsFailure(gen: gen, property: property)
 //    let iterToFail = measureIterationsToFirstFailure(gen: gen, property: property)
 
-    // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed, matching the methodology from MacIver & Donaldson Figure 13.
+    // ECOOP 2020 comparison: 1000 independent seeds, one failure per seed, matching the methodology from MacIver & Donaldson section 4.3.
     benchmark("Parser ECOOP") {
 
         let seedCount = 1000
