@@ -782,7 +782,7 @@ public extension __ExhaustRuntime {
 
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     ///
-    /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example, `oneOf` where multiple branches can produce the same value).
+    /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example, `oneOf` where multiple branches can produce the same value). Skips the reflection check for synthesized generators (``ReflectiveGenerator/isSynthesized``), which are forward-only by design.
     @discardableResult
     static func __examine(
         _ refGen: ReflectiveGenerator<some Equatable>,
@@ -810,6 +810,8 @@ public extension __ExhaustRuntime {
                     reflectionRoundTripSuccesses: 0,
                     replayDeterminismSuccesses: nil,
                     uniqueChoiceSequences: 0,
+                    reflectionSkipped: false,
+                    pinnedFieldCount: 0,
                     failures: [],
                     generationTime: 0,
                     elapsedTime: 0,
@@ -834,6 +836,7 @@ public extension __ExhaustRuntime {
             gen.validate(
                 samples: config.samples,
                 seed: seed,
+                skipReflection: refGen.isSynthesized,
                 reporting: config,
                 fileID: fileID,
                 filePath: filePath,
@@ -845,7 +848,7 @@ public extension __ExhaustRuntime {
 
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     ///
-    /// Falls back to choice-sequence comparison for non-`Equatable` types.
+    /// Falls back to choice-sequence comparison for non-`Equatable` types. Skips the reflection check for synthesized generators (``ReflectiveGenerator/isSynthesized``), which are forward-only by design.
     @discardableResult
     static func __examine(
         _ refGen: ReflectiveGenerator<some Any>,
@@ -873,6 +876,8 @@ public extension __ExhaustRuntime {
                     reflectionRoundTripSuccesses: 0,
                     replayDeterminismSuccesses: nil,
                     uniqueChoiceSequences: 0,
+                    reflectionSkipped: false,
+                    pinnedFieldCount: 0,
                     failures: [],
                     generationTime: 0,
                     elapsedTime: 0,
@@ -897,6 +902,7 @@ public extension __ExhaustRuntime {
             gen.validate(
                 samples: config.samples,
                 seed: seed,
+                skipReflection: refGen.isSynthesized,
                 reporting: config,
                 fileID: fileID,
                 filePath: filePath,
@@ -935,6 +941,8 @@ public extension __ExhaustRuntime {
                     reflectionRoundTripSuccesses: 0,
                     replayDeterminismSuccesses: nil,
                     uniqueChoiceSequences: 0,
+                    reflectionSkipped: false,
+                    pinnedFieldCount: 0,
                     failures: [],
                     generationTime: 0,
                     elapsedTime: 0,
@@ -959,6 +967,7 @@ public extension __ExhaustRuntime {
             gen.validate(
                 samples: config.samples,
                 seed: seed,
+                skipReflection: refGen.isSynthesized,
                 replayCheck: { lhs, rhs in
                     guard let lhs = lhs as? Output, let rhs = rhs as? Output else {
                         return false

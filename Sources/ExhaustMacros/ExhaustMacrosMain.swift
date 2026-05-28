@@ -5,6 +5,8 @@ import SwiftSyntaxMacros
 struct ExhaustMacrosPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         GenerateMacro.self,
+        GenerateFromDecodableMacro.self,
+        GenerateFromCodableInstanceMacro.self,
         ExhaustTestMacro.self,
         ExhaustAsyncTestMacro.self,
         ExampleMacro.self,
