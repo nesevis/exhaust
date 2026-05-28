@@ -2,11 +2,12 @@ import Benchmark
 import Exhaust
 
 func registerGenerationBenchmarks() {
+    let budget = ExhaustBudget.extensive
     benchmark("Gen: Bound5") {
         _ = #exhaust(
             bound5Gen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -15,7 +16,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             #gen(.uint64(in: 0 ... 20)).bind { binaryHeapGen(depth: $0) }.unique(),
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -24,7 +25,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             binaryHeapGenRecursive(),
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -33,7 +34,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             calculatorExpressionGen(depth: 5),
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -42,7 +43,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             couplingGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -51,7 +52,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             deletionGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -60,7 +61,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             differenceMustNotBeZeroGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -69,7 +70,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             distinctGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -78,7 +79,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             largeUnionListGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -87,7 +88,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             lengthListGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -96,7 +97,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             nestedListsGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -105,7 +106,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             reverseGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -114,7 +115,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             replacementGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -123,7 +124,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             parserLangGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
@@ -132,7 +133,7 @@ func registerGenerationBenchmarks() {
         _ = #exhaust(
             graphColoringGen,
             .suppress(.issueReporting),
-            .budget(.extensive),
+            .budget(budget),
             .replay(1337)
         ) { _ in true }
     }
