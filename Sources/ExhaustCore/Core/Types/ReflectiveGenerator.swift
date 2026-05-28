@@ -212,3 +212,10 @@ extension ReflectiveGenerator: CustomDebugStringConvertible {
             + gen.treeDescription(prefix: "", isLast: true)
     }
 }
+
+extension ReflectiveGenerator: CustomStringConvertible {
+    public var description: String {
+        let synthesized = isSynthesized ? " (synthesized)" : ""
+        return "ReflectiveGenerator<\(Output.self)>\(synthesized)"
+    }
+}
